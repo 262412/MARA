@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from .boolean_evidence_scope import boolean_retrieval_query
 from .evidence import EvidenceBundle, build_evidence_bundle
 from .evidence_identity import identity_of
 from .finance_typed_adequacy import ensure_finance_numeric_trace
@@ -86,6 +87,117 @@ def retrieve_with_rounds(
         attempted_retry=True,
     )
     return evidence_bundle, retrieve_decision
+
+
+def retrieve_for_verifier_recovery(
+    request: Any,
+    decision: Any,
+    retrieve: RetrieveFn,
+    bundle: EvidenceBundle,
+    *,
+    evaluate: EvaluateFn,
+    retry_reason: str,
+) -> tuple[EvidenceBundle, Any, str] | None:
+    """Run the single focused retrieval round reserved for verifier recovery."""
+
+    plan = ensure_request_query_plan(request)
+    completed_rounds = int(bundle.metadata.get("retrieval_rounds") or 1)
+    if completed_rounds >= plan.max_retrieval_rounds:
+        return None
+    if not optional_stage_allowed(request):
+        bundle.metadata.update(route_budget_metadata(request))
+        bundle.metadata[
+            "verifier_recovery_skipped_reason"
+        ] = "insufficient_remaining_time"
+        return None
+
+    query = verifier_recovery_query(request)
+    recovery_metadata = _retrieve_second_round(
+        request,
+        decision,
+        retrieve,
+        [
+            {
+                "query_id": "round2:verifier_recovery",
+                "slot_id": _boolean_verification_slot_id(plan),
+                "query": query,
+                "modality": "text",
+            }
+        ],
+    )
+    merged_metadata = _merge_retrieval_metadata(
+        _recovery_base_metadata(bundle.metadata),
+        recovery_metadata,
+    )
+    merged_metadata.update(
+        {
+            "verifier_recovery_attempt": 1,
+            "verifier_recovery_query": query,
+            "verifier_recovery_retry_reason": retry_reason,
+        }
+    )
+    recovered_bundle = build_evidence_bundle(
+        decision.legacy_route,
+        request,
+        merged_metadata,
+    )
+    recovered_bundle = _with_retrieval_rounds(recovered_bundle, completed_rounds + 1)
+    recovered_decision = _evaluate(
+        request,
+        decision,
+        recovered_bundle,
+        evaluate,
+        attempted_retry=True,
+    )
+    return recovered_bundle, recovered_decision, query
+
+
+def verifier_recovery_query(request: Any) -> str:
+    """Build a focused query from the required Boolean proposition frame."""
+
+    question = request_planning_question(request)
+    plan = ensure_request_query_plan(request)
+    slot_queries = [
+        str(slot.query).strip()
+        for slot in plan.evidence_slots
+        if slot.required_for_verification and str(slot.query).strip()
+    ]
+    semantic_query = boolean_retrieval_query(question, second_round=True)
+    parts = [*slot_queries, semantic_query]
+    parts.append(
+        "current paper authors exact proposition evidence predicate arguments "
+        "object polarity qualifier significance magnitude quantifier section scope"
+    )
+    return " ".join(dict.fromkeys(part for part in parts if part)).strip()
+
+
+def _boolean_verification_slot_id(plan: Any) -> str:
+    return next(
+        (
+            str(slot.slot_id)
+            for slot in plan.evidence_slots
+            if slot.required_for_verification
+            and str(slot.statement_kind or "").lower() == "boolean_proposition"
+        ),
+        "support:boolean_proposition",
+    )
+
+
+def _recovery_base_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    derived_keys = {
+        "boolean_authority",
+        "pending_verification_slot_ids",
+        "pipeline_stage_timings",
+        "pre_guardrail_answer",
+        "pre_verification_answer",
+        "verification_slot_states",
+        "verified_claim_support_by_claim",
+        "verified_claim_support_evidence",
+        "verified_claim_support_spans",
+        "verified_evidence",
+        "verify_decision",
+    }
+    return {key: value for key, value in metadata.items() if key not in derived_keys}
 
 
 def _retrieve_first_round(

@@ -264,6 +264,7 @@ def test_proposition_key_contains_identity_and_polarity_dimensions() -> None:
         "clinical model task",
         "results",
         "none",
+        "none",
         "yes",
     )
 

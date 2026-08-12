@@ -48,6 +48,92 @@ def test_prediction_verifier_observability_counts_abstention_claims_and_control(
     }
 
 
+def test_prediction_verifier_observability_deduplicates_repeated_route_transition():
+    transition = {
+        "stage": "route_switch",
+        "from_route": "doc_text",
+        "to_route": "hybrid",
+    }
+    prediction = {
+        "controller_trace": [dict(transition)],
+        "agent_trace": [dict(transition, stage="agent_route_switch")],
+        "workflow_plan": {
+            "steps": [dict(transition, stage="workflow_route_switch")],
+            "events": [dict(transition, stage="planner_route_switch")],
+        },
+    }
+
+    observability = prediction_verifier_observability(prediction)
+
+    assert observability["route_switch_count"] == 1
+
+
+def test_route_switch_summary_marker_is_not_a_second_transition():
+    transition = {
+        "stage": "route_switch",
+        "from_route": "doc_text",
+        "to_route": "hybrid",
+        "route_switch_used": True,
+    }
+    planner_summary = {
+        "stage": "planner",
+        "legacy_route": "hybrid",
+        "initial_route": "doc_text",
+        "final_route": "hybrid",
+        "route_switch_used": True,
+        "route_switch_candidates": ["hybrid"],
+        "override_reason": "Route switch used only after retrieval failure.",
+    }
+    prediction = {
+        "controller_trace": [transition, planner_summary],
+        "agent_trace": [dict(transition, event="route_switch")],
+    }
+
+    observability = prediction_verifier_observability(prediction)
+
+    assert observability["route_switch_count"] == 1
+
+
+def test_prediction_verifier_observability_preserves_distinct_routes_and_retries():
+    route_one = {
+        "logical_transition_key": "route-switch-1",
+        "from_route": "doc_text",
+        "to_route": "hybrid",
+    }
+    route_two = {
+        "event_id": "route-switch-2",
+        "from_route": "hybrid",
+        "to_route": "graph",
+    }
+    retry_one = {
+        "retry": True,
+        "attempt": 1,
+        "action": "retrieval_retry",
+    }
+    retry_two = {
+        "retry": True,
+        "attempt": 2,
+        "action": "retrieval_retry",
+    }
+    prediction = {
+        "controller_trace": [route_one, retry_one],
+        "agent_trace": [route_two, retry_two],
+        "workflow_plan": {
+            "events": [
+                dict(route_one, stage="workflow"),
+                dict(route_two, stage="workflow"),
+                dict(retry_one, stage="workflow"),
+                dict(retry_two, stage="workflow"),
+            ]
+        },
+    }
+
+    observability = prediction_verifier_observability(prediction)
+
+    assert observability["route_switch_count"] == 2
+    assert observability["retry_count"] == 2
+
+
 def test_verifier_observability_summary_and_route_table_counts_predictions():
     predictions = [
         {

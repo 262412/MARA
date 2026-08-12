@@ -466,7 +466,11 @@ def _qasper_stale_verifier_state(
             return 1
         return int(metadata.get("answer_dependent_state") != "terminal_answer_state.v1")
     if not isinstance(prediction.get("pre_contract_verification"), dict):
-        return 0
+        trace = metadata.get("qasper_answerability")
+        return int(
+            isinstance(trace, dict)
+            and trace.get("contract_id") == "qasper_runtime_authority_audit.v1"
+        )
     post = prediction.get("post_contract_verification")
     if not isinstance(post, dict):
         return 1

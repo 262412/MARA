@@ -1,3 +1,5 @@
+import hashlib
+import json
 from copy import deepcopy
 from pathlib import Path
 
@@ -6,7 +8,7 @@ from ktem.docqa._runtime_models import DocQARequest, DocQAResponse
 from ktem.docqa._runtime_turn import create_stream_result, finalize_stream_result
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
-from ktem.docqa.execution import GuardrailDecision, _result
+from ktem.docqa.execution import ABSTAIN_MESSAGE, GuardrailDecision, _result
 from ktem.docqa.route_selection import ControllerDecision
 from ktem.docqa.verification import VerifyDecision
 
@@ -56,6 +58,19 @@ def test_execution_terminal_projection_is_deep_copied_and_self_consistent():
     assert payload["engine_terminal_answer"] == "yes"
     assert payload["engine_verify_decision"] == result.verify_decision.as_dict()
     assert payload["engine_terminal_state"]["answer"] == "yes"
+    assert payload["engine_terminal_state"]["raw_generated_answer"] == "yes"
+    assert payload["engine_terminal_state"]["normalized_candidate_label"] == "yes"
+    assert payload["engine_terminal_state"]["verified_canonical_answer"] == ""
+    assert payload["engine_terminal_state"]["semantic_correction_applied"] is False
+    assert payload["engine_terminal_state"]["correction_reason"] == ""
+    assert payload["engine_terminal_state"]["authoritative_evidence_id"] == ""
+    assert payload["engine_terminal_state"]["authoritative_evidence_ref"] == ""
+    assert payload["engine_terminal_state"]["authoritative_quote"] == ""
+    assert payload["engine_terminal_state"]["guardrail_result"] == {
+        "status": "ok",
+        "action": "return",
+        "reason": "verified",
+    }
     assert (
         payload["engine_terminal_state"]["verify_decision"]
         == payload["engine_verify_decision"]
@@ -70,6 +85,65 @@ def test_execution_terminal_projection_is_deep_copied_and_self_consistent():
     fresh = result.as_dict()
     assert fresh["engine_terminal_state"]["verify_decision"]["status"] == "supported"
     assert "mutated" not in fresh["engine_terminal_evidence_bundle"]["metadata"]
+
+
+def test_engine_terminal_hash_covers_normalized_label_and_guardrail_result():
+    payload = _execution_result().as_dict()
+    state = payload["engine_terminal_state"]
+    expected = hashlib.sha256(
+        json.dumps(
+            state,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+
+    assert payload["engine_terminal_projection_hash"] == expected
+
+    state["normalized_candidate_label"] = "no"
+    tampered = hashlib.sha256(
+        json.dumps(
+            state,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    assert tampered != expected
+
+
+def test_terminal_projection_preserves_an_empty_raw_generation() -> None:
+    request = DocQARequest(prompt="Does the source support this claim?")
+    result = _result(
+        request,
+        ControllerDecision(
+            route="doc_text",
+            legacy_route="doc_text",
+            policy="document",
+            controller_mode="heuristic",
+            requires_retrieval=True,
+            reason="test route",
+        ),
+        RetrieveDecision("good", "evidence found"),
+        VerifyDecision(
+            mode="strict",
+            status="not_enough_evidence",
+            reason="No generated answer was available.",
+            action="abstain",
+        ),
+        GuardrailDecision("not_enough_evidence", "abstain", "empty answer"),
+        EvidenceBundle(route="doc_text"),
+        {"route": "doc_text"},
+        ABSTAIN_MESSAGE,
+        raw_generated_answer="",
+    )
+
+    payload = result.as_dict()
+    assert payload["engine_terminal_state"]["raw_generated_answer"] == ""
+    assert payload["engine_terminal_state"]["answer"] == ABSTAIN_MESSAGE
 
 
 def test_response_capture_preserves_terminal_projection_without_rebuilding():

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.boolean_claim_verification import boolean_claim_authority
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.execution import ABSTAIN_MESSAGE, execute_controller_turn
 
@@ -85,7 +86,15 @@ def test_111_runtime_commits_exact_qualifier_aware_no_authority(
     [claim] = result.verify_decision.claim_results
     assert claim["actor"] == "current_paper"
     assert claim["relation"] == "improve"
+    assert claim["predicate"] == "improve"
+    assert claim["arguments"]
+    assert claim["qualifier"] == "non_significant"
+    assert claim["scope"] == claim["section_scope"]
     assert claim["verified_slot_state"] == "verified_support"
+    [span] = claim["supporting_evidence_spans"]
+    assert span["predicate"] == "improve"
+    assert span["qualifier"] == "non_significant"
+    assert span["scope"] == span["section_scope"]
     metadata = result.evidence_bundle.metadata
     assert metadata["query_plan"]["stage"] == "verified"
     assert metadata["query_plan"]["state_authority"] == "verified_claim_support.v1"
@@ -290,6 +299,89 @@ def test_boolean_runtime_hard_negatives_remain_fail_closed(
     )
 
 
+@pytest.mark.parametrize(
+    ("question", "text"),
+    (
+        (
+            "Did they compare with other extractive summarization methods?",
+            (
+                "Overall, the upper-bound analysis concerns extractive "
+                "summarization alone. While CUI comparison allows for comparing "
+                "medically relevant concepts, the CUI labelling process is not "
+                "perfect and further work is needed."
+            ),
+        ),
+        (
+            "Is the dataset for sentiment analysis balanced?",
+            (
+                "Among commercial NLP toolkits, we selected two publicly "
+                "accessible APIs for entity-level sentiment analysis that are "
+                "agnostic to the text domain."
+            ),
+        ),
+        (
+            "Did the authors experiment with this new dataset?",
+            (
+                "This new dataset complements the earlier release by providing "
+                "experiments designed to analyze differences between natural "
+                "reading and annotation."
+            ),
+        ),
+        (
+            "Did the authors experiment with other tasks?",
+            (
+                "Two separate models are developed for the tasks. The NER task "
+                "is solved with a BiLSTM-CRF model and the RE task uses a "
+                "multi-head selection approach."
+            ),
+        ),
+        (
+            "Are humans and machine learning systems fooled by the same kinds "
+            "of illusions?",
+            (
+                "Machine-learning systems are susceptible to adversarial "
+                "examples and may be brittle and easily fooled. Human cognition "
+                "is assumed to yield robust systems."
+            ),
+        ),
+    ),
+)
+def test_false_positive_proposition_shapes_never_become_authority(
+    question: str,
+    text: str,
+) -> None:
+    result = _run_boolean(question, "yes", [_evidence("near-match", text)])
+
+    assert result.answer == ABSTAIN_MESSAGE
+    assert result.verify_decision.canonical_answer_polarity == ""
+    assert result.guardrail_decision.action == "abstain"
+
+
+def test_non_significant_qualifier_controls_overall_improvement_polarity() -> None:
+    question = (
+        "Overall, does having parallel data improve semantic role induction "
+        "across multiple languages?"
+    )
+    decisive = "We get non-significant improvements in both languages."
+    item = _evidence(
+        "qualified-improvement",
+        (
+            "The multilingual model adds word alignments from parallel data. "
+            f"{decisive} The multilingual model obtains small improvements in "
+            "both languages. These results indicate that little information can "
+            "be learned about semantic roles from this parallel data setup."
+        ),
+    )
+
+    result = _run_boolean(question, "yes", [item])
+
+    assert result.answer == "no"
+    assert result.verify_decision.semantic_correction_applied is True
+    assert decisive in result.verify_decision.authoritative_quote
+    [span] = result.verify_decision.claim_results[0]["supporting_evidence_spans"]
+    assert span["qualifier"] == "non_significant"
+
+
 def test_lexical_candidate_never_becomes_boolean_authority() -> None:
     question = "Did the authors release source code?"
     item = _evidence(
@@ -322,3 +414,126 @@ def test_generated_abstention_without_exact_authority_remains_fail_closed() -> N
     assert result.verify_decision.input_answer_polarity == ""
     assert result.verify_decision.canonical_answer_polarity == ""
     assert result.guardrail_decision.action == "abstain"
+
+
+def test_requirement_negative_qualifier_overrides_exclusive_requirement_match() -> None:
+    question = "Did the authors require fine-tuning the model?"
+    evidence = _evidence(
+        "requirement-negative",
+        (
+            "The only requirement is that the model accepts embeddings; "
+            "fine-tuning is not needed."
+        ),
+    )
+
+    authority = boolean_claim_authority(question, "yes", [evidence])
+
+    assert authority is not None
+    assert authority.status == "supported"
+    assert authority.canonical_answer_polarity == "no"
+    assert authority.semantic_correction_applied is True
+    assert authority.supporting[0].relation == "require"
+    assert authority.supporting[0].quantifier == "only"
+
+
+def test_requirement_without_qualifier_is_negative_authority() -> None:
+    question = (
+        "Is fine-tuning required to incorporate these embeddings into existing "
+        "models?"
+    )
+    evidence = _evidence(
+        "requirement-without",
+        "The embeddings can be used as a drop-in replacement without fine-tuning.",
+        section_id="methods",
+    )
+
+    authority = boolean_claim_authority(question, "yes", [evidence])
+
+    assert authority is not None
+    assert authority.status == "supported"
+    assert authority.canonical_answer_polarity == "no"
+    assert authority.semantic_correction_applied is True
+    assert authority.supporting[0].relation == "require"
+    assert authority.supporting[0].qualifier == "not_required"
+
+
+def test_boolean_authority_serializes_generic_proposition_schema() -> None:
+    question = (
+        "Overall, does having parallel data improve semantic role induction "
+        "across multiple languages?"
+    )
+    item = _evidence(
+        "schema-authority",
+        (
+            "Our multilingual model uses parallel data for semantic role induction. "
+            "Comparing with Line 2, we get non-significant improvements in both "
+            "languages."
+        ),
+    )
+
+    authority = boolean_claim_authority(question, "no", [item])
+
+    assert authority is not None
+    [support] = authority.supporting
+    payload = support.as_dict()
+    assert {
+        "actor",
+        "predicate",
+        "object",
+        "polarity",
+        "qualifier",
+        "quantifier",
+        "scope",
+    } <= payload.keys()
+    assert payload["predicate"] == "improve"
+    assert payload["qualifier"] == "non_significant"
+    assert payload["scope"] == payload["section_scope"]
+
+
+def test_boolean_authority_expands_to_nonadjacent_same_experiment_frame() -> None:
+    question = (
+        "Overall, does having parallel data improve semantic role induction "
+        "across multiple languages?"
+    )
+    subject = (
+        "Our multilingual model transfers semantic roles with word alignments "
+        "from parallel data in both languages."
+    )
+    bridge = "All systems use the same evaluation corpus split."
+    decisive = (
+        "Comparing with Line 2, we get non-significant improvements in both "
+        "languages."
+    )
+    unrelated = "Prior work reports a different monolingual benchmark."
+    text = " ".join((subject, bridge, decisive, unrelated))
+    item = _evidence("semantic-expansion", text)
+
+    authority = boolean_claim_authority(question, "no", [item])
+
+    assert authority is not None
+    [support] = authority.supporting
+    assert subject in support.quote
+    assert bridge in support.quote
+    assert decisive in support.quote
+    assert unrelated not in support.quote
+    assert text[support.span_start : support.span_end] == support.quote
+
+
+def test_27cf_unanswerable_question_stays_abstained_without_evidence() -> None:
+    question = (
+        "Are humans and machine learning systems fooled by the same kinds of "
+        "illusions?"
+    )
+
+    result = _run_boolean(
+        question,
+        "unanswerable The retrieved context does not establish this.",
+        [],
+    )
+
+    assert result.answer == ABSTAIN_MESSAGE
+    assert result.verify_decision.status == "not_enough_evidence"
+    assert result.guardrail_decision.action == "abstain"
+    assert "query_plan" not in result.evidence_bundle.metadata or (
+        result.evidence_bundle.metadata["query_plan"].get("stage") != "verified"
+    )

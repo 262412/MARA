@@ -8,8 +8,16 @@ from .boolean_evidence_scope import (
     _prior_work_scope_question,
     _requires_current_paper_scope,
 )
-from .boolean_proposition_tokens import _content_tokens, _object_token
+from .boolean_proposition_tokens import (
+    _content_tokens,
+    _object_token,
+    _relation_surface_tokens,
+)
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
+
+_MAX_CONTEXT_SENTENCES = 5
+_MAX_CONTEXT_DISTANCE = 3
+_MAX_CONTEXT_CHARS = 1400
 
 
 @dataclass(frozen=True)
@@ -50,8 +58,8 @@ def semantic_resolution_text(question: str, span: str, context: str) -> str:
     return context
 
 
-def bounded_proposition_context(text: str, span: str) -> str:
-    window = exact_proposition_context(text, span)
+def bounded_proposition_context(text: str, span: str, *, question: str = "") -> str:
+    window = exact_proposition_context(text, span, question=question)
     return window.text if window is not None else span
 
 
@@ -60,8 +68,9 @@ def exact_proposition_context(
     span: str,
     *,
     canonical_start: int | None = None,
+    question: str = "",
 ) -> PropositionContextWindow | None:
-    """Return one exact, continuous one-to-three sentence authority window."""
+    """Return the smallest bounded continuous window completing a proposition."""
 
     source = str(text or "")
     target = str(span or "")
@@ -81,8 +90,14 @@ def exact_proposition_context(
     if index is None:
         start, end = match.span()
     else:
-        start = statements[max(0, index - 1)][0]
-        end = statements[min(len(statements) - 1, index + 1)][1]
+        first, last = _semantic_window_indices(
+            source,
+            statements,
+            index,
+            question=question,
+        )
+        start = statements[first][0]
+        end = statements[last][1]
     while start < end and source[start].isspace():
         start += 1
     while end > start and source[end - 1].isspace():
@@ -96,6 +111,110 @@ def exact_proposition_context(
         canonical_start=absolute_start,
         canonical_end=absolute_end,
     )
+
+
+def _semantic_window_indices(
+    text: str,
+    statements: list[tuple[int, int]],
+    target_index: int,
+    *,
+    question: str,
+) -> tuple[int, int]:
+    if not str(question or "").strip():
+        return target_index, target_index
+    first = target_index
+    last = target_index
+    best_score = _semantic_frame_score(
+        question,
+        _statement_window_text(text, statements, first, last),
+    )
+    for distance in range(1, _MAX_CONTEXT_DISTANCE + 1):
+        candidates = []
+        if target_index - distance >= 0:
+            candidates.append((target_index - distance, last))
+        if target_index + distance < len(statements):
+            candidates.append((first, target_index + distance))
+        for candidate_first, candidate_last in candidates:
+            candidate_first = min(first, candidate_first)
+            candidate_last = max(last, candidate_last)
+            if candidate_last - candidate_first + 1 > _MAX_CONTEXT_SENTENCES:
+                continue
+            candidate_text = _statement_window_text(
+                text,
+                statements,
+                candidate_first,
+                candidate_last,
+            )
+            if len(candidate_text) > _MAX_CONTEXT_CHARS or _crosses_section_boundary(
+                candidate_text
+            ):
+                continue
+            score = _semantic_frame_score(question, candidate_text)
+            if score > best_score:
+                first, last, best_score = candidate_first, candidate_last, score
+    return first, last
+
+
+def _semantic_frame_score(
+    question: str, context: str
+) -> tuple[int, float, int, int, int]:
+    question_relations = boolean_relation_lemmas(question)
+    context_relations = boolean_relation_lemmas(context)
+    relation_score = int(
+        not question_relations or bool(question_relations & context_relations)
+    )
+    relation_tokens = {
+        token
+        for relation in question_relations
+        for token in _relation_surface_tokens(relation)
+    }
+    question_objects = normalized_object_tokens(question, relation_tokens) - {""}
+    context_objects = normalized_object_tokens(context, relation_tokens) - {""}
+    if (
+        "task" in question_objects
+        and re.search(r"\b(?:these|those|aforementioned)\s+tasks?\b", question, re.I)
+        and context_relations
+        and context_objects
+    ):
+        object_score = 1.0
+    elif question_objects:
+        object_score = len(question_objects & context_objects) / len(question_objects)
+    else:
+        object_score = 1.0
+    actor = _actor(context, "unknown")
+    if _prior_work_scope_question(question):
+        actor_score = int(actor in {"cited_work", "other_authors"})
+    elif _requires_current_paper_scope(question):
+        actor_score = int(actor == "current_paper")
+    else:
+        actor_score = int(actor != "unknown")
+    qualifier_score = _qualifier_specificity(context)
+    complete_count = actor_score + relation_score + int(object_score >= 1.0)
+    return complete_count, object_score, actor_score, relation_score, qualifier_score
+
+
+def _qualifier_specificity(value: str) -> int:
+    lowered = str(value or "").lower()
+    if re.search(
+        r"\b(?:non[- ]?significant|insignificant|not\s+significant)\b", lowered
+    ):
+        return 2
+    if re.search(r"\b(?:small|minor|marginal)\w*\b", lowered):
+        return 1
+    return 0
+
+
+def _statement_window_text(
+    text: str,
+    statements: list[tuple[int, int]],
+    first: int,
+    last: int,
+) -> str:
+    return text[statements[first][0] : statements[last][1]].strip()
+
+
+def _crosses_section_boundary(value: str) -> bool:
+    return bool(re.search(r"(?:^|\n)\s*#{1,6}\s+", value))
 
 
 def _sentence_offsets(text: str) -> list[tuple[int, int]]:
@@ -131,6 +250,8 @@ def actor_scope_scores(
 def normalized_object_tokens(value: str, relation_tokens: set[str]) -> set[str]:
     raw_tokens = _content_tokens(value) - relation_tokens
     normalized = {_object_token(token) for token in raw_tokens}
+    if {"semantic", "role", "induction"} <= raw_tokens:
+        normalized.discard("induction")
     parallel_resources = raw_tokens & {
         "corpora",
         "corpus",
@@ -139,6 +260,7 @@ def normalized_object_tokens(value: str, relation_tokens: set[str]) -> set[str]:
         "datasets",
     }
     if "parallel" in raw_tokens and parallel_resources:
+        normalized.discard("parallel")
         normalized -= {_object_token(token) for token in parallel_resources}
         normalized.add("parallel_data")
     return normalized

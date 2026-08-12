@@ -117,6 +117,7 @@ def mark_route_switch_recovery(
     *,
     initial_decision: ControllerDecision,
     candidates: list[str],
+    override_reason: str = "Route switch used only after retrieval failure.",
 ) -> ControllerDecision:
     return replace(
         decision,
@@ -141,7 +142,7 @@ def mark_route_switch_recovery(
         ),
         route_probe=initial_decision.route_probe,
         route_switch_candidates=list(candidates),
-        override_reason="Route switch used only after retrieval failure.",
+        override_reason=override_reason,
     )
 
 

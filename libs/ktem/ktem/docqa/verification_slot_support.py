@@ -38,6 +38,7 @@ def claim_aware_slot_support(
         return {}
     selected_items = list(evidence_bundle.items) if evidence_bundle is not None else []
     selected_lookup = unambiguous_evidence_alias_lookup(selected_items)
+    boolean_authority_required = _requires_typed_boolean_authority(request)
     resolved_support: list[tuple[str, dict[str, Any]]] = []
     for claim, evidence_id, result in supported_claims:
         item = selected_lookup.get(evidence_id)
@@ -47,11 +48,19 @@ def claim_aware_slot_support(
             identity = identity_of(item).key
         except ValueError:
             continue
-        if _exact_boolean_authority_matches(result, item, identity) or claim_supported(
-            claim,
-            [item],
-            prompt=prompt,
-            domain=domain,
+        exact_boolean_authority = _exact_boolean_authority_matches(
+            result,
+            item,
+            identity,
+        )
+        if exact_boolean_authority or (
+            not boolean_authority_required
+            and claim_supported(
+                claim,
+                [item],
+                prompt=prompt,
+                domain=domain,
+            )
         ):
             resolved_support.append((identity, item))
 
@@ -173,6 +182,19 @@ def _exact_boolean_authority_matches(
         return False
     if str(result.get("authoritative_evidence_id") or "") != identity:
         return False
+    if not all(
+        _typed_authority_value(result, key)
+        for key in (
+            "actor",
+            "predicate",
+            "arguments",
+            "polarity",
+            "qualifier",
+            "quantifier",
+            "scope",
+        )
+    ):
+        return False
     quote = str(result.get("authoritative_quote") or "")
     if not quote:
         return False
@@ -187,4 +209,26 @@ def _exact_boolean_authority_matches(
         and start >= 0
         and end > start
         and text[start:end] == quote
+    )
+
+
+def _typed_authority_value(result: dict[str, Any], key: str) -> Any:
+    aliases = {
+        "predicate": "relation",
+        "arguments": "object",
+        "polarity": "canonical_answer_polarity",
+        "scope": "section_scope",
+    }
+    return result.get(key) or result.get(aliases.get(key, ""))
+
+
+def _requires_typed_boolean_authority(request: Any) -> bool:
+    plan = getattr(request, "query_plan", None)
+    answer_type = slot_value(plan, "answer_type")
+    if str(answer_type or getattr(request, "task_type", "")).lower() == "boolean":
+        return True
+    evidence_slots = slot_value(plan, "evidence_slots") or ()
+    return any(
+        str(slot_value(slot, "statement_kind") or "") == "boolean_proposition"
+        for slot in evidence_slots
     )

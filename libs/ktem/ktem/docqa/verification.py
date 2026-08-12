@@ -239,6 +239,10 @@ def _boolean_authority_metadata(decision: VerifyDecision) -> dict[str, Any]:
         "section_scope": decision.section_scope,
         "relation": decision.relation,
         "object": decision.object,
+        "predicate": decision.relation,
+        "arguments": list(decision.predicate_arguments),
+        "qualifier": decision.qualifier,
+        "scope": decision.section_scope,
         "quantifier": decision.quantifier,
     }
 

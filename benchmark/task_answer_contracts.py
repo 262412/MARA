@@ -1,15 +1,25 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
-from ktem.docqa.boolean_claim_verification import canonical_boolean_answer_polarity
-from ktem.docqa.evidence_identity import identity_of
-
-from .metrics import is_abstention_answer, normalize_text
+from .metrics import is_abstention_answer
+from .qasper_answer_normalization import (
+    canonical_semantic_label as _canonical_semantic_label,
+)
+from .qasper_answer_normalization import semantic_rewrite_type as _rewrite_type
+from .qasper_answer_normalization import (
+    valid_qasper_typed_label as _valid_qasper_typed_label,
+)
+from .qasper_runtime_authority import records as _records
+from .qasper_runtime_authority import (
+    runtime_authority_inputs as _runtime_authority_inputs,
+)
+from .qasper_runtime_authority import runtime_boolean_authority
+from .qasper_runtime_projection import (
+    runtime_projection_present as _runtime_projection_present,
+)
 from .terminal_answer_state import rebuild_terminal_answer_state
 
 QASPER_RUNTIME_AUTHORITY_AUDIT = "qasper_runtime_authority_audit.v1"
@@ -37,7 +47,7 @@ def apply_task_answer_contract(
         }
         return False
 
-    audit = _qasper_audit_context(prediction)
+    audit = _qasper_audit_context(prediction, dataset_name=dataset_name)
     _record_qasper_audit(prediction, metadata, audit)
     if not audit["violation"] and audit["scored_label"] in {
         "yes",
@@ -50,9 +60,16 @@ def apply_task_answer_contract(
     return False
 
 
-def _qasper_audit_context(prediction: dict[str, Any]) -> dict[str, Any]:
-    projection_required = (
-        str(prediction.get("answer_type") or "").strip().lower() == "boolean"
+def _qasper_audit_context(
+    prediction: dict[str, Any],
+    *,
+    dataset_name: str,
+) -> dict[str, Any]:
+    projection_required = _runtime_boolean_obligation(prediction)
+    typed_label_required = _qasper_typed_label_required(
+        prediction,
+        dataset_name=dataset_name,
+        boolean_obligation=projection_required,
     )
     engine_answer = str(prediction.get("engine_terminal_answer") or "")
     engine_label = _canonical_semantic_label(engine_answer)
@@ -60,26 +77,33 @@ def _qasper_audit_context(prediction: dict[str, Any]) -> dict[str, Any]:
         prediction.get("answer_for_scoring") or prediction.get("predicted_answer") or ""
     )
     scored_label = _canonical_semantic_label(scored_answer)
-    authority_applicable = bool(
+    authority_applicable = projection_required
+    polarity_authority_required = bool(
         projection_required and ({engine_label, scored_label} & {"yes", "no"})
     )
     projection_present = _runtime_projection_present(prediction)
     authority = runtime_boolean_authority(prediction, engine_label)
     semantic_rewrite = bool(
-        projection_present
-        and engine_label
-        and scored_label
-        and engine_label != scored_label
+        engine_label and scored_label and engine_label != scored_label
+    )
+    invalid_typed_label = bool(
+        typed_label_required
+        and (
+            not _valid_qasper_typed_label(engine_answer)
+            or not _valid_qasper_typed_label(scored_answer)
+        )
     )
     authority_missing = bool(
         (projection_required and not projection_present)
-        or (authority_applicable and not authority["complete"])
+        or (polarity_authority_required and not authority["complete"])
     )
     action = (
         "hard_violation_semantic_rewrite"
         if semantic_rewrite
         else "hard_violation_missing_runtime_authority"
         if authority_missing
+        else "hard_violation_invalid_typed_label"
+        if invalid_typed_label
         else "pass_through"
     )
     return {
@@ -91,9 +115,12 @@ def _qasper_audit_context(prediction: dict[str, Any]) -> dict[str, Any]:
         "action": action,
         "projection_present": projection_present,
         "semantic_rewrite": semantic_rewrite,
+        "invalid_typed_label": invalid_typed_label,
+        "typed_label_required": typed_label_required,
         "runtime_boolean_authority_applicable": authority_applicable,
+        "runtime_boolean_polarity_authority_required": polarity_authority_required,
         "runtime_boolean_projection_required": projection_required,
-        "violation": semantic_rewrite or authority_missing,
+        "violation": semantic_rewrite or authority_missing or invalid_typed_label,
     }
 
 
@@ -175,8 +202,6 @@ def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
         prediction["contract_semantic_rewrite"] = True
         prediction["contract_action"] = "hard_violation_semantic_rewrite"
         contract["status"] = "violation"
-        _update_contract_trace(prediction)
-        return True
     engine_state = prediction.get("engine_terminal_state")
     if not isinstance(engine_state, dict) or not engine_state:
         _update_contract_trace(prediction)
@@ -202,7 +227,9 @@ def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
     engine_answer = str(prediction.get("engine_terminal_answer") or "")
     answer_type = str(prediction.get("answer_type") or "").strip().lower()
     terminal_answer = (
-        final_label or final_answer
+        final_answer
+        if semantic_rewrite
+        else final_label or final_answer
         if answer_type == "boolean" or is_abstention_answer(engine_answer)
         else engine_answer
     )
@@ -226,198 +253,6 @@ def synchronize_terminal_answer_state(prediction: dict[str, Any]) -> bool:
     return True
 
 
-def _runtime_projection_present(prediction: dict[str, Any]) -> bool:
-    state = prediction.get("engine_terminal_state")
-    verify_decision = prediction.get("engine_verify_decision")
-    guardrail_decision = prediction.get("engine_terminal_guardrail_decision")
-    evidence_bundle = prediction.get("engine_terminal_evidence_bundle")
-    terminal_answer = str(prediction.get("engine_terminal_answer") or "")
-    if not (
-        terminal_answer
-        and isinstance(state, dict)
-        and state.get("contract_id") == "engine_terminal_state.v1"
-        and isinstance(verify_decision, dict)
-        and isinstance(guardrail_decision, dict)
-        and isinstance(evidence_bundle, dict)
-    ):
-        return False
-    expected_state = {
-        "contract_id": "engine_terminal_state.v1",
-        "answer": terminal_answer,
-        "verify_decision": verify_decision,
-        "guardrail_decision": guardrail_decision,
-        "evidence_bundle": evidence_bundle,
-    }
-    if state != expected_state:
-        return False
-    expected_hash = hashlib.sha256(
-        json.dumps(
-            state,
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            default=str,
-        ).encode("utf-8")
-    ).hexdigest()
-    return str(prediction.get("engine_terminal_projection_hash") or "") == (
-        expected_hash
-    )
-
-
-def runtime_boolean_authority(
-    prediction: dict[str, Any],
-    engine_label: str = "",
-) -> dict[str, Any]:
-    if not engine_label:
-        engine_label = _canonical_semantic_label(
-            str(prediction.get("engine_terminal_answer") or "")
-        )
-    (
-        decision,
-        bundle,
-        plan,
-        slots,
-        verified_slots,
-        required_ids,
-    ) = _runtime_authority_inputs(prediction)
-    evidence_id = str(decision.get("authoritative_evidence_id") or "")
-    quote = str(decision.get("authoritative_quote") or "")
-    evidence_ref = str(decision.get("authoritative_evidence_ref") or "")
-    item = _evidence_item_by_identity(_records(bundle.get("items")), evidence_id)
-    quote_status = _quote_identity_status(
-        item,
-        quote,
-        decision.get("authoritative_span_start"),
-        decision.get("authoritative_span_end"),
-    )
-    claim_results = [
-        result
-        for result in decision.get("claim_results") or []
-        if isinstance(result, dict)
-    ]
-    supported_claim = any(
-        result.get("status") == "supported"
-        and str(result.get("canonical_answer_polarity") or "") == engine_label
-        and evidence_id in (result.get("supporting_evidence_ids") or [])
-        for result in claim_results
-    )
-    complete = bool(
-        engine_label in {"yes", "no"}
-        and decision.get("status") == "supported"
-        and decision.get("canonical_answer_polarity") == engine_label
-        and decision.get("boolean_authority_status") == "verified_support"
-        and plan.get("stage") == "verified"
-        and plan.get("state_authority") == "verified_claim_support.v1"
-        and slots
-        and len(verified_slots) == len(slots)
-        and evidence_id
-        and evidence_id in required_ids
-        and evidence_ref
-        and quote_status == "bound"
-        and supported_claim
-    )
-    failure_kind = _runtime_authority_failure_kind(
-        decision,
-        engine_label=engine_label,
-        slots=slots,
-        required_ids=required_ids,
-        evidence_id=evidence_id,
-        claim_results=claim_results,
-        quote_status=quote_status,
-        complete=complete,
-    )
-    return {
-        "complete": complete,
-        "status": "complete" if complete else "missing_or_inconsistent",
-        "decision": decision,
-        "plan": plan,
-        "required_slot_ids": [str(slot.get("slot_id") or "") for slot in slots],
-        "required_evidence_ids": required_ids,
-        "evidence_id": evidence_id,
-        "evidence_ref": evidence_ref,
-        "quote": quote,
-        "quote_ref_validation_status": quote_status,
-        "claim_results": claim_results,
-        "failure_kind": failure_kind,
-    }
-
-
-def _runtime_authority_inputs(
-    prediction: dict[str, Any],
-) -> tuple[
-    dict[str, Any],
-    dict[str, Any],
-    dict[str, Any],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[str],
-]:
-    decision = prediction.get("engine_verify_decision")
-    decision = decision if isinstance(decision, dict) else {}
-    bundle = prediction.get("engine_terminal_evidence_bundle")
-    bundle = bundle if isinstance(bundle, dict) else {}
-    bundle_metadata = bundle.get("metadata")
-    bundle_metadata = bundle_metadata if isinstance(bundle_metadata, dict) else {}
-    plan = bundle_metadata.get("query_plan") or bundle_metadata.get("bound_query_plan")
-    if not isinstance(plan, dict) or not plan:
-        metadata = prediction.get("evidence_metadata")
-        metadata = metadata if isinstance(metadata, dict) else {}
-        plan = metadata.get("query_plan") or metadata.get("bound_query_plan")
-    plan = plan if isinstance(plan, dict) else {}
-    slots = [
-        slot
-        for slot in plan.get("evidence_slots") or []
-        if isinstance(slot, dict)
-        and slot.get("required_for_verification")
-        and (
-            slot.get("role") == "support"
-            or slot.get("statement_kind") == "boolean_proposition"
-        )
-    ]
-    verified_slots = [
-        slot for slot in slots if slot.get("status") == "verified_support"
-    ]
-    required_ids = list(
-        dict.fromkeys(
-            str(evidence_id)
-            for slot in verified_slots
-            for evidence_id in slot.get("evidence_ids") or []
-            if str(evidence_id).strip()
-        )
-    )
-    return decision, bundle, plan, slots, verified_slots, required_ids
-
-
-def _runtime_authority_failure_kind(
-    decision: dict[str, Any],
-    *,
-    engine_label: str,
-    slots: list[dict[str, Any]],
-    required_ids: list[str],
-    evidence_id: str,
-    claim_results: list[dict[str, Any]],
-    quote_status: str,
-    complete: bool,
-) -> str:
-    if not slots or not required_ids or not evidence_id:
-        return "authority_missing"
-    if decision.get("status") != "supported" or (
-        decision.get("canonical_answer_polarity") != engine_label
-    ):
-        return "semantic_verifier"
-    claim_reasons = " ".join(
-        str(result.get("reason") or "") for result in claim_results
-    ).lower()
-    if any(
-        marker in claim_reasons
-        for marker in ("scope", "cited_work", "current_paper", "quantified", "actor")
-    ):
-        return "scope"
-    if quote_status != "bound":
-        return "ref_mismatch"
-    return "" if complete else "authority_missing"
-
-
 def _answerability_trace(
     prediction: dict[str, Any],
     *,
@@ -429,7 +264,10 @@ def _answerability_trace(
     action: str,
     projection_present: bool,
     semantic_rewrite: bool,
+    invalid_typed_label: bool,
+    typed_label_required: bool,
     runtime_boolean_authority_applicable: bool,
+    runtime_boolean_polarity_authority_required: bool,
     runtime_boolean_projection_required: bool,
 ) -> dict[str, Any]:
     complete = bool(authority["complete"])
@@ -437,7 +275,7 @@ def _answerability_trace(
         "authority_missing"
         if runtime_boolean_projection_required and not projection_present
         else ""
-        if complete or not runtime_boolean_authority_applicable
+        if complete or not runtime_boolean_polarity_authority_required
         else str(authority.get("failure_kind") or "authority_missing")
     )
     return {
@@ -456,7 +294,7 @@ def _answerability_trace(
             else "runtime_projection_missing"
             if runtime_boolean_projection_required and not projection_present
             else "runtime_safe_abstention"
-            if not runtime_boolean_authority_applicable
+            if not runtime_boolean_polarity_authority_required
             else "runtime_authority_missing_or_inconsistent"
             if runtime_boolean_authority_applicable
             else "runtime_boolean_authority_not_applicable"
@@ -470,8 +308,13 @@ def _answerability_trace(
         "scored_semantic_label": scored_label,
         "contract_action": action,
         "contract_semantic_rewrite": semantic_rewrite,
+        "invalid_typed_label": invalid_typed_label,
+        "typed_label_required": typed_label_required,
         "runtime_projection_present": projection_present,
         "runtime_boolean_authority_applicable": (runtime_boolean_authority_applicable),
+        "runtime_boolean_polarity_authority_required": (
+            runtime_boolean_polarity_authority_required
+        ),
         "runtime_boolean_projection_required": (runtime_boolean_projection_required),
         "runtime_authority_failure_kind": failure_kind,
         "post_engine_answerability_llm_call_count": 0,
@@ -532,62 +375,28 @@ def _update_contract_trace(prediction: dict[str, Any]) -> None:
         authority_trace["final_post_contract_answer"] = final_answer
 
 
-def _evidence_item_by_identity(
-    items: list[dict[str, Any]],
-    evidence_id: str,
-) -> dict[str, Any] | None:
-    if not evidence_id:
-        return None
-    matches = []
-    for item in items:
-        try:
-            if identity_of(item).key == evidence_id:
-                matches.append(item)
-        except ValueError:
-            continue
-    return matches[0] if len(matches) == 1 else None
-
-
-def _quote_identity_status(
-    item: dict[str, Any] | None,
-    quote: str,
-    start: Any,
-    end: Any,
-) -> str:
-    if item is None or not quote:
-        return "evidence_ref_quote_mismatch"
-    text = "\n".join(
-        str(item.get(field) or "").strip()
-        for field in ("text", "ocr_text", "vlm_text", "caption")
-        if str(item.get(field) or "").strip()
+def _runtime_boolean_obligation(prediction: dict[str, Any]) -> bool:
+    _decision, _bundle, plan, slots, _verified, _required = _runtime_authority_inputs(
+        prediction
     )
-    if text.count(quote) != 1:
-        return "evidence_ref_quote_mismatch"
-    if not isinstance(start, int) or not isinstance(end, int):
-        return "evidence_ref_quote_mismatch"
-    return "bound" if text[start:end] == quote else "evidence_ref_quote_mismatch"
+    if str(plan.get("answer_type") or "").strip().lower() == "boolean":
+        return True
+    if any(
+        str(slot.get("statement_kind") or "") == "boolean_proposition"
+        and bool(slot.get("required_for_verification"))
+        for slot in slots
+    ):
+        return True
+    return str(prediction.get("answer_type") or "").strip().lower() == "boolean"
 
 
-def _canonical_semantic_label(value: str) -> str:
-    if is_abstention_answer(str(value or "")):
-        return "unanswerable"
-    polarity = canonical_boolean_answer_polarity(str(value or ""))
-    return polarity or normalize_text(value)
-
-
-def _rewrite_type(before: str, after: str) -> str:
-    if before == after:
-        return "none"
-    before_abstained = before == "unanswerable"
-    after_abstained = after == "unanswerable"
-    if before_abstained and not after_abstained:
-        return "unanswerable_to_polarity"
-    if not before_abstained and after_abstained:
-        return "polarity_to_unanswerable"
-    return "answer_rewrite"
-
-
-def _records(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, dict)]
+def _qasper_typed_label_required(
+    prediction: dict[str, Any],
+    *,
+    dataset_name: str,
+    boolean_obligation: bool,
+) -> bool:
+    if "qasper_typed" not in str(dataset_name or "").lower():
+        return False
+    answer_type = str(prediction.get("answer_type") or "").strip().lower()
+    return bool(boolean_obligation or answer_type in {"boolean", "unanswerable"})

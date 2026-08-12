@@ -78,6 +78,29 @@ def test_current_paper_experiment_question_uses_direct_empirical_evidence() -> N
     assert resolution.decision.section_role == "experiments"
 
 
+def test_current_experiment_resolution_preserves_explicit_exclusion_polarity() -> None:
+    question = (
+        "Do they experiment with their proposed model on any other dataset "
+        "other than MovieQA?"
+    )
+    item = {
+        "evidence_id": "exclusive-dataset",
+        "source_id": "paper",
+        "section_id": "results",
+        "text": (
+            "We evaluated the proposed model only on the MovieQA dataset and no "
+            "other dataset."
+        ),
+    }
+
+    resolution = resolve_closed_scope_boolean(question, [item])
+
+    assert resolution is not None
+    assert resolution.polarity == "no"
+    assert resolution.evidence_quote == item["text"]
+    assert boolean_proposition_evidence_score(question, item) > 0
+
+
 def test_current_experiment_slot_score_and_binding_reuse_single_candidate_resolver() -> None:
     question = "Do the authors conduct experiments on the tasks mentioned?"
     item = {

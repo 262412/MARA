@@ -1,150 +1,108 @@
 from __future__ import annotations
 
-import hashlib
-import json
-from copy import deepcopy
-from dataclasses import asdict, dataclass, field
-from typing import Any, Callable
+from typing import Any
 
-from .controller import (
-    RetrieveDecision,
-    RouteDecision,
-    VerifyDecision,
-    _route_decision,
-    _verify_decision,
-    evaluate_retrieval_quality,
+from .controller import RetrieveDecision, VerifyDecision
+from .engine_terminal_projection import (
+    engine_terminal_projection as _engine_terminal_projection,
 )
-from .evidence import EvidenceBundle, build_evidence_bundle
-from .execution_trace import execution_trace
-from .execution_verification import ragtruth_contract_request, verify_generated_answer
+from .engine_terminal_projection import (
+    normalized_candidate_label as _normalized_candidate_label,
+)
+from .evidence import EvidenceBundle
+from .execution_contracts import ABSTAIN_MESSAGE
+from .execution_contracts import CANONICAL_ROUTES as _CANONICAL_ROUTES
+from .execution_contracts import (
+    DIRECT_ANSWER_MESSAGE,
+    ENGINE_TERMINAL_STATE_CONTRACT,
+    RAGTRUTH_EMPTY_ANSWER,
+)
+from .execution_models import (
+    GenerateFn,
+    GuardrailDecision,
+    RetrieveFn,
+    RewriteFn,
+    RouteExecutionResult,
+)
+from .execution_planning import (
+    build_execution_workflow_plan as _build_execution_workflow_plan,
+)
+from .execution_planning import controller_decision as _controller_decision
+from .execution_planning import planned_execution as _planned_execution
+from .execution_recovery import (
+    complete_verifier_recovery as _complete_verifier_recovery,
+)
+from .execution_recovery import (
+    recover_after_failed_retrieval as _recover_after_failed_retrieval,
+)
+from .execution_recovery import (
+    recover_after_failed_verification as _recover_after_failed_verification,
+)
+from .execution_recovery import (
+    required_boolean_authority_missing as _required_boolean_authority_missing,
+)
+from .execution_recovery import (
+    same_route_verifier_recovery_trace as _same_route_verifier_recovery_trace,
+)
+from .execution_recovery import (
+    switch_after_failed_retrieval as _switch_after_failed_retrieval,
+)
+from .execution_recovery import (
+    switch_after_failed_verification as _switch_after_failed_verification,
+)
+from .execution_recovery import verifier_recovery_policy as _verifier_recovery_policy
+from .execution_results import guarded_result as _guarded_result
+from .execution_results import result as _result
+from .execution_results import static_result as _static_result
+from .execution_results import verified_result as _verified_result
+from .execution_retrieval import retrieve_and_evaluate as _retrieve_and_evaluate
 from .pipeline_stage_timings import PipelineStageTimings
-from .query_planning import ensure_request_query_plan
-from .retrieval_rounds import retrieve_with_rounds
-from .route_budget import optional_stage_allowed, route_budget_metadata
 from .route_capabilities import (
     route_switch_candidate_evaluation as _route_switch_candidate_evaluation,
 )
 from .route_capabilities import route_switch_candidates as _route_switch_candidates
-from .route_selection import (
-    ControllerDecision,
-    controller_decision_from_route,
-    mark_route_switch_recovery,
-)
-from .verification import with_verification_evidence
-from .workflow import build_workflow_plan, planner_payload_from_trace
+from .route_selection import ControllerDecision
 
-DIRECT_ANSWER_MESSAGE = (
-    "MARA can answer general questions, but document-specific answers require "
-    "retrieved evidence."
-)
-ABSTAIN_MESSAGE = (
-    "MARA could not retrieve enough evidence to answer reliably. Select a "
-    "relevant source or page, or ask with more source-specific context."
-)
-RAGTRUTH_EMPTY_ANSWER = '{"hallucination list": []}'
+_controller_decision_from_payload = _controller_decision
 
-RetrieveFn = Callable[[Any, "ControllerDecision"], dict[str, Any]]
-GenerateFn = Callable[[Any, "ControllerDecision", EvidenceBundle], str]
-RewriteFn = Callable[[Any, "ControllerDecision", EvidenceBundle, str], str]
-
-ENGINE_TERMINAL_STATE_CONTRACT = "engine_terminal_state.v1"
-
-
-def _engine_terminal_projection(
-    answer: str,
-    verify_decision: VerifyDecision,
-    guardrail_decision: GuardrailDecision,
-    bundle: EvidenceBundle,
-) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str]:
-    terminal_answer = str(answer or "")
-    terminal_verify = deepcopy(verify_decision.as_dict())
-    terminal_guardrail = deepcopy(guardrail_decision.as_dict())
-    terminal_evidence = deepcopy(bundle.as_dict())
-    terminal_state = {
-        "contract_id": ENGINE_TERMINAL_STATE_CONTRACT,
-        "answer": terminal_answer,
-        "verify_decision": deepcopy(terminal_verify),
-        "guardrail_decision": deepcopy(terminal_guardrail),
-        "evidence_bundle": deepcopy(terminal_evidence),
-    }
-    projection_hash = hashlib.sha256(
-        json.dumps(
-            terminal_state,
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            default=str,
-        ).encode("utf-8")
-    ).hexdigest()
-    return (
-        terminal_answer,
-        terminal_state,
-        terminal_verify,
-        terminal_guardrail,
-        terminal_evidence,
-        projection_hash,
-    )
-
-
-_CANONICAL_ROUTES = {
-    "direct": "direct_answer",
-    "doc_text": "text_rag",
-    "doc_page_image": "page_image_rag",
-    "doc_element": "element_rag",
-    "graph_global": "graph_rag",
-    "hybrid": "hybrid_rag",
-    "abstain": "abstain",
-}
-
-
-@dataclass(frozen=True)
-class GuardrailDecision:
-    status: str
-    action: str
-    reason: str
-
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class RouteExecutionResult:
-    controller_decision: ControllerDecision
-    retrieve_decision: RetrieveDecision
-    verify_decision: VerifyDecision
-    guardrail_decision: GuardrailDecision
-    evidence_bundle: EvidenceBundle
-    workflow_plan: dict[str, Any] = field(default_factory=dict)
-    answer: str = ""
-    controller_trace: list[dict[str, Any]] = field(default_factory=list)
-    engine_terminal_answer: str = ""
-    engine_terminal_state: dict[str, Any] = field(default_factory=dict)
-    engine_verify_decision: dict[str, Any] = field(default_factory=dict)
-    engine_terminal_guardrail_decision: dict[str, Any] = field(default_factory=dict)
-    engine_terminal_evidence_bundle: dict[str, Any] = field(default_factory=dict)
-    engine_terminal_projection_hash: str = ""
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "controller_decision": self.controller_decision.as_dict(),
-            "retrieve_decision": self.retrieve_decision.as_dict(),
-            "verify_decision": self.verify_decision.as_dict(),
-            "guardrail_decision": self.guardrail_decision.as_dict(),
-            "evidence_bundle": self.evidence_bundle.as_dict(),
-            "workflow_plan": dict(self.workflow_plan),
-            "answer": self.answer,
-            "controller_trace": list(self.controller_trace),
-            "engine_terminal_answer": self.engine_terminal_answer,
-            "engine_terminal_state": deepcopy(self.engine_terminal_state),
-            "engine_verify_decision": deepcopy(self.engine_verify_decision),
-            "engine_terminal_guardrail_decision": deepcopy(
-                self.engine_terminal_guardrail_decision
-            ),
-            "engine_terminal_evidence_bundle": deepcopy(
-                self.engine_terminal_evidence_bundle
-            ),
-            "engine_terminal_projection_hash": self.engine_terminal_projection_hash,
-        }
+__all__ = [
+    "ABSTAIN_MESSAGE",
+    "DIRECT_ANSWER_MESSAGE",
+    "ENGINE_TERMINAL_STATE_CONTRACT",
+    "RAGTRUTH_EMPTY_ANSWER",
+    "ControllerDecision",
+    "EvidenceBundle",
+    "GenerateFn",
+    "GuardrailDecision",
+    "RetrieveDecision",
+    "RetrieveFn",
+    "RewriteFn",
+    "RouteExecutionResult",
+    "VerifyDecision",
+    "_CANONICAL_ROUTES",
+    "_build_execution_workflow_plan",
+    "_complete_verifier_recovery",
+    "_controller_decision",
+    "_controller_decision_from_payload",
+    "_engine_terminal_projection",
+    "_guarded_result",
+    "_normalized_candidate_label",
+    "_planned_execution",
+    "_recover_after_failed_retrieval",
+    "_recover_after_failed_verification",
+    "_required_boolean_authority_missing",
+    "_result",
+    "_retrieve_and_evaluate",
+    "_route_switch_candidate_evaluation",
+    "_route_switch_candidates",
+    "_same_route_verifier_recovery_trace",
+    "_static_result",
+    "_switch_after_failed_retrieval",
+    "_switch_after_failed_verification",
+    "_verified_result",
+    "_verifier_recovery_policy",
+    "execute_controller_turn",
+]
 
 
 def execute_controller_turn(
@@ -156,43 +114,57 @@ def execute_controller_turn(
     agent_trace: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
     timings = PipelineStageTimings()
-    controller_decision, workflow_plan = timings.measure(
+    decision, workflow_plan = timings.measure(
         "planning_seconds",
         _planned_execution,
         request,
         agent_trace or [],
     )
-    if controller_decision.route in {"direct_answer", "abstain"}:
+    if decision.route in {"direct_answer", "abstain"}:
         answer = (
             DIRECT_ANSWER_MESSAGE
-            if controller_decision.route == "direct_answer"
+            if decision.route == "direct_answer"
             else ABSTAIN_MESSAGE
         )
-        return _static_result(
-            request,
-            controller_decision,
-            answer,
-            workflow_plan,
-            timings,
-        )
-    evidence_bundle, retrieve_decision = timings.measure(
+        return _static_result(request, decision, answer, workflow_plan, timings)
+    return _execute_retrieval_turn(
+        request,
+        decision,
+        workflow_plan,
+        retrieve,
+        generate,
+        rewrite,
+        timings,
+    )
+
+
+def _execute_retrieval_turn(
+    request: Any,
+    decision: ControllerDecision,
+    workflow_plan: dict[str, Any],
+    retrieve: RetrieveFn,
+    generate: GenerateFn,
+    rewrite: RewriteFn | None,
+    timings: PipelineStageTimings,
+) -> RouteExecutionResult:
+    bundle, retrieve_decision = timings.measure(
         "retrieval_seconds",
         _retrieve_and_evaluate,
         request,
-        controller_decision,
+        decision,
         retrieve,
     )
     (
-        controller_decision,
-        evidence_bundle,
+        decision,
+        bundle,
         retrieve_decision,
         workflow_plan,
         route_switch_trace,
     ) = _recover_after_failed_retrieval(
         request,
-        controller_decision,
+        decision,
         retrieve_decision,
-        evidence_bundle,
+        bundle,
         workflow_plan,
         retrieve,
         timings,
@@ -200,9 +172,9 @@ def execute_controller_turn(
     if retrieve_decision.status != "good":
         return _guarded_result(
             request,
-            controller_decision,
+            decision,
             retrieve_decision,
-            evidence_bundle,
+            bundle,
             workflow_plan,
             route_switch_trace,
             timings,
@@ -211,388 +183,26 @@ def execute_controller_turn(
         "generation_seconds",
         generate,
         request,
-        controller_decision,
-        evidence_bundle,
+        decision,
+        bundle,
     )
-    return _verified_result(
+    initial_result = _verified_result(
         request,
-        controller_decision,
+        decision,
         retrieve_decision,
-        evidence_bundle,
+        bundle,
         answer,
         rewrite,
         workflow_plan,
         route_switch_trace,
         timings,
     )
-
-
-def _recover_after_failed_retrieval(
-    request: Any,
-    controller_decision: ControllerDecision,
-    retrieve_decision: RetrieveDecision,
-    evidence_bundle: EvidenceBundle,
-    workflow_plan: dict[str, Any],
-    retrieve: RetrieveFn,
-    timings: PipelineStageTimings,
-) -> tuple[
-    ControllerDecision,
-    EvidenceBundle,
-    RetrieveDecision,
-    dict[str, Any],
-    list[dict[str, Any]],
-]:
-    if retrieve_decision.status == "good":
-        return (
-            controller_decision,
-            evidence_bundle,
-            retrieve_decision,
-            workflow_plan,
-            [],
-        )
-    switched = timings.measure(
-        "retry_seconds",
-        _switch_after_failed_retrieval,
+    return _recover_after_failed_verification(
         request,
-        controller_decision,
-        retrieve_decision,
-        evidence_bundle,
+        initial_result,
         retrieve,
-    )
-    if switched is None:
-        return (
-            controller_decision,
-            evidence_bundle,
-            retrieve_decision,
-            workflow_plan,
-            [],
-        )
-    controller_decision, evidence_bundle, retrieve_decision, event = switched
-    workflow_plan = _build_execution_workflow_plan(
-        request,
-        controller_decision.legacy_route,
-        controller_decision.policy,
-        controller_decision.controller_mode,
-        [],
-    )
-    return (
-        controller_decision,
-        evidence_bundle,
-        retrieve_decision,
-        workflow_plan,
-        [event],
-    )
-
-
-def _planned_execution(
-    request: Any,
-    agent_trace: list[dict[str, Any]],
-) -> tuple[ControllerDecision, dict[str, Any]]:
-    planner_payload = planner_payload_from_trace(agent_trace)
-    ensure_request_query_plan(request, planner_payload=planner_payload)
-    route_decision = _route_decision(request, agent_trace)
-    controller_decision = _controller_decision(route_decision, planner_payload)
-    workflow_plan = _build_execution_workflow_plan(
-        request,
-        route_decision.route,
-        route_decision.policy,
-        route_decision.controller_mode,
-        agent_trace,
-    )
-    return controller_decision, workflow_plan
-
-
-def _build_execution_workflow_plan(
-    request: Any,
-    route: str,
-    policy: str,
-    controller_mode: str,
-    agent_trace: list[dict[str, Any]],
-) -> dict[str, Any]:
-    return build_workflow_plan(
-        route=route,
-        request=request,
-        planner_payload=planner_payload_from_trace(agent_trace),
-        policy=policy,
-        controller_mode=controller_mode,
-    ).as_dict()
-
-
-def _retrieve_and_evaluate(
-    request: Any,
-    decision: ControllerDecision,
-    retrieve: RetrieveFn,
-    *,
-    max_rounds: int | None = None,
-) -> tuple[EvidenceBundle, RetrieveDecision]:
-    plan = ensure_request_query_plan(request)
-    return retrieve_with_rounds(
-        request,
-        decision,
-        retrieve,
-        evaluate=evaluate_retrieval_quality,
-        retry_poor=(
-            decision.legacy_route == "doc_element"
-            or not _route_switch_candidates(request, decision.legacy_route)
-        ),
-        max_rounds=plan.max_retrieval_rounds if max_rounds is None else max_rounds,
-    )
-
-
-def _controller_decision(
-    route_decision: RouteDecision,
-    planner_payload: Any = None,
-) -> ControllerDecision:
-    return _controller_decision_from_payload(route_decision, planner_payload)
-
-
-def _controller_decision_from_payload(
-    route_decision: RouteDecision,
-    planner_payload: Any,
-) -> ControllerDecision:
-    return controller_decision_from_route(
-        route_decision,
-        canonical_routes=_CANONICAL_ROUTES,
-        planner_payload=planner_payload,
-    )
-
-
-def _switch_after_failed_retrieval(
-    request: Any,
-    decision: ControllerDecision,
-    failed_decision: RetrieveDecision,
-    failed_bundle: EvidenceBundle,
-    retrieve: RetrieveFn,
-) -> tuple[ControllerDecision, EvidenceBundle, RetrieveDecision, dict[str, Any]] | None:
-    if not optional_stage_allowed(request):
-        failed_bundle.metadata.update(route_budget_metadata(request))
-        failed_bundle.metadata[
-            "route_switch_skipped_reason"
-        ] = "insufficient_remaining_time"
-        return None
-    candidates, rejected_candidates = _route_switch_candidate_evaluation(
-        request,
-        decision.legacy_route,
-    )
-    if rejected_candidates:
-        failed_bundle.metadata["rejected_route_switch_candidates"] = list(
-            rejected_candidates
-        )
-    for route in candidates:
-        switched_decision = _controller_decision(
-            RouteDecision(
-                route=route,
-                policy="route_switch",
-                controller_mode=decision.controller_mode,
-                requires_retrieval=True,
-                reason=(
-                    f"Switched from {decision.legacy_route} after "
-                    f"{failed_decision.status} retrieval."
-                ),
-            )
-        )
-        switched_decision = mark_route_switch_recovery(
-            switched_decision,
-            initial_decision=decision,
-            candidates=candidates,
-        )
-        bundle, retrieve_decision = _retrieve_and_evaluate(
-            request,
-            switched_decision,
-            retrieve,
-            max_rounds=1,
-        )
-        switch_event = {
-            "stage": "route_switch",
-            "from_route": decision.legacy_route,
-            "to_route": route,
-            "reason": failed_decision.reason,
-            "route_switch_used": True,
-            "route_switch_candidates": list(candidates),
-            "failed_retrieval_rounds": int(
-                failed_bundle.metadata.get("retrieval_rounds") or 1
-            ),
-            "failed_slot_coverage": failed_bundle.metadata.get("slot_coverage"),
-            "failed_missing_required_slot_count": failed_bundle.metadata.get(
-                "missing_required_slot_count"
-            ),
-        }
-        if rejected_candidates:
-            switch_event["rejected_route_switch_candidates"] = list(rejected_candidates)
-        if retrieve_decision.status == "good":
-            return switched_decision, bundle, retrieve_decision, switch_event
-    return None
-
-
-def _static_result(
-    request: Any,
-    decision: ControllerDecision,
-    answer: str,
-    workflow_plan: dict[str, Any],
-    stage_timings: PipelineStageTimings,
-) -> RouteExecutionResult:
-    bundle = build_evidence_bundle(decision.legacy_route, request, {})
-    retrieve_decision = evaluate_retrieval_quality(decision.legacy_route, {})
-    verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
-    return _result(
-        request,
-        decision,
-        retrieve_decision,
-        verify_decision,
-        GuardrailDecision("ok", "return", decision.reason),
-        bundle,
-        workflow_plan,
-        answer,
-        stage_timings=stage_timings,
-    )
-
-
-def _guarded_result(
-    request: Any,
-    decision: ControllerDecision,
-    retrieve_decision: RetrieveDecision,
-    bundle: EvidenceBundle,
-    workflow_plan: dict[str, Any],
-    trace_prefix: list[dict[str, Any]] | None = None,
-    stage_timings: PipelineStageTimings | None = None,
-) -> RouteExecutionResult:
-    if ragtruth_contract_request(request):
-        bundle.metadata["task_contract_fallback"] = "ragtruth_empty_retrieval"
-        verify_decision = VerifyDecision(
-            mode="off",
-            status="not_required",
-            reason="RAGTruth task contract handled empty retrieval.",
-        )
-        return _result(
-            request,
-            decision,
-            retrieve_decision,
-            verify_decision,
-            GuardrailDecision("ok", "return", verify_decision.reason),
-            bundle,
-            workflow_plan,
-            RAGTRUTH_EMPTY_ANSWER,
-            trace_prefix,
-            stage_timings,
-        )
-    verify_decision = _verify_decision(request, retrieve_decision, bundle, "")
-    guardrail = GuardrailDecision(
-        status="not_enough_evidence",
-        action="abstain",
-        reason=retrieve_decision.reason,
-    )
-    return _result(
-        request,
-        decision,
-        retrieve_decision,
-        verify_decision,
-        guardrail,
-        bundle,
-        workflow_plan,
-        ABSTAIN_MESSAGE,
-        trace_prefix,
-        stage_timings,
-    )
-
-
-def _verified_result(
-    request: Any,
-    decision: ControllerDecision,
-    retrieve_decision: RetrieveDecision,
-    bundle: EvidenceBundle,
-    answer: str,
-    rewrite: RewriteFn | None,
-    workflow_plan: dict[str, Any],
-    trace_prefix: list[dict[str, Any]] | None = None,
-    stage_timings: PipelineStageTimings | None = None,
-) -> RouteExecutionResult:
-    stage_timings = stage_timings or PipelineStageTimings()
-    answer, verify_decision, guardrail, trace = verify_generated_answer(
-        request,
-        decision,
-        retrieve_decision,
-        bundle,
-        answer,
         rewrite,
-        trace_prefix,
-        stage_timings,
-        verify=_verify_decision,
-        guardrail_factory=GuardrailDecision,
-        abstain_message=ABSTAIN_MESSAGE,
-        ragtruth_empty_answer=RAGTRUTH_EMPTY_ANSWER,
-    )
-    return _result(
-        request,
-        decision,
-        retrieve_decision,
-        verify_decision,
-        guardrail,
-        bundle,
         workflow_plan,
-        answer,
-        trace,
-        stage_timings,
-    )
-
-
-def _result(
-    request: Any,
-    decision: ControllerDecision,
-    retrieve_decision: RetrieveDecision,
-    verify_decision: VerifyDecision,
-    guardrail_decision: GuardrailDecision,
-    bundle: EvidenceBundle,
-    workflow_plan: dict[str, Any],
-    answer: str,
-    trace_prefix: list[dict[str, Any]] | None = None,
-    stage_timings: PipelineStageTimings | None = None,
-) -> RouteExecutionResult:
-    bundle = with_verification_evidence(bundle, verify_decision, request)
-    (stage_timings or PipelineStageTimings()).record(bundle)
-    (
-        terminal_answer,
-        terminal_state,
-        terminal_verify,
-        terminal_guardrail,
-        terminal_evidence,
-        projection_hash,
-    ) = _engine_terminal_projection(
-        answer,
-        verify_decision,
-        guardrail_decision,
-        bundle,
-    )
-    prefix = [
-        item
-        for item in list(trace_prefix or [])
-        if item.get("stage") != "claim_aggregation"
-    ]
-    suffix = [
-        item
-        for item in list(trace_prefix or [])
-        if item.get("stage") == "claim_aggregation"
-    ]
-    return RouteExecutionResult(
-        controller_decision=decision,
-        retrieve_decision=retrieve_decision,
-        verify_decision=verify_decision,
-        guardrail_decision=guardrail_decision,
-        evidence_bundle=bundle,
-        workflow_plan=workflow_plan,
-        answer=answer,
-        controller_trace=prefix
-        + execution_trace(
-            decision,
-            workflow_plan,
-            retrieve_decision,
-            guardrail_decision,
-            verify_decision,
-        )
-        + suffix,
-        engine_terminal_answer=terminal_answer,
-        engine_terminal_state=terminal_state,
-        engine_verify_decision=terminal_verify,
-        engine_terminal_guardrail_decision=terminal_guardrail,
-        engine_terminal_evidence_bundle=terminal_evidence,
-        engine_terminal_projection_hash=projection_hash,
+        route_switch_trace,
+        timings,
     )

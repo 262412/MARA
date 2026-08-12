@@ -139,7 +139,7 @@ def test_boolean_candidate_binding_keeps_only_the_matching_slot_pending():
     assert requests[0]["modality"] == "auto"
 
 
-def test_exact_candidate_identity_can_promote_boolean_slot_authority():
+def test_generic_claim_support_cannot_promote_boolean_slot_authority():
     question = "Did the authors evaluate the model on clinical tasks?"
     plan = build_query_plan(
         question,
@@ -172,6 +172,81 @@ def test_exact_candidate_identity_can_promote_boolean_slot_authority():
                 "claim": candidate["text"],
                 "status": "supported",
                 "supporting_evidence_ids": [identity],
+            }
+        ],
+    )
+
+    verified = with_verification_evidence(bundle, decision, request=request)
+
+    [slot] = request.query_plan.evidence_slots
+    assert slot.status == "retrieved_unverified"
+    assert slot.evidence_ids == (identity,)
+    assert "query_plan" not in verified.metadata
+
+
+def test_exact_typed_boolean_authority_can_promote_boolean_slot_authority():
+    question = "Did the authors evaluate the model on clinical tasks?"
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    text = "We evaluated the model on clinical tasks."
+    candidate = {
+        "evidence_id": "candidate",
+        "source_id": "paper",
+        "section_id": "experiments",
+        "text": text,
+    }
+    bound = bind_evidence_slots(plan, [candidate])
+    request = DocQARequest(
+        prompt=question,
+        task_type="boolean",
+        verification_mode="strict",
+        verification_domain="qasper",
+        query_plan=bound,
+    )
+    bundle = EvidenceBundle(route="doc_text", items=[candidate])
+    identity = identity_of(candidate).key
+    decision = VerifyDecision(
+        mode="strict",
+        status="supported",
+        reason="exact typed authority",
+        claims=[f"yes: {question}"],
+        verified_citations=[identity],
+        canonical_answer_polarity="yes",
+        boolean_authority_status="exact",
+        authoritative_evidence_id=identity,
+        authoritative_evidence_ref=f"{identity}#quote:0:{len(text)}",
+        authoritative_span_id=f"{identity}#quote:0:{len(text)}",
+        authoritative_quote=text,
+        authoritative_span_start=0,
+        authoritative_span_end=len(text),
+        actor="current_paper",
+        section_scope="experiments",
+        relation="evaluate",
+        object="model clinical tasks",
+        qualifier="none",
+        quantifier="none",
+        claim_results=[
+            {
+                "claim_id": "claim:1",
+                "claim": f"yes: {question}",
+                "status": "supported",
+                "supporting_evidence_ids": [identity],
+                "canonical_answer_polarity": "yes",
+                "authority_status": "exact",
+                "authoritative_evidence_id": identity,
+                "authoritative_evidence_ref": f"{identity}#quote:0:{len(text)}",
+                "authoritative_quote": text,
+                "authoritative_span_start": 0,
+                "authoritative_span_end": len(text),
+                "actor": "current_paper",
+                "section_scope": "experiments",
+                "relation": "evaluate",
+                "object": "model clinical tasks",
+                "qualifier": "none",
+                "quantifier": "none",
             }
         ],
     )

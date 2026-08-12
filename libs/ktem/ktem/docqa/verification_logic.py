@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .boolean_claim_verification import boolean_claim_authority
@@ -22,81 +21,7 @@ from .evidence import EvidenceBundle
 from .evidence_identity import identity_of
 from .evidence_text import evidence_text, extract_final_answer_text
 from .query_planning import request_planning_question
-
-
-@dataclass(frozen=True)
-class VerifiedClaim:
-    claim_id: str
-    claim: str
-    status: str
-    supporting_evidence_ids: tuple[str, ...] = ()
-    contradicting_evidence_ids: tuple[str, ...] = ()
-    input_answer_polarity: str = ""
-    canonical_answer_polarity: str = ""
-    semantic_correction_applied: bool = False
-    authority_status: str = ""
-    authoritative_evidence_id: str = ""
-    authoritative_evidence_ref: str = ""
-    authoritative_span_id: str = ""
-    authoritative_quote: str = ""
-    authoritative_span_start: int | None = None
-    authoritative_span_end: int | None = None
-    authoritative_canonical_start: int | None = None
-    authoritative_canonical_end: int | None = None
-    actor: str = ""
-    section_scope: str = ""
-    relation: str = ""
-    object: str = ""
-    quantifier: str = ""
-    supporting_evidence_spans: tuple[dict[str, Any], ...] = ()
-    contradicting_evidence_spans: tuple[dict[str, Any], ...] = ()
-    verified_slot_state: str = ""
-
-    def as_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["supporting_evidence_ids"] = list(self.supporting_evidence_ids)
-        payload["contradicting_evidence_ids"] = list(self.contradicting_evidence_ids)
-        payload["supporting_evidence_spans"] = [
-            dict(value) for value in self.supporting_evidence_spans
-        ]
-        payload["contradicting_evidence_spans"] = [
-            dict(value) for value in self.contradicting_evidence_spans
-        ]
-        return payload
-
-
-@dataclass(frozen=True)
-class VerifyDecision:
-    mode: str
-    status: str
-    reason: str
-    action: str = "generate"
-    claims: list[str] = field(default_factory=list)
-    unsupported_claims: list[str] = field(default_factory=list)
-    unknown_claims: list[str] = field(default_factory=list)
-    verified_citations: list[str] = field(default_factory=list)
-    claim_results: list[dict[str, Any]] = field(default_factory=list)
-    input_answer_polarity: str = ""
-    canonical_answer_polarity: str = ""
-    semantic_correction_applied: bool = False
-    boolean_authority_status: str = ""
-    authoritative_evidence_id: str = ""
-    authoritative_evidence_ref: str = ""
-    authoritative_span_id: str = ""
-    authoritative_quote: str = ""
-    authoritative_span_start: int | None = None
-    authoritative_span_end: int | None = None
-    authoritative_canonical_start: int | None = None
-    authoritative_canonical_end: int | None = None
-    actor: str = ""
-    section_scope: str = ""
-    relation: str = ""
-    object: str = ""
-    quantifier: str = ""
-    verified_support_slot_ids: list[str] = field(default_factory=list)
-
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+from .verification_schema import VerifiedClaim, VerifyDecision
 
 
 def normalize_verification_mode(value: Any) -> str:
@@ -448,6 +373,8 @@ def _claim_decision_metadata(results: list[VerifiedClaim]) -> dict[str, Any]:
         "section_scope": typed.section_scope,
         "relation": typed.relation,
         "object": typed.object,
+        "predicate_arguments": typed.predicate_arguments,
+        "qualifier": typed.qualifier,
         "quantifier": typed.quantifier,
     }
 
@@ -560,6 +487,10 @@ def _boolean_verification(
         section_scope=(authority.section_scope if authority else ""),
         relation=(authority.relation if authority else ""),
         object=(authority.object if authority else ""),
+        predicate_arguments=(
+            (authority.object,) if authority and authority.object else ()
+        ),
+        qualifier=(authority.qualifier if authority else ""),
         quantifier=(authority.quantifier if authority else ""),
         supporting_evidence_spans=tuple(
             value.as_dict() for value in assessment.supporting

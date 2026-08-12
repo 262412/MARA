@@ -142,6 +142,15 @@ def test_parallel_data_and_parallel_corpus_are_narrow_object_aliases() -> None:
     assert score == 1.0
 
 
+def test_induction_alias_does_not_merge_unrelated_semantic_objects() -> None:
+    score, _object = _object_compatibility(
+        "Does parallel data improve grammar induction?",
+        "The parallel corpus enhances semantic roles.",
+    )
+
+    assert score < 0.6
+
+
 def test_boolean_framework_words_do_not_pollute_proposition_semantics() -> None:
     semantic = semantic_boolean_proposition_question(
         "Overall, does having parallel data improve semantic role induction "

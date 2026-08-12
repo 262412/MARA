@@ -27,8 +27,16 @@ def prediction_verifier_observability(prediction: dict[str, Any]) -> dict[str, i
         "false_abstention": false_abstention,
         "unsupported_claim_count": unsupported_claim_count,
         "has_unsupported_claim": int(_has_unsupported_claim(prediction, metrics)),
-        "retry_count": _control_event_count(prediction, _is_retry_event),
-        "route_switch_count": _control_event_count(prediction, _is_route_switch_event),
+        "retry_count": _control_event_count(
+            prediction,
+            _is_retry_event,
+            kind="retry",
+        ),
+        "route_switch_count": _control_event_count(
+            prediction,
+            _is_route_switch_event,
+            kind="route_switch",
+        ),
     }
 
 
@@ -174,8 +182,124 @@ def _int_metric(metrics: dict[str, Any], key: str) -> int:
 def _control_event_count(
     prediction: dict[str, Any],
     predicate: Callable[[dict[str, Any]], bool],
+    *,
+    kind: str,
 ) -> int:
-    return sum(1 for event in _control_events(prediction) if predicate(event))
+    seen: set[tuple[str, ...]] = set()
+    count = 0
+    for event in _control_events(prediction):
+        if not predicate(event):
+            continue
+        key = _logical_control_event_key(event, kind=kind)
+        if key in seen:
+            continue
+        seen.add(key)
+        count += 1
+    return count
+
+
+def _logical_control_event_key(
+    event: dict[str, Any],
+    *,
+    kind: str,
+) -> tuple[str, ...]:
+    attempt = _attempt_identity(event)
+    event_id = _event_id(event, kind=kind)
+    if event_id:
+        return (kind, "event_id", event_id, *attempt)
+
+    if kind == "route_switch":
+        from_route = _route_value(
+            event.get("from_route") or event.get("previous_route")
+        )
+        to_route = _route_value(event.get("to_route") or event.get("next_route"))
+        if from_route or to_route:
+            return (kind, "route", from_route, to_route, *attempt)
+        return (kind, "marker", _route_switch_marker(event), *attempt)
+
+    return (
+        kind,
+        "retry",
+        _retry_label(event),
+        _route_value(event.get("route")),
+        *attempt,
+    )
+
+
+def _event_id(event: dict[str, Any], *, kind: str) -> str:
+    keys: tuple[str, ...] = (
+        "event_id",
+        "logical_event_id",
+        "logical_transition_key",
+        "transition_id",
+    )
+    if kind == "retry":
+        keys += ("retry_id", "logical_retry_key", "retry_key")
+    for key in keys:
+        value = _normalized_event_value(event.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _attempt_identity(event: dict[str, Any]) -> tuple[str, ...]:
+    identity: list[str] = []
+    for key in (
+        "attempt_id",
+        "transition_attempt",
+        "retry_attempt",
+        "attempt",
+        "attempt_number",
+        "retry_index",
+        "retry_count",
+        "round_id",
+        "retry_round",
+        "round",
+        "query_id",
+        "slot_id",
+        "request_id",
+    ):
+        value = _normalized_event_value(event.get(key))
+        if value:
+            identity.append(f"{key}={value}")
+    return tuple(identity)
+
+
+def _route_value(value: Any) -> str:
+    return _normalized_event_value(value)
+
+
+def _retry_label(event: dict[str, Any]) -> str:
+    for key in (
+        "retry_kind",
+        "retry_reason",
+        "action",
+        "event",
+        "operation",
+        "reason",
+    ):
+        value = _normalized_event_value(event.get(key))
+        if value:
+            return value
+    return "retry"
+
+
+def _route_switch_marker(event: dict[str, Any]) -> str:
+    text = _event_text(event)
+    if any(
+        marker in text
+        for marker in ("route_switch", "switch_route", "route switch", "switch route")
+    ):
+        return "route_switch"
+    return text or "route_switch"
+
+
+def _normalized_event_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, (str, int, float)):
+        return str(value).strip().lower()
+    return ""
 
 
 def _control_events(prediction: dict[str, Any]) -> list[dict[str, Any]]:
@@ -202,10 +326,17 @@ def _is_route_switch_event(event: dict[str, Any]) -> bool:
     to_route = str(event.get("to_route") or event.get("next_route") or "")
     if from_route and to_route and from_route != to_route:
         return True
-    text = _event_text(event)
-    return any(
-        marker in text
-        for marker in ("route_switch", "switch_route", "route switch", "switch route")
+    labels = {
+        _normalized_event_value(event.get(key)).replace(" ", "_")
+        for key in ("stage", "event", "action", "operation")
+    }
+    return bool(
+        labels
+        & {
+            "route_switch",
+            "switch_route",
+            "route_transition",
+        }
     )
 
 

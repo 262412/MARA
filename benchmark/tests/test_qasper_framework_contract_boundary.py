@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from copy import deepcopy
 from typing import Any
 
@@ -273,7 +275,7 @@ def test_scoring_punctuation_normalization_is_not_a_semantic_rewrite() -> None:
     assert prediction["contract_semantic_rewrite"] is False
 
 
-def test_required_authority_coverage_excludes_non_applicable_rows() -> None:
+def test_required_authority_coverage_counts_every_boolean_obligation() -> None:
     answerable = _runtime_prediction()
     abstention = _runtime_abstention_prediction()
     free_text = _runtime_free_text_prediction()
@@ -286,11 +288,11 @@ def test_required_authority_coverage_excludes_non_applicable_rows() -> None:
 
     summary = contract_invariant_summary([answerable, abstention, free_text])
 
-    assert summary["qasper_required_verification_applicable_count"] == 1.0
-    assert summary["verifier_required_evidence_coverage"] == 1.0
+    assert summary["qasper_required_verification_applicable_count"] == 2.0
+    assert summary["verifier_required_evidence_coverage"] == 0.5
 
 
-def test_safe_runtime_abstention_requires_projection_but_not_polarity_authority() -> None:
+def test_safe_runtime_abstention_remains_an_applicable_boolean_obligation() -> None:
     prediction = _runtime_abstention_prediction()
 
     apply_task_answer_contract(
@@ -303,11 +305,13 @@ def test_safe_runtime_abstention_requires_projection_but_not_polarity_authority(
     assert prediction["predicted_answer"] == "unanswerable"
     assert prediction["contract_action"] == "pass_through"
     assert trace["runtime_projection_present"] is True
-    assert trace["runtime_boolean_authority_applicable"] is False
+    assert trace["runtime_boolean_authority_applicable"] is True
+    assert trace["runtime_boolean_polarity_authority_required"] is False
     assert trace["reason"] == "runtime_safe_abstention"
     summary = contract_invariant_summary([prediction])
     assert summary["qasper_runtime_authority_missing_count"] == 0.0
-    assert summary["qasper_required_verification_applicable_count"] == 0.0
+    assert summary["qasper_required_verification_applicable_count"] == 1.0
+    assert summary["verifier_required_evidence_coverage"] == 0.0
 
 
 def test_missing_runtime_projection_is_a_hard_violation_without_llm_reanswer() -> None:
@@ -355,6 +359,61 @@ def test_tampered_runtime_projection_is_a_hard_violation() -> None:
     )
 
 
+def test_rehashed_candidate_label_tamper_still_fails_projection_contract() -> None:
+    prediction = _runtime_prediction()
+    state = prediction["engine_terminal_state"]
+    state["normalized_candidate_label"] = "no"
+    prediction["engine_terminal_projection_hash"] = hashlib.sha256(
+        json.dumps(
+            state,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+
+    assert prediction["contract_action"] == "hard_violation_missing_runtime_authority"
+    assert (
+        prediction["evidence_metadata"]["qasper_answerability"][
+            "runtime_projection_present"
+        ]
+        is False
+    )
+
+
+def test_rehashed_incomplete_authority_frame_fails_runtime_audit() -> None:
+    prediction = _runtime_prediction()
+    prediction["engine_verify_decision"]["qualifier"] = ""
+    state = prediction["engine_terminal_state"]
+    state["verify_decision"]["qualifier"] = ""
+    prediction["engine_terminal_projection_hash"] = hashlib.sha256(
+        json.dumps(
+            state,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+
+    trace = prediction["evidence_metadata"]["qasper_answerability"]
+    assert trace["runtime_projection_present"] is True
+    assert prediction["contract_action"] == "hard_violation_missing_runtime_authority"
+
+
 def test_adapter_detects_but_never_hides_semantic_label_rewrite() -> None:
     prediction = _runtime_prediction()
     prediction["predicted_answer"] = "no"
@@ -374,6 +433,56 @@ def test_adapter_detects_but_never_hides_semantic_label_rewrite() -> None:
         contract_invariant_summary([prediction])["contract_semantic_rewrite_count"]
         == 1.0
     )
+
+    synchronize_terminal_answer_state(prediction)
+
+    assert prediction["terminal_answer_state"]["answer"] == "no"
+    assert prediction["post_contract_verification"]["answer"] == "no"
+    assert prediction["engine_terminal_answer"] == "yes"
+
+
+def test_query_plan_boolean_slot_drives_audit_applicability() -> None:
+    prediction = _runtime_abstention_prediction()
+    prediction["answer_type"] = "evidence_qa"
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+
+    trace = prediction["evidence_metadata"]["qasper_answerability"]
+    assert trace["runtime_boolean_authority_applicable"] is True
+    assert trace["runtime_boolean_projection_required"] is True
+
+
+def test_invalid_typed_label_is_a_hard_contract_failure_without_rewrite() -> None:
+    prediction = _runtime_free_text_prediction()
+    prediction["answer_type"] = "unanswerable"
+    prose = prediction["engine_terminal_answer"]
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+
+    assert prediction["predicted_answer"] == prose
+    assert prediction["answer_for_scoring"] == prose.removesuffix(".")
+    assert prediction["contract_semantic_rewrite"] is False
+    assert prediction["contract_action"] == "hard_violation_invalid_typed_label"
+    summary = contract_invariant_summary([prediction])
+    assert summary["qasper_invalid_typed_label_count"] == 1.0
+
+
+def test_gold_unanswerable_yes_fails_safe_abstention_cross_contract() -> None:
+    prediction = _runtime_prediction()
+    prediction["gold_answers"] = ["unanswerable"]
+
+    summary = contract_invariant_summary([prediction])
+
+    assert summary["contract_gates"]["safe_abstention"]["applicable_count"] == 1.0
+    assert summary["contract_gates"]["safe_abstention"]["violation_count"] == 1.0
 
 
 def test_ref_mismatch_counts_even_when_repair_cleared_raw_verdict() -> None:

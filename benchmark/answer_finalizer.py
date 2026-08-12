@@ -30,6 +30,13 @@ from .finance_citation_contract import (
     record_verified_claim_support,
     typed_calculation_is_verified,
 )
+from .qasper_answer_normalization import is_unanswerable_text as _is_unanswerable_text
+from .qasper_answer_normalization import (
+    normalize_qasper_contract_answer as _normalize_qasper_contract_answer,
+)
+from .qasper_answer_normalization import (
+    record_qasper_metadata as _record_qasper_metadata,
+)
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
@@ -109,8 +116,26 @@ def finalize_prediction_answer(
         repetition_removed=repetition_removed,
         repetition_kind=repetition_kind,
     )
-    finalization = prediction["answer_finalization"]
-    finalization["qasper_contract_normalized"] = qasper_contract_normalized
+    _record_standard_finalization(
+        prediction,
+        raw_answer=raw_answer,
+        answer_text_for_user=answer_text_for_user,
+        dataset_name=dataset_name,
+        qasper_contract_normalized=qasper_contract_normalized,
+    )
+
+
+def _record_standard_finalization(
+    prediction: dict[str, Any],
+    *,
+    raw_answer: str,
+    answer_text_for_user: str,
+    dataset_name: str,
+    qasper_contract_normalized: bool,
+) -> None:
+    _record_qasper_metadata(
+        prediction, raw_answer, dataset_name, qasper_contract_normalized
+    )
     record_emitted_citation_evidence(
         prediction,
         citations=_existing_structured_citations(
@@ -224,45 +249,6 @@ def _finalize_ragtruth_prediction(
         "ragtruth_json_valid": bool(json_answer),
         "task_contract_status": "ok" if json_answer else "error",
     }
-
-
-def _normalize_qasper_contract_answer(
-    answer: str,
-    *,
-    prediction: dict[str, Any],
-    dataset_name: str,
-) -> tuple[str, bool]:
-    dataset = str(dataset_name or "").lower()
-    if "qasper" not in dataset:
-        return answer, False
-    answer_type = str(prediction.get("answer_type") or "").strip().lower()
-    normalized = " ".join(str(answer or "").strip().lower().split())
-    boolean_match = re.match(r"^(yes|no|true|false)\b", normalized)
-    if "qasper_typed" in dataset:
-        if boolean_match:
-            return ("yes" if boolean_match.group(1) in {"yes", "true"} else "no"), True
-        if _is_unanswerable_text(normalized):
-            return "unanswerable", True
-        return "unanswerable", True
-    if answer_type == "boolean":
-        if not boolean_match:
-            return answer, False
-        return ("yes" if boolean_match.group(1) in {"yes", "true"} else "no"), True
-    if _is_unanswerable_text(normalized):
-        return "unanswerable", True
-    return answer, False
-
-
-def _is_unanswerable_text(answer: str) -> bool:
-    return answer.startswith(
-        (
-            "unanswerable",
-            "insufficient evidence",
-            "not enough evidence",
-            "unable to answer",
-            "cannot answer",
-        )
-    )
 
 
 def attach_structured_citations_from_evidence(

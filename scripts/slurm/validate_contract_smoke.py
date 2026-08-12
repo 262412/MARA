@@ -115,6 +115,8 @@ QASPER_HARD_GATES = {
     "qasper_semantic_veto_audit_violation_count": ("eq", 0.0),
     "contract_semantic_rewrite_count": ("eq", 0.0),
     "engine_scored_semantic_label_mismatch_count": ("eq", 0.0),
+    "qasper_invalid_typed_label_count": ("eq", 0.0),
+    "qasper_terminal_state_missing_count": ("eq", 0.0),
     "qasper_post_engine_answerability_llm_call_count": ("eq", 0.0),
     "qasper_runtime_authority_missing_count": ("eq", 0.0),
     "qasper_runtime_semantic_verifier_failure_count": ("eq", 0.0),

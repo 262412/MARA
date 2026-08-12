@@ -1,6 +1,7 @@
 import json
 from typing import Any
 
+import pytest
 from ktem.docqa.evidence_identity import identity_of
 
 from benchmark.answer_finalizer import finalize_prediction_answer
@@ -159,7 +160,7 @@ def test_finalizer_emits_canonical_qasper_unanswerable():
     assert prediction["answer_for_scoring"] == "unanswerable"
 
 
-def test_finalizer_enforces_qasper_typed_label_contract():
+def test_finalizer_preserves_invalid_qasper_typed_label_for_contract_audit():
     prediction: dict[str, Any] = {
         "question": "What absolute gain was reported?",
         "predicted_answer": "The paper reports a 99.53% gain.",
@@ -171,9 +172,58 @@ def test_finalizer_enforces_qasper_typed_label_contract():
         mode="scoring_adapter_v1",
     )
 
-    assert prediction["answer_for_user"] == "unanswerable"
-    assert prediction["answer_for_scoring"] == "unanswerable"
-    assert prediction["answer_finalization"]["qasper_contract_normalized"] is True
+    assert prediction["answer_for_user"] == "The paper reports a 99.53% gain."
+    assert prediction["answer_for_scoring"] == "The paper reports a 99.53% gain"
+    assert prediction["answer_finalization"]["qasper_contract_normalized"] is False
+    assert prediction["answer_finalization"]["qasper_typed_label_status"] == "invalid"
+
+
+def test_qasper_typed_boolean_prose_is_not_collapsed_to_prefix_label():
+    prediction: dict[str, Any] = {
+        "question": "Did the authors release source code?",
+        "predicted_answer": "Yes, the source code was released.",
+        "answer_type": "boolean",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed_v2",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == "Yes, the source code was released."
+    assert prediction["answer_for_scoring"] == "Yes, the source code was released"
+    assert prediction["answer_finalization"]["qasper_typed_label_status"] == "invalid"
+
+
+@pytest.mark.parametrize(
+    "answer",
+    (
+        "The method leverages labeled features and class distribution.",
+        "Yes, the method leverages labeled features and class distribution.",
+    ),
+)
+def test_qasper_typed_finalizer_preserves_free_text_instead_of_rewriting_abstention(
+    answer: str,
+):
+    prediction: dict[str, Any] = {
+        "question": "What background knowledge does the method leverage?",
+        "predicted_answer": answer,
+        "answer_type": "free_text",
+    }
+
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed_v2",
+        mode="scoring_adapter_v1",
+    )
+
+    assert prediction["answer_for_user"] == answer
+    assert prediction["answer_for_scoring"] == answer.removesuffix(".")
+    assert prediction["answer_finalization"]["qasper_contract_normalized"] is False
+    assert prediction["answer_finalization"]["qasper_typed_label_status"] == (
+        "not_applicable"
+    )
 
 
 def test_finalizer_extracts_ragtruth_json_from_markdown_answer():

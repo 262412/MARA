@@ -68,16 +68,6 @@ def _answerability_metrics(
         trace,
         required_verification_applicable=required_verification_applicable,
     )
-    contract_action = str(
-        prediction.get("contract_action") or trace.get("contract_action") or ""
-    )
-    semantic_rewrite = bool(
-        prediction.get("contract_semantic_rewrite")
-        or trace.get("contract_semantic_rewrite")
-    )
-    engine_label = str(trace.get("engine_semantic_label") or "")
-    scored_label = str(trace.get("scored_semantic_label") or "")
-    runtime_failure_kind = str(trace.get("runtime_authority_failure_kind") or "")
     return {
         "abstention_candidate_sent_as_semantic_answer_count": float(
             bool(candidate and is_abstention_answer(candidate))
@@ -88,9 +78,37 @@ def _answerability_metrics(
         ),
         "boolean_scope_violation_count": float(scope_violation),
         "wrong_polarity_count": float(_wrong_boolean_polarity(prediction, answer)),
+        **_runtime_audit_failure_metrics(prediction, trace),
+        **authority,
+    }
+
+
+def _runtime_audit_failure_metrics(
+    prediction: dict[str, Any],
+    trace: dict[str, Any],
+) -> dict[str, float]:
+    contract_action = str(
+        prediction.get("contract_action") or trace.get("contract_action") or ""
+    )
+    semantic_rewrite = bool(
+        prediction.get("contract_semantic_rewrite")
+        or trace.get("contract_semantic_rewrite")
+    )
+    engine_label = str(trace.get("engine_semantic_label") or "")
+    scored_label = str(trace.get("scored_semantic_label") or "")
+    runtime_failure = str(trace.get("runtime_authority_failure_kind") or "")
+    qasper_audited = trace.get("contract_id") == "qasper_runtime_authority_audit.v1"
+    return {
         "contract_semantic_rewrite_count": float(semantic_rewrite),
         "engine_scored_semantic_label_mismatch_count": float(
             bool(engine_label and scored_label and engine_label != scored_label)
+        ),
+        "qasper_invalid_typed_label_count": float(
+            bool(trace.get("invalid_typed_label"))
+        ),
+        "qasper_terminal_state_missing_count": float(
+            qasper_audited
+            and not isinstance(prediction.get("terminal_answer_state"), dict)
         ),
         "qasper_post_engine_answerability_llm_call_count": float(
             prediction.get("post_engine_answerability_llm_call_count")
@@ -99,13 +117,12 @@ def _answerability_metrics(
         ),
         "qasper_runtime_authority_missing_count": float(
             contract_action == "hard_violation_missing_runtime_authority"
-            and runtime_failure_kind in {"", "authority_missing"}
+            and runtime_failure in {"", "authority_missing"}
         ),
         "qasper_runtime_semantic_verifier_failure_count": float(
-            runtime_failure_kind == "semantic_verifier"
+            runtime_failure == "semantic_verifier"
         ),
-        "qasper_runtime_scope_failure_count": float(runtime_failure_kind == "scope"),
-        **authority,
+        "qasper_runtime_scope_failure_count": float(runtime_failure == "scope"),
     }
 
 
@@ -410,6 +427,8 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "wrong_polarity_count": 0.0,
         "contract_semantic_rewrite_count": 0.0,
         "engine_scored_semantic_label_mismatch_count": 0.0,
+        "qasper_invalid_typed_label_count": 0.0,
+        "qasper_terminal_state_missing_count": 0.0,
         "qasper_post_engine_answerability_llm_call_count": 0.0,
         "qasper_runtime_authority_missing_count": 0.0,
         "qasper_runtime_semantic_verifier_failure_count": 0.0,

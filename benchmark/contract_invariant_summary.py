@@ -268,6 +268,8 @@ def _qasper_authority_summary(
     keys = (
         "contract_semantic_rewrite_count",
         "engine_scored_semantic_label_mismatch_count",
+        "qasper_invalid_typed_label_count",
+        "qasper_terminal_state_missing_count",
         "qasper_post_engine_answerability_llm_call_count",
         "qasper_runtime_authority_missing_count",
         "qasper_runtime_semantic_verifier_failure_count",

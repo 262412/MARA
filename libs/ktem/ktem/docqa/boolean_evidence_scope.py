@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from .boolean_current_experiment import (
-    current_experiment_excerpt as _current_experiment_excerpt,
-)
-from .boolean_current_experiment import (
     is_current_experiment_question as _is_current_experiment_question,
 )
 from .boolean_current_experiment import (
     is_direct_current_empirical_action as _is_direct_current_empirical_action,
+)
+from .boolean_current_experiment import (
+    resolve_current_experiment_question as _resolve_current_experiment_question,
 )
 from .boolean_ownership_provenance import own_data_provenance_rejection
 from .boolean_retrieval_queries import (
@@ -258,47 +258,6 @@ def resolve_closed_scope_boolean(
     )
     return ClosedScopeResolution(
         polarity=polarity,
-        evidence_quote=quote,
-        decision=decision,
-        evidence_item=item,
-    )
-
-
-def _resolve_current_experiment_question(
-    question: str,
-    evidence_items: list[dict[str, Any]],
-) -> ClosedScopeResolution | None:
-    if not _is_current_experiment_question(question):
-        return None
-    candidates: list[tuple[dict[str, Any], str, BooleanScopeDecision]] = []
-    for item in evidence_items:
-        text = evidence_item_text(item)
-        if not text:
-            continue
-        quote = _current_experiment_excerpt(text)
-        if not quote:
-            continue
-        scope_item = {
-            **item,
-            "text": quote,
-            "ocr_text": "",
-            "vlm_text": "",
-            "caption": "",
-        }
-        decision = validate_boolean_scope(
-            question,
-            quote,
-            "yes",
-            evidence_items=[scope_item],
-        )
-        if not decision.scope_valid:
-            continue
-        candidates.append((item, quote, decision))
-    if not candidates:
-        return None
-    item, quote, decision = min(candidates, key=lambda value: len(value[1]))
-    return ClosedScopeResolution(
-        polarity="yes",
         evidence_quote=quote,
         decision=decision,
         evidence_item=item,

@@ -15,10 +15,13 @@ def is_current_experiment_question(question: str) -> bool:
             lowered,
         )
         and re.search(
-            r"\b(?:conduct|perform|run|carry out)\w*\s+(?:an?\s+)?experiments?\b",
+            r"\b(?:(?:conduct|perform|run|carry out)\w*\s+"
+            r"(?:an?\s+)?experiments?|experiment(?:ed|s|ing)?)\b",
             lowered,
         )
-        and re.search(r"\b(?:tasks?|benchmarks?)\b", lowered)
+        and re.search(
+            r"\b(?:tasks?|benchmarks?|data|dataset|datasets|corpus)\b", lowered
+        )
     )
 
 
@@ -84,6 +87,65 @@ def current_experiment_excerpt(text: str) -> str:
     return max(candidates, key=_current_experiment_statement_score, default="")
 
 
+def resolve_current_experiment_question(
+    question: str,
+    evidence_items: list[dict[str, Any]],
+) -> Any | None:
+    if not is_current_experiment_question(question):
+        return None
+
+    from .boolean_evidence_scope import (
+        ClosedScopeResolution,
+        classify_boolean_evidence,
+        evidence_item_text,
+        validate_boolean_scope,
+    )
+
+    candidates: list[tuple[dict[str, Any], str, Any, str]] = []
+    for item in evidence_items:
+        text = evidence_item_text(item)
+        quote = current_experiment_excerpt(text) if text else ""
+        if not quote:
+            continue
+        scope_item = {
+            **item,
+            "text": quote,
+            "ocr_text": "",
+            "vlm_text": "",
+            "caption": "",
+        }
+        assessment = classify_boolean_evidence(question, "yes", scope_item)
+        polarity = (
+            str(assessment.proposition.polarity or "")
+            if assessment.relation_score > 0 and assessment.object_score >= 0.6
+            else "yes"
+        )
+        if polarity not in {"yes", "no"}:
+            continue
+        decision = validate_boolean_scope(
+            question,
+            quote,
+            polarity,
+            evidence_items=[scope_item],
+        )
+        if decision.scope_valid:
+            candidates.append((item, quote, decision, polarity))
+    polarities = {value[3] for value in candidates}
+    if len(polarities) != 1:
+        return None
+    polarity = polarities.pop()
+    item, quote, decision, _polarity = min(
+        (value for value in candidates if value[3] == polarity),
+        key=lambda value: len(value[1]),
+    )
+    return ClosedScopeResolution(
+        polarity=polarity,
+        evidence_quote=quote,
+        decision=decision,
+        evidence_item=item,
+    )
+
+
 def _current_experiment_statement_score(statement: str) -> int:
     lowered = statement.lower()
     score = 0
@@ -109,7 +171,7 @@ def current_experiment_slot_score(
     from .boolean_evidence_scope import evidence_item_text, resolve_closed_scope_boolean
 
     resolution = resolve_closed_scope_boolean(question, [item])
-    if resolution is None or resolution.polarity != "yes":
+    if resolution is None or resolution.polarity not in {"yes", "no"}:
         return 0.0
     if identity_of(resolution.evidence_item).key != identity_of(item).key:
         return 0.0
