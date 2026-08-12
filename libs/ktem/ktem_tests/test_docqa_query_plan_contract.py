@@ -1,5 +1,9 @@
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.evidence import build_evidence_bundle
+from ktem.docqa.query_plan_schema import (
+    EvidenceSlot,
+    evidence_slot_references_are_bound,
+)
 from ktem.docqa.query_planning import build_query_plan, ensure_request_query_plan
 
 
@@ -71,3 +75,18 @@ def test_bound_plan_stage_is_explicit_and_updates_request_state():
     assert bundle.metadata["bound_query_plan"]["stage"] == "bound"
     assert request.query_plan.as_dict() == bundle.metadata["query_plan"]
     assert request.query_plan.evidence_slots[0].status == "filled"
+
+
+def test_verified_terminal_slot_states_retain_bound_reference_semantics():
+    for status in ("filled", "verified_support", "verified_conflict"):
+        slot = EvidenceSlot(
+            slot_id="support:proposition",
+            role="support",
+            status=status,
+            evidence_ids=("evidence:paper:authority",),
+        )
+        assert evidence_slot_references_are_bound(slot)
+
+    assert not evidence_slot_references_are_bound(
+        EvidenceSlot(slot_id="support:proposition", role="support")
+    )

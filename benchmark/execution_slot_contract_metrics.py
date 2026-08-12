@@ -13,7 +13,10 @@ from ktem.docqa.finance_scale import (
     valid_dimension_evidence_identity,
 )
 from ktem.docqa.query_evidence_constraints import executable_operand_evidence
-from ktem.docqa.query_plan_schema import plan_from_payload
+from ktem.docqa.query_plan_schema import (
+    evidence_slot_references_are_bound,
+    plan_from_payload,
+)
 from ktem.docqa.query_planning import score_evidence_for_slot
 
 from .metrics import is_abstention_answer
@@ -98,7 +101,7 @@ def _audit_slot_reference(
     counts["execution_other_slot_count"] += int(
         execution_required and not execution_operand and not execution_dimension
     )
-    if slot.status != "filled":
+    if not evidence_slot_references_are_bound(slot):
         return counts
     counts["reference_count"] += len(slot.evidence_ids)
     resolved = [

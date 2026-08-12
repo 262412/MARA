@@ -127,6 +127,58 @@ def test_unresolved_slot_reference_is_not_a_semantic_false_fill():
     assert summary["plan_evidence_reference_resolution_rate"] == 0.0
 
 
+def _terminal_plan_reference_prediction(*, missing_reference: bool) -> dict[str, Any]:
+    candidate = {
+        "source_id": "runtime",
+        "evidence_id": "conflict-authority",
+        "text": "The source contains an exact authoritative proposition.",
+    }
+    evidence_id = identity_of(candidate).key
+    return {
+        "question": "Does the source establish the proposition?",
+        "evidence_metadata": {
+            "canonical_candidate_evidence": [candidate],
+            "query_plan": {
+                "answer_type": "boolean",
+                "question_type": "cross_page",
+                "constraints": {"verification_domain": "qasper"},
+                "evidence_slots": [
+                    {
+                        "slot_id": "support:proposition",
+                        "role": "support",
+                        "required": True,
+                        "required_for_verification": True,
+                        "status": "verified_conflict",
+                        "evidence_ids": [
+                            "evidence:runtime:missing"
+                            if missing_reference
+                            else evidence_id
+                        ],
+                    }
+                ],
+            },
+        },
+    }
+
+
+def test_verified_conflict_plan_references_are_resolved_by_runtime_identity():
+    summary = contract_invariant_summary(
+        [_terminal_plan_reference_prediction(missing_reference=False)]
+    )
+
+    assert summary["slot_unresolved_reference_count"] == 0.0
+    assert summary["plan_evidence_reference_resolution_rate"] == 1.0
+
+
+def test_verified_conflict_plan_reference_still_fails_closed_when_missing():
+    summary = contract_invariant_summary(
+        [_terminal_plan_reference_prediction(missing_reference=True)]
+    )
+
+    assert summary["slot_unresolved_reference_count"] == 1.0
+    assert summary["plan_evidence_reference_resolution_rate"] == 0.0
+
+
 def test_source_page_pair_uses_crosswalk():
     prediction = {
         "source_identity_crosswalk": _crosswalk(),

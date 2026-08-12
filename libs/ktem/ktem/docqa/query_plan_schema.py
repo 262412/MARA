@@ -7,6 +7,9 @@ from typing import Any
 
 QUERY_PLAN_CONTRACT = "query_plan.v1"
 MAX_RETRIEVAL_ROUNDS = 2
+EVIDENCE_REFERENCE_BOUND_STATUSES = frozenset(
+    {"filled", "verified_support", "verified_conflict"}
+)
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,12 @@ class EvidenceSlot:
         payload["evidence_ids"] = list(self.evidence_ids)
         payload["locator"] = self.locator.as_dict() if self.locator else None
         return payload
+
+
+def evidence_slot_references_are_bound(slot: EvidenceSlot) -> bool:
+    """Return whether a typed slot state retains materialized evidence bindings."""
+
+    return slot.status in EVIDENCE_REFERENCE_BOUND_STATUSES
 
 
 @dataclass(frozen=True)
