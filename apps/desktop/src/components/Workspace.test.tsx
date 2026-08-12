@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { SessionDetail } from "../../shared/session-contracts";
 import type { QueryTask } from "../../shared/query-contracts";
+import type { SidecarError } from "../../shared/runtime-contracts";
 import type { ResourceState } from "../resource-state";
 import { Workspace } from "./Workspace";
 
@@ -36,6 +37,7 @@ const queryTask: QueryTask = {
   status: "success",
   stage: "completed",
   answer: "The evidence changed.",
+  answer_saved: true,
   citations: [
     {
       citation_id: "chunk-1",
@@ -57,10 +59,12 @@ function render(
   session: ResourceState<SessionDetail> | undefined,
   answerTask?: QueryTask,
   selectedSourceCount = 1,
+  answerActionError?: SidecarError,
 ) {
   return renderToStaticMarkup(
     <Workspace
       answerActionPending={false}
+      answerActionError={answerActionError}
       answerTask={answerTask}
       modelName="local-model"
       onCancelAnswer={() => undefined}
@@ -199,6 +203,89 @@ test("all assistant answer states share semantic Markdown rendering", () => {
     assert.match(current, /<h1>Result<\/h1>/, status);
     assert.match(current, /<table>/, status);
   }
+});
+
+test("persistence guidance follows the safe operation diagnostic", () => {
+  const session = { status: "success" as const, data: detail };
+  const basePersistence = {
+    errno: 13,
+    winerror: 5,
+    retry_count: 4,
+    post_failure_probe: "ready" as const,
+    smoke_mode: false,
+    fingerprint: "qpf-0123456789abcdef",
+  };
+  const replaceBlocked = render(session, {
+    ...queryTask,
+    status: "failed",
+    answer_saved: false,
+    error: {
+      code: "query_state_replace_blocked",
+      message: "Windows temporarily blocked the state replacement.",
+      retryable: true,
+      persistence: {
+        ...basePersistence,
+        operation: "atomic_replace",
+      },
+    },
+    retryable: true,
+  });
+  assert.match(replaceBlocked, /Windows 暂时阻止状态文件更新/);
+  assert.match(replaceBlocked, /当前部分回答尚未安全保存/);
+  assert.doesNotMatch(replaceBlocked, /重设.*AppData|目录的写入权限/);
+
+  const writeBlockedProbe = render(session, {
+    ...queryTask,
+    status: "failed",
+    answer_saved: false,
+    error: {
+      code: "query_state_permission_denied",
+      message: "The post-failure write probe failed.",
+      retryable: true,
+      persistence: {
+        ...basePersistence,
+        operation: "atomic_replace",
+        post_failure_probe: "write_blocked",
+      },
+    },
+    retryable: true,
+  });
+  assert.match(writeBlockedProbe, /恢复探测.*无法创建检查点/);
+  assert.doesNotMatch(writeBlockedProbe, /Windows 暂时阻止/);
+
+  const smokeFault = render(session, {
+    ...queryTask,
+    status: "failed",
+    answer_saved: false,
+    error: {
+      code: "query_state_permission_denied",
+      message: "Injected smoke fault.",
+      retryable: true,
+      persistence: {
+        ...basePersistence,
+        operation: "flush",
+        smoke_mode: true,
+      },
+    },
+    retryable: true,
+  });
+  assert.match(smokeFault, /内部构建验证故障/);
+  assert.doesNotMatch(smokeFault, /目录的写入权限/);
+
+  const preflightWriteFailure = render(session, undefined, 1, {
+    code: "query_state_permission_denied",
+    message: "The answer task could not be created.",
+    retryable: true,
+    request_id: "preflight-request",
+    details: {
+      persistence: {
+        ...basePersistence,
+        operation: "write_temp",
+      },
+    },
+  });
+  assert.match(preflightWriteFailure, /检查应用数据写入策略/);
+  assert.match(preflightWriteFailure, /preflight-request/);
 });
 
 test("Workspace truthfully explains why the composer is unavailable", () => {

@@ -22,6 +22,7 @@ const task: QueryTask = {
   status: "running",
   stage: "generating",
   answer: "Partial answer",
+  answer_saved: true,
   citations: [],
   error: null,
   retryable: false,

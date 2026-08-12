@@ -20,6 +20,8 @@ def test_native_packages_cover_query_journal_recovery_and_single_instance() -> N
         assert "--smoke-test-query-persistence" in commands
         assert "query_state_permission_denied" in commands
         assert "partial,typed_error,blocked_retry,recovery,single_turn" in commands
+        assert "query_smoke_isolation=inherited_env,residual_marker" in commands
+        assert "query-journal-permission-fault-*" in commands
         assert "--smoke-test-single-instance" in commands
         assert "secondary_blocked,primary_focused,one_sidecar" in commands
         assert (

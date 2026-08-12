@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { DoctorPayload } from "../../shared/doctor-contracts";
 import type { FileRecord } from "../../shared/file-contracts";
+import type { QueryTask } from "../../shared/query-contracts";
 import type { RuntimeStatus } from "../../shared/runtime-contracts";
 import type { ResourceState } from "../resource-state";
 import { Inspector } from "./Inspector";
@@ -52,10 +53,11 @@ const doctor: DoctorPayload = {
   request_id: "doctor-request",
 };
 
-function render(state: ResourceState<DoctorPayload>) {
+function render(state: ResourceState<DoctorPayload>, answerTask?: QueryTask) {
   return renderToStaticMarkup(
     <Inspector
       activeTab="run"
+      answerTask={answerTask}
       doctor={state}
       files={{ status: "success", data: [] }}
       onClose={() => undefined}
@@ -87,6 +89,53 @@ test("Doctor panel covers loading, success, failed, and degraded states", () => 
     }),
     /默认索引不可用/,
   );
+});
+
+test("Run inspector shows only safe persistence identity and task ID", () => {
+  const answerTask: QueryTask = {
+    task_id: "bd9c80d7-fa0e-4fda-8a88-304ea7c00a2e",
+    retry_of_task_id: null,
+    conversation_id: "session-1",
+    prompt: "private question must not be shown",
+    selected_file_ids: ["file-1"],
+    qa_scope: "document",
+    route_provider: "openai",
+    route_model: "test-model",
+    settings_revision: "revision",
+    sidecar_pid: 4321,
+    route_fingerprint: "a".repeat(64),
+    status: "failed",
+    stage: "storage_error",
+    answer: "private answer must not be shown",
+    answer_saved: false,
+    citations: [],
+    error: {
+      code: "query_state_replace_blocked",
+      message: "State replacement is blocked.",
+      retryable: true,
+      persistence: {
+        operation: "atomic_replace",
+        errno: 13,
+        winerror: 5,
+        retry_count: 4,
+        post_failure_probe: "ready",
+        smoke_mode: false,
+        fingerprint: "qpf-0123456789abcdef",
+      },
+    },
+    retryable: true,
+    created_at: "2026-08-12T10:00:00Z",
+    updated_at: "2026-08-12T10:00:01Z",
+    version: 4,
+  };
+
+  const markup = render({ status: "success", data: doctor }, answerTask);
+
+  assert.match(markup, /bd9c80d7-fa0e-4fda-8a88-304ea7c00a2e/);
+  assert.match(markup, /qpf-0123456789abcdef/);
+  assert.match(markup, /atomic_replace/);
+  assert.doesNotMatch(markup, /private question|private answer/);
+  assert.doesNotMatch(markup, /[A-Z]:\\|\/Users\/|\/home\//);
 });
 
 test("Sources panel renders real file states and selected identities", () => {

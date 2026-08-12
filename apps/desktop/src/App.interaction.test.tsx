@@ -120,6 +120,7 @@ function queryTask(prompt: string): QueryTask {
     status: "queued",
     stage: "queued",
     answer: "",
+    answer_saved: true,
     citations: [],
     error: null,
     retryable: false,

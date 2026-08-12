@@ -217,7 +217,7 @@ class QueryContractTest(unittest.TestCase):
             app.state.index_task_manager.close()
             manager.close()
 
-    def test_query_errors_are_stable_for_missing_conflicting_and_storage_states(
+    def test_query_errors_are_stable_for_missing_and_conflicting_states(
         self,
     ) -> None:
         missing = self.client.get(
@@ -252,6 +252,7 @@ class QueryContractTest(unittest.TestCase):
         self.assertEqual(unrelated_replay.status_code, 404)
         self.assertEqual(unrelated_replay.json()["code"], "query_task_not_found")
 
+    def test_query_persistence_error_has_safe_operation_diagnostic(self) -> None:
         class FailingJournal:
             def load(self):
                 return None
@@ -263,6 +264,12 @@ class QueryContractTest(unittest.TestCase):
                 raise QueryTaskPersistenceError(
                     "query_storage_full",
                     "MARA does not have enough free storage to save answer state.",
+                    operation="write_temp",
+                    error_type="PermissionError",
+                    error_number=13,
+                    winerror=5,
+                    retry_count=2,
+                    post_failure_probe="write_blocked",
                 )
 
         manager = QueryTaskManager(StubQueryService(), journal=FailingJournal())
@@ -285,7 +292,16 @@ class QueryContractTest(unittest.TestCase):
             self.assertEqual(storage.status_code, 503)
             self.assertEqual(storage.json()["code"], "query_storage_full")
             self.assertTrue(storage.json()["retryable"])
+            diagnostic = storage.json()["details"]["persistence"]
+            self.assertEqual(diagnostic["operation"], "write_temp")
+            self.assertEqual(diagnostic["errno"], 13)
+            self.assertEqual(diagnostic["winerror"], 5)
+            self.assertEqual(diagnostic["retry_count"], 2)
+            self.assertEqual(diagnostic["post_failure_probe"], "write_blocked")
+            self.assertFalse(diagnostic["smoke_mode"])
+            self.assertRegex(diagnostic["fingerprint"], r"^qpf-[0-9a-f]{16}$")
             self.assertNotIn("/private", storage.text)
+            self.assertNotIn("Question", storage.text)
         finally:
             app.state.index_task_manager.close()
             manager.close()

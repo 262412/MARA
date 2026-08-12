@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
+import threading
 import time
 import unittest
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from .query_task_journal import QueryTaskPersistenceError
 from .query_tasks import QueryTaskManager
@@ -79,6 +82,66 @@ class FinalFailureJournal:
         self.payload = copied
 
 
+class FailOnceCheckpointJournal:
+    def __init__(self) -> None:
+        self.payload: dict[str, Any] | None = None
+        self.partial_failures = 0
+
+    def load(self) -> dict[str, Any] | None:
+        return self.payload
+
+    def probe(self) -> None:
+        return None
+
+    def save(self, payload: dict[str, Any]) -> None:
+        copied = json.loads(json.dumps(payload))
+        has_partial = any(
+            task.get("status") == "running" and bool(task.get("answer"))
+            for task in copied["tasks"]
+        )
+        if has_partial and self.partial_failures == 0:
+            self.partial_failures += 1
+            raise _permission_error("flush")
+        self.payload = copied
+
+
+class PermissionRevocationService(StubQueryService):
+    def __init__(self) -> None:
+        super().__init__()
+        self.first_partial = threading.Event()
+        self.release_second_partial = threading.Event()
+
+    def stream_query(
+        self,
+        conversation_id: str,
+        prompt: str,
+        selected_file_ids: list[str],
+        cancel_event: threading.Event | None = None,
+        *,
+        turn_id: str = "",
+    ):
+        self.calls.append((conversation_id, prompt, selected_file_ids))
+        self.turn_ids.append(turn_id)
+        time.sleep(0.02)
+        yield {
+            "stage": "generating",
+            "answer": "Saved partial",
+            "final": False,
+            "citations": [],
+        }
+        self.first_partial.set()
+        self.release_second_partial.wait(timeout=3)
+        if cancel_event is not None and cancel_event.is_set():
+            return
+        time.sleep(0.02)
+        yield {
+            "stage": "generating",
+            "answer": "Unsaved partial with private sentinel",
+            "final": False,
+            "citations": [],
+        }
+
+
 class QueryTaskStagePersistenceTest(unittest.TestCase):
     def test_running_fault_is_typed_before_model_work(self) -> None:
         service = StubQueryService()
@@ -137,6 +200,87 @@ class QueryTaskStagePersistenceTest(unittest.TestCase):
 
 
 class QueryTaskStorageRecoveryTest(unittest.TestCase):
+    def test_two_access_denied_replaces_recover_inside_one_model_turn(self) -> None:
+        service = StubQueryService()
+        service.delay_before_partial = 0.03
+        real_replace = os.replace
+        transient_failures = 0
+
+        def fail_two_partial_replaces(source: Path, destination: Path) -> None:
+            nonlocal transient_failures
+            payload = json.loads(Path(source).read_text(encoding="utf-8"))
+            contains_partial = any(
+                task.get("status") == "running" and bool(task.get("answer"))
+                for task in payload.get("tasks", [])
+            )
+            if contains_partial and transient_failures < 2:
+                transient_failures += 1
+                error = PermissionError(13, "private path sentinel")
+                error.winerror = 5  # type: ignore[attr-defined]
+                raise error
+            real_replace(source, destination)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            journal_path = Path(temporary_directory) / "query-tasks.json"
+            manager = QueryTaskManager(
+                service,
+                journal_path=journal_path,
+                journal_flush_interval=0.0,
+            )
+            try:
+                with patch(
+                    "sidecar.query_task_journal.os.replace",
+                    side_effect=fail_two_partial_replaces,
+                ):
+                    created = _create_task(manager, "replace-recovery")
+                    completed = wait_for_terminal(manager, created["task_id"])
+
+                self.assertEqual(completed["status"], "success")
+                self.assertTrue(completed["answer_saved"])
+                self.assertEqual(transient_failures, 2)
+                self.assertEqual(len(service.calls), 1)
+                self.assertEqual(len(service.turn_ids), 1)
+                persisted = json.loads(journal_path.read_text(encoding="utf-8"))
+                matching = [
+                    task
+                    for task in persisted["tasks"]
+                    if task["task_id"] == created["task_id"]
+                ]
+                self.assertEqual(len(matching), 1)
+                self.assertEqual(matching[0]["status"], "success")
+            finally:
+                manager.close()
+
+    def test_one_transient_checkpoint_failure_recovers_without_second_model_call(
+        self,
+    ) -> None:
+        service = StubQueryService()
+        service.delay_before_partial = 0.03
+        journal = FailOnceCheckpointJournal()
+        manager = QueryTaskManager(
+            service,
+            journal=journal,
+            journal_flush_interval=0.01,
+        )
+        try:
+            created = _create_task(manager, "transient-checkpoint")
+            completed = wait_for_terminal(manager, created["task_id"])
+
+            self.assertEqual(completed["status"], "success")
+            self.assertTrue(completed["answer_saved"])
+            self.assertEqual(journal.partial_failures, 1)
+            self.assertEqual(len(service.calls), 1)
+            assert journal.payload is not None
+            matching = [
+                task
+                for task in journal.payload["tasks"]
+                if task["task_id"] == created["task_id"]
+            ]
+            self.assertEqual(len(matching), 1)
+            self.assertEqual(matching[0]["status"], "success")
+        finally:
+            manager.close()
+
     def test_partial_fault_blocks_retry_until_storage_recovers(self) -> None:
         service = StubQueryService()
         service.delay_before_partial = 0.03
@@ -153,7 +297,14 @@ class QueryTaskStorageRecoveryTest(unittest.TestCase):
                 failed = wait_for_terminal(manager, created["task_id"])
             self.assertEqual(failed["stage"], "storage_error")
             self.assertEqual(failed["answer"], "Partial answer")
+            self.assertFalse(failed["answer_saved"])
             self.assertEqual(failed["error"]["code"], "query_state_permission_denied")
+            self.assertEqual(failed["error"]["persistence"]["operation"], "flush")
+            self.assertFalse(failed["error"]["persistence"]["smoke_mode"])
+            self.assertRegex(
+                failed["error"]["persistence"]["fingerprint"],
+                r"^qpf-[0-9a-f]{16}$",
+            )
             self.assertIn("operation=flush", "\n".join(logs.output))
             self.assertNotIn("Question", "\n".join(logs.output))
 
@@ -201,8 +352,107 @@ class QueryTaskStorageRecoveryTest(unittest.TestCase):
         finally:
             restored_manager.close()
 
+    @unittest.skipIf(os.name == "nt", "POSIX permission revocation coverage")
+    def test_unwritable_state_directory_blocks_before_model_validation(self) -> None:
+        service = StubQueryService()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            state_directory = Path(temporary_directory) / "state"
+            state_directory.mkdir()
+            journal_path = state_directory / "query-tasks.json"
+            state_directory.chmod(0o500)
+            manager = QueryTaskManager(service, journal_path=journal_path)
+            try:
+                with self.assertRaises(QueryTaskPersistenceError) as caught:
+                    _create_task(manager, "unwritable-before-model")
+                self.assertEqual(caught.exception.operation, "write_temp")
+                self.assertEqual(service.validate_calls, 0)
+                self.assertEqual(service.calls, [])
+                self.assertFalse(journal_path.exists())
+            finally:
+                state_directory.chmod(0o700)
+                manager.close()
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission revocation coverage")
+    def test_linux_permission_revocation_preserves_last_saved_partial(self) -> None:
+        service = PermissionRevocationService()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            state_directory = Path(temporary_directory) / "state"
+            journal_path = state_directory / "query-tasks.json"
+            manager = QueryTaskManager(
+                service,
+                journal_path=journal_path,
+                journal_flush_interval=0.01,
+            )
+            try:
+                created = _create_task(manager, "linux-permission-revocation")
+                self.assertTrue(service.first_partial.wait(timeout=2))
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    persisted = json.loads(journal_path.read_text(encoding="utf-8"))
+                    saved = next(
+                        task
+                        for task in persisted["tasks"]
+                        if task["task_id"] == created["task_id"]
+                    )
+                    if saved["answer"] == "Saved partial":
+                        break
+                    time.sleep(0.01)
+                else:
+                    self.fail("The first partial answer was not durably checkpointed")
+
+                state_directory.chmod(0o500)
+                service.release_second_partial.set()
+                failed = wait_for_terminal(manager, created["task_id"])
+
+                self.assertEqual(failed["stage"], "storage_error")
+                self.assertEqual(
+                    failed["answer"],
+                    "Unsaved partial with private sentinel",
+                )
+                self.assertFalse(failed["answer_saved"])
+                self.assertEqual(
+                    failed["error"]["persistence"]["operation"],
+                    "write_temp",
+                )
+                self.assertNotIn(
+                    "private sentinel",
+                    json.dumps(failed["error"]),
+                )
+                persisted = json.loads(journal_path.read_text(encoding="utf-8"))
+                saved = next(
+                    task
+                    for task in persisted["tasks"]
+                    if task["task_id"] == created["task_id"]
+                )
+                self.assertEqual(saved["answer"], "Saved partial")
+            finally:
+                service.release_second_partial.set()
+                manager.close()
+                state_directory.chmod(0o700)
+                time.sleep(0.05)
+
 
 class QueryTaskJournalMigrationTest(unittest.TestCase):
+    def test_invalid_answer_saved_type_is_rejected_without_rewriting_v2(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            journal = Path(temporary_directory) / "query-tasks.json"
+            record = _task_record("query-invalid-answer-state", answer="Partial answer")
+            record["answer_saved"] = "false"
+            original = json.dumps({"journal_version": 2, "tasks": [record]})
+            journal.write_text(original, encoding="utf-8")
+
+            manager = QueryTaskManager(StubQueryService(), journal_path=journal)
+            try:
+                readiness = manager.persistence_readiness()
+                self.assertFalse(readiness["query_persistence_ready"])
+                self.assertEqual(
+                    readiness["query_persistence_issue_code"],
+                    "query_state_corrupt",
+                )
+                self.assertEqual(journal.read_text(encoding="utf-8"), original)
+            finally:
+                manager.close()
+
     def test_v1_migration_is_versioned_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             journal = Path(temporary_directory) / "query-tasks.json"
