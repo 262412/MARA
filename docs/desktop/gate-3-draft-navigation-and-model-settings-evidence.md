@@ -9,15 +9,20 @@ embedding 表的版本化幂等迁移、安全凭据清理、精确 settings rev
 及旧 Azure embedding 的数据根启动后，Settings、Doctor、SQLite 非敏感投影、运行时
 manager、查询任务和实际流式 POST 均收敛到当前设置。
 
+证据留存提交 `f57a70aa8679cdc433c06a462bbd1e75566cf900` 把 Windows 实际请求体与迁移
+报告纳入可下载诊断 artifact；最终验证提交
+`7ea46db5644b967734e17ba9c3bf537ef4ed7729` 通过 Desktop 三平台原生流水线。
+
 当前本地 Linux 原生组合包已从系统只读工作目录完成真实 loopback 查询，捕获到
 `{"model":"gpt-5.6-luna","stream":true}`；SQLite、WAL/journal、Desktop 数据根、
 日志和 smoke 诊断均未检出旧明文凭据 sentinel，仓库根、工作目录与安装目录均未产生
 `.theflow`。该结果只证明当前 Linux 构建，不能替代 Windows 产品验收。
 
-正式结论仍为 **NO-GO**，能力保持 **In progress**：当前源码还必须取得 Windows
-Server 2022 原生构建/loopback/Defender 证据，并在干净 Windows 10 与 Windows 11
+正式结论仍为 **NO-GO**，能力保持 **In progress**：当前源码已取得 Windows Server
+2022 原生构建/loopback/Defender 证据，但还必须在干净 Windows 10 与 Windows 11
 产品 VM 验证同一用户重启、覆盖安装、卸载后重装、safeStorage、旧数据库迁移和实际
-POST route。任一平台设置模型与实际 POST 不一致都阻止放行。
+POST route。Server 2022 不能替代两套产品 VM；任一平台设置模型与实际 POST 不一致都
+阻止放行。
 
 ## 历史基线结论（70a7021）
 
@@ -157,6 +162,41 @@ query_ready=false issue_code=llm_not_configured retryable=false task_created=fal
 | 动态链接        | `ldd` 无缺失                                                                                  |
 | 退出清理        | 无残留 Sidecar 进程                                                                           |
 
+## 本轮原生组合包证据（7ea46db）
+
+[Desktop Gate 2/3 运行 31550653108](https://github.com/262412/MARA/actions/runs/31550653108)
+对应 `7ea46db5644b967734e17ba9c3bf537ef4ed7729`，三个任务全部成功：Windows
+Server 2022 原生构建、组合包 smoke 和 Defender 扫描通过；Ubuntu 22.04 原生构建与
+smoke 通过；Ubuntu 24.04 使用 Ubuntu 22.04 的同一个包跨版本复验通过。所有 artifact
+均未过期，预计于 2026-11-10 过期。
+
+| artifact                                 | ID           | 上传大小    | Actions digest                                                     |
+| ---------------------------------------- | ------------ | ----------- | ------------------------------------------------------------------ |
+| `mara-desktop-windows`                   | `9124288700` | 410,711,447 | `7ebf09f5d0ed07a74cba4eb902ebade845b773878e33fd468fcbe5779981a2fe` |
+| `mara-desktop-windows-defender`          | `9124276653` | 359         | `38dcd13315b45ba77c1ec6010b5283cf0d062ae1fee8e0a7c36581ad40db64bd` |
+| `mara-desktop-windows-smoke-diagnostics` | `9124276233` | 9,972       | `687bce9537b187a4ad8d256c4c713bf5968c9092c4840446ff9571714bf600a5` |
+| `mara-desktop-linux-22-metrics`          | `9124282171` | 11,947      | `b0a0d910cea7107afba96d7bd252a1c93c9f0e0cfab57c098d595262eb15310c` |
+| `mara-desktop-linux-22`                  | `9124281903` | 427,867,244 | `eb0b7a7d8c4043f098bca103b911a21d7566812e832670e5b005d71c92725395` |
+
+Windows 诊断 artifact 直接保留了实际 loopback 请求体
+`{"model":"gpt-5.6-luna","stream":true}`。迁移报告确认唯一默认 Chat route 为
+OpenAI、唯一默认 Embedding route 为 OpenAI、settings revision 与 route fingerprint
+存在且明文凭据不存在。Renderer Settings 保存、Sidecar 精确重启、Doctor ready、查询、
+引用、索引、删除、取消/重试和 Sidecar 退出均通过；包体为 1,016,819,534 bytes、2,741
+个文件，主 smoke 为 15.260 秒、峰值工作集 101,261,312 bytes，Sidecar SHA-256 为
+`5c6dc517330b79d0ad1168ae78788380731f1a5b6de11719265642b34b268030`。
+
+Windows Defender 证据确认 antivirus 与 antimalware service 开启、移除 runner 的
+`D:\` 整盘排除、archive scanning 开启，结果为 `scan_result=no_detections`。完整包只在
+扫描成功后上传，诊断证据独立留存。
+
+Ubuntu 22.04 诊断 artifact 同样保留实际请求体
+`{"model":"gpt-5.6-luna","stream":true}`，迁移报告确认各自只有一个默认 route 且
+明文凭据不存在。发布目录为 1,105,561,602 bytes；主 smoke 为 16.97 秒、峰值常驻内存
+534,100 KiB；Sidecar SHA-256 为
+`af32c2ea1bf945c588efccb43bce901a4c6368755295b2840fea060205548294`，`ldd` 无缺失。
+Ubuntu 24.04 对同一个 Ubuntu 22.04 artifact 与数据快照复验成功。
+
 ## 历史原生组合包证据（70a7021，不作为本轮验收）
 
 所有 artifact 均对应 `70a7021`、未过期，预计于 2026-11-09 过期：
@@ -195,7 +235,7 @@ Windows Defender 证据确认 antivirus 与 antimalware service 开启、移除 
 
 ## 残余风险与关闭条件
 
-1. 在干净 Windows 10 和 Windows 11 x64 VM 上下载 artifact `9103469715`，记录 OS
+1. 在干净 Windows 10 和 Windows 11 x64 VM 上下载 artifact `9124288700`，记录 OS
    build、压缩包与可执行文件 SHA-256、100%/125%/150% 缩放、中文 IME、安全存储、
    首次/重复启动、真实远程或本地服务、Defender、数据根和退出后进程。
 2. 单独升级并验证共享 PDF 栈，关闭 `PYSEC-2026-3655`、`PYSEC-2026-3656`，不得把
