@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -19,8 +20,12 @@ from .query_tasks import (
 class StubQueryService:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, list[str]]] = []
+        self.validate_calls = 0
+        self.turn_ids: list[str] = []
+        self.committed_turns: dict[str, dict[str, object]] = {}
         self.block_after_partial = False
         self.fail_after_partial = False
+        self.delay_before_partial = 0.0
         self.partial_emitted = threading.Event()
         self.release = threading.Event()
 
@@ -30,6 +35,7 @@ class StubQueryService:
         prompt: str,
         selected_file_ids: list[str],
     ) -> dict[str, object]:
+        self.validate_calls += 1
         return {
             "route_provider": "openai",
             "route_model": "gpt-5.6-luna",
@@ -44,14 +50,19 @@ class StubQueryService:
         prompt: str,
         selected_file_ids: list[str],
         cancel_event: threading.Event | None = None,
+        *,
+        turn_id: str = "",
     ):
         self.calls.append((conversation_id, prompt, selected_file_ids))
+        self.turn_ids.append(turn_id)
         yield {
             "stage": "retrieving",
             "answer": "",
             "final": False,
             "citations": [],
         }
+        if self.delay_before_partial:
+            time.sleep(self.delay_before_partial)
         yield {
             "stage": "generating",
             "answer": "Partial answer",
@@ -63,8 +74,15 @@ class StubQueryService:
             while not self.release.wait(timeout=0.01):
                 if cancel_event is not None and cancel_event.is_set():
                     return
+            if cancel_event is not None and cancel_event.is_set():
+                return
         if self.fail_after_partial:
             raise RuntimeError("failed at /private/model/config.json")
+        if turn_id:
+            self.committed_turns[turn_id] = {
+                "answer": "Final answer",
+                "citations": [],
+            }
         yield {
             "stage": "completed",
             "answer": "Final answer",
@@ -81,14 +99,24 @@ class StubQueryService:
             ],
         }
 
+    def recover_committed_turn(
+        self,
+        _conversation_id: str,
+        turn_id: str,
+    ) -> dict[str, object] | None:
+        return self.committed_turns.get(turn_id)
+
 
 def wait_for_terminal(manager: QueryTaskManager, task_id: str) -> dict:
+    deadline = time.monotonic() + 10
     snapshot = manager.get_task(task_id)
     while snapshot["status"] in {"queued", "running"}:
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"Query task {task_id} did not reach a terminal state.")
         snapshot = manager.wait_for_change(
             task_id,
             snapshot["version"],
-            timeout=2,
+            timeout=min(2, max(0.01, deadline - time.monotonic())),
         )
     return snapshot
 
@@ -182,6 +210,8 @@ class QueryTaskManagerTest(unittest.TestCase):
                 prompt: str,
                 selected_file_ids: list[str],
                 cancel_event: threading.Event | None = None,
+                *,
+                turn_id: str = "",
             ):
                 if prompt == "Never returns":
                     self.partial_emitted.set()
@@ -257,6 +287,9 @@ class QueryTaskManagerTest(unittest.TestCase):
             def load(self):
                 return self.payload
 
+            def probe(self):
+                return None
+
             def save(self, payload):
                 self.save_count += 1
                 self.payload = json.loads(json.dumps(payload))
@@ -268,6 +301,8 @@ class QueryTaskManagerTest(unittest.TestCase):
                 prompt: str,
                 selected_file_ids: list[str],
                 cancel_event: threading.Event | None = None,
+                *,
+                turn_id: str = "",
             ):
                 for index in range(100):
                     yield {
@@ -388,6 +423,9 @@ class QueryTaskReadinessTest(unittest.TestCase):
             def load(self):
                 return None
 
+            def probe(self):
+                return None
+
             def save(self, _payload):
                 self.save_count += 1
 
@@ -443,6 +481,8 @@ class QueryTaskRouteFailureTest(unittest.TestCase):
                 prompt: str,
                 selected_file_ids: list[str],
                 cancel_event: threading.Event | None = None,
+                *,
+                turn_id: str = "",
             ):
                 raise ProviderError("secret-sentinel /private/provider/response")
                 yield

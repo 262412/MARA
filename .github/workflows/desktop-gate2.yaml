@@ -257,6 +257,55 @@ jobs:
                 --phase large-file-recovered \
                 --expect-empty \
                 --summary-file apps/desktop/release/metrics/linux-22-large-file-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          record_phase query-persistence-smoke
+          query_persistence_stdout="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-query-persistence-stdout.txt"
+          query_persistence_stderr="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-query-persistence-stderr.txt"
+          (
+            cd /usr
+            xvfb-run -a "$app_executable" --smoke-test-query-persistence
+          ) > "$query_persistence_stdout" 2> "$query_persistence_stderr"
+          grep -F \
+            "query_persistence=partial,typed_error,blocked_retry,recovery,single_turn error_code=query_state_permission_denied status_success" \
+            "$query_persistence_stdout"
+          ! grep -F "/tmp/mara-desktop/data/MARA" "$query_persistence_stderr"
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          record_phase single-instance-smoke
+          single_primary_stdout="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-single-primary-stdout.txt"
+          single_primary_stderr="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-single-primary-stderr.txt"
+          single_secondary_stdout="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-single-secondary-stdout.txt"
+          single_secondary_stderr="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-single-secondary-stderr.txt"
+          xvfb-run -a bash -c '
+            set -euo pipefail
+            app_executable=$1
+            primary_stdout=$2
+            primary_stderr=$3
+            secondary_stdout=$4
+            secondary_stderr=$5
+            cd /usr
+            "$app_executable" --smoke-test-single-instance \
+              > "$primary_stdout" 2> "$primary_stderr" &
+            primary_pid=$!
+            trap '\''kill "$primary_pid" 2>/dev/null || true'\'' EXIT
+            for _ in $(seq 1 300); do
+              if grep -Fq "single_instance_primary=ready" "$primary_stdout" 2>/dev/null; then
+                break
+              fi
+              sleep 0.1
+            done
+            grep -Fq "single_instance_primary=ready" "$primary_stdout"
+            "$app_executable" --smoke-test-single-instance \
+              > "$secondary_stdout" 2> "$secondary_stderr"
+            wait "$primary_pid"
+            trap - EXIT
+          ' bash "$app_executable" "$single_primary_stdout" \
+            "$single_primary_stderr" "$single_secondary_stdout" \
+            "$single_secondary_stderr"
+          grep -F \
+            "single_instance=secondary_blocked,primary_focused,one_sidecar status_success" \
+            "$single_primary_stdout"
           record_phase unconfigured-first-start
           unconfigured_root=/tmp/mara-desktop-unconfigured
           mkdir -p "$unconfigured_root/data" \
@@ -372,6 +421,9 @@ jobs:
           ) > apps/desktop/release/metrics/linux-22-settings-restart-stdout.txt \
             2> apps/desktop/release/metrics/linux-22-settings-restart-stderr.txt
           grep -F "renderer_query=source-selection,enter,stream,citation status_success" \
+            apps/desktop/release/metrics/linux-22-settings-restart-stdout.txt
+          grep -F \
+            "renderer_markdown=heading,list,table,code,blockquote,katex,citations,safe-links status_success" \
             apps/desktop/release/metrics/linux-22-settings-restart-stdout.txt
           grep -F '"model": "gpt-5.6-luna"' "$settings_chat_capture"
           grep -F '"stream": true' "$settings_chat_capture"
@@ -554,6 +606,12 @@ jobs:
           $cancelStderr = "apps/desktop/release/windows-cancel-stderr.txt"
           $partialStdout = "apps/desktop/release/windows-partial-stdout.txt"
           $partialStderr = "apps/desktop/release/windows-partial-stderr.txt"
+          $queryPersistenceStdout = "apps/desktop/release/windows-query-persistence-stdout.txt"
+          $queryPersistenceStderr = "apps/desktop/release/windows-query-persistence-stderr.txt"
+          $singlePrimaryStdout = "apps/desktop/release/windows-single-primary-stdout.txt"
+          $singlePrimaryStderr = "apps/desktop/release/windows-single-primary-stderr.txt"
+          $singleSecondaryStdout = "apps/desktop/release/windows-single-secondary-stdout.txt"
+          $singleSecondaryStderr = "apps/desktop/release/windows-single-secondary-stderr.txt"
           $sidecarExitStdout = "apps/desktop/release/windows-sidecar-exit-stdout.txt"
           $sidecarExitStderr = "apps/desktop/release/windows-sidecar-exit-stderr.txt"
           $diskFullStdout = "apps/desktop/release/windows-disk-full-stdout.txt"
@@ -777,6 +835,11 @@ jobs:
             -Quiet)) {
             throw "Persisted Settings did not support the real Renderer query."
           }
+          if (-not (Select-String -Path $settingsRestartStdout -SimpleMatch `
+            "renderer_markdown=heading,list,table,code,blockquote,katex,citations,safe-links status_success" `
+            -Quiet)) {
+            throw "The packaged Renderer did not produce safe semantic Markdown DOM."
+          }
           $capturedRoute = Get-Content $settingsChatCapture -Raw |
             ConvertFrom-Json
           if ($capturedRoute.model -ne "gpt-5.6-luna" -or
@@ -959,6 +1022,75 @@ jobs:
           }
           node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
             --data-root $dataRoot
+          $queryPersistenceProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-query-persistence" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $queryPersistenceStdout `
+            -RedirectStandardError $queryPersistenceStderr -PassThru
+          $queryPersistenceProcess.WaitForExit()
+          "query_persistence_exit_code=$($queryPersistenceProcess.ExitCode)" |
+            Add-Content $diagnostics
+          if (Test-Path $queryPersistenceStdout) {
+            Get-Content $queryPersistenceStdout | Write-Host
+          }
+          if (Test-Path $queryPersistenceStderr) {
+            Get-Content $queryPersistenceStderr | Write-Host
+            if (Select-String -Path $queryPersistenceStderr `
+              -SimpleMatch $dataRoot -Quiet) {
+              throw "The query persistence diagnostics exposed the Desktop data path."
+            }
+          }
+          if ($queryPersistenceProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $queryPersistenceProcess.ExitCode
+          }
+          if (-not (Select-String -Path $queryPersistenceStdout -SimpleMatch `
+            "query_persistence=partial,typed_error,blocked_retry,recovery,single_turn error_code=query_state_permission_denied status_success" `
+            -Quiet)) {
+            throw "The packaged query journal did not recover one persisted turn."
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $singlePrimary = Start-Process $executable `
+            -ArgumentList "--smoke-test-single-instance" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $singlePrimaryStdout `
+            -RedirectStandardError $singlePrimaryStderr -PassThru
+          for ($attempt = 0; $attempt -lt 300; $attempt++) {
+            if ((Test-Path $singlePrimaryStdout) -and
+                (Select-String -Path $singlePrimaryStdout -SimpleMatch `
+                  "single_instance_primary=ready" -Quiet)) {
+              break
+            }
+            Start-Sleep -Milliseconds 100
+          }
+          if (-not ((Test-Path $singlePrimaryStdout) -and
+              (Select-String -Path $singlePrimaryStdout -SimpleMatch `
+                "single_instance_primary=ready" -Quiet))) {
+            Stop-Process -Id $singlePrimary.Id -Force -ErrorAction SilentlyContinue
+            throw "The primary packaged application did not enter single-instance smoke."
+          }
+          $singleSecondary = Start-Process $executable `
+            -ArgumentList "--smoke-test-single-instance" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $singleSecondaryStdout `
+            -RedirectStandardError $singleSecondaryStderr -PassThru
+          $singleSecondary.WaitForExit()
+          $singlePrimary.WaitForExit()
+          @(
+            "single_primary_exit_code=$($singlePrimary.ExitCode)"
+            "single_secondary_exit_code=$($singleSecondary.ExitCode)"
+          ) | Add-Content $diagnostics
+          if ($singlePrimary.ExitCode -ne 0 -or $singleSecondary.ExitCode -ne 0) {
+            throw "The packaged single-instance smoke did not exit cleanly."
+          }
+          if (-not (Select-String -Path $singlePrimaryStdout -SimpleMatch `
+            "single_instance=secondary_blocked,primary_focused,one_sidecar status_success" `
+            -Quiet)) {
+            throw "The second packaged launch did not reuse the primary Sidecar."
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
           "block" | Set-Content $blockMarker
           $sidecarExitProcess = Start-Process $executable `
             -ArgumentList "--smoke-test-gate3-sidecar-exit" `
@@ -1138,6 +1270,12 @@ jobs:
             apps/desktop/release/windows-cancel-stderr.txt
             apps/desktop/release/windows-partial-stdout.txt
             apps/desktop/release/windows-partial-stderr.txt
+            apps/desktop/release/windows-query-persistence-stdout.txt
+            apps/desktop/release/windows-query-persistence-stderr.txt
+            apps/desktop/release/windows-single-primary-stdout.txt
+            apps/desktop/release/windows-single-primary-stderr.txt
+            apps/desktop/release/windows-single-secondary-stdout.txt
+            apps/desktop/release/windows-single-secondary-stderr.txt
             apps/desktop/release/windows-sidecar-exit-stdout.txt
             apps/desktop/release/windows-sidecar-exit-stderr.txt
             apps/desktop/release/windows-disk-full-stdout.txt

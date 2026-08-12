@@ -19,10 +19,15 @@ export type DoctorPayload = {
   issues: Array<string>;
   llm_default: string;
   ok: boolean;
-  query_action: "none" | "configure_llm" | "configure_credentials" | "check_model_access" | "repair_installation" | "check_connection" | "retry";
+  query_action: "none" | "configure_llm" | "configure_credentials" | "check_model_access" | "repair_installation" | "check_connection" | "close_extra_instance" | "check_data_permissions" | "free_storage" | "repair_state" | "retry";
   query_issue_code: string | null;
   query_message: string;
   query_model: string;
+  query_persistence_action: "none" | "close_extra_instance" | "check_data_permissions" | "free_storage" | "repair_state" | "retry";
+  query_persistence_issue_code: string | null;
+  query_persistence_message: string;
+  query_persistence_ready: boolean;
+  query_persistence_retryable: boolean;
   query_provider: string;
   query_ready: boolean;
   query_retryable: boolean;

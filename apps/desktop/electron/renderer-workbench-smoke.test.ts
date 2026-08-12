@@ -13,9 +13,12 @@ const navigationResult = {
   modelSettingsRedacted: true,
   navigationOk: true,
   queryCitationCount: 0,
+  queryCitationMarkersOk: true,
   queryConversationId: null,
+  queryMarkdownOk: true,
   queryMessageCount: 0,
   queryStatus: null,
+  queryUnsafeContentBlocked: true,
   sessionDelta: 0,
 };
 
@@ -55,6 +58,7 @@ test("packaged renderer blocked smoke requires no task and a preserved draft", a
 });
 
 test("packaged renderer query smoke requires one persisted cited answer", async () => {
+  const messages: string[] = [];
   const conversationId = await runRendererWorkbenchSmoke(
     {
       executeJavaScript: async () => ({
@@ -67,9 +71,36 @@ test("packaged renderer query smoke requires one persisted cited answer", async 
       }),
     },
     "query",
-    () => undefined,
+    (message) => messages.push(message),
   );
   assert.equal(conversationId, "renderer-session");
+  assert.ok(
+    messages.includes(
+      "renderer_markdown=heading,list,table,code,blockquote,katex,citations,safe-links status_success",
+    ),
+  );
+});
+
+test("packaged renderer query smoke requires semantic and safe Markdown DOM", async () => {
+  await assert.rejects(
+    runRendererWorkbenchSmoke(
+      {
+        executeJavaScript: async () => ({
+          ...navigationResult,
+          queryCitationCount: 1,
+          queryCitationMarkersOk: false,
+          queryConversationId: "renderer-session",
+          queryMarkdownOk: false,
+          queryMessageCount: 2,
+          queryStatus: "success",
+          queryUnsafeContentBlocked: false,
+          sessionDelta: 1,
+        }),
+      },
+      "query",
+    ),
+    /citation markers changed.*semantic DOM.*unsafe Markdown content/,
+  );
 });
 
 test("packaged renderer settings smoke saves through the real page and refreshes Doctor", async () => {

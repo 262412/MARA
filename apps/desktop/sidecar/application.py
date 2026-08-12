@@ -10,8 +10,9 @@ from .api_errors import SidecarApiError
 from .indexing_readiness import (
     DesktopIndexingPreflightError,
     IndexingReadiness,
-    classify_index_failure,
     collect_indexing_readiness,
+    index_failure_from_result,
+    index_result_name,
     validate_index_sources,
 )
 from .model_routes import (
@@ -20,6 +21,7 @@ from .model_routes import (
     query_route_diagnostics,
     query_route_name,
 )
+from .query_commit_state import recover_committed_answer, state_with_query_commit_marker
 from .query_readiness import QueryReadiness, collect_query_readiness
 
 FILE_RESPONSE_FIELDS = (
@@ -170,6 +172,8 @@ class DesktopApplicationService:
         prompt: str,
         selected_file_ids: list[str],
         cancel_event: threading.Event | None = None,
+        *,
+        turn_id: str = "",
     ) -> Iterator[dict[str, Any]]:
         with self._runtime_lock:
             identity = self._ensure_model_routes()
@@ -181,8 +185,10 @@ class DesktopApplicationService:
                 str(record["file_id"]): str(record["name"]) for record in source_records
             }
             runtime = self._create_runtime()
-            if runtime.load_session(conversation_id) is None:
+            session = runtime.load_session(conversation_id)
+            if session is None:
                 raise DesktopSessionNotFoundError(conversation_id)
+            request_state = state_with_query_commit_marker(session, turn_id)
             request = self._create_query_request(
                 prompt=prompt,
                 conversation_id=conversation_id,
@@ -195,6 +201,7 @@ class DesktopApplicationService:
                 use_citation="inline",
                 llm=query_route_name(identity),
                 origin="desktop",
+                state=request_state,
             )
         if cancel_event is not None and cancel_event.is_set():
             return
@@ -207,6 +214,18 @@ class DesktopApplicationService:
             if cancel_event is not None and cancel_event.is_set():
                 return
             yield _query_update(update, source_names)
+
+    def recover_committed_turn(
+        self,
+        conversation_id: str,
+        turn_id: str,
+    ) -> dict[str, object] | None:
+        with self._runtime_lock:
+            return recover_committed_answer(
+                self._get_runtime(),
+                conversation_id,
+                turn_id,
+            )
 
     def validate_query(
         self,
@@ -267,11 +286,11 @@ class DesktopApplicationService:
             result = self._get_runtime().index_paths(paths, reindex=reindex).as_dict()
         return {
             "successes": [
-                {"name": _index_result_name(item)}
+                {"name": index_result_name(item)}
                 for item in result.get("successes", [])
             ],
             "failures": [
-                _index_failure_from_result(item) for item in result.get("failures", [])
+                index_failure_from_result(item) for item in result.get("failures", [])
             ],
         }
 
@@ -556,23 +575,6 @@ def _citation_quote(item: dict[str, Any]) -> str:
         if value:
             return value[:4_000]
     return ""
-
-
-def _index_result_name(item: dict[str, Any]) -> str:
-    file_name = str(item.get("file_name", "") or "").strip()
-    if file_name:
-        return Path(file_name).name
-    return Path(str(item.get("file_path", "") or "")).name or "Unknown file"
-
-
-def _index_failure_from_result(item: dict[str, Any]) -> dict[str, Any]:
-    failure = classify_index_failure(str(item.get("message") or ""))
-    return {
-        "name": _index_result_name(item),
-        "code": failure.code,
-        "message": failure.message,
-        "retryable": failure.retryable,
-    }
 
 
 def _serialize_datetime(value: Any) -> str | None:

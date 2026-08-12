@@ -29,6 +29,8 @@ class QueryService(Protocol):
         prompt: str,
         selected_file_ids: list[str],
         cancel_event: threading.Event,
+        *,
+        turn_id: str,
     ) -> Iterator[dict[str, Any]]:
         ...
 
@@ -47,6 +49,7 @@ class QueryStreamRunner:
     def run(
         self,
         task_id: str,
+        turn_id: str,
         arguments: tuple[str, str, list[str]],
         cancel_event: threading.Event,
         on_update: Callable[[dict[str, Any]], bool],
@@ -54,7 +57,7 @@ class QueryStreamRunner:
         messages: Queue[tuple[str, Any]] = Queue()
         threading.Thread(
             target=self._produce,
-            args=(task_id, arguments, cancel_event, messages),
+            args=(task_id, turn_id, arguments, cancel_event, messages),
             daemon=True,
             name=f"mara-query-runtime-{task_id[:8]}",
         ).start()
@@ -90,13 +93,18 @@ class QueryStreamRunner:
     def _produce(
         self,
         task_id: str,
+        turn_id: str,
         arguments: tuple[str, str, list[str]],
         cancel_event: threading.Event,
         messages: Queue[tuple[str, Any]],
     ) -> None:
         stream: Iterator[dict[str, Any]] | None = None
         try:
-            stream = self._service.stream_query(*arguments, cancel_event)
+            stream = self._service.stream_query(
+                *arguments,
+                cancel_event,
+                turn_id=turn_id,
+            )
             for update in stream:
                 if cancel_event.is_set():
                     break

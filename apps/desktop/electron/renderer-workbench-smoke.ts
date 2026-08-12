@@ -26,9 +26,12 @@ type RendererWorkbenchSmokeResult = {
   modelSettingsReady: boolean;
   navigationOk: boolean;
   queryCitationCount: number;
+  queryCitationMarkersOk: boolean;
   queryConversationId: string | null;
+  queryMarkdownOk: boolean;
   queryMessageCount: number;
   queryStatus: string | null;
+  queryUnsafeContentBlocked: boolean;
   sessionDelta: number;
 };
 
@@ -229,9 +232,12 @@ function rendererWorkbenchSmokeScript(
       let draftPromptPreserved = true;
       let imeAndRepeatBlocked = true;
       let queryCitationCount = 0;
+      let queryCitationMarkersOk = true;
       let queryConversationId = null;
+      let queryMarkdownOk = true;
       let queryMessageCount = 0;
       let queryStatus = null;
+      let queryUnsafeContentBlocked = true;
       let sessionDelta = 0;
       if (mode === "blocked") {
         inputValue(input, expectedPrompt);
@@ -333,6 +339,29 @@ function rendererWorkbenchSmokeScript(
           const detail = await bridge.getSession(queryConversationId);
           queryMessageCount = detail?.ok ? detail.data.messages.length : 0;
         }
+        let answer = null;
+        for (let attempt = 0; attempt < 200; attempt += 1) {
+          answer = document.querySelector(".current-answer .answer-content");
+          if (answer?.querySelector("h1") && answer.querySelector(".katex")) break;
+          await wait(25);
+        }
+        const links = Array.from(answer?.querySelectorAll("a") ?? []);
+        queryMarkdownOk =
+          answer?.querySelector("h1")?.textContent?.trim() === "Grounded result" &&
+          answer.querySelectorAll("ul > li").length === 2 &&
+          answer.querySelector("blockquote") !== null &&
+          answer.querySelector("table tbody td") !== null &&
+          answer.querySelector("pre > code.language-text") !== null &&
+          answer.querySelector(".katex") !== null;
+        queryCitationMarkersOk =
+          answer?.textContent?.includes("【1】【2】") === true;
+        queryUnsafeContentBlocked =
+          answer?.querySelector("script, img, [onerror]") === null &&
+          links.every((link) => {
+            const href = link.getAttribute("href") ?? "";
+            return href.startsWith("https://") || href.startsWith("http://") || href.startsWith("#");
+          }) &&
+          !links.some((link) => link.textContent?.trim() === "blocked");
       }
       return {
         altEnterOk,
@@ -346,9 +375,12 @@ function rendererWorkbenchSmokeScript(
         modelSettingsReady,
         navigationOk,
         queryCitationCount,
+        queryCitationMarkersOk,
         queryConversationId,
+        queryMarkdownOk,
         queryMessageCount,
         queryStatus,
+        queryUnsafeContentBlocked,
         sessionDelta,
       };
     })()
@@ -385,6 +417,9 @@ export async function runRendererWorkbenchSmoke(
       failures.push(`renderer query status was ${result.queryStatus ?? "missing"}`);
     }
     if (result.queryCitationCount < 1) failures.push("renderer query had no citations");
+    if (!result.queryCitationMarkersOk) failures.push("citation markers changed in Markdown");
+    if (!result.queryMarkdownOk) failures.push("assistant Markdown was not semantic DOM");
+    if (!result.queryUnsafeContentBlocked) failures.push("unsafe Markdown content reached the DOM");
     if (result.queryMessageCount < 2) failures.push("renderer query was not persisted");
   }
   if (failures.length > 0) {
@@ -393,6 +428,11 @@ export async function runRendererWorkbenchSmoke(
   reportSuccess(
     `renderer_ui=real-navigation,draft,settings,keyboard mode=${mode} status_success`,
   );
+  if (mode === "query") {
+    reportSuccess(
+      "renderer_markdown=heading,list,table,code,blockquote,katex,citations,safe-links status_success",
+    );
+  }
   if (mode === "settings") {
     reportSuccess(
       "renderer_model_settings=ui-save,restart,doctor-ready,redacted status_success",

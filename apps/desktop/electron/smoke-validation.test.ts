@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 import type { DesktopResult, RuntimeStatus } from "../shared/runtime-contracts";
@@ -93,6 +95,11 @@ const doctorPayload: DoctorPayload = {
     query_message: "Question answering is ready.",
     query_action: "none",
     query_retryable: false,
+    query_persistence_ready: true,
+    query_persistence_issue_code: null,
+    query_persistence_message: "Answer state storage is ready.",
+    query_persistence_action: "none",
+    query_persistence_retryable: false,
     query_provider: "OpenAI-compatible",
     query_model: "desktop-chat",
     embedding_provider: "OpenAI-compatible",
@@ -156,6 +163,19 @@ const importCapabilities: DesktopResult<ImportCapabilities> = {
     supported_extensions: [".pdf", ".docx", ".txt", ".md", ".zip"],
   },
 };
+
+test("main acquires the single-instance lock before resolving Desktop data", () => {
+  const source = readFileSync(path.join(process.cwd(), "electron", "main.ts"), "utf8");
+  const lock = source.indexOf("app.requestSingleInstanceLock()");
+  const dataRoot = source.indexOf("resolveDesktopDataRoot(");
+  assert.ok(lock >= 0, "single-instance lock is missing");
+  assert.ok(lock < dataRoot, "Desktop data is resolved before single-instance lock");
+  assert.match(source, /app\.on\("second-instance"/);
+  assert.match(source, /mainWindow\.restore\(\)/);
+  assert.match(source, /mainWindow\.focus\(\)/);
+  assert.match(source, /single_instance=secondary_blocked,primary_focused,one_sidecar/);
+  assert.match(source, /after\.data\.sidecar_pid !== before\.data\.sidecar_pid/);
+});
 
 test("accepts the deterministic non-empty packaged smoke snapshot", () => {
   assert.doesNotThrow(() =>

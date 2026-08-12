@@ -13,6 +13,7 @@ import type { SidecarError } from "../../shared/runtime-contracts";
 import type { SessionDetail, SessionMessage } from "../../shared/session-contracts";
 import type { ResourceState } from "../resource-state";
 import { submittedPromptTransition } from "../query-task-state";
+import { AssistantMarkdown } from "./AssistantMarkdown";
 import { Icon } from "./Icon";
 
 type WorkspaceProps = {
@@ -246,7 +247,10 @@ export function Workspace({
         {answerActionError ? (
           <div className="answer-action-error" role="alert">
             <span>{answerActionError.message}</span>
-            <small>请求 ID：{answerActionError.request_id}</small>
+            <small>
+              错误代码：{answerActionError.code} · 请求 ID：
+              {answerActionError.request_id}
+            </small>
           </div>
         ) : null}
         {disabledReason ? (
@@ -325,7 +329,7 @@ function SavedMessage({ message }: { message: SessionMessage }) {
   return (
     <article className="message assistant-message">
       <AssistantHeading detail="已保存的回答" />
-      <p>{message.content}</p>
+      <AssistantMarkdown content={message.content} />
     </article>
   );
 }
@@ -352,7 +356,7 @@ function CurrentAnswer({
       </div>
       <article className={`message assistant-message answer-${task.status}`}>
         <AssistantHeading detail={answerStatus(task)} />
-        {task.answer ? <p className="answer-content">{task.answer}</p> : null}
+        {task.answer ? <AssistantMarkdown content={task.answer} /> : null}
         {active && !task.answer ? <p className="answer-placeholder">正在检索所选来源…</p> : null}
         {task.error ? (
           <div className="answer-error" role="alert">
@@ -410,6 +414,12 @@ function queryErrorAction(code: string): string {
     llm_rate_limited: "请稍后重试；无需重新安装 MARA。",
     llm_provider_unreachable: "请检查网络或本地模型服务后重试。",
     llm_dependency_missing: "当前安装缺少提供方依赖，请修复或重新安装 MARA。",
+    query_storage_full: "请释放应用数据所在磁盘的空间，然后重试。",
+    query_state_locked: "请关闭额外的 MARA 实例，然后重试。",
+    query_state_permission_denied: "请检查 MARA 应用数据目录的写入权限，然后重试。",
+    query_state_read_only: "请让 MARA 应用数据目录恢复可写，然后重试。",
+    query_state_corrupt: "回答状态文件已保留，请先修复状态文件再继续。",
+    query_persistence_failed: "请确认应用数据存储可用，然后重试。",
   };
   return actions[code] ?? "请记录任务 ID 后重试；若持续失败，请联系维护者。";
 }
@@ -508,9 +518,12 @@ function answerStatus(task: QueryTask): string {
     return "回答已保存";
   }
   if (task.status === "cancelled") {
-    return "生成已停止";
+    return task.answer ? "生成已停止，内容未完成" : "生成已停止";
   }
-  return "生成失败";
+  if (task.stage === "storage_error" && task.answer) {
+    return "部分回答未安全保存";
+  }
+  return task.answer ? "回答未完成" : "生成失败";
 }
 
 function WorkspaceState({

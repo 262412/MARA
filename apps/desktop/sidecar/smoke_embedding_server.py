@@ -10,6 +10,37 @@ from pathlib import Path
 from typing import Any
 
 MAX_REQUEST_BYTES = 1_048_576
+SMOKE_CITATION_PREAMBLE = (
+    "CITATION LIST\n\n"
+    "CITATION【1】\n\n"
+    "START_PHRASE: The deterministic query source alpha says\n"
+    "END_PHRASE: preserves grounded evidence identities.\n\n"
+    "CITATION【2】\n\n"
+    "START_PHRASE: The deterministic query source beta says\n"
+    "END_PHRASE: keeps cross-file citations distinct.\n\n"
+    "FINAL ANSWER\n"
+)
+SMOKE_MARKDOWN_PREFIX = (
+    "# Grounded result\n\n"
+    "MARA Desktop preserves grounded evidence identities and keeps "
+)
+SMOKE_MARKDOWN_SUFFIX = (
+    "cross-file citations distinct.【1】【2】\n\n"
+    "- One persisted answer\n"
+    "- Two distinct sources\n\n"
+    "> Evidence remains scoped to the selected files.\n\n"
+    "| Check | Result |\n"
+    "| --- | --- |\n"
+    "| Journal | durable |\n\n"
+    "```text\nquery status: success\n```\n\n"
+    "Inline formula: $x^2 + y^2$.\n\n"
+    "[Documentation](https://example.com/mara) "
+    "[blocked](javascript:alert(1))\n\n"
+    "<img src=x onerror=alert(1)>"
+)
+SMOKE_CHAT_ANSWER = (
+    SMOKE_CITATION_PREAMBLE + SMOKE_MARKDOWN_PREFIX + SMOKE_MARKDOWN_SUFFIX
+)
 
 
 def _embedding(value: str | list[int]) -> list[float]:
@@ -162,18 +193,6 @@ class _EmbeddingHandler(BaseHTTPRequestHandler):
             return
         model = str(payload.get("model") or "smoke-chat")
         self._capture_chat_route(model, bool(payload.get("stream")))
-        answer = (
-            "CITATION LIST\n\n"
-            "CITATION【1】\n\n"
-            "START_PHRASE: The deterministic query source alpha says\n"
-            "END_PHRASE: preserves grounded evidence identities.\n\n"
-            "CITATION【2】\n\n"
-            "START_PHRASE: The deterministic query source beta says\n"
-            "END_PHRASE: keeps cross-file citations distinct.\n\n"
-            "FINAL ANSWER\n"
-            "MARA Desktop preserves grounded evidence identities and keeps "
-            "cross-file citations distinct.【1】【2】"
-        )
         if not payload.get("stream"):
             self._write_json(
                 200,
@@ -185,7 +204,10 @@ class _EmbeddingHandler(BaseHTTPRequestHandler):
                     "choices": [
                         {
                             "index": 0,
-                            "message": {"role": "assistant", "content": answer},
+                            "message": {
+                                "role": "assistant",
+                                "content": SMOKE_CHAT_ANSWER,
+                            },
                             "finish_reason": "stop",
                         }
                     ],
@@ -201,20 +223,7 @@ class _EmbeddingHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        chunks = [
-            (
-                "CITATION LIST\n\n"
-                "CITATION【1】\n\n"
-                "START_PHRASE: The deterministic query source alpha says\n"
-                "END_PHRASE: preserves grounded evidence identities.\n\n"
-                "CITATION【2】\n\n"
-                "START_PHRASE: The deterministic query source beta says\n"
-                "END_PHRASE: keeps cross-file citations distinct.\n\n"
-                "FINAL ANSWER\n"
-            ),
-            "MARA Desktop preserves grounded evidence identities and keeps ",
-            "cross-file citations distinct.【1】【2】",
-        ]
+        chunks = [SMOKE_CITATION_PREAMBLE, SMOKE_MARKDOWN_PREFIX, SMOKE_MARKDOWN_SUFFIX]
         for index, content in enumerate(chunks):
             if index == 2 and self.chat_block_marker is not None:
                 assert self.chat_request_marker is not None

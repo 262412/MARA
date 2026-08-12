@@ -10,7 +10,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Annotated, Any, Protocol, cast
+from typing import Annotated, Any, Protocol
 from uuid import uuid4
 
 if os.environ.get("MARA_DESKTOP_DATA_DIR"):
@@ -26,8 +26,6 @@ from fastapi.responses import JSONResponse
 from sidecar.api_errors import SidecarApiError
 from sidecar.application import DesktopApplicationService, DesktopSessionNotFoundError
 from sidecar.contracts import (
-    DoctorPayload,
-    DoctorResponse,
     FileListResponse,
     ImportCapabilitiesResponse,
     RuntimeHealth,
@@ -35,7 +33,9 @@ from sidecar.contracts import (
     SessionListResponse,
     SidecarError,
 )
+from sidecar.data_root_lease import DesktopDataRootLease, DesktopDataRootLeaseError
 from sidecar.desktop_data_root import configure_desktop_data_root
+from sidecar.doctor_routes import register_doctor_route
 from sidecar.file_routes import register_gate3_routes
 from sidecar.index_task_journal import JsonIndexTaskJournal
 from sidecar.index_tasks import IndexTaskManager
@@ -44,11 +44,12 @@ from sidecar.maintenance_logging import (
     configure_maintenance_logging,
 )
 from sidecar.model_routes import settings_revision
+from sidecar.query_manager_factory import create_query_task_manager
 from sidecar.query_routes import register_query_routes
-from sidecar.query_tasks import QueryService, QueryTaskManager
+from sidecar.query_tasks import QueryTaskManager
 from sidecar.server_runtime import apply_smoke_startup_delay, create_loopback_listener
 from sidecar.session_routes import register_session_mutation_routes
-from sidecar.smoke_faults import inject_smoke_fault
+from sidecar.smoke_faults import inject_smoke_fault, query_smoke_fault_marker
 from sidecar.task_error_handlers import register_task_exception_handlers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -225,6 +226,7 @@ def create_app(
     query_task_manager: QueryTaskManager | None = None,
     *,
     smoke_fault: str | None = None,
+    query_smoke_fault_marker: Path | None = None,
 ) -> FastAPI:
     if not token:
         raise ValueError("Sidecar token is required")
@@ -257,9 +259,11 @@ def create_app(
             journal=journal,
             validator=service.validate_indexing,
         )
-    answer_task_manager = query_task_manager or QueryTaskManager(
-        cast(QueryService, service),
-        journal_path=_query_task_journal_path(),
+    answer_task_manager = create_query_task_manager(
+        service,
+        query_task_manager,
+        _query_task_journal_path(),
+        query_smoke_fault_marker,
     )
     app.state.token = token
     app.state.application_service = service
@@ -278,6 +282,12 @@ def create_app(
         logger=LOGGER,
     )
     _register_lifecycle_routes(app)
+    register_doctor_route(
+        app,
+        dependencies=_protected_dependencies(),
+        call_service=_call_service,
+        request_id=_request_id,
+    )
     _register_data_routes(app)
     app.add_api_route(
         "/openapi.json",
@@ -422,19 +432,6 @@ def _register_data_routes(app: FastAPI) -> None:
     protected_without_query = _protected_dependencies()
 
     @app.get(
-        "/v1/doctor",
-        response_model=DoctorResponse,
-        dependencies=protected_without_query,
-    )
-    def get_doctor(request: Request) -> DoctorResponse:
-        request_id = _request_id(request)
-        doctor = _call_service(request, "get_doctor")
-        return DoctorResponse(
-            request_id=request_id,
-            doctor=DoctorPayload.model_validate({**doctor, "request_id": request_id}),
-        )
-
-    @app.get(
         "/v1/files",
         response_model=FileListResponse,
         dependencies=protected_without_query,
@@ -529,12 +526,23 @@ def main() -> int:
         return 2
 
     desktop_data_root = Path(data_root)
+    try:
+        lease = DesktopDataRootLease.acquire(desktop_data_root)
+    except DesktopDataRootLeaseError as error:
+        print(error.code, file=sys.stderr)
+        return 1
+    with lease:
+        return _run_server(token, desktop_data_root)
+
+
+def _run_server(token: str, desktop_data_root: Path) -> int:
     configure_desktop_data_root(desktop_data_root)
     maintenance_handler = configure_maintenance_logging(desktop_data_root)
     attach_query_maintenance_loggers(maintenance_handler)
     app = create_app(
         token,
         smoke_fault=os.environ.get("MARA_DESKTOP_SMOKE_FAULT") or None,
+        query_smoke_fault_marker=query_smoke_fault_marker(desktop_data_root),
     )
     listener = create_loopback_listener()
     host, port = listener.getsockname()

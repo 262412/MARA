@@ -150,16 +150,24 @@ def _register_query_task_errors(
         request: Request, error: QueryTaskPersistenceError
     ) -> JSONResponse:
         logger.error(
-            "Query task persistence unavailable request_id=%s error_code=%s",
+            "Query task persistence unavailable request_id=%s error_code=%s "
+            "operation=%s error_type=%s errno=%s winerror=%s retried=%s "
+            "retry_count=%s",
             request_id(request),
             error.code,
+            error.operation,
+            error.error_type,
+            error.error_number,
+            error.winerror,
+            error.retry_count > 0,
+            error.retry_count,
         )
         return error_response(
             request,
             status_code=503,
             code=error.code,
             message=error.message,
-            retryable=True,
+            retryable=error.retryable,
         )
 
     @app.exception_handler(QueryTaskNotFoundError)

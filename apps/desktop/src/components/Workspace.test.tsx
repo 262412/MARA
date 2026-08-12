@@ -162,6 +162,45 @@ test("Workspace renders streaming, success, failed, and cancelled answers", () =
   assert.doesNotMatch(modelMissing, /重试回答/);
 });
 
+test("all assistant answer states share semantic Markdown rendering", () => {
+  const markdown = "# Result\n\n- item\n\n| A | B |\n| - | - |\n| 1 | 2 |";
+  const markdownDetail: SessionDetail = {
+    ...detail,
+    messages: [{ role: "assistant", content: markdown }],
+  };
+  const history = render({ status: "success", data: markdownDetail });
+  assert.match(history, /<h1>Result<\/h1>/);
+  assert.match(history, /<table>/);
+
+  for (const status of ["running", "success", "failed", "cancelled"] as const) {
+    const current = render(
+      { status: "success", data: { ...detail, messages: [] } },
+      {
+        ...queryTask,
+        status,
+        answer: markdown,
+        error:
+          status === "failed"
+            ? {
+                code: "query_state_permission_denied",
+                message: "Answer state cannot be saved.",
+                retryable: true,
+              }
+            : status === "cancelled"
+              ? {
+                  code: "query_cancelled",
+                  message: "Answer generation was cancelled.",
+                  retryable: true,
+                }
+              : null,
+        retryable: status === "failed" || status === "cancelled",
+      },
+    );
+    assert.match(current, /<h1>Result<\/h1>/, status);
+    assert.match(current, /<table>/, status);
+  }
+});
+
 test("Workspace truthfully explains why the composer is unavailable", () => {
   const session = { status: "success" as const, data: detail };
   assert.match(render(undefined), /先选择或新建任务/);

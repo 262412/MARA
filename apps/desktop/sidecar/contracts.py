@@ -58,9 +58,25 @@ class DoctorPayload(BaseModel):
         "check_model_access",
         "repair_installation",
         "check_connection",
+        "close_extra_instance",
+        "check_data_permissions",
+        "free_storage",
+        "repair_state",
         "retry",
     ]
     query_retryable: bool
+    query_persistence_ready: bool
+    query_persistence_issue_code: str | None
+    query_persistence_message: str
+    query_persistence_action: Literal[
+        "none",
+        "close_extra_instance",
+        "check_data_permissions",
+        "free_storage",
+        "repair_state",
+        "retry",
+    ]
+    query_persistence_retryable: bool
     query_provider: str
     query_model: str
     embedding_provider: str

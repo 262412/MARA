@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -95,6 +95,10 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 app.enableSandbox();
+const singleInstanceLockAcquired = app.requestSingleInstanceLock();
+if (!singleInstanceLockAcquired) {
+  app.quit();
+}
 
 let mainWindow: BrowserWindow | undefined;
 let quitting = false;
@@ -103,12 +107,40 @@ let recoverQueryTaskAfterRestart = false;
 const watchedIndexTasks = new Set<string>();
 const watchedQueryTasks = new Set<string>();
 const MODEL_SETTINGS_SMOKE_FAKE_KEY = "mara-desktop-settings-secret-sentinel";
+const SINGLE_INSTANCE_SMOKE_FLAG = "--smoke-test-single-instance";
+const requireSingleInstanceSmoke = process.argv.includes(
+  SINGLE_INSTANCE_SMOKE_FLAG,
+);
+let singleInstanceSmokeFocused = false;
+let resolveSingleInstanceSmoke: (() => void) | undefined;
+const singleInstanceSmokeObserved = new Promise<void>((resolve) => {
+  resolveSingleInstanceSmoke = resolve;
+});
+
+if (singleInstanceLockAcquired) {
+  app.on("second-instance", (_event, commandLine) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      mainWindow.focus();
+      singleInstanceSmokeFocused = true;
+    }
+    if (commandLine.includes(SINGLE_INSTANCE_SMOKE_FLAG)) {
+      resolveSingleInstanceSmoke?.();
+    }
+  });
+}
 
 const requireGate3DiskFull = process.argv.includes(
   "--smoke-test-gate3-disk-full",
 );
 const requireGate3DatabaseLock = process.argv.includes(
   "--smoke-test-gate3-database-lock",
+);
+const requireQueryPersistenceFault = process.argv.includes(
+  "--smoke-test-query-persistence",
 );
 if (requireGate3DiskFull && requireGate3DatabaseLock) {
   throw new Error("Only one Gate 3 storage fault can be injected per launch");
@@ -125,6 +157,11 @@ const desktopDataRoot = resolveDesktopDataRoot(
   app.getPath("home"),
   app.getPath("appData"),
 );
+const queryPersistenceFaultMarker = path.join(
+  desktopDataRoot,
+  "tmp",
+  "query-journal-permission-fault",
+);
 const modelSettings = new DesktopModelSettingsStore(
   desktopDataRoot,
   createDesktopCredentialProtector(safeStorage, process.platform),
@@ -134,7 +171,15 @@ let modelSettingsApplyQueue: Promise<void> = Promise.resolve();
 const sidecar = new SidecarManager({
   appPath: app.getAppPath(),
   dataRoot: desktopDataRoot,
-  environment: () => modelSettings.environment(),
+  environment: () => ({
+    ...modelSettings.environment(),
+    ...(requireQueryPersistenceFault
+      ? {
+          MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER:
+            queryPersistenceFaultMarker,
+        }
+      : {}),
+  }),
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
   smokeFault: gate3SmokeFault,
@@ -875,6 +920,128 @@ async function runGate3QuerySmoke(initialFiles: FileRecord[]): Promise<void> {
   }
 }
 
+async function runQueryPersistenceSmoke(): Promise<void> {
+  const prompt = "MARA Desktop query persistence recovery smoke.";
+  const created = await sidecar.createQueryTask({
+    conversation_id: GATE2_SMOKE_SESSION_ID,
+    prompt,
+    selected_file_ids: [GATE2_SMOKE_FILE_ID],
+  });
+  if (!created.ok) {
+    throw new Error(`Query persistence smoke creation failed: ${created.error.code}`);
+  }
+  const failed = await waitForQueryTaskTerminal(created.data.task_id);
+  if (
+    !failed.ok ||
+    failed.data.status !== "failed" ||
+    failed.data.stage !== "storage_error" ||
+    failed.data.error?.code !== "query_state_permission_denied" ||
+    !failed.data.retryable ||
+    failed.data.answer.length === 0
+  ) {
+    throw new Error("Query persistence smoke did not preserve a typed partial answer");
+  }
+  const doctor = await sidecar.getDoctor();
+  if (
+    !doctor.ok ||
+    doctor.data.query_persistence_ready ||
+    doctor.data.query_persistence_issue_code !==
+      "query_state_permission_denied" ||
+    doctor.data.query_ready
+  ) {
+    throw new Error("Doctor did not block queries during the storage fault");
+  }
+  const blockedRetry = await sidecar.retryQueryTask(created.data.task_id);
+  const latestWhileBlocked = await sidecar.getLatestQueryTask();
+  if (
+    blockedRetry.ok ||
+    blockedRetry.error.code !== "query_state_permission_denied" ||
+    !latestWhileBlocked.ok ||
+    latestWhileBlocked.data?.task_id !== created.data.task_id
+  ) {
+    throw new Error("Storage-fault retry created work or reached the model");
+  }
+  await unlink(queryPersistenceFaultMarker);
+  const retried = await sidecar.retryQueryTask(created.data.task_id);
+  if (!retried.ok) {
+    throw new Error(`Query persistence retry failed: ${retried.error.code}`);
+  }
+  const terminal = await waitForQueryTaskTerminal(retried.data.task_id);
+  if (!terminal.ok || terminal.data.status !== "success") {
+    throw new Error("Query persistence retry did not recover to success");
+  }
+  const sessionDetail = await sidecar.getSession(GATE2_SMOKE_SESSION_ID);
+  if (!sessionDetail.ok) {
+    throw new Error(`Query persistence session reload failed: ${sessionDetail.error.code}`);
+  }
+  const matchingQuestionIndexes = sessionDetail.data.messages.flatMap(
+    (message, index) =>
+      message.role === "user" && message.content === prompt ? [index] : [],
+  );
+  const matchingQuestionIndex = matchingQuestionIndexes[0];
+  const persistedAnswer =
+    matchingQuestionIndex === undefined
+      ? undefined
+      : sessionDetail.data.messages[matchingQuestionIndex + 1];
+  if (
+    matchingQuestionIndexes.length !== 1 ||
+    persistedAnswer?.role !== "assistant" ||
+    persistedAnswer.content !== terminal.data.answer
+  ) {
+    throw new Error("Query persistence recovery created a duplicate session turn");
+  }
+  const journal = JSON.parse(
+    await readFile(
+      path.join(desktopDataRoot, "state", "query-tasks.json"),
+      "utf8",
+    ),
+  ) as { journal_version?: number; tasks?: Array<{ status?: string }> };
+  if (
+    journal.journal_version !== 2 ||
+    !journal.tasks?.some((task) => task.status === "success")
+  ) {
+    throw new Error("Query persistence recovery did not commit a v2 success journal");
+  }
+  process.stdout.write(
+    "query_persistence=partial,typed_error,blocked_retry,recovery,single_turn error_code=query_state_permission_denied status_success\n",
+  );
+}
+
+async function runSingleInstanceSmoke(): Promise<void> {
+  const before = await sidecar.getDoctor();
+  if (!before.ok || !before.data.sidecar_pid) {
+    throw new Error("Single-instance smoke could not identify the primary Sidecar");
+  }
+  process.stdout.write(
+    `single_instance_primary=ready sidecar_pid=${before.data.sidecar_pid}\n`,
+  );
+  let timeout: NodeJS.Timeout | undefined;
+  await Promise.race([
+    singleInstanceSmokeObserved,
+    new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(
+        () => reject(new Error("Single-instance smoke did not observe a second launch")),
+        30_000,
+      );
+    }),
+  ]).finally(() => {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  });
+  const after = await sidecar.getDoctor();
+  if (
+    !singleInstanceSmokeFocused ||
+    !after.ok ||
+    after.data.sidecar_pid !== before.data.sidecar_pid
+  ) {
+    throw new Error("Second launch did not focus the primary or preserve one Sidecar");
+  }
+  process.stdout.write(
+    "single_instance=secondary_blocked,primary_focused,one_sidecar status_success\n",
+  );
+}
+
 async function createWatchedIndexTask(
   filePaths: string[],
 ): Promise<DesktopResult<IndexTask>> {
@@ -1150,7 +1317,8 @@ function createWindow(): void {
   void mainWindow.loadURL("mara://app/");
 }
 
-app.whenReady().then(async () => {
+if (singleInstanceLockAcquired) {
+  void app.whenReady().then(async () => {
   await registerApplicationProtocol();
   try {
     await modelSettings.load();
@@ -1160,6 +1328,10 @@ app.whenReady().then(async () => {
       "Model settings load failed error_type=%s",
       modelSettingsLoadFailure,
     );
+  }
+  if (requireQueryPersistenceFault) {
+    await mkdir(path.dirname(queryPersistenceFaultMarker), { recursive: true });
+    await writeFile(queryPersistenceFaultMarker, "armed\n", "utf8");
   }
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, _permission, callback) => callback(false),
@@ -1214,9 +1386,11 @@ app.whenReady().then(async () => {
     requireGate3SidecarExit ||
     requireGate3DiskFull ||
     requireGate3DatabaseLock ||
-    requireGate3LargeFile;
+    requireGate3LargeFile ||
+    requireQueryPersistenceFault;
   if (
     process.argv.includes("--smoke-test") ||
+    requireSingleInstanceSmoke ||
     requireNonEmptyFixture ||
     requireIndexingUnconfigured ||
     requireModelSettings
@@ -1285,7 +1459,9 @@ app.whenReady().then(async () => {
         );
       }
       const initialFiles = files.ok ? files.data : [];
-      if (requireIndexingUnconfigured) {
+      if (requireSingleInstanceSmoke) {
+        await runSingleInstanceSmoke();
+      } else if (requireIndexingUnconfigured) {
         await runUnconfiguredIndexingSmoke();
       } else if (requireGate3ModelUnavailable) {
         await runGate3ModelUnavailableSmoke();
@@ -1303,6 +1479,8 @@ app.whenReady().then(async () => {
         await runGate3LargeFileSmoke(initialFiles);
       } else if (requireGate3Cancellation) {
         await runGate3CancellationSmoke(initialFiles);
+      } else if (requireQueryPersistenceFault) {
+        await runQueryPersistenceSmoke();
       } else if (requireGate3Delete) {
         await runGate3QuerySmoke(initialFiles);
         await runGate3SessionMutationSmoke();
@@ -1327,7 +1505,8 @@ app.whenReady().then(async () => {
       createWindow();
     }
   });
-});
+  });
+}
 
 app.on("before-quit", (event) => {
   if (quitting) {

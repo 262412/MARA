@@ -18,6 +18,7 @@ class QueryTaskState:
     conversation_id: str
     prompt: str
     selected_file_ids: list[str]
+    turn_id: str = ""
     route_provider: str = ""
     route_model: str = ""
     settings_revision: str = ""
@@ -75,6 +76,7 @@ def task_to_dict(task: QueryTaskState) -> dict[str, Any]:
         "conversation_id": task.conversation_id,
         "prompt": task.prompt,
         "selected_file_ids": list(task.selected_file_ids),
+        "turn_id": task.turn_id,
         "route_provider": task.route_provider,
         "route_model": task.route_model,
         "settings_revision": task.settings_revision,
@@ -102,6 +104,7 @@ def task_from_dict(item: dict[str, Any]) -> QueryTaskState:
         conversation_id=str(item["conversation_id"]),
         prompt=str(item["prompt"]),
         selected_file_ids=[str(value) for value in item.get("selected_file_ids", [])],
+        turn_id=str(item.get("turn_id") or item["task_id"]),
         route_provider=str(item.get("route_provider", "")),
         route_model=str(item.get("route_model", "")),
         settings_revision=str(item.get("settings_revision", "")),

@@ -416,3 +416,20 @@ def _storage_full(error: Exception | str) -> bool:
         marker in text
         for marker in ("no space left on device", "disk full", "winerror 112")
     )
+
+
+def index_result_name(item: dict[str, Any]) -> str:
+    file_name = str(item.get("file_name", "") or "").strip()
+    if file_name:
+        return Path(file_name).name
+    return Path(str(item.get("file_path", "") or "")).name or "Unknown file"
+
+
+def index_failure_from_result(item: dict[str, Any]) -> dict[str, Any]:
+    failure = classify_index_failure(str(item.get("message") or ""))
+    return {
+        "name": index_result_name(item),
+        "code": failure.code,
+        "message": failure.message,
+        "retryable": failure.retryable,
+    }
