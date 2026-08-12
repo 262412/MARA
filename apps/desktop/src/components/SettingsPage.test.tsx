@@ -55,6 +55,9 @@ const doctor = {
   query_model: "",
   embedding_provider: "",
   embedding_model: "",
+  settings_revision: "",
+  sidecar_pid: 4321,
+  route_fingerprint: "",
   request_id: "doctor-request",
 } as DoctorPayload;
 

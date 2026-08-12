@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sidecar.application import configure_desktop_data_root
+from sidecar.desktop_data_root import configure_desktop_data_root
 
 GATE2_SMOKE_FILE_ID = "gate2-smoke-file"
 GATE2_SMOKE_SESSION_ID = "gate2-smoke-session"

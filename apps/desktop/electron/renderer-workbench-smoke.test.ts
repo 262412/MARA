@@ -87,7 +87,11 @@ test("packaged renderer settings smoke saves through the real page and refreshes
     },
     "settings",
     () => undefined,
-    { baseUrl: "http://127.0.0.1:43127/v1" },
+    {
+      baseUrl: "http://127.0.0.1:43127/v1",
+      provider: "openai_compatible",
+      credential: "packaged-fake-key",
+    },
   );
 
   assert.match(source, /chat\.provider/);
@@ -95,4 +99,6 @@ test("packaged renderer settings smoke saves through the real page and refreshes
   assert.match(source, /保存并应用/);
   assert.match(source, /query_ready/);
   assert.match(source, /indexing_ready/);
+  assert.match(source, /openai_compatible/);
+  assert.match(source, /packaged-fake-key/);
 });

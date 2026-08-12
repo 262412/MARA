@@ -126,3 +126,76 @@ def test_reranking_manager_lists_local_multilingual_vendor():
     manager = _build_manager(module, module.RerankingManager)
 
     assert "LocalMultilingualReranking" in manager.vendors()
+
+
+@pytest.mark.parametrize(
+    ("module_name", "manager_name"),
+    [
+        ("ktem.llms.manager", "LLMManager"),
+        ("ktem.embeddings.manager", "EmbeddingManager"),
+    ],
+)
+def test_desktop_manager_hydrates_runtime_secret_without_using_persisted_spec(
+    monkeypatch,
+    module_name,
+    manager_name,
+):
+    module = __import__(module_name, fromlist=[manager_name])
+    manager = _build_manager(module, getattr(module, manager_name))
+    manager._desktop = True
+    manager._info = {
+        "openai": {
+            "name": "openai",
+            "spec": {
+                "__type__": "provider.Type",
+                "model": "gpt-5.6-luna",
+                "secret_ref": "desktop-safe-storage:chat",
+            },
+            "default": True,
+        }
+    }
+    manager._default = "openai"
+    manager._runtime_specs = {
+        "openai": {
+            "__type__": "provider.Type",
+            "model": "gpt-5.6-luna",
+            "api_key": "runtime-only-secret",
+        }
+    }
+    received: list[dict] = []
+
+    def deserialize(spec, safe=False):
+        received.append(dict(spec))
+        return {"model": spec["model"]}
+
+    monkeypatch.setattr(module, "deserialize", deserialize)
+
+    assert manager.get_default() == {"model": "gpt-5.6-luna"}
+    assert received == [manager._runtime_specs["openai"]]
+    assert "api_key" not in manager.info()["openai"]["spec"]
+
+
+@pytest.mark.parametrize(
+    ("module_name", "manager_name"),
+    [
+        ("ktem.llms.manager", "LLMManager"),
+        ("ktem.embeddings.manager", "EmbeddingManager"),
+    ],
+)
+def test_desktop_manager_never_randomly_selects_a_stale_nondefault_route(
+    module_name,
+    manager_name,
+):
+    module = __import__(module_name, fromlist=[manager_name])
+    manager = _build_manager(module, getattr(module, manager_name))
+    manager._desktop = True
+    manager._info = {
+        "legacy": {
+            "name": "legacy",
+            "spec": {"__type__": "legacy.Type"},
+            "default": False,
+        }
+    }
+
+    with pytest.raises(ValueError, match="No default Desktop"):
+        manager.get_default_name()

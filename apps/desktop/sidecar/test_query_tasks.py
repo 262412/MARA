@@ -29,8 +29,14 @@ class StubQueryService:
         conversation_id: str,
         prompt: str,
         selected_file_ids: list[str],
-    ) -> None:
-        return None
+    ) -> dict[str, object]:
+        return {
+            "route_provider": "openai",
+            "route_model": "gpt-5.6-luna",
+            "settings_revision": "settings-revision-test",
+            "sidecar_pid": 4321,
+            "route_fingerprint": "a" * 64,
+        }
 
     def stream_query(
         self,
@@ -98,6 +104,11 @@ class QueryTaskManagerTest(unittest.TestCase):
                 ["file-1"],
                 idempotency_key="query-1",
             )
+            self.assertEqual(created["route_provider"], "openai")
+            self.assertEqual(created["route_model"], "gpt-5.6-luna")
+            self.assertEqual(created["settings_revision"], "settings-revision-test")
+            self.assertEqual(created["sidecar_pid"], 4321)
+            self.assertEqual(created["route_fingerprint"], "a" * 64)
             duplicate = manager.create_task(
                 "session-1",
                 "What does the paper say?",
@@ -410,8 +421,55 @@ class QueryTaskReadinessTest(unittest.TestCase):
                 "code": "query_runtime_failed",
                 "message": "MARA could not complete the answer.",
                 "retryable": False,
+                "provider_request_id": None,
+                "diagnostic": None,
             },
         )
+
+
+class QueryTaskRouteFailureTest(unittest.TestCase):
+    def test_provider_request_identity_is_preserved_without_raw_error_text(
+        self,
+    ) -> None:
+        class ProviderError(RuntimeError):
+            status_code = 404
+            request_id = "provider-request-404"
+            body = {"code": "model_not_found"}
+
+        class ProviderFailureService(StubQueryService):
+            def stream_query(
+                self,
+                conversation_id: str,
+                prompt: str,
+                selected_file_ids: list[str],
+                cancel_event: threading.Event | None = None,
+            ):
+                raise ProviderError("secret-sentinel /private/provider/response")
+                yield
+
+        manager = QueryTaskManager(ProviderFailureService())
+        try:
+            created = manager.create_task(
+                "session-1",
+                "Question",
+                ["file-1"],
+                idempotency_key="provider-failure",
+            )
+            failed = wait_for_terminal(manager, created["task_id"])
+
+            self.assertEqual(failed["error"]["code"], "llm_model_not_found")
+            self.assertEqual(
+                failed["error"]["provider_request_id"],
+                "provider-request-404",
+            )
+            self.assertEqual(
+                failed["error"]["diagnostic"],
+                "provider_status=404 provider_code=model_not_found",
+            )
+            self.assertNotIn("secret-sentinel", json.dumps(failed))
+            self.assertNotIn("/private", json.dumps(failed))
+        finally:
+            manager.close()
 
 
 if __name__ == "__main__":

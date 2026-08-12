@@ -44,6 +44,9 @@ class StubApplicationService:
             "query_model": "chat-model",
             "embedding_provider": "openai",
             "embedding_model": "embedding-model",
+            "settings_revision": "settings-revision-test",
+            "sidecar_pid": 4321,
+            "route_fingerprint": "a" * 64,
         }
 
     def list_files(self) -> list[dict]:
@@ -155,6 +158,12 @@ class UnconfiguredEmbeddingService(StubApplicationService):
         )
 
 
+def assert_route_identity(test: unittest.TestCase, payload: dict) -> None:
+    test.assertEqual(payload["settings_revision"], "settings-revision-test")
+    test.assertEqual(payload["sidecar_pid"], 4321)
+    test.assertEqual(payload["route_fingerprint"], "a" * 64)
+
+
 class SidecarContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.token = "test-token"
@@ -220,8 +229,10 @@ class SidecarContractTest(unittest.TestCase):
         self.assertEqual(payload["state"], "healthy")
         self.assertEqual(payload["protocol"], PROTOCOL_VERSION)
         self.assertIn("session_create", payload["capabilities"])
+        self.assertIsNone(payload["model_settings_revision"])
         self.assertNotIn("token", payload)
         self.assertNotIn("port", payload)
+        self.assertNotIn("api_key", response.text.casefold())
 
     def test_openapi_json_requires_sidecar_auth_but_schema_generation_remains_available(
         self,
@@ -260,6 +271,7 @@ class SidecarContractTest(unittest.TestCase):
         self.assertTrue(doctor["doctor"]["indexing_ready"])
         self.assertIsNone(doctor["doctor"]["indexing_issue_code"])
         self.assertEqual(doctor["doctor"]["request_id"], "request-123")
+        assert_route_identity(self, doctor["doctor"])
 
     def test_session_detail_is_authenticated_validated_and_path_free(self) -> None:
         response = self.authenticated_get("/v1/sessions/session-1")

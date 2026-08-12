@@ -92,7 +92,11 @@ else:
         docs_dir=runtime_paths.config_dir / "docs",
         mode="package",
     )
-runtime_settings.update(_load_user_overrides(runtime_paths.flowsettings_path))
+user_overrides = _load_user_overrides(runtime_paths.flowsettings_path)
+if os.environ.get("MARA_DESKTOP_MODEL_SETTINGS") == "1":
+    user_overrides.pop("KH_LLMS", None)
+    user_overrides.pop("KH_EMBEDDINGS", None)
+runtime_settings.update(user_overrides)
 runtime_settings["STORAGE"] = {
     "__type__": "theflow.storage.LocalStorage",
     "prefix": str(theflow_storage_dir),

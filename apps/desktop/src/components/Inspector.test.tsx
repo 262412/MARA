@@ -41,6 +41,9 @@ const doctor: DoctorPayload = {
   query_model: "local-chat",
   embedding_provider: "Ollama",
   embedding_model: "local-embedding",
+  settings_revision: "settings-revision-test",
+  sidecar_pid: 4321,
+  route_fingerprint: "a".repeat(64),
   request_id: "doctor-request",
 };
 

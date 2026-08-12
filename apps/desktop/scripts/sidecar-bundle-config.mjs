@@ -47,6 +47,7 @@ export const requiredSidecarModules = [
   "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
   "docx",
   "ktem.default_flowsettings",
+  "ktem.desktop_model_routes",
   "ktem.docqa",
   "ktem.index.file.pipelines",
   "ktem.reasoning.prompt_optimization.decompose_question",

@@ -6,7 +6,6 @@ import logging
 import os
 import re
 import signal
-import socket
 import sys
 import threading
 import time
@@ -25,11 +24,7 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sidecar.api_errors import SidecarApiError
-from sidecar.application import (
-    DesktopApplicationService,
-    DesktopSessionNotFoundError,
-    configure_desktop_data_root,
-)
+from sidecar.application import DesktopApplicationService, DesktopSessionNotFoundError
 from sidecar.contracts import (
     DoctorPayload,
     DoctorResponse,
@@ -40,12 +35,18 @@ from sidecar.contracts import (
     SessionListResponse,
     SidecarError,
 )
+from sidecar.desktop_data_root import configure_desktop_data_root
 from sidecar.file_routes import register_gate3_routes
 from sidecar.index_task_journal import JsonIndexTaskJournal
 from sidecar.index_tasks import IndexTaskManager
-from sidecar.maintenance_logging import configure_maintenance_logging
+from sidecar.maintenance_logging import (
+    attach_query_maintenance_loggers,
+    configure_maintenance_logging,
+)
+from sidecar.model_routes import settings_revision
 from sidecar.query_routes import register_query_routes
 from sidecar.query_tasks import QueryService, QueryTaskManager
+from sidecar.server_runtime import apply_smoke_startup_delay, create_loopback_listener
 from sidecar.session_routes import register_session_mutation_routes
 from sidecar.smoke_faults import inject_smoke_fault
 from sidecar.task_error_handlers import register_task_exception_handlers
@@ -73,15 +74,6 @@ CAPABILITIES = [
     "query_retry",
 ]
 LOGGER = logging.getLogger("mara.desktop.sidecar")
-
-
-def _attach_query_maintenance_loggers(handler: logging.Handler) -> None:
-    for name in ("mara.desktop.query_tasks", "mara.desktop.query_stream"):
-        logger = logging.getLogger(name)
-        logger.setLevel(logging.INFO)
-        if handler not in logger.handlers:
-            logger.addHandler(handler)
-        logger.propagate = False
 
 
 class ApplicationService(Protocol):
@@ -274,6 +266,7 @@ def create_app(
     app.state.index_task_manager = task_manager
     app.state.query_task_manager = answer_task_manager
     app.state.request_shutdown = None
+    app.state.model_settings_revision = settings_revision()
     app.add_event_handler("shutdown", task_manager.close)
     app.add_event_handler("shutdown", answer_task_manager.close)
     _register_request_middleware(app)
@@ -406,6 +399,7 @@ def _register_lifecycle_routes(app: FastAPI) -> None:
             protocol=PROTOCOL_VERSION,
             version=SIDECAR_VERSION,
             capabilities=CAPABILITIES,
+            model_settings_revision=request.app.state.model_settings_revision,
             request_id=_request_id(request),
         )
 
@@ -520,14 +514,6 @@ def _watch_parent_pipe(server: uvicorn.Server) -> None:
         server.should_exit = True
 
 
-def _create_listener() -> socket.socket:
-    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind(("127.0.0.1", 0))
-    listener.listen()
-    return listener
-
-
 def main() -> int:
     token = os.environ.get("MARA_DESKTOP_TOKEN", "")
     data_root = os.environ.get("MARA_DESKTOP_DATA_DIR", "")
@@ -538,15 +524,19 @@ def main() -> int:
         print("MARA_DESKTOP_DATA_DIR is required", file=sys.stderr)
         return 2
 
+    if not apply_smoke_startup_delay():
+        print("MARA_DESKTOP_SMOKE_STARTUP_DELAY_MS is invalid", file=sys.stderr)
+        return 2
+
     desktop_data_root = Path(data_root)
     configure_desktop_data_root(desktop_data_root)
     maintenance_handler = configure_maintenance_logging(desktop_data_root)
-    _attach_query_maintenance_loggers(maintenance_handler)
+    attach_query_maintenance_loggers(maintenance_handler)
     app = create_app(
         token,
         smoke_fault=os.environ.get("MARA_DESKTOP_SMOKE_FAULT") or None,
     )
-    listener = _create_listener()
+    listener = create_loopback_listener()
     host, port = listener.getsockname()
     config = uvicorn.Config(
         app,

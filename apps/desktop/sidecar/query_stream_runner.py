@@ -20,7 +20,7 @@ class QueryService(Protocol):
         conversation_id: str,
         prompt: str,
         selected_file_ids: list[str],
-    ) -> None:
+    ) -> dict[str, Any] | None:
         ...
 
     def stream_query(

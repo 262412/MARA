@@ -17,6 +17,10 @@ class LLMManager:
     """Represent a pool of models"""
 
     def __init__(self):
+        from ktem.desktop_model_routes import (
+            desktop_model_settings_enabled,
+            desktop_runtime_spec,
+        )
         from theflow.settings import settings as flowsettings
 
         self._models: dict[str, ChatLLM] = {}
@@ -24,8 +28,16 @@ class LLMManager:
         self._default: str = ""
         self._vendors: list[Type] = []
         self._load_errors: list[str] = []
+        self._desktop = desktop_model_settings_enabled()
+        self._runtime_specs: dict[str, dict[str, Any]] = {}
 
-        if hasattr(flowsettings, "KH_LLMS"):
+        if self._desktop:
+            for name in getattr(flowsettings, "KH_LLMS", {}):
+                runtime_spec = desktop_runtime_spec(flowsettings, "chat", str(name))
+                if runtime_spec is not None:
+                    self._runtime_specs[str(name)] = runtime_spec
+
+        if not self._desktop and hasattr(flowsettings, "KH_LLMS"):
             for name, model in flowsettings.KH_LLMS.items():
                 with Session(engine) as session:
                     stmt = select(LLMTable).where(LLMTable.name == name)
@@ -65,7 +77,7 @@ class LLMManager:
         if key in self._models:
             return self._models[key]
 
-        spec = self._info[key]["spec"]
+        spec = getattr(self, "_runtime_specs", {}).get(key, self._info[key]["spec"])
         try:
             model = deserialize(spec, safe=False)
         except Exception as exc:
@@ -166,6 +178,8 @@ class LLMManager:
             raise ValueError("No models in pool")
 
         if not self._default:
+            if getattr(self, "_desktop", False):
+                raise ValueError("No default Desktop chat model is configured")
             return self.get_random_name()
 
         return self._default
@@ -198,6 +212,12 @@ class LLMManager:
         if not name:
             raise ValueError("Name must not be empty")
 
+        runtime_spec = dict(spec)
+        if getattr(self, "_desktop", False):
+            from ktem.desktop_model_routes import persisted_desktop_spec
+
+            spec = persisted_desktop_spec(spec, "chat")
+            self._runtime_specs[name] = runtime_spec
         try:
             with Session(engine) as session:
 
@@ -241,6 +261,12 @@ class LLMManager:
             self.add(new_name, spec=spec, default=default)
             return
 
+        runtime_spec = dict(spec)
+        if getattr(self, "_desktop", False):
+            from ktem.desktop_model_routes import persisted_desktop_spec
+
+            spec = persisted_desktop_spec(spec, "chat")
+            self._runtime_specs[new_name or name] = runtime_spec
         try:
             with Session(engine) as session:
 

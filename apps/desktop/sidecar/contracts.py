@@ -14,6 +14,7 @@ class RuntimeHealth(BaseModel):
     protocol: int
     version: str
     capabilities: list[str]
+    model_settings_revision: str | None
     request_id: str
 
 
@@ -54,6 +55,7 @@ class DoctorPayload(BaseModel):
         "none",
         "configure_llm",
         "configure_credentials",
+        "check_model_access",
         "repair_installation",
         "check_connection",
         "retry",
@@ -63,6 +65,9 @@ class DoctorPayload(BaseModel):
     query_model: str
     embedding_provider: str
     embedding_model: str
+    settings_revision: str = Field(max_length=128)
+    sidecar_pid: int = Field(gt=0)
+    route_fingerprint: str = Field(max_length=64)
     request_id: str
 
 
@@ -206,6 +211,8 @@ class QueryTaskError(BaseModel):
     code: str
     message: str
     retryable: bool
+    provider_request_id: str | None = Field(default=None, max_length=200)
+    diagnostic: str | None = Field(default=None, max_length=512)
 
 
 class QueryTask(BaseModel):
@@ -217,6 +224,11 @@ class QueryTask(BaseModel):
     prompt: str = Field(max_length=20_000)
     selected_file_ids: list[str] = Field(min_length=1, max_length=64)
     qa_scope: Literal["document", "multi_document"]
+    route_provider: str = Field(max_length=128)
+    route_model: str = Field(max_length=256)
+    settings_revision: str = Field(max_length=128)
+    sidecar_pid: int = Field(gt=0)
+    route_fingerprint: str = Field(max_length=64)
     status: Literal["queued", "running", "success", "failed", "cancelled"]
     stage: str
     answer: str = Field(max_length=1_000_000)

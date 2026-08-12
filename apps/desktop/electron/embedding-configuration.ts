@@ -1,24 +1,9 @@
 import { mkdir, open } from "node:fs/promises";
 import path from "node:path";
 
-const DESKTOP_EMBEDDING_TEMPLATE = `# MARA Desktop embedding configuration
-# Add one supported provider, save this file, then restart MARA Desktop.
-# Credentials remain in this Desktop-owned file and are never sent to Renderer.
-
-OPENAI_API_BASE=https://api.openai.com/v1
-OPENAI_API_KEY=
-OPENAI_EMBEDDINGS_MODEL=text-embedding-3-small
-
-# Azure OpenAI embedding service (optional)
-AZURE_OPENAI_ENDPOINT=
-AZURE_OPENAI_API_KEY=
-OPENAI_API_VERSION=2024-02-15-preview
-AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=
-
-# OpenAI-compatible local embedding service (optional)
-KH_OLLAMA_URL=http://localhost:11434/v1/
-LOCAL_MODEL=
-LOCAL_MODEL_EMBEDDINGS=
+const DESKTOP_EMBEDDING_TEMPLATE = `# MARA Desktop model configuration moved
+# Configure chat and embedding routes in MARA Desktop Settings.
+# Credentials are protected by Electron safeStorage and must not be written here.
 `;
 
 export function embeddingConfigurationPath(dataRoot: string): string {

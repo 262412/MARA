@@ -97,7 +97,7 @@ Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开�
 | 会话新建、搜索、重命名与删除     | In progress | 真实 create/rename/delete；客户端搜索；认证、幂等、写互斥与窄 IPC；Windows、Ubuntu 22/24 包通过  | 当前包 Windows 10/11 VM；固定            |
 | 冷启动草稿与 Composer            | In progress | 启动不建空会话；首次发送幂等建会话/任务；IME、Enter、Alt+Enter、重复键与失败保留自动化通过       | Windows 10/11 VM；中文 IME 人工验收      |
 | Resources、Help、Settings 基线页 | In progress | 五类强类型页面；焦点/ARIA/标题；离线帮助；模型设置页和跨页后台任务连续性三平台包通过             | 完整 Resources/Settings P0；缩放人工验收 |
-| 模型设置与问答准备状态           | In progress | Chat/Embedding 独立路由；安全凭据降级；重启后 Doctor；稳定 query readiness/error；三平台包通过   | Windows 10/11 安全存储与真实服务验收     |
+| 模型设置与问答准备状态           | In progress | Electron route 唯一权威；旧库幂等迁移与密钥清理；revision/PID/fingerprint；真实 POST 捕获门      | 当前包 Windows 10/11 安全存储与迁移验收  |
 | 文档/多文档问答、流式与引用      | In progress | 真实 `stream_turn()`；64 来源；单调 SSE；未配置 LLM 不建任务；双文件 partial 取消/重试三平台通过 | Windows 10/11 VM；页/选中文本；引用定位  |
 
 当前 Gate 3 文件索引修复打包基线为

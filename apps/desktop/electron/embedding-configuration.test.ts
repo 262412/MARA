@@ -9,7 +9,7 @@ import {
   prepareEmbeddingConfiguration,
 } from "./embedding-configuration";
 
-test("materializes a Desktop-owned embedding configuration without placeholders", async () => {
+test("legacy embedding configuration points to secure Desktop Settings", async () => {
   const dataRoot = await mkdtemp(
     path.join(os.tmpdir(), "mara-desktop-config-"),
   );
@@ -19,9 +19,8 @@ test("materializes a Desktop-owned embedding configuration without placeholders"
 
   assert.equal(configPath, embeddingConfigurationPath(dataRoot));
   assert.ok(configPath.startsWith(`${path.resolve(dataRoot)}${path.sep}`));
-  assert.match(content, /OPENAI_API_KEY=/);
-  assert.match(content, /OPENAI_EMBEDDINGS_MODEL=/);
-  assert.doesNotMatch(content, /YOUR_OPENAI_KEY|your-key/);
+  assert.match(content, /MARA Desktop Settings/);
+  assert.doesNotMatch(content, /API_KEY|TOKEN|PASSWORD/);
 });
 
 test("never overwrites an existing Desktop embedding configuration", async () => {

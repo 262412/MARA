@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 
 from .indexing_readiness import (
     DesktopIndexingPreflightError,
+    _desktop_embedding_configurations,
     evaluate_embedding_readiness,
     validate_index_sources,
     validate_indexing_storage,
@@ -32,6 +36,52 @@ def _embedding(
 
 
 class DesktopIndexingReadinessTest(unittest.TestCase):
+    def test_runtime_configuration_remains_authoritative_after_database_scrub(
+        self,
+    ) -> None:
+        configured = _embedding()
+        persisted = {
+            "desktop": {
+                "default": True,
+                "spec": {
+                    "__type__": "kotaemon.embeddings.OpenAIEmbeddings",
+                    "base_url": "http://127.0.0.1:43123/v1",
+                    "model": "desktop-loopback-embedding",
+                    "secret_ref": "desktop-safe-storage:embedding",
+                },
+            }
+        }
+        manager = SimpleNamespace(
+            info=lambda: persisted,
+            add=lambda *_args, **_kwargs: self.fail("unexpected manager add"),
+            update=lambda *_args, **_kwargs: self.fail("unexpected manager update"),
+        )
+        manager_module = ModuleType("ktem.embeddings.manager")
+        manager_module.embedding_models_manager = manager
+        flowsettings = SimpleNamespace(KH_EMBEDDINGS=configured)
+        settings_module = ModuleType("theflow.settings")
+        settings_module.settings = flowsettings
+
+        with patch.dict(
+            sys.modules,
+            {
+                "ktem.embeddings.manager": manager_module,
+                "theflow.settings": settings_module,
+            },
+        ):
+            runtime_configurations = _desktop_embedding_configurations()
+
+        self.assertEqual(
+            runtime_configurations["desktop"]["spec"]["api_key"],
+            "configured-key",
+        )
+        self.assertTrue(
+            evaluate_embedding_readiness(
+                runtime_configurations,
+                module_available=lambda _module: True,
+            ).indexing_ready
+        )
+
     def test_empty_and_placeholder_credentials_are_not_configured(self) -> None:
         for credential in (
             "",

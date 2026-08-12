@@ -19,7 +19,7 @@ export type DoctorPayload = {
   issues: Array<string>;
   llm_default: string;
   ok: boolean;
-  query_action: "none" | "configure_llm" | "configure_credentials" | "repair_installation" | "check_connection" | "retry";
+  query_action: "none" | "configure_llm" | "configure_credentials" | "check_model_access" | "repair_installation" | "check_connection" | "retry";
   query_issue_code: string | null;
   query_message: string;
   query_model: string;
@@ -27,7 +27,10 @@ export type DoctorPayload = {
   query_ready: boolean;
   query_retryable: boolean;
   request_id: string;
+  route_fingerprint: string;
   session_count: number;
+  settings_revision: string;
+  sidecar_pid: number;
   warnings: Array<string>;
 };
 
@@ -137,7 +140,12 @@ export type QueryTask = {
   qa_scope: "document" | "multi_document";
   retry_of_task_id: string | null;
   retryable: boolean;
+  route_fingerprint: string;
+  route_model: string;
+  route_provider: string;
   selected_file_ids: Array<string>;
+  settings_revision: string;
+  sidecar_pid: number;
   stage: string;
   status: "queued" | "running" | "success" | "failed" | "cancelled";
   task_id: string;
@@ -153,7 +161,9 @@ export type QueryTaskCreateRequest = {
 
 export type QueryTaskError = {
   code: string;
+  diagnostic?: string | null;
   message: string;
+  provider_request_id?: string | null;
   retryable: boolean;
 };
 
@@ -164,6 +174,7 @@ export type QueryTaskResponse = {
 
 export type RuntimeHealth = {
   capabilities: Array<string>;
+  model_settings_revision: string | null;
   protocol: number;
   request_id: string;
   state: string;

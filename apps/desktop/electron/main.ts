@@ -22,6 +22,7 @@ import type {
   RuntimeStatus,
   SidecarError,
 } from "../shared/runtime-contracts";
+import { SIDECAR_PROTOCOL_VERSION } from "../shared/runtime-contracts";
 import { resolveDesktopDataRoot } from "./desktop-data";
 import { prepareEmbeddingConfiguration } from "./embedding-configuration";
 import {
@@ -101,6 +102,7 @@ let recoverIndexTaskAfterRestart = false;
 let recoverQueryTaskAfterRestart = false;
 const watchedIndexTasks = new Set<string>();
 const watchedQueryTasks = new Set<string>();
+const MODEL_SETTINGS_SMOKE_FAKE_KEY = "mara-desktop-settings-secret-sentinel";
 
 const requireGate3DiskFull = process.argv.includes(
   "--smoke-test-gate3-disk-full",
@@ -128,6 +130,7 @@ const modelSettings = new DesktopModelSettingsStore(
   createDesktopCredentialProtector(safeStorage, process.platform),
 );
 let modelSettingsLoadFailure: string | undefined;
+let modelSettingsApplyQueue: Promise<void> = Promise.resolve();
 const sidecar = new SidecarManager({
   appPath: app.getAppPath(),
   dataRoot: desktopDataRoot,
@@ -998,36 +1001,48 @@ function registerIpc(): void {
       return { ok: true, data: modelSettings.status() };
     },
     saveModelSettings: async (settings) => {
-      const requestId = randomUUID();
-      try {
-        const saved = await modelSettings.save(settings);
-        modelSettingsLoadFailure = undefined;
-        const restarted = await sidecar.restart();
-        if (restarted.state !== "healthy") {
-          throw new Error("Sidecar restart did not become healthy");
+      const operation = modelSettingsApplyQueue.then(async () => {
+        const requestId = randomUUID();
+        try {
+          const saved = await modelSettings.save(settings);
+          modelSettingsLoadFailure = undefined;
+          const expectedRevision = modelSettings.settingsRevision();
+          const restarted = await sidecar.restart(expectedRevision);
+          if (restarted.state !== "healthy") {
+            throw new Error("Sidecar restart did not become healthy");
+          }
+          const doctor = await sidecar.getDoctor();
+          if (
+            !doctor.ok ||
+            doctor.data.settings_revision !== expectedRevision ||
+            !/^[a-f0-9]{64}$/.test(doctor.data.route_fingerprint)
+          ) {
+            throw new Error("Doctor route identity did not match saved settings");
+          }
+          return { ok: true as const, data: saved };
+        } catch (error) {
+          console.error(
+            "Model settings apply failed request_id=%s error_type=%s",
+            requestId,
+            error instanceof Error ? error.name : "UnknownError",
+          );
+          return {
+            ok: false as const,
+            error: {
+              code: "model_settings_apply_failed",
+              message: "MARA Desktop could not save and apply the model settings.",
+              details: null,
+              retryable: false,
+              request_id: requestId,
+            },
+          };
         }
-        const doctor = await sidecar.getDoctor();
-        if (!doctor.ok) {
-          throw new Error("Doctor refresh failed after model settings save");
-        }
-        return { ok: true, data: saved };
-      } catch (error) {
-        console.error(
-          "Model settings apply failed request_id=%s error_type=%s",
-          requestId,
-          error instanceof Error ? error.name : "UnknownError",
-        );
-        return {
-          ok: false,
-          error: {
-            code: "model_settings_apply_failed",
-            message: "MARA Desktop could not save and apply the model settings.",
-            details: null,
-            retryable: false,
-            request_id: requestId,
-          },
-        };
-      }
+      });
+      modelSettingsApplyQueue = operation.then(
+        () => undefined,
+        () => undefined,
+      );
+      return operation;
     },
     getLatestIndexTask: () => sidecar.getLatestIndexTask(),
     cancelIndexTask: async (taskId) => {
@@ -1150,7 +1165,14 @@ app.whenReady().then(async () => {
     (_webContents, _permission, callback) => callback(false),
   );
   registerIpc();
-  const startup = sidecar.start();
+  const startup = modelSettingsLoadFailure
+    ? Promise.resolve({
+        state: "failed" as const,
+        protocol: SIDECAR_PROTOCOL_VERSION,
+        capabilities: [],
+        message: "Desktop model settings migration failed.",
+      })
+    : sidecar.start(modelSettings.settingsRevision() || undefined);
   createWindow();
   const requireGate3Formats = process.argv.includes(
     "--smoke-test-gate3-formats",
@@ -1177,6 +1199,9 @@ app.whenReady().then(async () => {
   const requireModelSettings = process.argv.includes(
     "--smoke-test-model-settings",
   );
+  const requireSecureModelSettings = process.argv.includes(
+    "--smoke-test-model-settings-secure",
+  );
   const requireGate3Delete =
     process.argv.includes("--smoke-test-gate3") || requireGate3Formats;
   const requireNonEmptyFixture =
@@ -1197,9 +1222,32 @@ app.whenReady().then(async () => {
     requireModelSettings
   ) {
     const exitCode = await runDesktopSmoke(async () => {
+      let rendererSessionId: string | null = null;
+      if (requireModelSettings) {
+        if (!mainWindow) {
+          throw new Error("Packaged Settings race smoke has no main window");
+        }
+        rendererSessionId = await runRendererWorkbenchSmoke(
+          mainWindow.webContents,
+          "settings",
+          console.log,
+          {
+            baseUrl: process.env.MARA_DESKTOP_SMOKE_MODEL_BASE_URL ?? "",
+            provider: requireSecureModelSettings
+              ? "openai_compatible"
+              : "ollama",
+            credential: requireSecureModelSettings
+              ? MODEL_SETTINGS_SMOKE_FAKE_KEY
+              : undefined,
+          },
+        );
+      }
+      const effectiveStartup = requireModelSettings
+        ? sidecar.start(modelSettings.settingsRevision())
+        : startup;
       const [status, doctor, files, sessions, session, importCapabilities] =
         await Promise.all([
-          startup,
+          effectiveStartup,
           sidecar.getDoctor(),
           sidecar.listFiles(),
           sidecar.listSessions(),
@@ -1216,23 +1264,17 @@ app.whenReady().then(async () => {
         throw new Error("Packaged renderer bridge smoke has no main window");
       }
       await runRendererBridgeSmoke(mainWindow.webContents);
-      const rendererSessionId = await runRendererWorkbenchSmoke(
-        mainWindow.webContents,
-        requireIndexingUnconfigured
-          ? "blocked"
-          : requireModelSettings
-            ? "settings"
-          : requireGate3Delete
-            ? "query"
-            : "navigation",
-        console.log,
-        requireModelSettings
-          ? {
-              baseUrl:
-                process.env.MARA_DESKTOP_SMOKE_MODEL_BASE_URL ?? "",
-            }
-          : undefined,
-      );
+      if (!requireModelSettings) {
+        rendererSessionId = await runRendererWorkbenchSmoke(
+          mainWindow.webContents,
+          requireIndexingUnconfigured
+            ? "blocked"
+            : requireGate3Delete
+              ? "query"
+              : "navigation",
+          console.log,
+        );
+      }
       if (rendererSessionId) {
         const deleted = await sidecar.deleteSession(rendererSessionId);
         if (!deleted.ok) {

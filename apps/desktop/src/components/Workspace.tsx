@@ -235,6 +235,7 @@ export function Workspace({
           <CurrentAnswer
             actionPending={answerActionPending}
             onCancel={onCancelAnswer}
+            onOpenSettings={onOpenSettings}
             onRetry={onRetryAnswer}
             task={visibleTask}
           />
@@ -332,11 +333,13 @@ function SavedMessage({ message }: { message: SessionMessage }) {
 function CurrentAnswer({
   actionPending,
   onCancel,
+  onOpenSettings,
   onRetry,
   task,
 }: {
   actionPending: boolean;
   onCancel: () => void;
+  onOpenSettings: () => void;
   onRetry: () => void;
   task: QueryTask;
 }) {
@@ -354,7 +357,14 @@ function CurrentAnswer({
         {task.error ? (
           <div className="answer-error" role="alert">
             {task.status === "cancelled" ? "生成已停止。" : task.error.message}
+            <p>{queryErrorAction(task.error.code)}</p>
             <small>错误代码：{task.error.code} · 任务 ID：{task.task_id}</small>
+            {task.error.provider_request_id ? (
+              <small>提供方请求 ID：{task.error.provider_request_id}</small>
+            ) : null}
+            {task.error.diagnostic ? (
+              <small>诊断：{task.error.diagnostic}</small>
+            ) : null}
           </div>
         ) : null}
         {task.citations.length > 0 ? <Citations citations={task.citations} /> : null}
@@ -369,10 +379,39 @@ function CurrentAnswer({
               {actionPending ? "正在重试…" : "重试回答"}
             </button>
           ) : null}
+          {task.error && queryErrorNeedsSettings(task.error.code) ? (
+            <button disabled={actionPending} onClick={onOpenSettings} type="button">
+              打开模型设置
+            </button>
+          ) : null}
         </div>
       </article>
     </div>
   );
+}
+
+function queryErrorNeedsSettings(code: string): boolean {
+  return [
+    "llm_model_not_found",
+    "llm_model_unsupported",
+    "llm_model_access_denied",
+    "llm_authentication_failed",
+    "llm_credentials_missing",
+  ].includes(code);
+}
+
+function queryErrorAction(code: string): string {
+  const actions: Record<string, string> = {
+    llm_model_not_found: "请检查模型 ID 和提供方地址，然后重新保存设置。",
+    llm_model_unsupported: "请在设置中选择该提供方支持的聊天模型。",
+    llm_model_access_denied: "请确认当前账号拥有该模型的访问权限。",
+    llm_authentication_failed: "请在设置中更新模型凭据。",
+    llm_credentials_missing: "请在设置中补充模型凭据。",
+    llm_rate_limited: "请稍后重试；无需重新安装 MARA。",
+    llm_provider_unreachable: "请检查网络或本地模型服务后重试。",
+    llm_dependency_missing: "当前安装缺少提供方依赖，请修复或重新安装 MARA。",
+  };
+  return actions[code] ?? "请记录任务 ID 后重试；若持续失败，请联系维护者。";
 }
 
 function AssistantHeading({ detail }: { detail: string }) {

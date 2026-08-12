@@ -149,7 +149,25 @@ def load_packaged_runtime_env() -> Path:
     runtime_paths = get_runtime_paths()
     runtime_paths.config_dir.mkdir(parents=True, exist_ok=True)
     desktop_owned_config = bool(os.environ.get("MARA_DESKTOP_DATA_DIR"))
+    desktop_model_environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name == "MARA_DESKTOP_MODEL_SETTINGS"
+        or name == "MARA_DESKTOP_SETTINGS_REVISION"
+        or name.startswith("MARA_DESKTOP_CHAT_")
+        or name.startswith("MARA_DESKTOP_EMBEDDING_")
+    }
     load_dotenv(runtime_paths.env_path, override=desktop_owned_config)
+    if desktop_model_environment.get("MARA_DESKTOP_MODEL_SETTINGS") == "1":
+        for name in [
+            key
+            for key in os.environ
+            if key == "MARA_DESKTOP_SETTINGS_REVISION"
+            or key.startswith("MARA_DESKTOP_CHAT_")
+            or key.startswith("MARA_DESKTOP_EMBEDDING_")
+        ]:
+            os.environ.pop(name, None)
+        os.environ.update(desktop_model_environment)
     return runtime_paths.env_path
 
 

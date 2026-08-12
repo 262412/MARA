@@ -10,9 +10,12 @@ from typing import Any
 QUERY_READINESS_MESSAGES = {
     "llm_not_configured": "Configure a chat model before asking questions.",
     "llm_credentials_missing": "Configure credentials for the selected chat model.",
-    "llm_auth_failed": "The selected chat model rejected its credentials.",
+    "llm_authentication_failed": "The selected chat model rejected its credentials.",
     "llm_dependency_missing": "The selected chat model is not included in this MARA build.",
-    "llm_unavailable": "The selected chat model is temporarily unavailable.",
+    "llm_model_not_found": "The selected chat model was not found at the configured provider.",
+    "llm_model_unsupported": "The configured provider does not support the selected chat model.",
+    "llm_model_access_denied": "The configured account cannot access the selected chat model.",
+    "llm_provider_unreachable": "MARA could not reach the configured chat model provider.",
     "llm_rate_limited": "The selected chat model is rate limited. Try again later.",
     "query_timeout": "MARA did not receive answer progress before the time limit.",
     "query_runtime_failed": "MARA could not complete the answer.",
@@ -20,9 +23,12 @@ QUERY_READINESS_MESSAGES = {
 QUERY_READINESS_ACTIONS = {
     "llm_not_configured": "configure_llm",
     "llm_credentials_missing": "configure_credentials",
-    "llm_auth_failed": "configure_credentials",
+    "llm_authentication_failed": "configure_credentials",
     "llm_dependency_missing": "repair_installation",
-    "llm_unavailable": "check_connection",
+    "llm_model_not_found": "configure_llm",
+    "llm_model_unsupported": "configure_llm",
+    "llm_model_access_denied": "check_model_access",
+    "llm_provider_unreachable": "check_connection",
     "llm_rate_limited": "retry",
     "query_timeout": "retry",
     "query_runtime_failed": "retry",
@@ -49,12 +55,16 @@ class QueryFailureContract:
     code: str
     message: str
     retryable: bool
+    provider_request_id: str | None = None
+    diagnostic: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "code": self.code,
             "message": self.message,
             "retryable": self.retryable,
+            "provider_request_id": self.provider_request_id,
+            "diagnostic": self.diagnostic,
         }
 
 
@@ -110,7 +120,7 @@ class QueryReadiness:
             query_message=QUERY_READINESS_MESSAGES[code],
             query_action=QUERY_READINESS_ACTIONS[code],
             query_retryable=(
-                (code in {"llm_unavailable", "llm_rate_limited"})
+                (code in {"llm_provider_unreachable", "llm_rate_limited"})
                 if retryable is None
                 else retryable
             ),
@@ -214,41 +224,49 @@ def classify_query_failure(error: BaseException | str) -> QueryFailureContract:
     """Map provider/runtime failures to path-free, stable Desktop contracts."""
     code = _known_failure_code(error)
     if code is not None:
-        return _failure(code)
+        return _failure(code, error)
 
     text = str(error).casefold()
     status_code = _status_code(error)
+    provider_code = _provider_error_code(error)
     if (
         isinstance(error, (ModuleNotFoundError, ImportError))
         or "no module named" in text
     ):
-        return _failure("llm_dependency_missing")
-    if any(
-        marker in text
-        for marker in ("model not found", "unknown model", "unsupported model")
-    ):
-        return _failure("llm_dependency_missing")
+        return _failure("llm_dependency_missing", error)
+    if _model_unsupported(provider_code, text):
+        return _failure("llm_model_unsupported", error)
+    if status_code == 404 or _model_not_found(provider_code, text):
+        return _failure("llm_model_not_found", error)
     if status_code == 429 or _contains_status(text, 429) or _rate_limited(text):
-        return _failure("llm_rate_limited")
+        return _failure("llm_rate_limited", error)
     if (
-        status_code in {401, 403}
-        or _contains_status(text, 401, 403)
+        status_code == 403
+        or _contains_status(text, 403)
+        or any(
+            marker in text
+            for marker in ("forbidden", "access denied", "permission denied")
+        )
+    ):
+        return _failure("llm_model_access_denied", error)
+    if (
+        status_code == 401
+        or _contains_status(text, 401)
         or any(
             marker in text
             for marker in (
                 "unauthorized",
-                "forbidden",
                 "invalid api key",
                 "authentication failed",
             )
         )
     ):
-        return _failure("llm_auth_failed")
+        return _failure("llm_authentication_failed", error)
     if _credentials_missing(text):
-        return _failure("llm_credentials_missing")
+        return _failure("llm_credentials_missing", error)
     if status_code in {408, 425, 500, 502, 503, 504} or _unavailable(error, text):
-        return _failure("llm_unavailable")
-    return _failure("query_runtime_failed")
+        return _failure("llm_provider_unreachable", error)
+    return _failure("query_runtime_failed", error)
 
 
 def _evaluate_selected_model(
@@ -263,7 +281,7 @@ def _evaluate_selected_model(
     safe_provider = _safe_provider(provider)
     if safe_provider not in SAFE_PROVIDER_NAMES:
         return QueryReadiness.blocked(
-            code="llm_dependency_missing",
+            code="llm_model_unsupported",
             query_provider=safe_provider,
             query_model=query_model,
             embedding_provider=embedding_provider,
@@ -317,17 +335,31 @@ def _evaluate_selected_model(
     )
 
 
-def _failure(code: str) -> QueryFailureContract:
-    retryable = code in {"llm_unavailable", "llm_rate_limited", "query_timeout"}
+def _failure(
+    code: str,
+    error: BaseException | str | None = None,
+) -> QueryFailureContract:
+    retryable = code in {
+        "llm_provider_unreachable",
+        "llm_rate_limited",
+        "query_timeout",
+    }
     return QueryFailureContract(
         code=code,
         message=QUERY_READINESS_MESSAGES[code],
         retryable=retryable,
+        provider_request_id=_provider_request_id(error),
+        diagnostic=_provider_diagnostic(error),
     )
 
 
 def _known_failure_code(error: BaseException | str) -> str | None:
     code = getattr(error, "code", None)
+    if code == "llm_dependency_missing" and not isinstance(
+        error,
+        (ImportError, ModuleNotFoundError),
+    ):
+        return None
     return str(code) if code in QUERY_READINESS_CODES else None
 
 
@@ -352,6 +384,69 @@ def _status_code(error: BaseException | str) -> int | None:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def _provider_error_code(error: BaseException | str) -> str:
+    values: list[Any] = [getattr(error, "code", None), getattr(error, "type", None)]
+    body = getattr(error, "body", None)
+    if isinstance(body, Mapping):
+        values.extend((body.get("code"), body.get("type")))
+        nested = body.get("error")
+        if isinstance(nested, Mapping):
+            values.extend((nested.get("code"), nested.get("type")))
+    for value in values:
+        normalized = _safe_diagnostic_token(value)
+        if normalized:
+            return normalized.casefold()
+    return ""
+
+
+def _provider_request_id(error: BaseException | str | None) -> str | None:
+    if error is None or isinstance(error, str):
+        return None
+    candidates: list[Any] = [getattr(error, "request_id", None)]
+    response = getattr(error, "response", None)
+    headers = getattr(response, "headers", None)
+    if isinstance(headers, Mapping):
+        candidates.extend(
+            headers.get(name)
+            for name in ("x-request-id", "x-request_id", "x-ms-request-id")
+        )
+    for value in candidates:
+        safe = _safe_diagnostic_token(value, limit=200)
+        if safe:
+            return safe
+    return None
+
+
+def _provider_diagnostic(error: BaseException | str | None) -> str | None:
+    if error is None:
+        return None
+    values: list[str] = []
+    status = _status_code(error)
+    if status is not None:
+        values.append(f"provider_status={status}")
+    code = _provider_error_code(error)
+    if code:
+        values.append(f"provider_code={code}")
+    return " ".join(values) or None
+
+
+def _safe_diagnostic_token(value: Any, *, limit: int = 128) -> str:
+    text = str(value or "").strip()
+    return text if re.fullmatch(rf"[A-Za-z0-9._:-]{{1,{limit}}}", text) else ""
+
+
+def _model_not_found(provider_code: str, text: str) -> bool:
+    return provider_code in {"model_not_found", "unknown_model"} or any(
+        marker in text for marker in ("model not found", "unknown model")
+    )
+
+
+def _model_unsupported(provider_code: str, text: str) -> bool:
+    return provider_code in {"model_unsupported", "unsupported_model"} or any(
+        marker in text for marker in ("model is unsupported", "unsupported model")
+    )
 
 
 def _contains_status(text: str, *codes: int) -> bool:

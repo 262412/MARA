@@ -10,6 +10,8 @@ export type RendererWorkbenchSmokeMode =
 
 export type RendererWorkbenchSettingsInput = {
   baseUrl: string;
+  provider?: "ollama" | "openai_compatible";
+  credential?: string;
 };
 
 type RendererWorkbenchSmokeResult = {
@@ -75,8 +77,12 @@ function rendererWorkbenchSmokeScript(
         if (document.querySelector("#task-input") && button("Resources")) break;
         await wait(25);
       }
-      const sessionsBefore = await bridge.listSessions();
-      const latestBefore = await bridge.getLatestAnswerTask();
+      const sessionsBefore = mode === "settings"
+        ? { ok: true, data: [] }
+        : await bridge.listSessions();
+      const latestBefore = mode === "settings"
+        ? { ok: true, data: null }
+        : await bridge.getLatestAnswerTask();
       const pages = [
         ["Resources", "资源状态", "Resources"],
         ["Help", "帮助与快捷键", "Help"],
@@ -116,12 +122,14 @@ function rendererWorkbenchSmokeScript(
       let modelSettingsApplied = mode !== "settings";
       let modelSettingsReady = mode !== "settings";
       if (mode === "settings" && settingsInput?.baseUrl) {
+        const selectedProvider = settingsInput.provider ?? "ollama";
+        const selectedCredential = settingsInput.credential ?? null;
         const configureRoute = async (kind, model) => {
           const provider = document.querySelector(
             'select[name="' + kind + '.provider"]',
           );
           if (!(provider instanceof HTMLSelectElement)) return false;
-          selectValue(provider, "ollama");
+          selectValue(provider, selectedProvider);
           await wait(25);
           const baseUrl = document.querySelector(
             'input[name="' + kind + '.base_url"]',
@@ -135,10 +143,17 @@ function rendererWorkbenchSmokeScript(
           ) return false;
           formInputValue(baseUrl, settingsInput.baseUrl);
           formInputValue(modelInput, model);
+          if (selectedProvider !== "ollama") {
+            const credential = document.querySelector(
+              'input[name="' + kind + '.credential"]',
+            );
+            if (!(credential instanceof HTMLInputElement)) return false;
+            formInputValue(credential, selectedCredential ?? "");
+          }
           await wait(0);
           return true;
         };
-        const chatConfigured = await configureRoute("chat", "smoke-chat");
+        const chatConfigured = await configureRoute("chat", "gpt-5.6-luna");
         const embeddingConfigured = await configureRoute(
           "embedding",
           "smoke-embedding",
@@ -168,20 +183,24 @@ function rendererWorkbenchSmokeScript(
           chatConfigured &&
           embeddingConfigured &&
           savedSettings?.ok === true &&
-          savedSettings.data.chat.provider === "ollama" &&
-          savedSettings.data.chat.model === "smoke-chat" &&
-          savedSettings.data.embedding.provider === "ollama" &&
+          savedSettings.data.chat.provider === selectedProvider &&
+          savedSettings.data.chat.model === "gpt-5.6-luna" &&
+          savedSettings.data.embedding.provider === selectedProvider &&
           savedSettings.data.embedding.model === "smoke-embedding" &&
-          savedSettings.data.chat.credential_present === false &&
-          savedSettings.data.embedding.credential_present === false &&
-          !savedSerialized.includes('"credential":');
+          savedSettings.data.chat.credential_present === Boolean(selectedCredential) &&
+          savedSettings.data.embedding.credential_present === Boolean(selectedCredential) &&
+          !savedSerialized.includes('"credential":') &&
+          (!selectedCredential || !savedSerialized.includes(selectedCredential));
+        const expectedProvider = selectedProvider === "openai_compatible"
+          ? "openai"
+          : selectedProvider;
         modelSettingsReady =
           readyRuntime?.state === "healthy" &&
           readyDoctor?.ok === true &&
           readyDoctor.data.query_ready === true &&
           readyDoctor.data.indexing_ready === true &&
-          readyDoctor.data.query_provider === "ollama" &&
-          readyDoctor.data.embedding_provider === "ollama";
+          readyDoctor.data.query_provider === expectedProvider &&
+          readyDoctor.data.embedding_provider === expectedProvider;
       }
       button("工作台")?.click();
       await wait(25);

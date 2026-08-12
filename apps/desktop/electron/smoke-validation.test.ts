@@ -39,6 +39,11 @@ const queryTask: QueryTask = {
   prompt: "What is the fixture?",
   selected_file_ids: [GATE2_SMOKE_FILE_ID],
   qa_scope: "document",
+  route_provider: "openai",
+  route_model: "desktop-chat",
+  settings_revision: "smoke-settings-revision",
+  sidecar_pid: 4321,
+  route_fingerprint: "a".repeat(64),
   status: "success",
   stage: "completed",
   answer: "MARA Desktop preserves grounded evidence identities.",
@@ -92,6 +97,9 @@ const doctorPayload: DoctorPayload = {
     query_model: "desktop-chat",
     embedding_provider: "OpenAI-compatible",
     embedding_model: "desktop-embedding",
+    settings_revision: "smoke-settings-revision",
+    sidecar_pid: 4321,
+    route_fingerprint: "a".repeat(64),
     request_id: "doctor-smoke",
 };
 const doctor: DesktopResult<DoctorPayload> = {

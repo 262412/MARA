@@ -5,6 +5,10 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 MAINTENANCE_LOGGER = "mara.desktop.index_tasks"
+QUERY_MAINTENANCE_LOGGERS = (
+    "mara.desktop.query_tasks",
+    "mara.desktop.query_stream",
+)
 
 
 def configure_maintenance_logging(data_root: Path) -> RotatingFileHandler:
@@ -26,3 +30,12 @@ def configure_maintenance_logging(data_root: Path) -> RotatingFileHandler:
     logger.setLevel(logging.INFO)
     logger.addHandler(handler)
     return handler
+
+
+def attach_query_maintenance_loggers(handler: logging.Handler) -> None:
+    for name in QUERY_MAINTENANCE_LOGGERS:
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.INFO)
+        if handler not in logger.handlers:
+            logger.addHandler(handler)
+        logger.propagate = False

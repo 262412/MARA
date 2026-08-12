@@ -5,8 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from .maintenance_logging import configure_maintenance_logging
-from .server import _attach_query_maintenance_loggers
+from .maintenance_logging import (
+    attach_query_maintenance_loggers,
+    configure_maintenance_logging,
+)
 
 
 class DesktopMaintenanceLoggingTest(unittest.TestCase):
@@ -42,8 +44,8 @@ class DesktopMaintenanceLoggingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             data_root = Path(temporary_directory) / "MARA"
             handler = configure_maintenance_logging(data_root)
-            _attach_query_maintenance_loggers(handler)
-            _attach_query_maintenance_loggers(handler)
+            attach_query_maintenance_loggers(handler)
+            attach_query_maintenance_loggers(handler)
             loggers = [
                 logging.getLogger("mara.desktop.query_tasks"),
                 logging.getLogger("mara.desktop.query_stream"),
@@ -54,7 +56,7 @@ class DesktopMaintenanceLoggingTest(unittest.TestCase):
                 loggers[0].error(
                     "Query task failed task_id=%s error_code=%s stage=%s error_type=%s",
                     "query-safe-id",
-                    "llm_unavailable",
+                    "llm_provider_unreachable",
                     "streaming",
                     "ConnectionError",
                 )
@@ -70,7 +72,7 @@ class DesktopMaintenanceLoggingTest(unittest.TestCase):
 
             self.assertTrue(log_path.is_relative_to(data_root.resolve() / "logs"))
             self.assertIn("query-safe-id", content)
-            self.assertIn("llm_unavailable", content)
+            self.assertIn("llm_provider_unreachable", content)
             self.assertIn("streaming", content)
             self.assertIn("ConnectionError", content)
             self.assertNotIn("/private", content)

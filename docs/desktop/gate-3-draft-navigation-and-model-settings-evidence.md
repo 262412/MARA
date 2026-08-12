@@ -1,6 +1,24 @@
 # MARA Desktop Gate 3 草稿、导航与模型准备纵向切片证据
 
-## 结论
+## 2026-08-12 模型路由一致性与凭据清理结论
+
+本文件所在修复把 Electron 当前模型设置设为 Desktop 唯一路由权威，增加旧模型表与
+embedding 表的版本化幂等迁移、安全凭据清理、精确 settings revision 握手、实际 route
+诊断和 provider 错误分类。使用旧 Google 默认、同名旧 Ollama/OpenAI route、多默认项
+及旧 Azure embedding 的数据根启动后，Settings、Doctor、SQLite 非敏感投影、运行时
+manager、查询任务和实际流式 POST 均收敛到当前设置。
+
+当前本地 Linux 原生组合包已从系统只读工作目录完成真实 loopback 查询，捕获到
+`{"model":"gpt-5.6-luna","stream":true}`；SQLite、WAL/journal、Desktop 数据根、
+日志和 smoke 诊断均未检出旧明文凭据 sentinel，仓库根、工作目录与安装目录均未产生
+`.theflow`。该结果只证明当前 Linux 构建，不能替代 Windows 产品验收。
+
+正式结论仍为 **NO-GO**，能力保持 **In progress**：当前源码还必须取得 Windows
+Server 2022 原生构建/loopback/Defender 证据，并在干净 Windows 10 与 Windows 11
+产品 VM 验证同一用户重启、覆盖安装、卸载后重装、safeStorage、旧数据库迁移和实际
+POST route。任一平台设置模型与实际 POST 不一致都阻止放行。
+
+## 历史基线结论（70a7021）
 
 实现提交 `c0d952a1e482ff9c57202f2bc970ffdcf826840b` 修复了冷启动会话、占位导航、
 模型设置与问答准备四组相互关联的用户级缺陷；提交
@@ -49,9 +67,11 @@ Help 或 Settings 不取消后台问答；返回工作台后继续观察同一�
 - Renderer 增加五类强类型路由、三个真实页面、受控 Composer 和模型设置表单。
 - Desktop runtime defaults 只在 `MARA_DESKTOP_MODEL_SETTINGS=1` 时采用独立的
   Chat/Embedding 路由；未设置该标记时保持 Web、CLI 和 Gradio 的旧行为。
+- Doctor 和查询任务增加实际 route 的 provider/model、settings revision、Sidecar PID
+  与 route fingerprint；这些字段由 OpenAPI 生成共享类型。
 
 本切片没有修改 `MARA` / `MARA-cli` 命令、Click 参数、Gradio 事件链、DocQA 数据库
-schema、现有索引/问答任务 JSON 字段或旧数据迁移语义。Renderer 仍不知道 Sidecar
+schema 或既有索引/问答任务字段语义；查询任务仅增加向后兼容的路由诊断字段。Renderer 仍不知道 Sidecar
 端口、令牌或本地路径；没有增加通用 `invoke`、`request`、文件读写或任意 URL IPC。
 
 ## 模型设置与安全边界
@@ -63,11 +83,16 @@ schema、现有索引/问答任务 JSON 字段或旧数据迁移语义。Rendere
 - 非敏感元数据原子写入 Desktop 数据根的 `state/model-settings.json`；凭据只写入
   Electron `safeStorage` 加密的独立文件，权限收紧为当前用户可读写。
 - Linux 若 Electron 只能提供 `basic_text` 后端，则明确降级为当前进程会话凭据，不把
-  凭据持久化。旧环境变量只作兼容读取，Settings 不修改 `.env`。
+  凭据持久化。旧 `state/config/.env` 的受支持模型路由只迁移一次，随后移除模型变量并
+  保留无关配置；升级用户应轮换曾由旧版本明文保存的 API key。
 - Renderer 提交用户当前输入的凭据后只接收 `credential_present` 和
   `credential_storage`；Main/Sidecar 不把凭据值回传，日志和错误也不记录该值。
-- 保存设置会停止旧 Sidecar、以新环境启动一个 Sidecar，再刷新 Doctor；任何阶段失败
-  都返回稳定、脱敏且带 `request_id` 的错误。
+- SQLite 模型与 embedding spec 只保存非敏感 route 和 `secret_ref`；当前完整 spec 只在
+  Sidecar 进程内由 Electron 解密值叠加。迁移会清理主库、WAL/journal 和 Desktop 备份，
+  不删除会话、索引、文件或其他用户表。
+- 保存设置会停止旧 Sidecar、以新 revision 环境启动一个 Sidecar，并等待 Health 与
+  Doctor 的 revision/PID/fingerprint 全部一致；任何阶段失败都返回稳定、脱敏且带
+  `request_id` 的错误。
 
 ## 问答准备与错误契约
 
@@ -75,31 +100,37 @@ Doctor 的 `query_ready` 是 Renderer 启用发送的唯一业务准备依据；
 字符串。未准备好时不会创建空会话或 `query-tasks.json` 任务，并提供打开 Settings 的
 明确动作。
 
-| code                      | retryable | 用户动作                            |
-| ------------------------- | --------- | ----------------------------------- |
-| `llm_not_configured`      | false     | 配置 Chat 路由                      |
-| `llm_credentials_missing` | false     | 提供所选路由的凭据                  |
-| `llm_auth_failed`         | false     | 检查或更新凭据                      |
-| `llm_dependency_missing`  | false     | 修复安装包，不能盲目重试            |
-| `llm_unavailable`         | true      | 检查服务/网络后重试                 |
-| `llm_rate_limited`        | true      | 等待后重试                          |
-| `query_timeout`           | true      | 重试问答                            |
-| `query_runtime_failed`    | false     | 记录 request/task ID 后诊断未知故障 |
+| code                        | retryable | 用户动作                            |
+| --------------------------- | --------- | ----------------------------------- |
+| `llm_not_configured`        | false     | 配置 Chat 路由                      |
+| `llm_credentials_missing`   | false     | 提供所选路由的凭据                  |
+| `llm_authentication_failed` | false     | 检查或更新凭据                      |
+| `llm_dependency_missing`    | false     | 修复安装包，不能盲目重试            |
+| `llm_model_not_found`       | false     | 检查模型 ID 与 endpoint             |
+| `llm_model_unsupported`     | false     | 选择 provider 支持的模型            |
+| `llm_model_access_denied`   | false     | 检查账号的模型访问权限              |
+| `llm_provider_unreachable`  | true      | 检查服务/网络后重试                 |
+| `llm_rate_limited`          | true      | 等待后重试                          |
+| `query_timeout`             | true      | 重试问答                            |
+| `query_runtime_failed`      | false     | 记录 request/task ID 后诊断未知故障 |
 
-Sidecar 维护者日志写入 Desktop-owned 日志目录，只记录 request/task ID、稳定类别和异常
-类型；绝对源路径、API key、Sidecar token/port 和 traceback 不进入 Renderer 响应。
+`llm_dependency_missing` 只表示真实 Python import/package 缺失；provider 返回的 unknown、
+not found 或 unsupported model 不再描述为“模型未包含在 MARA build”。Sidecar 维护者
+日志写入 Desktop-owned 日志目录，只记录 request/task ID、稳定类别和异常类型；安全的
+provider request ID 与状态/错误码可进入任务诊断，绝对源路径、API key、Sidecar
+token/port、响应正文和 traceback 不进入 Renderer 响应。
 
 ## 回归与本地 Linux 证据
 
 先添加失败回归，再修改生产代码。当前本地验证结果：
 
-| 验证层                              | 结果                                                                           |
-| ----------------------------------- | ------------------------------------------------------------------------------ |
-| `cd apps/desktop && npm run verify` | Electron 71、Renderer 34、Sidecar 95、打包配置 5；契约漂移、类型和生产构建通过 |
-| 受影响 `ktem` / `slide_cli` DocQA   | 86 passed                                                                      |
-| workflow 与供应链策略               | 48 passed                                                                      |
-| 代码卫生                            | 所有变更 Python 文件 pre-commit 与 hygiene gate 通过；baseline 未刷新          |
-| Node 依赖                           | `npm audit` 为 0 vulnerabilities                                               |
+| 验证层                              | 结果                                                                            |
+| ----------------------------------- | ------------------------------------------------------------------------------- |
+| `cd apps/desktop && npm run verify` | Electron 75、Renderer 34、Sidecar 106、打包配置 5；契约漂移、类型和生产构建通过 |
+| 受影响 `ktem` / `slide_cli` DocQA   | 105 passed；另有 9 项公共 CLI 契约通过                                          |
+| workflow 与供应链策略               | 50 passed                                                                       |
+| 代码卫生                            | 所有变更 Python 文件 pre-commit 与 hygiene gate 通过；baseline 未刷新           |
+| Node 依赖                           | `npm audit` 为 0 vulnerabilities                                                |
 
 本地 Linux 组合包从只读、非仓库工作目录启动。无模型配置时，真实打包 Renderer 输出：
 
@@ -111,20 +142,21 @@ query_ready=false issue_code=llm_not_configured retryable=false task_created=fal
 ```
 
 随后通过真实 Settings 页面分别保存回环 Chat 与 Embedding 路由、受控重启 Sidecar，
-清除常规模型环境变量后第二次启动仍完成 TXT 索引、多文档问答、取消/重试、会话变更和
-批量删除。任务进度只写入 `<data-root>/cache/theflow`；工作目录、安装目录和仓库根没有
-新增 `.theflow`。仓库原有 `.theflow` 清单哈希在测试前后均为
-`17cfb205440382e04cba61c1610c0cd09373d2e112433640b39282917b35bb3b`。
+清除常规模型环境变量后第二次启动仍完成 TXT 索引、多文档问答、会话变更和批量删除。
+任务进度只写入 `<data-root>/cache/theflow`；工作目录 `/usr`、安装目录和仓库根均不存在
+`.theflow`。路由迁移报告确认只有一个默认 Chat route 和一个默认 Embedding route，
+`chat_model=gpt-5.6-luna`、任务终态为 `success`、明文凭据不存在。
 
-| 本地 Linux 指标 | 结果                                                               |
-| --------------- | ------------------------------------------------------------------ |
-| 发布目录大小    | 1,088,605,495 bytes                                                |
-| 文件数          | 2,072                                                              |
-| Sidecar SHA-256 | `f421f202a2eee81ed6830b05e8764f638a799179b37224ab9a80d57c7800851c` |
-| 动态链接        | `ldd` 无缺失                                                       |
-| 退出清理        | 无残留 Sidecar 进程                                                |
+| 本地 Linux 指标 | 结果                                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------- |
+| 发布目录大小    | 1,088,655,442 bytes                                                                           |
+| 文件数          | 2,072                                                                                         |
+| Linux 压缩包    | 421,463,028 bytes；SHA-256 `191dcfb68419126e7f7554a397b5cfa5fead3a4217300d63897de0bf9694f6ee` |
+| Sidecar SHA-256 | `49e8795c76115954655736dcb28e2bb26cc80b5ebb5fc9204fb39f8912347f92`                            |
+| 动态链接        | `ldd` 无缺失                                                                                  |
+| 退出清理        | 无残留 Sidecar 进程                                                                           |
 
-## 原生组合包证据
+## 历史原生组合包证据（70a7021，不作为本轮验收）
 
 所有 artifact 均对应 `70a7021`、未过期，预计于 2026-11-09 过期：
 

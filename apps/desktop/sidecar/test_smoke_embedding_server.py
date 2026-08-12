@@ -131,6 +131,26 @@ class SmokeEmbeddingServerTest(unittest.TestCase):
             server.server_close()
             thread.join(timeout=2)
 
+    def test_captures_only_the_actual_chat_route_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            capture = Path(temporary_directory) / "chat-route.json"
+            server = create_server("smoke-token", chat_capture=capture)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                with urlopen(_chat_request(server.server_port), timeout=2) as response:
+                    response.read()
+
+                self.assertEqual(
+                    json.loads(capture.read_text(encoding="utf-8")),
+                    {"model": "smoke-chat", "stream": True},
+                )
+                self.assertNotIn("Question", capture.read_text(encoding="utf-8"))
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
     def test_chat_block_marker_exposes_a_partial_stream_then_releases(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             marker_root = Path(temporary_directory)

@@ -64,6 +64,8 @@ flowchart LR
 | R26 | 模型或检索阻塞使取消永久占用问答 worker        | 任务停在 cancelling，后续问答饿死        | 合作式 cancel event；独立 producer；idle timeout；取消不等待下一次 yield                    | 永不 yield 单测与三平台 partial 取消通过   |
 | R27 | SSE、GET、取消和重试响应乱序                   | partial/终态倒退或永久不再更新           | 按 task ID/version 单调合并；retry lineage；healthy 下有界重连退避                          | 乱序、临时 GET 失败和打包 UI smoke 通过    |
 | R28 | token 级 journal 全量重写并无限保留历史        | O(N²) I/O、数据根无界增长                | 250 ms 合并写；终态强制原子写；最近 100 任务上限；幂等索引同步裁剪                          | 高频更新和保留上限契约测试通过             |
+| R29 | Settings 与 SQLite 默认模型分裂                | Doctor 显示新模型但实际请求旧模型        | Electron route 唯一权威；canonical upsert；显式查询 route；revision/PID/fingerprint 握手    | 两平台捕获真实 POST model；旧库矩阵通过    |
+| R30 | 旧模型 spec 或 `.env` 明文保存凭据             | API key 从 SQLite、日志或备份泄露        | safeStorage 运行时注入；spec 只存 `secret_ref`；旧库/.env 清理；原始字节扫描；失败关闭      | Windows 重启/重装与 Win10/11 迁移验收通过  |
 
 R22 当前由 `pypdf 4.2` 的 GHSA-fp3f-mc75-235c 与 GHSA-fwg2-594c-jp42
 触发。LlamaIndex 0.10 暂时阻止升级到修复版；后续必须升级 reader 或回移上游资源

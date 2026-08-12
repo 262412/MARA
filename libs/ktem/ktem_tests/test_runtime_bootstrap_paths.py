@@ -62,6 +62,31 @@ def test_desktop_owned_embedding_config_overrides_inherited_placeholders(
     assert os.environ["OPENAI_API_KEY"] == "desktop-configured-key"
 
 
+def test_modern_desktop_route_environment_cannot_be_overridden_by_legacy_env(
+    monkeypatch,
+    tmp_path,
+):
+    desktop_root = tmp_path / "MARA"
+    config_dir = desktop_root / "state" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / ".env").write_text(
+        "MARA_DESKTOP_CHAT_MODEL=legacy-chat-model\n"
+        "MARA_DESKTOP_CHAT_API_KEY=legacy-secret\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MARA_DESKTOP_DATA_DIR", str(desktop_root))
+    monkeypatch.setenv("MARA_DESKTOP_MODEL_SETTINGS", "1")
+    monkeypatch.setenv("MARA_DESKTOP_SETTINGS_REVISION", "settings-revision-current")
+    monkeypatch.setenv("MARA_DESKTOP_CHAT_MODEL", "gpt-5.6-luna")
+    monkeypatch.setenv("MARA_DESKTOP_CHAT_API_KEY", "current-secret")
+
+    load_packaged_runtime_env()
+
+    assert os.environ["MARA_DESKTOP_CHAT_MODEL"] == "gpt-5.6-luna"
+    assert os.environ["MARA_DESKTOP_CHAT_API_KEY"] == "current-secret"
+    assert os.environ["MARA_DESKTOP_SETTINGS_REVISION"] == ("settings-revision-current")
+
+
 def test_desktop_runtime_does_not_search_the_repository_env(tmp_path) -> None:
     desktop_root = tmp_path / "desktop-data"
     read_only_cwd = tmp_path / "read-only-cwd"
@@ -103,6 +128,65 @@ assert settings.KH_EMBEDDINGS == {}, sorted(settings.KH_EMBEDDINGS)
         )
     finally:
         read_only_cwd.chmod(0o755)
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_modern_desktop_model_route_outranks_flowsettings_override(tmp_path) -> None:
+    desktop_root = tmp_path / "desktop-data"
+    config_dir = desktop_root / "state" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "flowsettings.py").write_text(
+        "KH_LLMS = {\n"
+        "    'openai': {\n"
+        "        'default': True,\n"
+        "        'spec': {\n"
+        "            '__type__': 'kotaemon.llms.ChatOpenAI',\n"
+        "            'model': 'legacy-chat-model',\n"
+        "            'base_url': 'https://legacy.example/v1',\n"
+        "            'api_key': 'legacy-secret',\n"
+        "        },\n"
+        "    },\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    environment = {
+        **os.environ,
+        "MARA_DESKTOP_DATA_DIR": str(desktop_root),
+        "KH_APP_DATA_DIR": str(desktop_root / "state" / "ktem_app_data"),
+        "MARA_DESKTOP_MODEL_SETTINGS": "1",
+        "MARA_DESKTOP_SETTINGS_REVISION": "settings-revision-current",
+        "MARA_DESKTOP_CHAT_PROVIDER": "openai_compatible",
+        "MARA_DESKTOP_CHAT_BASE_URL": "https://api.openai.com/v1",
+        "MARA_DESKTOP_CHAT_MODEL": "gpt-5.6-luna",
+        "MARA_DESKTOP_CHAT_API_VERSION": "",
+        "MARA_DESKTOP_CHAT_API_KEY": "current-secret",
+        "MARA_DESKTOP_EMBEDDING_PROVIDER": "none",
+        "THEFLOW_SETTINGS_MODULE": "ktem.default_flowsettings",
+        "KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED": "1",
+        "PYTHONPATH": os.pathsep.join(
+            [
+                str(REPOSITORY_ROOT / "libs" / "ktem"),
+                str(REPOSITORY_ROOT / "libs" / "kotaemon"),
+                str(REPOSITORY_ROOT / "libs" / "slide_cli"),
+            ]
+        ),
+    }
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from theflow.settings import settings; "
+            "assert settings.KH_LLMS['openai']['spec']['model'] == 'gpt-5.6-luna'; "
+            "assert settings.KH_LLMS['openai']['spec']['base_url'] == "
+            "'https://api.openai.com/v1'",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
     assert completed.returncode == 0, completed.stderr
 

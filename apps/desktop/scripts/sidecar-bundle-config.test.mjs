@@ -102,6 +102,7 @@ test("includes the storage, embedding, and modern Office modules used by Gate 3"
     "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
     "docx",
     "ktem.docqa",
+    "ktem.desktop_model_routes",
     "ktem.index.file.pipelines",
     "ktem.reasoning.prompt_optimization.decompose_question",
     "ktem.reasoning.prompt_optimization.rewrite_question",

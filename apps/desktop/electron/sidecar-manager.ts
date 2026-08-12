@@ -6,6 +6,7 @@ import path from "node:path";
 import type {
   DoctorPayload,
   DoctorResponse,
+  RuntimeHealth,
 } from "../shared/doctor-contracts";
 import type {
   FileBatchDeleteRequest,
@@ -187,6 +188,27 @@ export function parseReadyMessage(line: string): SidecarReadyMessage {
   return message as SidecarReadyMessage;
 }
 
+export function validateRouteHandshake(
+  doctor: Pick<
+    DoctorPayload,
+    "settings_revision" | "sidecar_pid" | "route_fingerprint"
+  >,
+  expectedRevision: string | undefined,
+  expectedPid: number,
+): void {
+  if (doctor.sidecar_pid !== expectedPid) {
+    throw new Error("Sidecar Doctor reported a different process identifier");
+  }
+  if (expectedRevision !== undefined) {
+    if (doctor.settings_revision !== expectedRevision) {
+      throw new Error("Sidecar Doctor reported a different settings revision");
+    }
+    if (!/^[a-f0-9]{64}$/.test(doctor.route_fingerprint)) {
+      throw new Error("Sidecar Doctor did not provide a valid route fingerprint");
+    }
+  }
+}
+
 export function parseIndexTaskEvent(
   block: string,
   expectedRequestId?: string,
@@ -236,9 +258,13 @@ export class SidecarManager {
   private token?: string;
   private port?: number;
   private startup?: Promise<RuntimeStatus>;
+  private startupRevision?: string;
+  private activeRevision?: string;
   private restartTimer?: ReturnType<typeof setTimeout>;
+  private restartQueue: Promise<void> = Promise.resolve();
   private restartAttempts = 0;
   private stopping = false;
+  private generation = 0;
   private status: RuntimeStatus = {
     state: "stopped",
     protocol: SIDECAR_PROTOCOL_VERSION,
@@ -531,19 +557,33 @@ export class SidecarManager {
     }
   }
 
-  start(): Promise<RuntimeStatus> {
+  start(expectedRevision?: string): Promise<RuntimeStatus> {
     if (this.startup) {
+      if (this.startupRevision !== expectedRevision) {
+        return Promise.reject(
+          new Error("Sidecar startup is using a different settings revision"),
+        );
+      }
       return this.startup;
     }
-    if (this.status.state === "healthy") {
+    if (
+      this.status.state === "healthy" &&
+      this.activeRevision === expectedRevision
+    ) {
       return Promise.resolve(this.getStatus());
     }
     if (this.status.state === "stopped" && !this.restartTimer) {
       this.restartAttempts = 0;
     }
 
-    const startup = this.launch();
+    const environment = this.options.environment?.() ?? {};
+    const revision =
+      expectedRevision ??
+      (environment.MARA_DESKTOP_SETTINGS_REVISION || undefined);
+    const generation = ++this.generation;
+    const startup = this.launch(generation, revision, environment);
     this.startup = startup;
+    this.startupRevision = revision;
     startup.then(
       () => this.clearStartup(startup),
       () => this.clearStartup(startup),
@@ -551,18 +591,30 @@ export class SidecarManager {
     return startup;
   }
 
-  async restart(): Promise<RuntimeStatus> {
-    await this.stop();
-    return this.start();
+  restart(expectedRevision?: string): Promise<RuntimeStatus> {
+    const operation = (this.restartQueue ?? Promise.resolve()).then(async () => {
+      await this.stop();
+      return this.start(expectedRevision);
+    });
+    this.restartQueue = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return operation;
   }
 
   private clearStartup(startup: Promise<RuntimeStatus>): void {
     if (this.startup === startup) {
       this.startup = undefined;
+      this.startupRevision = undefined;
     }
   }
 
-  private async launch(): Promise<RuntimeStatus> {
+  private async launch(
+    generation: number,
+    expectedRevision: string | undefined,
+    environment: Record<string, string> = this.options.environment?.() ?? {},
+  ): Promise<RuntimeStatus> {
     if (this.child) {
       return this.getStatus();
     }
@@ -591,7 +643,7 @@ export class SidecarManager {
     const child = spawn(command.executable, command.args, {
       env: {
         ...process.env,
-        ...this.options.environment?.(),
+        ...environment,
         KH_APP_DATA_DIR: path.join(
           this.options.dataRoot,
           "state",
@@ -618,6 +670,9 @@ export class SidecarManager {
       process.stderr.write(`[mara-sidecar] ${chunk}`);
     });
     child.once("exit", (code, signal) => {
+      if (this.child !== child || generation !== this.generation) {
+        return;
+      }
       this.child = undefined;
       this.port = undefined;
       this.token = undefined;
@@ -634,11 +689,30 @@ export class SidecarManager {
 
     try {
       const ready = await this.waitForReady(child);
+      if (this.child !== child || generation !== this.generation) {
+        return this.getStatus();
+      }
       if (ready.pid !== child.pid) {
         throw new Error("Sidecar reported a different process identifier");
       }
       this.port = ready.port;
-      const health = await this.requestJson<Record<string, unknown>>("/health");
+      const health = await this.requestJson<RuntimeHealth>("/health", {}, true);
+      if (!isRuntimeHealth(health)) {
+        throw new Error("Sidecar returned an invalid health response");
+      }
+      if (health.model_settings_revision !== (expectedRevision ?? null)) {
+        throw new Error("Sidecar health reported a different settings revision");
+      }
+      const doctor = await this.requestJson<DoctorResponse>(
+        "/v1/doctor",
+        {},
+        true,
+      );
+      validateRouteHandshake(doctor.doctor, expectedRevision, ready.pid);
+      if (this.child !== child || generation !== this.generation) {
+        return this.getStatus();
+      }
+      this.activeRevision = expectedRevision;
       this.setStatus({
         state: "healthy",
         protocol: ready.protocol,
@@ -650,6 +724,13 @@ export class SidecarManager {
       return this.getStatus();
     } catch (error) {
       child.kill();
+      if (this.child !== child || generation !== this.generation) {
+        return this.getStatus();
+      }
+      this.child = undefined;
+      this.port = undefined;
+      this.token = undefined;
+      this.activeRevision = undefined;
       const message = error instanceof Error ? error.message : String(error);
       this.setStatus({
         state: "failed",
@@ -712,6 +793,10 @@ export class SidecarManager {
 
   async stop(): Promise<void> {
     this.stopping = true;
+    this.generation += 1;
+    this.startup = undefined;
+    this.startupRevision = undefined;
+    this.activeRevision = undefined;
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
       this.restartTimer = undefined;
@@ -1063,6 +1148,23 @@ function isSidecarError(value: unknown): value is SidecarError {
   );
 }
 
+function isRuntimeHealth(value: unknown): value is RuntimeHealth {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const health = value as Record<string, unknown>;
+  return (
+    health.state === "healthy" &&
+    health.protocol === SIDECAR_PROTOCOL_VERSION &&
+    typeof health.version === "string" &&
+    Array.isArray(health.capabilities) &&
+    health.capabilities.every((item) => typeof item === "string") &&
+    (health.model_settings_revision === null ||
+      typeof health.model_settings_revision === "string") &&
+    typeof health.request_id === "string"
+  );
+}
+
 function isIndexTaskResponse(value: unknown): value is IndexTaskResponse {
   if (!value || typeof value !== "object") {
     return false;
@@ -1124,6 +1226,11 @@ function isQueryTask(value: unknown): value is QueryTask {
     Array.isArray(task.selected_file_ids) &&
     task.selected_file_ids.every((item) => typeof item === "string") &&
     (task.qa_scope === "document" || task.qa_scope === "multi_document") &&
+    typeof task.route_provider === "string" &&
+    typeof task.route_model === "string" &&
+    typeof task.settings_revision === "string" &&
+    typeof task.sidecar_pid === "number" &&
+    typeof task.route_fingerprint === "string" &&
     ["queued", "running", "success", "failed", "cancelled"].includes(
       String(task.status),
     ) &&
@@ -1162,7 +1269,13 @@ function isQueryError(value: unknown): boolean {
   return (
     typeof error.code === "string" &&
     typeof error.message === "string" &&
-    typeof error.retryable === "boolean"
+    typeof error.retryable === "boolean" &&
+    (error.provider_request_id === undefined ||
+      error.provider_request_id === null ||
+      typeof error.provider_request_id === "string") &&
+    (error.diagnostic === undefined ||
+      error.diagnostic === null ||
+      typeof error.diagnostic === "string")
   );
 }
 

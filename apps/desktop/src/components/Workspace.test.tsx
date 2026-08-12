@@ -28,6 +28,11 @@ const queryTask: QueryTask = {
   prompt: "What changed?",
   selected_file_ids: ["file-1"],
   qa_scope: "document",
+  route_provider: "openai",
+  route_model: "gpt-5.6-luna",
+  settings_revision: "settings-revision-test",
+  sidecar_pid: 4321,
+  route_fingerprint: "a".repeat(64),
   status: "success",
   stage: "completed",
   answer: "The evidence changed.",
@@ -138,6 +143,23 @@ test("Workspace renders streaming, success, failed, and cancelled answers", () =
   });
   assert.match(cancelled, /生成已停止/);
   assert.match(cancelled, /重试回答/);
+
+  const modelMissing = render(session, {
+    ...queryTask,
+    status: "failed",
+    error: {
+      code: "llm_model_not_found",
+      message: "The selected chat model was not found at the configured provider.",
+      retryable: false,
+      provider_request_id: "provider-request-404",
+      diagnostic: "provider_status=404 provider_code=model_not_found",
+    },
+    retryable: false,
+  });
+  assert.match(modelMissing, /检查模型 ID/);
+  assert.match(modelMissing, /提供方请求 ID：provider-request-404/);
+  assert.match(modelMissing, /打开模型设置/);
+  assert.doesNotMatch(modelMissing, /重试回答/);
 });
 
 test("Workspace truthfully explains why the composer is unavailable", () => {

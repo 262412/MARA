@@ -86,12 +86,32 @@ export class DesktopModelSettingsStore {
   async load(): Promise<void> {
     const metadata = await readJsonIfPresent(modelMetadataPath(this.dataRoot));
     if (metadata === undefined) {
-      this.metadata = undefined;
-      this.secrets = {};
+      const legacy = await readLegacyModelSettings(this.dataRoot);
+      if (legacy) {
+        const revision = randomUUID();
+        const migrated: PersistedModelSettings = {
+          version: 1,
+          credentials_revision: revision,
+          chat: persistedRoute(legacy.settings.chat),
+          embedding: persistedRoute(legacy.settings.embedding),
+        };
+        const secrets = {
+          chat: legacy.settings.chat.credential ?? undefined,
+          embedding: legacy.settings.embedding.credential ?? undefined,
+        };
+        await persistSettings(this.dataRoot, migrated, secrets, this.protector);
+        this.metadata = migrated;
+        this.secrets = secrets;
+      } else {
+        this.metadata = undefined;
+        this.secrets = {};
+      }
+      await scrubLegacyModelEnvironment(this.dataRoot);
       return;
     }
     this.metadata = validatePersistedSettings(metadata);
     this.secrets = await this.loadCredentials(this.metadata.credentials_revision);
+    await scrubLegacyModelEnvironment(this.dataRoot);
   }
 
   status(): ModelSettingsStatus {
@@ -148,7 +168,12 @@ export class DesktopModelSettingsStore {
     );
     this.metadata = metadata;
     this.secrets = secrets;
+    await scrubLegacyModelEnvironment(this.dataRoot);
     return this.status();
+  }
+
+  settingsRevision(): string {
+    return this.metadata?.credentials_revision ?? "";
   }
 
   environment(): Record<string, string> {
@@ -157,6 +182,7 @@ export class DesktopModelSettingsStore {
     }
     return {
       MARA_DESKTOP_MODEL_SETTINGS: "1",
+      MARA_DESKTOP_SETTINGS_REVISION: this.metadata.credentials_revision,
       ...routeEnvironment("CHAT", this.metadata.chat, this.secrets.chat),
       ...routeEnvironment(
         "EMBEDDING",
@@ -471,4 +497,181 @@ function isMissing(error: unknown): boolean {
     "code" in error &&
     (error as NodeJS.ErrnoException).code === "ENOENT"
   );
+}
+
+type LegacyModelSettings = {
+  settings: ModelSettingsInput;
+};
+
+const LEGACY_MODEL_KEYS = new Set([
+  "OPENAI_API_BASE",
+  "OPENAI_API_KEY",
+  "OPENAI_CHAT_MODEL",
+  "OPENAI_EMBEDDINGS_MODEL",
+  "AZURE_OPENAI_ENDPOINT",
+  "AZURE_OPENAI_API_KEY",
+  "OPENAI_API_VERSION",
+  "AZURE_OPENAI_CHAT_DEPLOYMENT",
+  "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT",
+  "KH_OLLAMA_URL",
+  "LOCAL_MODEL",
+  "LOCAL_MODEL_EMBEDDINGS",
+  "MARA_DESKTOP_MODEL_SETTINGS",
+  "MARA_DESKTOP_SETTINGS_REVISION",
+  "MARA_DESKTOP_CHAT_PROVIDER",
+  "MARA_DESKTOP_CHAT_BASE_URL",
+  "MARA_DESKTOP_CHAT_MODEL",
+  "MARA_DESKTOP_CHAT_API_VERSION",
+  "MARA_DESKTOP_CHAT_API_KEY",
+  "MARA_DESKTOP_EMBEDDING_PROVIDER",
+  "MARA_DESKTOP_EMBEDDING_BASE_URL",
+  "MARA_DESKTOP_EMBEDDING_MODEL",
+  "MARA_DESKTOP_EMBEDDING_API_VERSION",
+  "MARA_DESKTOP_EMBEDDING_API_KEY",
+]);
+
+function legacyEnvironmentPath(dataRoot: string): string {
+  return path.join(path.resolve(dataRoot), "state", "config", ".env");
+}
+
+async function readLegacyModelSettings(
+  dataRoot: string,
+): Promise<LegacyModelSettings | undefined> {
+  const content = await readTextIfPresent(legacyEnvironmentPath(dataRoot));
+  if (content === undefined) {
+    return undefined;
+  }
+  const values = parseLegacyEnvironment(content);
+  const openAiKey = validLegacyCredential(values.OPENAI_API_KEY);
+  const azureKey = validLegacyCredential(values.AZURE_OPENAI_API_KEY);
+  const openAiBase = values.OPENAI_API_BASE?.trim() || "https://api.openai.com/v1";
+  const azureEndpoint = values.AZURE_OPENAI_ENDPOINT?.trim() || "";
+  const ollamaEndpoint = values.KH_OLLAMA_URL?.trim() || "http://127.0.0.1:11434/v1";
+
+  const chat = legacyRoute(
+    openAiKey && values.OPENAI_CHAT_MODEL
+      ? {
+          provider: "openai_compatible",
+          base_url: openAiBase,
+          model: values.OPENAI_CHAT_MODEL,
+          api_version: "",
+          credential: openAiKey,
+        }
+      : azureKey && azureEndpoint && values.AZURE_OPENAI_CHAT_DEPLOYMENT
+        ? {
+            provider: "azure_openai",
+            base_url: azureEndpoint,
+            model: values.AZURE_OPENAI_CHAT_DEPLOYMENT,
+            api_version: values.OPENAI_API_VERSION || "2024-02-15-preview",
+            credential: azureKey,
+          }
+        : values.LOCAL_MODEL
+          ? {
+              provider: "ollama",
+              base_url: ollamaEndpoint,
+              model: values.LOCAL_MODEL,
+              api_version: "",
+              credential: null,
+            }
+          : undefined,
+  );
+  const embedding = legacyRoute(
+    openAiKey && values.OPENAI_EMBEDDINGS_MODEL
+      ? {
+          provider: "openai_compatible",
+          base_url: openAiBase,
+          model: values.OPENAI_EMBEDDINGS_MODEL,
+          api_version: "",
+          credential: openAiKey,
+        }
+      : azureKey && azureEndpoint && values.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT
+        ? {
+            provider: "azure_openai",
+            base_url: azureEndpoint,
+            model: values.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT,
+            api_version: values.OPENAI_API_VERSION || "2024-02-15-preview",
+            credential: azureKey,
+          }
+        : values.LOCAL_MODEL_EMBEDDINGS
+          ? {
+              provider: "ollama",
+              base_url: ollamaEndpoint,
+              model: values.LOCAL_MODEL_EMBEDDINGS,
+              api_version: "",
+              credential: null,
+            }
+          : undefined,
+  );
+  if (chat.provider === "none" && embedding.provider === "none") {
+    return undefined;
+  }
+  return { settings: { chat, embedding } };
+}
+
+function legacyRoute(route: ModelRouteInput | undefined): ModelRouteInput {
+  if (!route) {
+    return {
+      provider: "none",
+      base_url: "",
+      model: "",
+      api_version: "",
+      credential: null,
+    };
+  }
+  return validateRoute(route, "legacy");
+}
+
+function validLegacyCredential(value: string | undefined): string | undefined {
+  const credential = value?.trim() || "";
+  return credential && !PLACEHOLDER_CREDENTIALS.has(credential.toLowerCase())
+    ? credential
+    : undefined;
+}
+
+function parseLegacyEnvironment(content: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const line of content.split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (!match || !LEGACY_MODEL_KEYS.has(match[1])) {
+      continue;
+    }
+    const raw = match[2].trim();
+    values[match[1]] =
+      (raw.startsWith('"') && raw.endsWith('"')) ||
+      (raw.startsWith("'") && raw.endsWith("'"))
+        ? raw.slice(1, -1)
+        : raw;
+  }
+  return values;
+}
+
+async function scrubLegacyModelEnvironment(dataRoot: string): Promise<void> {
+  const filePath = legacyEnvironmentPath(dataRoot);
+  const content = await readTextIfPresent(filePath);
+  if (content === undefined) {
+    return;
+  }
+  const retained = content
+    .split(/\r?\n/)
+    .filter((line) => {
+      const match = line.match(/^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=/);
+      return !match || !LEGACY_MODEL_KEYS.has(match[1]);
+    })
+    .join("\n")
+    .replace(/^\s+|\s+$/g, "");
+  await atomicWrite(
+    filePath,
+    Buffer.from(retained ? `${retained}\n` : "# Model settings migrated to MARA Desktop Settings.\n"),
+  );
+}
+
+async function readTextIfPresent(filePath: string): Promise<string | undefined> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error) {
+    if (isMissing(error)) {
+      return undefined;
+    }
+    throw error;
+  }
 }

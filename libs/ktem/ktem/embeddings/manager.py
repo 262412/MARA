@@ -17,6 +17,10 @@ class EmbeddingManager:
     """Represent a pool of models"""
 
     def __init__(self):
+        from ktem.desktop_model_routes import (
+            desktop_model_settings_enabled,
+            desktop_runtime_spec,
+        )
         from theflow.settings import settings as flowsettings
 
         self._models: dict[str, BaseEmbeddings] = {}
@@ -24,9 +28,21 @@ class EmbeddingManager:
         self._default: str = ""
         self._vendors: list[Type] = []
         self._load_errors: list[str] = []
+        self._desktop = desktop_model_settings_enabled()
+        self._runtime_specs: dict[str, dict[str, Any]] = {}
+
+        if self._desktop:
+            for name in getattr(flowsettings, "KH_EMBEDDINGS", {}):
+                runtime_spec = desktop_runtime_spec(
+                    flowsettings,
+                    "embedding",
+                    str(name),
+                )
+                if runtime_spec is not None:
+                    self._runtime_specs[str(name)] = runtime_spec
 
         # populate the pool if empty
-        if hasattr(flowsettings, "KH_EMBEDDINGS"):
+        if not self._desktop and hasattr(flowsettings, "KH_EMBEDDINGS"):
             with Session(engine) as sess:
                 count = sess.query(EmbeddingTable).count()
             if not count:
@@ -69,7 +85,10 @@ class EmbeddingManager:
         if resolved_key in self._models:
             model = self._models[resolved_key]
         else:
-            spec = self._info[resolved_key]["spec"]
+            spec = getattr(self, "_runtime_specs", {}).get(
+                resolved_key,
+                self._info[resolved_key]["spec"],
+            )
             try:
                 model = deserialize(spec, safe=False)
             except Exception as exc:
@@ -168,6 +187,8 @@ class EmbeddingManager:
             raise ValueError("No models in pool")
 
         if not self._default:
+            if getattr(self, "_desktop", False):
+                raise ValueError("No default Desktop embedding model is configured")
             return self.get_random_name()
 
         return self._default
@@ -200,6 +221,12 @@ class EmbeddingManager:
         if not name:
             raise ValueError("Name must not be empty")
 
+        runtime_spec = dict(spec)
+        if getattr(self, "_desktop", False):
+            from ktem.desktop_model_routes import persisted_desktop_spec
+
+            spec = persisted_desktop_spec(spec, "embedding")
+            self._runtime_specs[name] = runtime_spec
         try:
             with Session(engine) as sess:
                 if default:
@@ -242,6 +269,12 @@ class EmbeddingManager:
             self.add(new_name, spec=spec, default=default)
             return
 
+        runtime_spec = dict(spec)
+        if getattr(self, "_desktop", False):
+            from ktem.desktop_model_routes import persisted_desktop_spec
+
+            spec = persisted_desktop_spec(spec, "embedding")
+            self._runtime_specs[new_name or name] = runtime_spec
         try:
             with Session(engine) as sess:
 

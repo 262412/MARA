@@ -47,6 +47,9 @@ const doctor = {
   query_model: "desktop-chat-model",
   embedding_provider: "OpenAI-compatible",
   embedding_model: "desktop-embedding-model",
+  settings_revision: "settings-revision-test",
+  sidecar_pid: 4321,
+  route_fingerprint: "a".repeat(64),
   request_id: "doctor-request",
 } as DoctorPayload;
 
@@ -104,6 +107,11 @@ function queryTask(prompt: string): QueryTask {
     prompt,
     selected_file_ids: [file.file_id],
     qa_scope: "document",
+    route_provider: "openai",
+    route_model: "gpt-5.6-luna",
+    settings_revision: "settings-revision-test",
+    sidecar_pid: 4321,
+    route_fingerprint: "a".repeat(64),
     status: "queued",
     stage: "queued",
     answer: "",

@@ -32,6 +32,7 @@ def create_server(
     request_marker: Path | None = None,
     chat_block_marker: Path | None = None,
     chat_request_marker: Path | None = None,
+    chat_capture: Path | None = None,
 ) -> ThreadingHTTPServer:
     if not token:
         raise ValueError("Smoke embedding token is required")
@@ -50,6 +51,7 @@ def create_server(
             "request_marker": request_marker,
             "chat_block_marker": chat_block_marker,
             "chat_request_marker": chat_request_marker,
+            "chat_capture": chat_capture,
         },
     )
     return ThreadingHTTPServer(("127.0.0.1", port), handler_type)
@@ -63,6 +65,7 @@ class _EmbeddingHandler(BaseHTTPRequestHandler):
     request_marker: Path | None = None
     chat_block_marker: Path | None = None
     chat_request_marker: Path | None = None
+    chat_capture: Path | None = None
 
     def do_POST(self) -> None:
         if self.path not in {"/v1/embeddings", "/v1/chat/completions"}:
@@ -158,6 +161,7 @@ class _EmbeddingHandler(BaseHTTPRequestHandler):
             self._write_json(400, {"error": {"message": "Invalid request"}})
             return
         model = str(payload.get("model") or "smoke-chat")
+        self._capture_chat_route(model, bool(payload.get("stream")))
         answer = (
             "CITATION LIST\n\n"
             "CITATION【1】\n\n"
@@ -229,6 +233,13 @@ class _EmbeddingHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             return
+
+    def _capture_chat_route(self, model: str, stream: bool) -> None:
+        if self.chat_capture is None:
+            return
+        self.chat_capture.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps({"model": model, "stream": stream}, sort_keys=True)
+        self.chat_capture.write_text(f"{payload}\n", encoding="utf-8")
 
     def _write_sse_chunk(
         self,
@@ -309,6 +320,7 @@ def _parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--request-marker", type=Path)
     parser.add_argument("--chat-block-marker", type=Path)
     parser.add_argument("--chat-request-marker", type=Path)
+    parser.add_argument("--chat-capture", type=Path)
     return parser.parse_args(arguments)
 
 
@@ -323,6 +335,7 @@ def main() -> int:
         request_marker=arguments.request_marker,
         chat_block_marker=arguments.chat_block_marker,
         chat_request_marker=arguments.chat_request_marker,
+        chat_capture=arguments.chat_capture,
     )
     arguments.port_file.parent.mkdir(parents=True, exist_ok=True)
     arguments.port_file.write_text(f"{server.server_port}\n", encoding="utf-8")

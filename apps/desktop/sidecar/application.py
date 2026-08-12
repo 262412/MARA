@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 import threading
 from collections.abc import Callable, Iterator
@@ -15,17 +14,14 @@ from .indexing_readiness import (
     collect_indexing_readiness,
     validate_index_sources,
 )
+from .model_routes import (
+    apply_route_identity,
+    prepare_model_routes,
+    query_route_diagnostics,
+    query_route_name,
+)
 from .query_readiness import QueryReadiness, collect_query_readiness
 
-DESKTOP_DATA_DIRECTORIES = (
-    "state",
-    "documents",
-    "previews",
-    "cache",
-    "logs",
-    "backups",
-    "tmp",
-)
 FILE_RESPONSE_FIELDS = (
     "file_id",
     "name",
@@ -118,6 +114,7 @@ class DesktopApplicationService:
         ),
         create_runtime: Callable[[], Any] = _create_runtime,
         create_query_request: Callable[..., Any] = _create_query_request,
+        prepare_model_routes: Callable[[], Any | None] = prepare_model_routes,
     ) -> None:
         self._collect_doctor = collect_doctor
         self._collect_files = collect_files
@@ -127,18 +124,22 @@ class DesktopApplicationService:
         self._collect_query_readiness = collect_query_readiness
         self._create_runtime = create_runtime
         self._create_query_request = create_query_request
+        self._prepare_model_routes = prepare_model_routes
+        self._route_identity: Any | None = None
+        self._routes_prepared = False
         self._runtime: Any | None = None
         self._runtime_lock = threading.Lock()
 
     def get_doctor(self) -> dict[str, Any]:
         with self._runtime_lock:
+            identity = self._ensure_model_routes()
             doctor = self._collect_doctor()
             readiness = self._collect_indexing_readiness()
             query_readiness = self._collect_query_readiness()
         payload = {**doctor, **readiness.as_dict()}
         if query_readiness is not None:
             payload.update(query_readiness.as_dict())
-        return payload
+        return apply_route_identity(payload, identity)
 
     def list_files(self) -> list[dict[str, Any]]:
         with self._runtime_lock:
@@ -171,6 +172,7 @@ class DesktopApplicationService:
         cancel_event: threading.Event | None = None,
     ) -> Iterator[dict[str, Any]]:
         with self._runtime_lock:
+            identity = self._ensure_model_routes()
             source_records = _selected_source_records(
                 self._collect_files(),
                 selected_file_ids,
@@ -191,7 +193,7 @@ class DesktopApplicationService:
                 ),
                 reasoning_type="simple",
                 use_citation="inline",
-                llm=None,
+                llm=query_route_name(identity),
                 origin="desktop",
             )
         if cancel_event is not None and cancel_event.is_set():
@@ -211,14 +213,16 @@ class DesktopApplicationService:
         conversation_id: str,
         _prompt: str,
         selected_file_ids: list[str],
-    ) -> None:
+    ) -> dict[str, Any]:
         with self._runtime_lock:
+            identity = self._ensure_model_routes()
             query_readiness = self._collect_query_readiness()
             if query_readiness is not None and not query_readiness.query_ready:
                 raise DesktopQueryPreflightError.from_readiness(query_readiness)
             _selected_source_records(self._collect_files(), selected_file_ids)
             if self._get_runtime().load_session(conversation_id) is None:
                 raise DesktopSessionNotFoundError(conversation_id)
+            return query_route_diagnostics(identity, query_readiness)
 
     def rename_session(self, conversation_id: str, name: str) -> dict[str, Any]:
         with self._runtime_lock:
@@ -246,6 +250,7 @@ class DesktopApplicationService:
 
     def validate_indexing(self, paths: list[str]) -> None:
         with self._runtime_lock:
+            self._ensure_model_routes()
             readiness = self._collect_indexing_readiness()
         if not readiness.indexing_ready:
             raise DesktopIndexingPreflightError.from_readiness(readiness)
@@ -258,6 +263,7 @@ class DesktopApplicationService:
         reindex: bool = False,
     ) -> dict[str, list[dict[str, Any]]]:
         with self._runtime_lock:
+            self._ensure_model_routes()
             result = self._get_runtime().index_paths(paths, reindex=reindex).as_dict()
         return {
             "successes": [
@@ -286,9 +292,16 @@ class DesktopApplicationService:
         return self.delete_files([file_id])
 
     def _get_runtime(self) -> Any:
+        self._ensure_model_routes()
         if self._runtime is None:
             self._runtime = self._create_runtime()
         return self._runtime
+
+    def _ensure_model_routes(self) -> Any | None:
+        if not self._routes_prepared:
+            self._route_identity = self._prepare_model_routes()
+            self._routes_prepared = True
+        return self._route_identity
 
 
 def _session_detail(session: Any) -> dict[str, Any]:
@@ -568,22 +581,3 @@ def _serialize_datetime(value: Any) -> str | None:
     if hasattr(value, "isoformat"):
         return str(value.isoformat())
     return str(value)
-
-
-def configure_desktop_data_root(data_root: Path) -> Path:
-    expanded_root = data_root.expanduser()
-    if not expanded_root.is_absolute():
-        raise ValueError("Desktop data root must be absolute")
-    resolved_root = expanded_root.resolve()
-
-    os.environ["MARA_DESKTOP_DATA_DIR"] = str(resolved_root)
-    os.environ["THEFLOW_SETTINGS_MODULE"] = "ktem.default_flowsettings"
-    os.environ["KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED"] = "1"
-
-    for directory in DESKTOP_DATA_DIRECTORIES:
-        (resolved_root / directory).mkdir(parents=True, exist_ok=True)
-    app_data_dir = resolved_root / "state" / "ktem_app_data"
-    app_data_dir.mkdir(parents=True, exist_ok=True)
-    os.environ["KH_APP_DATA_DIR"] = str(app_data_dir)
-    os.environ["KH_OFFICE_TO_PDF_INDEXING"] = "false"
-    return app_data_dir

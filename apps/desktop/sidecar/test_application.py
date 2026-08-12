@@ -15,8 +15,8 @@ from .application import (
     DesktopQueryPreflightError,
     DesktopSessionNotFoundError,
     _query_citations,
-    configure_desktop_data_root,
 )
+from .desktop_data_root import configure_desktop_data_root
 from .indexing_readiness import IndexingReadiness
 from .query_readiness import QueryReadiness
 
@@ -27,7 +27,14 @@ READY_DOCTOR = {
     "indexing_message": "File indexing is ready.",
     "indexing_action": "none",
     "indexing_retryable": False,
+    "settings_revision": "",
+    "sidecar_pid": os.getpid(),
+    "route_fingerprint": "",
 }
+READY_QUERY = QueryReadiness.ready(
+    query_provider="openai",
+    query_model="gpt-5.6-luna",
+)
 
 
 class _StreamingQueryRuntime:
@@ -368,6 +375,8 @@ class DesktopQueryApplicationServiceTest(unittest.TestCase):
             ],
             create_runtime=lambda: runtime,
             create_query_request=lambda **values: SimpleNamespace(**values),
+            collect_query_readiness=lambda: READY_QUERY,
+            prepare_model_routes=lambda: SimpleNamespace(query_route_name="openai"),
         )
 
         updates = list(
@@ -412,7 +421,7 @@ class DesktopQueryApplicationServiceTest(unittest.TestCase):
         self.assertEqual(request.reasoning_type, "simple")
         self.assertEqual(request.use_citation, "inline")
         self.assertEqual(request.origin, "desktop")
-        self.assertIsNone(request.llm)
+        self.assertEqual(request.llm, "openai")
         self.assertEqual(
             request.source_identity_crosswalk,
             [

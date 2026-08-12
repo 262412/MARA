@@ -178,6 +178,32 @@ API 不暴露任意 reasoning、Web search、模型或凭据选择。文件导�
 降级。Desktop 到 Studio/原生导出切片时，必须先实现等价的 Windows 安全文件句柄
 后端，再启用该能力；现有 Web/CLI runtime 默认仍生成完整 artifact 与 manifest。
 
+### Desktop 模型路由与凭据
+
+Desktop 模式以 Electron Main 保存的 Chat/Embedding 设置为唯一权威来源。每次保存都
+生成新的 settings revision；Main 停止旧 Sidecar 后，以该 revision 的环境快照启动新
+进程，并要求 `/health` 与认证后的 `/v1/doctor` 同时返回精确 revision、Sidecar PID
+和有效 route fingerprint。只看到健康端口不代表设置已经应用，旧启动 Promise 也不能
+被新的保存操作复用。
+
+Sidecar 在首次 Doctor、索引或问答运行时前执行版本化、幂等的 Desktop 路由迁移：
+
+- `llm_table` 和 `embedding` 各自最多保留一个有效默认项；旧 Google、Azure、Ollama、
+  同名 OpenAI 和多默认项都被降为非默认，当前 Electron route 以 canonical upsert 写入。
+- SQLite 只保存 provider、model、endpoint 等非敏感 spec 和 `secret_ref`。运行时 manager
+  仅从当前 Sidecar 进程环境叠加由 Electron `safeStorage` 解密的凭据；查询显式指定同一
+  canonical route，不再让 `llms.get_default()` 从旧记录随机或按插入顺序选择。
+- 迁移原地事务化更新模型表、checkpoint/VACUUM 并清理 SQLite sidecar；会话、索引、
+  文件和其他表不删除、不重建。包含旧明文凭据的数据库备份只做安全清理，不创建新的
+  明文迁移备份；任一步失败即拒绝 Sidecar 进入 healthy。
+- 旧 `state/config/.env` 的受支持模型路由先导入 Electron 设置，再删除其中的模型变量；
+  无关配置保留。升级用户应在迁移成功后轮换曾由旧版本明文保存的 API key。
+
+Doctor 与每个查询任务只投影实际 route 的 provider、model、settings revision、PID 和
+SHA-256 fingerprint。Renderer 不接收 endpoint、API key、Sidecar token/port、配置路径
+或绝对文件路径。上述 canonical 行为只在 `MARA_DESKTOP_MODEL_SETTINGS=1` 的独立
+Desktop 数据根启用；CLI、Web 与 Gradio 的持久化模型语义保持不变。
+
 ## 3. Sidecar 生命周期
 
 ```mermaid

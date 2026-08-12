@@ -288,14 +288,17 @@ def _desktop_embedding_configurations() -> Mapping[str, Any]:
 
     selected = _configured_default(configured)
     if selected is not None:
+        from ktem.desktop_model_routes import persisted_desktop_spec
+
         name, config = selected
         spec = dict(config["spec"])
+        persisted_spec = persisted_desktop_spec(spec, "embedding")
         current = embedding_models_manager.info().get(name)
         if current is None:
             embedding_models_manager.add(name, spec=spec, default=True)
-        elif current.get("spec") != spec or not bool(current.get("default")):
+        elif current.get("spec") != persisted_spec or not bool(current.get("default")):
             embedding_models_manager.update(name, spec=spec, default=True)
-    return embedding_models_manager.info()
+    return configured
 
 
 def _configured_default(

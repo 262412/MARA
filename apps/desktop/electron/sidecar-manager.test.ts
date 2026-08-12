@@ -13,6 +13,7 @@ import {
   SidecarManager,
   sidecarRequestTimeout,
   sidecarRestartDelay,
+  validateRouteHandshake,
   waitForRequestReadiness,
 } from "./sidecar-manager";
 
@@ -97,8 +98,9 @@ test("controlled restart stops the current Sidecar before starting with refreshe
   manager.stop = async () => {
     calls.push("stop");
   };
-  manager.start = async () => {
+  manager.start = async (expectedRevision) => {
     calls.push("start");
+    assert.equal(expectedRevision, "settings-revision-2");
     return {
       state: "healthy",
       protocol: 1,
@@ -107,10 +109,100 @@ test("controlled restart stops the current Sidecar before starting with refreshe
     };
   };
 
-  const status = await manager.restart();
+  const status = await manager.restart("settings-revision-2");
 
   assert.deepEqual(calls, ["stop", "start"]);
   assert.equal(status.state, "healthy");
+});
+
+test("restart invalidates a pending initial startup instead of reusing it", async () => {
+  const manager = Object.create(SidecarManager.prototype) as SidecarManager;
+  const testable = manager as unknown as {
+    child: undefined;
+    generation: number;
+    launch: (generation: number, revision?: string) => Promise<{
+      state: "healthy";
+      protocol: number;
+      version: string;
+      capabilities: string[];
+    }>;
+    options: { onStatus?: () => void };
+    restartAttempts: number;
+    restartQueue: Promise<void>;
+    restartTimer: undefined;
+    startup: Promise<never> | undefined;
+    startupRevision: string | undefined;
+    status: {
+      state: "starting" | "stopped" | "healthy";
+      protocol: number;
+      version?: string;
+      capabilities: string[];
+    };
+    stopping: boolean;
+  };
+  testable.child = undefined;
+  testable.generation = 1;
+  testable.options = {};
+  testable.restartAttempts = 0;
+  testable.restartQueue = Promise.resolve();
+  testable.restartTimer = undefined;
+  testable.startup = new Promise<never>(() => undefined);
+  testable.startupRevision = "settings-revision-old";
+  testable.status = { state: "starting", protocol: 1, capabilities: [] };
+  testable.stopping = false;
+  const launches: Array<[number, string | undefined]> = [];
+  testable.launch = async (generation, revision) => {
+    launches.push([generation, revision]);
+    const launchedStatus: {
+      state: "healthy";
+      protocol: number;
+      version: string;
+      capabilities: string[];
+    } = {
+      state: "healthy",
+      protocol: 1,
+      version: "0.8.0",
+      capabilities: [],
+    };
+    testable.status = launchedStatus;
+    return launchedStatus;
+  };
+
+  const status = await manager.restart("settings-revision-new");
+
+  assert.equal(status.state, "healthy");
+  assert.equal(launches.length, 1);
+  assert.equal(launches[0]?.[1], "settings-revision-new");
+  assert.ok((launches[0]?.[0] ?? 0) > 1);
+});
+
+test("route handshake requires the exact settings revision, PID, and fingerprint", () => {
+  const doctor = {
+    settings_revision: "settings-revision-3",
+    sidecar_pid: 4321,
+    route_fingerprint: "a".repeat(64),
+  };
+
+  assert.doesNotThrow(() =>
+    validateRouteHandshake(doctor, "settings-revision-3", 4321),
+  );
+  assert.throws(
+    () => validateRouteHandshake(doctor, "settings-revision-old", 4321),
+    /revision/i,
+  );
+  assert.throws(
+    () => validateRouteHandshake(doctor, "settings-revision-3", 9999),
+    /process/i,
+  );
+  assert.throws(
+    () =>
+      validateRouteHandshake(
+        { ...doctor, route_fingerprint: "" },
+        "settings-revision-3",
+        4321,
+      ),
+    /fingerprint/i,
+  );
 });
 
 test("bounds query watcher reconnect delays without giving up on transient failures", () => {
@@ -215,7 +307,7 @@ test("parses typed index task SSE events without accepting arbitrary payloads", 
 
 test("parses query SSE events and rejects raw path-shaped payloads", () => {
   const event =
-    'event: query\ndata: {"request_id":"request-1","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","status":"success","stage":"completed","answer":"Grounded answer","citations":[{"citation_id":"chunk-1","file_id":"file-1","file_name":"paper.pdf","page_label":"2","element_id":null,"quote":"Evidence"}],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:01Z","version":3}}';
+    'event: query\ndata: {"request_id":"request-1","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","route_provider":"openai","route_model":"gpt-5.6-luna","settings_revision":"revision-1","sidecar_pid":4321,"route_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"success","stage":"completed","answer":"Grounded answer","citations":[{"citation_id":"chunk-1","file_id":"file-1","file_name":"paper.pdf","page_label":"2","element_id":null,"quote":"Evidence"}],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:01Z","version":3}}';
   const task = parseQueryTaskEvent(event, "request-1");
 
   assert.equal(task.answer, "Grounded answer");
@@ -269,7 +361,7 @@ test("query watcher survives one retryable fallback GET failure", async () => {
     return {
       ok: true,
       data: parseQueryTaskEvent(
-        'event: query\ndata: {"request_id":"request-2","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","status":"success","stage":"completed","answer":"Recovered","citations":[],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:02Z","version":4}}',
+        'event: query\ndata: {"request_id":"request-2","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","route_provider":"openai","route_model":"gpt-5.6-luna","settings_revision":"revision-1","sidecar_pid":4321,"route_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"success","stage":"completed","answer":"Recovered","citations":[],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:02Z","version":4}}',
       ),
     };
   };
