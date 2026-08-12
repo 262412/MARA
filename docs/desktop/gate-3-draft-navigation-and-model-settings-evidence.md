@@ -2,7 +2,8 @@
 
 ## 2026-08-12 模型路由一致性与凭据清理结论
 
-本文件所在修复把 Electron 当前模型设置设为 Desktop 唯一路由权威，增加旧模型表与
+实现提交 `03b78e807720d3b877642b6b9867c4f6363a558a` 把 Electron 当前模型设置设为
+Desktop 唯一路由权威，增加旧模型表与
 embedding 表的版本化幂等迁移、安全凭据清理、精确 settings revision 握手、实际 route
 诊断和 provider 错误分类。使用旧 Google 默认、同名旧 Ollama/OpenAI route、多默认项
 及旧 Azure embedding 的数据根启动后，Settings、Doctor、SQLite 非敏感投影、运行时
