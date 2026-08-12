@@ -256,6 +256,9 @@ class QueryContractTest(unittest.TestCase):
             def load(self):
                 return None
 
+            def probe(self):
+                return None
+
             def save(self, payload):
                 raise QueryTaskPersistenceError(
                     "query_storage_full",
