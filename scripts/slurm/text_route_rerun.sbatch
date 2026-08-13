@@ -296,7 +296,10 @@ test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
 VALIDATION_ARGS=(--require-all-usable)
 if [[ "${SUITE_NAME,,}" == *qasper* ]]; then
-  VALIDATION_ARGS+=(--require-qasper-answerability)
+  VALIDATION_ARGS+=(
+    --require-qasper-answerability
+    --qasper-manifest "$MANIFEST"
+  )
 fi
 "$MARA_BENCHMARK_PYTHON" \
   "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \

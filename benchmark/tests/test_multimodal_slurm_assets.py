@@ -182,6 +182,13 @@ def test_text_route_slurm_script_can_emit_and_validate_full_contract_artifacts()
     )
 
 
+def test_text_route_slurm_script_scopes_qasper_answerability_with_manifest():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "--require-qasper-answerability" in text
+    assert '--qasper-manifest "$MANIFEST"' in text
+
+
 def test_text_route_slurm_script_hard_checks_tool_calls_before_benchmark():
     text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
 

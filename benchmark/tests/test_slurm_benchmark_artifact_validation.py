@@ -16,6 +16,21 @@ def _write_predictions(path: Path, rows: list[dict[str, object]]) -> None:
     )
 
 
+def _write_manifest(path: Path, examples: list[dict[str, object]]) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "dataset_name": "qasper_validation_test",
+                "documents": [],
+                "examples": examples,
+                "routes": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_validator_accepts_artifact_with_usable_prediction(tmp_path):
     predictions = tmp_path / "predictions.jsonl"
     _write_predictions(
@@ -236,6 +251,163 @@ def test_validator_accepts_qasper_boolean_with_answerability_trace(tmp_path):
             str(VALIDATOR),
             str(predictions),
             "--require-qasper-answerability",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "qasper_answerability_coverage=1/1" in result.stdout
+
+
+def test_validator_keeps_unscoped_qasper_boolean_requirement_fail_closed(tmp_path):
+    predictions = tmp_path / "predictions.jsonl"
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "free-text",
+                "answer_type": "evidence_qa",
+                "predicted_answer": "grounded answer",
+                "error": None,
+            }
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-qasper-answerability",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "no usable boolean predictions" in result.stderr
+
+
+def test_validator_treats_selected_free_text_qasper_manifest_as_not_applicable(
+    tmp_path,
+):
+    manifest = tmp_path / "manifest.json"
+    predictions = tmp_path / "predictions.jsonl"
+    _write_manifest(
+        manifest,
+        [{"example_id": "free-text", "answer_type": "evidence_qa"}],
+    )
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "free-text",
+                "answer_type": "evidence_qa",
+                "predicted_answer": "grounded answer",
+                "error": None,
+                "evidence_metadata": {},
+            }
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-qasper-answerability",
+            "--qasper-manifest",
+            str(manifest),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "qasper_answerability_coverage=0/0" in result.stdout
+    assert "qasper_answerability_status=not_applicable" in result.stdout
+
+
+def test_validator_rejects_manifest_boolean_prediction_type_drift(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    predictions = tmp_path / "predictions.jsonl"
+    _write_manifest(
+        manifest,
+        [{"example_id": "boolean", "answer_type": "boolean"}],
+    )
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "boolean",
+                "answer_type": "evidence_qa",
+                "predicted_answer": "yes",
+                "error": None,
+                "evidence_metadata": {
+                    "qasper_answerability": {
+                        "contract_id": "qasper_answerability.test",
+                        "status": "ok",
+                    }
+                },
+            }
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-qasper-answerability",
+            "--qasper-manifest",
+            str(manifest),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "manifest/prediction answer type mismatch" in result.stderr
+
+
+def test_validator_accepts_manifest_boolean_with_answerability_trace(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    predictions = tmp_path / "predictions.jsonl"
+    _write_manifest(
+        manifest,
+        [{"example_id": "boolean", "answer_type": "boolean"}],
+    )
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "boolean",
+                "answer_type": "boolean",
+                "predicted_answer": "yes",
+                "error": None,
+                "evidence_metadata": {
+                    "qasper_answerability": {
+                        "contract_id": "qasper_answerability.test",
+                        "status": "ok",
+                    }
+                },
+            }
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-qasper-answerability",
+            "--qasper-manifest",
+            str(manifest),
         ],
         check=False,
         capture_output=True,

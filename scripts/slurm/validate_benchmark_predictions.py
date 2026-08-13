@@ -32,13 +32,56 @@ def _required_hybrid_eligibility(
 
 def _qasper_answerability_coverage(
     predictions: list[dict[str, Any]],
+    *,
+    manifest_path: Path | None = None,
 ) -> tuple[int, int]:
-    required = [
-        row
-        for row in predictions
-        if _prediction_is_usable(row)
-        and str(row.get("answer_type") or "").strip().lower() == "boolean"
-    ]
+    usable = [row for row in predictions if _prediction_is_usable(row)]
+    if manifest_path is None:
+        required = [
+            row
+            for row in usable
+            if str(row.get("answer_type") or "").strip().lower() == "boolean"
+        ]
+    else:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict):
+            raise SystemExit("QASPER manifest must be a JSON object")
+        examples = manifest.get("examples")
+        if not isinstance(examples, list):
+            raise SystemExit("QASPER manifest must contain an examples list")
+        answer_types: dict[str, str] = {}
+        for example in examples:
+            if not isinstance(example, dict):
+                raise SystemExit("QASPER manifest examples must be objects")
+            example_id = str(example.get("example_id") or "").strip()
+            if not example_id:
+                raise SystemExit("QASPER manifest example is missing example_id")
+            if example_id in answer_types:
+                raise SystemExit(
+                    f"QASPER manifest contains duplicate example_id: {example_id}"
+                )
+            answer_types[example_id] = (
+                str(example.get("answer_type") or "").strip().lower()
+            )
+
+        required = []
+        for row in usable:
+            example_id = str(row.get("example_id") or "").strip()
+            if not example_id or example_id not in answer_types:
+                raise SystemExit(
+                    "QASPER prediction example_id is missing from manifest: "
+                    f"{example_id or '<missing>'}"
+                )
+            if answer_types[example_id] != "boolean":
+                continue
+            prediction_answer_type = str(row.get("answer_type") or "").strip().lower()
+            if prediction_answer_type != "boolean":
+                raise SystemExit(
+                    "QASPER manifest/prediction answer type mismatch for "
+                    f"{example_id}: boolean != {prediction_answer_type or '<missing>'}"
+                )
+            required.append(row)
+
     covered = 0
     for row in required:
         metadata = row.get("evidence_metadata")
@@ -59,6 +102,14 @@ def main() -> None:
     parser.add_argument("--require-all-usable", action="store_true")
     parser.add_argument("--require-hybrid-eligible", action="store_true")
     parser.add_argument("--require-qasper-answerability", action="store_true")
+    parser.add_argument(
+        "--qasper-manifest",
+        type=Path,
+        help=(
+            "Scope QASPER Boolean answerability coverage to the selected "
+            "examples whose manifest answer_type is boolean."
+        ),
+    )
     args = parser.parse_args()
 
     predictions_path = args.predictions
@@ -95,10 +146,18 @@ def main() -> None:
                 "required hybrid evidence was unavailable for "
                 f"{required_count - eligible_count}/{required_count} decisions"
             )
+    if args.qasper_manifest is not None and not args.require_qasper_answerability:
+        raise SystemExit("--qasper-manifest requires --require-qasper-answerability")
     if args.require_qasper_answerability:
-        covered_count, required_count = _qasper_answerability_coverage(predictions)
+        covered_count, required_count = _qasper_answerability_coverage(
+            predictions,
+            manifest_path=args.qasper_manifest,
+        )
         print(f"qasper_answerability_coverage={covered_count}/{required_count}")
         if required_count == 0:
+            if args.qasper_manifest is not None:
+                print("qasper_answerability_status=not_applicable")
+                return
             raise SystemExit(
                 "formal QASPER validation found no usable boolean predictions"
             )
