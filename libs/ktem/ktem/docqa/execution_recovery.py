@@ -12,6 +12,7 @@ from .controller import (
 from .evidence import EvidenceBundle
 from .execution_models import RetrieveFn, RewriteFn, RouteExecutionResult
 from .execution_planning import build_execution_workflow_plan, controller_decision
+from .execution_recovery_events import boolean_slot_states as _boolean_slot_states
 from .execution_recovery_events import (
     build_retrieval_switch_event as _retrieval_switch_event,
 )
@@ -22,8 +23,13 @@ from .execution_recovery_events import bundle_evidence_ids as _bundle_evidence_i
 from .execution_recovery_events import (
     record_route_switch_reverification as _record_route_switch_reverification,
 )
+from .execution_recovery_events import recovery_trace_fields as _recovery_trace_fields
+from .execution_recovery_events import (
+    required_boolean_slot_state as _required_boolean_slot_state,
+)
 from .execution_results import guarded_result, verified_result
 from .execution_retrieval import retrieve_and_evaluate
+from .execution_verifier_rebind import rebind_existing_boolean_evidence
 from .pipeline_stage_timings import PipelineStageTimings
 from .query_planning import ensure_request_query_plan
 from .retrieval_rounds import retrieve_for_verifier_recovery
@@ -92,18 +98,35 @@ def recover_after_failed_verification(
         initial_result.controller_decision,
         initial_result.evidence_bundle,
     )
-    switched = _controller_verifier_recovery(
-        request,
-        initial_result,
-        retrieve,
-        rewrite,
-        candidate_answer,
-        policy,
-        trace_prefix,
-        timings,
-    )
-    if switched is not None:
-        return switched
+    slot_state = _required_boolean_slot_state(initial_result.evidence_bundle)
+    if slot_state == "retrieved_unverified" and policy != "crag_guarded":
+        rebound, recovery_trace = _rebind_existing_verifier_recovery(
+            request,
+            initial_result,
+            rewrite,
+            candidate_answer,
+            workflow_plan,
+            trace_prefix,
+            timings,
+        )
+        if not required_boolean_authority_missing(request, rebound.verify_decision):
+            return rebound
+        if policy == "controller_auto":
+            recovery_trace[-1].pop("stop_reason", None)
+            switched = _controller_verifier_recovery(
+                request,
+                rebound,
+                retrieve,
+                rewrite,
+                candidate_answer,
+                policy,
+                [*trace_prefix, *recovery_trace],
+                timings,
+            )
+            if switched is not None:
+                return switched
+            recovery_trace[-1]["stop_reason"] = "authority_recovery_exhausted"
+        return rebound
     return _same_route_verifier_recovery(
         request,
         initial_result,
@@ -115,6 +138,47 @@ def recover_after_failed_verification(
         trace_prefix,
         timings,
     )
+
+
+def _rebind_existing_verifier_recovery(
+    request: Any,
+    initial_result: RouteExecutionResult,
+    rewrite: RewriteFn | None,
+    candidate_answer: str,
+    workflow_plan: dict[str, Any],
+    trace_prefix: list[dict[str, Any]],
+    timings: PipelineStageTimings,
+) -> tuple[RouteExecutionResult, list[dict[str, Any]]]:
+    before = _boolean_slot_states(initial_result.evidence_bundle)
+    rebound_bundle = timings.measure(
+        "retry_seconds",
+        rebind_existing_boolean_evidence,
+        request,
+        initial_result.controller_decision.legacy_route,
+        initial_result.evidence_bundle,
+    )
+    shared = _recovery_trace_fields(
+        request,
+        initial_result.verify_decision,
+        initial_result.evidence_bundle,
+        rebound_bundle,
+    )
+    rebind = {"stage": "evidence_rebind", "slot_states_before": before, **shared}
+    reverify = {"stage": "reverify", "attempt": 1, **shared}
+    recovery_trace = [rebind, reverify]
+    result = complete_verifier_recovery(
+        request,
+        initial_result.controller_decision,
+        initial_result.retrieve_decision,
+        rebound_bundle,
+        candidate_answer,
+        rewrite,
+        workflow_plan,
+        [*trace_prefix, *recovery_trace],
+        timings,
+        terminal_event=reverify,
+    )
+    return result, recovery_trace
 
 
 def _controller_verifier_recovery(
@@ -192,6 +256,7 @@ def _same_route_verifier_recovery(
         retrieve_decision,
         focused_query,
         request=request,
+        initial_bundle=initial_result.evidence_bundle,
         recovered_bundle=bundle,
     )
     return complete_verifier_recovery(
@@ -225,6 +290,8 @@ def complete_verifier_recovery(
         terminal_event.update(
             {
                 "verification_status": "not_enough_evidence",
+                "slot_states_after": _boolean_slot_states(bundle),
+                "recovered_evidence_ids": _bundle_evidence_ids(bundle),
                 "stop_reason": "authority_recovery_exhausted",
             }
         )
@@ -258,6 +325,8 @@ def complete_verifier_recovery(
     terminal_event.update(
         {
             "verification_status": result.verify_decision.status,
+            "slot_states_after": _boolean_slot_states(result.evidence_bundle),
+            "recovered_evidence_ids": _bundle_evidence_ids(result.evidence_bundle),
             "stop_reason": (
                 "authority_conflict_resolved"
                 if conflict_resolved
@@ -279,27 +348,37 @@ def same_route_verifier_recovery_trace(
     focused_query: str,
     *,
     request: Any | None = None,
+    initial_bundle: EvidenceBundle | None = None,
     recovered_bundle: EvidenceBundle | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    shared = {
-        "verifier_recovery_attempt": 1,
-        "retry_reason": "required_boolean_authority_missing",
-        "failure_type": "required_boolean_authority_missing",
-        "recovered_evidence_ids": _bundle_evidence_ids(recovered_bundle),
-        "agent_mode": str(getattr(request, "agent_mode", "") or "auto"),
-        "verification_mode": str(
-            getattr(request, "verification_mode", "") or verify_decision.mode or "off"
-        ),
-    }
+    shared = _recovery_trace_fields(
+        request,
+        verify_decision,
+        initial_bundle,
+        recovered_bundle,
+    )
+    retrieval_round = int(
+        (recovered_bundle.metadata if recovered_bundle else {}).get(
+            "verifier_recovery_round"
+        )
+        or 2
+    )
     if policy != "crag_guarded":
-        event = {
-            "stage": "verifier_recovery",
-            "attempt": 1,
-            "retrieval_round": 2,
+        focused_retrieval = {
+            "stage": "focused_retrieval",
+            "retrieval_round": retrieval_round,
             "focused_query": focused_query,
+            "status": retrieve_decision.status,
             **shared,
         }
-        return [event], event
+        rebind = {
+            "stage": "evidence_rebind",
+            "retrieval_round": retrieval_round,
+            "status": retrieve_decision.status,
+            **shared,
+        }
+        reverify = {"stage": "reverify", "attempt": 1, **shared}
+        return [focused_retrieval, rebind, reverify], reverify
     critic = {
         "stage": "critic",
         "status": verify_decision.status,
@@ -308,14 +387,14 @@ def same_route_verifier_recovery_trace(
     }
     focused_retrieval = {
         "stage": "focused_retrieval",
-        "retrieval_round": 2,
+        "retrieval_round": retrieval_round,
         "focused_query": focused_query,
         "status": retrieve_decision.status,
         **shared,
     }
     rebind = {
         "stage": "evidence_rebind",
-        "retrieval_round": 2,
+        "retrieval_round": retrieval_round,
         "status": retrieve_decision.status,
         **shared,
     }
@@ -330,32 +409,9 @@ def verifier_recovery_policy(
 ) -> str:
     if str(getattr(request, "agent_mode", "") or "").strip().lower() == "thorough":
         return "crag_guarded"
-    if _has_rebindable_boolean_proposition(bundle):
-        return "text_rag"
     if decision.policy == "auto" and not decision.route_switch_used:
         return "controller_auto"
     return "text_rag"
-
-
-def _has_rebindable_boolean_proposition(bundle: EvidenceBundle | None) -> bool:
-    if bundle is None:
-        return False
-    for key in ("bound_query_plan", "query_plan"):
-        plan = bundle.metadata.get(key)
-        if not isinstance(plan, dict):
-            continue
-        slots = plan.get("evidence_slots")
-        if not isinstance(slots, list):
-            continue
-        if any(
-            isinstance(slot, dict)
-            and str(slot.get("statement_kind") or "") == "boolean_proposition"
-            and str(slot.get("status") or "") == "retrieved_unverified"
-            and bool(slot.get("evidence_ids"))
-            for slot in slots
-        ):
-            return True
-    return False
 
 
 def required_boolean_authority_missing(
@@ -426,11 +482,13 @@ def switch_after_failed_verification(
         return None
     bundle, retrieve_decision, focused_query = recovered
     event = _verifier_switch_event(
+        request,
         decision,
         route,
         candidates,
         focused_query,
         failed_verification,
+        failed_bundle,
         bundle,
         rejected_candidates,
     )

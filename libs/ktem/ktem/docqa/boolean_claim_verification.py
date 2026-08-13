@@ -5,6 +5,7 @@ from typing import Any
 
 from .boolean_authoritative_conflict import authoritative_conflict_claim
 from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuthority
+from .boolean_authority_selection import _authority_rank, _best_authority
 from .boolean_evidence_scope import (
     ClosedScopeResolution,
     _actor,
@@ -22,6 +23,7 @@ from .boolean_proposition_evidence import (
     boolean_proposition_object_identity,
     classify_boolean_evidence_set,
     exact_span_asserts_boolean_relation,
+    exact_span_completes_boolean_proposition,
     proposition_qualifier,
 )
 from .boolean_relations import primary_boolean_relation
@@ -336,7 +338,14 @@ def _exact_authorities(
         window = _exact_window(
             assessment.item,
             assessment.span_text,
-            question=semantic_boolean_proposition_question(prompt),
+            question=(
+                ""
+                if exact_span_completes_boolean_proposition(
+                    prompt,
+                    assessment.span_text,
+                )
+                else semantic_boolean_proposition_question(prompt)
+            ),
         )
         if window is None:
             continue
@@ -369,40 +378,30 @@ def _exact_authorities(
         (authority.evidence_id, authority.span_start, authority.span_end): authority
         for authority in authorities
     }
+    strongest_by_evidence: dict[str, BooleanEvidenceAuthority] = {}
+    for authority in deduplicated.values():
+        current = strongest_by_evidence.get(authority.evidence_id)
+        if current is None or (
+            -_authority_rank(authority),
+            len(authority.quote),
+            authority.span_id,
+        ) < (
+            -_authority_rank(current),
+            len(current.quote),
+            current.span_id,
+        ):
+            strongest_by_evidence[authority.evidence_id] = authority
     return tuple(
         sorted(
-            deduplicated.values(),
+            strongest_by_evidence.values(),
             key=lambda value: (
                 -_authority_rank(value),
+                len(value.quote),
                 value.evidence_id,
                 value.span_id,
             ),
         )
     )
-
-
-def _best_authority(
-    values: tuple[BooleanEvidenceAuthority, ...],
-) -> BooleanEvidenceAuthority:
-    return min(
-        values,
-        key=lambda value: (-_authority_rank(value), value.evidence_id, value.span_id),
-    )
-
-
-def _authority_rank(value: BooleanEvidenceAuthority) -> int:
-    lowered = value.quote.lower()
-    qualifiers = (
-        "non-significant",
-        "non significant",
-        "insignificant",
-        "small",
-        "marginal",
-        "only",
-        "however",
-        "comparing",
-    )
-    return sum(marker in lowered for marker in qualifiers)
 
 
 def _exact_window(
@@ -440,6 +439,14 @@ def _assertive_relation(
     if assessment.object_score < 1.0 or not assessment.proposition.object:
         return False
     if re.search(r"\b(?:discuss|describe|mention)\w*\b", span):
+        return False
+    if not re.search(
+        r"\b(?:could|may|might|would|should)\b", prompt, re.I
+    ) and re.search(
+        r"\b(?:could|may|might|would|should)\b",
+        span,
+        re.I,
+    ):
         return False
     return True
 

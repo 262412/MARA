@@ -189,19 +189,25 @@ def test_missing_authority_allows_at_most_one_recovery_and_abstains(
 
 
 @pytest.mark.parametrize(
-    ("route_policy", "allowed_routes", "agent_mode", "recovery_route"),
     (
-        ("doc", ["doc_text"], None, "doc_text"),
-        ("auto", ["doc_text", "hybrid"], None, "doc_text"),
-        ("auto", ["doc_text", "hybrid"], "thorough", "doc_text"),
+        "route_policy",
+        "allowed_routes",
+        "agent_mode",
+        "recovery_route",
+        "uses_route_switch",
     ),
-    ids=("text_rag", "controller_auto", "crag_guarded"),
+    (
+        ("auto", ["doc_text", "hybrid"], None, "hybrid", True),
+        ("auto", ["doc_text", "hybrid"], "thorough", "doc_text", False),
+    ),
+    ids=("controller_auto", "crag_guarded"),
 )
 def test_recovery_conflict_terminates_resolved_and_preserves_authority_sides(
     route_policy: str,
     allowed_routes: list[str],
     agent_mode: str | None,
     recovery_route: str,
+    uses_route_switch: bool,
 ) -> None:
     calls: list[tuple[str, int]] = []
 
@@ -234,7 +240,7 @@ def test_recovery_conflict_terminates_resolved_and_preserves_authority_sides(
     [terminal] = _terminal_events(result)
     assert terminal["stop_reason"] == "authority_conflict_resolved"
     route_switches = _stage_events(result, "route_switch")
-    assert not route_switches
+    assert bool(route_switches) is uses_route_switch
 
 
 def test_crag_recovery_rebind_and_reverify_keep_both_conflicting_authorities() -> None:

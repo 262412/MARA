@@ -528,14 +528,10 @@ def _ordered_routes(predictions: list[dict[str, Any]]) -> list[str]:
 
 
 def _observed_policy_fields(predictions: list[dict[str, Any]]) -> dict[str, Any]:
-    modes = _observed_values(predictions, "agent_mode")
-    policies = _observed_values(predictions, "route_policy")
-    fields: dict[str, Any] = {}
-    if modes:
-        fields["agent_modes"] = modes
-    if policies:
-        fields["route_policies"] = policies
-    return fields
+    return {
+        "agent_modes": _observed_values(predictions, "agent_mode"),
+        "route_policies": _observed_values(predictions, "route_policy"),
+    }
 
 
 def _observed_values(predictions: list[dict[str, Any]], key: str) -> list[str]:

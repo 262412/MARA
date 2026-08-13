@@ -13,6 +13,12 @@ from .boolean_current_experiment import (
 from .boolean_current_experiment import (
     resolve_current_experiment_question as _resolve_current_experiment_question,
 )
+from .boolean_evidence_text import (
+    _bound_local_context,
+    _matching_item,
+    _nearest_heading,
+    evidence_item_text,
+)
 from .boolean_ownership_provenance import own_data_provenance_rejection
 from .boolean_retrieval_queries import (
     boolean_retrieval_query as _boolean_retrieval_query,
@@ -26,6 +32,8 @@ from .boolean_scope_quantifiers import (
     _quantified_object_scope_complete,
     _scope_excerpt,
 )
+from .boolean_structured_resolution import structured_boolean_resolutions
+from .evidence_identity import identity_of
 
 boolean_retrieval_query = _boolean_retrieval_query
 
@@ -134,6 +142,7 @@ def validate_boolean_scope(
             actor=actor,
             section_role=section_role,
             quantifier=quantifier,
+            verdict=verdict,
         )
     return _language_scope_decision(
         actor,
@@ -151,11 +160,13 @@ def _quantified_scope_decision(
     actor: str,
     section_role: str,
     quantifier: str,
+    verdict: str,
 ) -> BooleanScopeDecision:
     complete = _quantified_object_scope_complete(
         question,
         quote,
         quantifier=quantifier,
+        verdict=verdict,
     )
     actor_scope_valid = actor == "current_paper" or (
         actor in {"cited_work", "other_authors"}
@@ -171,6 +182,8 @@ def _quantified_scope_decision(
             if not actor_scope_valid
             else "quantified_object_scope_complete"
             if complete
+            else "other_than_alternative_unproven"
+            if re.search(r"\bother\s+than\b", question, re.IGNORECASE)
             else "quantified_object_scope_incomplete"
         ),
     )
@@ -230,6 +243,9 @@ def resolve_closed_scope_boolean(
     )
     if experiment_resolution is not None:
         return experiment_resolution
+    structured_resolution = _resolve_structured_boolean(question, evidence_items)
+    if structured_resolution is not None:
+        return structured_resolution
     if not (_language_data_question(question) and _has_closed_quantifier(question)):
         return None
     supported: dict[str, list[tuple[dict[str, Any], BooleanScopeDecision, str]]] = {
@@ -268,6 +284,101 @@ def resolve_closed_scope_boolean(
     )
 
 
+def _resolve_structured_boolean(
+    question: str,
+    evidence_items: list[dict[str, Any]],
+) -> ClosedScopeResolution | None:
+    candidates: list[tuple[str, dict[str, Any], BooleanScopeDecision, str]] = []
+    for item in evidence_items:
+        text = evidence_item_text(item)
+        for resolution in structured_boolean_resolutions(question, text):
+            actor, section_role, rejection = _structured_candidate_scope(
+                question,
+                item,
+                resolution,
+            )
+            if rejection or actor != "current_paper":
+                continue
+            decision = BooleanScopeDecision(
+                actor=actor,
+                section_role=section_role,
+                quantifier=resolution.quantifier,
+                scope_valid=True,
+                reason=resolution.reason,
+            )
+            candidates.append((resolution.polarity, item, decision, resolution.quote))
+    polarities = {value[0] for value in candidates}
+    if len(polarities) != 1:
+        return None
+    polarity = polarities.pop()
+    _, item, decision, quote = min(
+        candidates,
+        key=lambda value: (
+            len(value[3]),
+            value[3],
+            str(identity_of(value[1]).key),
+        ),
+    )
+    return ClosedScopeResolution(
+        polarity=polarity,
+        evidence_quote=quote,
+        decision=decision,
+        evidence_item=item,
+    )
+
+
+def _structured_candidate_scope(
+    question: str,
+    item: dict[str, Any],
+    resolution: Any,
+) -> tuple[str, str, str]:
+    section_role = _section_role(item, resolution.quote)
+    actor = _actor(resolution.quote, section_role)
+    if (
+        actor == "unknown"
+        and resolution.reason == "explicit_complete_named_enumeration"
+        and re.search(
+            r"\b(?:our|we|this|current(?:ly)?)\b",
+            resolution.quote,
+            flags=re.IGNORECASE,
+        )
+    ):
+        actor = "current_paper"
+        if section_role == "unknown":
+            section_role = "methods"
+    if resolution.reason == "explicit_current_derogatory_label_analysis" and re.search(
+        r"\b(?:primary|main)\s+focus\s+of\s+this\s+study\b",
+        resolution.quote,
+        flags=re.IGNORECASE,
+    ):
+        actor = "current_paper"
+        section_role = "methods"
+    rejection = _scope_rejection(
+        question,
+        actor=actor,
+        section_role=section_role,
+        structured_scope_available=True,
+        quote=resolution.quote,
+    )
+    if (
+        resolution.reason == "explicit_external_collection_provenance"
+        and rejection
+        in {
+            "external_data_source_does_not_establish_own_collection",
+            "own_data_provenance_not_established",
+        }
+    ):
+        rejection = ""
+    if (
+        resolution.reason == "explicit_current_dataset_challenges"
+        and actor == "current_paper"
+        and section_role == "introduction"
+        and rejection == "current_paper_scope_not_established"
+    ):
+        rejection = ""
+    return actor, section_role, rejection
+
+
 def boolean_proposition_evidence_score(
     question: str,
     item: dict[str, Any],
@@ -279,28 +390,15 @@ def boolean_proposition_evidence_score(
     return score(question, item)
 
 
-def evidence_item_text(item: dict[str, Any]) -> str:
-    return "\n".join(
-        str(item.get(field) or "").strip()
-        for field in ("text", "ocr_text", "vlm_text", "caption")
-        if str(item.get(field) or "").strip()
-    )
-
-
-def _matching_item(
-    quote: str,
-    items: list[dict[str, Any]],
-) -> dict[str, Any]:
-    normalized_quote = _normalized(quote)
-    for item in items:
-        text = _normalized(evidence_item_text(item))
-        if normalized_quote and normalized_quote in text:
-            return item
-    return {}
-
-
 def _actor(quote: str, section_role: str) -> str:
     lowered = str(quote or "").lower()
+    explicit_current_actor = bool(
+        re.search(
+            r"\b(?:i|we|our|current (?:paper|study|work)|"
+            r"this (?:paper|article|study|work)|(?:the\s+)?authors?)\b",
+            lowered,
+        )
+    )
     if re.search(
         r"\b(?:external|independent|different|outside)\s+"
         r"(?:authors?|researchers?|papers?|stud(?:y|ies)|work)\b",
@@ -335,6 +433,18 @@ def _actor(quote: str, section_role: str) -> str:
     if (
         section_role == "related_work"
         or any(marker in lowered for marker in cited_markers)
+        or (
+            not explicit_current_actor
+            and re.search(r"\bbibref\d+\b|\[[0-9, -]+\]", lowered)
+        )
+        or (
+            not explicit_current_actor
+            and re.search(
+                r"\b(?:prior|previous|earlier|cited)\s+"
+                r"(?:model|encoder|system|method|approach|baseline)\b",
+                lowered,
+            )
+        )
         or re.search(
             r"\b(?:prior|previous|earlier|cited|related)\s+"
             r"(?:paper|article|study|research|work)\b",
@@ -352,11 +462,7 @@ def _actor(quote: str, section_role: str) -> str:
         return "cited_work"
     if re.search(r"\b[a-z][a-z-]+\s+et\s+al\.?", lowered):
         return "other_authors"
-    if re.search(
-        r"\b(?:i|we|our|current (?:paper|study|work)|"
-        r"(?:this (?:paper|article|study|work))|(?:the\s+)?authors?)\b",
-        lowered,
-    ):
+    if explicit_current_actor:
         return "current_paper"
     if section_role in {"experiments", "methods", "results"}:
         return "current_paper"
@@ -383,45 +489,6 @@ def _section_role(item: dict[str, Any], quote: str) -> str:
     return _section_role_from_text(str(quote or "")) or "unknown"
 
 
-def _bound_local_context(item: dict[str, Any], quote: str) -> str:
-    text = evidence_item_text(item)
-    normalized_quote = _normalized(quote)
-    if not text or not normalized_quote:
-        return str(quote or "")
-    normalized_text = _normalized(text)
-    if normalized_quote not in normalized_text:
-        return str(quote or "")
-    parts = str(quote or "").strip().split()
-    pattern = re.compile(
-        r"\s+".join(re.escape(part) for part in parts),
-        flags=re.IGNORECASE,
-    )
-    match = pattern.search(text)
-    if match is None:
-        return str(quote or "")
-    heading = _nearest_heading(item, quote)
-    start = max(0, match.start() - 320)
-    end = min(len(text), match.end() + 320)
-    return "\n".join(part for part in (heading, text[start:end]) if part)
-
-
-def _nearest_heading(item: dict[str, Any], quote: str) -> str:
-    text = evidence_item_text(item)
-    if not text:
-        return ""
-    parts = str(quote or "").strip().split()
-    if not parts:
-        return ""
-    match = re.search(
-        r"\s+".join(re.escape(part) for part in parts),
-        text,
-        flags=re.IGNORECASE,
-    )
-    prefix = text[: match.start()] if match is not None else text
-    headings = re.findall(r"(?m)^\s{0,3}#{1,6}\s+(.+?)\s*$", prefix)
-    return headings[-1].strip() if headings else ""
-
-
 def _section_role_from_text(value: str) -> str:
     lowered = re.sub(r"[_-]+", " ", str(value or "").lower())
     if re.search(r"\b(?:related work|background|previous work|prior work)\b", lowered):
@@ -435,7 +502,7 @@ def _section_role_from_text(value: str) -> str:
         lowered,
     ):
         return "experiments"
-    if re.search(r"\b(?:results?|findings?|performance)\b", lowered):
+    if re.search(r"\b(?:results?|findings?|performance|scores?)\b", lowered):
         return "results"
     if re.search(
         r"\b(?:method|approach|procedure|annotation|current study|"

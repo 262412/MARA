@@ -8,8 +8,21 @@ from .boolean_evidence_scope import (
     _language_data_question,
     _non_english_counterexample,
 )
-from .boolean_proposition_tokens import _content_tokens, _relation_surface_tokens
-from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
+from .boolean_proposition_conditions import (
+    containment_marker_polarity,
+    without_target_has_negative_outcome,
+)
+from .boolean_proposition_tokens import (
+    _content_tokens,
+    _object_token,
+    _relation_surface_tokens,
+)
+from .boolean_relations import (
+    boolean_relation_lemma,
+    boolean_relation_lemmas,
+    boolean_relations_align,
+    primary_boolean_relation,
+)
 
 
 def answer_polarity(answer: str) -> str:
@@ -34,7 +47,7 @@ def evidence_polarity(
             return "yes"
         return ""
     evidence_polarity = _target_relation_polarity(question, text)
-    question_polarity = _target_relation_polarity(question, question)
+    question_polarity = _question_relation_polarity(question)
     if evidence_polarity is None or question_polarity is None:
         return ""
     evidence_negative = evidence_polarity
@@ -56,10 +69,59 @@ def target_relation_is_negated(question: str, text: str) -> bool:
     return _target_relation_polarity(question, text) is True
 
 
+def _question_relation_polarity(question: str) -> bool | None:
+    polarity = _target_relation_polarity(question, question)
+    if polarity is not None:
+        return polarity
+    if not primary_boolean_relation(question):
+        return None
+    if not re.match(
+        r"^\s*(?:do|does|did|is|are|was|were|has|have|had)\b",
+        str(question or ""),
+        flags=re.IGNORECASE,
+    ):
+        return None
+    return bool(
+        re.search(
+            r"\b(?:do|does|did|is|are|was|were|has|have|had)\s+not\b|" r"\bnever\b",
+            str(question or ""),
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 def _target_relation_polarity(question: str, text: str) -> bool | None:
     target = primary_boolean_relation(question)
     lowered = str(text or "").lower()
+    containment_polarity = containment_marker_polarity(question, lowered)
+    if containment_polarity is not None:
+        return containment_polarity
     if _alternative_object_is_explicitly_excluded(question, lowered, target):
+        return True
+    if (
+        target == "improve"
+        and re.search(r"\beffective(?:ness)?\b", str(question or ""), re.I)
+        and (
+            without_target_has_negative_outcome(question, lowered)
+            or re.search(
+                r"\b(?:can(?:not|'t)|can\s+not|could\s+not|not\s+able\s+to|"
+                r"unable\s+to)\b"
+                r"[^.!?]{0,100}\bwithout\b",
+                lowered,
+            )
+        )
+    ):
+        return False
+    if target == "improve" and _limited_improvement_conclusion(lowered):
+        return True
+    if (
+        target == "improve"
+        and re.search(r"^\s*overall\b", question, re.I)
+        and re.search(
+            r"\b(?:small|minor|marginal)\s+improvements?\b",
+            lowered,
+        )
+    ):
         return True
     if target == "improve" and re.search(
         r"\b(?:(?:small|minor|marginal)\s*,?\s*)?"
@@ -69,20 +131,23 @@ def _target_relation_polarity(question: str, text: str) -> bool | None:
         lowered,
     ):
         return True
+    if target == "attribute":
+        attribute_polarity = _attribute_predicate_polarity(question, lowered)
+        if attribute_polarity is not None:
+            return attribute_polarity
     relation_matches = [
         match
-        for match in re.finditer(r"[a-z]+(?:'[a-z]+)?", lowered)
+        for match in re.finditer(r"[a-z]+(?:[-'][a-z]+)?", lowered)
         if target and target in boolean_relation_lemmas(match.group(0))
     ]
+    if not relation_matches and boolean_relations_align(question, lowered):
+        relation_matches = [
+            match
+            for match in re.finditer(r"[a-z]+(?:[-'][a-z]+)?", lowered)
+            if boolean_relation_lemma(match.group(0))
+        ]
     if not relation_matches:
-        return bool(
-            re.search(
-                r"\b(?:can't|cannot|couldn't|could not|didn't|doesn't|does not|"
-                r"don't|do not|did not|fail(?:ed|s)? to|not able to|unable to|"
-                r"no|not|never|without)\b",
-                lowered,
-            )
-        )
+        return None
     polarities = [
         _relation_match_is_negated(lowered, match) for match in relation_matches
     ]
@@ -158,16 +223,35 @@ def _alternative_object_is_explicitly_excluded(
         r"\b(?:any\s+)?(?:other\s+)?(?P<noun>[a-z][a-z-]*)" r"\s+other\s+than\b",
         str(question or "").lower(),
     )
-    if object_match is None or not target_relation:
+    plain_other = re.search(
+        r"\bother\s+(?P<noun>[a-z][a-z-]*s?)\b",
+        str(question or "").lower(),
+    )
+    selected = object_match or plain_other
+    if selected is None or not target_relation:
         return False
-    noun = object_match.group("noun")
+    noun = selected.group("noun")
     singular = noun[:-1] if noun.endswith("s") else noun
     relation_present = target_relation in boolean_relation_lemmas(lowered_text)
     exclusion_present = re.search(
         rf"\bno\s+other\s+{re.escape(singular)}s?\b",
         lowered_text,
     )
-    return bool(relation_present and exclusion_present)
+    exclusive_scope = bool(
+        plain_other and re.search(r"\b(?:only|solely|exclusively)\b", lowered_text)
+    )
+    return bool(relation_present and (exclusion_present or exclusive_scope))
+
+
+def _limited_improvement_conclusion(value: str) -> bool:
+    return bool(
+        "improve" in boolean_relation_lemmas(value)
+        and re.search(
+            r"\b(?:little|minimal|negligible|almost\s+no|no)\s+"
+            r"(?:useful\s+)?(?:information|evidence|benefit|gain|impact)\b",
+            value,
+        )
+    )
 
 
 def _relation_match_is_negated(lowered: str, match: re.Match[str]) -> bool:
@@ -181,13 +265,52 @@ def _relation_match_is_negated(lowered: str, match: re.Match[str]) -> bool:
         default=len(suffix),
     )
     local_suffix = suffix[:suffix_boundary]
-    return bool(
-        re.search(
-            r"\b(?:can't|cannot|couldn't|could not|didn't|doesn't|does not|"
-            r"don't|do not|did not|fail(?:ed|s)?\s+to|not\s+able\s+to|"
-            r"unable\s+to|omit(?:ted|s)?|exclud(?:e|ed|es)|"
-            r"skip(?:ped|s)?|no|not|never|without)\b",
-            local_prefix,
-        )
-        or re.search(r"^\s+(?:no|not\s+any)\b", local_suffix)
+    governed_prefix = re.search(
+        r"(?:\b(?:can't|cannot|couldn't|could\s+not|didn't|doesn't|"
+        r"does\s+not|don't|do\s+not|did\s+not|isn't|is\s+not|aren't|"
+        r"are\s+not|wasn't|was\s+not|weren't|were\s+not|never)"
+        r"(?:\s+[a-z]+ly){0,2}\s*|"
+        r"\b(?:fail(?:ed|s)?|omit(?:ted|s)?|exclud(?:e|ed|es)|"
+        r"skip(?:ped|s)?|unable)\s+(?:to\s+)?)$",
+        local_prefix,
     )
+    return bool(governed_prefix or re.search(r"^\s+(?:no|not\s+any)\b", local_suffix))
+
+
+def attribute_predicate_is_asserted(question: str, text: str) -> bool:
+    predicate, subject = _attribute_frame(question)
+    if not predicate:
+        return False
+    evidence = _normalized_ordered_tokens(text)
+    return predicate in evidence and bool(subject & set(evidence))
+
+
+def _attribute_predicate_polarity(question: str, text: str) -> bool | None:
+    predicate, _subject = _attribute_frame(question)
+    if not predicate:
+        return None
+    matches = [
+        match
+        for match in re.finditer(r"[a-z0-9]+(?:-[a-z0-9]+)?", text)
+        if _object_token(match.group(0).lower()) == predicate
+    ]
+    if not matches:
+        return None
+    polarities = {_relation_match_is_negated(text, match) for match in matches}
+    return polarities.pop() if len(polarities) == 1 else None
+
+
+def _attribute_frame(question: str) -> tuple[str, set[str]]:
+    tokens = _normalized_ordered_tokens(question)
+    if not tokens:
+        return "", set()
+    return tokens[-1], set(tokens[:-1]) - {"model", "component"}
+
+
+def _normalized_ordered_tokens(value: str) -> list[str]:
+    return [
+        normalized
+        for token in re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)?", str(value or "").lower())
+        if (normalized := _object_token(token))
+        and normalized not in {"are", "has", "have", "was", "were"}
+    ]

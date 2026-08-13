@@ -3,37 +3,36 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .boolean_current_experiment import (
-    current_experiment_slot_score,
-    is_current_experiment_question,
-    is_direct_current_empirical_action,
-)
+from .boolean_current_experiment import current_experiment_slot_score
 from .boolean_evidence_scope import (
-    _actor,
     _closed_quantifier,
-    _english_closed_scope,
     _has_closed_quantifier,
     _language_data_question,
-    _non_english_counterexample,
     _prior_work_scope_question,
-    _requires_current_paper_scope,
-    _scope_rejection,
     _section_role,
     evidence_item_text,
     validate_boolean_scope,
 )
-from .boolean_proposition_arguments import _question_argument_tokens
+from .boolean_proposition_actor import proposition_scope_rejection
+from .boolean_proposition_compatibility import (
+    _object_compatibility,
+    _relation_compatibility,
+)
 from .boolean_proposition_context import (
     actor_scope_scores,
     bounded_proposition_context,
     contextual_actor,
-    normalized_object_tokens,
     proposition_spans,
 )
 from .boolean_proposition_context import semantic_resolution_text as _resolution_text
 from .boolean_proposition_polarity import answer_polarity as _answer_polarity
-from .boolean_proposition_polarity import evidence_polarity as _evidence_polarity
+from .boolean_proposition_polarity import attribute_predicate_is_asserted
 from .boolean_proposition_qualifiers import proposition_qualifier
+from .boolean_proposition_resolution import (
+    closed_alternative_object_score,
+    question_aligned_relation,
+    resolve_proposition_polarity,
+)
 from .boolean_proposition_schema import (
     BooleanEvidenceAssessment,
     BooleanEvidenceSet,
@@ -150,17 +149,27 @@ def _proposition_frame(
     section_role = _section_role(item, span)
     actor = contextual_actor(span, context, section_role)
     quantifier = _closed_quantifier(semantic_question)
-    qualifier = proposition_qualifier(context)
-    polarity_text = (
-        context
-        if qualifier in {"non_significant", "not_required"}
-        and _context_matches_proposition(semantic_question, context)
-        else span
+    span_matches = _context_matches_proposition(semantic_question, span)
+    span_qualifier = proposition_qualifier(span, question=semantic_question)
+    context_qualifier = proposition_qualifier(
+        context,
+        question=semantic_question,
     )
-    evidence_polarity = _evidence_polarity(
-        semantic_question,
-        polarity_text,
-        desired_polarity=desired_polarity,
+    qualifier = _resolved_qualifier(
+        question,
+        span_qualifier,
+        context_qualifier,
+        span_matches=span_matches,
+    )
+    evidence_polarity = resolve_proposition_polarity(
+        question,
+        span,
+        context,
+        qualifier,
+        desired_polarity,
+        context_matches=_context_matches_proposition(semantic_question, context),
+        span_matches=span_matches,
+        qualifier_is_local=(span_qualifier != "none" and qualifier == span_qualifier),
     )
     relation_score = _relation_compatibility(semantic_question, resolution_text)
     object_score, proposition_object = _object_compatibility(
@@ -172,11 +181,17 @@ def _proposition_frame(
         # requires evidence-side tokens.
         resolution_text,
     )
+    object_score = closed_alternative_object_score(
+        question,
+        item,
+        span,
+        evidence_polarity,
+        quantifier,
+        object_score,
+    )
     proposition = BooleanProposition(
         actor=actor,
-        action=(
-            primary_boolean_relation(span) or primary_boolean_relation(resolution_text)
-        ),
+        action=question_aligned_relation(semantic_question, span, resolution_text),
         object=proposition_object,
         section_scope=(
             "current_paper"
@@ -188,32 +203,58 @@ def _proposition_frame(
         quantifier=quantifier,
         qualifier=qualifier,
     )
-    scope_rejection = _scope_rejection(
+    scope_rejection = proposition_scope_rejection(
         question,
+        span,
+        context,
         actor=actor,
         section_role=section_role,
-        structured_scope_available=True,
-        quote=span,
     )
-    if (
-        not scope_rejection
-        and is_current_experiment_question(question)
-        and not is_direct_current_empirical_action(span)
-    ):
-        scope_rejection = "current_experiment_action_not_established"
     return proposition, section_role, scope_rejection, relation_score, object_score
 
 
 def _deduplicated_assessments(
     assessments: tuple[BooleanEvidenceAssessment, ...],
 ) -> tuple[BooleanEvidenceAssessment, ...]:
-    output: dict[tuple[str, tuple[str, ...]], BooleanEvidenceAssessment] = {}
+    output: dict[
+        tuple[str, tuple[str, ...], str],
+        BooleanEvidenceAssessment,
+    ] = {}
     for assessment in assessments:
-        key = (assessment.classification, assessment.proposition.key)
+        key = (
+            assessment.classification,
+            assessment.proposition.key,
+            assessment.span_id,
+        )
         current = output.get(key)
         if current is None or _assessment_rank(assessment) > _assessment_rank(current):
             output[key] = assessment
     return tuple(output.values())
+
+
+def _resolved_qualifier(
+    question: str,
+    span_qualifier: str,
+    context_qualifier: str,
+    *,
+    span_matches: bool,
+) -> str:
+    if re.search(r"^\s*overall\b", question, re.IGNORECASE):
+        priority = {
+            "none": 0,
+            "minor": 1,
+            "marginal": 1,
+            "small": 1,
+            "limited_information": 2,
+            "non_significant": 3,
+            "not_required": 4,
+            "required_condition": 4,
+        }
+        if priority.get(context_qualifier, 0) > priority.get(span_qualifier, 0):
+            return context_qualifier
+    if span_qualifier != "none":
+        return span_qualifier
+    return "none" if span_matches else context_qualifier
 
 
 def _classify_proposition_span(
@@ -274,9 +315,28 @@ def exact_span_asserts_boolean_relation(question: str, span: str) -> bool:
     """Return whether the exact span asserts a compatible Boolean relation."""
 
     semantic_question = semantic_boolean_proposition_question(question)
-    if not primary_boolean_relation(semantic_question):
+    target = primary_boolean_relation(semantic_question)
+    if not target:
         return False
+    if target == "attribute":
+        return bool(
+            attribute_predicate_is_asserted(semantic_question, span)
+            or re.search(r"\b(?:is|are|was|were|has|have|with)\b", span, re.I)
+            or boolean_relation_lemmas(span)
+            & {"contain", "create", "evaluate", "provide", "train", "use"}
+        )
     return _relation_compatibility(semantic_question, span) > 0
+
+
+def exact_span_completes_boolean_proposition(question: str, span: str) -> bool:
+    """Return whether authority can use the exact span without context fill."""
+
+    semantic_question = semantic_boolean_proposition_question(question)
+    object_score, _object = _object_compatibility(semantic_question, span)
+    return bool(
+        exact_span_asserts_boolean_relation(semantic_question, span)
+        and object_score >= 0.6
+    )
 
 
 def _metalinguistic_relation_mention(question: str, span: str) -> bool:
@@ -326,6 +386,25 @@ def classify_boolean_evidence_set(
         )
         for assessment in assessments:
             grouped[assessment.classification].append(assessment)
+    for classification, group_assessments in grouped.items():
+        strongest: dict[
+            tuple[str, tuple[str, ...]],
+            BooleanEvidenceAssessment,
+        ] = {}
+        for assessment in group_assessments:
+            key = (identity_of(assessment.item).key, assessment.proposition.key)
+            current = strongest.get(key)
+            if current is None or (
+                _assessment_rank(assessment),
+                -len(assessment.span_text),
+                assessment.span_id,
+            ) > (
+                _assessment_rank(current),
+                -len(current.span_text),
+                current.span_id,
+            ):
+                strongest[key] = assessment
+        grouped[classification] = list(strongest.values())
     return BooleanEvidenceSet(
         supports=tuple(grouped["supports"]),
         contradicts=tuple(grouped["contradicts"]),
@@ -426,147 +505,15 @@ def boolean_proposition_binding_trace(
     answer: str,
     items: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    semantic_question = semantic_boolean_proposition_question(question)
-    question_relation = primary_boolean_relation(semantic_question)
-    question_object = _object_compatibility(semantic_question, semantic_question)[1]
-    question_actor = (
-        "current_paper"
-        if _requires_current_paper_scope(question)
-        else _actor(question, _section_role({}, question))
-    )
-    candidates = [
-        assessment
-        for item in items
-        for assessment in classify_boolean_evidence_candidates(question, answer, item)
-    ]
-    supports = [value for value in candidates if value.classification == "supports"]
-    contradictions = [
-        value for value in candidates if value.classification == "contradicts"
-    ]
-    rejected = [
-        value
-        for value in candidates
-        if value.classification in {"unrelated", "insufficient_scope"}
-    ]
-    return {
-        "question_proposition": {
-            "actor": question_actor,
-            "predicate": question_relation,
-            "relation": question_relation,
-            "object": question_object,
-            "scope": (
-                "current_paper" if question_actor == "current_paper" else "document"
-            ),
-            "polarity": _answer_polarity(answer),
-            "qualifier": proposition_qualifier(semantic_question),
-            "quantifier": _closed_quantifier(semantic_question),
-        },
-        "proposition_candidate_ids": [value.span_id for value in candidates],
-        "normalized_relation": question_relation,
-        "relation_match_reason": (
-            "normalized_relation_family_match" if supports or contradictions else ""
-        ),
-        "proposition_candidates": [_assessment_trace(value) for value in candidates],
-        "bound_support_span_ids": [value.span_id for value in supports],
-        "bound_contradiction_span_ids": [value.span_id for value in contradictions],
-        "bound_support_evidence_ids": _assessment_evidence_ids(supports),
-        "bound_contradiction_evidence_ids": _assessment_evidence_ids(contradictions),
-        "rejected_candidates": [_assessment_trace(value) for value in rejected],
-        "final_support_evidence_ids": _assessment_evidence_ids(supports),
-        "final_contradiction_evidence_ids": _assessment_evidence_ids(contradictions),
-        "binding_status": "filled" if supports else "missing",
-    }
+    from .boolean_proposition_trace import boolean_proposition_binding_trace as trace
 
-
-def _assessment_trace(value: BooleanEvidenceAssessment) -> dict[str, Any]:
-    return {
-        "proposition_candidate_id": value.span_id,
-        "evidence_id": identity_of(value.item).key,
-        "span": value.span_text,
-        "normalized_relation": value.proposition.action,
-        "predicate": value.proposition.predicate,
-        "actor": value.proposition.actor,
-        "object": value.proposition.object,
-        "qualifier": value.proposition.qualifier,
-        "quantifier": value.proposition.quantifier,
-        "scope": value.proposition.scope,
-        "relation_match_reason": (
-            "normalized_relation_family_match"
-            if value.relation_score > 0
-            else "normalized_relation_mismatch"
-        ),
-        "actor_score": value.actor_score,
-        "scope_score": value.scope_score,
-        "object_score": value.object_score,
-        "polarity": value.proposition.polarity,
-        "classification": value.classification,
-        "reason": value.reason,
-    }
+    return trace(question, answer, items)
 
 
 def _context_matches_proposition(question: str, context: str) -> bool:
     relation_score = _relation_compatibility(question, context)
     object_score, _object = _object_compatibility(question, context)
     return relation_score > 0 and object_score >= 0.6
-
-
-def _assessment_evidence_ids(
-    values: list[BooleanEvidenceAssessment],
-) -> list[str]:
-    return list(dict.fromkeys(identity_of(value.item).key for value in values))
-
-
-def _relation_compatibility(question: str, text: str) -> float:
-    if _language_data_question(question) and _has_closed_quantifier(question):
-        if _english_closed_scope(text) or _non_english_counterexample(text):
-            return 1.0
-    question_relations = boolean_relation_lemmas(question)
-    evidence_relations = boolean_relation_lemmas(text)
-    if not question_relations:
-        return 1.0
-    if question_relations & evidence_relations:
-        return 1.0
-    return 0.0
-
-
-def _object_compatibility(question: str, text: str) -> tuple[float, str]:
-    question_relations = boolean_relation_lemmas(question)
-    evidence_relations = boolean_relation_lemmas(text)
-    relation_tokens = {
-        token
-        for relation in question_relations | evidence_relations
-        for token in _relation_surface_tokens(relation)
-    }
-    question_tokens = _question_argument_tokens(
-        question,
-        relation_tokens,
-    )
-    evidence_tokens = normalized_object_tokens(text, relation_tokens)
-    question_tokens.discard("")
-    evidence_tokens.discard("")
-    if (
-        "task" in question_tokens
-        and (
-            re.search(
-                r"\b(?:these|those|aforementioned)\s+tasks?\b",
-                question,
-                re.I,
-            )
-            or re.search(r"\btasks?\s+mentioned\b", question, re.I)
-        )
-        and evidence_relations
-        and evidence_tokens
-    ):
-        return 1.0, "deictic_task_set"
-    if not question_tokens:
-        return 1.0, ""
-    proposition_object = " ".join(sorted(question_tokens))
-    if _language_data_question(question) and _has_closed_quantifier(question):
-        if _english_closed_scope(text) or _non_english_counterexample(text):
-            return 1.0, proposition_object
-    shared = question_tokens & evidence_tokens
-    score = len(shared) / len(question_tokens)
-    return score, proposition_object
 
 
 def boolean_proposition_object_identity(question: str) -> str:

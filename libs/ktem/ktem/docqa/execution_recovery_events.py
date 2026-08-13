@@ -19,6 +19,61 @@ def bundle_evidence_ids(bundle: EvidenceBundle | None) -> list[str]:
     )
 
 
+def boolean_slot_states(bundle: EvidenceBundle | None) -> list[dict[str, Any]]:
+    if bundle is None:
+        return []
+    plan: dict[str, Any] = {}
+    for key in ("query_plan", "bound_query_plan"):
+        candidate = bundle.metadata.get(key)
+        if isinstance(candidate, dict):
+            plan = candidate
+            break
+    return [
+        {
+            "slot_id": str(slot.get("slot_id") or ""),
+            "status": str(slot.get("status") or "missing"),
+            "evidence_ids": list(slot.get("evidence_ids") or []),
+        }
+        for slot in plan.get("evidence_slots") or []
+        if isinstance(slot, dict)
+        and str(slot.get("statement_kind") or "") == "boolean_proposition"
+        and bool(slot.get("required_for_verification"))
+    ]
+
+
+def required_boolean_slot_state(bundle: EvidenceBundle | None) -> str:
+    statuses = {item["status"] for item in boolean_slot_states(bundle)}
+    for status in (
+        "verified_conflict",
+        "verified_support",
+        "retrieved_unverified",
+        "retrieved_partial",
+    ):
+        if status in statuses:
+            return status
+    return "missing"
+
+
+def recovery_trace_fields(
+    request: Any | None,
+    verify_decision: VerifyDecision,
+    initial_bundle: EvidenceBundle | None,
+    recovered_bundle: EvidenceBundle | None,
+) -> dict[str, Any]:
+    return {
+        "verifier_recovery_attempt": 1,
+        "retry_reason": "required_boolean_authority_missing",
+        "failure_type": "required_boolean_authority_missing",
+        "recovered_evidence_ids": bundle_evidence_ids(recovered_bundle),
+        "slot_states_before": boolean_slot_states(initial_bundle),
+        "slot_states_after": boolean_slot_states(recovered_bundle),
+        "agent_mode": str(getattr(request, "agent_mode", "") or "auto"),
+        "verification_mode": str(
+            getattr(request, "verification_mode", "") or verify_decision.mode or "off"
+        ),
+    }
+
+
 def record_route_switch_reverification(result: Any) -> None:
     evidence_ids = bundle_evidence_ids(result.evidence_bundle)
     for event in result.controller_trace:
@@ -30,11 +85,13 @@ def record_route_switch_reverification(result: Any) -> None:
 
 
 def build_verifier_switch_event(
+    request: Any,
     decision: ControllerDecision,
     route: str,
     candidates: list[str],
     focused_query: str,
     failed_verification: VerifyDecision,
+    failed_bundle: EvidenceBundle,
     recovered_bundle: EvidenceBundle,
     rejected_candidates: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -46,13 +103,23 @@ def build_verifier_switch_event(
         "route_switch_used": True,
         "route_switch_candidates": list(candidates),
         "verifier_recovery_attempt": 1,
-        "retrieval_round": 2,
+        "retrieval_round": int(
+            recovered_bundle.metadata.get("verifier_recovery_round") or 2
+        ),
         "focused_query": focused_query,
         "retry_reason": "required_boolean_authority_missing",
         "failure_type": "required_boolean_authority_missing",
         "failed_verifier_status": failed_verification.status,
         "failed_verifier_reason": failed_verification.reason,
         "recovered_evidence_ids": bundle_evidence_ids(recovered_bundle),
+        "slot_states_before": boolean_slot_states(failed_bundle),
+        "slot_states_after": boolean_slot_states(recovered_bundle),
+        "agent_mode": str(getattr(request, "agent_mode", "") or "auto"),
+        "verification_mode": str(
+            getattr(request, "verification_mode", "")
+            or failed_verification.mode
+            or "off"
+        ),
     }
     if rejected_candidates:
         event["rejected_route_switch_candidates"] = list(rejected_candidates)

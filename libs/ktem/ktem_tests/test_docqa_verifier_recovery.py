@@ -43,7 +43,7 @@ def _stage_events(result: Any, stage: str) -> list[dict[str, Any]]:
     return [event for event in result.controller_trace if event.get("stage") == stage]
 
 
-def test_text_rag_runs_one_focused_same_route_recovery_after_missing_authority():
+def test_text_rag_rebinds_retrieved_evidence_without_duplicate_retrieval():
     calls: list[tuple[str, int, str]] = []
     generation_calls = 0
 
@@ -55,8 +55,7 @@ def test_text_rag_runs_one_focused_same_route_recovery_after_missing_authority()
                 request.retrieval_query,
             )
         )
-        text = NEAR_MATCH if request.retrieval_round_id == 1 else EXACT_AUTHORITY
-        return {"evidence": [_evidence(f"evidence-{len(calls)}", text)]}
+        return {"evidence": [_evidence(f"evidence-{len(calls)}", NEAR_MATCH)]}
 
     def generate(*_args: Any) -> str:
         nonlocal generation_calls
@@ -69,26 +68,20 @@ def test_text_rag_runs_one_focused_same_route_recovery_after_missing_authority()
         generate=generate,
     )
 
-    assert [(route, round_id) for route, round_id, _query in calls] == [
-        ("doc_text", 1),
-        ("doc_text", 2),
-    ]
-    assert calls[1][2] != QUESTION
-    assert "current paper" in calls[1][2].lower()
-    assert "qualifier" in calls[1][2].lower()
-    assert result.answer == "yes"
+    assert [(route, round_id) for route, round_id, _query in calls] == [("doc_text", 1)]
+    assert result.answer == ABSTAIN_MESSAGE
     assert generation_calls == 1
-    assert result.verify_decision.status == "supported"
-    assert result.verify_decision.authoritative_evidence_id
-    [event] = _stage_events(result, "verifier_recovery")
+    assert result.verify_decision.status == "unknown"
+    [rebind] = _stage_events(result, "evidence_rebind")
+    [event] = _stage_events(result, "reverify")
     assert event["attempt"] == 1
-    assert event["retrieval_round"] == 2
     assert event["retry_reason"] == "required_boolean_authority_missing"
-    assert event["stop_reason"] == "authority_recovered"
+    assert event["stop_reason"] == "authority_recovery_exhausted"
+    assert rebind["slot_states_before"][0]["status"] == "retrieved_unverified"
     assert not _stage_events(result, "route_switch")
 
 
-def test_controller_auto_rebinds_same_route_when_relevant_span_lacks_authority():
+def test_controller_auto_rebinds_before_bounded_route_switch():
     calls: list[tuple[str, int]] = []
 
     def retrieve(request: DocQARequest, decision: Any) -> dict[str, Any]:
@@ -105,14 +98,14 @@ def test_controller_auto_rebinds_same_route_when_relevant_span_lacks_authority()
         generate=lambda *_args: "yes",
     )
 
-    assert calls == [("doc_text", 1), ("doc_text", 2)]
+    assert calls == [("doc_text", 1), ("hybrid", 2)]
     assert result.answer == "yes"
-    assert result.controller_decision.legacy_route == "doc_text"
-    [recovery] = _stage_events(result, "verifier_recovery")
+    assert result.controller_decision.legacy_route == "hybrid"
+    [recovery] = _stage_events(result, "reverify")
     assert recovery["verifier_recovery_attempt"] == 1
     assert recovery["retry_reason"] == "required_boolean_authority_missing"
-    assert recovery["stop_reason"] == "authority_recovered"
-    assert not _stage_events(result, "route_switch")
+    [transition] = _stage_events(result, "route_switch")
+    assert transition["stop_reason"] == "authority_recovered"
 
 
 def test_controller_auto_switches_route_when_no_relevant_proposition_exists():
@@ -195,9 +188,9 @@ def test_verifier_recovery_exhausts_after_one_attempt_and_safely_abstains():
         generate=lambda *_args: "yes",
     )
 
-    assert calls == [("doc_text", 1), ("doc_text", 2)]
+    assert calls == [("doc_text", 1)]
     assert result.answer == ABSTAIN_MESSAGE
     assert result.verify_decision.status == "unknown"
-    [event] = _stage_events(result, "verifier_recovery")
+    [event] = _stage_events(result, "reverify")
     assert event["attempt"] == 1
     assert event["stop_reason"] == "authority_recovery_exhausted"

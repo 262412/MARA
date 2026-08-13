@@ -59,8 +59,11 @@ def is_direct_current_empirical_action(value: str) -> bool:
     ):
         return False
     empirical_action = re.search(
-        r"\b(?:experiment|evaluat|test|unable to construct|ran|measur|"
-        r"observation|observe)\w*\b",
+        r"\b(?:appl(?:y|ies|ied|ying)|experiment(?:ed|ing)?|"
+        r"evaluat(?:e|es|ed|ing)|"
+        r"test(?:s|ed|ing)?|unable\s+to\s+construct|ran|run|"
+        r"conduct(?:s|ed|ing)?|perform(?:s|ed|ing)?|"
+        r"measur(?:e|es|ed|ing)|observe(?:s|d)?|observing)\b",
         lowered,
         flags=re.IGNORECASE,
     )
@@ -175,7 +178,7 @@ def _current_experiment_statement_score(statement: str) -> int:
     if re.search(r"\b(?:i|we|our|the authors?)\b", lowered):
         score += 2
     if re.search(
-        r"\b(?:unable to construct|evaluat|experiment|measur|"
+        r"\b(?:appl(?:y|ies|ied|ying)|unable to construct|evaluat|experiment|measur|"
         r"observe|observed|observes|observing|observation|ran|tested)\w*\b",
         lowered,
     ):

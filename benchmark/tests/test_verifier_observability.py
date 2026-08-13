@@ -177,6 +177,8 @@ def test_verifier_observability_summary_and_route_table_counts_predictions():
         "unsupported_claim_rate": 0.5,
         "retry_rate": 1.0,
         "route_switch_rate": 0.5,
+        "route_policies": [],
+        "agent_modes": [],
     }
     assert route_verifier_observability_table("qasper", predictions) == [
         {
@@ -197,6 +199,8 @@ def test_verifier_observability_summary_and_route_table_counts_predictions():
             "unsupported_claim_rate": 0.5,
             "retry_rate": 1.0,
             "route_switch_rate": 0.5,
+            "route_policies": [],
+            "agent_modes": [],
         }
     ]
 

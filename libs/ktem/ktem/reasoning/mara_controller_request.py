@@ -68,6 +68,7 @@ def controller_execution_request(
         ),
         route_policy=getattr(pipeline, "route_policy", None) or "auto",
         allowed_routes=list(getattr(pipeline, "allowed_routes", None) or []),
+        agent_mode=getattr(pipeline, "agent_mode", None) or "auto",
         verification_mode=getattr(pipeline, "verification_mode", None) or "light",
         verification_domain=(
             getattr(pipeline, "verification_domain", None)

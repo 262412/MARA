@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import re
 
-from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
+from .boolean_proposition_tokens import _object_token
+from .boolean_relations import (
+    boolean_relation_lemmas,
+    boolean_relations_align,
+    primary_boolean_relation,
+)
+from .boolean_scope_alternatives import (
+    _other_than_scope_complete,
+    other_quantified_scope_complete,
+)
 from .boolean_scope_language import _current_language_data_context  # noqa: F401
 from .boolean_scope_language import _english_closed_scope  # noqa: F401
 from .boolean_scope_language import _language_data_question  # noqa: F401
 from .boolean_scope_language import _non_english_counterexample  # noqa: F401
 from .boolean_scope_language import _scope_excerpt  # noqa: F401
+from .boolean_scope_quantifier_values import _number_value
 
 
 def _has_closed_quantifier(question: str) -> bool:
@@ -25,6 +35,12 @@ def _closed_quantifier(question: str) -> str:
         return "both"
     if re.search(r"\b(?:some|any)\b", lowered):
         return "some" if re.search(r"\bsome\b", lowered) else "any"
+    if re.search(
+        r"\bother\s+(?:tasks?|benchmarks?|data|datasets?|corpora|corpus|"
+        r"languages?|methods?|models?|systems?)\b",
+        lowered,
+    ):
+        return "other"
     count_match = re.search(
         r"\b(?:the\s+)?(two|three|four|five|six|seven|eight|nine|[2-9])\s+"
         r"[a-z][a-z-]*s\b",
@@ -38,6 +54,7 @@ def _quantified_object_scope_complete(
     quote: str,
     *,
     quantifier: str,
+    verdict: str = "",
 ) -> bool:
     relation_spans = _target_relation_spans(question, quote)
     if not relation_spans:
@@ -54,6 +71,14 @@ def _quantified_object_scope_complete(
             quote,
             relation_spans,
             quantifier,
+            verdict,
+        )
+    if quantifier == "other":
+        return other_quantified_scope_complete(
+            _quantified_object_noun(question, "other"),
+            quote,
+            relation_spans,
+            verdict=verdict,
         )
     if quantifier.startswith("count:"):
         return _counted_quantified_scope_complete(
@@ -70,6 +95,7 @@ def _existential_quantified_scope_complete(
     quote: str,
     relation_spans: list[str],
     quantifier: str,
+    verdict: str,
 ) -> bool:
     """Require one explicit object for ``some``/``any`` propositions.
 
@@ -95,16 +121,13 @@ def _existential_quantified_scope_complete(
         return True
     if not noun:
         return False
-    if (
-        quantifier == "any"
-        and re.search(r"\bother\s+than\b", lowered_question)
-        and _span_mentions_object_noun(quote, noun)
-    ):
-        # A verifier quote may retain the complete sentence while the exact
-        # relation clause contains only its object complement.  Treat that
-        # sentence as scope-complete here; exact proposition authority still
-        # validates the relation span independently.
-        return True
+    if quantifier == "any" and re.search(r"\bother\s+than\b", lowered_question):
+        return _other_than_scope_complete(
+            question,
+            noun,
+            relation_spans,
+            verdict=verdict,
+        )
     for span in relation_spans:
         if not _span_mentions_object_noun(span, noun):
             continue
@@ -282,6 +305,7 @@ def _target_relation_spans(question: str, quote: str) -> list[str]:
                 part.strip()
                 for part in candidates
                 if target in boolean_relation_lemmas(part)
+                or boolean_relations_align(question, part)
             )
     return output
 
@@ -301,6 +325,13 @@ def _quantified_object_noun(question: str, quantifier: str) -> str:
         )
         if alternative is not None:
             return _singular_object_noun(alternative.group(1))
+        excluded = re.search(
+            rf"\b{re.escape(quantifier)}\s+([a-z][a-z-]*s?)\s+other\s+than\b",
+            str(question or ""),
+            flags=re.IGNORECASE,
+        )
+        if excluded is not None:
+            return _singular_object_noun(excluded.group(1))
     match = re.search(
         rf"\b{prefix}\s+(?:[a-z0-9][a-z0-9-]*\s+){{0,2}}" r"([a-z][a-z-]*s?)\b",
         str(question or ""),
@@ -550,18 +581,8 @@ def _looks_like_named_dataset(value: str) -> bool:
 
 
 def _normalized_object_phrase(value: str) -> str:
-    return " ".join(re.findall(r"[a-z0-9]+", str(value or "").lower()))
-
-
-def _number_value(value: str) -> int:
-    words = {
-        "two": 2,
-        "three": 3,
-        "four": 4,
-        "five": 5,
-        "six": 6,
-        "seven": 7,
-        "eight": 8,
-        "nine": 9,
-    }
-    return words.get(value, int(value) if value.isdigit() else 0)
+    return " ".join(
+        token
+        for raw in re.findall(r"[a-z0-9]+", str(value or "").lower())
+        if (token := _object_token(raw))
+    )

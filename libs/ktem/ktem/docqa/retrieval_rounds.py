@@ -108,7 +108,7 @@ def retrieve_for_verifier_recovery(
 
     plan = ensure_request_query_plan(request)
     completed_rounds = int(bundle.metadata.get("retrieval_rounds") or 1)
-    if completed_rounds >= plan.max_retrieval_rounds:
+    if int(bundle.metadata.get("verifier_focused_retrieval_attempt") or 0) >= 1:
         return None
     if not optional_stage_allowed(request):
         bundle.metadata.update(route_budget_metadata(request))
@@ -118,18 +118,20 @@ def retrieve_for_verifier_recovery(
         return None
 
     query = verifier_recovery_query(request)
+    recovery_round = completed_rounds + 1
     recovery_metadata = _retrieve_second_round(
         request,
         decision,
         retrieve,
         [
             {
-                "query_id": "round2:verifier_recovery",
+                "query_id": "verifier_recovery:1",
                 "slot_id": _boolean_verification_slot_id(plan),
                 "query": query,
                 "modality": "text",
             }
         ],
+        round_id=recovery_round,
     )
     merged_metadata = _merge_retrieval_metadata(
         _recovery_base_metadata(bundle.metadata),
@@ -138,6 +140,8 @@ def retrieve_for_verifier_recovery(
     merged_metadata.update(
         {
             "verifier_recovery_attempt": 1,
+            "verifier_focused_retrieval_attempt": 1,
+            "verifier_recovery_round": recovery_round,
             "verifier_recovery_query": query,
             "verifier_recovery_retry_reason": retry_reason,
         }
@@ -331,6 +335,8 @@ def _retrieve_second_round(
     decision: Any,
     retrieve: RetrieveFn,
     requests: list[dict[str, str]],
+    *,
+    round_id: int = 2,
 ) -> dict[str, Any]:
     original_query = str(getattr(request, "retrieval_query", "") or "")
     original_slot_id = str(getattr(request, "retrieval_slot_id", "") or "")
@@ -340,10 +346,10 @@ def _retrieve_second_round(
         for retrieval_request in requests:
             request.retrieval_query = str(retrieval_request.get("query") or "")
             request.retrieval_slot_id = str(retrieval_request.get("slot_id") or "")
-            request.retrieval_round_id = 2
+            request.retrieval_round_id = round_id
             response = _with_retrieval_lineage(
                 retrieve(request, decision),
-                round_id=2,
+                round_id=round_id,
                 query_id=str(retrieval_request.get("query_id") or ""),
                 slot_id=request.retrieval_slot_id,
             )

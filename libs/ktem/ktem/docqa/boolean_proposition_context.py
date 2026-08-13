@@ -145,8 +145,15 @@ def _semantic_window_indices(
                 candidate_first,
                 candidate_last,
             )
-            if len(candidate_text) > _MAX_CONTEXT_CHARS or _crosses_section_boundary(
-                candidate_text
+            if (
+                len(candidate_text) > _MAX_CONTEXT_CHARS
+                or _crosses_section_boundary(candidate_text)
+                or _crosses_actor_boundary(
+                    text,
+                    statements,
+                    candidate_first,
+                    candidate_last,
+                )
             ):
                 continue
             score = _semantic_frame_score(question, candidate_text)
@@ -196,6 +203,12 @@ def _semantic_frame_score(
 def _qualifier_specificity(value: str) -> int:
     lowered = str(value or "").lower()
     if re.search(
+        r"\b(?:little|minimal|negligible|almost\s+no|no)\s+"
+        r"(?:useful\s+)?(?:information|evidence|benefit|gain|impact)\b",
+        lowered,
+    ):
+        return 3
+    if re.search(
         r"\b(?:non[- ]?significant|insignificant|not\s+significant)\b", lowered
     ):
         return 2
@@ -215,6 +228,26 @@ def _statement_window_text(
 
 def _crosses_section_boundary(value: str) -> bool:
     return bool(re.search(r"(?:^|\n)\s*#{1,6}\s+", value))
+
+
+def _crosses_actor_boundary(
+    text: str,
+    statements: list[tuple[int, int]],
+    first: int,
+    last: int,
+) -> bool:
+    actors = {
+        actor
+        for index in range(first, last + 1)
+        if (
+            actor := _actor(
+                _statement_window_text(text, statements, index, index),
+                "unknown",
+            )
+        )
+        in {"current_paper", "cited_work", "other_authors"}
+    }
+    return "current_paper" in actors and bool(actors & {"cited_work", "other_authors"})
 
 
 def _sentence_offsets(text: str) -> list[tuple[int, int]]:
@@ -250,6 +283,14 @@ def actor_scope_scores(
 def normalized_object_tokens(value: str, relation_tokens: set[str]) -> set[str]:
     raw_tokens = _content_tokens(value) - relation_tokens
     normalized = {_object_token(token) for token in raw_tokens}
+    if re.search(
+        r"\b(?:task\s+bank|bank\s+of(?:\s+over)?\s+\w+\s+tasks?|"
+        r"(?:collection|catalog|suite)\s+of\s+(?:\w+\s+){0,2}tasks?)\b",
+        str(value or ""),
+        flags=re.IGNORECASE,
+    ):
+        normalized.add("dataset")
+        normalized.discard("bank")
     if {"semantic", "role", "induction"} <= raw_tokens:
         normalized.discard("induction")
     parallel_resources = raw_tokens & {

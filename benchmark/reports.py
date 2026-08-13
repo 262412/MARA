@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import csv
 import json
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,7 @@ from .report_benchmark_taxonomy import (
     routing_taxonomy_markdown,
 )
 from .report_compaction_fields import TEXT_FIELDS
+from .report_csv_schema import _CSV_FIELD_ORDER
 from .report_external_evaluators import (
     external_evaluator_by_route_markdown,
     external_evaluator_markdown,
@@ -73,69 +76,6 @@ _COMPACT_DROP_FIELDS = {
     "rendered_page_image",
     "visual_embedding",
 }
-_CSV_FIELD_ORDER = [
-    "dataset_name",
-    "route",
-    "num_predictions",
-    "avg_mara_score",
-    "avg_native_score",
-    "avg_mara_proxy_score",
-    "avg_em",
-    "avg_f1",
-    "avg_semantic_answer_f1",
-    "product_avg_em",
-    "product_avg_f1",
-    "avg_answer_for_user_tokens",
-    "avg_answer_for_scoring_tokens",
-    "avg_mara_answer_score",
-    "avg_mara_evidence_score",
-    "avg_mara_citation_score",
-    "avg_mara_groundedness_score",
-    "avg_mara_abstention_score",
-    "avg_mara_controller_score",
-    "avg_mara_format_score",
-    "avg_anls",
-    "avg_page_hit",
-    "avg_strict_page_hit",
-    "avg_equivalent_evidence_page_hit",
-    "avg_strict_gold_page_coverage",
-    "avg_canonical_mapped_page_coverage",
-    "avg_equivalent_evidence_page_coverage",
-    "avg_citation_recall",
-    "avg_citation_precision",
-    "avg_emitted_citation_recall",
-    "avg_emitted_citation_precision",
-    "avg_source_retrieval_recall",
-    "avg_citation_metadata_recall",
-    "avg_citation_metadata_precision",
-    "avg_citation_inline_recall",
-    "avg_citation_inline_precision",
-    "avg_citation_recall_source",
-    "avg_citation_precision_source",
-    "avg_citation_recall_page",
-    "avg_citation_precision_page",
-    "avg_citation_recall_span",
-    "avg_citation_precision_span",
-    "avg_unsupported_claim_rate",
-    "avg_abstention_rate",
-    "num_true_abstention",
-    "num_false_abstention",
-    "num_unsupported_claim",
-    "total_unsupported_claim_count",
-    "num_retry",
-    "total_retry_count",
-    "num_route_switch",
-    "total_route_switch_count",
-    "avg_multimodal_answer_support",
-    "avg_total_seconds",
-    "median_total_seconds",
-    "p95_total_seconds",
-    "avg_total_seconds_including_preparation",
-    "median_total_seconds_including_preparation",
-    "p95_total_seconds_including_preparation",
-    "num_route_timeouts",
-    "benchmark_role",
-]
 
 
 def _to_slug(text: str) -> str:
@@ -497,16 +437,43 @@ def _diagnostic_failure_counts_markdown(summary: dict[str, Any]) -> list[str]:
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fieldnames = _csv_fieldnames(rows)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=fieldnames,
+                extrasaction="raise",
+            )
+            writer.writeheader()
+            writer.writerows(rows)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def _csv_fieldnames(rows: list[dict[str, Any]]) -> list[str]:
-    keys = list(rows[0])
+    keys = {key for row in rows for key in row}
     fieldnames = [key for key in _CSV_FIELD_ORDER if key in keys]
-    fieldnames.extend(key for key in keys if key not in fieldnames)
+    seen = set(fieldnames)
+    for row in rows:
+        for key in row:
+            if key not in seen:
+                fieldnames.append(key)
+                seen.add(key)
     return fieldnames
 
 
