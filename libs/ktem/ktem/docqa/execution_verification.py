@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Callable
 
+from .boolean_evidence_scope import evidence_item_text
 from .claim_aggregation import aggregate_answer_claims
 from .claim_revision import revise_to_supported_claims
 from .controller import RetrieveDecision, VerifyDecision
@@ -9,6 +11,12 @@ from .evidence_identity import identity_of
 from .evidence_schema import EvidenceBundle
 from .evidence_text import extract_final_answer_text
 from .pipeline_stage_timings import PipelineStageTimings
+from .qasper_answer_revision import (
+    ANSWER_REVISION_CONTRACT,
+    AnswerRevisionAssessment,
+    assess_qasper_answer_revision,
+    proposal_matches_verified_authority,
+)
 
 GuardrailFactory = Callable[[str, str, str], Any]
 RewriteFn = Callable[[Any, Any, EvidenceBundle, str], str]
@@ -107,14 +115,16 @@ def _verify_nonempty_answer(
         *list(trace_prefix or []),
         {"stage": "claim_aggregation", **aggregation_trace},
     ]
-    verify_decision = _timed_verify(
-        timings,
-        verify,
+    answer, verify_decision, revision_trace = _verify_with_answer_revision(
         request,
         retrieve_decision,
         bundle,
         answer,
+        verify,
+        timings,
     )
+    if revision_trace:
+        trace.append(revision_trace)
     if verify_decision.action == "revise" and rewrite is not None:
         answer, verify_decision = _rewrite_and_verify(
             request,
@@ -159,6 +169,148 @@ def _verify_nonempty_answer(
         guardrail,
         trace,
     )
+
+
+def _verify_with_answer_revision(
+    request: Any,
+    retrieve_decision: RetrieveDecision,
+    bundle: EvidenceBundle,
+    answer: str,
+    verify: VerifyFn,
+    timings: PipelineStageTimings,
+) -> tuple[str, VerifyDecision, dict[str, Any] | None]:
+    verify_decision = _timed_verify(
+        timings,
+        verify,
+        request,
+        retrieve_decision,
+        bundle,
+        answer,
+    )
+    return _revise_qasper_answer_relation(
+        request,
+        retrieve_decision,
+        bundle,
+        answer,
+        verify_decision,
+        verify,
+        timings,
+    )
+
+
+def _revise_qasper_answer_relation(
+    request: Any,
+    retrieve_decision: RetrieveDecision,
+    bundle: EvidenceBundle,
+    answer: str,
+    verify_decision: VerifyDecision,
+    verify: VerifyFn,
+    timings: PipelineStageTimings,
+) -> tuple[str, VerifyDecision, dict[str, Any] | None]:
+    evidence_signature = _answer_revision_evidence_signature(bundle)
+    attempted = bundle.metadata.setdefault(
+        "qasper_answer_revision_attempted_evidence_signatures",
+        [],
+    )
+    if evidence_signature in attempted:
+        return answer, verify_decision, None
+    assessment = assess_qasper_answer_revision(
+        request,
+        verify_decision,
+        list(bundle.items),
+    )
+    if not assessment.eligible:
+        return answer, verify_decision, None
+    attempted.append(evidence_signature)
+    proposal = assessment.proposal
+    if proposal is None:
+        return (
+            answer,
+            verify_decision,
+            _answer_revision_event(
+                answer,
+                assessment,
+                verify_decision,
+                verify_decision,
+                verified=False,
+            ),
+        )
+    revised = proposal.revised_answer
+    fresh = _timed_verify(
+        timings,
+        verify,
+        request,
+        retrieve_decision,
+        bundle,
+        revised,
+    )
+    verified = proposal_matches_verified_authority(proposal, fresh)
+    event = _answer_revision_event(
+        answer,
+        assessment,
+        verify_decision,
+        fresh,
+        verified=verified,
+    )
+    return (revised, fresh, event) if verified else (answer, verify_decision, event)
+
+
+def _answer_revision_event(
+    original_answer: str,
+    assessment: AnswerRevisionAssessment,
+    before: VerifyDecision,
+    after: VerifyDecision,
+    *,
+    verified: bool,
+) -> dict[str, Any]:
+    proposal = assessment.proposal
+    return {
+        "stage": "answer_revision",
+        "contract_id": ANSWER_REVISION_CONTRACT,
+        "original_candidate": original_answer,
+        "revised_candidate": proposal.revised_answer if proposal else "",
+        "authority_evidence_id": proposal.canonical_evidence_id if proposal else "",
+        "authority_evidence_ids": list(assessment.candidate_evidence_ids),
+        "authority_evidence_ref": proposal.evidence_ref if proposal else "",
+        "authority_span_id": proposal.span_id if proposal else "",
+        "authority_quote": proposal.quote if proposal else "",
+        "actor": proposal.actor if proposal else "",
+        "relation": proposal.relation if proposal else "",
+        "object": proposal.object if proposal else "",
+        "qualifier": proposal.qualifier if proposal else "",
+        "scope": proposal.scope if proposal else "",
+        "revision_reason": (
+            proposal.revision_reason if proposal else assessment.reason
+        ),
+        "ambiguity_status": assessment.ambiguity_status,
+        "conflict_status": assessment.conflict_status,
+        "authority_state_before": str(
+            (before.typed_authority or {}).get("state") or ""
+        ),
+        "authority_state_after": str((after.typed_authority or {}).get("state") or ""),
+        "authority_changed": verified,
+        "verification_status": after.status,
+        "stop_reason": (
+            "answer_revision_verified"
+            if verified
+            else (
+                "answer_revision_verification_failed"
+                if proposal
+                else f"answer_revision_{assessment.reason}"
+            )
+        ),
+    }
+
+
+def _answer_revision_evidence_signature(bundle: EvidenceBundle) -> str:
+    authorities = sorted(
+        {
+            f"{identity_of(item).key}\x1f{evidence_item_text(item)}"
+            for item in bundle.items
+            if identity_of(item).key
+        }
+    )
+    return hashlib.sha256("\x1e".join(authorities).encode("utf-8")).hexdigest()
 
 
 def _verified_boolean_answer(answer: str, decision: VerifyDecision) -> str:

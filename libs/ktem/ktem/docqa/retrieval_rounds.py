@@ -184,11 +184,17 @@ def verifier_recovery_query(request: Any) -> str:
         else boolean_retrieval_query(question, second_round=True)
     )
     parts = [*slot_queries, semantic_query]
-    parts.append(
-        "current paper authors exact proposition evidence predicate arguments "
-        "object answer relation polarity qualifier significance magnitude quantity "
-        "quantifier section scope"
-    )
+    if answer_relation_required:
+        parts.append(
+            "current paper authors direct answer relation predicate arguments "
+            "object qualifier section scope"
+        )
+    else:
+        parts.append(
+            "current paper authors exact proposition evidence predicate arguments "
+            "object answer relation polarity qualifier significance magnitude "
+            "quantity quantifier section scope"
+        )
     return " ".join(dict.fromkeys(part for part in parts if part)).strip()
 
 

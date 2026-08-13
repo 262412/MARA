@@ -8,15 +8,14 @@ from .evidence import EvidenceBundle
 from .execution_models import RetrieveFn, RewriteFn, RouteExecutionResult
 from .execution_planning import build_execution_workflow_plan
 from .execution_recovery_events import authority_state as _authority_state
-from .execution_recovery_events import boolean_slot_states as _boolean_slot_states
 from .execution_recovery_events import bundle_evidence_ids as _bundle_evidence_ids
 from .execution_recovery_events import (
     record_route_switch_reverification as _record_route_switch_reverification,
 )
 from .execution_recovery_events import recovery_trace_fields as _recovery_trace_fields
-from .execution_recovery_events import (
-    required_boolean_slot_state as _required_boolean_slot_state,
-)
+from .execution_recovery_events import required_authority_recovery_reason
+from .execution_recovery_events import required_typed_slot_state as _typed_slot_state
+from .execution_recovery_events import typed_slot_states as _typed_slot_states
 from .execution_results import guarded_result, verified_result
 from .execution_route_switch_recovery import (
     switch_after_failed_retrieval,
@@ -87,7 +86,7 @@ def recover_after_failed_verification(
     timings: PipelineStageTimings,
 ) -> RouteExecutionResult:
     _record_route_switch_reverification(initial_result)
-    if not required_boolean_authority_missing(request, initial_result.verify_decision):
+    if not required_typed_authority_missing(request, initial_result.verify_decision):
         _mark_resolved_initial_conflict(initial_result)
         return initial_result
     if not optional_stage_allowed(request):
@@ -98,7 +97,7 @@ def recover_after_failed_verification(
         initial_result.controller_decision,
         initial_result.evidence_bundle,
     )
-    slot_state = _required_boolean_slot_state(initial_result.evidence_bundle)
+    slot_state = _typed_slot_state(initial_result.evidence_bundle)
     if slot_state == "retrieved_unverified" and policy != "crag_guarded":
         rebound, recovery_trace = _rebind_existing_verifier_recovery(
             request,
@@ -109,7 +108,7 @@ def recover_after_failed_verification(
             trace_prefix,
             timings,
         )
-        if not required_boolean_authority_missing(request, rebound.verify_decision):
+        if not required_typed_authority_missing(request, rebound.verify_decision):
             return rebound
         if policy == "controller_auto":
             recovery_trace[-1].pop("stop_reason", None)
@@ -161,7 +160,7 @@ def _rebind_existing_verifier_recovery(
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
 ) -> tuple[RouteExecutionResult, list[dict[str, Any]]]:
-    before = _boolean_slot_states(initial_result.evidence_bundle)
+    before = _typed_slot_states(initial_result.evidence_bundle)
     rebound_bundle = timings.measure(
         "retry_seconds",
         rebind_existing_boolean_evidence,
@@ -257,7 +256,7 @@ def _same_route_verifier_recovery(
         retrieve,
         initial_result.evidence_bundle,
         evaluate=evaluate_retrieval_quality,
-        retry_reason="required_boolean_authority_missing",
+        retry_reason=required_authority_recovery_reason(request),
     )
     if recovered is None:
         return initial_result
@@ -302,7 +301,7 @@ def complete_verifier_recovery(
         terminal_event.update(
             {
                 "verification_status": "not_enough_evidence",
-                "slot_states_after": _boolean_slot_states(bundle),
+                "slot_states_after": _typed_slot_states(bundle),
                 "recovered_evidence_ids": _bundle_evidence_ids(bundle),
                 "authority_state_after": str(
                     terminal_event.get("authority_state_before") or ""
@@ -343,7 +342,7 @@ def _record_recovery_outcome(
     result: RouteExecutionResult,
     terminal_event: dict[str, Any],
 ) -> None:
-    recovered = not required_boolean_authority_missing(request, result.verify_decision)
+    recovered = not required_typed_authority_missing(request, result.verify_decision)
     conflict_resolved = (
         result.verify_decision.status == "verified_conflict"
         and authoritative_conflict_complete(
@@ -358,7 +357,7 @@ def _record_recovery_outcome(
     terminal_event.update(
         {
             "verification_status": result.verify_decision.status,
-            "slot_states_after": _boolean_slot_states(result.evidence_bundle),
+            "slot_states_after": _typed_slot_states(result.evidence_bundle),
             "recovered_evidence_ids": _bundle_evidence_ids(result.evidence_bundle),
             "authority_state_after": authority_state_after,
             "authority_atoms_after": authority_atoms_after,
@@ -452,7 +451,7 @@ def verifier_recovery_policy(
     return "text_rag"
 
 
-def required_boolean_authority_missing(
+def required_typed_authority_missing(
     request: Any,
     verify_decision: VerifyDecision,
 ) -> bool:
@@ -506,13 +505,21 @@ def required_boolean_authority_missing(
         return not authoritative_conflict_complete(
             verify_decision.authoritative_conflict
         )
-    return not (
-        verify_decision.status == "supported"
-        and verify_decision.canonical_answer_polarity in {"yes", "no"}
-        and bool(verify_decision.authoritative_evidence_id)
-        and bool(verify_decision.authoritative_evidence_ref)
-        and bool(verify_decision.authoritative_quote)
+    identity_complete = bool(
+        verify_decision.authoritative_evidence_id
+        and verify_decision.authoritative_evidence_ref
+        and verify_decision.authoritative_quote
     )
+    if plan.answer_type == "boolean":
+        return not (
+            verify_decision.status == "supported"
+            and verify_decision.canonical_answer_polarity in {"yes", "no"}
+            and identity_complete
+        )
+    return not (verify_decision.status == "supported" and identity_complete)
+
+
+required_boolean_authority_missing = required_typed_authority_missing
 
 
 def _mark_resolved_initial_conflict(result: RouteExecutionResult) -> None:

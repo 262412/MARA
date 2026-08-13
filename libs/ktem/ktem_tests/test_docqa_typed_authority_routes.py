@@ -104,6 +104,9 @@ def test_answer_relation_recovery_commits_same_authority_across_routes(
     ]
     assert len(terminal_events) == 1
     assert terminal_events[0]["authority_changed"] is True
+    assert terminal_events[0]["retry_reason"] == (
+        "required_answer_relation_authority_missing"
+    )
     if agent_mode == "thorough":
         recovery = [
             event
@@ -246,6 +249,23 @@ def test_incomplete_answer_relation_stays_safe_across_routes(
     assert result.verify_decision.verified_citations == []
     assert result.verify_decision.typed_authority["state"] == "missing"
     assert result.verify_decision.typed_authority["authority_atoms"] == []
+    recovery = [
+        event
+        for event in result.controller_trace
+        if event.get("verifier_recovery_attempt") == 1
+    ]
+    assert recovery
+    assert all(
+        event["retry_reason"] == "required_answer_relation_authority_missing"
+        for event in recovery
+    )
+    focused = [
+        event
+        for event in recovery
+        if event.get("stage") in {"focused_retrieval", "route_switch"}
+    ]
+    assert len(focused) == 1
+    assert " polarity " not in f" {focused[0]['focused_query'].lower()} "
     assert not any(
         event.get("stop_reason") == "authority_recovered"
         for event in result.controller_trace

@@ -42,6 +42,9 @@ from .execution_recovery import (
     required_boolean_authority_missing as _required_boolean_authority_missing,
 )
 from .execution_recovery import (
+    required_typed_authority_missing as _required_typed_authority_missing,
+)
+from .execution_recovery import (
     same_route_verifier_recovery_trace as _same_route_verifier_recovery_trace,
 )
 from .execution_recovery import (
@@ -91,6 +94,7 @@ __all__ = [
     "_recover_after_failed_retrieval",
     "_recover_after_failed_verification",
     "_required_boolean_authority_missing",
+    "_required_typed_authority_missing",
     "_result",
     "_retrieve_and_evaluate",
     "_route_switch_candidate_evaluation",

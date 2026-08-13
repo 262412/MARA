@@ -4,6 +4,7 @@ from typing import Any
 
 from .controller import VerifyDecision
 from .evidence import EvidenceBundle
+from .query_planning import ensure_request_query_plan
 from .route_selection import ControllerDecision
 
 
@@ -19,7 +20,7 @@ def bundle_evidence_ids(bundle: EvidenceBundle | None) -> list[str]:
     )
 
 
-def boolean_slot_states(bundle: EvidenceBundle | None) -> list[dict[str, Any]]:
+def typed_slot_states(bundle: EvidenceBundle | None) -> list[dict[str, Any]]:
     if bundle is None:
         return []
     plan: dict[str, Any] = {}
@@ -42,8 +43,8 @@ def boolean_slot_states(bundle: EvidenceBundle | None) -> list[dict[str, Any]]:
     ]
 
 
-def required_boolean_slot_state(bundle: EvidenceBundle | None) -> str:
-    statuses = {item["status"] for item in boolean_slot_states(bundle)}
+def required_typed_slot_state(bundle: EvidenceBundle | None) -> str:
+    statuses = {item["status"] for item in typed_slot_states(bundle)}
     for status in (
         "verified_conflict",
         "verified_support",
@@ -62,13 +63,14 @@ def recovery_trace_fields(
     recovered_bundle: EvidenceBundle | None,
 ) -> dict[str, Any]:
     before_state, before_atoms = authority_state(verify_decision)
+    reason = required_authority_recovery_reason(request)
     return {
         "verifier_recovery_attempt": 1,
-        "retry_reason": "required_boolean_authority_missing",
-        "failure_type": "required_boolean_authority_missing",
+        "retry_reason": reason,
+        "failure_type": reason,
         "recovered_evidence_ids": bundle_evidence_ids(recovered_bundle),
-        "slot_states_before": boolean_slot_states(initial_bundle),
-        "slot_states_after": boolean_slot_states(recovered_bundle),
+        "slot_states_before": typed_slot_states(initial_bundle),
+        "slot_states_after": typed_slot_states(recovered_bundle),
         "agent_mode": str(getattr(request, "agent_mode", "") or "auto"),
         "verification_mode": str(
             getattr(request, "verification_mode", "") or verify_decision.mode or "off"
@@ -76,6 +78,23 @@ def recovery_trace_fields(
         "authority_state_before": before_state,
         "authority_atoms_before": before_atoms,
     }
+
+
+def required_authority_recovery_reason(request: Any | None) -> str:
+    if request is None:
+        return "required_typed_authority_missing"
+    plan = ensure_request_query_plan(request)
+    answer_type = str(getattr(plan, "answer_type", "") or "").lower()
+    kinds = {
+        str(getattr(slot, "statement_kind", "") or "").lower()
+        for slot in getattr(plan, "evidence_slots", ()) or ()
+        if bool(getattr(slot, "required_for_verification", False))
+    }
+    if answer_type == "boolean" or "boolean_proposition" in kinds:
+        return "required_boolean_authority_missing"
+    if "answer_relation" in kinds:
+        return "required_answer_relation_authority_missing"
+    return "required_typed_authority_missing"
 
 
 def authority_state(decision: VerifyDecision) -> tuple[str, list[str]]:
@@ -116,6 +135,7 @@ def build_verifier_switch_event(
     recovered_bundle: EvidenceBundle,
     rejected_candidates: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    reason = required_authority_recovery_reason(request)
     event = {
         "stage": "route_switch",
         "transition_id": f"verifier-recovery:1:{decision.legacy_route}->{route}",
@@ -128,13 +148,13 @@ def build_verifier_switch_event(
             recovered_bundle.metadata.get("verifier_recovery_round") or 2
         ),
         "focused_query": focused_query,
-        "retry_reason": "required_boolean_authority_missing",
-        "failure_type": "required_boolean_authority_missing",
+        "retry_reason": reason,
+        "failure_type": reason,
         "failed_verifier_status": failed_verification.status,
         "failed_verifier_reason": failed_verification.reason,
         "recovered_evidence_ids": bundle_evidence_ids(recovered_bundle),
-        "slot_states_before": boolean_slot_states(failed_bundle),
-        "slot_states_after": boolean_slot_states(recovered_bundle),
+        "slot_states_before": typed_slot_states(failed_bundle),
+        "slot_states_after": typed_slot_states(recovered_bundle),
         "agent_mode": str(getattr(request, "agent_mode", "") or "auto"),
         "verification_mode": str(
             getattr(request, "verification_mode", "")
@@ -145,6 +165,10 @@ def build_verifier_switch_event(
     if rejected_candidates:
         event["rejected_route_switch_candidates"] = list(rejected_candidates)
     return event
+
+
+boolean_slot_states = typed_slot_states
+required_boolean_slot_state = required_typed_slot_state
 
 
 def build_retrieval_switch_event(

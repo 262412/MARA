@@ -17,6 +17,7 @@ from .execution_recovery_events import (
 from .execution_recovery_events import (
     build_verifier_switch_event as _verifier_switch_event,
 )
+from .execution_recovery_events import required_authority_recovery_reason
 from .execution_retrieval import retrieve_and_evaluate
 from .retrieval_rounds import retrieve_for_verifier_recovery
 from .route_budget import optional_stage_allowed, route_budget_metadata
@@ -40,14 +41,20 @@ def switch_after_failed_verification(
             failed_bundle.metadata["rejected_route_switch_candidates"] = list(rejected)
         return None
     route = candidates[0]
-    switched_decision = _verifier_switch_decision(decision, route, candidates)
+    failure_reason = required_authority_recovery_reason(request)
+    switched_decision = _verifier_switch_decision(
+        decision,
+        route,
+        candidates,
+        failure_reason,
+    )
     recovered = retrieve_for_verifier_recovery(
         request,
         switched_decision,
         retrieve,
         failed_bundle,
         evaluate=evaluate_retrieval_quality,
-        retry_reason="required_boolean_authority_missing",
+        retry_reason=failure_reason,
     )
     if recovered is None:
         return None
@@ -70,6 +77,7 @@ def _verifier_switch_decision(
     decision: ControllerDecision,
     route: str,
     candidates: list[str],
+    failure_reason: str,
 ) -> ControllerDecision:
     switched = controller_decision(
         RouteDecision(
@@ -78,8 +86,8 @@ def _verifier_switch_decision(
             controller_mode=decision.controller_mode,
             requires_retrieval=True,
             reason=(
-                f"Switched from {decision.legacy_route} after required Boolean "
-                "authority was not established."
+                f"Switched from {decision.legacy_route} after required typed "
+                f"authority was not established ({failure_reason})."
             ),
         )
     )
@@ -87,7 +95,7 @@ def _verifier_switch_decision(
         switched,
         initial_decision=decision,
         candidates=candidates,
-        override_reason="Route switch used after required Boolean authority failure.",
+        override_reason="Route switch used after required typed authority failure.",
     )
 
 

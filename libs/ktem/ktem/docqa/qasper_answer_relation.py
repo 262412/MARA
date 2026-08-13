@@ -294,7 +294,17 @@ def _answer_relation_atom(
         evidence_id = identity_of(item).key
     except ValueError:
         return None
-    canonical_base = _optional_int(item.get("canonical_start"))
+    canonical_base = next(
+        (
+            value
+            for value in (
+                _optional_int(item.get("canonical_start")),
+                _optional_int(item.get("chunk_start")),
+            )
+            if value is not None
+        ),
+        None,
+    )
     canonical_start = canonical_base + start if canonical_base is not None else None
     canonical_end = canonical_base + end if canonical_base is not None else None
     span_start = canonical_start if canonical_start is not None else start
@@ -303,7 +313,9 @@ def _answer_relation_atom(
     source_id, page_label = source_page_locator(item)
     relation = _relation_name(question, relation_kind)
     quantifier = sorted(answer_numbers)[0] if answer_numbers else "none"
-    object_value = " ".join(sorted(answer_values))
+    object_value = _answer_object_value(answer_clause, answer_values)
+    if not object_value:
+        return None
     section_scope = _section_scope(item)
     return {
         "evidence_id": evidence_id,
@@ -328,6 +340,20 @@ def _answer_relation_atom(
         "polarity": "",
         "reason": "exact_question_answer_relation",
     }
+
+
+def _answer_object_value(
+    answer_clause: str,
+    answer_values: set[str],
+) -> str:
+    values = []
+    seen: set[str] = set()
+    for token in _TOKEN_RE.findall(str(answer_clause or "")):
+        normalized = _stem(token.lower())
+        if normalized in answer_values and normalized not in seen:
+            seen.add(normalized)
+            values.append(token)
+    return " ".join(values)
 
 
 def _local_answer_relation_establishes_actor(
