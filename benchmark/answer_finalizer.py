@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from .answer_abstention import structured_or_text_abstention
+from .answer_abstention import apply_abstention_projection
 from .answer_modes import normalize_benchmark_answer_mode
 from .answer_repetition import deduplicate_final_answer as _deduplicate_final_answer
 from .answer_scoring_adapter import select_scoring_answer
@@ -25,7 +25,6 @@ from .finance_answer_finalization import (
     metadata_citations_allowed,
 )
 from .finance_citation_contract import (
-    clear_answer_citation_state,
     record_execution_operand_evidence,
     record_verified_claim_support,
     typed_calculation_is_verified,
@@ -55,6 +54,9 @@ def finalize_prediction_answer(
     mode: str,
 ) -> None:
     normalized_mode = normalize_benchmark_answer_mode(mode)
+    presentation_answer = str(
+        prediction.get("answer_for_user") or prediction.get("predicted_answer") or ""
+    )
     raw_answer, preserve_semantic_answer = qasper_terminal_scoring_commit(
         prediction,
         dataset_name=dataset_name,
@@ -74,12 +76,7 @@ def finalize_prediction_answer(
         prediction=prediction,
         dataset_name=dataset_name,
     )
-    record_execution_operand_evidence(
-        prediction,
-        _citation_candidate_items(prediction),
-        _canonical_source_refs(prediction),
-    )
-    enforce_finance_citation_authority(prediction, dataset_name=dataset_name)
+    _prepare_finalization_evidence(prediction, dataset_name=dataset_name)
     (
         answer_for_user,
         answer_text_for_user,
@@ -101,14 +98,15 @@ def finalize_prediction_answer(
         mode=normalized_mode,
         preserve_semantic_answer=preserve_semantic_answer,
     )
-    if structured_or_text_abstention(prediction, answer_text_for_user):
-        answer_for_scoring = "unanswerable"
-        source = "canonical_abstention"
-        prediction["answer_status"] = "abstained"
-        answer_for_user = answer_text_for_user
-        clear_answer_citation_state(prediction)
-    else:
-        prediction["answer_status"] = "answered"
+    answer_for_user, answer_for_scoring, source = apply_abstention_projection(
+        prediction,
+        answer_for_user=answer_for_user,
+        answer_for_scoring=answer_for_scoring,
+        answer_text_for_user=answer_text_for_user,
+        presentation_answer=presentation_answer,
+        source=source,
+        preserve_semantic_answer=preserve_semantic_answer,
+    )
     _store_finalized_answers(
         prediction,
         answer_for_user=answer_for_user,
@@ -127,6 +125,17 @@ def finalize_prediction_answer(
         dataset_name=dataset_name,
         qasper_contract_normalized=qasper_contract_normalized,
     )
+
+
+def _prepare_finalization_evidence(
+    prediction: dict[str, Any], *, dataset_name: str
+) -> None:
+    record_execution_operand_evidence(
+        prediction,
+        _citation_candidate_items(prediction),
+        _canonical_source_refs(prediction),
+    )
+    enforce_finance_citation_authority(prediction, dataset_name=dataset_name)
 
 
 def _finalization_answer_source(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .finance_citation_contract import clear_answer_citation_state
 from .metrics import is_abstention_answer
 
 
@@ -40,6 +41,38 @@ def structured_or_text_abstention(
         ):
             return True
     return is_abstention_answer(answer)
+
+
+def apply_abstention_projection(
+    prediction: dict[str, Any],
+    *,
+    answer_for_user: str,
+    answer_for_scoring: str,
+    answer_text_for_user: str,
+    presentation_answer: str,
+    source: str,
+    preserve_semantic_answer: bool,
+) -> tuple[str, str, str]:
+    terminal_abstention = structured_or_text_abstention(
+        prediction, answer_text_for_user
+    )
+    presentation_abstention = bool(
+        preserve_semantic_answer
+        and structured_or_text_abstention(prediction, presentation_answer)
+    )
+    if not (terminal_abstention or presentation_abstention):
+        prediction["answer_status"] = "answered"
+        return answer_for_user, answer_for_scoring, source
+    if not preserve_semantic_answer:
+        answer_for_scoring = "unanswerable"
+        source = "canonical_abstention"
+    prediction["answer_status"] = "abstained"
+    clear_answer_citation_state(prediction)
+    return (
+        presentation_answer if presentation_abstention else answer_text_for_user,
+        answer_for_scoring,
+        source,
+    )
 
 
 def _terminal_task_contract_abstention(

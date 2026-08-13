@@ -6,12 +6,13 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from .boolean_claim_verification import canonical_boolean_answer_polarity
 from .evidence import EvidenceBundle
 from .execution_contracts import ABSTAIN_MESSAGE
 from .execution_models import GuardrailDecision
 from .verification import VerifyDecision
 
-TERMINAL_SEMANTIC_COMMIT_CONTRACT = "terminal_semantic_commit.v1"
+TERMINAL_SEMANTIC_COMMIT_CONTRACT = "terminal_semantic_commit.v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +31,7 @@ class TerminalSemanticCommit:
     authoritative_evidence: tuple[dict[str, Any], ...]
     citations: tuple[str, ...]
     projection_hash: str
-    state_version: int = 1
+    state_version: int = 2
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -54,10 +55,15 @@ def build_terminal_semantic_commit(
     guardrail_decision: GuardrailDecision | dict[str, Any],
     bundle: EvidenceBundle | dict[str, Any],
 ) -> TerminalSemanticCommit:
-    semantic_answer = str(answer or "")
     verify = _as_dict(verify_decision)
     guardrail = _as_dict(guardrail_decision)
     evidence_bundle = _as_dict(bundle)
+    semantic_answer = canonical_terminal_semantic_answer(
+        answer,
+        verify,
+        guardrail,
+        evidence_bundle,
+    )
     authoritative_evidence = tuple(_authoritative_evidence(evidence_bundle))
     citations = tuple(
         str(value).strip()
@@ -73,7 +79,7 @@ def build_terminal_semantic_commit(
         "guardrail_decision": guardrail,
         "authoritative_evidence": list(authoritative_evidence),
         "citations": list(citations),
-        "state_version": 1,
+        "state_version": 2,
     }
     projection_hash = hashlib.sha256(
         json.dumps(
@@ -93,6 +99,30 @@ def build_terminal_semantic_commit(
         citations=citations,
         projection_hash=projection_hash,
     )
+
+
+def canonical_terminal_semantic_answer(
+    answer: str,
+    verify_decision: VerifyDecision | dict[str, Any],
+    guardrail_decision: GuardrailDecision | dict[str, Any],
+    bundle: EvidenceBundle | dict[str, Any],
+) -> str:
+    """Choose the runtime-owned semantic answer before the terminal commit."""
+
+    presentation_answer = str(answer or "")
+    verify = _as_dict(verify_decision)
+    guardrail = _as_dict(guardrail_decision)
+    evidence_bundle = _as_dict(bundle)
+    if _semantic_abstention(presentation_answer, verify, guardrail):
+        return "unanswerable"
+    verified_polarity = str(verify.get("canonical_answer_polarity") or "").lower()
+    if verified_polarity in {"yes", "no"}:
+        return verified_polarity
+    if _planned_answer_type(evidence_bundle) == "boolean":
+        candidate_polarity = canonical_boolean_answer_polarity(presentation_answer)
+        if candidate_polarity:
+            return candidate_polarity
+    return presentation_answer
 
 
 def terminal_commit_projection_present(
@@ -132,9 +162,20 @@ def _answer_status(
     verify: dict[str, Any],
     guardrail: dict[str, Any],
 ) -> str:
+    return (
+        "abstained" if _semantic_abstention(answer, verify, guardrail) else "answered"
+    )
+
+
+def _semantic_abstention(
+    answer: str,
+    verify: dict[str, Any],
+    guardrail: dict[str, Any],
+) -> bool:
     normalized = " ".join(answer.strip().lower().split())
-    if (
+    return bool(
         str(guardrail.get("action") or "").lower() == "abstain"
+        or str(verify.get("action") or "").lower() == "abstain"
         or str(verify.get("status") or "").lower()
         in {"not_enough_evidence", "verified_conflict"}
         or normalized.startswith(
@@ -148,9 +189,16 @@ def _answer_status(
                 ABSTAIN_MESSAGE.lower(),
             )
         )
-    ):
-        return "abstained"
-    return "answered"
+    )
+
+
+def _planned_answer_type(bundle: dict[str, Any]) -> str:
+    metadata = bundle.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    plan = metadata.get("query_plan") or metadata.get("bound_query_plan")
+    if not isinstance(plan, dict):
+        return ""
+    return str(plan.get("answer_type") or "").strip().lower()
 
 
 def _as_dict(value: Any) -> dict[str, Any]:

@@ -9,7 +9,10 @@ from .boolean_claim_verification import canonical_boolean_answer_polarity
 from .evidence import EvidenceBundle
 from .execution_contracts import ABSTAIN_MESSAGE, ENGINE_TERMINAL_STATE_CONTRACT
 from .execution_models import GuardrailDecision
-from .terminal_semantic_commit import build_terminal_semantic_commit
+from .terminal_semantic_commit import (
+    build_terminal_semantic_commit,
+    canonical_terminal_semantic_answer,
+)
 from .verification import VerifyDecision
 
 
@@ -21,13 +24,15 @@ def engine_terminal_projection(
     *,
     raw_generated_answer: str | None = None,
 ) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str]:
-    terminal_answer = str(answer or "")
-    raw_answer = (
-        terminal_answer if raw_generated_answer is None else str(raw_generated_answer)
+    (
+        terminal_answer,
+        raw_answer,
+        terminal_verify,
+        terminal_guardrail,
+        terminal_evidence,
+    ) = _terminal_projection_values(
+        answer, verify_decision, guardrail_decision, bundle, raw_generated_answer
     )
-    terminal_verify = deepcopy(verify_decision.as_dict())
-    terminal_guardrail = deepcopy(guardrail_decision.as_dict())
-    terminal_evidence = deepcopy(bundle.as_dict())
     raw_candidate_label = normalized_candidate_label(raw_answer, terminal_evidence)
     conflict_terminal = terminal_verify.get("status") == "verified_conflict"
     candidate_label = (
@@ -75,15 +80,7 @@ def engine_terminal_projection(
         terminal_guardrail,
         terminal_evidence,
     ).as_dict()
-    projection_hash = hashlib.sha256(
-        json.dumps(
-            terminal_state,
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            default=str,
-        ).encode("utf-8")
-    ).hexdigest()
+    projection_hash = _projection_hash(terminal_state)
     return (
         terminal_answer,
         terminal_state,
@@ -92,6 +89,49 @@ def engine_terminal_projection(
         terminal_evidence,
         projection_hash,
     )
+
+
+def _terminal_projection_values(
+    answer: str,
+    verify_decision: VerifyDecision,
+    guardrail_decision: GuardrailDecision,
+    bundle: EvidenceBundle,
+    raw_generated_answer: str | None,
+) -> tuple[str, str, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    presentation_answer = str(answer or "")
+    raw_answer = (
+        presentation_answer
+        if raw_generated_answer is None
+        else str(raw_generated_answer)
+    )
+    terminal_verify = deepcopy(verify_decision.as_dict())
+    terminal_guardrail = deepcopy(guardrail_decision.as_dict())
+    terminal_evidence = deepcopy(bundle.as_dict())
+    terminal_answer = canonical_terminal_semantic_answer(
+        presentation_answer,
+        terminal_verify,
+        terminal_guardrail,
+        terminal_evidence,
+    )
+    return (
+        terminal_answer,
+        raw_answer,
+        terminal_verify,
+        terminal_guardrail,
+        terminal_evidence,
+    )
+
+
+def _projection_hash(terminal_state: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            terminal_state,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def normalized_candidate_label(

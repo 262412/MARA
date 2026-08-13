@@ -129,6 +129,8 @@ def _presentation_matches(value: Any, answer: str) -> bool:
         return False
     if presentation == answer:
         return True
+    if is_abstention_answer(answer) and is_abstention_answer(presentation):
+        return True
     return bool(answer and presentation.startswith(f"{answer} "))
 
 

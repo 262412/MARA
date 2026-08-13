@@ -153,6 +153,16 @@ def finalize_stream_result(result: TurnStreamResult, empty_message: str) -> None
         terminal_answer = str(execution.get("engine_terminal_answer") or "").strip()
         if terminal_answer:
             answer = terminal_answer
+        terminal_commit = execution.get("engine_terminal_commit") or execution.get(
+            "terminal_semantic_commit"
+        )
+        if (
+            isinstance(terminal_commit, dict)
+            and terminal_commit.get("answer_status") == "abstained"
+        ):
+            presentation_answer = str(execution.get("answer") or "").strip()
+            if presentation_answer:
+                answer = presentation_answer
     result.text = extract_final_answer_text(_hide_unclosed_think_block(answer))
     if not result.text:
         result.text = empty_message

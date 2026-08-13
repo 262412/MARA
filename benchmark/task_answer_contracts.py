@@ -48,11 +48,11 @@ def apply_task_answer_contract(
 
     audit = _qasper_audit_context(prediction, dataset_name=dataset_name)
     _record_qasper_audit(prediction, metadata, audit)
-    if not audit["violation"] and audit["scored_label"] in {
-        "yes",
-        "no",
-        "unanswerable",
-    }:
+    if (
+        not audit["projection_present"]
+        and not audit["violation"]
+        and audit["scored_label"] in {"yes", "no", "unanswerable"}
+    ):
         prediction["predicted_answer"] = audit["scored_label"]
         prediction["answer_for_scoring"] = audit["scored_label"]
         _update_contract_trace(prediction)

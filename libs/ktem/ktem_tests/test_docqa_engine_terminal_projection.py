@@ -143,7 +143,46 @@ def test_terminal_projection_preserves_an_empty_raw_generation() -> None:
 
     payload = result.as_dict()
     assert payload["engine_terminal_state"]["raw_generated_answer"] == ""
-    assert payload["engine_terminal_state"]["answer"] == ABSTAIN_MESSAGE
+    assert result.answer == ABSTAIN_MESSAGE
+    assert payload["engine_terminal_answer"] == "unanswerable"
+    assert payload["engine_terminal_state"]["answer"] == "unanswerable"
+    assert payload["engine_terminal_commit"]["semantic_answer"] == "unanswerable"
+    assert payload["engine_terminal_commit"]["answer_status"] == "abstained"
+
+
+def test_stream_finalization_preserves_safe_abstention_presentation() -> None:
+    request = DocQARequest(prompt="Which inputs does the method rely on?")
+    execution = _result(
+        request,
+        ControllerDecision(
+            route="doc_text",
+            legacy_route="doc_text",
+            policy="document",
+            controller_mode="heuristic",
+            requires_retrieval=True,
+            reason="test route",
+        ),
+        RetrieveDecision("good", "evidence found"),
+        VerifyDecision(
+            mode="strict",
+            status="unknown",
+            reason="Claim support is unknown.",
+            action="abstain",
+        ),
+        GuardrailDecision("unknown", "abstain", "Claim support is unknown."),
+        EvidenceBundle(route="doc_text"),
+        {"route": "doc_text"},
+        ABSTAIN_MESSAGE,
+        raw_generated_answer="unsupported answer",
+    ).as_dict()
+    result = create_stream_result(request)
+    result.text = "unsupported answer"
+    result.capture.ingest("execution", execution)
+
+    finalize_stream_result(result, "empty")
+
+    assert execution["engine_terminal_answer"] == "unanswerable"
+    assert result.text == ABSTAIN_MESSAGE
 
 
 def test_response_capture_preserves_terminal_projection_without_rebuilding():

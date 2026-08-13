@@ -68,6 +68,11 @@ def _conflict_prediction() -> dict:
 
 def test_benchmark_passively_audits_complete_authoritative_conflict() -> None:
     prediction = _conflict_prediction()
+    committed_conflict = deepcopy(
+        prediction["engine_terminal_commit"]["verify_decision"][
+            "authoritative_conflict"
+        ]
+    )
 
     apply_task_answer_contract(
         prediction,
@@ -81,6 +86,15 @@ def test_benchmark_passively_audits_complete_authoritative_conflict() -> None:
     assert authority["authority_kind"] == "authoritative_conflict"
     assert prediction["predicted_answer"] == "unanswerable"
     assert prediction["answer_for_scoring"] == "unanswerable"
+    assert prediction["engine_terminal_commit"]["semantic_answer"] == "unanswerable"
+    assert (
+        prediction["engine_terminal_commit"]["verify_decision"][
+            "authoritative_conflict"
+        ]
+        == committed_conflict
+    )
+    assert committed_conflict["positive_authorities"]
+    assert committed_conflict["negative_authorities"]
     assert prediction["contract_action"] == "pass_through"
     assert prediction["contract_semantic_rewrite"] is False
     assert prediction["structured_citations"] == []
