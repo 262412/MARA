@@ -5,6 +5,7 @@ from typing import Any, Callable
 from .boolean_evidence_scope import boolean_retrieval_query
 from .evidence import EvidenceBundle, build_evidence_bundle
 from .evidence_identity import identity_of
+from .execution_verifier_rebind import verification_recovery_base_metadata
 from .finance_typed_adequacy import ensure_finance_numeric_trace
 from .query_planning import ensure_request_query_plan, request_planning_question
 from .route_budget import optional_stage_allowed, route_budget_metadata
@@ -134,7 +135,7 @@ def retrieve_for_verifier_recovery(
         round_id=recovery_round,
     )
     merged_metadata = _merge_retrieval_metadata(
-        _recovery_base_metadata(bundle.metadata),
+        verification_recovery_base_metadata(bundle.metadata),
         recovery_metadata,
     )
     merged_metadata.update(
@@ -163,7 +164,7 @@ def retrieve_for_verifier_recovery(
 
 
 def verifier_recovery_query(request: Any) -> str:
-    """Build a focused query from the required Boolean proposition frame."""
+    """Build a focused query from the required proposition frame."""
 
     question = request_planning_question(request)
     plan = ensure_request_query_plan(request)
@@ -172,11 +173,21 @@ def verifier_recovery_query(request: Any) -> str:
         for slot in plan.evidence_slots
         if slot.required_for_verification and str(slot.query).strip()
     ]
-    semantic_query = boolean_retrieval_query(question, second_round=True)
+    answer_relation_required = any(
+        slot.required_for_verification
+        and str(slot.statement_kind or "").lower() == "answer_relation"
+        for slot in plan.evidence_slots
+    )
+    semantic_query = (
+        question
+        if answer_relation_required
+        else boolean_retrieval_query(question, second_round=True)
+    )
     parts = [*slot_queries, semantic_query]
     parts.append(
         "current paper authors exact proposition evidence predicate arguments "
-        "object polarity qualifier significance magnitude quantifier section scope"
+        "object answer relation polarity qualifier significance magnitude quantity "
+        "quantifier section scope"
     )
     return " ".join(dict.fromkeys(part for part in parts if part)).strip()
 
@@ -187,27 +198,11 @@ def _boolean_verification_slot_id(plan: Any) -> str:
             str(slot.slot_id)
             for slot in plan.evidence_slots
             if slot.required_for_verification
-            and str(slot.statement_kind or "").lower() == "boolean_proposition"
+            and str(slot.statement_kind or "").lower()
+            in {"answer_relation", "boolean_proposition"}
         ),
         "support:boolean_proposition",
     )
-
-
-def _recovery_base_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    derived_keys = {
-        "boolean_authority",
-        "pending_verification_slot_ids",
-        "pipeline_stage_timings",
-        "pre_guardrail_answer",
-        "pre_verification_answer",
-        "verification_slot_states",
-        "verified_claim_support_by_claim",
-        "verified_claim_support_evidence",
-        "verified_claim_support_spans",
-        "verified_evidence",
-        "verify_decision",
-    }
-    return {key: value for key, value in metadata.items() if key not in derived_keys}
 
 
 def _retrieve_first_round(

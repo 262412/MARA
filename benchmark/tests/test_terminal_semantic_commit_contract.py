@@ -44,7 +44,7 @@ def _runtime_prediction(answer: str, *, dataset_name: str) -> dict:
             prompt=question,
             retrieval_query=question,
             task_type="free_text",
-            verification_domain="qasper",
+            verification_domain="general",
             verification_mode="strict",
             route_policy="doc",
             allowed_routes=["doc_text"],

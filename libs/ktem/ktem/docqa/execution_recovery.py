@@ -3,22 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from .boolean_authoritative_conflict import authoritative_conflict_complete
-from .controller import (
-    RetrieveDecision,
-    RouteDecision,
-    VerifyDecision,
-    evaluate_retrieval_quality,
-)
+from .controller import RetrieveDecision, VerifyDecision, evaluate_retrieval_quality
 from .evidence import EvidenceBundle
 from .execution_models import RetrieveFn, RewriteFn, RouteExecutionResult
-from .execution_planning import build_execution_workflow_plan, controller_decision
+from .execution_planning import build_execution_workflow_plan
+from .execution_recovery_events import authority_state as _authority_state
 from .execution_recovery_events import boolean_slot_states as _boolean_slot_states
-from .execution_recovery_events import (
-    build_retrieval_switch_event as _retrieval_switch_event,
-)
-from .execution_recovery_events import (
-    build_verifier_switch_event as _verifier_switch_event,
-)
 from .execution_recovery_events import bundle_evidence_ids as _bundle_evidence_ids
 from .execution_recovery_events import (
     record_route_switch_reverification as _record_route_switch_reverification,
@@ -28,14 +18,17 @@ from .execution_recovery_events import (
     required_boolean_slot_state as _required_boolean_slot_state,
 )
 from .execution_results import guarded_result, verified_result
-from .execution_retrieval import retrieve_and_evaluate
+from .execution_route_switch_recovery import (
+    switch_after_failed_retrieval,
+    switch_after_failed_verification,
+)
 from .execution_verifier_rebind import rebind_existing_boolean_evidence
 from .pipeline_stage_timings import PipelineStageTimings
 from .query_planning import ensure_request_query_plan
 from .retrieval_rounds import retrieve_for_verifier_recovery
-from .route_budget import optional_stage_allowed, route_budget_metadata
-from .route_capabilities import route_switch_candidate_evaluation
-from .route_selection import ControllerDecision, mark_route_switch_recovery
+from .route_budget import optional_stage_allowed
+from .route_selection import ControllerDecision
+from .typed_proposition_authority import TYPED_PROPOSITION_AUTHORITY_CONTRACT
 
 
 def recover_after_failed_retrieval(
@@ -66,15 +59,22 @@ def recover_after_failed_retrieval(
     )
     if switched is None:
         return decision, bundle, retrieve_decision, workflow_plan, []
-    decision, bundle, retrieve_decision, event = switched
-    workflow_plan = build_execution_workflow_plan(
-        request,
-        decision.legacy_route,
-        decision.policy,
-        decision.controller_mode,
-        [],
+    recovered_decision, bundle, retrieve_decision, events = switched
+    if recovered_decision.legacy_route != decision.legacy_route:
+        workflow_plan = build_execution_workflow_plan(
+            request,
+            recovered_decision.legacy_route,
+            recovered_decision.policy,
+            recovered_decision.controller_mode,
+            [],
+        )
+    return (
+        recovered_decision,
+        bundle,
+        retrieve_decision,
+        workflow_plan,
+        events,
     )
-    return decision, bundle, retrieve_decision, workflow_plan, [event]
 
 
 def recover_after_failed_verification(
@@ -126,7 +126,19 @@ def recover_after_failed_verification(
             if switched is not None:
                 return switched
             recovery_trace[-1]["stop_reason"] = "authority_recovery_exhausted"
-        return rebound
+            return rebound
+        recovery_trace[-1].pop("stop_reason", None)
+        return _same_route_verifier_recovery(
+            request,
+            rebound,
+            retrieve,
+            rewrite,
+            candidate_answer,
+            policy,
+            workflow_plan,
+            [*trace_prefix, *recovery_trace],
+            timings,
+        )
     return _same_route_verifier_recovery(
         request,
         initial_result,
@@ -292,6 +304,13 @@ def complete_verifier_recovery(
                 "verification_status": "not_enough_evidence",
                 "slot_states_after": _boolean_slot_states(bundle),
                 "recovered_evidence_ids": _bundle_evidence_ids(bundle),
+                "authority_state_after": str(
+                    terminal_event.get("authority_state_before") or ""
+                ),
+                "authority_atoms_after": list(
+                    terminal_event.get("authority_atoms_before") or []
+                ),
+                "authority_changed": False,
                 "stop_reason": "authority_recovery_exhausted",
             }
         )
@@ -315,6 +334,15 @@ def complete_verifier_recovery(
         trace_prefix,
         timings,
     )
+    _record_recovery_outcome(request, result, terminal_event)
+    return result
+
+
+def _record_recovery_outcome(
+    request: Any,
+    result: RouteExecutionResult,
+    terminal_event: dict[str, Any],
+) -> None:
     recovered = not required_boolean_authority_missing(request, result.verify_decision)
     conflict_resolved = (
         result.verify_decision.status == "verified_conflict"
@@ -322,11 +350,22 @@ def complete_verifier_recovery(
             result.verify_decision.authoritative_conflict
         )
     )
+    authority_state_after, authority_atoms_after = _authority_state(
+        result.verify_decision
+    )
+    authority_state_before = str(terminal_event.get("authority_state_before") or "")
+    authority_atoms_before = list(terminal_event.get("authority_atoms_before") or [])
     terminal_event.update(
         {
             "verification_status": result.verify_decision.status,
             "slot_states_after": _boolean_slot_states(result.evidence_bundle),
             "recovered_evidence_ids": _bundle_evidence_ids(result.evidence_bundle),
+            "authority_state_after": authority_state_after,
+            "authority_atoms_after": authority_atoms_after,
+            "authority_changed": (
+                authority_state_before != authority_state_after
+                or authority_atoms_before != authority_atoms_after
+            ),
             "stop_reason": (
                 "authority_conflict_resolved"
                 if conflict_resolved
@@ -338,7 +377,6 @@ def complete_verifier_recovery(
             ),
         }
     )
-    return result
 
 
 def same_route_verifier_recovery_trace(
@@ -418,14 +456,52 @@ def required_boolean_authority_missing(
     request: Any,
     verify_decision: VerifyDecision,
 ) -> bool:
+    if verify_decision.mode == "off" or verify_decision.status == "not_requested":
+        return False
     plan = ensure_request_query_plan(request)
-    boolean_required = plan.answer_type == "boolean" or any(
+    typed_required = plan.answer_type == "boolean" or any(
         slot.required_for_verification
-        and str(slot.statement_kind or "").lower() == "boolean_proposition"
+        and str(slot.statement_kind or "").lower()
+        in {"answer_relation", "boolean_proposition"}
         for slot in plan.evidence_slots
     )
-    if not boolean_required:
+    if not typed_required:
         return False
+    typed = verify_decision.typed_authority
+    if typed.get("contract_id") == TYPED_PROPOSITION_AUTHORITY_CONTRACT:
+        state = str(typed.get("state") or "")
+        required = {
+            str(value).strip()
+            for value in typed.get("required_slot_ids") or []
+            if str(value).strip()
+        }
+        verified = {
+            str(value).strip()
+            for value in typed.get("verified_slot_ids") or []
+            if str(value).strip()
+        }
+        atoms = [
+            atom
+            for atom in typed.get("authority_atoms") or []
+            if isinstance(atom, dict)
+        ]
+        if state == "verified_conflict":
+            return not authoritative_conflict_complete(
+                verify_decision.authoritative_conflict
+            )
+        return not (
+            verify_decision.status == "supported"
+            and state == "verified_support"
+            and required
+            and required == verified
+            and atoms
+            and all(
+                str(atom.get("evidence_id") or "")
+                and str(atom.get("evidence_ref") or "")
+                and str(atom.get("quote") or "")
+                for atom in atoms
+            )
+        )
     if verify_decision.status == "verified_conflict":
         return not authoritative_conflict_complete(
             verify_decision.authoritative_conflict
@@ -449,139 +525,6 @@ def _mark_resolved_initial_conflict(result: RouteExecutionResult) -> None:
         if event.get("stage") == "verifier":
             event["stop_reason"] = "authority_conflict_resolved"
             break
-
-
-def switch_after_failed_verification(
-    request: Any,
-    decision: ControllerDecision,
-    failed_verification: VerifyDecision,
-    failed_bundle: EvidenceBundle,
-    retrieve: RetrieveFn,
-) -> tuple[ControllerDecision, EvidenceBundle, RetrieveDecision, dict[str, Any]] | None:
-    candidates, rejected_candidates = route_switch_candidate_evaluation(
-        request,
-        decision.legacy_route,
-    )
-    if not candidates:
-        if rejected_candidates:
-            failed_bundle.metadata["rejected_route_switch_candidates"] = list(
-                rejected_candidates
-            )
-        return None
-    route = candidates[0]
-    switched_decision = _verifier_switch_decision(decision, route, candidates)
-    recovered = retrieve_for_verifier_recovery(
-        request,
-        switched_decision,
-        retrieve,
-        failed_bundle,
-        evaluate=evaluate_retrieval_quality,
-        retry_reason="required_boolean_authority_missing",
-    )
-    if recovered is None:
-        return None
-    bundle, retrieve_decision, focused_query = recovered
-    event = _verifier_switch_event(
-        request,
-        decision,
-        route,
-        candidates,
-        focused_query,
-        failed_verification,
-        failed_bundle,
-        bundle,
-        rejected_candidates,
-    )
-    return switched_decision, bundle, retrieve_decision, event
-
-
-def _verifier_switch_decision(
-    decision: ControllerDecision,
-    route: str,
-    candidates: list[str],
-) -> ControllerDecision:
-    switched = controller_decision(
-        RouteDecision(
-            route=route,
-            policy="route_switch",
-            controller_mode=decision.controller_mode,
-            requires_retrieval=True,
-            reason=(
-                f"Switched from {decision.legacy_route} after required Boolean "
-                "authority was not established."
-            ),
-        )
-    )
-    return mark_route_switch_recovery(
-        switched,
-        initial_decision=decision,
-        candidates=candidates,
-        override_reason="Route switch used after required Boolean authority failure.",
-    )
-
-
-def switch_after_failed_retrieval(
-    request: Any,
-    decision: ControllerDecision,
-    failed_decision: RetrieveDecision,
-    failed_bundle: EvidenceBundle,
-    retrieve: RetrieveFn,
-) -> tuple[ControllerDecision, EvidenceBundle, RetrieveDecision, dict[str, Any]] | None:
-    if not optional_stage_allowed(request):
-        failed_bundle.metadata.update(route_budget_metadata(request))
-        failed_bundle.metadata[
-            "route_switch_skipped_reason"
-        ] = "insufficient_remaining_time"
-        return None
-    candidates, rejected_candidates = route_switch_candidate_evaluation(
-        request,
-        decision.legacy_route,
-    )
-    if rejected_candidates:
-        failed_bundle.metadata["rejected_route_switch_candidates"] = list(
-            rejected_candidates
-        )
-    for route in candidates:
-        switched = _retrieval_switch_decision(decision, route, candidates)
-        bundle, retrieve_decision = retrieve_and_evaluate(
-            request,
-            switched,
-            retrieve,
-            max_rounds=1,
-        )
-        event = _retrieval_switch_event(
-            decision,
-            route,
-            candidates,
-            failed_decision,
-            failed_bundle,
-            bundle,
-            rejected_candidates,
-        )
-        if retrieve_decision.status == "good":
-            return switched, bundle, retrieve_decision, event
-    return None
-
-
-def _retrieval_switch_decision(
-    decision: ControllerDecision,
-    route: str,
-    candidates: list[str],
-) -> ControllerDecision:
-    switched = controller_decision(
-        RouteDecision(
-            route=route,
-            policy="route_switch",
-            controller_mode=decision.controller_mode,
-            requires_retrieval=True,
-            reason=(f"Switched from {decision.legacy_route} after failed retrieval."),
-        )
-    )
-    return mark_route_switch_recovery(
-        switched,
-        initial_decision=decision,
-        candidates=candidates,
-    )
 
 
 def _raw_candidate(result: RouteExecutionResult) -> str:

@@ -42,7 +42,7 @@ def _recovery_events(result: Any) -> list[dict[str, Any]]:
     ]
 
 
-def test_retrieved_unverified_text_route_rebinds_without_duplicate_retrieval() -> None:
+def test_retrieved_unverified_text_route_runs_one_targeted_retrieval_after_rebind() -> None:
     calls: list[tuple[str, int]] = []
 
     def retrieve(request: DocQARequest, decision: Any) -> dict[str, Any]:
@@ -55,11 +55,14 @@ def test_retrieved_unverified_text_route_rebinds_without_duplicate_retrieval() -
         generate=lambda *_args: "yes",
     )
 
-    assert calls == [("doc_text", 1)]
+    assert calls == [("doc_text", 1), ("doc_text", 2)]
     assert result.answer == ABSTAIN_MESSAGE
     assert result.verify_decision.status == "unknown"
     events = _recovery_events(result)
     assert [event["stage"] for event in events] == [
+        "evidence_rebind",
+        "reverify",
+        "focused_retrieval",
         "evidence_rebind",
         "reverify",
     ]
@@ -67,6 +70,7 @@ def test_retrieved_unverified_text_route_rebinds_without_duplicate_retrieval() -
     assert events[-1]["slot_states_after"][0]["status"] == "retrieved_unverified"
     assert events[-1]["recovered_evidence_ids"]
     assert events[-1]["stop_reason"] == "authority_recovery_exhausted"
+    assert events[-1]["authority_changed"] is False
 
 
 def test_controller_auto_rebinds_before_one_bounded_route_switch() -> None:
@@ -98,6 +102,8 @@ def test_controller_auto_rebinds_before_one_bounded_route_switch() -> None:
     assert transition["recovered_evidence_ids"]
     assert transition["slot_states_before"][0]["status"] == "retrieved_unverified"
     assert transition["slot_states_after"][0]["status"] == "verified_support"
+    assert transition["authority_changed"] is True
+    assert transition["authority_state_after"] == "verified_support"
     assert transition["stop_reason"] == "authority_recovered"
 
 
@@ -126,6 +132,8 @@ def test_thorough_recovery_keeps_full_crag_stage_sequence() -> None:
     assert all(event["agent_mode"] == "thorough" for event in events)
     assert events[0]["slot_states_before"][0]["status"] == "retrieved_unverified"
     assert events[-1]["slot_states_after"][0]["status"] == "verified_support"
+    assert events[-1]["authority_changed"] is True
+    assert events[-1]["authority_state_after"] == "verified_support"
     assert events[-1]["stop_reason"] == "authority_recovered"
 
 

@@ -36,7 +36,8 @@ def boolean_slot_states(bundle: EvidenceBundle | None) -> list[dict[str, Any]]:
         }
         for slot in plan.get("evidence_slots") or []
         if isinstance(slot, dict)
-        and str(slot.get("statement_kind") or "") == "boolean_proposition"
+        and str(slot.get("statement_kind") or "")
+        in {"answer_relation", "boolean_proposition"}
         and bool(slot.get("required_for_verification"))
     ]
 
@@ -60,6 +61,7 @@ def recovery_trace_fields(
     initial_bundle: EvidenceBundle | None,
     recovered_bundle: EvidenceBundle | None,
 ) -> dict[str, Any]:
+    before_state, before_atoms = authority_state(verify_decision)
     return {
         "verifier_recovery_attempt": 1,
         "retry_reason": "required_boolean_authority_missing",
@@ -71,7 +73,26 @@ def recovery_trace_fields(
         "verification_mode": str(
             getattr(request, "verification_mode", "") or verify_decision.mode or "off"
         ),
+        "authority_state_before": before_state,
+        "authority_atoms_before": before_atoms,
     }
+
+
+def authority_state(decision: VerifyDecision) -> tuple[str, list[str]]:
+    authority = decision.typed_authority
+    if not isinstance(authority, dict):
+        return "", []
+    atoms = [
+        ":".join(
+            (
+                str(atom.get("evidence_id") or ""),
+                str(atom.get("evidence_ref") or atom.get("span_id") or ""),
+            )
+        )
+        for atom in authority.get("authority_atoms") or []
+        if isinstance(atom, dict)
+    ]
+    return str(authority.get("state") or ""), atoms
 
 
 def record_route_switch_reverification(result: Any) -> None:

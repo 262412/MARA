@@ -15,7 +15,18 @@ _DERIVED_VERIFICATION_KEYS = {
     "verified_claim_support_spans",
     "verified_evidence",
     "verify_decision",
+    "typed_authority",
 }
+
+
+def verification_recovery_base_metadata(
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in metadata.items()
+        if key not in _DERIVED_VERIFICATION_KEYS
+    }
 
 
 def rebind_existing_boolean_evidence(
@@ -23,13 +34,9 @@ def rebind_existing_boolean_evidence(
     route: str,
     bundle: EvidenceBundle,
 ) -> EvidenceBundle:
-    """Rebuild Boolean slot bindings without issuing another retrieval call."""
+    """Rebuild proposition slot bindings without issuing another retrieval call."""
 
-    metadata = {
-        key: value
-        for key, value in bundle.metadata.items()
-        if key not in _DERIVED_VERIFICATION_KEYS
-    }
+    metadata = verification_recovery_base_metadata(bundle.metadata)
     metadata["evidence"] = list(bundle.items)
     metadata["verifier_rebind_attempt"] = 1
     rebound = build_evidence_bundle(route, request, metadata)

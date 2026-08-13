@@ -12,6 +12,7 @@ from ktem.docqa.evidence_identity import identity_of
 
 from .qasper_answer_normalization import canonical_semantic_label
 from .qasper_runtime_projection import typed_boolean_authority_frame_complete
+from .qasper_typed_authority_audit import typed_authority_audit
 
 
 def runtime_boolean_authority(
@@ -51,6 +52,26 @@ def runtime_boolean_authority(
         verified_slots=verified_slots,
         required_ids=required_ids,
         engine_label=engine_label,
+    )
+
+
+def runtime_typed_proposition_authority(
+    prediction: dict[str, Any],
+) -> dict[str, Any]:
+    (
+        decision,
+        bundle,
+        plan,
+        slots,
+        verified_slots,
+        required_ids,
+    ) = runtime_authority_inputs(prediction)
+    return typed_authority_audit(
+        decision,
+        bundle,
+        slots,
+        verified_slots,
+        required_ids,
     )
 
 

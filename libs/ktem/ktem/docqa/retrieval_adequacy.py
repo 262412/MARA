@@ -37,7 +37,8 @@ def missing_qasper_verification_slot_count(
     if not isinstance(slots, list):
         return 0
     return sum(
-        str(slot.get("statement_kind") or "") == "boolean_proposition"
+        str(slot.get("statement_kind") or "")
+        in {"answer_relation", "boolean_proposition"}
         and bool(slot.get("required_for_verification"))
         and not bool(slot.get("required_for_retrieval"))
         and str(slot.get("status") or "missing") == "missing"

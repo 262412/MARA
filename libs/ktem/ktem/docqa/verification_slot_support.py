@@ -16,6 +16,7 @@ from .evidence_identity import identity_of
 from .evidence_schema import EvidenceBundle
 from .query_plan_schema import EvidenceSlot, _slot_from_payload
 from .query_planning import score_evidence_for_slot
+from .typed_proposition_authority import coherent_authority_failure
 from .verification_evidence_mapping import verification_slots
 
 
@@ -198,6 +199,9 @@ def enforce_verification_slot_support(
                 else getattr(decision, "boolean_authority_status", "")
             ),
         )
+    reason = "verification_required_slots_unsupported:" + ",".join(unsupported_slots)
+    if _requires_typed_boolean_authority(request) or str(domain).startswith("qasper"):
+        return coherent_authority_failure(decision, reason)
     return replace(
         decision,
         status="unknown",
@@ -222,16 +226,9 @@ def _enforce_conflict_slot_support(
     )
     unsupported_slots = unsupported_verification_slots(request, reconciled_slots)
     if unsupported_slots:
-        return replace(
+        return coherent_authority_failure(
             decision,
-            status="unknown",
-            reason=(
-                "Authoritative conflict did not bind verification-required slots: "
-                + ", ".join(unsupported_slots)
-            ),
-            action="abstain",
-            unknown_claims=decision.claims,
-            boolean_authority_status="conflict_incomplete",
+            "authoritative_conflict_slots_unsupported:" + ",".join(unsupported_slots),
         )
     conflict = with_verified_conflict_slots(
         decision.authoritative_conflict,

@@ -51,6 +51,7 @@ def _answerability_metrics(
     required_verification_applicable = _required_verification_applicable(
         trace,
         boolean_applicable=applicable,
+        answerable=_gold_is_answerable(prediction),
         required_slot_ids=required_slot_ids,
         required_evidence_ids=required_evidence_ids,
     )
@@ -123,6 +124,17 @@ def _runtime_audit_failure_metrics(
             runtime_failure == "semantic_verifier"
         ),
         "qasper_runtime_scope_failure_count": float(runtime_failure == "scope"),
+        "qasper_runtime_canonical_identity_mismatch_count": float(
+            str(trace.get("runtime_typed_authority_identity_status") or "")
+            in {"canonical_identity_unresolved", "canonical_ref_identity_mismatch"}
+        ),
+        "qasper_runtime_quote_grounding_failure_count": float(
+            trace.get("runtime_typed_authority_quote_grounding_status")
+            == "quote_semantic_grounding_failure"
+        ),
+        "qasper_runtime_authority_frame_incomplete_count": float(
+            trace.get("runtime_typed_authority_frame_status") == "incomplete"
+        ),
     }
 
 
@@ -130,10 +142,15 @@ def _required_verification_applicable(
     trace: dict[str, Any],
     *,
     boolean_applicable: bool,
+    answerable: bool,
     required_slot_ids: list[str],
     required_evidence_ids: list[str],
 ) -> bool:
     explicit = trace.get("runtime_boolean_authority_applicable")
+    if explicit:
+        return True
+    if trace.get("runtime_typed_authority_applicable") is not None:
+        return bool(trace.get("runtime_typed_authority_applicable") and answerable)
     if explicit is not None:
         return bool(explicit)
     return bool(
@@ -433,6 +450,9 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "qasper_runtime_authority_missing_count": 0.0,
         "qasper_runtime_semantic_verifier_failure_count": 0.0,
         "qasper_runtime_scope_failure_count": 0.0,
+        "qasper_runtime_canonical_identity_mismatch_count": 0.0,
+        "qasper_runtime_quote_grounding_failure_count": 0.0,
+        "qasper_runtime_authority_frame_incomplete_count": 0.0,
         "qasper_required_verification_applicable_count": 0.0,
         "qasper_required_slot_nonempty_state_count": 0.0,
         "qasper_required_slot_empty_state_count": 0.0,

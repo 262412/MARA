@@ -41,6 +41,7 @@ def _run_free_text_runtime(
     evidence = {
         "source_id": "paper",
         "span_id": "support",
+        "section_id": "methods",
         "text": answer,
     }
     execution = execute_controller_turn(

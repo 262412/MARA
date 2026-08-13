@@ -5,7 +5,7 @@ from typing import Any
 
 from .boolean_authoritative_conflict import authoritative_conflict_claim
 from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuthority
-from .boolean_authority_selection import _authority_rank, _best_authority
+from .boolean_authority_selection import _best_authority, _deduplicated_authorities
 from .boolean_evidence_scope import (
     ClosedScopeResolution,
     _actor,
@@ -57,13 +57,16 @@ def boolean_claim_authority(
     input_polarity = canonical_boolean_answer_polarity(answer)
     if not input_polarity and not allow_missing_polarity:
         return None
+    authority_items = [
+        item for item in evidence_items if not _title_or_heading_item(item)
+    ]
     probe_polarity = input_polarity or "yes"
-    closed_scope = resolve_closed_scope_boolean(prompt, evidence_items)
+    closed_scope = resolve_closed_scope_boolean(prompt, authority_items)
     resolved = _authority_from_closed_scope(prompt, closed_scope)
     if resolved is None:
-        resolved = _non_english_result_authority(prompt, evidence_items)
+        resolved = _non_english_result_authority(prompt, authority_items)
     if resolved is None:
-        resolved = _exclusive_requirement_authority(prompt, evidence_items)
+        resolved = _exclusive_requirement_authority(prompt, authority_items)
     if resolved is not None:
         canonical_polarity, authority = resolved
         return _supported_authority(
@@ -74,7 +77,7 @@ def boolean_claim_authority(
             reason="exact_closed_scope_proposition",
         )
 
-    classified = classify_boolean_evidence_set(prompt, probe_polarity, evidence_items)
+    classified = classify_boolean_evidence_set(prompt, probe_polarity, authority_items)
     supporting = _exact_authorities(prompt, classified.supports)
     contradicting = _exact_authorities(prompt, classified.contradicts)
     if supporting and contradicting:
@@ -103,7 +106,7 @@ def boolean_claim_authority(
             contradicting=(),
             reason="exact_opposite_boolean_proposition",
         )
-    resolved = _negative_requirement_authority(prompt, evidence_items)
+    resolved = _negative_requirement_authority(prompt, authority_items)
     if resolved is not None:
         canonical_polarity, authority = resolved
         return _supported_authority(
@@ -333,6 +336,8 @@ def _exact_authorities(
 ) -> tuple[BooleanEvidenceAuthority, ...]:
     authorities: list[BooleanEvidenceAuthority] = []
     for assessment in assessments:
+        if re.match(r"^\s*#{1,6}\s+\S", assessment.span_text):
+            continue
         if not _assertive_relation(prompt, assessment):
             continue
         window = _exact_window(
@@ -363,7 +368,12 @@ def _exact_authorities(
                 canonical_start=window.canonical_start,
                 canonical_end=window.canonical_end,
                 actor=assessment.proposition.actor,
-                section_scope=assessment.proposition.section_scope,
+                section_scope=(
+                    "document"
+                    if assessment.proposition.actor == "current_paper"
+                    and assessment.proposition.section_scope == "unknown"
+                    else assessment.proposition.section_scope
+                ),
                 relation=primary_boolean_relation(prompt),
                 object=assessment.proposition.object,
                 quantifier=assessment.proposition.quantifier,
@@ -374,34 +384,15 @@ def _exact_authorities(
                 page_label=page_label,
             )
         )
-    deduplicated = {
-        (authority.evidence_id, authority.span_start, authority.span_end): authority
-        for authority in authorities
-    }
-    strongest_by_evidence: dict[str, BooleanEvidenceAuthority] = {}
-    for authority in deduplicated.values():
-        current = strongest_by_evidence.get(authority.evidence_id)
-        if current is None or (
-            -_authority_rank(authority),
-            len(authority.quote),
-            authority.span_id,
-        ) < (
-            -_authority_rank(current),
-            len(current.quote),
-            current.span_id,
-        ):
-            strongest_by_evidence[authority.evidence_id] = authority
-    return tuple(
-        sorted(
-            strongest_by_evidence.values(),
-            key=lambda value: (
-                -_authority_rank(value),
-                len(value.quote),
-                value.evidence_id,
-                value.span_id,
-            ),
-        )
+    return _deduplicated_authorities(authorities)
+
+
+def _title_or_heading_item(item: dict[str, Any]) -> bool:
+    kind = " ".join(
+        str(item.get(key) or "").lower()
+        for key in ("element_type", "modality", "section_id", "section_title")
     )
+    return bool(re.search(r"\btitle\b|\bheading\b", kind))
 
 
 def _exact_window(

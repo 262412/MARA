@@ -153,6 +153,8 @@ def _projection_fields_match(
         "guardrail_decision": guardrail_decision,
         "evidence_bundle": evidence_bundle,
     }
+    if "typed_authority" in verify_decision or "typed_authority" in state:
+        expected["typed_authority"] = verify_decision.get("typed_authority") or {}
     return all(state.get(key) == value for key, value in expected.items())
 
 

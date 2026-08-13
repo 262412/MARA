@@ -195,6 +195,9 @@ def _candidate_ids_for_slot(
     used_comparison_ids: set[str],
     used_cross_page_locators: set[tuple[str, str]],
 ) -> list[str]:
+    verification_ids = _verification_candidate_ids(slot, ranked)
+    if verification_ids is not None:
+        return verification_ids
     segment_ids = _segment_comparison_candidate_ids(plan, slot, ranked)
     if segment_ids is not None:
         return segment_ids
@@ -203,33 +206,7 @@ def _candidate_ids_for_slot(
         and str(slot.operator_role or "").lower() == "collection"
         and max(1, slot.cardinality) > 1
     ):
-        selected: list[str] = []
-        facilities: set[str] = set()
-        for score, _index, item in ranked:
-            if score <= 0:
-                continue
-            attributes = _agreement_attributes(item)
-            if slot.metric == "revolving credit capacity" and slot.entity.startswith(
-                "active"
-            ):
-                if attributes["agreement_lifecycle_status"] != "active":
-                    continue
-                as_of_date = slot.entity.removeprefix("active_at:")
-                effective_date = attributes["effective_date"]
-                if (
-                    slot.entity.startswith("active_at:")
-                    and effective_date
-                    and effective_date > as_of_date
-                ):
-                    continue
-            facility = attributes["facility_identity"] or identity_of(item).key
-            if facility in facilities:
-                continue
-            facilities.add(facility)
-            selected.append(identity_of(item).key)
-            if len(selected) >= max(1, slot.cardinality):
-                break
-        return selected
+        return _collection_candidate_ids(slot, ranked)
     candidate_ids = (
         _dimension_candidate_ids(slot, ranked, bound_operand_items)
         if slot.role == "dimension"
@@ -264,6 +241,56 @@ def _candidate_ids_for_slot(
         if slot.role == "operand"
         else candidate_ids
     )
+
+
+def _collection_candidate_ids(
+    slot: EvidenceSlot,
+    ranked: list[tuple[float, int, dict[str, Any]]],
+) -> list[str]:
+    selected: list[str] = []
+    facilities: set[str] = set()
+    for score, _index, item in ranked:
+        if score <= 0:
+            continue
+        attributes = _agreement_attributes(item)
+        if slot.metric == "revolving credit capacity" and slot.entity.startswith(
+            "active"
+        ):
+            if attributes["agreement_lifecycle_status"] != "active":
+                continue
+            as_of_date = slot.entity.removeprefix("active_at:")
+            effective_date = attributes["effective_date"]
+            if (
+                slot.entity.startswith("active_at:")
+                and effective_date
+                and effective_date > as_of_date
+            ):
+                continue
+        facility = attributes["facility_identity"] or identity_of(item).key
+        if facility in facilities:
+            continue
+        facilities.add(facility)
+        selected.append(identity_of(item).key)
+        if len(selected) >= max(1, slot.cardinality):
+            break
+    return selected
+
+
+def _verification_candidate_ids(
+    slot: EvidenceSlot,
+    ranked: list[tuple[float, int, dict[str, Any]]],
+) -> list[str] | None:
+    if not (
+        slot.required_for_verification
+        and not slot.required_for_retrieval
+        and slot.statement_kind in {"answer_relation", "boolean_proposition"}
+    ):
+        return None
+    return [
+        identity_of(item).key
+        for score, _index, item in ranked[: max(3, slot.cardinality)]
+        if slot.statement_kind == "answer_relation" or score > 0
+    ]
 
 
 def _segment_comparison_candidate_ids(
@@ -381,10 +408,12 @@ def _bound_slot_status(
     if not evidence_ids:
         return "missing"
     if (
-        slot.statement_kind == "boolean_proposition"
+        slot.statement_kind in {"answer_relation", "boolean_proposition"}
         and slot.required_for_verification
         and not slot.required_for_retrieval
     ):
+        if slot.statement_kind == "answer_relation":
+            return "retrieved_unverified"
         levels = [
             boolean_proposition_authority_level(
                 slot.metric,

@@ -66,6 +66,7 @@ def engine_terminal_projection(
         "authoritative_conflict": deepcopy(
             terminal_verify.get("authoritative_conflict") or {}
         ),
+        "typed_authority": deepcopy(terminal_verify.get("typed_authority") or {}),
         "terminal_reason": (
             str(terminal_verify.get("reason") or "") if conflict_terminal else ""
         ),

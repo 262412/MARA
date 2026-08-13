@@ -131,7 +131,12 @@ def test_execute_controller_turn_records_workflow_plan_and_trace():
         "fuse_evidence",
         "generate_docqa_answer",
     ]
-    assert result.controller_trace[1] == {
+    workflow_event = next(
+        event
+        for event in result.controller_trace
+        if event.get("stage") == "workflow_plan"
+    )
+    assert workflow_event == {
         "stage": "workflow_plan",
         "strategy": "planned_trace",
         "agent_mode": "auto",

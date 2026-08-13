@@ -35,3 +35,36 @@ def _authority_rank(value: BooleanEvidenceAuthority) -> int:
     if any(marker in lowered for marker in ("small", "marginal", "minor")):
         return 2
     return int("only" in lowered)
+
+
+def _deduplicated_authorities(
+    authorities: list[BooleanEvidenceAuthority],
+) -> tuple[BooleanEvidenceAuthority, ...]:
+    deduplicated = {
+        (authority.evidence_id, authority.span_start, authority.span_end): authority
+        for authority in authorities
+    }
+    strongest_by_evidence: dict[str, BooleanEvidenceAuthority] = {}
+    for authority in deduplicated.values():
+        current = strongest_by_evidence.get(authority.evidence_id)
+        if current is None or (
+            -_authority_rank(authority),
+            len(authority.quote),
+            authority.span_id,
+        ) < (
+            -_authority_rank(current),
+            len(current.quote),
+            current.span_id,
+        ):
+            strongest_by_evidence[authority.evidence_id] = authority
+    return tuple(
+        sorted(
+            strongest_by_evidence.values(),
+            key=lambda value: (
+                -_authority_rank(value),
+                len(value.quote),
+                value.evidence_id,
+                value.span_id,
+            ),
+        )
+    )

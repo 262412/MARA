@@ -92,6 +92,23 @@ def _primary_support_slots(
     capabilities: dict[str, object],
     verification_domain: str,
 ) -> tuple[EvidenceSlot, ...]:
+    if "qasper" in verification_domain.lower() and answer_type not in {
+        "boolean",
+        "formula",
+        "numeric",
+    }:
+        return (
+            EvidenceSlot(
+                slot_id="support:answer_relation",
+                role="support",
+                metric=question,
+                modality="auto",
+                required_for_retrieval=False,
+                required_for_verification=True,
+                statement_kind="answer_relation",
+                query=question,
+            ),
+        )
     if (
         "finance" not in verification_domain.lower()
         or question_type not in {"simple_fact", "long_form"}

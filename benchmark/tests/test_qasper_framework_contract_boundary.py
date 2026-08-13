@@ -156,6 +156,7 @@ def _runtime_free_text_prediction() -> dict:
     evidence = {
         "evidence_id": "background",
         "source_id": "paper",
+        "section_id": "methods",
         "text": answer,
     }
     execution = execute_controller_turn(
@@ -275,7 +276,7 @@ def test_scoring_punctuation_normalization_is_not_a_semantic_rewrite() -> None:
     assert prediction["contract_semantic_rewrite"] is False
 
 
-def test_required_authority_coverage_counts_every_boolean_obligation() -> None:
+def test_required_authority_coverage_counts_boolean_and_free_text_obligations() -> None:
     answerable = _runtime_prediction()
     abstention = _runtime_abstention_prediction()
     free_text = _runtime_free_text_prediction()
@@ -288,8 +289,8 @@ def test_required_authority_coverage_counts_every_boolean_obligation() -> None:
 
     summary = contract_invariant_summary([answerable, abstention, free_text])
 
-    assert summary["qasper_required_verification_applicable_count"] == 2.0
-    assert summary["verifier_required_evidence_coverage"] == 0.5
+    assert summary["qasper_required_verification_applicable_count"] == 3.0
+    assert summary["verifier_required_evidence_coverage"] == 2.0 / 3.0
 
 
 def test_safe_runtime_abstention_remains_an_applicable_boolean_obligation() -> None:

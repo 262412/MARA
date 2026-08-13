@@ -439,6 +439,9 @@ def test_execute_controller_turn_switches_route_after_poor_retrieval():
         "reverification_status": "not_requested",
         "reverification_reason": "Verification disabled.",
         "reverification_evidence_ids": ["hybrid-1"],
+        "attempt": 1,
+        "transition_committed": True,
+        "attempt_status": "good",
     }
 
 

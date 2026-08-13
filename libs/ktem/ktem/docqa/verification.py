@@ -13,6 +13,12 @@ from .evidence import EvidenceBundle
 from .evidence_identity import identity_of
 from .query_plan_schema import QueryPlan, slot_binding_state
 from .query_planning import request_planning_question
+from .typed_proposition_authority import (
+    TYPED_PROPOSITION_AUTHORITY_CONTRACT,
+    resolve_qasper_authority_transaction,
+    typed_slot_bindings,
+    with_qasper_missing_authority,
+)
 from .verification_evidence_mapping import (
     blocking_verification_slots,
     claim_support_identities_by_claim,
@@ -61,27 +67,21 @@ def verify_decision(
         )
     missing_slots = blocking_verification_slots(request, evidence_bundle)
     if missing_slots:
-        action = "retry" if retrieve_decision.retry else "abstain"
-        return VerifyDecision(
-            mode=mode,
-            status="not_enough_evidence",
-            reason=(
-                "Verification-required evidence slots are missing: "
-                + ", ".join(missing_slots)
-            ),
-            action=action,
+        return _missing_slot_decision(
+            request, retrieve_decision, mode, answer, missing_slots
         )
     prompt, domain, claims = _verification_context(request, answer)
     if retrieve_decision.status != "good" and not _can_verify_available_evidence(
         evidence_bundle,
         claims,
     ):
-        action = "retry" if retrieve_decision.retry else "abstain"
-        return VerifyDecision(
+        return _insufficient_retrieval_decision(
+            request,
+            retrieve_decision,
             mode=mode,
-            status="not_enough_evidence",
-            reason=f"{mode.title()} verification requested without sufficient evidence.",
-            action=action,
+            prompt=prompt,
+            answer=answer,
+            domain=domain,
         )
     claims, results = _verification_results(
         evidence_bundle,
@@ -100,8 +100,72 @@ def verify_decision(
         prompt=prompt,
         domain=domain,
     )
+    typed_decision = resolve_qasper_authority_transaction(
+        request,
+        decision,
+        evidence_bundle,
+        question=prompt,
+        answer=answer,
+        domain=domain,
+    )
+    if typed_decision is not None:
+        return typed_decision
     return enforce_verification_slot_support(
         request, decision, evidence_bundle, prompt=prompt, domain=domain
+    )
+
+
+def _missing_slot_decision(
+    request: Any,
+    retrieve_decision: Any,
+    mode: str,
+    answer: str,
+    missing_slots: list[str],
+) -> VerifyDecision:
+    domain = normalize_verification_domain(
+        getattr(request, "verification_domain", None)
+    )
+    decision = VerifyDecision(
+        mode=mode,
+        status="not_enough_evidence",
+        reason=(
+            "Verification-required evidence slots are missing: "
+            + ", ".join(missing_slots)
+        ),
+        action="retry" if retrieve_decision.retry else "abstain",
+    )
+    return with_qasper_missing_authority(
+        request,
+        decision,
+        question=request_planning_question(request),
+        answer=answer,
+        domain=domain,
+        reason="required_evidence_slot_missing",
+    )
+
+
+def _insufficient_retrieval_decision(
+    request: Any,
+    retrieve_decision: Any,
+    *,
+    mode: str,
+    prompt: str,
+    answer: str,
+    domain: str,
+) -> VerifyDecision:
+    decision = VerifyDecision(
+        mode=mode,
+        status="not_enough_evidence",
+        reason=f"{mode.title()} verification requested without sufficient evidence.",
+        action="retry" if retrieve_decision.retry else "abstain",
+    )
+    return with_qasper_missing_authority(
+        request,
+        decision,
+        question=prompt,
+        answer=answer,
+        domain=domain,
+        reason="retrieval_evidence_insufficient",
     )
 
 
@@ -204,6 +268,8 @@ def with_verification_evidence(
         metadata["boolean_authoritative_conflict"] = dict(
             decision.authoritative_conflict
         )
+    if decision.typed_authority:
+        metadata["typed_authority"] = dict(decision.typed_authority)
     if request is not None:
         verified_ids = {identity_of(item).key for item in verified}
         reconciled_slots = _reconciled_verification_slots(
@@ -235,6 +301,11 @@ def _reconciled_verification_slots(
     decision: VerifyDecision,
     bundle: EvidenceBundle,
 ) -> dict[str, tuple[str, ...]]:
+    if (
+        decision.typed_authority.get("contract_id")
+        == TYPED_PROPOSITION_AUTHORITY_CONTRACT
+    ):
+        return typed_slot_bindings(decision)
     if decision.status == "verified_conflict":
         return conflict_aware_slot_support(request, decision, bundle)
     return claim_aware_slot_support(
@@ -334,25 +405,36 @@ def _synchronize_verified_claim_query_plan(
         if decision.status == "verified_conflict"
         else "verified_support"
     )
-    authoritative = replace(
-        plan,
-        evidence_slots=tuple(
-            (
-                replace(
-                    slot,
-                    status=verified_status,
-                    evidence_ids=reconciled_slots[slot.slot_id],
-                )
-                if slot in verification_support_slots
-                else slot
-            )
-            for slot in plan.evidence_slots
-        ),
+    already_committed = all(
+        slot.status == verified_status
+        and slot.evidence_ids == reconciled_slots[slot.slot_id]
+        for slot in verification_support_slots
     )
-    state_version = int(getattr(request, "query_plan_state_version", 0) or 0) + 1
-    request.query_plan = authoritative
-    request.query_plan_id = authoritative.plan_id
-    request.query_plan_state_version = state_version
+    authoritative = (
+        plan
+        if already_committed
+        else replace(
+            plan,
+            evidence_slots=tuple(
+                (
+                    replace(
+                        slot,
+                        status=verified_status,
+                        evidence_ids=reconciled_slots[slot.slot_id],
+                    )
+                    if slot in verification_support_slots
+                    else slot
+                )
+                for slot in plan.evidence_slots
+            ),
+        )
+    )
+    current_version = int(getattr(request, "query_plan_state_version", 0) or 0)
+    state_version = current_version if already_committed else current_version + 1
+    if not already_committed:
+        request.query_plan = authoritative
+        request.query_plan_id = authoritative.plan_id
+        request.query_plan_state_version = state_version
     payload = authoritative.as_dict()
     payload.update(
         {
@@ -362,6 +444,9 @@ def _synchronize_verified_claim_query_plan(
                 BOOLEAN_AUTHORITATIVE_CONFLICT_CONTRACT
                 if decision.status == "verified_conflict"
                 else "verified_claim_support.v1"
+            ),
+            "authority_projection_contract": (
+                TYPED_PROPOSITION_AUTHORITY_CONTRACT if decision.typed_authority else ""
             ),
         }
     )

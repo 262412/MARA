@@ -174,7 +174,8 @@ def _semantic_abstention(
 ) -> bool:
     normalized = " ".join(answer.strip().lower().split())
     return bool(
-        str(guardrail.get("action") or "").lower() == "abstain"
+        _incoherent_authority_projection(verify)
+        or str(guardrail.get("action") or "").lower() == "abstain"
         or str(verify.get("action") or "").lower() == "abstain"
         or str(verify.get("status") or "").lower()
         in {"not_enough_evidence", "verified_conflict"}
@@ -189,6 +190,23 @@ def _semantic_abstention(
                 ABSTAIN_MESSAGE.lower(),
             )
         )
+    )
+
+
+def _incoherent_authority_projection(verify: dict[str, Any]) -> bool:
+    status = str(verify.get("status") or "").lower()
+    typed = verify.get("typed_authority")
+    typed = typed if isinstance(typed, dict) else {}
+    typed_state = str(typed.get("state") or "").lower()
+    exact_claim = any(
+        str(result.get("authority_status") or "").lower()
+        in {"exact", "verified_support"}
+        for result in verify.get("claim_results") or []
+        if isinstance(result, dict)
+    )
+    return bool(
+        (typed_state == "verified_support" and status != "supported")
+        or (exact_claim and status not in {"supported", "verified_conflict"})
     )
 
 

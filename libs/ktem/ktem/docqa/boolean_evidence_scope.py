@@ -395,7 +395,8 @@ def _actor(quote: str, section_role: str) -> str:
     explicit_current_actor = bool(
         re.search(
             r"\b(?:i|we|our|current (?:paper|study|work)|"
-            r"this (?:paper|article|study|work)|(?:the\s+)?authors?)\b",
+            r"this (?:paper|article|study|work)|(?:the\s+)?authors?|"
+            r"(?:the\s+)?proposed (?:model|method|approach|system))\b",
             lowered,
         )
     )

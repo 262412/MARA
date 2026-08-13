@@ -83,6 +83,7 @@ class VerifyDecision:
     quantifier: str = ""
     verified_support_slot_ids: list[str] = field(default_factory=list)
     authoritative_conflict: dict[str, Any] = field(default_factory=dict)
+    typed_authority: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)

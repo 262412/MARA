@@ -17,6 +17,7 @@ from .finance_query_planning import (
 )
 from .finance_scale import source_scale_evidence
 from .financial_statement_identity import matches_required_financial_identity
+from .qasper_answer_relation import answer_relation_candidate_score
 from .query_evidence_constraints import (
     atomic_evidence,
     executable_operand_evidence,
@@ -73,13 +74,13 @@ def score_evidence_for_slot(
         return 0.0
     if slot.role == "operand" and requires_structure and not atomic_evidence(item):
         return 0.0
-    if (
-        slot.statement_kind != "boolean_proposition"
-        and not matches_required_financial_identity(
-            item,
-            slot.statement_kind,
-            slot.financial_scope,
-        )
+    if slot.statement_kind not in {
+        "answer_relation",
+        "boolean_proposition",
+    } and not matches_required_financial_identity(
+        item,
+        slot.statement_kind,
+        slot.financial_scope,
     ):
         return 0.0
     boolean_score = _boolean_score(slot, item)
@@ -105,6 +106,8 @@ def candidate_score_for_slot(
 ) -> float:
     """Score retrieval candidates separately from strict authority matching."""
 
+    if slot.statement_kind == "answer_relation":
+        return answer_relation_candidate_score(slot.query or slot.metric, item)
     if slot.statement_kind != "boolean_proposition":
         return score_evidence_for_slot(
             slot,
