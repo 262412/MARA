@@ -13,6 +13,9 @@ if str(PROJECT_ROOT) not in sys.path:
 from benchmark.contract_invariant_metrics import (  # noqa: E402
     contract_invariant_summary,
 )
+from benchmark.terminal_outcome_contract import (  # noqa: E402
+    terminal_outcome_summary_fields,
+)
 
 CONTRACT = "contract_smoke_audit.v1"
 STAGES = (
@@ -85,6 +88,7 @@ HARD_GATES = {
     "accepted_answer_citation_emission": ("eq", 1.0),
     "verified_claim_support_coverage": ("eq", 1.0),
     "final_answer_citation_emission": ("eq", 1.0),
+    "terminal_outcome_contract_violation_count": ("eq", 0.0),
 }
 FINANCE_HARD_GATES = {
     "execution_slot_atomicity_rate": ("eq", 1.0),
@@ -353,6 +357,7 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
         "failed_gates": failed_gates,
         "contract_gates": metrics.get("contract_gates"),
         "contract_gate_failures": contract_gate_failures,
+        "terminal_outcome_summary": terminal_outcome_summary_fields(predictions),
         "status": status,
     }
     (run_dir / "contract_smoke_audit.json").write_text(

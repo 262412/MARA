@@ -290,7 +290,7 @@ if [[ -z "$RUN_DIR" || ! -f "$RUN_DIR/summary.json" || ! -f "$RUN_DIR/prediction
   exit 1
 fi
 
-VALIDATION_ARGS=(--require-all-usable)
+VALIDATION_ARGS=(--require-all-usable --manifest "$MANIFEST")
 if [[ "$REQUIRE_HYBRID_ELIGIBLE" == "1" ]]; then
   VALIDATION_ARGS+=(--require-hybrid-eligible)
 fi

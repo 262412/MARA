@@ -16,7 +16,12 @@ def _write_predictions(path: Path, rows: list[dict[str, object]]) -> None:
     )
 
 
-def _write_manifest(path: Path, examples: list[dict[str, object]]) -> None:
+def _write_manifest(
+    path: Path,
+    examples: list[dict[str, object]],
+    *,
+    routes: list[dict[str, object]] | None = None,
+) -> None:
     path.write_text(
         json.dumps(
             {
@@ -24,7 +29,7 @@ def _write_manifest(path: Path, examples: list[dict[str, object]]) -> None:
                 "dataset_name": "qasper_validation_test",
                 "documents": [],
                 "examples": examples,
-                "routes": [],
+                "routes": routes or [],
             }
         ),
         encoding="utf-8",
@@ -416,3 +421,125 @@ def test_validator_accepts_manifest_boolean_with_answerability_trace(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "qasper_answerability_coverage=1/1" in result.stdout
+
+
+def test_validator_accepts_exact_manifest_cross_product_including_failure(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    predictions = tmp_path / "predictions.jsonl"
+    _write_manifest(
+        manifest,
+        [
+            {"example_id": "one", "answer_type": "boolean"},
+            {"example_id": "two", "answer_type": "boolean"},
+        ],
+        routes=[{"route_id": "text"}, {"route_id": "controller"}],
+    )
+    _write_predictions(
+        predictions,
+        [
+            {"example_id": "one", "route": "text", "error": None},
+            {"example_id": "one", "route": "controller", "error": None},
+            {"example_id": "two", "route": "text", "error": None},
+            {
+                "example_id": "two",
+                "route": "controller",
+                "error": "backend failed",
+                "terminal_outcome": "execution_failed",
+            },
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--manifest",
+            str(manifest),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "manifest_prediction_coverage=4/4" in result.stdout
+
+
+def test_validator_rejects_missing_manifest_route_prediction(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    predictions = tmp_path / "predictions.jsonl"
+    _write_manifest(
+        manifest,
+        [{"example_id": "one"}, {"example_id": "two"}],
+        routes=[{"route_id": "text"}, {"route_id": "controller"}],
+    )
+    _write_predictions(
+        predictions,
+        [
+            {"example_id": "one", "route": "text", "error": None},
+            {"example_id": "one", "route": "controller", "error": None},
+            {"example_id": "two", "route": "text", "error": None},
+        ],
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR), str(predictions), "--manifest", str(manifest)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "manifest/prediction key mismatch" in result.stderr
+
+
+def test_validator_rejects_duplicate_manifest_prediction_key(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    predictions = tmp_path / "predictions.jsonl"
+    _write_manifest(
+        manifest,
+        [{"example_id": "one"}],
+        routes=[{"route_id": "text"}],
+    )
+    _write_predictions(
+        predictions,
+        [
+            {"example_id": "one", "route": "text", "error": None},
+            {"example_id": "one", "route": "text", "error": None},
+        ],
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR), str(predictions), "--manifest", str(manifest)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "duplicate prediction key" in result.stderr
+
+
+def test_validator_rejects_duplicate_manifest_identity(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    predictions = tmp_path / "predictions.jsonl"
+    _write_manifest(
+        manifest,
+        [{"example_id": "one"}, {"example_id": "one"}],
+        routes=[{"route_id": "text"}],
+    )
+    _write_predictions(
+        predictions,
+        [{"example_id": "one", "route": "text", "error": None}],
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR), str(predictions), "--manifest", str(manifest)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "duplicate example_id" in result.stderr

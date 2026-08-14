@@ -93,12 +93,77 @@ def _qasper_answerability_coverage(
     return covered, len(required)
 
 
-def main() -> None:
+def _manifest_prediction_coverage(
+    predictions: list[dict[str, Any]],
+    manifest_path: Path,
+) -> tuple[int, int]:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise SystemExit("benchmark manifest must be a JSON object")
+    examples = manifest.get("examples")
+    routes = manifest.get("routes")
+    if not isinstance(examples, list) or not isinstance(routes, list):
+        raise SystemExit("benchmark manifest must contain examples and routes lists")
+    example_ids = _unique_manifest_ids(examples, "example_id")
+    route_ids = _unique_manifest_ids(routes, "route_id")
+    expected_keys = {
+        (example_id, route_id) for example_id in example_ids for route_id in route_ids
+    }
+    observed_keys: set[tuple[str, str]] = set()
+    for row in predictions:
+        example_id = str(row.get("example_id") or "").strip()
+        route_id = str(row.get("route") or "").strip()
+        if not example_id or not route_id:
+            raise SystemExit("prediction is missing example_id or route")
+        key = (example_id, route_id)
+        if key in observed_keys:
+            raise SystemExit(
+                f"benchmark artifact contains duplicate prediction key: {key}"
+            )
+        observed_keys.add(key)
+    if observed_keys != expected_keys:
+        missing = sorted(expected_keys - observed_keys)
+        unexpected = sorted(observed_keys - expected_keys)
+        raise SystemExit(
+            "manifest/prediction key mismatch: "
+            f"missing={len(missing)} unexpected={len(unexpected)} "
+            f"first_missing={missing[:1]} first_unexpected={unexpected[:1]}"
+        )
+    return len(observed_keys), len(expected_keys)
+
+
+def _unique_manifest_ids(
+    values: list[Any],
+    field: str,
+) -> list[str]:
+    identifiers: list[str] = []
+    for value in values:
+        if not isinstance(value, dict):
+            raise SystemExit("benchmark manifest entries must be objects")
+        identifier = str(value.get(field) or "").strip()
+        if not identifier:
+            raise SystemExit(f"benchmark manifest entry is missing {field}")
+        if identifier in identifiers:
+            raise SystemExit(
+                f"benchmark manifest contains duplicate {field}: {identifier}"
+            )
+        identifiers.append(identifier)
+    if not identifiers:
+        raise SystemExit(f"benchmark manifest contains no {field} values")
+    return identifiers
+
+
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Reject benchmark artifacts that contain no usable predictions."
     )
     parser.add_argument("predictions", type=Path)
     parser.add_argument("--expected-count", type=int)
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Require predictions to equal the manifest example-by-route cross product.",
+    )
     parser.add_argument("--require-all-usable", action="store_true")
     parser.add_argument("--require-hybrid-eligible", action="store_true")
     parser.add_argument("--require-qasper-answerability", action="store_true")
@@ -110,7 +175,11 @@ def main() -> None:
             "examples whose manifest answer_type is boolean."
         ),
     )
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
 
     predictions_path = args.predictions
     predictions = [
@@ -127,6 +196,12 @@ def main() -> None:
         raise SystemExit(
             f"expected {args.expected_count} predictions but found {len(predictions)}"
         )
+    if args.manifest is not None:
+        covered_count, required_count = _manifest_prediction_coverage(
+            predictions,
+            args.manifest,
+        )
+        print(f"manifest_prediction_coverage={covered_count}/{required_count}")
     if usable_count == 0:
         raise SystemExit("benchmark artifact contains zero usable predictions")
     if args.require_all_usable and usable_count != len(predictions):

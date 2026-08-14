@@ -294,7 +294,7 @@ test -f "$RUN_DIR/summary.json"
 test -f "$RUN_DIR/route_metrics.csv"
 test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
-VALIDATION_ARGS=(--require-all-usable)
+VALIDATION_ARGS=(--require-all-usable --manifest "$MANIFEST")
 if [[ "${SUITE_NAME,,}" == *qasper* ]]; then
   VALIDATION_ARGS+=(
     --require-qasper-answerability

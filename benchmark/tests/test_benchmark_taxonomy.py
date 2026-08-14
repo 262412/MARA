@@ -33,6 +33,22 @@ def _prediction(**overrides):
 def test_classify_failure_taxonomy_prioritizes_operational_failures():
     assert (
         classify_failure_taxonomy(
+            _prediction(terminal_outcome="timeout", error_type="")
+        )
+        == "timeout"
+    )
+    assert (
+        classify_failure_taxonomy(
+            _prediction(terminal_outcome="execution_failed", error="")
+        )
+        == "execution_error"
+    )
+    assert (
+        classify_failure_taxonomy(_prediction(terminal_outcome="cancelled", error=""))
+        == "cancelled"
+    )
+    assert (
+        classify_failure_taxonomy(
             _prediction(error_type="route_timeout", error="timed out")
         )
         == "timeout"
