@@ -46,16 +46,18 @@ def apply_terminal_outcome_record(prediction: dict[str, Any]) -> dict[str, Any]:
     record = terminal_outcome_record(prediction)
     prediction["terminal_outcome"] = record["outcome"]
     prediction["terminal_outcome_reason"] = record["reason"]
-    prediction["terminal_outcome_contract_violation"] = record[
-        "contract_violation"
-    ]
+    prediction["terminal_outcome_contract_violation"] = record["contract_violation"]
     return record
 
 
 def benchmark_outcome_classification(prediction: dict[str, Any]) -> str:
     outcome = str(terminal_outcome_record(prediction)["outcome"] or "")
     if outcome == "safe_abstention":
-        return "false_abstention" if _is_false_abstention(prediction) else "true_abstention"
+        return (
+            "false_abstention"
+            if _is_false_abstention(prediction)
+            else "true_abstention"
+        )
     if outcome in {"answered", "execution_failed", "timeout", "cancelled"}:
         return outcome
     return "unclassified"

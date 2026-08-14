@@ -3,23 +3,26 @@ from __future__ import annotations
 import hashlib
 import json
 from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 
+from ktem.docqa.terminal_semantic_commit import (
+    terminal_commit_outcome,
+    terminal_commit_projection_present,
+)
+
 from benchmark.qasper_runtime_projection import runtime_projection_present
-from benchmark.runner import _error_prediction, _retrieval_trace_row
-from benchmark.scoring import score_prediction
 from benchmark.route_timeout import RouteExecutionTimeout
-from benchmark.terminal_outcome_replay import replay_terminal_outcome_adapter
+from benchmark.runner import _error_prediction, _retrieval_trace_row
+from benchmark.schemas import BenchmarkConfig
+from benchmark.scoring import score_prediction
 from benchmark.terminal_outcome_contract import (
     apply_benchmark_outcome_classification,
     terminal_outcome_record,
     terminal_outcome_route_fields,
     terminal_outcome_summary_fields,
 )
-from ktem.docqa.terminal_semantic_commit import (
-    terminal_commit_outcome,
-    terminal_commit_projection_present,
-)
+from benchmark.terminal_outcome_replay import replay_terminal_outcome_adapter
 
 
 def _example() -> SimpleNamespace:
@@ -40,8 +43,10 @@ def _example() -> SimpleNamespace:
     )
 
 
-def _route_config() -> SimpleNamespace:
-    return SimpleNamespace(
+def _route_config() -> BenchmarkConfig:
+    return BenchmarkConfig(
+        suite_name="terminal-outcome-contract-test",
+        output_dir=Path("."),
         engine="mara",
         route="text_rag",
         scope="document",
@@ -66,21 +71,22 @@ def test_error_rows_carry_complete_mutually_exclusive_runtime_outcomes() -> None
     assert failed["terminal_outcome"] == "execution_failed"
     for prediction in (timeout, failed):
         assert runtime_projection_present(prediction)
-        assert terminal_commit_projection_present(
-            prediction["engine_terminal_commit"]
-        )
+        assert terminal_commit_projection_present(prediction["engine_terminal_commit"])
         record = terminal_outcome_record(prediction)
         assert record["contract_violation"] is False
-        assert sum(
-            record[key]
-            for key in (
-                "answered",
-                "safe_abstention",
-                "execution_failed",
-                "timeout",
-                "cancelled",
+        assert (
+            sum(
+                record[key]
+                for key in (
+                    "answered",
+                    "safe_abstention",
+                    "execution_failed",
+                    "timeout",
+                    "cancelled",
+                )
             )
-        ) == 1
+            == 1
+        )
 
 
 def test_operational_failure_remains_in_denominator_and_scores_zero() -> None:
@@ -105,13 +111,12 @@ def test_retrieval_trace_uses_the_same_terminal_outcome_source() -> None:
     trace = _retrieval_trace_row(prediction)
 
     assert trace["terminal_outcome"] == prediction["terminal_outcome"]
-    assert trace["terminal_outcome_reason"] == prediction[
-        "terminal_outcome_reason"
-    ]
+    assert trace["terminal_outcome_reason"] == prediction["terminal_outcome_reason"]
     assert trace["engine_terminal_state"] == prediction["engine_terminal_state"]
-    assert trace["engine_terminal_projection_hash"] == prediction[
-        "engine_terminal_projection_hash"
-    ]
+    assert (
+        trace["engine_terminal_projection_hash"]
+        == prediction["engine_terminal_projection_hash"]
+    )
     assert trace["terminal_outcome_contract_violation"] is False
 
 
@@ -254,6 +259,6 @@ def test_terminal_outcome_replay_preserves_scores_and_denominator_exactly() -> N
     assert replay["denominator_before"] == 2
     assert replay["denominator_after"] == 2
     assert replay["per_row_score_match_count"] == 2
-    assert replay["score_projection_hash_before"] == replay[
-        "score_projection_hash_after"
-    ]
+    assert (
+        replay["score_projection_hash_before"] == replay["score_projection_hash_after"]
+    )
