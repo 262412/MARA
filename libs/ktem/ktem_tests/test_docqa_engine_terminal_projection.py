@@ -10,6 +10,10 @@ from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.execution import ABSTAIN_MESSAGE, GuardrailDecision, _result
 from ktem.docqa.route_selection import ControllerDecision
+from ktem.docqa.terminal_session_state import (
+    terminal_semantic_commit_for_message,
+    with_terminal_semantic_commit,
+)
 from ktem.docqa.verification import VerifyDecision
 
 from benchmark.engine_result import EngineRunResult
@@ -183,6 +187,10 @@ def test_stream_finalization_preserves_safe_abstention_presentation() -> None:
 
     assert execution["engine_terminal_answer"] == "unanswerable"
     assert result.text == ABSTAIN_MESSAGE
+    assert execution["engine_terminal_commit"]["semantic_answer"] == "unanswerable"
+    assert execution["engine_terminal_commit"]["presentation_answer"] == (
+        ABSTAIN_MESSAGE
+    )
 
 
 def test_response_capture_preserves_terminal_projection_without_rebuilding():
@@ -242,6 +250,23 @@ def test_docqa_response_schema_exposes_terminal_projection_fields():
     assert payload["engine_terminal_answer"] == "yes"
     assert payload["engine_terminal_state"] == {"answer": "yes"}
     assert payload["engine_verify_decision"] == {"status": "supported"}
+
+
+def test_session_state_persists_immutable_commit_separately_from_presentation() -> None:
+    execution = _execution_result().as_dict()
+    commit = execution["engine_terminal_commit"]
+
+    state = with_terminal_semantic_commit(
+        {"app": {"regen": False}},
+        message_index=3,
+        commit=commit,
+    )
+    commit["semantic_answer"] = "mutated outside session state"
+
+    persisted = terminal_semantic_commit_for_message(state, 3)
+    assert persisted["semantic_answer"] == "yes"
+    assert persisted["presentation_answer"] == "yes"
+    assert state["app"] == {"regen": False}
 
 
 def test_benchmark_prediction_roundtrip_preserves_terminal_projection():

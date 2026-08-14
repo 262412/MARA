@@ -107,7 +107,10 @@ test("Run inspector shows only safe persistence identity and task ID", () => {
     status: "failed",
     stage: "storage_error",
     answer: "private answer must not be shown",
-    answer_saved: false,
+      answer_saved: false,
+      terminal_semantic_commit: {},
+      terminal_outcome: "",
+      terminal_outcome_reason: "",
     citations: [],
     error: {
       code: "query_state_replace_blocked",

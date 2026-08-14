@@ -165,6 +165,9 @@ export type QueryTask = {
   stage: string;
   status: "queued" | "running" | "success" | "failed" | "cancelled";
   task_id: string;
+  terminal_outcome: "" | "answered" | "safe_abstention" | "execution_failed" | "timeout" | "cancelled";
+  terminal_outcome_reason: string;
+  terminal_semantic_commit: Record<string, unknown>;
   updated_at: string;
   version: number;
 };

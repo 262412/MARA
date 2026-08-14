@@ -339,6 +339,11 @@ class QueryTaskStorageRecoveryTest(unittest.TestCase):
         created = _create_task(manager, "session-commit-original")
         failed = wait_for_terminal(manager, created["task_id"])
         self.assertEqual(failed["stage"], "storage_error")
+        self.assertEqual(failed["terminal_outcome"], "answered")
+        self.assertEqual(
+            failed["terminal_semantic_commit"]["semantic_answer"],
+            "Final answer",
+        )
         self.assertEqual(len(service.calls), 1)
         manager.close()
 
@@ -348,6 +353,11 @@ class QueryTaskStorageRecoveryTest(unittest.TestCase):
             restored = restored_manager.get_task(created["task_id"])
             self.assertEqual(restored["status"], "success")
             self.assertEqual(restored["answer"], "Final answer")
+            self.assertEqual(restored["terminal_outcome"], "answered")
+            self.assertEqual(
+                restored["terminal_semantic_commit"]["semantic_answer"],
+                "Final answer",
+            )
             self.assertEqual(len(service.calls), 1)
         finally:
             restored_manager.close()
@@ -468,7 +478,7 @@ class QueryTaskJournalMigrationTest(unittest.TestCase):
             finally:
                 manager.close()
             migrated = json.loads(journal.read_text(encoding="utf-8"))
-            self.assertEqual(migrated["journal_version"], 2)
+            self.assertEqual(migrated["journal_version"], 3)
             self.assertEqual(migrated["tasks"][0]["turn_id"], "query-interrupted")
 
             second_manager = QueryTaskManager(StubQueryService(), journal_path=journal)

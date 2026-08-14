@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from ktem.docqa.terminal_semantic_commit import build_terminal_semantic_commit
+
 from . import query_tasks as query_tasks_module
 from .query_readiness import QueryFailureContract
 from .query_tasks import (
@@ -82,6 +84,7 @@ class StubQueryService:
             self.committed_turns[turn_id] = {
                 "answer": "Final answer",
                 "citations": [],
+                "terminal_semantic_commit": _answered_terminal_commit(),
             }
         yield {
             "stage": "completed",
@@ -97,6 +100,9 @@ class StubQueryService:
                     "quote": "Grounded evidence.",
                 }
             ],
+            "terminal_semantic_commit": _answered_terminal_commit(),
+            "terminal_outcome": "answered",
+            "terminal_outcome_reason": "",
         }
 
     def recover_committed_turn(
@@ -119,6 +125,16 @@ def wait_for_terminal(manager: QueryTaskManager, task_id: str) -> dict:
             timeout=min(2, max(0.01, deadline - time.monotonic())),
         )
     return snapshot
+
+
+def _answered_terminal_commit() -> dict[str, object]:
+    return build_terminal_semantic_commit(
+        "Final answer",
+        {"status": "supported", "action": "return"},
+        {"status": "ok", "action": "return"},
+        {"items": [], "metadata": {}},
+        presentation_answer="Final answer",
+    ).as_dict()
 
 
 class QueryTaskManagerTest(unittest.TestCase):
@@ -148,6 +164,11 @@ class QueryTaskManagerTest(unittest.TestCase):
             completed = wait_for_terminal(manager, created["task_id"])
             self.assertEqual(completed["status"], "success")
             self.assertEqual(completed["answer"], "Final answer")
+            self.assertEqual(completed["terminal_outcome"], "answered")
+            self.assertEqual(
+                completed["terminal_semantic_commit"]["semantic_answer"],
+                "Final answer",
+            )
             self.assertEqual(completed["qa_scope"], "document")
             self.assertEqual(completed["citations"][0]["file_id"], "file-1")
             self.assertEqual(
@@ -175,6 +196,7 @@ class QueryTaskManagerTest(unittest.TestCase):
             service.release.set()
             cancelled = wait_for_terminal(manager, created["task_id"])
             self.assertEqual(cancelled["status"], "cancelled")
+            self.assertEqual(cancelled["terminal_outcome"], "cancelled")
             self.assertEqual(cancelled["answer"], "Partial answer")
             self.assertTrue(cancelled["retryable"])
             self.assertEqual(cancelled["qa_scope"], "multi_document")

@@ -8,8 +8,8 @@ from .query_task_state import QueryTaskState
 from .query_task_state import now as _now
 from .query_task_state import task_from_dict
 
-QUERY_JOURNAL_VERSION = 2
-SUPPORTED_QUERY_JOURNAL_VERSIONS = {1, QUERY_JOURNAL_VERSION}
+QUERY_JOURNAL_VERSION = 3
+SUPPORTED_QUERY_JOURNAL_VERSIONS = {1, 2, QUERY_JOURNAL_VERSION}
 ACTIVE_QUERY_STATUSES = {"queued", "running"}
 LOGGER = logging.getLogger("mara.desktop.query_tasks")
 
@@ -77,6 +77,8 @@ def load_recoverable_tasks(
 
 
 def restore_committed_turn(service: Any, task: QueryTaskState) -> bool:
+    from ktem.docqa.terminal_semantic_commit import terminal_commit_projection_present
+
     recover = getattr(service, "recover_committed_turn", None)
     if not callable(recover) or not task.turn_id:
         return False
@@ -97,6 +99,23 @@ def restore_committed_turn(service: Any, task: QueryTaskState) -> bool:
     task.citations = [
         dict(item) for item in committed.get("citations", []) if isinstance(item, dict)
     ]
+    terminal_commit = committed.get("terminal_semantic_commit")
+    task.terminal_semantic_commit = (
+        dict(terminal_commit)
+        if isinstance(terminal_commit, dict)
+        and terminal_commit_projection_present(terminal_commit)
+        else {}
+    )
+    task.terminal_outcome = str(
+        task.terminal_semantic_commit.get("outcome")
+        or committed.get("terminal_outcome")
+        or ""
+    )
+    task.terminal_outcome_reason = str(
+        task.terminal_semantic_commit.get("outcome_reason")
+        or committed.get("terminal_outcome_reason")
+        or ""
+    )
     task.status = "success"
     task.stage = "completed"
     task.error = None

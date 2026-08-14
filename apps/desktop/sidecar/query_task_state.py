@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import threading
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -30,6 +31,9 @@ class QueryTaskState:
     answer: str = ""
     answer_saved: bool = True
     citations: list[dict[str, Any]] = field(default_factory=list)
+    terminal_semantic_commit: dict[str, Any] = field(default_factory=dict)
+    terminal_outcome: str = ""
+    terminal_outcome_reason: str = ""
     created_at: str = field(default_factory=now)
     updated_at: str = field(default_factory=now)
     version: int = 1
@@ -58,6 +62,9 @@ def task_snapshot(task: QueryTaskState) -> dict[str, Any]:
         "answer": task.answer,
         "answer_saved": task.answer_saved,
         "citations": [dict(item) for item in task.citations],
+        "terminal_semantic_commit": deepcopy(task.terminal_semantic_commit),
+        "terminal_outcome": task.terminal_outcome,
+        "terminal_outcome_reason": task.terminal_outcome_reason,
         "error": dict(task.error) if task.error else None,
         "retryable": bool(
             task.error.get("retryable")
@@ -89,6 +96,9 @@ def task_to_dict(task: QueryTaskState) -> dict[str, Any]:
         "answer": task.answer,
         "answer_saved": task.answer_saved,
         "citations": [dict(item) for item in task.citations],
+        "terminal_semantic_commit": deepcopy(task.terminal_semantic_commit),
+        "terminal_outcome": task.terminal_outcome,
+        "terminal_outcome_reason": task.terminal_outcome_reason,
         "created_at": task.created_at,
         "updated_at": task.updated_at,
         "version": task.version,
@@ -122,6 +132,9 @@ def task_from_dict(item: dict[str, Any]) -> QueryTaskState:
             for value in item.get("citations", [])
             if isinstance(value, dict)
         ],
+        terminal_semantic_commit=_terminal_commit(item),
+        terminal_outcome=str(item.get("terminal_outcome") or ""),
+        terminal_outcome_reason=str(item.get("terminal_outcome_reason") or ""),
         created_at=str(item.get("created_at", now())),
         updated_at=str(item.get("updated_at", now())),
         version=int(item.get("version", 1)),
@@ -135,3 +148,8 @@ def _saved_answer_state(item: dict[str, Any]) -> bool:
     if not isinstance(value, bool):
         raise TypeError("Query task answer_saved must be a boolean.")
     return value
+
+
+def _terminal_commit(item: dict[str, Any]) -> dict[str, Any]:
+    value = item.get("terminal_semantic_commit")
+    return deepcopy(value) if isinstance(value, dict) else {}

@@ -10,6 +10,9 @@ from . import _runtime_mara as _mara
 from ._runtime_models import DocQARequest, _PreparedPipeline
 from ._runtime_utils import _serialize_value
 from .evidence_text import extract_final_answer_text
+from .terminal_session_state import (
+    state_with_stream_terminal_commit as _state_with_stream_terminal_commit,
+)
 
 
 @dataclass
@@ -22,6 +25,13 @@ class TurnStreamResult:
     state: dict[str, Any]
     capture: _mara.ResponseCapture
     preserve_text_after_chat_clear: bool = False
+
+
+def state_with_stream_terminal_commit(
+    stream_result: TurnStreamResult,
+    message_index: int,
+) -> dict[str, Any]:
+    return _state_with_stream_terminal_commit(stream_result, message_index)
 
 
 def build_turn_request(

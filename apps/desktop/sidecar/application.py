@@ -23,6 +23,7 @@ from .model_routes import (
 )
 from .query_commit_state import recover_committed_answer, state_with_query_commit_marker
 from .query_readiness import QueryReadiness, collect_query_readiness
+from .query_terminal_outcome import response_terminal_commit
 
 FILE_RESPONSE_FIELDS = (
     "file_id",
@@ -374,11 +375,15 @@ def _query_update(
 ) -> dict[str, Any]:
     response = getattr(update, "response", None)
     if response is not None:
+        commit = response_terminal_commit(response)
         return {
             "stage": "completed",
             "answer": str(response.answer or ""),
             "final": True,
             "citations": _query_citations(response, source_names),
+            "terminal_semantic_commit": commit,
+            "terminal_outcome": str(commit.get("outcome") or ""),
+            "terminal_outcome_reason": str(commit.get("outcome_reason") or ""),
         }
     event = getattr(update, "event", {})
     channel = str(event.get("channel") or "") if isinstance(event, dict) else ""

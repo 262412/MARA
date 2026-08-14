@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .query_readiness import QueryFailureContract, classify_query_failure
+from .query_readiness import QueryFailureContract
 from .query_stream_runner import QueryService, QueryStreamRunner
 from .query_task_journal import (
     JsonQueryTaskJournal,
@@ -28,6 +28,14 @@ from .query_task_state import QueryTaskState as _QueryTask
 from .query_task_state import now as _now
 from .query_task_state import task_snapshot as _task_snapshot
 from .query_task_state import task_to_dict as _task_to_dict
+from .query_terminal_outcome import (
+    apply_operational_terminal_outcome as _apply_operational_terminal_outcome,
+)
+from .query_terminal_outcome import apply_terminal_update as _apply_terminal_update
+from .query_terminal_outcome import query_outcome_error as _query_outcome_error
+from .query_terminal_outcome import (
+    terminal_outcome_for_task_status as _terminal_outcome_for_task_status,
+)
 
 TERMINAL_QUERY_STATUSES = {"success", "failed", "cancelled"}
 DEFAULT_JOURNAL_FLUSH_INTERVAL = 0.25
@@ -115,6 +123,12 @@ class _QueryTaskPersistence:
             task.status = "failed"
             task.stage = "storage_error"
             task.answer_saved = False
+            if not task.terminal_semantic_commit:
+                _apply_operational_terminal_outcome(
+                    task,
+                    "execution_failed",
+                    error.code,
+                )
             task.error = {
                 "code": error.code,
                 "message": error.message,
@@ -519,6 +533,11 @@ class QueryTaskManager(_QueryTaskPersistence):
         task.status = "cancelled" if outcome == "cancelled" else "failed"
         task.stage = "completed"
         task.error = _query_outcome_error(outcome, error)
+        _apply_operational_terminal_outcome(
+            task,
+            _terminal_outcome_for_task_status(outcome),
+            str(task.error["code"]),
+        )
         LOGGER.error(
             "Query task failed task_id=%s error_code=%s stage=%s error_type=%s",
             task.task_id,
@@ -550,29 +569,7 @@ def _apply_query_update(task: _QueryTask, update: dict[str, Any]) -> None:
     ]
     if citations or not task.citations or final:
         task.citations = citations
-
-
-def _query_outcome_error(
-    outcome: str,
-    error: QueryFailureContract | Exception | None = None,
-) -> dict[str, Any]:
-    if outcome == "cancelled":
-        return {
-            "code": "query_cancelled",
-            "message": "Answer generation was cancelled.",
-            "retryable": True,
-        }
-    if outcome == "timeout":
-        return {
-            "code": "query_timeout",
-            "message": "MARA did not receive answer progress before the time limit.",
-            "retryable": True,
-        }
-    if isinstance(error, QueryFailureContract):
-        return error.as_dict()
-    return classify_query_failure(
-        error if error is not None else "query runtime failed"
-    ).as_dict()
+    _apply_terminal_update(task, update)
 
 
 def _create_fingerprint(

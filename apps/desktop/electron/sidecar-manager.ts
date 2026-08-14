@@ -1236,6 +1236,19 @@ function isQueryTask(value: unknown): value is QueryTask {
     ) &&
     typeof task.stage === "string" &&
     typeof task.answer === "string" &&
+    typeof task.answer_saved === "boolean" &&
+    task.terminal_semantic_commit !== null &&
+    typeof task.terminal_semantic_commit === "object" &&
+    !Array.isArray(task.terminal_semantic_commit) &&
+    [
+      "",
+      "answered",
+      "safe_abstention",
+      "execution_failed",
+      "timeout",
+      "cancelled",
+    ].includes(String(task.terminal_outcome)) &&
+    typeof task.terminal_outcome_reason === "string" &&
     Array.isArray(task.citations) &&
     task.citations.every(isQueryCitation) &&
     (task.error === null || isQueryError(task.error)) &&

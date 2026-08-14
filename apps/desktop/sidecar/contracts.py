@@ -269,6 +269,16 @@ class QueryTask(BaseModel):
     answer: str = Field(max_length=1_000_000)
     answer_saved: bool
     citations: list[QueryCitation] = Field(max_length=10_000)
+    terminal_semantic_commit: dict[str, Any]
+    terminal_outcome: Literal[
+        "",
+        "answered",
+        "safe_abstention",
+        "execution_failed",
+        "timeout",
+        "cancelled",
+    ]
+    terminal_outcome_reason: str = Field(max_length=1024)
     error: QueryTaskError | None
     retryable: bool
     created_at: str
