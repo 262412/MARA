@@ -15,7 +15,6 @@ from .mara_answer_type_contract import (
     request_answer_type,
 )
 from .mara_artifacts import build_artifact_for_pipeline
-from .mara_controller import planner_trace_payload
 from .mara_controller_request import (
     controller_execution_request as _controller_execution_request,
 )
@@ -34,12 +33,8 @@ from .mara_query_planning import understand_query as understand_mara_query
 from .mara_query_planning import with_selected_source_context
 from .mara_ragtruth_answering import route_ragtruth_answer
 from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
-from .mara_route_probe import (
-    controller_latency_budget,
-    controller_route_probe,
-    dataset_family,
-    page_image_route_available,
-)
+from .mara_route_preparation import prepare_controller_route, route_trace_payload
+from .mara_route_probe import page_image_route_available
 from .mara_route_retrieval import controller_text_retrieve, route_retrieval_metadata
 from .mara_visual_answering import route_visual_answer as _route_visual_answer
 from .mara_visual_gate import hybrid_should_use_visual_generator
@@ -102,21 +97,6 @@ def _mara_event(mara_channel: str, payload: Any) -> Document:
         channel="debug",
         content={"mara_channel": mara_channel, "payload": payload},
     )
-
-
-def _route_trace_payload(
-    understanding: dict[str, Any],
-    agent_mode: str | None,
-    plan: list[dict[str, str]],
-) -> dict[str, Any]:
-    return {
-        "event": "route",
-        "task_type": understanding["task_type"],
-        "modalities": understanding["modalities"],
-        "scope": understanding["scope"],
-        "agent_mode": agent_mode or "auto",
-        "plan": plan,
-    }
 
 
 def _planner_route(planner_payload: dict[str, Any]) -> str:
@@ -496,15 +476,18 @@ class MaraAgentPipeline(FullQAPipeline):
         rewrite_generator = getattr(self, "rewrite_generator", None)
         rewrite = rewrite_generator if callable(rewrite_generator) else None
 
+        execution_request = getattr(
+            self, "_mara_active_execution_request", None
+        ) or _controller_execution_request(self, message)
         execution = execute_controller_turn(
-            _controller_execution_request(self, message),
+            execution_request,
             retrieve=retrieve,
             generate=generate,
             rewrite=rewrite,
             agent_trace=[planner_payload],
         )
         ensure_finance_numeric_trace(
-            _controller_execution_request(self, message),
+            execution_request,
             execution.evidence_bundle,
         )
         if generation_events and execution.answer != generated_answer:
@@ -531,28 +514,30 @@ class MaraAgentPipeline(FullQAPipeline):
             understanding,
             agent_mode=getattr(self, "agent_mode", "auto"),
         )
-        yield _mara_event(
-            "agent_trace",
-            _route_trace_payload(
-                understanding,
-                getattr(self, "agent_mode", "auto"),
-                plan,
-            ),
-        )
-        route_probe = controller_route_probe(
-            self, routing_message, history, understanding
-        )
-        latency_budget = controller_latency_budget(self)
-        planner_payload = planner_trace_payload(
+        initial_trace = route_trace_payload(
             understanding,
-            planner=getattr(self, "planner", None),
-            planner_model=getattr(self, "planner_model", None),
-            question=routing_message,
-            allowed_routes=getattr(self, "allowed_routes", None),
-            route_probe=route_probe,
-            dataset_family=dataset_family(self),
-            latency_budget=latency_budget,
+            getattr(self, "agent_mode", "auto"),
+            plan,
         )
+        yield _mara_event("agent_trace", initial_trace)
+        execution_request = _controller_execution_request(self, message)
+        preparation = prepare_controller_route(
+            self,
+            execution_request,
+            routing_message,
+            history,
+            understanding,
+            initial_trace,
+        )
+        if preparation.deadline_execution is not None:
+            return (
+                yield from _route_execution_events(
+                    preparation.deadline_execution,
+                    [],
+                    None,
+                )
+            )
+        planner_payload = preparation.planner_payload or {}
         yield _mara_event("agent_trace", planner_payload)
         effective_route = _effective_route(self, planner_payload)
         if effective_route in {
@@ -564,15 +549,19 @@ class MaraAgentPipeline(FullQAPipeline):
             "hybrid",
             "abstain",
         }:
-            execution, generation_events, artifact = self.execute_controller_route(
-                message,
-                conv_id,
-                history,
-                understanding,
-                planner_payload,
-                kwargs,
-                routing_message=routing_message,
-            )
+            self._mara_active_execution_request = execution_request
+            try:
+                execution, generation_events, artifact = self.execute_controller_route(
+                    message,
+                    conv_id,
+                    history,
+                    understanding,
+                    planner_payload,
+                    kwargs,
+                    routing_message=routing_message,
+                )
+            finally:
+                delattr(self, "_mara_active_execution_request")
             return (
                 yield from _route_execution_events(
                     execution,

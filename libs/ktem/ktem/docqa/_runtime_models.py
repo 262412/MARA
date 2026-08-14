@@ -58,6 +58,7 @@ class DocQARequest:
     command_state: Optional[str] = None
     route_timeout_seconds: Optional[float] = None
     route_deadline_monotonic: Optional[float] = None
+    route_terminal_reserve_seconds: Optional[float] = None
     generation_temperature: Optional[float] = None
     generation_top_p: Optional[float] = None
     generation_seed: Optional[int] = None

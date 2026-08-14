@@ -11,6 +11,12 @@ from .execution_models import GuardrailDecision, RewriteFn, RouteExecutionResult
 from .execution_trace import execution_trace
 from .execution_verification import ragtruth_contract_request, verify_generated_answer
 from .pipeline_stage_timings import PipelineStageTimings
+from .route_budget import (
+    RouteDeadlineExhausted,
+    deadline_trace_event,
+    route_budget_metadata,
+    route_budget_trace,
+)
 from .route_selection import ControllerDecision
 from .verification import VerifyDecision, with_verification_evidence
 
@@ -86,6 +92,63 @@ def guarded_result(
     )
 
 
+def deadline_exhausted_result(
+    request: Any,
+    decision: ControllerDecision,
+    workflow_plan: dict[str, Any],
+    error: RouteDeadlineExhausted,
+    stage_timings: PipelineStageTimings,
+) -> RouteExecutionResult:
+    bundle = getattr(request, "route_last_evidence_bundle", None)
+    if not isinstance(bundle, EvidenceBundle):
+        bundle = EvidenceBundle(route=decision.legacy_route, items=[], metadata={})
+    metadata = dict(bundle.metadata)
+    metadata.update(route_budget_metadata(request))
+    metadata["route_deadline"] = deadline_trace_event(request, error)
+    bundle = EvidenceBundle(
+        route=bundle.route,
+        items=list(bundle.items),
+        metadata=metadata,
+    )
+    retrieve_decision = RetrieveDecision(
+        status="poor",
+        reason="route_deadline_exhausted",
+        retry=False,
+    )
+    verify_decision = VerifyDecision(
+        mode=str(getattr(request, "verification_mode", "") or "off"),
+        status="not_enough_evidence",
+        reason="route_deadline_exhausted",
+        action="abstain",
+        typed_authority={
+            "state": "missing",
+            "reason": "route_deadline_exhausted",
+            "authority_atoms": [],
+            "required_slot_ids": [],
+            "verified_slot_ids": [],
+            "slot_bindings": {},
+        },
+    )
+    guardrail = GuardrailDecision(
+        status="not_enough_evidence",
+        action="abstain",
+        reason="route_deadline_exhausted",
+    )
+    trace = [deadline_trace_event(request, error)]
+    return result(
+        request,
+        decision,
+        retrieve_decision,
+        verify_decision,
+        guardrail,
+        bundle,
+        workflow_plan,
+        ABSTAIN_MESSAGE,
+        trace,
+        stage_timings,
+    )
+
+
 def verified_result(
     request: Any,
     decision: ControllerDecision,
@@ -142,6 +205,7 @@ def result(
     *,
     raw_generated_answer: str | None = None,
 ) -> RouteExecutionResult:
+    trace_prefix = [*route_budget_trace(request), *list(trace_prefix or [])]
     bundle = with_verification_evidence(bundle, verify_decision, request)
     (stage_timings or PipelineStageTimings()).record(bundle)
     (

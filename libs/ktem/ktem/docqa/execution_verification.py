@@ -17,6 +17,7 @@ from .qasper_answer_revision import (
     assess_qasper_answer_revision,
     proposal_matches_verified_authority,
 )
+from .route_budget import run_blocking_route_stage
 
 GuardrailFactory = Callable[[str, str, str], Any]
 RewriteFn = Callable[[Any, Any, EvidenceBundle, str], str]
@@ -358,11 +359,15 @@ def _rewrite_and_verify(
 ) -> tuple[str, VerifyDecision]:
     answer = timings.measure(
         "retry_seconds",
+        run_blocking_route_stage,
+        request,
+        "answer_rewrite",
         rewrite,
         request,
         decision,
         bundle,
         answer,
+        configured_timeout_seconds=getattr(request, "rewrite_timeout_seconds", None),
     )
     answer, aggregation_trace = timings.measure(
         "finalization_seconds",
@@ -396,11 +401,17 @@ def _timed_verify(
 ) -> VerifyDecision:
     return timings.measure(
         "verification_seconds",
+        run_blocking_route_stage,
+        request,
+        "verification",
         verify,
         request,
         retrieve_decision,
         bundle,
         answer,
+        configured_timeout_seconds=getattr(
+            request, "verification_timeout_seconds", None
+        ),
     )
 
 

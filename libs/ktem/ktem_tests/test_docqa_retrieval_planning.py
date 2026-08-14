@@ -374,7 +374,7 @@ def test_second_round_retrieves_missing_same_source_scale_convention():
     assert result.evidence_bundle.metadata["slot_coverage"] == 1.0
 
 
-def test_second_round_stops_when_generation_reserve_is_exhausted():
+def test_expired_route_deadline_stops_before_first_retrieval():
     calls = []
 
     def retrieve(_request, _decision):
@@ -403,9 +403,6 @@ def test_second_round_stops_when_generation_reserve_is_exhausted():
         generate=lambda *_args: "20%.",
     )
 
-    assert calls == [1, 1]
-    assert result.evidence_bundle.metadata["retrieval_rounds"] == 1
-    assert (
-        result.evidence_bundle.metadata["second_round_skipped_reason"]
-        == "insufficient_remaining_time"
-    )
+    assert calls == []
+    assert result.engine_terminal_answer == "unanswerable"
+    assert result.verify_decision.reason == "route_deadline_exhausted"

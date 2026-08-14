@@ -5,7 +5,9 @@ from typing import Any
 from .controller import VerifyDecision
 from .evidence import EvidenceBundle
 from .query_planning import ensure_request_query_plan
+from .route_budget import route_budget_metadata
 from .route_selection import ControllerDecision
+from .typed_retrieval_recovery import verifier_recovery_frame
 
 
 def bundle_evidence_ids(bundle: EvidenceBundle | None) -> list[str]:
@@ -61,23 +63,124 @@ def recovery_trace_fields(
     verify_decision: VerifyDecision,
     initial_bundle: EvidenceBundle | None,
     recovered_bundle: EvidenceBundle | None,
+    *,
+    candidate_answer: str = "",
 ) -> dict[str, Any]:
     before_state, before_atoms = authority_state(verify_decision)
     reason = required_authority_recovery_reason(request)
+    before_ids = bundle_evidence_ids(initial_bundle)
+    after_ids = bundle_evidence_ids(recovered_bundle)
+    new_ids = [value for value in after_ids if value not in before_ids]
+    removed_ids = [value for value in before_ids if value not in after_ids]
+    before_slots = typed_slot_states(initial_bundle)
+    after_slots = typed_slot_states(recovered_bundle)
+    typed = verify_decision.typed_authority
+    typed = typed if isinstance(typed, dict) else {}
     return {
         "verifier_recovery_attempt": 1,
         "retry_reason": reason,
         "failure_type": reason,
-        "recovered_evidence_ids": bundle_evidence_ids(recovered_bundle),
-        "slot_states_before": typed_slot_states(initial_bundle),
-        "slot_states_after": typed_slot_states(recovered_bundle),
+        "typed_failure_reason": str(typed.get("reason") or ""),
+        "recovered_evidence_ids": after_ids,
+        "evidence_ids_before": before_ids,
+        "evidence_ids_after": after_ids,
+        "new_evidence_ids": new_ids,
+        "removed_evidence_ids": removed_ids,
+        "slot_states_before": before_slots,
+        "slot_states_after": after_slots,
+        "slot_state_changed": before_slots != after_slots,
+        "proposition_binding_changed": bool(
+            new_ids or removed_ids or before_slots != after_slots
+        ),
+        "candidate_answer_before": candidate_answer,
+        "candidate_answer_after": candidate_answer,
+        "candidate_changed": False,
         "agent_mode": str(getattr(request, "agent_mode", "") or "auto"),
         "verification_mode": str(
             getattr(request, "verification_mode", "") or verify_decision.mode or "off"
         ),
         "authority_state_before": before_state,
         "authority_atoms_before": before_atoms,
+        **route_budget_metadata(request),
     }
+
+
+def recovery_has_progress(fields: dict[str, Any]) -> bool:
+    return bool(fields.get("new_evidence_ids") or fields.get("slot_state_changed"))
+
+
+def same_route_verifier_recovery_trace(
+    policy: str,
+    verify_decision: VerifyDecision,
+    retrieve_decision: Any,
+    focused_query: str,
+    *,
+    request: Any | None = None,
+    initial_bundle: EvidenceBundle | None = None,
+    recovered_bundle: EvidenceBundle | None = None,
+    candidate_answer: str = "",
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    shared = recovery_trace_fields(
+        request,
+        verify_decision,
+        initial_bundle,
+        recovered_bundle,
+        candidate_answer=candidate_answer,
+    )
+    shared["recovery_frame"] = verifier_recovery_frame(request)
+    retrieval_round = int(
+        (recovered_bundle.metadata if recovered_bundle else {}).get(
+            "verifier_recovery_round"
+        )
+        or 2
+    )
+    focused = {
+        "stage": "focused_retrieval",
+        "retrieval_round": retrieval_round,
+        "focused_query": focused_query,
+        "status": retrieve_decision.status,
+        "recovery_action": "targeted_retrieval",
+        **shared,
+    }
+    rebind = {
+        "stage": "evidence_rebind",
+        "retrieval_round": retrieval_round,
+        "status": retrieve_decision.status,
+        "recovery_action": "rebind_recovered_evidence",
+        **shared,
+    }
+    reverify = {
+        "stage": "reverify",
+        "attempt": 1,
+        "recovery_action": "fresh_reverification",
+        **shared,
+    }
+    if policy != "crag_guarded":
+        return [focused, rebind, reverify], reverify
+    critic = {
+        "stage": "critic",
+        "status": verify_decision.status,
+        "reason": verify_decision.reason,
+        **shared,
+    }
+    return [critic, focused, rebind, reverify], reverify
+
+
+def copy_reverification_outcome(
+    route_switch_event: dict[str, Any],
+    reverify_event: dict[str, Any],
+) -> None:
+    for key in (
+        "slot_states_after",
+        "recovered_evidence_ids",
+        "authority_state_after",
+        "authority_atoms_after",
+        "authority_changed",
+        "candidate_answer_after",
+        "candidate_changed",
+        "verification_status",
+    ):
+        route_switch_event[key] = reverify_event.get(key)
 
 
 def required_authority_recovery_reason(request: Any | None) -> str:

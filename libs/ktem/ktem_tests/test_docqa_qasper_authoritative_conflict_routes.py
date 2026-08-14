@@ -182,7 +182,8 @@ def test_missing_authority_allows_at_most_one_recovery_and_abstains(
     assert recovery_events
     assert {event["verifier_recovery_attempt"] for event in recovery_events} == {1}
     [terminal] = _terminal_events(result)
-    assert terminal["stop_reason"] == "authority_recovery_exhausted"
+    assert terminal["stop_reason"] == "recovery_no_progress"
+    assert terminal["recovery_action"] == "stop_without_reverify"
     assert result.answer == ABSTAIN_MESSAGE
     assert result.guardrail_decision.action == "abstain"
     assert result.verify_decision.status != "supported"

@@ -32,6 +32,12 @@ def switch_after_failed_verification(
     failed_bundle: EvidenceBundle,
     retrieve: RetrieveFn,
 ) -> tuple[ControllerDecision, EvidenceBundle, RetrieveDecision, dict[str, Any]] | None:
+    if not optional_stage_allowed(request):
+        failed_bundle.metadata.update(route_budget_metadata(request))
+        failed_bundle.metadata[
+            "route_switch_skipped_reason"
+        ] = "insufficient_remaining_time"
+        return None
     candidates, rejected = route_switch_candidate_evaluation(
         request,
         decision.legacy_route,
@@ -70,6 +76,8 @@ def switch_after_failed_verification(
         bundle,
         rejected,
     )
+    event["expected_authority_gain"] = True
+    event["expected_gain_reason"] = "alternate_route_for_typed_authority_failure"
     return switched_decision, bundle, retrieve_decision, event
 
 
@@ -125,6 +133,12 @@ def switch_after_failed_retrieval(
         failed_bundle.metadata["rejected_route_switch_candidates"] = list(rejected)
     attempts: list[dict[str, Any]] = []
     for attempt, route in enumerate(candidates, start=1):
+        if not optional_stage_allowed(request):
+            failed_bundle.metadata.update(route_budget_metadata(request))
+            failed_bundle.metadata[
+                "route_switch_skipped_reason"
+            ] = "insufficient_remaining_time"
+            break
         switched = _retrieval_switch_decision(decision, route, candidates)
         bundle, retrieve_decision = retrieve_and_evaluate(
             request,
@@ -141,6 +155,7 @@ def switch_after_failed_retrieval(
             bundle,
             rejected,
         )
+        event["expected_evidence_gain"] = True
         if retrieve_decision.status == "good":
             event.update(
                 {
@@ -162,6 +177,8 @@ def switch_after_failed_retrieval(
         )
         attempts.append(event)
     if attempts:
+        attempts[-1]["stop_reason"] = "route_switch_candidates_exhausted"
+        attempts[-1].update(route_budget_metadata(request))
         return decision, failed_bundle, failed_decision, attempts
     return None
 

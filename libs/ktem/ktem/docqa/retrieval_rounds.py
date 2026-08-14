@@ -2,13 +2,32 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from .boolean_evidence_scope import boolean_retrieval_query
 from .evidence import EvidenceBundle, build_evidence_bundle
 from .evidence_identity import identity_of
 from .execution_verifier_rebind import verification_recovery_base_metadata
+from .finance_calculation_recovery import calculation_recovery_requests
 from .finance_typed_adequacy import ensure_finance_numeric_trace
 from .query_planning import ensure_request_query_plan, request_planning_question
-from .route_budget import optional_stage_allowed, route_budget_metadata
+from .route_budget import (
+    optional_stage_allowed,
+    route_budget_metadata,
+    run_blocking_route_stage,
+)
+from .typed_retrieval_recovery import (
+    qasper_typed_recovery_required as _qasper_typed_recovery_required,
+)
+from .typed_retrieval_recovery import quality_retry_request as _quality_retry_request
+from .typed_retrieval_recovery import (
+    typed_qasper_initial_requests as _typed_qasper_initial_requests,
+)
+from .typed_retrieval_recovery import (
+    typed_qasper_recovery_requests as _typed_qasper_recovery_requests,
+)
+from .typed_retrieval_recovery import (
+    typed_retrieval_recovery_trace as _typed_retrieval_recovery_trace,
+)
+from .typed_retrieval_recovery import verification_slot_id as _verification_slot_id
+from .typed_retrieval_recovery import verifier_recovery_query
 
 EvaluateFn = Callable[..., Any]
 RetrieveFn = Callable[[Any, Any], dict[str, Any]]
@@ -35,6 +54,7 @@ def retrieve_with_rounds(
         request,
         evidence_metadata,
     )
+    request.route_last_evidence_bundle = evidence_bundle
     retrieve_decision = _evaluate(
         request,
         decision,
@@ -42,18 +62,25 @@ def retrieve_with_rounds(
         evaluate,
         attempted_retry=False,
     )
+    initial_bundle = evidence_bundle
     second_round_requests = _second_round_requests(evidence_bundle)
-    calculation_recovery = _calculation_recovery_requests(second_round_requests)
+    calculation_recovery = calculation_recovery_requests(second_round_requests)
     retry_for_slots = bool(second_round_requests)
     retry_for_quality = (
         retrieve_decision.status == "ambiguous" and retrieve_decision.retry
     ) or (retrieve_decision.status == "poor" and retrieve_decision.retry and retry_poor)
     if retry_for_quality and not second_round_requests:
         second_round_requests = [_quality_retry_request(request)]
+    second_round_requests = _typed_qasper_recovery_requests(
+        request,
+        second_round_requests,
+    )
     if min(max_rounds, plan.max_retrieval_rounds) < 2 or (
         not retry_for_slots and not retry_for_quality
     ):
-        return _with_retrieval_rounds(evidence_bundle, 1), retrieve_decision
+        evidence_bundle = _with_retrieval_rounds(evidence_bundle, 1)
+        request.route_last_evidence_bundle = evidence_bundle
+        return evidence_bundle, retrieve_decision
     if not optional_stage_allowed(request):
         metadata = dict(evidence_bundle.metadata)
         metadata.update(route_budget_metadata(request))
@@ -63,8 +90,32 @@ def retrieve_with_rounds(
             items=evidence_bundle.items,
             metadata=metadata,
         )
-        return _with_retrieval_rounds(evidence_bundle, 1), retrieve_decision
+        evidence_bundle = _with_retrieval_rounds(evidence_bundle, 1)
+        request.route_last_evidence_bundle = evidence_bundle
+        return evidence_bundle, retrieve_decision
 
+    return _complete_second_round(
+        request,
+        decision,
+        retrieve,
+        evaluate,
+        evidence_metadata,
+        initial_bundle,
+        second_round_requests,
+        calculation_recovery,
+    )
+
+
+def _complete_second_round(
+    request: Any,
+    decision: Any,
+    retrieve: RetrieveFn,
+    evaluate: EvaluateFn,
+    evidence_metadata: dict[str, Any],
+    initial_bundle: EvidenceBundle,
+    second_round_requests: list[dict[str, str]],
+    calculation_recovery: list[dict[str, str]],
+) -> tuple[EvidenceBundle, Any]:
     second_round_metadata = _retrieve_second_round(
         request,
         decision,
@@ -73,27 +124,38 @@ def retrieve_with_rounds(
     )
     merge_base = _second_round_merge_base(
         evidence_metadata,
-        evidence_bundle,
+        initial_bundle,
         calculation_recovery,
     )
     merged_metadata = _merge_retrieval_metadata(
         merge_base,
         second_round_metadata,
     )
-    evidence_bundle = build_evidence_bundle(
+    recovered_bundle = build_evidence_bundle(
         decision.legacy_route,
         request,
         merged_metadata,
     )
-    evidence_bundle = _with_retrieval_rounds(evidence_bundle, 2)
+    recovered_bundle = _with_retrieval_rounds(recovered_bundle, 2)
+    request.route_last_evidence_bundle = recovered_bundle
     retrieve_decision = _evaluate(
         request,
         decision,
-        evidence_bundle,
+        recovered_bundle,
         evaluate,
         attempted_retry=True,
     )
-    return evidence_bundle, retrieve_decision
+    if _qasper_typed_recovery_required(request):
+        recovered_bundle.metadata[
+            "typed_retrieval_recovery_trace"
+        ] = _typed_retrieval_recovery_trace(
+            request,
+            initial_bundle,
+            recovered_bundle,
+            second_round_requests,
+            retrieve_decision,
+        )
+    return recovered_bundle, retrieve_decision
 
 
 def retrieve_for_verifier_recovery(
@@ -127,7 +189,7 @@ def retrieve_for_verifier_recovery(
         [
             {
                 "query_id": "verifier_recovery:1",
-                "slot_id": _boolean_verification_slot_id(plan),
+                "slot_id": _verification_slot_id(plan),
                 "query": query,
                 "modality": "text",
             }
@@ -153,6 +215,7 @@ def retrieve_for_verifier_recovery(
         merged_metadata,
     )
     recovered_bundle = _with_retrieval_rounds(recovered_bundle, completed_rounds + 1)
+    request.route_last_evidence_bundle = recovered_bundle
     recovered_decision = _evaluate(
         request,
         decision,
@@ -161,54 +224,6 @@ def retrieve_for_verifier_recovery(
         attempted_retry=True,
     )
     return recovered_bundle, recovered_decision, query
-
-
-def verifier_recovery_query(request: Any) -> str:
-    """Build a focused query from the required proposition frame."""
-
-    question = request_planning_question(request)
-    plan = ensure_request_query_plan(request)
-    slot_queries = [
-        str(slot.query).strip()
-        for slot in plan.evidence_slots
-        if slot.required_for_verification and str(slot.query).strip()
-    ]
-    answer_relation_required = any(
-        slot.required_for_verification
-        and str(slot.statement_kind or "").lower() == "answer_relation"
-        for slot in plan.evidence_slots
-    )
-    semantic_query = (
-        question
-        if answer_relation_required
-        else boolean_retrieval_query(question, second_round=True)
-    )
-    parts = [*slot_queries, semantic_query]
-    if answer_relation_required:
-        parts.append(
-            "current paper authors direct answer relation predicate arguments "
-            "object qualifier section scope"
-        )
-    else:
-        parts.append(
-            "current paper authors exact proposition evidence predicate arguments "
-            "object answer relation polarity qualifier significance magnitude "
-            "quantity quantifier section scope"
-        )
-    return " ".join(dict.fromkeys(part for part in parts if part)).strip()
-
-
-def _boolean_verification_slot_id(plan: Any) -> str:
-    return next(
-        (
-            str(slot.slot_id)
-            for slot in plan.evidence_slots
-            if slot.required_for_verification
-            and str(slot.statement_kind or "").lower()
-            in {"answer_relation", "boolean_proposition"}
-        ),
-        "support:boolean_proposition",
-    )
 
 
 def _retrieve_first_round(
@@ -235,6 +250,7 @@ def _retrieve_first_round(
                 "query": query or request_planning_question(request),
             }
         ]
+    requests = _typed_qasper_initial_requests(request, requests)
     original_query = str(getattr(request, "retrieval_query", "") or "")
     original_slot_id = str(getattr(request, "retrieval_slot_id", "") or "")
     original_round_id = int(getattr(request, "retrieval_round_id", 0) or 0)
@@ -245,7 +261,16 @@ def _retrieve_first_round(
             request.retrieval_slot_id = str(retrieval_request["slot_id"])
             request.retrieval_round_id = 1
             response = _with_retrieval_lineage(
-                retrieve(request, decision),
+                run_blocking_route_stage(
+                    request,
+                    "retrieval",
+                    retrieve,
+                    request,
+                    decision,
+                    configured_timeout_seconds=getattr(
+                        request, "retrieval_timeout_seconds", None
+                    ),
+                ),
                 round_id=1,
                 query_id=str(retrieval_request["query_id"]),
                 slot_id=request.retrieval_slot_id,
@@ -280,16 +305,6 @@ def _second_round_requests(bundle: EvidenceBundle) -> list[dict[str, str]]:
     ]
 
 
-def _calculation_recovery_requests(
-    requests: list[dict[str, str]],
-) -> list[dict[str, str]]:
-    return [
-        request
-        for request in requests
-        if str(request.get("query_id") or "").startswith("round2:calculation_recovery:")
-    ]
-
-
 def _second_round_merge_base(
     evidence_metadata: dict[str, Any],
     bundle: EvidenceBundle,
@@ -310,27 +325,6 @@ def _second_round_merge_base(
     return base
 
 
-def _quality_retry_request(request: Any) -> dict[str, str]:
-    query = next(
-        (
-            str(value).strip()
-            for value in (
-                getattr(request, "retrieval_query", ""),
-                request_planning_question(request),
-                getattr(request, "prompt", ""),
-            )
-            if str(value or "").strip()
-        ),
-        "",
-    )
-    return {
-        "query_id": "round2:quality_retry",
-        "slot_id": "",
-        "query": query,
-        "modality": "auto",
-    }
-
-
 def _retrieve_second_round(
     request: Any,
     decision: Any,
@@ -349,7 +343,16 @@ def _retrieve_second_round(
             request.retrieval_slot_id = str(retrieval_request.get("slot_id") or "")
             request.retrieval_round_id = round_id
             response = _with_retrieval_lineage(
-                retrieve(request, decision),
+                run_blocking_route_stage(
+                    request,
+                    "retrieval_recovery",
+                    retrieve,
+                    request,
+                    decision,
+                    configured_timeout_seconds=getattr(
+                        request, "retrieval_timeout_seconds", None
+                    ),
+                ),
                 round_id=round_id,
                 query_id=str(retrieval_request.get("query_id") or ""),
                 slot_id=request.retrieval_slot_id,

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
 
 from kotaemon.base import RetrievedDocument
-from kotaemon.docqa_request_policies import BENCHMARK_REQUEST_POLICY
 
 from . import controller_fields as cf
 from . import generation_contract
@@ -14,7 +13,7 @@ from .alce_answer_grounding import (
     alce_grounding_stage_event,
     apply_alce_answer_grounding,
 )
-from .docqa_controller_context import controller_request_context
+from .docqa_controller_context import docqa_request_kwargs
 from .docqa_evidence_projection import evidence_element_ids
 from .docqa_image_documents import (
     element_index_records_from_documents,
@@ -22,10 +21,7 @@ from .docqa_image_documents import (
 )
 from .docqa_index_cache import DocQAIndexCache
 from .docqa_response_projection import response_evidence_outputs
-from .docqa_runtime_sources import (
-    selected_source_fallback_text,
-    source_identity_crosswalk,
-)
+from .docqa_runtime_sources import source_identity_crosswalk
 from .engine_accessors import active_runtime_record, config_value, field_value
 from .engine_context import (
     all_context_pages,
@@ -210,6 +206,10 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         self._active_route_trace: list[dict[str, Any]] = []
         self._active_timings: dict[str, float] = {}
         self._active_stage_started_at: float | None = None
+        self._route_deadline_monotonic: float | None = None
+
+    def set_route_deadline_monotonic(self, deadline: float | None) -> None:
+        self._route_deadline_monotonic = deadline
 
     def _get_runtime(self) -> Any:
         if self._runtime is None:
@@ -249,55 +249,15 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         selected_file_ids: list[str],
         active_record: Any,
     ) -> dict[str, Any]:
-        policy = BENCHMARK_REQUEST_POLICY
-        config = self._benchmark_config()
-        crosswalk = source_identity_crosswalk(documents, selected_file_ids)
-        for document, record in zip(documents, crosswalk):
-            document.source_identity_crosswalk = [dict(record)]
-        return {
-            **controller_request_context(
-                example, config, lambda key: config_value(self.config, key, None)
-            ),
-            "selected_file_ids": selected_file_ids,
-            "source_identity_crosswalk": crosswalk,
-            "page_image_records": page_image_records_from_documents(documents),
-            "element_index_records": element_index_records_from_documents(documents),
-            "qa_scope": str(
-                config_value(self.config, "scope", None)
-                or field_value(example, "scope", policy.qa_scope_default)
-            ).replace("-", "_"),
-            "active_file_id": getattr(active_record, "file_id", ""),
-            "active_file_name": getattr(active_record, "name", ""),
-            "page_number": None,
-            "selected_text": selected_source_fallback_text(
-                documents,
-                selected_file_ids,
-            ),
-            "llm": config_value(self.config, "llm_name", None),
-            "use_citation": config_value(self.config, "docqa_citation_mode", None),
-            "max_context_length": self.max_context_length,
-            "route_timeout_seconds": config_value(
-                self.config,
-                "route_timeout_seconds",
-                None,
-            ),
-            **generation_contract.benchmark_request_generation_config(),
-            "reasoning_type": config_value(self.config, "reasoning_type", None),
-            "agent_mode": config_value(self.config, "agent_mode", None),
-            "artifact_type": config_value(self.config, "artifact_type", None),
-            "graph_mode": config_value(self.config, "graph_mode", None),
-            "visual_retriever_backend": config_value(
-                self.config,
-                "visual_retriever_backend",
-                None,
-            ),
-            "visual_generator_backend": config_value(
-                self.config,
-                "visual_generator_backend",
-                None,
-            ),
-            "origin": policy.origin,
-        }
+        return docqa_request_kwargs(
+            self,
+            example=example,
+            documents=documents,
+            selected_file_ids=selected_file_ids,
+            active_record=active_record,
+            page_image_builder=page_image_records_from_documents,
+            element_index_builder=element_index_records_from_documents,
+        )
 
     def run(
         self,

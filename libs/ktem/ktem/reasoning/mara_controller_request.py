@@ -45,6 +45,11 @@ def controller_execution_request(
             "route_deadline_monotonic",
             None,
         ),
+        route_terminal_reserve_seconds=getattr(
+            pipeline,
+            "route_terminal_reserve_seconds",
+            None,
+        ),
         origin=str(
             getattr(docqa_request, "origin", None)
             or getattr(pipeline, "origin", "")

@@ -296,6 +296,11 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     if route_deadline is None and pipeline.route_timeout_seconds:
         route_deadline = monotonic() + float(pipeline.route_timeout_seconds)
     pipeline.route_deadline_monotonic = route_deadline
+    pipeline.route_terminal_reserve_seconds = getattr(
+        request,
+        "route_terminal_reserve_seconds",
+        None,
+    )
     _apply_visual_backends(pipeline, request)
     pipeline.docqa_request = request
 
@@ -393,6 +398,7 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.max_context_length = source.max_context_length
     target.route_timeout_seconds = source.route_timeout_seconds
     target.route_deadline_monotonic = source.route_deadline_monotonic
+    target.route_terminal_reserve_seconds = source.route_terminal_reserve_seconds
     target.generation_temperature = source.generation_temperature
     target.generation_top_p = source.generation_top_p
     target.generation_seed = source.generation_seed

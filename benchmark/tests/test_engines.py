@@ -315,6 +315,9 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
             route_timeout_seconds=45,
         ),
     )
+    deadline = 1234.5
+    assert isinstance(engine, DocQARuntimeEngine)
+    engine.set_route_deadline_monotonic(deadline)
 
     result = engine.run(
         example=BenchmarkExample(
@@ -331,6 +334,7 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
 
     assert fake_runtime.indexed == [([str(doc_path)], False)]
     _assert_runtime_request_contract(fake_runtime.requests[0])
+    assert fake_runtime.requests[0].route_deadline_monotonic == deadline
     _assert_runtime_result_contract(result)
 
 

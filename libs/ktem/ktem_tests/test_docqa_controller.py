@@ -442,6 +442,7 @@ def test_execute_controller_turn_switches_route_after_poor_retrieval():
         "attempt": 1,
         "transition_committed": True,
         "attempt_status": "good",
+        "expected_evidence_gain": True,
     }
 
 

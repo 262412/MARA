@@ -6,6 +6,11 @@ from typing import Any
 
 from .boolean_evidence_scope import evidence_item_text
 from .evidence_identity import identity_of
+from .qasper_relation_frame import QuestionRelationFrame, question_relation_frame
+from .qasper_relation_frame import (
+    question_scope_is_explicit as _question_scope_is_explicit,
+)
+from .qasper_relation_frame import relation_is_explicit as _relation_is_explicit
 from .query_phrase_extraction import source_page_locator
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
@@ -92,7 +97,10 @@ def resolve_qasper_answer_relation(
     answer: str,
     evidence_items: list[dict[str, Any]],
 ) -> AnswerRelationResolution:
-    relation_kind = _relation_kind(question)
+    frame = question_relation_frame(question)
+    if not frame.predicate:
+        return AnswerRelationResolution("missing", "question_predicate_unresolved")
+    relation_kind = frame.relation_kind
     question_tokens = _content_tokens(question)
     answer_numbers = _numbers(answer)
     if relation_kind == "quantity" and not answer_numbers:
@@ -107,6 +115,7 @@ def resolve_qasper_answer_relation(
             clause,
             evidence_items,
             relation_kind=relation_kind,
+            frame=frame,
             question_tokens=question_tokens,
             question_anchors=question_anchors,
             answer_numbers=answer_numbers,
@@ -139,6 +148,7 @@ def _resolve_answer_clause(
     evidence_items: list[dict[str, Any]],
     *,
     relation_kind: str,
+    frame: QuestionRelationFrame,
     question_tokens: set[str],
     question_anchors: set[str],
     answer_numbers: set[str],
@@ -168,6 +178,7 @@ def _resolve_answer_clause(
                 question=question,
                 clause=clause,
                 relation_kind=relation_kind,
+                frame=frame,
                 question_anchors=question_anchors,
                 answer_numbers=answer_numbers,
                 clause_numbers=clause_numbers,
@@ -195,6 +206,7 @@ def _answer_relation_candidate(
     question: str,
     clause: str,
     relation_kind: str,
+    frame: QuestionRelationFrame,
     question_anchors: set[str],
     answer_numbers: set[str],
     clause_numbers: set[str],
@@ -204,15 +216,18 @@ def _answer_relation_candidate(
 ) -> tuple[tuple[float, float, int, str, int], dict[str, Any], set[str]] | None:
     quote_tokens = _content_tokens(quote)
     quote_numbers = _numbers(quote)
-    supported = len(quote_tokens & novel_tokens) + len(quote_numbers & clause_numbers)
-    coverage = supported / max(1, len(answer_values))
-    if coverage < 0.5 or not _relation_is_explicit(
-        relation_kind,
-        question,
+    supported_values = answer_values & (quote_tokens | quote_numbers)
+    coverage = len(supported_values) / max(1, len(answer_values))
+    if coverage < 1.0 or not _relation_is_explicit(
+        frame,
         quote,
         answer_numbers=answer_numbers,
         quote_numbers=quote_numbers,
     ):
+        return None
+    if not _answer_values_bind_to_relation(frame, quote, answer_values):
+        return None
+    if not _question_scope_is_explicit(frame, quote):
         return None
     anchors = quote_tokens & question_anchors
     actor = _resolved_actor(item, quote, question, clause, anchors, previous_actor)
@@ -228,6 +243,7 @@ def _answer_relation_candidate(
         question=question,
         answer_clause=clause,
         relation_kind=relation_kind,
+        frame=frame,
         answer_values=answer_values,
         answer_numbers=answer_numbers,
         actor=actor,
@@ -242,6 +258,41 @@ def _answer_relation_candidate(
         start,
     )
     return rank, atom, anchors
+
+
+def _answer_values_bind_to_relation(
+    frame: QuestionRelationFrame,
+    quote: str,
+    answer_values: set[str],
+) -> bool:
+    if frame.predicate != "account_for":
+        return True
+    relation = re.search(r"\baccount(?:s|ed|ing)?\s+for\b", quote, re.I)
+    if relation is None:
+        return False
+    suffix = quote[relation.end() :]
+    passive_actor = re.match(
+        r"\s+by\s+(?:this\s+work|this\s+paper|us|the\s+authors?)\b",
+        suffix,
+        re.I,
+    )
+    if passive_actor is not None:
+        prefix = quote[: relation.start()]
+        auxiliary = re.search(
+            r"\b(?:is|are|was|were|be|been|being)(?:\s+\w+){0,3}\s*$",
+            prefix,
+            re.I,
+        )
+        argument_span = prefix[: auxiliary.start()] if auxiliary else prefix
+    else:
+        argument_span = suffix
+    argument_span = re.split(
+        r";|\b(?:while|whereas|but|although|however)\b",
+        argument_span,
+        maxsplit=1,
+        flags=re.I,
+    )[0]
+    return answer_values <= _content_tokens(argument_span)
 
 
 def _resolved_actor(
@@ -278,6 +329,7 @@ def _answer_relation_atom(
     question: str,
     answer_clause: str,
     relation_kind: str,
+    frame: QuestionRelationFrame,
     answer_values: set[str],
     answer_numbers: set[str],
     actor: str,
@@ -311,7 +363,7 @@ def _answer_relation_atom(
     span_end = canonical_end if canonical_end is not None else end
     evidence_ref = f"{evidence_id}#quote:{span_start}:{span_end}"
     source_id, page_label = source_page_locator(item)
-    relation = _relation_name(question, relation_kind)
+    relation = frame.predicate
     quantifier = sorted(answer_numbers)[0] if answer_numbers else "none"
     object_value = _answer_object_value(answer_clause, answer_values)
     if not object_value:
@@ -333,10 +385,13 @@ def _answer_relation_atom(
         "predicate": relation,
         "object": object_value,
         "arguments": [object_value],
+        "object_role": frame.expected_object_role,
+        "object_type": frame.expected_object_type,
         "qualifier": quote_qualifier,
         "quantifier": quantifier,
         "scope": section_scope,
         "section_scope": section_scope,
+        "question_scope": frame.scope,
         "polarity": "",
         "reason": "exact_question_answer_relation",
     }
@@ -398,88 +453,6 @@ def answer_relation_candidate_score(
     return overlap / len(question_tokens) if overlap else 0.0
 
 
-def _relation_kind(question: str) -> str:
-    lowered = str(question or "").lower()
-    if re.search(r"\bhow\s+(?:many|much)\b|\b(?:number|count)\s+of\b", lowered):
-        return "quantity"
-    if re.search(
-        r"\b(?:mean|means|repr?esents?|refer\s+to|denote|define|stand\s+for)\b",
-        lowered,
-    ):
-        return "definition"
-    if re.search(r"\bwhy\b|\b(?:cause|reason|drive|lead\s+to|result\s+in)\b", lowered):
-        return "cause"
-    if re.search(r"^\s*how\b", lowered):
-        return "method"
-    return "attribute"
-
-
-def _relation_is_explicit(
-    relation_kind: str,
-    question: str,
-    quote: str,
-    *,
-    answer_numbers: set[str],
-    quote_numbers: set[str],
-) -> bool:
-    lowered = quote.lower()
-    if relation_kind == "quantity":
-        return bool(answer_numbers and answer_numbers <= quote_numbers)
-    if relation_kind == "definition":
-        return bool(
-            re.search(
-                r"\b(?:mean|represent|refer|denote|define|stand|is|are)\w*\b",
-                lowered,
-            )
-        )
-    if relation_kind == "cause":
-        return bool(
-            re.search(
-                r"\b(?:because|cause|due\s+to|reason|drive|lead|result)\w*\b",
-                lowered,
-            )
-        )
-    if relation_kind == "method":
-        return bool(re.search(r"\b(?:by|using|through|via|with)\b", lowered))
-    return True
-
-
-def _relation_name(question: str, relation_kind: str) -> str:
-    if relation_kind in {"quantity", "definition", "cause", "method"}:
-        relation_terms = {
-            "quantity": ("recruit", "include", "use", "contain", "count"),
-            "definition": (
-                "represent",
-                "mean",
-                "refer",
-                "denote",
-                "define",
-            ),
-            "cause": ("cause", "drive", "lead", "result", "reason"),
-            "method": ("use", "apply", "perform", "compute", "derive"),
-        }[relation_kind]
-        tokens = _content_tokens(question)
-        return next((term for term in relation_terms if term in tokens), relation_kind)
-    tokens = _content_tokens(question)
-    return next(
-        (
-            term
-            for term in (
-                "leverage",
-                "use",
-                "provide",
-                "contain",
-                "include",
-                "report",
-                "describe",
-                "identify",
-            )
-            if term in tokens
-        ),
-        "attribute",
-    )
-
-
 def _actor(item: dict[str, Any], quote: str) -> str:
     section = _section_scope(item)
     if _RELATED_WORK_TERMS.search(section) or _RELATED_WORK_TERMS.search(quote):
@@ -502,7 +475,7 @@ def _actor(item: dict[str, Any], quote: str) -> str:
 def _requires_current_paper_actor(question: str) -> bool:
     return bool(
         re.search(
-            r"\b(?:authors?|paper|study|work|approach|model|method|proposed|we|our)\b",
+            r"\b(?:authors?|paper|study|work|approach|model|method|proposed|we|our|they|their)\b",
             question,
             re.IGNORECASE,
         )
@@ -580,7 +553,7 @@ def _numbers(value: str) -> set[str]:
 def _qualifier(*values: str) -> str:
     text = " ".join(values).lower()
     match = re.search(
-        r"\b(?:at\s+least|at\s+most|more\s+than|less\s+than|only|approximately|about)\b",
+        r"\b(?:at\s+least|at\s+most|more\s+than|less\s+than|only|approximately|about|now)\b",
         text,
     )
     return match.group(0) if match else "none"

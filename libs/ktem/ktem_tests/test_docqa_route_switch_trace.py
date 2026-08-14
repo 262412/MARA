@@ -47,6 +47,7 @@ def test_route_switch_trace_preserves_failed_attempt_before_committed_transition
     assert failed["attempt_status"] == "ambiguous"
     assert failed["transition_committed"] is False
     assert failed["route_switch_used"] is False
+    assert failed["expected_evidence_gain"] is True
     assert committed["to_route"] == "graph_global"
     assert committed["attempt"] == 2
     assert committed["attempt_status"] == "good"

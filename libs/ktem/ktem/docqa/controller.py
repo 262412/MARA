@@ -12,6 +12,7 @@ from .retrieval_adequacy import (
     missing_qasper_verification_slot_count,
     retrieval_adequacy_issue,
 )
+from .retrieval_stop import record_missing_slot_stop, static_retrieval_outcome
 from .verification import VerifyDecision, verify_decision, with_verification_evidence
 from .workflow import build_workflow_plan
 from .workflow import executor_registry as workflow_executor_registry
@@ -256,17 +257,9 @@ def evaluate_retrieval_quality(
     verification_domain: str | None = None,
     origin: str | None = None,
 ) -> RetrieveDecision:
-    if route == "direct":
-        return RetrieveDecision(
-            status="not_required",
-            reason="Direct route does not require retrieval.",
-        )
-    if route == "abstain":
-        return RetrieveDecision(
-            status="poor",
-            reason="Route abstained before retrieval.",
-            retry=False,
-        )
+    static_outcome = static_retrieval_outcome(route)
+    if static_outcome is not None:
+        return RetrieveDecision(*static_outcome)
     if _evidence_count(evidence_metadata) > 0:
         adequacy_issue = retrieval_adequacy_issue(
             prompt,
@@ -292,11 +285,16 @@ def evaluate_retrieval_quality(
             evidence_metadata["final_adequacy_status"] = "ambiguous"
             evidence_metadata["adequacy_decision_authority"] = "query_plan"
             evidence_metadata["heuristic_overridden"] = False
+            stop_reason = record_missing_slot_stop(
+                evidence_metadata,
+                attempted_retry=attempted_retry,
+            )
             return RetrieveDecision(
                 status="poor" if attempted_retry else "ambiguous",
                 reason=(
                     "Retrieved evidence does not fill "
                     f"{missing_required_slots} required QueryPlan slot(s)."
+                    + (f" stop_reason={stop_reason}." if stop_reason else "")
                 ),
                 retry=not attempted_retry,
             )

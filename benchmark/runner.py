@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import fields, replace
 from pathlib import Path
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import Any
 
 from .backend_health_summary import load_backend_health
@@ -217,6 +217,12 @@ def _run_engine_example(engine, bundle: ManifestBundle, example) -> dict[str, An
     return _engine_result_to_prediction(result, example=example, documents=documents)
 
 
+def _set_engine_route_deadline(engine: Any, deadline: float | None) -> None:
+    setter = getattr(engine, "set_route_deadline_monotonic", None)
+    if callable(setter):
+        setter(deadline)
+
+
 def _prepare_engine_examples(
     engine,
     bundle: ManifestBundle,
@@ -387,6 +393,12 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         for example in selected_bundle.examples:
             document = selected_bundle.documents[example.document_id]
             route_started_at = perf_counter()
+            route_deadline_monotonic = (
+                monotonic() + route_config.route_timeout_seconds
+                if route_config.route_timeout_seconds is not None
+                else None
+            )
+            _set_engine_route_deadline(engine, route_deadline_monotonic)
             try:
                 prediction = run_with_route_timeout(
                     route_config.route_timeout_seconds,

@@ -10,6 +10,16 @@ from .query_planning import request_planning_question
 _RECOVERY_QUERY_PREFIX = "round2:calculation_recovery:"
 
 
+def calculation_recovery_requests(
+    requests: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    return [
+        request
+        for request in requests
+        if str(request.get("query_id") or "").startswith(_RECOVERY_QUERY_PREFIX)
+    ]
+
+
 def missing_required_calculation_slot_ids(
     evidence_metadata: dict[str, Any],
 ) -> tuple[str, ...]:

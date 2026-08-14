@@ -39,9 +39,6 @@ from .execution_recovery import (
     recover_after_failed_verification as _recover_after_failed_verification,
 )
 from .execution_recovery import (
-    required_boolean_authority_missing as _required_boolean_authority_missing,
-)
-from .execution_recovery import (
     required_typed_authority_missing as _required_typed_authority_missing,
 )
 from .execution_recovery import (
@@ -54,12 +51,14 @@ from .execution_recovery import (
     switch_after_failed_verification as _switch_after_failed_verification,
 )
 from .execution_recovery import verifier_recovery_policy as _verifier_recovery_policy
+from .execution_results import deadline_exhausted_result as _deadline_exhausted_result
 from .execution_results import guarded_result as _guarded_result
 from .execution_results import result as _result
 from .execution_results import static_result as _static_result
 from .execution_results import verified_result as _verified_result
 from .execution_retrieval import retrieve_and_evaluate as _retrieve_and_evaluate
 from .pipeline_stage_timings import PipelineStageTimings
+from .route_budget import RouteDeadlineExhausted, run_blocking_route_stage
 from .route_capabilities import (
     route_switch_candidate_evaluation as _route_switch_candidate_evaluation,
 )
@@ -93,7 +92,6 @@ __all__ = [
     "_planned_execution",
     "_recover_after_failed_retrieval",
     "_recover_after_failed_verification",
-    "_required_boolean_authority_missing",
     "_required_typed_authority_missing",
     "_result",
     "_retrieve_and_evaluate",
@@ -106,7 +104,30 @@ __all__ = [
     "_verified_result",
     "_verifier_recovery_policy",
     "execute_controller_turn",
+    "deadline_exhausted_controller_result",
 ]
+
+
+def deadline_exhausted_controller_result(
+    request: Any,
+    error: RouteDeadlineExhausted,
+    *,
+    agent_trace: list[dict[str, Any]] | None = None,
+) -> RouteExecutionResult:
+    timings = PipelineStageTimings()
+    decision, workflow_plan = timings.measure(
+        "planning_seconds",
+        _planned_execution,
+        request,
+        agent_trace or [],
+    )
+    return _deadline_exhausted_result(
+        request,
+        decision,
+        workflow_plan,
+        error,
+        timings,
+    )
 
 
 def execute_controller_turn(
@@ -131,15 +152,24 @@ def execute_controller_turn(
             else ABSTAIN_MESSAGE
         )
         return _static_result(request, decision, answer, workflow_plan, timings)
-    return _execute_retrieval_turn(
-        request,
-        decision,
-        workflow_plan,
-        retrieve,
-        generate,
-        rewrite,
-        timings,
-    )
+    try:
+        return _execute_retrieval_turn(
+            request,
+            decision,
+            workflow_plan,
+            retrieve,
+            generate,
+            rewrite,
+            timings,
+        )
+    except RouteDeadlineExhausted as error:
+        return _deadline_exhausted_result(
+            request,
+            decision,
+            workflow_plan,
+            error,
+            timings,
+        )
 
 
 def _execute_retrieval_turn(
@@ -185,10 +215,14 @@ def _execute_retrieval_turn(
         )
     answer = timings.measure(
         "generation_seconds",
+        run_blocking_route_stage,
+        request,
+        "generation",
         generate,
         request,
         decision,
         bundle,
+        configured_timeout_seconds=getattr(request, "generation_timeout_seconds", None),
     )
     initial_result = _verified_result(
         request,

@@ -76,14 +76,12 @@ def test_text_rag_runs_one_focused_retrieval_when_rebind_does_not_improve_author
     assert generation_calls == 1
     assert result.verify_decision.status == "unknown"
     rebinds = _stage_events(result, "evidence_rebind")
-    events = _stage_events(result, "reverify")
-    rebind = rebinds[0]
-    event = events[-1]
-    assert event["attempt"] == 1
-    assert event["retry_reason"] == "required_boolean_authority_missing"
-    assert event["stop_reason"] == "authority_recovery_exhausted"
-    assert event["authority_changed"] is False
-    assert rebind["slot_states_before"][0]["status"] == "retrieved_unverified"
+    assert not _stage_events(result, "reverify")
+    rebind = rebinds[-1]
+    assert rebind["retry_reason"] == "required_boolean_authority_missing"
+    assert rebind["stop_reason"] == "recovery_no_progress"
+    assert rebind["authority_changed"] is False
+    assert rebinds[0]["slot_states_before"][0]["status"] == "retrieved_unverified"
     assert not _stage_events(result, "route_switch")
 
 
@@ -110,8 +108,9 @@ def test_controller_auto_rebinds_before_bounded_route_switch():
     [recovery] = _stage_events(result, "reverify")
     assert recovery["verifier_recovery_attempt"] == 1
     assert recovery["retry_reason"] == "required_boolean_authority_missing"
+    assert recovery["stop_reason"] == "authority_recovered"
     [transition] = _stage_events(result, "route_switch")
-    assert transition["stop_reason"] == "authority_recovered"
+    assert transition["authority_state_after"] == "verified_support"
 
 
 def test_controller_auto_switches_route_when_no_relevant_proposition_exists():
@@ -197,6 +196,7 @@ def test_verifier_recovery_exhausts_after_one_attempt_and_safely_abstains():
     assert calls == [("doc_text", 1), ("doc_text", 2)]
     assert result.answer == ABSTAIN_MESSAGE
     assert result.verify_decision.status == "unknown"
-    event = _stage_events(result, "reverify")[-1]
-    assert event["attempt"] == 1
-    assert event["stop_reason"] == "authority_recovery_exhausted"
+    assert not _stage_events(result, "reverify")
+    event = _stage_events(result, "evidence_rebind")[-1]
+    assert event["stop_reason"] == "recovery_no_progress"
+    assert event["recovery_action"] == "stop_without_reverify"
