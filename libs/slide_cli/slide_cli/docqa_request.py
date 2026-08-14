@@ -55,6 +55,7 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "command_state",
     "route_timeout_seconds",
     "route_deadline_monotonic",
+    "route_terminal_reserve_seconds",
     "generation_temperature",
     "generation_top_p",
     "generation_seed",
@@ -124,6 +125,7 @@ class DocQARequest:
     generation_temperature: float | None = None
     generation_top_p: float | None = None
     generation_seed: int | None = None
+    route_terminal_reserve_seconds: float | None = None
 
 
 def to_runtime_docqa_request(request: DocQARequest):
@@ -190,6 +192,7 @@ def to_runtime_docqa_request(request: DocQARequest):
         command_state=deepcopy(request.command_state),
         route_timeout_seconds=deepcopy(request.route_timeout_seconds),
         route_deadline_monotonic=deepcopy(request.route_deadline_monotonic),
+        route_terminal_reserve_seconds=deepcopy(request.route_terminal_reserve_seconds),
         generation_temperature=deepcopy(request.generation_temperature),
         generation_top_p=deepcopy(request.generation_top_p),
         generation_seed=deepcopy(request.generation_seed),

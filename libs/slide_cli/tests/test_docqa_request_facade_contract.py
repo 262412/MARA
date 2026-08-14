@@ -63,6 +63,7 @@ CANONICAL_REQUEST_FIELDS = (
     "command_state",
     "route_timeout_seconds",
     "route_deadline_monotonic",
+    "route_terminal_reserve_seconds",
     "generation_temperature",
     "generation_top_p",
     "generation_seed",
@@ -129,6 +130,7 @@ APPENDED_FACADE_FIELDS = (
     "generation_temperature",
     "generation_top_p",
     "generation_seed",
+    "route_terminal_reserve_seconds",
 )
 
 
