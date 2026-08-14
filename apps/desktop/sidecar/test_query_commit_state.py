@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import unittest
+from copy import deepcopy
 from types import SimpleNamespace
 
-from ktem.docqa.terminal_semantic_commit import build_terminal_semantic_commit
-from ktem.docqa.terminal_session_state import with_terminal_semantic_commit
-
 from .application import DesktopApplicationService
+from .query_terminal_outcome import (
+    TERMINAL_SESSION_STATE_CONTRACT,
+    TERMINAL_SESSION_STATE_KEY,
+    _with_projection_hash,
+)
 
 
 class DesktopQueryCommitStateTest(unittest.TestCase):
@@ -66,18 +69,13 @@ class CommitRuntime:
         self.stream_calls += 1
         self.session.state = request.state
         self.session.messages.append((request.prompt, "Committed answer"))
-        commit = build_terminal_semantic_commit(
-            "Committed answer",
-            {"status": "supported", "action": "return"},
-            {"status": "ok", "action": "return"},
-            {"items": [], "metadata": {}},
-            presentation_answer="Committed answer",
-        ).as_dict()
-        self.session.state = with_terminal_semantic_commit(
-            self.session.state,
-            message_index=0,
-            commit=commit,
-        )
+        commit = _answered_terminal_commit("Committed answer")
+        state = deepcopy(self.session.state)
+        state[TERMINAL_SESSION_STATE_KEY] = {
+            "contract_id": TERMINAL_SESSION_STATE_CONTRACT,
+            "commits": {"0": commit},
+        }
+        self.session.state = state
         yield SimpleNamespace(
             answer="Committed answer",
             event={},
@@ -89,3 +87,21 @@ class CommitRuntime:
                 terminal_semantic_commit=commit,
             ),
         )
+
+
+def _answered_terminal_commit(answer: str) -> dict[str, object]:
+    return _with_projection_hash(
+        {
+            "contract_id": "terminal_semantic_commit.v3",
+            "semantic_answer": answer,
+            "presentation_answer": answer,
+            "outcome": "answered",
+            "outcome_reason": "",
+            "answer_status": "answered",
+            "verify_decision": {"status": "supported", "action": "return"},
+            "guardrail_decision": {"status": "ok", "action": "return"},
+            "authoritative_evidence": [],
+            "citations": [],
+            "state_version": 3,
+        }
+    )

@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from copy import deepcopy
 from typing import Any
-
-from ktem.docqa.execution_contracts import ABSTAIN_MESSAGE
-from ktem.docqa.terminal_semantic_commit import (
-    build_terminal_semantic_commit,
-    terminal_commit_projection_present,
-)
 
 from .query_readiness import QueryFailureContract, classify_query_failure
 from .query_task_state import QueryTaskState
 
+TERMINAL_COMMIT_CONTRACTS = {
+    "terminal_semantic_commit.v2",
+    "terminal_semantic_commit.v3",
+}
+TERMINAL_SESSION_STATE_KEY = "_mara_terminal_semantic_commits"
+TERMINAL_SESSION_STATE_CONTRACT = "terminal_semantic_commit_session.v1"
 
-def response_terminal_commit(response: Any) -> dict[str, Any]:
+
+def response_terminal_fields(response: Any) -> dict[str, Any]:
     commit = getattr(response, "engine_terminal_commit", None) or getattr(
         response,
         "terminal_semantic_commit",
@@ -21,7 +24,11 @@ def response_terminal_commit(response: Any) -> dict[str, Any]:
     )
     if not isinstance(commit, dict) or not terminal_commit_projection_present(commit):
         return {}
-    return dict(commit)
+    return {
+        "terminal_semantic_commit": dict(commit),
+        "terminal_outcome": str(commit.get("outcome") or ""),
+        "terminal_outcome_reason": str(commit.get("outcome_reason") or ""),
+    }
 
 
 def apply_terminal_update(task: QueryTaskState, update: dict[str, Any]) -> None:
@@ -39,15 +46,22 @@ def apply_operational_terminal_outcome(
     reason: str,
 ) -> None:
     action = "cancel" if outcome == "cancelled" else "error"
-    commit = build_terminal_semantic_commit(
-        ABSTAIN_MESSAGE,
-        {"status": outcome, "action": action, "reason": reason},
-        {"status": outcome, "action": action, "reason": reason},
-        {"items": [], "metadata": {}},
-        outcome=outcome,
-        outcome_reason=reason,
-        presentation_answer=task.answer,
-    ).as_dict()
+    decision = {"status": outcome, "action": action, "reason": reason}
+    commit = _with_projection_hash(
+        {
+            "contract_id": "terminal_semantic_commit.v3",
+            "semantic_answer": "unanswerable",
+            "presentation_answer": task.answer,
+            "outcome": outcome,
+            "outcome_reason": reason,
+            "answer_status": "abstained",
+            "verify_decision": dict(decision),
+            "guardrail_decision": dict(decision),
+            "authoritative_evidence": [],
+            "citations": [],
+            "state_version": 3,
+        }
+    )
     task.terminal_semantic_commit = commit
     task.terminal_outcome = outcome
     task.terminal_outcome_reason = reason
@@ -82,3 +96,51 @@ def query_outcome_error(
     return classify_query_failure(
         error if error is not None else "query runtime failed"
     ).as_dict()
+
+
+def terminal_commit_projection_present(commit: Any) -> bool:
+    if (
+        not isinstance(commit, dict)
+        or commit.get("contract_id") not in TERMINAL_COMMIT_CONTRACTS
+    ):
+        return False
+    expected = dict(commit)
+    projection_hash = str(expected.pop("projection_hash", "") or "")
+    return bool(projection_hash and projection_hash == _projection_hash(expected))
+
+
+def terminal_semantic_commit_for_message(
+    state: Any,
+    message_index: int,
+) -> dict[str, Any]:
+    if not isinstance(state, dict):
+        return {}
+    store = state.get(TERMINAL_SESSION_STATE_KEY)
+    if (
+        not isinstance(store, dict)
+        or store.get("contract_id") != TERMINAL_SESSION_STATE_CONTRACT
+    ):
+        return {}
+    commits = store.get("commits")
+    commit = commits.get(str(message_index)) if isinstance(commits, dict) else None
+    if not isinstance(commit, dict) or not terminal_commit_projection_present(commit):
+        return {}
+    return deepcopy(commit)
+
+
+def _with_projection_hash(payload: dict[str, Any]) -> dict[str, Any]:
+    commit = deepcopy(payload)
+    commit["projection_hash"] = _projection_hash(commit)
+    return commit
+
+
+def _projection_hash(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()

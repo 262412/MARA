@@ -8,8 +8,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ktem.docqa.terminal_semantic_commit import build_terminal_semantic_commit
-
 from . import query_tasks as query_tasks_module
 from .query_readiness import QueryFailureContract
 from .query_tasks import (
@@ -17,6 +15,7 @@ from .query_tasks import (
     QueryTaskManager,
     QueryTaskNotFoundError,
 )
+from .query_terminal_outcome import _with_projection_hash
 
 
 class StubQueryService:
@@ -128,13 +127,21 @@ def wait_for_terminal(manager: QueryTaskManager, task_id: str) -> dict:
 
 
 def _answered_terminal_commit() -> dict[str, object]:
-    return build_terminal_semantic_commit(
-        "Final answer",
-        {"status": "supported", "action": "return"},
-        {"status": "ok", "action": "return"},
-        {"items": [], "metadata": {}},
-        presentation_answer="Final answer",
-    ).as_dict()
+    return _with_projection_hash(
+        {
+            "contract_id": "terminal_semantic_commit.v3",
+            "semantic_answer": "Final answer",
+            "presentation_answer": "Final answer",
+            "outcome": "answered",
+            "outcome_reason": "",
+            "answer_status": "answered",
+            "verify_decision": {"status": "supported", "action": "return"},
+            "guardrail_decision": {"status": "ok", "action": "return"},
+            "authoritative_evidence": [],
+            "citations": [],
+            "state_version": 3,
+        }
+    )
 
 
 class QueryTaskManagerTest(unittest.TestCase):

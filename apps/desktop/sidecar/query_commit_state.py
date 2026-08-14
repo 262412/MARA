@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from ktem.docqa.terminal_session_state import terminal_semantic_commit_for_message
+from .query_terminal_outcome import terminal_semantic_commit_for_message
 
 DESKTOP_QUERY_COMMIT_STATE_KEY = "_mara_desktop_query_commits"
 DESKTOP_QUERY_COMMIT_STATE_VERSION = 1

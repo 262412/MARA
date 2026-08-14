@@ -7,6 +7,7 @@ from .query_task_journal import QueryTaskJournal, QueryTaskPersistenceError
 from .query_task_state import QueryTaskState
 from .query_task_state import now as _now
 from .query_task_state import task_from_dict
+from .query_terminal_outcome import terminal_commit_projection_present
 
 QUERY_JOURNAL_VERSION = 3
 SUPPORTED_QUERY_JOURNAL_VERSIONS = {1, 2, QUERY_JOURNAL_VERSION}
@@ -77,8 +78,6 @@ def load_recoverable_tasks(
 
 
 def restore_committed_turn(service: Any, task: QueryTaskState) -> bool:
-    from ktem.docqa.terminal_semantic_commit import terminal_commit_projection_present
-
     recover = getattr(service, "recover_committed_turn", None)
     if not callable(recover) or not task.turn_id:
         return False
