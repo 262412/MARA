@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+common_dir="$(git -C "$root" rev-parse --git-common-dir)"
+if [[ "$common_dir" != /* ]]; then
+  common_dir="$root/$common_dir"
+fi
+primary_root="$(cd -- "$common_dir/.." && pwd -P)"
+current_root="$(cd -- "$root" && pwd -P)"
+[[ "$current_root" == "$primary_root" ]] && exit 0
+
+guard="$primary_root/scripts/check_mara_worktree_env.py"
+[[ -f "$guard" ]] || exit 0
+
+exec python3 "$guard" prepare-linked

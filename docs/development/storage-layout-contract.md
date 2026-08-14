@@ -26,6 +26,10 @@ Project .venv:
 ~/scratch/projects/MARA/.venv
 must be a symlink to ~/fastscratch/envs/mara
 
+Linked worktree .venv:
+must be a regular sentinel file created by `scripts/check_mara_worktree_env.py`
+and must never point to the canonical environment
+
 Caches:
 ~/fastscratch/cache
 
@@ -191,6 +195,25 @@ never under the source checkout as `.theflow`. Pytest must set
 `THEFLOW_TEMP_PATH`; the session cleanup then removes per-component progress and
 cache files instead of leaking them into `scratch` or `fastscratch`.
 
+The primary environment is deployment-like: all MARA workspace members are
+installed non-editably with `./install.sh`. Linked worktrees must not run a
+project-syncing `uv run` or `uv sync` against that environment. The repository
+Git hook places a `.venv` sentinel in linked worktrees so an accidental uv
+project operation fails before it can rewrite the canonical environment. For
+each formal install, the installer explicitly rebuilds only the four local
+workspace distributions so source changes cannot leave stale non-editable
+code behind; third-party dependencies remain lock-checked without forced
+reinstallation. For
+source-overlay checks without copying third-party dependencies, use:
+
+```bash
+scripts/run_with_canonical_env.sh -m pytest <test-path>
+```
+
+The runner imports `slide_cli`, `ktem`, and `kotaemon` from the current
+worktree via `PYTHONPATH`, while using only the canonical environment's
+third-party dependencies. It does not sync or install the worktree.
+
 ## Preflight Check
 
 Run this check before large development sessions, dependency installs, model
@@ -224,16 +247,21 @@ test ! -e outputs
 test ! -e .theflow
 ```
 
-The correct `.venv` result is a symlink that resolves to:
+In the primary checkout, the correct `.venv` result is a symlink that resolves
+to:
 
 ```text
 /mnt/fastscratch/users/tbczhang/envs/mara
 ```
 
+In a linked worktree, `.venv` must instead be the sentinel file beginning with
+`MARA_LINKED_WORKTREE_NO_VENV=1`.
+
 Stop before running `uv`, `pip`, tests, `MARA app init`, dataset syncs, Slurm
 jobs, or model setup if:
 
-- `.venv` is a real directory instead of a symlink.
+- The primary `.venv` is a real directory instead of a symlink, or a linked
+  worktree `.venv` is anything other than the repository sentinel file.
 - Any cache or runtime environment variable except `PRE_COMMIT_HOME` points to
   `scratch` or home.
 - `UV_NO_CACHE` is not `1`; a single dependency operation can otherwise
@@ -272,6 +300,20 @@ Before deleting or compressing caches, inspect quota and directory ownership.
 Prefer archiving cache backups into a single tar file over keeping hundreds of
 thousands of small files. Do not delete user data, model weights, or active
 runtime state without explicit user approval.
+
+Enable the repository worktree guard once per clone:
+
+```bash
+git config core.hooksPath .githooks
+python scripts/check_mara_worktree_env.py check
+```
+
+The post-checkout hook prepares future linked worktrees automatically. To
+repair an existing linked worktree that still aliases the canonical
+environment, run `python scripts/check_mara_worktree_env.py prepare-linked`
+from that worktree. The command only replaces a symlink whose resolved target
+is the primary checkout's canonical environment; any unknown environment is
+preserved and reported as an error.
 
 ## Ignore Rules
 

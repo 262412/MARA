@@ -423,7 +423,16 @@ def check_installers(root: Path) -> list[Violation]:
     for path in INSTALLER_PATHS:
         source = (root / path).read_text(encoding="utf-8")
         if path in {Path("install.sh"), Path("install.ps1")}:
-            for token in ("UV_PYTHON_DOWNLOADS", "uv python find", "--frozen"):
+            for token in (
+                "UV_PYTHON_DOWNLOADS",
+                "uv python find",
+                "--frozen",
+                "--no-editable",
+                "--reinstall-package mara-app",
+                "--reinstall-package mara-research-cli",
+                "--reinstall-package ktem",
+                "--reinstall-package kotaemon",
+            ):
                 if token not in source:
                     violations.append(
                         _violation(path, source, "installer-lock", f"missing {token}")

@@ -12,6 +12,18 @@ if [[ ! -f "$SCRIPT_DIR/pyproject.toml" || ! -f "$SCRIPT_DIR/uv.lock" ]]; then
   echo "install.sh supports a verified MARA source checkout with uv.lock." >&2
   exit 64
 fi
+COMMON_GIT_DIR="$(git -C "$SCRIPT_DIR" rev-parse --git-common-dir 2>/dev/null || true)"
+if [[ -n "$COMMON_GIT_DIR" ]]; then
+  if [[ "$COMMON_GIT_DIR" != /* ]]; then
+    COMMON_GIT_DIR="$SCRIPT_DIR/$COMMON_GIT_DIR"
+  fi
+  PRIMARY_ROOT="$(cd -- "$COMMON_GIT_DIR/.." && pwd -P)"
+  if [[ "$SCRIPT_DIR" != "$PRIMARY_ROOT" ]]; then
+    echo "Refusing to install from a linked Git worktree: $SCRIPT_DIR" >&2
+    echo "Run install.sh only from the primary checkout: $PRIMARY_ROOT" >&2
+    exit 64
+  fi
+fi
 if ! command -v uv >/dev/null 2>&1; then
   echo "uv is required. Install a verified uv release with your package manager." >&2
   exit 69
@@ -27,6 +39,11 @@ uv sync \
   --project "$SCRIPT_DIR" \
   --frozen \
   --no-dev \
+  --no-editable \
+  --reinstall-package mara-app \
+  --reinstall-package mara-research-cli \
+  --reinstall-package ktem \
+  --reinstall-package kotaemon \
   --extra mara \
   --python "$PYTHON_BIN"
 

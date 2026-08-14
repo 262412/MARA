@@ -573,14 +573,14 @@ When changing the `libs/slide_cli` public command surface:
 
 ```powershell
 cd libs\slide_cli
-uv run --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.10 python -m pytest -q
 ```
 
 When changing the `libs/kotaemon` GitHub Actions unit-test path:
 
 ```powershell
 cd libs\kotaemon
-uv run --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.10 python -m pytest -q
 ```
 
 ### Current Boundaries
@@ -1126,14 +1126,14 @@ MARA docqa doctor
 
 ```powershell
 cd libs\slide_cli
-uv run --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.10 python -m pytest -q
 ```
 
 当改动 `libs/kotaemon` 的 GitHub Actions 单元测试路径时：
 
 ```powershell
 cd libs\kotaemon
-uv run --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.10 python -m pytest -q
 ```
 
 ### 当前边界

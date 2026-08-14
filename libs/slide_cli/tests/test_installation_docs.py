@@ -8,7 +8,11 @@ def test_windows_installer_installs_mara_cli_from_local_implementation():
 
     assert "uv sync" in install_script
     assert "--frozen" in install_script
+    assert "--no-editable" in install_script
     assert "--extra mara" in install_script
+    assert "Refusing to install from a linked Git worktree" in install_script
+    for package in ("mara-app", "mara-research-cli", "ktem", "kotaemon"):
+        assert f"--reinstall-package {package}" in install_script
     assert "MARA.exe" in install_script
     assert "pip install" not in install_script
     assert "UV_PYTHON_DOWNLOADS" in install_script
@@ -31,7 +35,11 @@ def test_posix_installer_installs_mara_cli_from_local_implementation():
 
     assert "uv sync" in install_script
     assert "--frozen" in install_script
+    assert "--no-editable" in install_script
     assert "--extra mara" in install_script
+    assert "Refusing to install from a linked Git worktree" in install_script
+    for package in ("mara-app", "mara-research-cli", "ktem", "kotaemon"):
+        assert f"--reinstall-package {package}" in install_script
     assert "/bin/MARA" in install_script
     assert "pip install" not in install_script
     assert "UV_PYTHON_DOWNLOADS" in install_script
@@ -50,3 +58,15 @@ def test_root_readme_documents_mara_research_cli_source_install():
     assert 'pip install -e "libs/slide_cli"' not in readme
     assert "pip install mara-research-cli" in readme
     assert "MARA doctor" in readme
+
+
+def test_local_verification_docs_do_not_resync_the_canonical_environment():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    hygiene_contract = (
+        REPO_ROOT / "docs/development/codebase-hygiene-contract.md"
+    ).read_text(encoding="utf-8")
+
+    assert "uv run --python 3.10" not in readme
+    assert "uv run --python 3.10" not in hygiene_contract
+    assert "uv run --no-sync --python 3.10" in readme
+    assert "uv run --no-sync --python 3.10" in hygiene_contract

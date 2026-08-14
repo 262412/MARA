@@ -9,7 +9,7 @@ import yaml
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10
-    import tomli as tomllib
+    import tomli as tomllib  # type: ignore[no-redef]
 
 from scripts.check_supply_chain_policy import (
     _check_action_pins,
@@ -65,6 +65,9 @@ def test_canonical_installers_use_only_the_frozen_source_lock():
         assert "uv sync" in source
         assert "--frozen" in source
         assert "--no-dev" in source
+        assert "--no-editable" in source
+        for package in ("mara-app", "mara-research-cli", "ktem", "kotaemon"):
+            assert f"--reinstall-package {package}" in source
         assert "pip install" not in source
         assert "mara-app[mara]" not in source
 
