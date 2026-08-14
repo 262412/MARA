@@ -6,6 +6,7 @@ from typing import Any
 from .boolean_authoritative_conflict import authoritative_conflict_claim
 from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuthority
 from .boolean_authority_selection import _best_authority, _deduplicated_authorities
+from .boolean_deictic_authority import ambiguous_deictic_object_authority
 from .boolean_evidence_scope import (
     ClosedScopeResolution,
     _actor,
@@ -57,9 +58,7 @@ def boolean_claim_authority(
     input_polarity = canonical_boolean_answer_polarity(answer)
     if not input_polarity and not allow_missing_polarity:
         return None
-    authority_items = [
-        item for item in evidence_items if not _title_or_heading_item(item)
-    ]
+    authority_items = _authority_items(evidence_items)
     probe_polarity = input_polarity or "yes"
     closed_scope = resolve_closed_scope_boolean(prompt, authority_items)
     resolved = _authority_from_closed_scope(prompt, closed_scope)
@@ -88,6 +87,10 @@ def boolean_claim_authority(
             supporting,
             contradicting,
         )
+    if ambiguous := ambiguous_deictic_object_authority(
+        prompt, input_polarity, probe_polarity, supporting or contradicting
+    ):
+        return ambiguous
     if supporting:
         return _supported_authority(
             prompt,
@@ -393,6 +396,10 @@ def _title_or_heading_item(item: dict[str, Any]) -> bool:
         for key in ("element_type", "modality", "section_id", "section_title")
     )
     return bool(re.search(r"\btitle\b|\bheading\b", kind))
+
+
+def _authority_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in items if not _title_or_heading_item(item)]
 
 
 def _exact_window(

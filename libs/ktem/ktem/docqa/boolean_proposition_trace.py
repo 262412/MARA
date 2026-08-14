@@ -76,28 +76,17 @@ def boolean_proposition_binding_trace(
 
 
 def _assessment_trace(value: BooleanEvidenceAssessment) -> dict[str, Any]:
+    assessment = value.as_dict()
     return {
+        **assessment,
         "proposition_candidate_id": value.span_id,
-        "evidence_id": identity_of(value.item).key,
         "span": value.span_text,
         "normalized_relation": value.proposition.action,
-        "predicate": value.proposition.predicate,
-        "actor": value.proposition.actor,
-        "object": value.proposition.object,
-        "qualifier": value.proposition.qualifier,
-        "quantifier": value.proposition.quantifier,
-        "scope": value.proposition.scope,
         "relation_match_reason": (
             "normalized_relation_family_match"
             if value.relation_score > 0
             else "normalized_relation_mismatch"
         ),
-        "actor_score": value.actor_score,
-        "scope_score": value.scope_score,
-        "object_score": value.object_score,
-        "polarity": value.proposition.polarity,
-        "classification": value.classification,
-        "reason": value.reason,
     }
 
 

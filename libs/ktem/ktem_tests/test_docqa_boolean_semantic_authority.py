@@ -267,3 +267,66 @@ def test_deictic_method_identity_binds_to_an_explicit_current_method() -> None:
     assert authority is not None
     assert authority.status == "supported"
     assert authority.canonical_answer_polarity == "yes"
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    (
+        "We will evaluate the model on clinical tasks.",
+        "We plan to evaluate the model on clinical tasks.",
+        "We intend to evaluate the model on clinical tasks.",
+    ),
+)
+def test_prospective_proposition_never_becomes_current_authority(
+    evidence: str,
+) -> None:
+    authority = boolean_claim_authority(
+        "Did the authors evaluate the model on clinical tasks?",
+        "unanswerable",
+        [_item(evidence)],
+        allow_missing_polarity=True,
+    )
+
+    assert authority is not None
+    assert authority.status == "unknown"
+    assert authority.canonical_answer_polarity == ""
+    assert authority.supporting == ()
+    assert authority.reason == "no_exact_boolean_authority"
+
+
+def test_nominalized_evaluation_establishes_exact_boolean_authority() -> None:
+    evidence = "Our evaluation of the model covers clinical tasks."
+    authority = boolean_claim_authority(
+        "Did the authors evaluate the model on clinical tasks?",
+        "unanswerable",
+        [_item(evidence)],
+        allow_missing_polarity=True,
+    )
+
+    assert authority is not None
+    assert authority.status == "supported"
+    assert authority.canonical_answer_polarity == "yes"
+    [support] = authority.supporting
+    assert support.relation == "evaluate"
+    assert support.object == "clinical model task"
+    assert support.quote == evidence
+
+
+def test_deictic_dataset_cannot_bind_to_multiple_distinct_objects() -> None:
+    items = [
+        {**_item("We evaluated the Alpha dataset."), "evidence_id": "alpha"},
+        {**_item("We evaluated the Beta dataset."), "evidence_id": "beta"},
+    ]
+
+    authority = boolean_claim_authority(
+        "Did the authors evaluate this dataset?",
+        "unanswerable",
+        items,
+        allow_missing_polarity=True,
+    )
+
+    assert authority is not None
+    assert authority.status == "conflicting"
+    assert authority.canonical_answer_polarity == ""
+    assert authority.supporting == ()
+    assert authority.reason == "ambiguous_deictic_object_binding"

@@ -7,6 +7,19 @@ from .boolean_proposition_context import normalized_object_tokens
 from .boolean_proposition_tokens import _relation_surface_tokens
 from .boolean_relations import primary_boolean_relation
 
+_NON_AUTHORITATIVE_PROPOSITION_RE = re.compile(
+    r"\b(?:future|hypothetical|prospective|potential)\s+"
+    r"(?:work|study|experiments?|evaluation|tests?)\b"
+    r"|\b(?:could|might|may|would|intend|intended|plan|planned|will)\b",
+    re.IGNORECASE,
+)
+
+
+def non_authoritative_proposition_span(span: str) -> bool:
+    """Return whether a proposition is prospective rather than asserted now."""
+
+    return bool(_NON_AUTHORITATIVE_PROPOSITION_RE.search(str(span or "")))
+
 
 def containment_marker_polarity(question: str, text: str) -> bool | None:
     """Bind ``subject with/without object`` to an asked containment frame."""

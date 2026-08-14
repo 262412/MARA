@@ -18,6 +18,7 @@ from .boolean_proposition_compatibility import (
     _object_compatibility,
     _relation_compatibility,
 )
+from .boolean_proposition_conditions import non_authoritative_proposition_span
 from .boolean_proposition_context import (
     actor_scope_scores,
     bounded_proposition_context,
@@ -130,6 +131,30 @@ def _assess_proposition_span(
         span_text=span,
         actor_score=actor_score,
         scope_score=scope_score,
+        candidate_relevance=_candidate_relevance(
+            classification,
+            relation_score=relation_score,
+            object_score=object_score,
+            actor_score=actor_score,
+            scope_score=scope_score,
+        ),
+    )
+
+
+def _candidate_relevance(
+    classification: str,
+    *,
+    relation_score: float,
+    object_score: float,
+    actor_score: float,
+    scope_score: float,
+) -> bool:
+    return bool(
+        classification not in {"insufficient_scope"}
+        and relation_score > 0
+        and object_score >= 0.6
+        and actor_score > 0
+        and scope_score > 0
     )
 
 
@@ -271,7 +296,10 @@ def _classify_proposition_span(
     object_score: float,
     scope_rejection: str,
 ) -> tuple[str, str]:
-    if (
+    if non_authoritative_proposition_span(span):
+        classification = "insufficient_scope"
+        reason = "prospective_proposition_not_current_authority"
+    elif (
         (actor in {"cited_work", "other_authors"} or section_role == "related_work")
         and not _prior_work_scope_question(question)
         or section_role == "future_work"
@@ -431,12 +459,7 @@ def boolean_proposition_evidence_score(
         return current_experiment_score
     assessments = classify_boolean_evidence_candidates(question, "", item)
     compatible = [
-        assessment
-        for assessment in assessments
-        if assessment.actor_score > 0
-        and assessment.scope_score > 0
-        and assessment.relation_score > 0
-        and assessment.object_score >= 0.6
+        assessment for assessment in assessments if assessment.candidate_relevance
     ]
     if not compatible:
         return 0.0

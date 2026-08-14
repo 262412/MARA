@@ -153,6 +153,10 @@ def test_exact_boolean_transaction_records_the_complete_state(
     assert candidate["scope"] == "results"
     assert candidate["polarity"] == case.evidence_polarity
     assert candidate["reason"] == case.candidate_reason
+    assert candidate["candidate_relevance"] is True
+    assert candidate["authority_state"] == "retrieved_unverified"
+    assert candidate["evidence_id"] == evidence_id
+    assert candidate["exact_span"] == case.evidence_text
 
     commit = result.engine_terminal_commit
     assert commit["semantic_answer"] == case.expected_answer
@@ -295,6 +299,33 @@ def test_explicit_conflict_is_verified_but_terminally_abstained() -> None:
     [slot] = result.evidence_bundle.metadata["query_plan"]["evidence_slots"]
     assert slot["status"] == "verified_conflict"
     assert set(slot["evidence_ids"]) == expected_ids
+    assert result.engine_terminal_commit["semantic_answer"] == "unanswerable"
+    assert result.engine_terminal_commit["answer_status"] == "abstained"
+    assert result.engine_terminal_commit["citations"] == []
+
+
+def test_deictic_multi_object_authority_commits_verified_conflict() -> None:
+    question = "Did the authors evaluate this dataset?"
+    alpha = _evidence(
+        "alpha",
+        "We evaluated the Alpha dataset.",
+        page_label="1",
+    )
+    beta = _evidence(
+        "beta",
+        "We evaluated the Beta dataset.",
+        page_label="2",
+    )
+
+    result = _run_boolean(question, "unanswerable", [alpha, beta])
+
+    assert result.answer == "unanswerable"
+    assert result.verify_decision.status == "verified_conflict"
+    assert result.verify_decision.typed_authority["state"] == "verified_conflict"
+    assert result.verify_decision.authoritative_conflict["conflict_kind"] == (
+        "ambiguous_deictic_object_binding"
+    )
+    assert result.guardrail_decision.action == "abstain"
     assert result.engine_terminal_commit["semantic_answer"] == "unanswerable"
     assert result.engine_terminal_commit["answer_status"] == "abstained"
     assert result.engine_terminal_commit["citations"] == []

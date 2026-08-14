@@ -5,6 +5,7 @@ from typing import Any
 
 from .boolean_current_experiment import current_experiment_slot_score
 from .boolean_evidence_scope import _prior_work_scope_question, evidence_item_text
+from .boolean_proposition_conditions import non_authoritative_proposition_span
 from .boolean_proposition_evidence import (
     _assessment_rank,
     _proposition_content_tokens,
@@ -115,7 +116,7 @@ def _compatible_candidates(
             or assessment.proposition.section_scope
             not in {"related_work", "future_work"}
         )
-        and not _non_authoritative_candidate_span(assessment.span_text)
+        and not non_authoritative_proposition_span(assessment.span_text)
     ]
 
 
@@ -138,13 +139,5 @@ def _normalized_requirement_item(item: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-_NON_AUTHORITATIVE_CANDIDATE_RE = re.compile(
-    r"\b(?:future|hypothetical|prospective|potential)\s+"
-    r"(?:work|study|experiments?|evaluation|tests?)\b"
-    r"|\b(?:could|might|may|would|intend(?:ed)?|plan|planned|will)\b",
-    re.IGNORECASE,
-)
-
-
 def _non_authoritative_candidate_span(span: str) -> bool:
-    return bool(_NON_AUTHORITATIVE_CANDIDATE_RE.search(str(span or "")))
+    return non_authoritative_proposition_span(span)
