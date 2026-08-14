@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import signal
 import threading
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ DEFAULT_OPTIONAL_STAGE_RESERVE_SECONDS = 12.0
 DEFAULT_TERMINAL_COMMIT_RESERVE_SECONDS = 12.0
 
 _T = TypeVar("_T")
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,24 +102,28 @@ def run_blocking_route_stage(
     deadline checks remain fail-closed.
     """
 
+    request.route_last_blocking_stage = blocking_stage
     absolute_deadline = _absolute_deadline(request)
     if absolute_deadline is None and configured_timeout_seconds is None:
-        return call(*args, **kwargs)
+        try:
+            return call(*args, **kwargs)
+        except Exception:
+            request.route_failed_stage = blocking_stage
+            LOGGER.exception("DocQA route stage failed: %s", blocking_stage)
+            raise
     remaining_before = remaining_route_seconds(request)
     timeout = route_call_timeout_seconds(
         request,
         configured_timeout_seconds=configured_timeout_seconds,
     )
-    event = {
-        "stage": "route_budget",
-        "blocking_stage": blocking_stage,
-        "absolute_deadline_monotonic": absolute_deadline,
-        "remaining_route_seconds_before": _rounded(remaining_before),
-        "terminal_commit_reserve_seconds": terminal_commit_reserve_seconds(request),
-        "configured_call_timeout_seconds": configured_timeout_seconds,
-        "call_timeout_budget_seconds": _rounded(timeout),
-        "status": "started",
-    }
+    event = _route_budget_event(
+        request,
+        blocking_stage,
+        absolute_deadline,
+        remaining_before,
+        configured_timeout_seconds,
+        timeout,
+    )
     _budget_trace(request).append(event)
     if timeout is not None and timeout <= 0:
         event["status"] = "deadline_exhausted_before_call"
@@ -125,29 +131,28 @@ def run_blocking_route_stage(
 
     previous_call_timeout = getattr(request, "route_call_timeout_seconds", None)
     request.route_call_timeout_seconds = timeout
+    cancel_event = threading.Event()
+    request.route_call_cancel_event = cancel_event
     started = monotonic()
     try:
-        result = _run_with_interruptible_timeout(
+        return _run_timed_route_stage(
+            request,
+            blocking_stage,
+            call,
+            args,
+            kwargs,
             timeout,
-            lambda: call(*args, **kwargs),
-            on_timeout=lambda: _deadline_error(
-                request,
-                blocking_stage,
-                timeout,
-                remaining_route_seconds(request),
-            ),
+            cancel_event,
+            event,
         )
-        if remaining_route_seconds(request) == 0.0:
-            raise _deadline_error(
-                request,
-                blocking_stage,
-                timeout,
-                remaining_route_seconds(request),
-            )
-        event["status"] = "completed"
-        return result
     except RouteDeadlineExhausted:
         event["status"] = "deadline_exhausted"
+        raise
+    except Exception as error:
+        event["status"] = "failed"
+        event["error_type"] = type(error).__name__
+        request.route_failed_stage = blocking_stage
+        LOGGER.exception("DocQA timed route stage failed: %s", blocking_stage)
         raise
     finally:
         event["elapsed_seconds"] = round(max(0.0, monotonic() - started), 6)
@@ -161,6 +166,64 @@ def run_blocking_route_stage(
                 pass
         else:
             request.route_call_timeout_seconds = previous_call_timeout
+
+
+def _route_budget_event(
+    request: Any,
+    blocking_stage: str,
+    absolute_deadline: float | None,
+    remaining_before: float | None,
+    configured_timeout_seconds: float | None,
+    timeout: float | None,
+) -> dict[str, Any]:
+    return {
+        "stage": "route_budget",
+        "blocking_stage": blocking_stage,
+        "absolute_deadline_monotonic": absolute_deadline,
+        "remaining_route_seconds_before": _rounded(remaining_before),
+        "terminal_commit_reserve_seconds": terminal_commit_reserve_seconds(request),
+        "configured_call_timeout_seconds": configured_timeout_seconds,
+        "call_timeout_budget_seconds": _rounded(timeout),
+        "status": "started",
+    }
+
+
+def _run_timed_route_stage(
+    request: Any,
+    blocking_stage: str,
+    call: Callable[..., _T],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    timeout: float | None,
+    cancel_event: threading.Event,
+    event: dict[str, Any],
+) -> _T:
+    result = _run_with_interruptible_timeout(
+        timeout,
+        lambda: call(*args, **kwargs),
+        on_timeout=lambda: _deadline_error(
+            request,
+            blocking_stage,
+            timeout,
+            remaining_route_seconds(request),
+        ),
+        on_cancel=lambda: _cancel_blocking_route_stage(
+            request,
+            blocking_stage,
+            call,
+            cancel_event,
+        ),
+        event=event,
+    )
+    if remaining_route_seconds(request) == 0.0:
+        raise _deadline_error(
+            request,
+            blocking_stage,
+            timeout,
+            remaining_route_seconds(request),
+        )
+    event["status"] = "completed"
+    return result
 
 
 def route_budget_trace(request: Any) -> list[dict[str, Any]]:
@@ -201,9 +264,19 @@ def _run_with_interruptible_timeout(
     call: Callable[[], _T],
     *,
     on_timeout: Callable[[], RouteDeadlineExhausted],
+    on_cancel: Callable[[], None],
+    event: dict[str, Any],
 ) -> _T:
-    if timeout_seconds is None or not _signal_timeout_available():
+    if timeout_seconds is None:
         return call()
+    if not _signal_timeout_available():
+        return _run_with_worker_timeout(
+            timeout_seconds,
+            call,
+            on_timeout=on_timeout,
+            on_cancel=on_cancel,
+            event=event,
+        )
     sigalrm = signal.SIGALRM
     itimer_real = signal.ITIMER_REAL
     previous_handler = signal.getsignal(sigalrm)
@@ -227,6 +300,61 @@ def _run_with_interruptible_timeout(
                 max(0.000001, previous_delay - elapsed),
                 previous_interval,
             )
+
+
+def _run_with_worker_timeout(
+    timeout_seconds: float,
+    call: Callable[[], _T],
+    *,
+    on_timeout: Callable[[], RouteDeadlineExhausted],
+    on_cancel: Callable[[], None],
+    event: dict[str, Any],
+) -> _T:
+    completed = threading.Event()
+    result: list[_T] = []
+    errors: list[BaseException] = []
+
+    def invoke() -> None:
+        try:
+            result.append(call())
+        except Exception as error:
+            LOGGER.debug("DocQA route worker failed", exc_info=error)
+            errors.append(error)
+        finally:
+            completed.set()
+
+    worker = threading.Thread(
+        target=invoke,
+        name="mara-route-stage",
+        daemon=True,
+    )
+    worker.start()
+    if not completed.wait(max(0.000001, float(timeout_seconds))):
+        on_cancel()
+        producer_stopped = completed.wait(0.1)
+        event["cancellation_status"] = (
+            "producer_stopped" if producer_stopped else "producer_unresponsive"
+        )
+        raise on_timeout()
+    if errors:
+        raise errors[0]
+    return result[0]
+
+
+def _cancel_blocking_route_stage(
+    request: Any,
+    blocking_stage: str,
+    call: Callable[..., Any],
+    cancel_event: threading.Event,
+) -> None:
+    cancel_event.set()
+    callback = getattr(request, "route_cancel_callback", None)
+    if callable(callback):
+        callback(blocking_stage)
+    owner = getattr(call, "__self__", None)
+    cancel = getattr(owner, "cancel", None)
+    if callable(cancel):
+        cancel()
 
 
 def _signal_timeout_available() -> bool:

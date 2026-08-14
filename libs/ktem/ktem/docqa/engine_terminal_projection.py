@@ -23,6 +23,8 @@ def engine_terminal_projection(
     bundle: EvidenceBundle,
     *,
     raw_generated_answer: str | None = None,
+    terminal_outcome: str | None = None,
+    terminal_outcome_reason: str = "",
 ) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str]:
     (
         terminal_answer,
@@ -45,7 +47,54 @@ def engine_terminal_projection(
         terminal_verify.get("semantic_correction_applied")
         or (verified_label in {"yes", "no"} and candidate_label != verified_label)
     )
-    terminal_state = {
+    terminal_state = _terminal_state(
+        terminal_answer,
+        raw_answer,
+        raw_candidate_label,
+        candidate_label,
+        verified_label,
+        correction_applied,
+        conflict_terminal,
+        terminal_verify,
+        terminal_guardrail,
+        terminal_evidence,
+    )
+    terminal_commit = build_terminal_semantic_commit(
+        terminal_answer,
+        terminal_verify,
+        terminal_guardrail,
+        terminal_evidence,
+        outcome=terminal_outcome,
+        outcome_reason=terminal_outcome_reason,
+        presentation_answer=answer,
+    ).as_dict()
+    terminal_state["terminal_outcome"] = terminal_commit["outcome"]
+    terminal_state["presentation_answer"] = terminal_commit["presentation_answer"]
+    terminal_state["terminal_semantic_commit"] = terminal_commit
+    projection_hash = _projection_hash(terminal_state)
+    return (
+        terminal_answer,
+        terminal_state,
+        terminal_verify,
+        terminal_guardrail,
+        terminal_evidence,
+        projection_hash,
+    )
+
+
+def _terminal_state(
+    terminal_answer: str,
+    raw_answer: str,
+    raw_candidate_label: str,
+    candidate_label: str,
+    verified_label: str,
+    correction_applied: bool,
+    conflict_terminal: bool,
+    terminal_verify: dict[str, Any],
+    terminal_guardrail: dict[str, Any],
+    terminal_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    return {
         "contract_id": ENGINE_TERMINAL_STATE_CONTRACT,
         "answer": terminal_answer,
         "raw_generated_answer": raw_answer,
@@ -75,21 +124,6 @@ def engine_terminal_projection(
         "guardrail_decision": deepcopy(terminal_guardrail),
         "evidence_bundle": deepcopy(terminal_evidence),
     }
-    terminal_state["terminal_semantic_commit"] = build_terminal_semantic_commit(
-        terminal_answer,
-        terminal_verify,
-        terminal_guardrail,
-        terminal_evidence,
-    ).as_dict()
-    projection_hash = _projection_hash(terminal_state)
-    return (
-        terminal_answer,
-        terminal_state,
-        terminal_verify,
-        terminal_guardrail,
-        terminal_evidence,
-        projection_hash,
-    )
 
 
 def _terminal_projection_values(

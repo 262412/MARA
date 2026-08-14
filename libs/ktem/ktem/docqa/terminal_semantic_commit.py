@@ -12,7 +12,16 @@ from .execution_contracts import ABSTAIN_MESSAGE
 from .execution_models import GuardrailDecision
 from .verification import VerifyDecision
 
-TERMINAL_SEMANTIC_COMMIT_CONTRACT = "terminal_semantic_commit.v2"
+TERMINAL_SEMANTIC_COMMIT_CONTRACT = "terminal_semantic_commit.v3"
+LEGACY_TERMINAL_SEMANTIC_COMMIT_CONTRACT = "terminal_semantic_commit.v2"
+TERMINAL_OUTCOMES = {
+    "answered",
+    "safe_abstention",
+    "execution_failed",
+    "timeout",
+    "cancelled",
+}
+OPERATIONAL_TERMINAL_OUTCOMES = {"execution_failed", "timeout", "cancelled"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,18 +34,24 @@ class TerminalSemanticCommit:
     """
 
     semantic_answer: str
+    presentation_answer: str
+    outcome: str
+    outcome_reason: str
     answer_status: str
     verify_decision: dict[str, Any]
     guardrail_decision: dict[str, Any]
     authoritative_evidence: tuple[dict[str, Any], ...]
     citations: tuple[str, ...]
     projection_hash: str
-    state_version: int = 2
+    state_version: int = 3
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "contract_id": TERMINAL_SEMANTIC_COMMIT_CONTRACT,
             "semantic_answer": self.semantic_answer,
+            "presentation_answer": self.presentation_answer,
+            "outcome": self.outcome,
+            "outcome_reason": self.outcome_reason,
             "answer_status": self.answer_status,
             "verify_decision": deepcopy(self.verify_decision),
             "guardrail_decision": deepcopy(self.guardrail_decision),
@@ -54,6 +69,10 @@ def build_terminal_semantic_commit(
     verify_decision: VerifyDecision | dict[str, Any],
     guardrail_decision: GuardrailDecision | dict[str, Any],
     bundle: EvidenceBundle | dict[str, Any],
+    *,
+    outcome: str | None = None,
+    outcome_reason: str = "",
+    presentation_answer: str | None = None,
 ) -> TerminalSemanticCommit:
     verify = _as_dict(verify_decision)
     guardrail = _as_dict(guardrail_decision)
@@ -64,34 +83,54 @@ def build_terminal_semantic_commit(
         guardrail,
         evidence_bundle,
     )
-    authoritative_evidence = tuple(_authoritative_evidence(evidence_bundle))
-    citations = tuple(
-        str(value).strip()
-        for value in verify.get("verified_citations") or []
-        if str(value).strip()
+    resolved_outcome = _terminal_outcome(
+        outcome,
+        semantic_answer,
+        verify,
+        guardrail,
     )
-    answer_status = _answer_status(semantic_answer, verify, guardrail)
+    resolved_reason = outcome_reason or _outcome_reason(
+        resolved_outcome,
+        verify,
+        guardrail,
+    )
+    rendered_answer = str(
+        answer if presentation_answer is None else presentation_answer
+    )
+    authoritative_evidence = (
+        ()
+        if resolved_outcome in OPERATIONAL_TERMINAL_OUTCOMES
+        else tuple(_authoritative_evidence(evidence_bundle))
+    )
+    citations = (
+        ()
+        if resolved_outcome in OPERATIONAL_TERMINAL_OUTCOMES
+        else tuple(
+            str(value).strip()
+            for value in verify.get("verified_citations") or []
+            if str(value).strip()
+        )
+    )
+    answer_status = "answered" if resolved_outcome == "answered" else "abstained"
     unsigned = {
         "contract_id": TERMINAL_SEMANTIC_COMMIT_CONTRACT,
         "semantic_answer": semantic_answer,
+        "presentation_answer": rendered_answer,
+        "outcome": resolved_outcome,
+        "outcome_reason": resolved_reason,
         "answer_status": answer_status,
         "verify_decision": verify,
         "guardrail_decision": guardrail,
         "authoritative_evidence": list(authoritative_evidence),
         "citations": list(citations),
-        "state_version": 2,
+        "state_version": 3,
     }
-    projection_hash = hashlib.sha256(
-        json.dumps(
-            unsigned,
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            default=str,
-        ).encode("utf-8")
-    ).hexdigest()
+    projection_hash = _commit_hash(unsigned)
     return TerminalSemanticCommit(
         semantic_answer=semantic_answer,
+        presentation_answer=rendered_answer,
+        outcome=resolved_outcome,
+        outcome_reason=resolved_reason,
         answer_status=answer_status,
         verify_decision=verify,
         guardrail_decision=guardrail,
@@ -130,22 +169,70 @@ def terminal_commit_projection_present(
 ) -> bool:
     if not isinstance(commit, dict):
         return False
-    if commit.get("contract_id") != TERMINAL_SEMANTIC_COMMIT_CONTRACT:
+    if commit.get("contract_id") not in {
+        TERMINAL_SEMANTIC_COMMIT_CONTRACT,
+        LEGACY_TERMINAL_SEMANTIC_COMMIT_CONTRACT,
+    }:
         return False
     expected = dict(commit)
     projection_hash = str(expected.pop("projection_hash") or "")
     if not projection_hash:
         return False
-    computed = hashlib.sha256(
+    computed = _commit_hash(expected)
+    return computed == projection_hash
+
+
+def terminal_commit_outcome(commit: Any) -> str:
+    if not terminal_commit_projection_present(commit):
+        return ""
+    outcome = str(commit.get("outcome") or "")
+    if outcome in TERMINAL_OUTCOMES:
+        return outcome
+    return (
+        "answered"
+        if str(commit.get("answer_status") or "") == "answered"
+        else "safe_abstention"
+    )
+
+
+def _commit_hash(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(
         json.dumps(
-            expected,
+            payload,
             sort_keys=True,
             ensure_ascii=False,
             separators=(",", ":"),
             default=str,
         ).encode("utf-8")
     ).hexdigest()
-    return computed == projection_hash
+
+
+def _terminal_outcome(
+    requested: str | None,
+    semantic_answer: str,
+    verify: dict[str, Any],
+    guardrail: dict[str, Any],
+) -> str:
+    if requested is not None:
+        normalized = str(requested).strip().lower()
+        if normalized not in TERMINAL_OUTCOMES:
+            raise ValueError(f"Unsupported terminal outcome: {requested}")
+        return normalized
+    return (
+        "safe_abstention"
+        if _semantic_abstention(semantic_answer, verify, guardrail)
+        else "answered"
+    )
+
+
+def _outcome_reason(
+    outcome: str,
+    verify: dict[str, Any],
+    guardrail: dict[str, Any],
+) -> str:
+    if outcome == "answered":
+        return ""
+    return str(guardrail.get("reason") or verify.get("reason") or outcome)
 
 
 def _authoritative_evidence(bundle: dict[str, Any]) -> list[dict[str, Any]]:
@@ -155,16 +242,6 @@ def _authoritative_evidence(bundle: dict[str, Any]) -> list[dict[str, Any]]:
         "verified_evidence"
     )
     return [dict(item) for item in values or [] if isinstance(item, dict)]
-
-
-def _answer_status(
-    answer: str,
-    verify: dict[str, Any],
-    guardrail: dict[str, Any],
-) -> str:
-    return (
-        "abstained" if _semantic_abstention(answer, verify, guardrail) else "answered"
-    )
 
 
 def _semantic_abstention(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .controller import RetrieveDecision, VerifyDecision
@@ -53,6 +54,7 @@ from .execution_recovery import (
 from .execution_recovery import verifier_recovery_policy as _verifier_recovery_policy
 from .execution_results import deadline_exhausted_result as _deadline_exhausted_result
 from .execution_results import guarded_result as _guarded_result
+from .execution_results import operational_failure_result as _operational_failure_result
 from .execution_results import result as _result
 from .execution_results import static_result as _static_result
 from .execution_results import verified_result as _verified_result
@@ -66,6 +68,7 @@ from .route_capabilities import route_switch_candidates as _route_switch_candida
 from .route_selection import ControllerDecision
 
 _controller_decision_from_payload = _controller_decision
+LOGGER = logging.getLogger(__name__)
 
 __all__ = [
     "ABSTAIN_MESSAGE",
@@ -139,12 +142,23 @@ def execute_controller_turn(
     agent_trace: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
     timings = PipelineStageTimings()
-    decision, workflow_plan = timings.measure(
-        "planning_seconds",
-        _planned_execution,
-        request,
-        agent_trace or [],
-    )
+    try:
+        decision, workflow_plan = timings.measure(
+            "planning_seconds",
+            _planned_execution,
+            request,
+            agent_trace or [],
+        )
+    except Exception as error:
+        LOGGER.exception("DocQA planning failed before terminal commit")
+        return _operational_failure_result(
+            request,
+            None,
+            {},
+            error,
+            "planning",
+            timings,
+        )
     if decision.route in {"direct_answer", "abstain"}:
         answer = (
             DIRECT_ANSWER_MESSAGE
@@ -170,6 +184,31 @@ def execute_controller_turn(
             error,
             timings,
         )
+    except Exception as error:
+        LOGGER.exception(
+            "DocQA route execution failed during %s",
+            _failed_route_stage(request),
+        )
+        return _operational_failure_result(
+            request,
+            decision,
+            workflow_plan,
+            error,
+            _failed_route_stage(request),
+            timings,
+        )
+
+
+def _failed_route_stage(request: Any) -> str:
+    failed_stage = str(getattr(request, "route_failed_stage", "") or "")
+    if failed_stage:
+        return failed_stage
+    events = getattr(request, "route_budget_trace", None)
+    if isinstance(events, list):
+        for event in reversed(events):
+            if event.get("status") == "failed":
+                return str(event.get("blocking_stage") or "backend")
+    return "backend"
 
 
 def _execute_retrieval_turn(
