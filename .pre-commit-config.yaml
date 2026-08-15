@@ -23,7 +23,7 @@ repos:
       - id: detect-private-key
       - id: check-added-large-files
         args: ["--maxkb=750"]
-        exclude: "^libs/ktem/ktem/assets/vendor/pdfjs/pdfjs-6\\.1\\.200-dist\\.zip$"
+        exclude: "(^libs/ktem/ktem/assets/vendor/pdfjs/pdfjs-6\\.1\\.200-dist\\.zip$|^benchmark/tests/fixtures/qasper_golden_replay_v1\\.jsonl$)"
       - id: debug-statements
   - repo: https://github.com/ambv/black
     rev: ae2c0758c9e61a385df9700dc9c231bf54887041 # 22.3.0
@@ -88,6 +88,6 @@ repos:
     rev: ec0f41b9573937aebab66e3ca5b00d00a7b339fa # v2.2.4
     hooks:
       - id: codespell
-        exclude: "(^|/)package-lock\\.json$"
+        exclude: "((^|/)package-lock\\.json$|^benchmark/tests/fixtures/qasper_golden_replay_v1\\.jsonl$)"
         additional_dependencies:
           - tomli==2.2.1
