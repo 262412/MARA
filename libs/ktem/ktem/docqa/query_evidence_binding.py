@@ -4,7 +4,6 @@ from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from .boolean_proposition_evidence import boolean_proposition_authority_level
 from .calculation_evidence_identity import reconcile_materialized_cells
 from .cross_page_boolean_authority import reconcile_cross_page_boolean_proposition
 from .deterministic_ranking import quantized_score
@@ -21,9 +20,6 @@ from .query_evidence_binding_support import (
     agreement_attributes as _agreement_attributes,
 )
 from .query_evidence_binding_support import binding_quality as _binding_quality
-from .query_evidence_binding_support import (
-    candidate_score_for_slot as _candidate_score_for_slot,
-)
 from .query_evidence_binding_support import item_for_raw_id as _item_for_raw_id
 from .query_evidence_binding_support import score_evidence_for_slot
 from .query_evidence_binding_support import (
@@ -33,6 +29,8 @@ from .query_evidence_binding_support import slot_semantic_match as _slot_semanti
 from .query_evidence_binding_support import (
     trusted_dimension_item as _trusted_dimension_item,
 )
+from .query_evidence_slot_state import binding_trace as _binding_trace
+from .query_evidence_slot_state import bound_slot_status as _bound_slot_status
 from .query_phrase_extraction import source_page_locator
 from .query_plan_schema import (
     EvidenceSlot,
@@ -40,16 +38,23 @@ from .query_plan_schema import (
     required_slot_count,
     slot_binding_state,
 )
+from .selection_assessment_table import (
+    SelectionAssessmentTable,
+    candidate_assessment_score,
+)
 
 
 def bind_evidence_slots(
     plan: QueryPlan,
     evidence_items: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> QueryPlan:
     bound, _trace = _bind_evidence_slots(
         plan,
         evidence_items,
         preserve_existing=False,
+        assessments=assessments,
     )
     return bound
 
@@ -57,8 +62,15 @@ def bind_evidence_slots(
 def bind_evidence_slots_monotonic(
     plan: QueryPlan,
     evidence_items: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> tuple[QueryPlan, list[dict[str, Any]]]:
-    return _bind_evidence_slots(plan, evidence_items, preserve_existing=True)
+    return _bind_evidence_slots(
+        plan,
+        evidence_items,
+        preserve_existing=True,
+        assessments=assessments,
+    )
 
 
 def _bind_evidence_slots(
@@ -66,62 +78,50 @@ def _bind_evidence_slots(
     evidence_items: list[dict[str, Any]],
     *,
     preserve_existing: bool,
+    assessments: SelectionAssessmentTable | None,
 ) -> tuple[QueryPlan, list[dict[str, Any]]]:
     evidence_items = _binding_evidence_items(plan, evidence_items)
     bound_slots = []
     binding_trace: list[dict[str, Any]] = []
-    used_generic_operand_ids: set[str] = set()
-    used_comparison_ids: set[str] = set()
-    used_cross_page_locators: set[tuple[str, str]] = set()
-    evidence_by_identity = {identity_of(item).key: item for item in evidence_items}
-    bound_operand_items: list[dict[str, Any]] = []
+    generic_ids: set[str] = set()
+    comparison_ids: set[str] = set()
+    cross_page_locators: set[tuple[str, str]] = set()
+    by_id = {identity_of(item).key: item for item in evidence_items}
+    operand_items: list[dict[str, Any]] = []
+    requires_structure = bool(plan.constraints.get("requires_structure"))
     for slot in plan.evidence_slots:
         preserved, replacement_reason = _existing_binding_state(
+            plan,
             slot,
-            evidence_by_identity,
+            by_id,
             evidence_items,
-            requires_structure=bool(plan.constraints.get("requires_structure")),
+            requires_structure,
+            assessments,
         )
         if preserve_existing and preserved:
             evidence_ids = slot.evidence_ids
-            _update_bound_operand_state(
-                slot,
-                evidence_ids,
-                evidence_by_identity,
-                bound_operand_items,
-                used_generic_operand_ids,
-            )
+            _track_operand(slot, evidence_ids, by_id, operand_items, generic_ids)
             bound_slots.append(slot)
             binding_trace.append(
                 _binding_trace(slot, evidence_ids, evidence_ids, preserved=True)
             )
             continue
-        ranked = _ranked_evidence(plan, slot, evidence_items)
+        ranked = _ranked_evidence(plan, slot, evidence_items, assessments)
         candidate_ids = _candidate_ids_for_slot(
             plan,
             slot,
             ranked,
-            bound_operand_items,
-            used_generic_operand_ids,
-            used_comparison_ids,
-            used_cross_page_locators,
+            operand_items,
+            generic_ids,
+            comparison_ids,
+            cross_page_locators,
         )
         evidence_ids = tuple(candidate_ids)
-        _update_bound_operand_state(
-            slot,
-            evidence_ids,
-            evidence_by_identity,
-            bound_operand_items,
-            used_generic_operand_ids,
-        )
+        _track_operand(slot, evidence_ids, by_id, operand_items, generic_ids)
         bound_slots.append(
             replace(
                 slot,
-                status=_bound_slot_status(
-                    slot,
-                    evidence_ids,
-                    evidence_by_identity,
-                ),
+                status=_bound_slot_status(plan, slot, evidence_ids, by_id, assessments),
                 evidence_ids=evidence_ids,
             )
         )
@@ -136,7 +136,12 @@ def _bind_evidence_slots(
                 )
             )
     bound_slots = reconcile_cross_page_boolean_proposition(
-        plan, bound_slots, evidence_by_identity, status_for=_bound_slot_status
+        plan,
+        bound_slots,
+        by_id,
+        status_for=lambda slot, evidence_ids, evidence: _bound_slot_status(
+            plan, slot, evidence_ids, evidence, assessments
+        ),
     )
     return replace(plan, evidence_slots=tuple(bound_slots)), binding_trace
 
@@ -156,13 +161,15 @@ def _ranked_evidence(
     plan: QueryPlan,
     slot: EvidenceSlot,
     evidence_items: list[dict[str, Any]],
+    assessments: SelectionAssessmentTable | None,
 ) -> list[tuple[float, int, dict[str, Any]]]:
     ranked = (
         (
-            _candidate_score_for_slot(
+            candidate_assessment_score(
+                plan,
                 slot,
                 item,
-                requires_structure=bool(plan.constraints.get("requires_structure")),
+                assessments,
             ),
             index,
             item,
@@ -313,7 +320,7 @@ def _segment_comparison_candidate_ids(
     ]
 
 
-def _update_bound_operand_state(
+def _track_operand(
     slot: EvidenceSlot,
     evidence_ids: tuple[str, ...],
     evidence_by_identity: dict[str, dict[str, Any]],
@@ -332,11 +339,12 @@ def _update_bound_operand_state(
 
 
 def _existing_binding_state(
+    plan: QueryPlan,
     slot: EvidenceSlot,
     evidence_by_identity: dict[str, dict[str, Any]],
     evidence_items: list[dict[str, Any]],
-    *,
     requires_structure: bool,
+    assessments: SelectionAssessmentTable | None,
 ) -> tuple[bool, str]:
     if (
         slot.status
@@ -355,16 +363,20 @@ def _existing_binding_state(
     items = [evidence_by_identity.get(evidence_id) for evidence_id in slot.evidence_ids]
     if any(item is None for item in items):
         return False, "unresolved_existing_identity"
-    score_for_existing = (
-        _candidate_score_for_slot
-        if slot.status in {"retrieved_partial", "retrieved_unverified"}
-        else score_evidence_for_slot
-    )
     if any(
-        score_for_existing(
-            slot,
-            item,
-            requires_structure=requires_structure,
+        (
+            candidate_assessment_score(
+                plan,
+                slot,
+                item,
+                assessments,
+            )
+            if slot.status in {"retrieved_partial", "retrieved_unverified"}
+            else score_evidence_for_slot(
+                slot,
+                item,
+                requires_structure=requires_structure,
+            )
         )
         <= 0
         for item in items
@@ -394,71 +406,11 @@ def _existing_binding_state(
         slot,
         items,
         evidence_items,
-        requires_structure=requires_structure,
+        plan=plan,
+        assessments=assessments,
     ):
         return False, "provenance_complete_equivalent_available"
     return True, ""
-
-
-def _bound_slot_status(
-    slot: EvidenceSlot,
-    evidence_ids: tuple[str, ...],
-    evidence_by_identity: dict[str, dict[str, Any]],
-) -> str:
-    if not evidence_ids:
-        return "missing"
-    if (
-        slot.statement_kind in {"answer_relation", "boolean_proposition"}
-        and slot.required_for_verification
-        and not slot.required_for_retrieval
-    ):
-        if slot.statement_kind == "answer_relation":
-            return "retrieved_unverified"
-        levels = [
-            boolean_proposition_authority_level(
-                slot.metric,
-                evidence_by_identity[evidence_id],
-            )
-            for evidence_id in evidence_ids
-            if evidence_id in evidence_by_identity
-        ]
-        if levels and "complete" not in levels and "partial" in levels:
-            return "retrieved_partial"
-        return "retrieved_unverified"
-    items = [
-        evidence_by_identity[evidence_id]
-        for evidence_id in evidence_ids
-        if evidence_id in evidence_by_identity
-    ]
-    state_slot = replace(slot, evidence_ids=evidence_ids)
-    return slot_binding_state(
-        state_slot,
-        items,
-        semantic_match=lambda item: _slot_semantic_match(
-            slot,
-            item,
-            requires_structure=bool(slot.statement_kind or slot.financial_scope),
-        ),
-        materialized=lambda item: _slot_item_materialized(slot, item),
-        provenance_complete=lambda item: bool(identity_of(item).key),
-    )
-
-
-def _binding_trace(
-    slot: EvidenceSlot,
-    before_ids: tuple[str, ...],
-    after_ids: tuple[str, ...],
-    *,
-    preserved: bool,
-    replacement_reason: str = "",
-) -> dict[str, Any]:
-    return {
-        "slot_id": slot.slot_id,
-        "preserved_existing_binding": preserved,
-        "replacement_reason": replacement_reason,
-        "before_identity": before_ids[0] if before_ids else "",
-        "after_identity": after_ids[0] if after_ids else "",
-    }
 
 
 def _dimension_candidate_ids(
@@ -501,7 +453,8 @@ def _provenance_complete_revenue_equivalent_available(
     existing_items: list[dict[str, Any] | None],
     evidence_items: list[dict[str, Any]],
     *,
-    requires_structure: bool,
+    plan: QueryPlan,
+    assessments: SelectionAssessmentTable | None,
 ) -> bool:
     if not _is_revenue_operand_slot(slot) or len(existing_items) != 1:
         return False
@@ -517,10 +470,11 @@ def _provenance_complete_revenue_equivalent_available(
     return any(
         identity_of(candidate).key != identity_of(existing).key
         and _equivalent_revenue_operand(existing, candidate)
-        and _candidate_score_for_slot(
+        and candidate_assessment_score(
+            plan,
             slot,
             candidate,
-            requires_structure=requires_structure,
+            assessments,
         )
         > 0
         and bool(source_page_table_scale_evidence(candidate, evidence_items)[0])

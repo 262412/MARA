@@ -15,12 +15,15 @@ from .required_slot_selection import (
     slot_requires_selection,
     slot_score,
 )
+from .selection_assessment_table import SelectionAssessmentTable
 
 
 def evidence_selection_budget_trace(
     plan: QueryPlan,
     candidates: list[dict[str, Any]],
     selected: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> dict[str, dict[str, int]]:
     return {
         "candidate_budget_partitions": _candidate_budget_partitions(plan),
@@ -28,6 +31,7 @@ def evidence_selection_budget_trace(
             plan,
             candidates,
             selected,
+            assessments=assessments,
         ),
     }
 
@@ -36,6 +40,8 @@ def evidence_stage_trace(
     plan: QueryPlan,
     candidates: list[dict[str, Any]],
     selected: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> list[dict[str, Any]]:
     selected_ids = {identity_of(item).key for item in selected}
     bound_slots = {
@@ -58,13 +64,13 @@ def evidence_stage_trace(
             slot.slot_id
             for slot in plan.evidence_slots
             if str(item.get("materialization_source_id") or "")
-            and slot_score(plan, slot, item) > 0
+            and slot_score(plan, slot, item, assessments=assessments) > 0
         ]
         parent_retained = identity in selected_ids and any(
             slot.required_for_execution
             and slot.role == "operand"
             and not is_atomic_operand_candidate(item)
-            and slot_score(plan, slot, item) > 0
+            and slot_score(plan, slot, item, assessments=assessments) > 0
             for slot in plan.evidence_slots
         )
         output.append(
@@ -120,13 +126,15 @@ def slot_candidate_reasons(
     slot: Any,
     candidates: list[dict[str, Any]],
     selected: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     selected_ids = {identity_of(item).key for item in selected}
     chosen: list[dict[str, Any]] = []
     dropped: list[dict[str, Any]] = []
     for item in candidates:
         identity = identity_of(item).key
-        score = slot_score(plan, slot, item)
+        score = slot_score(plan, slot, item, assessments=assessments)
         if identity in selected_ids and score > 0:
             bound = identity in set(slot.evidence_ids)
             parent = (
@@ -202,6 +210,8 @@ def _selected_budget_usage(
     plan: QueryPlan,
     candidates: list[dict[str, Any]],
     selected: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> dict[str, int]:
     selected_by_id = {identity_of(item).key: item for item in selected}
     operand_ids = {
@@ -225,7 +235,7 @@ def _selected_budget_usage(
         and any(
             slot.required_for_execution
             and slot.role == "operand"
-            and slot_score(plan, slot, item) > 0
+            and slot_score(plan, slot, item, assessments=assessments) > 0
             for slot in plan.evidence_slots
         )
     }

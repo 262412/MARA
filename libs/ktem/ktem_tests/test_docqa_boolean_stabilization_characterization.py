@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.boolean_claim_verification import boolean_claim_authority
+from ktem.docqa.evidence import build_evidence_bundle
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.query_evidence_binding import bind_evidence_slots
 from ktem.docqa.query_planning import build_query_plan
 from ktem.docqa.typed_retrieval_recovery import (
     typed_qasper_initial_query,
+    typed_qasper_recovery_requests,
+    typed_retrieval_recovery_trace,
     verifier_recovery_query,
 )
-
 
 INDEXING_QUESTION = (
     "Do they employ their indexing-based method to create a sample of a QA "
@@ -73,9 +76,40 @@ def test_direct_indexing_abstract_has_exact_yes_authority_and_citation() -> None
     assert support.quote == item["text"]
     assert support.actor == "current_paper"
     assert support.relation in {"create", "use"}
-    assert {"dataset", "indexing", "method", "wikipedia"} <= set(
-        support.object.split()
+    assert {"dataset", "indexing", "method", "wikipedia"} <= set(support.object.split())
+
+
+@pytest.mark.parametrize("route_policy", ("doc", "auto", "hybrid"))
+def test_direct_indexing_abstract_survives_each_route_without_recovery(
+    route_policy: str,
+) -> None:
+    item = _item(
+        "direct-abstract",
+        (
+            "We present an indexing-based method for the creation of a "
+            "silver-standard answer-retrieval dataset using the entire Wikipedia."
+        ),
+        section_id="abstract",
     )
+
+    result = execute_controller_turn(
+        _boolean_request(INDEXING_QUESTION, route_policy=route_policy),
+        retrieve=lambda *_args: {"evidence": [item]},
+        generate=lambda *_args: "yes",
+    )
+
+    assert result.answer == "yes"
+    assert result.verify_decision.status == "supported"
+    assert result.verify_decision.canonical_answer_polarity == "yes"
+    assert result.verify_decision.authoritative_evidence_id == identity_of(item).key
+    assert result.verify_decision.authoritative_quote == item["text"]
+    assert result.verify_decision.verified_citations == [identity_of(item).key]
+    assert not [
+        event
+        for event in result.controller_trace
+        if event.get("verifier_recovery_attempt")
+        or event.get("stage") == "route_switch"
+    ]
 
 
 def test_adjacent_methods_atoms_form_strict_bounded_authority() -> None:
@@ -174,6 +208,8 @@ def test_typed_queries_keep_one_original_question_and_one_focused_frame() -> Non
     assert "indexing" in focused
     assert "dataset" in focused
     assert "wikipedia" in focused
+    assert "silver-standard" in focused
+    assert "answer retrieval" in focused
 
 
 def _parallel_candidates() -> list[dict[str, Any]]:
@@ -245,6 +281,60 @@ def test_four_parallel_candidates_form_bounded_exact_negative_authority() -> Non
     assert "small" in support.quote.lower()
 
 
+def test_unchanged_parallel_candidates_record_one_no_progress_stop() -> None:
+    request = _boolean_request(PARALLEL_QUESTION)
+    bundle = build_evidence_bundle(
+        "doc_text",
+        request,
+        {"evidence": _parallel_candidates()},
+    )
+
+    trace = typed_retrieval_recovery_trace(
+        request,
+        bundle,
+        bundle,
+        typed_qasper_recovery_requests(
+            request,
+            [{"query": PARALLEL_QUESTION}],
+        ),
+        SimpleNamespace(status="ambiguous"),
+    )
+
+    [slot] = bundle.metadata["bound_query_plan"]["evidence_slots"]
+    assert slot["status"] == "retrieved_unverified"
+    assert trace["evidence_ids_before"] == trace["evidence_ids_after"]
+    assert trace["slot_states_before"] == trace["slot_states_after"]
+    assert trace["slot_state_changed"] is False
+    assert trace["recovery_outcome"] == "no_progress"
+    assert trace["stop_reason"] == "recovery_no_progress"
+
+
+@pytest.mark.parametrize("route_policy", ("doc", "auto", "hybrid"))
+def test_parallel_negative_authority_survives_each_route_without_recovery(
+    route_policy: str,
+) -> None:
+    items = _parallel_candidates()
+
+    result = execute_controller_turn(
+        _boolean_request(PARALLEL_QUESTION, route_policy=route_policy),
+        retrieve=lambda *_args: {"evidence": items},
+        generate=lambda *_args: "Overall, no. The gains are not significant.",
+    )
+
+    assert result.answer == "no"
+    assert result.verify_decision.status == "supported"
+    assert result.verify_decision.canonical_answer_polarity == "no"
+    assert result.verify_decision.authoritative_evidence_id == identity_of(items[0]).key
+    assert result.verify_decision.authoritative_quote
+    assert result.verify_decision.verified_citations == [identity_of(items[0]).key]
+    assert not [
+        event
+        for event in result.controller_trace
+        if event.get("verifier_recovery_attempt")
+        or event.get("stage") == "route_switch"
+    ]
+
+
 @pytest.mark.parametrize(
     "question,text,section_id",
     (
@@ -300,8 +390,7 @@ def test_parallel_near_matches_do_not_authorize_a_unique_no(
 
     assert authority is not None
     assert not (
-        authority.status == "supported"
-        and authority.canonical_answer_polarity == "no"
+        authority.status == "supported" and authority.canonical_answer_polarity == "no"
     )
 
 

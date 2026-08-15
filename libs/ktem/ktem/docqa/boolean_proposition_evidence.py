@@ -504,6 +504,21 @@ def boolean_proposition_authority_level(
     )
 
 
+def boolean_proposition_candidate_authority_level(
+    question: str,
+    item: dict[str, Any],
+    candidate_score: float,
+) -> str:
+    """Map a cached retrieval assessment to its pre-verification slot state."""
+
+    text = evidence_item_text(item)
+    if not text:
+        return "none"
+    if quality_control_evidence_kind(question, text) == "annotation_artifact_control":
+        return "partial"
+    return "complete" if candidate_score > 0 else "none"
+
+
 def _proposition_content_tokens(value: str) -> set[str]:
     relation_tokens = {
         token

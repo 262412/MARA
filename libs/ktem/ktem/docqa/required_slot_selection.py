@@ -5,14 +5,14 @@ from typing import Any
 from .deterministic_ranking import quantized_score
 from .evidence_identity import evidence_aliases, identity_of
 from .finance_narrative_evidence import finance_narrative_support_quality
-from .finance_query_planning import finance_metric_evidence_matches
 from .finance_scale import source_scale_evidence
-from .query_evidence_binding_support import (
-    agreement_attributes,
-    candidate_score_for_slot,
-)
+from .query_evidence_binding_support import agreement_attributes
 from .query_plan_schema import required_slot_count
 from .query_planning import QueryPlan
+from .selection_assessment_table import (
+    SelectionAssessmentTable,
+    selection_assessment_score,
+)
 
 REQUIRED_SLOT_CANDIDATE_QUOTA = 2
 EXECUTION_SLOT_PARENT_QUOTA = 1
@@ -55,8 +55,10 @@ def required_slot_shortlist(
     plan: QueryPlan,
     *,
     candidate_limit: int,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    required_slots = _ranked_required_slots(plan, items)
+    assessments = assessments or SelectionAssessmentTable.build(plan, items)
+    required_slots = _ranked_required_slots(plan, items, assessments)
     if not required_slots or candidate_limit <= 0:
         return list(items[: max(0, candidate_limit)]), 0
     per_slot_quota = max(
@@ -82,6 +84,7 @@ def required_slot_shortlist(
             candidate_limit=candidate_limit,
             per_slot_quota=per_slot_quota,
             preserve_locator_diversity=preserve_locator_diversity,
+            assessments=assessments,
         )
         if len(selected_ids) >= candidate_limit:
             break
@@ -90,6 +93,7 @@ def required_slot_shortlist(
         selected_ids,
         candidate_limit=candidate_limit,
         plan=plan,
+        assessments=assessments,
     )
     return _ordered_shortlist(
         items,
@@ -109,11 +113,12 @@ def _select_required_slot_candidates(
     candidate_limit: int,
     per_slot_quota: int,
     preserve_locator_diversity: bool,
+    assessments: SelectionAssessmentTable,
 ) -> None:
     selected_facilities: set[str] = set()
     ranked = sorted(
         (
-            (slot_score(plan, slot, item), index, item)
+            (slot_score(plan, slot, item, assessments=assessments), index, item)
             for index, item in enumerate(items)
         ),
         key=lambda row: (
@@ -162,11 +167,18 @@ def _select_required_slot_candidates(
         )
 
 
-def _ranked_required_slots(plan: QueryPlan, items: list[dict[str, Any]]) -> list[Any]:
+def _ranked_required_slots(
+    plan: QueryPlan,
+    items: list[dict[str, Any]],
+    assessments: SelectionAssessmentTable,
+) -> list[Any]:
     return sorted(
         (slot for slot in plan.evidence_slots if slot_requires_selection(slot)),
         key=lambda slot: (
-            sum(slot_score(plan, slot, item) > 0 for item in items),
+            sum(
+                slot_score(plan, slot, item, assessments=assessments) > 0
+                for item in items
+            ),
             slot.slot_id,
         ),
     )
@@ -224,6 +236,7 @@ def _add_execution_dimension_candidates(
     *,
     candidate_limit: int,
     plan: QueryPlan | None = None,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> None:
     operands = [
         item
@@ -252,6 +265,7 @@ def _add_execution_dimension_candidates(
             items,
             selected_ids,
             plan=plan,
+            assessments=assessments,
         )
         if eviction is None:
             return
@@ -264,52 +278,33 @@ def _dimension_eviction_candidate(
     selected_ids: set[str],
     *,
     plan: QueryPlan | None,
+    assessments: SelectionAssessmentTable | None,
 ) -> str | None:
     selected = [item for item in items if identity_of(item).key in selected_ids]
     if not selected:
         return None
-    protected: set[str] = set()
-    if plan is not None:
-        execution_slots = [
-            slot
-            for slot in plan.evidence_slots
-            if slot.required_for_execution and slot.role == "operand"
-        ]
-        for slot in execution_slots:
-            best = max(
-                (
-                    item
-                    for item in selected
-                    if _is_atomic_operand_candidate(item)
-                    and slot_score(plan, slot, item) > 0
-                ),
-                key=lambda item: (
-                    quantized_score(slot_score(plan, slot, item)),
-                    quantized_score(_reranker_score(item)),
-                    identity_of(item).key,
-                ),
-                default=None,
-            )
-            if best is not None:
-                protected.add(identity_of(best).key)
-    for item in selected:
-        if not _is_atomic_operand_candidate(item):
-            continue
-        _scale, evidence_id = source_scale_evidence(item, items)
-        if not evidence_id:
-            continue
-        protected.update(
-            identity_of(candidate).key
-            for candidate in items
-            if evidence_id in evidence_aliases(candidate)
-        )
+    protected = _protected_dimension_eviction_ids(
+        items,
+        selected,
+        plan,
+        assessments,
+    )
     evictable = [item for item in selected if identity_of(item).key not in protected]
     if not evictable:
         return None
     execution_scores: list[tuple[Any, dict[str, Any], float]] = []
     if plan is not None:
         execution_scores = [
-            (slot, item, slot_score(plan, slot, item))
+            (
+                slot,
+                item,
+                slot_score(
+                    plan,
+                    slot,
+                    item,
+                    assessments=assessments,
+                ),
+            )
             for slot in plan.evidence_slots
             for item in evictable
             if slot.required_for_execution and slot.role == "operand"
@@ -330,6 +325,63 @@ def _dimension_eviction_candidate(
 
     eviction = min(evictable, key=rank)
     return identity_of(eviction).key
+
+
+def _protected_dimension_eviction_ids(
+    items: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+    plan: QueryPlan | None,
+    assessments: SelectionAssessmentTable | None,
+) -> set[str]:
+    protected: set[str] = set()
+    if plan is not None:
+        execution_slots = [
+            slot
+            for slot in plan.evidence_slots
+            if slot.required_for_execution and slot.role == "operand"
+        ]
+        for slot in execution_slots:
+            best = max(
+                (
+                    item
+                    for item in selected
+                    if _is_atomic_operand_candidate(item)
+                    and slot_score(
+                        plan,
+                        slot,
+                        item,
+                        assessments=assessments,
+                    )
+                    > 0
+                ),
+                key=lambda item: (
+                    quantized_score(
+                        slot_score(
+                            plan,
+                            slot,
+                            item,
+                            assessments=assessments,
+                        )
+                    ),
+                    quantized_score(_reranker_score(item)),
+                    identity_of(item).key,
+                ),
+                default=None,
+            )
+            if best is not None:
+                protected.add(identity_of(best).key)
+    for item in selected:
+        if not _is_atomic_operand_candidate(item):
+            continue
+        _scale, evidence_id = source_scale_evidence(item, items)
+        if not evidence_id:
+            continue
+        protected.update(
+            identity_of(candidate).key
+            for candidate in items
+            if evidence_id in evidence_aliases(candidate)
+        )
+    return protected
 
 
 def _add_slot_candidates(
@@ -435,27 +487,12 @@ def slot_score(
     plan: QueryPlan,
     slot: Any,
     item: dict[str, Any],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> float:
-    score = candidate_score_for_slot(
+    return selection_assessment_score(
+        plan,
         slot,
         item,
-        requires_structure=bool(plan.constraints.get("requires_structure")),
+        assessments,
     )
-    if score > 0 or not (slot.required_for_execution and slot.role == "operand"):
-        return score
-    if _is_atomic_operand_candidate(item):
-        return 0.0
-    text = " ".join(
-        str(item.get(field) or "")
-        for field in ("text", "caption", "ocr_text", "table_title")
-    ).lower()
-    metric = str(slot.metric or "").strip().lower()
-    table_like = bool(
-        item.get("table_id")
-        or item.get("table_instance_id")
-        or str(item.get("modality") or "").lower() == "table"
-        or str(item.get("element_type") or "").lower() == "table"
-    )
-    if table_like and metric and finance_metric_evidence_matches(metric, text):
-        return 0.25
-    return 0.0

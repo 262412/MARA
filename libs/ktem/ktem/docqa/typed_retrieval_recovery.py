@@ -19,22 +19,33 @@ def verifier_recovery_query(request: Any) -> str:
     question = request_planning_question(request)
     plan = ensure_request_query_plan(request)
     slot_queries = [
-        str(slot.query).strip()
+        _without_question(str(slot.query).strip(), question)
         for slot in plan.evidence_slots
         if slot.required_for_verification and str(slot.query).strip()
     ]
     answer_relation_required = _answer_relation_required(plan)
-    semantic_query = (
-        question
-        if answer_relation_required
-        else boolean_retrieval_query(question, second_round=True)
+    semantic_query = _without_question(
+        (
+            question
+            if answer_relation_required
+            else boolean_retrieval_query(question, second_round=True)
+        ),
+        question,
+    )
+    frame = verifier_recovery_frame(request)
+    frame_terms = " ".join(
+        str(value).strip()
+        for name, value in frame.items()
+        if name not in {"actor", "object_role", "scope"}
+        and str(value or "").strip()
+        and str(value) != "none"
     )
     typed_query = " ".join(
         f"{name}:{value}"
-        for name, value in verifier_recovery_frame(request).items()
+        for name, value in frame.items()
         if str(value or "").strip() and str(value) not in {"none", "document"}
     )
-    parts = [*slot_queries, semantic_query, typed_query]
+    parts = [*slot_queries, semantic_query, frame_terms, typed_query]
     return " ".join(dict.fromkeys(part for part in parts if part)).strip()
 
 
@@ -91,8 +102,30 @@ def typed_qasper_initial_requests(
 def typed_qasper_initial_query(request: Any, query: str) -> str:
     if not qasper_typed_recovery_required(request):
         return str(query or "").strip()
-    values = (str(query or "").strip(), verifier_recovery_query(request))
+    question = request_planning_question(request)
+    values = (
+        _question_once(str(query or "").strip(), question),
+        verifier_recovery_query(request),
+    )
     return " ".join(dict.fromkeys(value for value in values if value))
+
+
+def _without_question(value: str, question: str) -> str:
+    output = str(value or "")
+    target = str(question or "").strip()
+    if target:
+        output = output.replace(target, " ")
+    return " ".join(output.split())
+
+
+def _question_once(value: str, question: str) -> str:
+    output = str(value or "").strip()
+    target = str(question or "").strip()
+    if not target or target not in output:
+        return " ".join(output.split())
+    prefix, suffix = output.split(target, maxsplit=1)
+    suffix = suffix.replace(target, " ")
+    return " ".join(f"{prefix} {target} {suffix}".split())
 
 
 def quality_retry_request(request: Any) -> dict[str, str]:

@@ -9,11 +9,14 @@ from .query_planning import (
     missing_slot_requests,
     request_planning_question,
 )
+from .selection_assessment_table import SelectionAssessmentTable
 
 
 def select_planned_evidence(
     request: Any,
     candidates: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     prompt = request_planning_question(request)
     query_plan = ensure_request_query_plan(request)
@@ -22,6 +25,7 @@ def select_planned_evidence(
         prompt,
         candidates,
         query_plan,
+        assessments=assessments,
     )
     planned_plan = getattr(request, "planned_query_plan", None) or query_plan
     bound_state_version = int(getattr(request, "query_plan_state_version", 0) or 0) + 1

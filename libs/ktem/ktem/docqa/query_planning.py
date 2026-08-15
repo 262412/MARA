@@ -37,6 +37,7 @@ from .query_plan_schema import (
     slot_binding_state,
     with_plan_id,
 )
+from .selection_assessment_table import SelectionAssessmentTable
 
 _TOKEN_RE = re.compile(r"[a-z0-9%$€£¥]+", re.IGNORECASE)
 _NUMERIC_TERMS = {
@@ -335,8 +336,14 @@ def request_planning_question(request: Any) -> str:
 def bind_evidence_slots(
     plan: QueryPlan,
     evidence_items: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> QueryPlan:
-    return _bind_evidence_slots(plan, evidence_items)
+    return _bind_evidence_slots(
+        plan,
+        evidence_items,
+        assessments=assessments,
+    )
 
 
 def score_evidence_for_slot(

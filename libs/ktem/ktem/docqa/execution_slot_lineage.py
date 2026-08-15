@@ -6,6 +6,7 @@ from .evidence_identity import evidence_aliases, identity_of
 from .finance_scale import source_scale_evidence
 from .query_planning import QueryPlan
 from .required_slot_selection import slot_score
+from .selection_assessment_table import SelectionAssessmentTable
 
 
 def execution_slot_lineage(
@@ -13,8 +14,14 @@ def execution_slot_lineage(
     slot: Any,
     candidates: list[dict[str, Any]],
     selected: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentTable | None = None,
 ) -> dict[str, Any]:
-    matching = [item for item in candidates if slot_score(plan, slot, item) > 0]
+    matching = [
+        item
+        for item in candidates
+        if slot_score(plan, slot, item, assessments=assessments) > 0
+    ]
     parents = [item for item in matching if not is_atomic_operand_candidate(item)]
     cells = [item for item in matching if is_atomic_operand_candidate(item)]
     selected_lookup = {_identity(item): item for item in selected}
@@ -52,7 +59,12 @@ def execution_slot_lineage(
             else []
         ),
         "selected_cell": _identity(selected_cell) if selected_cell else "",
-        "binding_score": slot_score(plan, slot, selected_cell)
+        "binding_score": slot_score(
+            plan,
+            slot,
+            selected_cell,
+            assessments=assessments,
+        )
         if selected_cell
         else 0.0,
         "rejection_reasons": rejection_reasons,

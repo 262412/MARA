@@ -28,9 +28,13 @@ def boolean_proposition_candidate_score(
         value for value in (question, metric) if str(value or "").strip()
     )
     context_question = _normalize_requirement_terms(combined_question)
-    proposition_question = semantic_boolean_proposition_question(
-        _normalize_requirement_terms(metric or question)
+    normalized_question = _normalize_requirement_terms(question)
+    proposition_source = (
+        normalized_question
+        if normalized_question.endswith("?")
+        else _normalize_requirement_terms(metric or question)
     )
+    proposition_question = semantic_boolean_proposition_question(proposition_source)
     candidate_item = _normalized_requirement_item(item)
     text = evidence_item_text(candidate_item)
     if not text:

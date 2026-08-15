@@ -16,7 +16,7 @@ from .boolean_proposition_tokens import (
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
 
 _MAX_CONTEXT_SENTENCES = 5
-_MAX_CONTEXT_DISTANCE = 3
+_MAX_CONTEXT_DISTANCE = _MAX_CONTEXT_SENTENCES - 1
 _MAX_CONTEXT_CHARS = 1400
 
 

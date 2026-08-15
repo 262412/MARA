@@ -5,9 +5,10 @@ from typing import Any
 
 import ktem.docqa.boolean_proposition_candidates as candidate_module
 import ktem.docqa.boolean_proposition_evidence as proposition_module
+from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.evidence import build_evidence_bundle
 from ktem.docqa.evidence_set_selection import select_evidence_for_plan
 from ktem.docqa.query_planning import build_query_plan
-
 
 QUESTION = "Did the authors release source code?"
 
@@ -44,47 +45,11 @@ def _items() -> list[dict[str, Any]]:
     ]
 
 
-def test_boolean_candidate_assessment_is_once_per_slot_identity_and_revision(
-    monkeypatch: Any,
+def _assert_selection_snapshot(
+    selected: list[dict[str, Any]],
+    trace: dict[str, Any],
+    bound: Any,
 ) -> None:
-    calls: Counter[tuple[str, str, str]] = Counter()
-    original = proposition_module.classify_boolean_evidence_candidates
-
-    def counted(
-        question: str,
-        answer: str,
-        item: dict[str, Any],
-    ) -> Any:
-        calls[
-            (
-                " ".join(question.casefold().split()),
-                str(item.get("evidence_id") or ""),
-                str(item.get("text") or ""),
-            )
-        ] += 1
-        return original(question, answer, item)
-
-    monkeypatch.setattr(
-        proposition_module,
-        "classify_boolean_evidence_candidates",
-        counted,
-    )
-    monkeypatch.setattr(
-        candidate_module,
-        "classify_boolean_evidence_candidates",
-        counted,
-    )
-
-    plan = build_query_plan(
-        QUESTION,
-        answer_type="boolean",
-        verification_domain="qasper",
-    )
-    selected, trace, bound = select_evidence_for_plan(QUESTION, _items(), plan)
-
-    assert sum(calls.values()) == 3
-    assert {key[1] for key in calls} == {"support", "related", "noise"}
-    assert set(calls.values()) == {1}
     assert [item["evidence_id"] for item in selected] == [
         "support",
         "related",
@@ -134,3 +99,100 @@ def test_boolean_candidate_assessment_is_once_per_slot_identity_and_revision(
         "evidence:paper:support",
     ]
 
+
+def test_boolean_candidate_assessment_is_once_per_slot_identity_and_revision(
+    monkeypatch: Any,
+) -> None:
+    calls: Counter[tuple[str, str, str]] = Counter()
+    original = proposition_module.classify_boolean_evidence_candidates
+
+    def counted(
+        question: str,
+        answer: str,
+        item: dict[str, Any],
+    ) -> Any:
+        calls[
+            (
+                " ".join(question.casefold().split()),
+                str(item.get("evidence_id") or ""),
+                str(item.get("text") or ""),
+            )
+        ] += 1
+        return original(question, answer, item)
+
+    monkeypatch.setattr(
+        proposition_module,
+        "classify_boolean_evidence_candidates",
+        counted,
+    )
+    monkeypatch.setattr(
+        candidate_module,
+        "classify_boolean_evidence_candidates",
+        counted,
+    )
+
+    plan = build_query_plan(
+        QUESTION,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    selected, trace, bound = select_evidence_for_plan(QUESTION, _items(), plan)
+
+    assert sum(calls.values()) == 3
+    assert {key[1] for key in calls} == {"support", "related", "noise"}
+    assert set(calls.values()) == {1}
+    _assert_selection_snapshot(selected, trace, bound)
+
+
+def test_request_pipeline_reuses_one_immutable_candidate_snapshot(
+    monkeypatch: Any,
+) -> None:
+    calls: Counter[tuple[str, str]] = Counter()
+    original = proposition_module.classify_boolean_evidence_candidates
+
+    def counted(
+        question: str,
+        answer: str,
+        item: dict[str, Any],
+    ) -> Any:
+        calls[(" ".join(question.casefold().split()), identity(item))] += 1
+        return original(question, answer, item)
+
+    def identity(item: dict[str, Any]) -> str:
+        return str(item.get("canonical_id") or item.get("evidence_id") or "")
+
+    monkeypatch.setattr(
+        proposition_module,
+        "classify_boolean_evidence_candidates",
+        counted,
+    )
+    monkeypatch.setattr(
+        candidate_module,
+        "classify_boolean_evidence_candidates",
+        counted,
+    )
+    for route in ("doc_text", "hybrid"):
+        calls.clear()
+        request = DocQARequest(
+            prompt=QUESTION,
+            retrieval_query=QUESTION,
+            task_type="boolean",
+            verification_mode="strict",
+            verification_domain="qasper",
+            selected_file_ids=["paper"],
+            origin="benchmark",
+        )
+
+        bundle = build_evidence_bundle(
+            route,
+            request,
+            {"evidence": _items()},
+        )
+
+        assert sum(calls.values()) == 3, route
+        assert set(calls.values()) == {1}, route
+        assert [item["evidence_id"] for item in bundle.items] == [
+            "support",
+            "related",
+            "noise",
+        ]
