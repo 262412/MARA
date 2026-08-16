@@ -41,6 +41,192 @@ def test_multiple_slot_reranker_traces_are_not_overwritten():
     ]
 
 
+def test_multi_query_evidence_dedupes_without_runtime_source_uuid():
+    text = "The model structure injects keywords into a template."
+    merged = _merge_retrieval_metadata(
+        {
+            "evidence": [
+                {
+                    "evidence_id": "first-runtime-chunk",
+                    "source_id": "runtime-source-a",
+                    "evaluation_source_id": "paper-model-structure",
+                    "page_label": "4",
+                    "section_id": "model-structure",
+                    "normalized_text_hash": "stable-model-structure-hash",
+                    "text": text,
+                    "source_backrefs": ["runtime-source-a#page:4"],
+                    "retrieval_lineage": [{"query_id": "initial"}],
+                }
+            ]
+        },
+        {
+            "evidence": [
+                {
+                    "evidence_id": "second-runtime-chunk",
+                    "source_id": "runtime-source-b",
+                    "evaluation_source_id": "paper-model-structure",
+                    "page_label": "4",
+                    "section_id": "model-structure",
+                    "normalized_text_hash": "stable-model-structure-hash",
+                    "text": text,
+                    "source_backrefs": ["runtime-source-b#page:4"],
+                    "retrieval_lineage": [{"query_id": "recovery"}],
+                }
+            ]
+        },
+    )
+
+    assert len(merged["evidence"]) == 1
+    [item] = merged["evidence"]
+    assert item["source_backrefs"] == [
+        "runtime-source-a#page:4",
+        "runtime-source-b#page:4",
+    ]
+    assert item["retrieval_lineage"] == [
+        {"query_id": "initial"},
+        {"query_id": "recovery"},
+    ]
+
+
+def test_multi_query_dedupe_preserves_distinct_semantic_locations():
+    shared = {
+        "source_id": "runtime-source",
+        "normalized_text_hash": "repeated-heading-hash",
+        "text": "Results",
+    }
+    merged = _merge_retrieval_metadata(
+        {"evidence": [{**shared, "evidence_id": "page-1", "page_label": "1"}]},
+        {"evidence": [{**shared, "evidence_id": "page-2", "page_label": "2"}]},
+    )
+
+    assert len(merged["evidence"]) == 2
+
+
+def test_multi_query_dedupe_preserves_identical_text_from_distinct_documents():
+    shared = {
+        "normalized_text_hash": "shared-boilerplate-hash",
+        "page_label": "1",
+        "text": "This work is licensed under the same terms.",
+    }
+    merged = _merge_retrieval_metadata(
+        {
+            "evidence": [
+                {
+                    **shared,
+                    "evaluation_source_id": "paper-a",
+                    "source_id": "runtime-source-a",
+                }
+            ]
+        },
+        {
+            "evidence": [
+                {
+                    **shared,
+                    "evaluation_source_id": "paper-b",
+                    "source_id": "runtime-source-b",
+                }
+            ]
+        },
+    )
+
+    assert len(merged["evidence"]) == 2
+
+
+def test_multi_query_dedupe_preserves_distinct_spans_with_same_text():
+    shared = {
+        "evaluation_source_id": "paper-a",
+        "source_id": "runtime-source",
+        "normalized_text_hash": "repeated-sentence-hash",
+        "page_label": "2",
+        "text": "The same sentence appears twice.",
+    }
+    merged = _merge_retrieval_metadata(
+        {"evidence": [{**shared, "span_id": "paragraph-1:sentence-2"}]},
+        {"evidence": [{**shared, "span_id": "paragraph-3:sentence-1"}]},
+    )
+
+    assert len(merged["evidence"]) == 2
+
+
+def test_multi_query_dedupe_ignores_runtime_uuid_inside_stable_locator():
+    first_uuid = "11111111-1111-4111-8111-111111111111"
+    second_uuid = "22222222-2222-4222-8222-222222222222"
+    shared = {
+        "evaluation_source_id": "paper-a",
+        "normalized_text_hash": "stable-span-hash",
+        "page_label": "2",
+        "text": "One stable evidence span.",
+    }
+    merged = _merge_retrieval_metadata(
+        {
+            "evidence": [
+                {
+                    **shared,
+                    "source_id": first_uuid,
+                    "span_id": f"evidence:{first_uuid}:stable-span#quote:1:8",
+                }
+            ]
+        },
+        {
+            "evidence": [
+                {
+                    **shared,
+                    "source_id": second_uuid,
+                    "span_id": f"evidence:{second_uuid}:stable-span#quote:1:8",
+                }
+            ]
+        },
+    )
+
+    assert len(merged["evidence"]) == 1
+
+
+def test_multi_query_dedupe_fails_closed_without_canonical_document_identity():
+    first_uuid = "11111111-1111-4111-8111-111111111111"
+    second_uuid = "22222222-2222-4222-8222-222222222222"
+    shared = {
+        "normalized_text_hash": "ambiguous-cross-document-hash",
+        "page_label": "1",
+        "text": "Identical boilerplate without a canonical document identity.",
+    }
+    merged = _merge_retrieval_metadata(
+        {"evidence": [{**shared, "source_id": first_uuid, "evidence_id": "chunk-a"}]},
+        {"evidence": [{**shared, "source_id": second_uuid, "evidence_id": "chunk-b"}]},
+    )
+
+    assert len(merged["evidence"]) == 2
+
+
+def test_multi_query_dedupe_preserves_distinct_uuid_valued_span_locators():
+    shared = {
+        "evaluation_source_id": "paper-a",
+        "source_id": "runtime-source",
+        "normalized_text_hash": "same-text-hash",
+        "page_label": "1",
+        "text": "The same text is anchored to two distinct spans.",
+    }
+    merged = _merge_retrieval_metadata(
+        {
+            "evidence": [
+                {
+                    **shared,
+                    "span_id": "11111111-1111-4111-8111-111111111111",
+                }
+            ]
+        },
+        {
+            "evidence": [
+                {
+                    **shared,
+                    "span_id": "22222222-2222-4222-8222-222222222222",
+                }
+            ]
+        },
+    )
+
+    assert len(merged["evidence"]) == 2
+
+
 def test_reranker_query_trace_preserves_query_slot_round():
     metadata = _with_retrieval_lineage(
         {

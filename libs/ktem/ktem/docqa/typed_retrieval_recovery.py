@@ -18,24 +18,9 @@ from .route_budget import route_budget_metadata
 def verifier_recovery_query(request: Any) -> str:
     question = request_planning_question(request)
     plan = ensure_request_query_plan(request)
-    slot_queries = [
-        str(slot.query).strip()
-        for slot in plan.evidence_slots
-        if slot.required_for_verification and str(slot.query).strip()
-    ]
-    answer_relation_required = _answer_relation_required(plan)
-    semantic_query = (
-        question
-        if answer_relation_required
-        else boolean_retrieval_query(question, second_round=True)
-    )
-    typed_query = " ".join(
-        f"{name}:{value}"
-        for name, value in verifier_recovery_frame(request).items()
-        if str(value or "").strip() and str(value) not in {"none", "document"}
-    )
-    parts = [*slot_queries, semantic_query, typed_query]
-    return " ".join(dict.fromkeys(part for part in parts if part)).strip()
+    if _answer_relation_required(plan):
+        return question
+    return boolean_retrieval_query(question, second_round=True)
 
 
 def verifier_recovery_frame(request: Any) -> dict[str, str]:
@@ -65,37 +50,56 @@ def verifier_recovery_frame(request: Any) -> dict[str, str]:
 
 def typed_qasper_recovery_requests(
     request: Any,
-    requests: list[dict[str, str]],
-) -> list[dict[str, str]]:
-    return typed_qasper_initial_requests(request, requests)
-
-
-def typed_qasper_initial_requests(
-    request: Any,
-    requests: list[dict[str, str]],
-) -> list[dict[str, str]]:
+    requests: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     if not requests or not qasper_typed_recovery_required(request):
         return requests
+    metadata = recovery_query_metadata(request)
     return [
         {
             **item,
-            "query": typed_qasper_initial_query(
-                request,
-                str(item.get("query") or ""),
-            ),
+            "query": recovery_query(request, str(item.get("query") or "")),
+            "query_metadata": metadata,
         }
         for item in requests
     ]
 
 
-def typed_qasper_initial_query(request: Any, query: str) -> str:
-    if not qasper_typed_recovery_required(request):
-        return str(query or "").strip()
-    values = (str(query or "").strip(), verifier_recovery_query(request))
-    return " ".join(dict.fromkeys(value for value in values if value))
+def recovery_query(request: Any, slot_query: str) -> str:
+    question = request_planning_question(request)
+    semantic_query = verifier_recovery_query(request)
+    parts = (
+        question,
+        _without_question(slot_query, question),
+        _without_question(semantic_query, question),
+    )
+    return " ".join(dict.fromkeys(part for part in parts if part)).strip()
 
 
-def quality_retry_request(request: Any) -> dict[str, str]:
+def initial_query_metadata() -> dict[str, str]:
+    return {
+        "contract_id": "initial_retrieval_query.v1",
+        "query_kind": "initial",
+    }
+
+
+def recovery_query_metadata(request: Any) -> dict[str, Any]:
+    return {
+        "contract_id": "recovery_query.v1",
+        "query_kind": "recovery",
+        "typed_frame": verifier_recovery_frame(request),
+    }
+
+
+def _without_question(value: str, question: str) -> str:
+    output = str(value or "")
+    target = str(question or "").strip()
+    if target:
+        output = output.replace(target, " ")
+    return " ".join(output.split())
+
+
+def quality_retry_request(request: Any) -> dict[str, Any]:
     query = next(
         (
             str(value).strip()
