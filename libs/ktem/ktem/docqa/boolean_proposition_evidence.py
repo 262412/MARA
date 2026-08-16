@@ -444,6 +444,8 @@ def classify_boolean_evidence_set(
 def boolean_proposition_evidence_score(
     question: str,
     item: dict[str, Any],
+    *,
+    classified_candidates: tuple[BooleanEvidenceAssessment, ...] | None = None,
 ) -> float:
     question = semantic_boolean_proposition_question(question)
     text = evidence_item_text(item)
@@ -457,7 +459,11 @@ def boolean_proposition_evidence_score(
     current_experiment_score = current_experiment_slot_score(question, item)
     if current_experiment_score is not None:
         return current_experiment_score
-    assessments = classify_boolean_evidence_candidates(question, "", item)
+    assessments = (
+        classified_candidates
+        if classified_candidates is not None
+        else classify_boolean_evidence_candidates(question, "", item)
+    )
     compatible = [
         assessment for assessment in assessments if assessment.candidate_relevance
     ]
@@ -489,6 +495,8 @@ def boolean_proposition_evidence_score(
 def boolean_proposition_authority_level(
     question: str,
     item: dict[str, Any],
+    *,
+    classified_candidates: tuple[BooleanEvidenceAssessment, ...] | None = None,
 ) -> str:
     """Classify retrieval support before answer-specific verification."""
 
@@ -500,7 +508,14 @@ def boolean_proposition_authority_level(
     if quality_kind == "annotation_artifact_control":
         return "partial"
     return (
-        "complete" if boolean_proposition_evidence_score(question, item) > 0 else "none"
+        "complete"
+        if boolean_proposition_evidence_score(
+            question,
+            item,
+            classified_candidates=classified_candidates,
+        )
+        > 0
+        else "none"
     )
 
 
