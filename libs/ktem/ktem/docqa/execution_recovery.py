@@ -20,6 +20,9 @@ from .execution_recovery_events import recovery_has_progress as _recovery_has_pr
 from .execution_recovery_events import recovery_trace_fields as _recovery_trace_fields
 from .execution_recovery_events import required_authority_recovery_reason
 from .execution_recovery_events import required_typed_slot_state as _typed_slot_state
+from .execution_recovery_events import (
+    retrieval_no_progress_decision as _retrieval_no_progress_decision,
+)
 from .execution_recovery_events import same_route_verifier_recovery_trace
 from .execution_recovery_events import typed_slot_states as _typed_slot_states
 from .execution_results import guarded_result, verified_result
@@ -55,6 +58,9 @@ def recover_after_failed_retrieval(
     recovery_trace = _typed_retrieval_recovery_trace(bundle)
     if retrieve_decision.status == "good":
         return decision, bundle, retrieve_decision, workflow_plan, recovery_trace
+    no_progress = _retrieval_no_progress_decision(recovery_trace, retrieve_decision)
+    if no_progress is not None:
+        return decision, bundle, no_progress, workflow_plan, recovery_trace
     switched = timings.measure(
         "retry_seconds",
         switch_after_failed_retrieval,
