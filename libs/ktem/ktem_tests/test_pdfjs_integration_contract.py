@@ -10,6 +10,7 @@ from ktem.assets.pdfjs_assets import PdfJsAssetError, materialize_pdfjs
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ARCHIVE_PATH = "libs/ktem/ktem/assets/vendor/pdfjs/pdfjs-6.1.200-dist.zip"
+GOLDEN_REPLAY_PATH = "benchmark/tests/fixtures/qasper_golden_replay_v1.jsonl"
 
 
 def test_launcher_allows_the_runtime_pdfjs_directory(monkeypatch, tmp_path):
@@ -114,6 +115,7 @@ def test_archive_has_exact_docker_and_precommit_allowlists():
         (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
     )
     escaped_archive_path = ARCHIVE_PATH.replace(".", r"\.")
+    escaped_golden_replay_path = GOLDEN_REPLAY_PATH.replace(".", r"\.")
     large_file_hook = next(
         hook
         for repository in precommit["repos"]
@@ -123,7 +125,9 @@ def test_archive_has_exact_docker_and_precommit_allowlists():
 
     assert "*.zip" in dockerignore
     assert f"!{ARCHIVE_PATH}" in dockerignore
-    assert large_file_hook["exclude"] == f"^{escaped_archive_path}$"
+    assert large_file_hook["exclude"] == (
+        f"(^{escaped_archive_path}$|^{escaped_golden_replay_path}$)"
+    )
 
 
 def test_env_example_exposes_only_the_pinned_pdfjs_version():
