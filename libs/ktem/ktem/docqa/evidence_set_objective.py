@@ -6,20 +6,42 @@ from .evidence_identity import evidence_aliases
 from .query_phrase_extraction import source_page_locator
 from .query_planning import QueryPlan
 from .required_slot_selection import slot_score
+from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 
 
 def marginal_set_gain(
     item: dict[str, Any],
     selected: list[dict[str, Any]],
     plan: QueryPlan,
+    *,
+    assessments: SelectionAssessmentSnapshot | None = None,
+    hot_loop: bool = False,
 ) -> float:
     covered_slots = {
         slot.slot_id
         for slot in plan.evidence_slots
-        if any(slot_score(plan, slot, selected_item) > 0 for selected_item in selected)
+        if any(
+            slot_score(
+                plan,
+                slot,
+                selected_item,
+                assessments=assessments,
+                hot_loop=hot_loop,
+            )
+            > 0
+            for selected_item in selected
+        )
     }
     slot_gain = sum(
-        slot.slot_id not in covered_slots and slot_score(plan, slot, item) > 0
+        slot.slot_id not in covered_slots
+        and slot_score(
+            plan,
+            slot,
+            item,
+            assessments=assessments,
+            hot_loop=hot_loop,
+        )
+        > 0
         for slot in plan.evidence_slots
     )
     structure_gain = float(_shares_structure_edge(item, selected))

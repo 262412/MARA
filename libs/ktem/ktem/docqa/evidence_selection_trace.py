@@ -15,6 +15,7 @@ from .finance_query_planning import finance_metric_evidence_matches
 from .query_plan_schema import slot_binding_state
 from .query_planning import QueryPlan, slot_coverage, slot_needs_second_round
 from .required_slot_selection import slot_requires_selection, slot_score
+from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 from .selection_score_normalization import SELECTION_SCORE_CONTRACT
 
 _TOKEN_RE = re.compile(r"[\w.%$€£¥-]+", re.UNICODE)
@@ -26,6 +27,8 @@ def build_selection_trace(
     bound: QueryPlan,
     budget: dict[str, int],
     context: dict[str, Any],
+    *,
+    assessments: SelectionAssessmentSnapshot | None = None,
 ) -> dict[str, Any]:
     pages = _pages(selected)
     return {
@@ -51,8 +54,18 @@ def build_selection_trace(
             for slot in bound.evidence_slots
         ),
         **context,
-        **evidence_selection_budget_trace(bound, candidates, selected),
-        "evidence_stage_trace": evidence_stage_trace(bound, candidates, selected),
+        **evidence_selection_budget_trace(
+            bound,
+            candidates,
+            selected,
+            assessments=assessments,
+        ),
+        "evidence_stage_trace": evidence_stage_trace(
+            bound,
+            candidates,
+            selected,
+            assessments=assessments,
+        ),
         "trace_validation_errors": selection_trace_consistency_errors(
             bound,
             candidates,
@@ -62,13 +75,23 @@ def build_selection_trace(
             bound,
             candidates,
             selected,
+            assessments=assessments,
         ),
         "execution_slot_lineage": [
-            execution_slot_lineage(bound, slot, candidates, selected)
+            execution_slot_lineage(
+                bound,
+                slot,
+                candidates,
+                selected,
+                assessments=assessments,
+            )
             for slot in bound.evidence_slots
             if slot.required_for_execution
         ],
         "relevance_score_contract": SELECTION_SCORE_CONTRACT,
+        "boolean_assessment_cache": (
+            assessments.audit() if assessments is not None else {}
+        ),
     }
 
 
@@ -76,6 +99,8 @@ def _required_slot_bindings(
     plan: QueryPlan,
     candidates: list[dict[str, Any]],
     selected: list[dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentSnapshot | None = None,
 ) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for slot in plan.evidence_slots:
@@ -107,13 +132,19 @@ def _required_slot_bindings(
                 "selected_evidence_ids": list(slot.evidence_ids),
                 "best_selected_slot_score": max(
                     (
-                        slot_score(plan, slot, item)
+                        slot_score(plan, slot, item, assessments=assessments)
                         for item in selected
                         if identity_of(item).key in set(slot.evidence_ids)
                     ),
                     default=0.0,
                 ),
-                **slot_candidate_reasons(plan, slot, candidates, selected),
+                **slot_candidate_reasons(
+                    plan,
+                    slot,
+                    candidates,
+                    selected,
+                    assessments=assessments,
+                ),
             }
         )
     return output
