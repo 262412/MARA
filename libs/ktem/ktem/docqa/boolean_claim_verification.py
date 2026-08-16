@@ -6,27 +6,27 @@ from typing import Any
 from .boolean_authoritative_conflict import authoritative_conflict_claim
 from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuthority
 from .boolean_authority_selection import _best_authority, _deduplicated_authorities
+from .boolean_deictic_authority import ambiguous_deictic_object_authority
 from .boolean_evidence_scope import (
-    ClosedScopeResolution,
     _actor,
     _scope_rejection,
     _section_role,
     evidence_item_text,
-    resolve_closed_scope_boolean,
 )
+from .boolean_proposition_conditions import non_authoritative_proposition_span
 from .boolean_proposition_context import (
     PropositionContextWindow,
     exact_proposition_context,
 )
 from .boolean_proposition_evidence import (
     BooleanEvidenceAssessment,
-    boolean_proposition_object_identity,
     classify_boolean_evidence_set,
     exact_span_asserts_boolean_relation,
     exact_span_completes_boolean_proposition,
     proposition_qualifier,
 )
 from .boolean_relations import primary_boolean_relation
+from .boolean_structured_authority import structured_boolean_authorities
 from .evidence_identity import identity_of
 from .evidence_text import extract_final_answer_text
 from .query_phrase_extraction import (
@@ -57,14 +57,10 @@ def boolean_claim_authority(
     input_polarity = canonical_boolean_answer_polarity(answer)
     if not input_polarity and not allow_missing_polarity:
         return None
-    authority_items = [
-        item for item in evidence_items if not _title_or_heading_item(item)
-    ]
+    authority_items = _authority_items(evidence_items)
     probe_polarity = input_polarity or "yes"
-    closed_scope = resolve_closed_scope_boolean(prompt, authority_items)
-    resolved = _authority_from_closed_scope(prompt, closed_scope)
-    if resolved is None:
-        resolved = _non_english_result_authority(prompt, authority_items)
+    structured = structured_boolean_authorities(prompt, authority_items)
+    resolved = _non_english_result_authority(prompt, authority_items)
     if resolved is None:
         resolved = _exclusive_requirement_authority(prompt, authority_items)
     if resolved is not None:
@@ -76,10 +72,34 @@ def boolean_claim_authority(
             (authority,),
             reason="exact_closed_scope_proposition",
         )
-
     classified = classify_boolean_evidence_set(prompt, probe_polarity, authority_items)
-    supporting = _exact_authorities(prompt, classified.supports)
-    contradicting = _exact_authorities(prompt, classified.contradicts)
+    supporting, contradicting = _combined_exact_authorities(
+        prompt,
+        probe_polarity,
+        structured,
+        classified.supports,
+        classified.contradicts,
+    )
+    return _resolve_boolean_authority_decision(
+        prompt,
+        input_polarity,
+        probe_polarity,
+        authority_items,
+        structured,
+        supporting,
+        contradicting,
+    )
+
+
+def _resolve_boolean_authority_decision(
+    prompt: str,
+    input_polarity: str,
+    probe_polarity: str,
+    authority_items: list[dict[str, Any]],
+    structured: tuple[BooleanEvidenceAuthority, ...],
+    supporting: tuple[BooleanEvidenceAuthority, ...],
+    contradicting: tuple[BooleanEvidenceAuthority, ...],
+) -> BooleanClaimAuthority:
     if supporting and contradicting:
         return authoritative_conflict_claim(
             prompt,
@@ -88,23 +108,37 @@ def boolean_claim_authority(
             supporting,
             contradicting,
         )
+    if ambiguous := ambiguous_deictic_object_authority(
+        prompt, input_polarity, probe_polarity, supporting or contradicting
+    ):
+        return ambiguous
     if supporting:
+        reason = (
+            "exact_closed_scope_proposition"
+            if any(value in structured for value in supporting)
+            else "exact_boolean_proposition"
+        )
         return _supported_authority(
             prompt,
             input_polarity,
             probe_polarity,
             supporting,
-            reason="exact_boolean_proposition",
+            reason=reason,
         )
     if contradicting:
         canonical_polarity = "no" if probe_polarity == "yes" else "yes"
+        reason = (
+            "exact_closed_scope_proposition"
+            if any(value in structured for value in contradicting)
+            else "exact_opposite_boolean_proposition"
+        )
         return _supported_authority(
             prompt,
             input_polarity,
             canonical_polarity,
             contradicting,
             contradicting=(),
-            reason="exact_opposite_boolean_proposition",
+            reason=reason,
         )
     resolved = _negative_requirement_authority(prompt, authority_items)
     if resolved is not None:
@@ -162,44 +196,6 @@ def _supported_authority(
         supporting=supporting,
         contradicting=contradicting,
         reason=reason,
-    )
-
-
-def _authority_from_closed_scope(
-    prompt: str,
-    resolution: ClosedScopeResolution | None,
-) -> tuple[str, BooleanEvidenceAuthority] | None:
-    if resolution is None:
-        return None
-    item = resolution.evidence_item
-    window = _exact_window(item, resolution.evidence_quote)
-    if window is None:
-        return None
-    identity = identity_of(item).key
-    span_id = _span_identity(identity, window)
-    source_id, page_label = source_page_locator(item)
-    return (
-        resolution.polarity,
-        BooleanEvidenceAuthority(
-            evidence_id=identity,
-            evidence_ref=span_id,
-            span_id=span_id,
-            quote=window.text,
-            span_start=window.start,
-            span_end=window.end,
-            canonical_start=window.canonical_start,
-            canonical_end=window.canonical_end,
-            actor=resolution.decision.actor,
-            section_scope=resolution.decision.section_role,
-            relation=primary_boolean_relation(prompt),
-            object=boolean_proposition_object_identity(prompt),
-            quantifier=resolution.decision.quantifier,
-            polarity=resolution.polarity,
-            reason=resolution.decision.reason,
-            qualifier=proposition_qualifier(window.text),
-            source_id=source_id,
-            page_label=page_label,
-        ),
     )
 
 
@@ -330,6 +326,25 @@ def _negative_requirement_authority(
     return "no", _best_authority(tuple(candidates))
 
 
+def _combined_exact_authorities(
+    prompt: str,
+    probe_polarity: str,
+    structured: tuple[BooleanEvidenceAuthority, ...],
+    supporting_assessments: tuple[BooleanEvidenceAssessment, ...],
+    contradicting_assessments: tuple[BooleanEvidenceAssessment, ...],
+) -> tuple[tuple[BooleanEvidenceAuthority, ...], tuple[BooleanEvidenceAuthority, ...]]:
+    supporting = list(_exact_authorities(prompt, supporting_assessments))
+    contradicting = list(_exact_authorities(prompt, contradicting_assessments))
+    supporting.extend(value for value in structured if value.polarity == probe_polarity)
+    contradicting.extend(
+        value for value in structured if value.polarity != probe_polarity
+    )
+    return (
+        _deduplicated_authorities(supporting),
+        _deduplicated_authorities(contradicting),
+    )
+
+
 def _exact_authorities(
     prompt: str,
     assessments: tuple[BooleanEvidenceAssessment, ...],
@@ -395,6 +410,10 @@ def _title_or_heading_item(item: dict[str, Any]) -> bool:
     return bool(re.search(r"\btitle\b|\bheading\b", kind))
 
 
+def _authority_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in items if not _title_or_heading_item(item)]
+
+
 def _exact_window(
     item: dict[str, Any],
     span: str,
@@ -431,13 +450,7 @@ def _assertive_relation(
         return False
     if re.search(r"\b(?:discuss|describe|mention)\w*\b", span):
         return False
-    if not re.search(
-        r"\b(?:could|may|might|would|should)\b", prompt, re.I
-    ) and re.search(
-        r"\b(?:could|may|might|would|should)\b",
-        span,
-        re.I,
-    ):
+    if non_authoritative_proposition_span(semantic_prompt, span):
         return False
     return True
 

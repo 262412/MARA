@@ -4,25 +4,11 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .boolean_current_experiment import (
-    is_current_experiment_question as _is_current_experiment_question,
-)
-from .boolean_current_experiment import (
-    is_direct_current_empirical_action as _is_direct_current_empirical_action,
-)
-from .boolean_current_experiment import (
-    resolve_current_experiment_question as _resolve_current_experiment_question,
-)
-from .boolean_evidence_text import (
-    _bound_local_context,
-    _matching_item,
-    _nearest_heading,
-    evidence_item_text,
-)
+from . import boolean_current_experiment as current_experiment
+from . import boolean_evidence_text as evidence_text
+from .boolean_evidence_text import evidence_item_text
 from .boolean_ownership_provenance import own_data_provenance_rejection
-from .boolean_retrieval_queries import (
-    boolean_retrieval_query as _boolean_retrieval_query,
-)
+from .boolean_retrieval_queries import boolean_retrieval_query  # noqa: F401
 from .boolean_scope_quantifiers import (
     _closed_quantifier,
     _english_closed_scope,
@@ -32,10 +18,12 @@ from .boolean_scope_quantifiers import (
     _quantified_object_scope_complete,
     _scope_excerpt,
 )
+from .boolean_structured_attributes import (
+    derogatory_label_analysis_scope_span,
+    structured_scope_barrier,
+)
 from .boolean_structured_resolution import structured_boolean_resolutions
 from .evidence_identity import identity_of
-
-boolean_retrieval_query = _boolean_retrieval_query
 
 
 @dataclass(frozen=True)
@@ -93,12 +81,12 @@ def validate_boolean_scope(
     *,
     evidence_items: list[dict[str, Any]] | None = None,
 ) -> BooleanScopeDecision:
-    matching_item = _matching_item(quote, evidence_items or [])
+    matching_item = evidence_text._matching_item(quote, evidence_items or [])
     section_role = _section_role(matching_item, quote)
     context = (
         str(quote or "")
-        if _is_current_experiment_question(question)
-        else _bound_local_context(matching_item, quote)
+        if current_experiment.is_current_experiment_question(question)
+        else evidence_text._bound_local_context(matching_item, quote)
     )
     actor = _actor(context, section_role)
     quantifier = _closed_quantifier(question)
@@ -117,9 +105,9 @@ def validate_boolean_scope(
             False,
             scope_rejection,
         )
-    if _is_current_experiment_question(
+    if current_experiment.is_current_experiment_question(
         question
-    ) and not _is_direct_current_empirical_action(quote):
+    ) and not current_experiment.is_direct_current_empirical_action(quote):
         return BooleanScopeDecision(
             actor,
             section_role,
@@ -180,11 +168,15 @@ def _quantified_scope_decision(
         (
             "quantified_scope_requires_current_paper_actor"
             if not actor_scope_valid
-            else "quantified_object_scope_complete"
-            if complete
-            else "other_than_alternative_unproven"
-            if re.search(r"\bother\s+than\b", question, re.IGNORECASE)
-            else "quantified_object_scope_incomplete"
+            else (
+                "quantified_object_scope_complete"
+                if complete
+                else (
+                    "other_than_alternative_unproven"
+                    if re.search(r"\bother\s+than\b", question, re.IGNORECASE)
+                    else "quantified_object_scope_incomplete"
+                )
+            )
         ),
     )
 
@@ -237,7 +229,7 @@ def resolve_closed_scope_boolean(
     question: str,
     evidence_items: list[dict[str, Any]],
 ) -> ClosedScopeResolution | None:
-    experiment_resolution = _resolve_current_experiment_question(
+    experiment_resolution = current_experiment.resolve_current_experiment_question(
         question,
         evidence_items,
     )
@@ -346,13 +338,15 @@ def _structured_candidate_scope(
         actor = "current_paper"
         if section_role == "unknown":
             section_role = "methods"
-    if resolution.reason == "explicit_current_derogatory_label_analysis" and re.search(
-        r"\b(?:primary|main)\s+focus\s+of\s+this\s+study\b",
+    local_scope_span = derogatory_label_analysis_scope_span(
+        resolution.reason,
         resolution.quote,
-        flags=re.IGNORECASE,
-    ):
-        actor = "current_paper"
-        section_role = "methods"
+    )
+    if local_scope_span and not structured_scope_barrier(item, resolution.quote):
+        local_actor = _actor(local_scope_span, "unknown")
+        if local_actor == "current_paper":
+            actor = local_actor
+            section_role = "methods"
     rejection = _scope_rejection(
         question,
         actor=actor,
@@ -484,7 +478,7 @@ def _section_role(item: dict[str, Any], quote: str) -> str:
     explicit_role = _section_role_from_text(" ".join(explicit_values))
     if explicit_role:
         return explicit_role
-    heading_role = _section_role_from_text(_nearest_heading(item, quote))
+    heading_role = _section_role_from_text(evidence_text._nearest_heading(item, quote))
     if heading_role:
         return heading_role
     return _section_role_from_text(str(quote or "")) or "unknown"
