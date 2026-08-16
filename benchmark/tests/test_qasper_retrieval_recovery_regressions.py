@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import evaluate_retrieval_quality
@@ -23,7 +24,7 @@ def _evidence(evidence_id: str, text: str, *, source_id: str = "paper") -> dict:
 
 
 def test_qasper_missing_boolean_proposition_gets_one_local_second_round():
-    calls: list[tuple[int, str, tuple[str, ...]]] = []
+    calls: list[tuple[int, str, tuple[str, ...], dict[str, Any]]] = []
 
     def retrieve(request, _decision):
         calls.append(
@@ -31,6 +32,7 @@ def test_qasper_missing_boolean_proposition_gets_one_local_second_round():
                 request.retrieval_round_id,
                 request.retrieval_query,
                 tuple(request.selected_file_ids or []),
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
             )
         )
         if request.retrieval_round_id == 1:
@@ -63,8 +65,30 @@ def test_qasper_missing_boolean_proposition_gets_one_local_second_round():
     assert calls[0][0] == 1
     assert calls[1][0] == 2
     assert calls[0][2] == calls[1][2] == ("runtime-file-1",)
+    assert calls[0][1] == QUESTION
+    assert calls[0][1].count(QUESTION) == 1
+    assert calls[0][3] == {
+        "contract_id": "initial_retrieval_query.v1",
+        "query_kind": "initial",
+    }
     assert calls[1][1] != QUESTION
+    assert calls[1][1].count(QUESTION) == 1
+    assert all(
+        token not in calls[1][1]
+        for token in ("actor:", "predicate:", "object:", "object_role:")
+    )
+    assert calls[1][3]["contract_id"] == "recovery_query.v1"
+    assert calls[1][3]["query_kind"] == "recovery"
+    assert calls[1][3]["typed_frame"]["actor"] == "current_paper"
     assert result.evidence_bundle.metadata["retrieval_rounds"] == 2
+    contracts = result.evidence_bundle.metadata["retrieval_query_contracts"]
+    assert [item["query_kind"] for item in contracts] == ["initial", "recovery"]
+    assert contracts[0]["query"] == QUESTION
+    assert contracts[1]["query"] == calls[1][1]
+    assert contracts[1]["typed_frame"] == calls[1][3]["typed_frame"]
+    assert result.evidence_bundle.metadata["canonical_candidate_count"] == 1
+    [slot] = result.evidence_bundle.metadata["query_plan"]["evidence_slots"]
+    assert slot["status"] == "retrieved_unverified"
 
 
 def test_unrelated_graph_entity_does_not_satisfy_qasper_boolean_slot():

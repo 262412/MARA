@@ -3,23 +3,24 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from .evidence import EvidenceBundle, build_evidence_bundle
-from .evidence_identity import identity_of
 from .execution_verifier_rebind import verification_recovery_base_metadata
 from .finance_calculation_recovery import calculation_recovery_requests
 from .finance_typed_adequacy import ensure_finance_numeric_trace
 from .query_planning import ensure_request_query_plan, request_planning_question
+from .retrieval_metadata_merge import (
+    merge_retrieval_metadata as _merge_retrieval_metadata,
+)
 from .route_budget import (
     optional_stage_allowed,
     route_budget_metadata,
     run_blocking_route_stage,
 )
+from .typed_retrieval_recovery import initial_query_metadata
 from .typed_retrieval_recovery import (
     qasper_typed_recovery_required as _qasper_typed_recovery_required,
 )
 from .typed_retrieval_recovery import quality_retry_request as _quality_retry_request
-from .typed_retrieval_recovery import (
-    typed_qasper_initial_requests as _typed_qasper_initial_requests,
-)
+from .typed_retrieval_recovery import recovery_query_metadata
 from .typed_retrieval_recovery import (
     typed_qasper_recovery_requests as _typed_qasper_recovery_requests,
 )
@@ -31,6 +32,7 @@ from .typed_retrieval_recovery import verifier_recovery_query
 
 EvaluateFn = Callable[..., Any]
 RetrieveFn = Callable[[Any, Any], dict[str, Any]]
+_MISSING = object()
 
 
 def retrieve_with_rounds(
@@ -113,8 +115,8 @@ def _complete_second_round(
     evaluate: EvaluateFn,
     evidence_metadata: dict[str, Any],
     initial_bundle: EvidenceBundle,
-    second_round_requests: list[dict[str, str]],
-    calculation_recovery: list[dict[str, str]],
+    second_round_requests: list[dict[str, Any]],
+    calculation_recovery: list[dict[str, Any]],
 ) -> tuple[EvidenceBundle, Any]:
     second_round_metadata = _retrieve_second_round(
         request,
@@ -146,14 +148,14 @@ def _complete_second_round(
         attempted_retry=True,
     )
     if _qasper_typed_recovery_required(request):
-        recovered_bundle.metadata[
-            "typed_retrieval_recovery_trace"
-        ] = _typed_retrieval_recovery_trace(
-            request,
-            initial_bundle,
-            recovered_bundle,
-            second_round_requests,
-            retrieve_decision,
+        recovered_bundle.metadata["typed_retrieval_recovery_trace"] = (
+            _typed_retrieval_recovery_trace(
+                request,
+                initial_bundle,
+                recovered_bundle,
+                second_round_requests,
+                retrieve_decision,
+            )
         )
     return recovered_bundle, retrieve_decision
 
@@ -175,9 +177,9 @@ def retrieve_for_verifier_recovery(
         return None
     if not optional_stage_allowed(request):
         bundle.metadata.update(route_budget_metadata(request))
-        bundle.metadata[
-            "verifier_recovery_skipped_reason"
-        ] = "insufficient_remaining_time"
+        bundle.metadata["verifier_recovery_skipped_reason"] = (
+            "insufficient_remaining_time"
+        )
         return None
 
     query = verifier_recovery_query(request)
@@ -192,6 +194,7 @@ def retrieve_for_verifier_recovery(
                 "slot_id": _verification_slot_id(plan),
                 "query": query,
                 "modality": "text",
+                "query_metadata": recovery_query_metadata(request),
             }
         ],
         round_id=recovery_round,
@@ -232,11 +235,13 @@ def _retrieve_first_round(
     retrieve: RetrieveFn,
     plan: Any,
 ) -> dict[str, Any]:
+    question = request_planning_question(request)
     requests = [
         {
             "query_id": f"round1:{slot.slot_id}",
             "slot_id": slot.slot_id,
             "query": slot.query,
+            "query_metadata": initial_query_metadata(),
         }
         for slot in plan.evidence_slots
         if slot.required_for_retrieval and slot.query
@@ -247,33 +252,41 @@ def _retrieve_first_round(
             {
                 "query_id": "round1:primary",
                 "slot_id": "",
-                "query": query or request_planning_question(request),
+                "query": query or question,
+                "query_metadata": initial_query_metadata(),
             }
         ]
-    requests = _typed_qasper_initial_requests(request, requests)
     original_query = str(getattr(request, "retrieval_query", "") or "")
     original_slot_id = str(getattr(request, "retrieval_slot_id", "") or "")
     original_round_id = int(getattr(request, "retrieval_round_id", 0) or 0)
+    original_query_metadata = getattr(request, "retrieval_query_metadata", _MISSING)
     merged: dict[str, Any] = {}
     try:
         for retrieval_request in requests:
             request.retrieval_query = str(retrieval_request["query"])
             request.retrieval_slot_id = str(retrieval_request["slot_id"])
             request.retrieval_round_id = 1
-            response = _with_retrieval_lineage(
-                run_blocking_route_stage(
-                    request,
-                    "retrieval",
-                    retrieve,
-                    request,
-                    decision,
-                    configured_timeout_seconds=getattr(
-                        request, "retrieval_timeout_seconds", None
+            request.retrieval_query_metadata = dict(
+                retrieval_request.get("query_metadata") or {}
+            )
+            response = _with_retrieval_query_contract(
+                _with_retrieval_lineage(
+                    run_blocking_route_stage(
+                        request,
+                        "retrieval",
+                        retrieve,
+                        request,
+                        decision,
+                        configured_timeout_seconds=getattr(
+                            request, "retrieval_timeout_seconds", None
+                        ),
                     ),
+                    round_id=1,
+                    query_id=str(retrieval_request["query_id"]),
+                    slot_id=request.retrieval_slot_id,
                 ),
+                retrieval_request,
                 round_id=1,
-                query_id=str(retrieval_request["query_id"]),
-                slot_id=request.retrieval_slot_id,
             )
             merged = _merge_retrieval_metadata(merged, response)
         return merged
@@ -281,9 +294,10 @@ def _retrieve_first_round(
         request.retrieval_query = original_query
         request.retrieval_slot_id = original_slot_id
         request.retrieval_round_id = original_round_id
+        _restore_query_metadata(request, original_query_metadata)
 
 
-def _second_round_requests(bundle: EvidenceBundle) -> list[dict[str, str]]:
+def _second_round_requests(bundle: EvidenceBundle) -> list[dict[str, Any]]:
     requests = [
         dict(item)
         for item in bundle.metadata.get("second_round_requests") or []
@@ -308,7 +322,7 @@ def _second_round_requests(bundle: EvidenceBundle) -> list[dict[str, str]]:
 def _second_round_merge_base(
     evidence_metadata: dict[str, Any],
     bundle: EvidenceBundle,
-    calculation_recovery: list[dict[str, str]],
+    calculation_recovery: list[dict[str, Any]],
 ) -> dict[str, Any]:
     base = dict(evidence_metadata)
     if not calculation_recovery:
@@ -329,33 +343,47 @@ def _retrieve_second_round(
     request: Any,
     decision: Any,
     retrieve: RetrieveFn,
-    requests: list[dict[str, str]],
+    requests: list[dict[str, Any]],
     *,
     round_id: int = 2,
 ) -> dict[str, Any]:
     original_query = str(getattr(request, "retrieval_query", "") or "")
     original_slot_id = str(getattr(request, "retrieval_slot_id", "") or "")
     original_round_id = int(getattr(request, "retrieval_round_id", 0) or 0)
+    original_query_metadata = getattr(request, "retrieval_query_metadata", _MISSING)
     merged: dict[str, Any] = {}
     try:
         for retrieval_request in requests:
             request.retrieval_query = str(retrieval_request.get("query") or "")
             request.retrieval_slot_id = str(retrieval_request.get("slot_id") or "")
             request.retrieval_round_id = round_id
-            response = _with_retrieval_lineage(
-                run_blocking_route_stage(
-                    request,
-                    "retrieval_recovery",
-                    retrieve,
-                    request,
-                    decision,
-                    configured_timeout_seconds=getattr(
-                        request, "retrieval_timeout_seconds", None
+            query_metadata = dict(
+                retrieval_request.get("query_metadata")
+                or {
+                    "contract_id": "recovery_query.v1",
+                    "query_kind": "recovery",
+                }
+            )
+            request.retrieval_query_metadata = query_metadata
+            traced_request = {**retrieval_request, "query_metadata": query_metadata}
+            response = _with_retrieval_query_contract(
+                _with_retrieval_lineage(
+                    run_blocking_route_stage(
+                        request,
+                        "retrieval_recovery",
+                        retrieve,
+                        request,
+                        decision,
+                        configured_timeout_seconds=getattr(
+                            request, "retrieval_timeout_seconds", None
+                        ),
                     ),
+                    round_id=round_id,
+                    query_id=str(retrieval_request.get("query_id") or ""),
+                    slot_id=request.retrieval_slot_id,
                 ),
+                traced_request,
                 round_id=round_id,
-                query_id=str(retrieval_request.get("query_id") or ""),
-                slot_id=request.retrieval_slot_id,
             )
             merged = _merge_retrieval_metadata(merged, response)
         return merged
@@ -363,6 +391,15 @@ def _retrieve_second_round(
         request.retrieval_query = original_query
         request.retrieval_slot_id = original_slot_id
         request.retrieval_round_id = original_round_id
+        _restore_query_metadata(request, original_query_metadata)
+
+
+def _restore_query_metadata(request: Any, original: Any) -> None:
+    if original is _MISSING:
+        if hasattr(request, "retrieval_query_metadata"):
+            delattr(request, "retrieval_query_metadata")
+        return
+    request.retrieval_query_metadata = original
 
 
 def _evaluate(
@@ -393,50 +430,24 @@ def _with_retrieval_rounds(
     return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
 
 
-def _merge_retrieval_metadata(
-    first: dict[str, Any],
-    second: dict[str, Any],
+def _with_retrieval_query_contract(
+    metadata: dict[str, Any],
+    retrieval_request: dict[str, Any],
+    *,
+    round_id: int,
 ) -> dict[str, Any]:
-    merged = dict(first)
-    for key, value in second.items():
-        current = merged.get(key)
-        if isinstance(current, list) and isinstance(value, list):
-            merged[key] = _stable_union(current, value)
-        elif isinstance(current, dict) and isinstance(value, dict):
-            merged[key] = {**current, **value}
-        elif value not in (None, "", [], {}):
-            merged[key] = value
-    return merged
-
-
-def _stable_union(first: list[Any], second: list[Any]) -> list[Any]:
-    output: list[Any] = []
-    identities: set[str] = set()
-    for item in [*first, *second]:
-        identity = _retrieval_value_identity(item)
-        if identity in identities:
-            existing_index = next(
-                index
-                for index, existing in enumerate(output)
-                if _retrieval_value_identity(existing) == identity
-            )
-            output[existing_index] = _merge_retrieval_value(
-                output[existing_index],
-                item,
-            )
-            continue
-        identities.add(identity)
-        output.append(item)
+    output = dict(metadata or {})
+    query_metadata = dict(retrieval_request.get("query_metadata") or {})
+    output["retrieval_query_contracts"] = [
+        {
+            **query_metadata,
+            "round_id": round_id,
+            "query_id": str(retrieval_request.get("query_id") or ""),
+            "slot_id": str(retrieval_request.get("slot_id") or ""),
+            "query": str(retrieval_request.get("query") or ""),
+        }
+    ]
     return output
-
-
-def _retrieval_value_identity(value: Any) -> str:
-    if not isinstance(value, dict):
-        return repr(value)
-    try:
-        return identity_of(value).key
-    except ValueError:
-        return repr(sorted(value.items()))
 
 
 def _with_retrieval_lineage(
@@ -553,43 +564,3 @@ def _raw_retrieval_score(
             continue
         return float(value), field
     return None, "not_recorded"
-
-
-def _merge_retrieval_value(left: Any, right: Any) -> Any:
-    if not isinstance(left, dict) or not isinstance(right, dict):
-        return left
-    merged = dict(left)
-    merged["retrieval_lineage"] = _stable_dict_union(
-        list(left.get("retrieval_lineage") or []),
-        list(right.get("retrieval_lineage") or []),
-    )
-    merged["source_backrefs"] = list(
-        dict.fromkeys(
-            [
-                *list(left.get("source_backrefs") or []),
-                *list(right.get("source_backrefs") or []),
-            ]
-        )
-    )
-    metadata = dict(left.get("metadata") or {})
-    for key, value in dict(right.get("metadata") or {}).items():
-        if key not in metadata:
-            metadata[key] = value
-    if metadata:
-        merged["metadata"] = metadata
-    return merged
-
-
-def _stable_dict_union(
-    first: list[dict[str, Any]],
-    second: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    output: list[dict[str, Any]] = []
-    seen: set[tuple[tuple[str, str], ...]] = set()
-    for item in [*first, *second]:
-        key = tuple(sorted((str(name), str(value)) for name, value in item.items()))
-        if key in seen:
-            continue
-        seen.add(key)
-        output.append(item)
-    return output
