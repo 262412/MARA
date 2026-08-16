@@ -3,6 +3,11 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from .query_terminal_outcome import (
+    terminal_commit_outcome,
+    terminal_semantic_commit_for_message,
+)
+
 DESKTOP_QUERY_COMMIT_STATE_KEY = "_mara_desktop_query_commits"
 DESKTOP_QUERY_COMMIT_STATE_VERSION = 1
 MAX_DESKTOP_QUERY_COMMIT_MARKERS = 128
@@ -50,7 +55,14 @@ def recover_committed_answer(
     message = messages[message_index]
     if not isinstance(message, (list, tuple)) or len(message) < 2:
         return None
-    return {"answer": str(message[1] or ""), "citations": []}
+    commit = terminal_semantic_commit_for_message(session.state, message_index)
+    return {
+        "answer": str(message[1] or ""),
+        "citations": [],
+        "terminal_semantic_commit": commit,
+        "terminal_outcome": terminal_commit_outcome(commit),
+        "terminal_outcome_reason": str(commit.get("outcome_reason") or ""),
+    }
 
 
 def _query_commit_marker(state: Any, turn_id: str) -> dict[str, Any] | None:

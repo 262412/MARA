@@ -733,7 +733,7 @@ class DocQARuntime(RuntimeSessionMutationFacade):
             retrieval_history=session_info.retrieval_messages,
             plot_history=session_info.plot_history,
             messages=messages,
-            state=stream_result.state,
+            state=_turn.state_with_stream_terminal_commit(stream_result, len(history)),
             graph_source_ids=graph_source_ids,
             selected_inputs=selected_inputs,
             selected_file_ids=prepared.selected_file_ids,

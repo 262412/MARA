@@ -307,16 +307,22 @@ test("parses typed index task SSE events without accepting arbitrary payloads", 
 
 test("parses query SSE events and rejects raw path-shaped payloads", () => {
   const event =
-    'event: query\ndata: {"request_id":"request-1","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","route_provider":"openai","route_model":"gpt-5.6-luna","settings_revision":"revision-1","sidecar_pid":4321,"route_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"success","stage":"completed","answer":"Grounded answer","citations":[{"citation_id":"chunk-1","file_id":"file-1","file_name":"paper.pdf","page_label":"2","element_id":null,"quote":"Evidence"}],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:01Z","version":3}}';
+    'event: query\ndata: {"request_id":"request-1","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","route_provider":"openai","route_model":"gpt-5.6-luna","settings_revision":"revision-1","sidecar_pid":4321,"route_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"success","stage":"completed","answer":"Grounded answer","answer_saved":true,"terminal_semantic_commit":{"contract_id":"terminal_semantic_commit.v3"},"terminal_outcome":"answered","terminal_outcome_reason":"","citations":[{"citation_id":"chunk-1","file_id":"file-1","file_name":"paper.pdf","page_label":"2","element_id":null,"quote":"Evidence"}],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:01Z","version":3}}';
   const task = parseQueryTaskEvent(event, "request-1");
 
   assert.equal(task.answer, "Grounded answer");
+  assert.equal(task.terminal_outcome, "answered");
   assert.equal(task.citations[0]?.file_name, "paper.pdf");
   assert.throws(() => parseQueryTaskEvent(event, "request-2"));
   assert.throws(() => parseQueryTaskEvent("event: task\ndata: {}"));
   assert.throws(() =>
     parseQueryTaskEvent(
       'event: query\ndata: {"request_id":"request-1","task":{"path":"/private/paper.pdf"}}',
+    ),
+  );
+  assert.throws(() =>
+    parseQueryTaskEvent(
+      'event: query\ndata: {"request_id":"request-1","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","route_provider":"openai","route_model":"gpt-5.6-luna","settings_revision":"revision-1","sidecar_pid":4321,"route_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"success","stage":"completed","answer":"Grounded answer","answer_saved":true,"citations":[],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:01Z","version":3}}',
     ),
   );
 });
@@ -361,7 +367,7 @@ test("query watcher survives one retryable fallback GET failure", async () => {
     return {
       ok: true,
       data: parseQueryTaskEvent(
-        'event: query\ndata: {"request_id":"request-2","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","route_provider":"openai","route_model":"gpt-5.6-luna","settings_revision":"revision-1","sidecar_pid":4321,"route_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"success","stage":"completed","answer":"Recovered","citations":[],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:02Z","version":4}}',
+        'event: query\ndata: {"request_id":"request-2","task":{"task_id":"query-1","retry_of_task_id":null,"conversation_id":"session-1","prompt":"Question","selected_file_ids":["file-1"],"qa_scope":"document","route_provider":"openai","route_model":"gpt-5.6-luna","settings_revision":"revision-1","sidecar_pid":4321,"route_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"success","stage":"completed","answer":"Recovered","answer_saved":true,"terminal_semantic_commit":{"contract_id":"terminal_semantic_commit.v3"},"terminal_outcome":"answered","terminal_outcome_reason":"","citations":[],"error":null,"retryable":false,"created_at":"2026-08-08T10:00:00Z","updated_at":"2026-08-08T10:00:02Z","version":4}}',
       ),
     };
   };

@@ -50,6 +50,9 @@ const queryTask: QueryTask = {
   stage: "completed",
   answer: "MARA Desktop preserves grounded evidence identities.",
   answer_saved: true,
+  terminal_semantic_commit: {},
+  terminal_outcome: "",
+  terminal_outcome_reason: "",
   citations: [
     {
       citation_id: "chunk-1",

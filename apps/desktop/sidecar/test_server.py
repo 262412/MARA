@@ -465,6 +465,31 @@ class SidecarContractTest(unittest.TestCase):
         )
 
 
+class SidecarTerminalContractTest(unittest.TestCase):
+    def test_openapi_exposes_the_terminal_projection(self) -> None:
+        schema = create_app("test-token", StubApplicationService()).openapi()
+        query_task_schema = schema["components"]["schemas"]["QueryTask"]
+
+        self.assertTrue(
+            {
+                "terminal_semantic_commit",
+                "terminal_outcome",
+                "terminal_outcome_reason",
+            }.issubset(query_task_schema["required"])
+        )
+        self.assertEqual(
+            query_task_schema["properties"]["terminal_outcome"]["enum"],
+            [
+                "",
+                "answered",
+                "safe_abstention",
+                "execution_failed",
+                "timeout",
+                "cancelled",
+            ],
+        )
+
+
 class SidecarIndexingReadinessContractTest(unittest.TestCase):
     def test_unconfigured_embedding_is_rejected_before_task_creation(self) -> None:
         token = "test-token"

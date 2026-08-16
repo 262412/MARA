@@ -5,6 +5,7 @@ from typing import Any, cast
 import ktem.docqa.runtime as runtime_module
 from ktem.docqa import _runtime_turn as turn_module
 from ktem.docqa.runtime import DocQARuntime
+from ktem.docqa.terminal_session_state import terminal_semantic_commit_for_message
 
 from kotaemon.base import Document
 
@@ -106,7 +107,13 @@ def _make_runtime():
     )
     runtime.load_session = lambda _conversation_id: None
     runtime.create_session = lambda user_id=None: session_info
-    runtime.persist_conversation_state = lambda **_kwargs: ([], [])
+    runtime.persisted_states = []
+
+    def persist_conversation_state(**kwargs):
+        runtime.persisted_states.append(kwargs["state"])
+        return [], []
+
+    runtime.persist_conversation_state = persist_conversation_state
     return runtime
 
 
@@ -186,6 +193,15 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
         "evidence_bundle.v2"
     )
     assert final.stream_events[-1]["channel"] == "info"
+    _assert_persisted_terminal_commit(runtime, final)
+
+
+def _assert_persisted_terminal_commit(runtime: Any, final: Any) -> None:
+    persisted_commit = terminal_semantic_commit_for_message(
+        runtime.persisted_states[-1],
+        0,
+    )
+    assert persisted_commit == final.response.engine_terminal_commit
 
 
 def test_runtime_stream_turn_does_not_replace_substantial_answer_with_late_label(

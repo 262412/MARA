@@ -38,6 +38,9 @@ const queryTask: QueryTask = {
   stage: "completed",
   answer: "The evidence changed.",
   answer_saved: true,
+  terminal_semantic_commit: {},
+  terminal_outcome: "",
+  terminal_outcome_reason: "",
   citations: [
     {
       citation_id: "chunk-1",

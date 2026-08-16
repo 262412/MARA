@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from typing import Any
 
 from .query_task_journal import QueryTaskJournal, QueryTaskPersistenceError
 from .query_task_state import QueryTaskState
 from .query_task_state import now as _now
 from .query_task_state import task_from_dict
+from .query_terminal_outcome import (
+    terminal_commit_outcome,
+    terminal_commit_projection_present,
+)
 
-QUERY_JOURNAL_VERSION = 2
-SUPPORTED_QUERY_JOURNAL_VERSIONS = {1, QUERY_JOURNAL_VERSION}
+QUERY_JOURNAL_VERSION = 3
+SUPPORTED_QUERY_JOURNAL_VERSIONS = {1, 2, QUERY_JOURNAL_VERSION}
 ACTIVE_QUERY_STATUSES = {"queued", "running"}
 LOGGER = logging.getLogger("mara.desktop.query_tasks")
 
@@ -97,6 +102,17 @@ def restore_committed_turn(service: Any, task: QueryTaskState) -> bool:
     task.citations = [
         dict(item) for item in committed.get("citations", []) if isinstance(item, dict)
     ]
+    terminal_commit = committed.get("terminal_semantic_commit")
+    task.terminal_semantic_commit = (
+        deepcopy(terminal_commit)
+        if isinstance(terminal_commit, dict)
+        and terminal_commit_projection_present(terminal_commit)
+        else {}
+    )
+    task.terminal_outcome = terminal_commit_outcome(task.terminal_semantic_commit)
+    task.terminal_outcome_reason = str(
+        task.terminal_semantic_commit.get("outcome_reason") or ""
+    )
     task.status = "success"
     task.stage = "completed"
     task.error = None
