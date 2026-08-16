@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import evaluate_retrieval_quality
@@ -23,7 +24,7 @@ def _evidence(evidence_id: str, text: str, *, source_id: str = "paper") -> dict:
 
 
 def test_qasper_missing_boolean_proposition_gets_one_local_second_round():
-    calls: list[tuple[int, str, tuple[str, ...]]] = []
+    calls: list[tuple[int, str, tuple[str, ...], dict[str, Any]]] = []
 
     def retrieve(request, _decision):
         calls.append(
@@ -31,6 +32,7 @@ def test_qasper_missing_boolean_proposition_gets_one_local_second_round():
                 request.retrieval_round_id,
                 request.retrieval_query,
                 tuple(request.selected_file_ids or []),
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
             )
         )
         if request.retrieval_round_id == 1:
@@ -63,8 +65,30 @@ def test_qasper_missing_boolean_proposition_gets_one_local_second_round():
     assert calls[0][0] == 1
     assert calls[1][0] == 2
     assert calls[0][2] == calls[1][2] == ("runtime-file-1",)
+    assert calls[0][1] == QUESTION
+    assert calls[0][1].count(QUESTION) == 1
+    assert calls[0][3] == {
+        "contract_id": "initial_retrieval_query.v1",
+        "query_kind": "initial",
+    }
     assert calls[1][1] != QUESTION
+    assert calls[1][1].count(QUESTION) == 1
+    assert all(
+        token not in calls[1][1]
+        for token in ("actor:", "predicate:", "object:", "object_role:")
+    )
+    assert calls[1][3]["contract_id"] == "recovery_query.v1"
+    assert calls[1][3]["query_kind"] == "recovery"
+    assert calls[1][3]["typed_frame"]["actor"] == "current_paper"
     assert result.evidence_bundle.metadata["retrieval_rounds"] == 2
+    contracts = result.evidence_bundle.metadata["retrieval_query_contracts"]
+    assert [item["query_kind"] for item in contracts] == ["initial", "recovery"]
+    assert contracts[0]["query"] == QUESTION
+    assert contracts[1]["query"] == calls[1][1]
+    assert contracts[1]["typed_frame"] == calls[1][3]["typed_frame"]
+    assert result.evidence_bundle.metadata["canonical_candidate_count"] == 1
+    [slot] = result.evidence_bundle.metadata["query_plan"]["evidence_slots"]
+    assert slot["status"] == "retrieved_unverified"
 
 
 def test_unrelated_graph_entity_does_not_satisfy_qasper_boolean_slot():
@@ -126,21 +150,35 @@ def test_non_qasper_verification_only_boolean_slot_stays_out_of_round_two():
 
 
 def test_6f024d4c_true_unanswerable_remains_fail_closed_after_retry():
-    calls = 0
+    question = "What was the baseline?"
+    document_title = (
+        "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+    )
+    calls: list[tuple[int, str, dict[str, Any]]] = []
 
-    def retrieve(_request, _decision):
-        nonlocal calls
-        calls += 1
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_round_id,
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
         return {"evidence": []}
 
     result = execute_controller_turn(
         DocQARequest(
-            prompt="What was the baseline?",
+            prompt=question,
+            retrieval_query=question,
             task_type="free_text",
             verification_domain="qasper",
+            verification_mode="strict",
             route_policy="doc",
             allowed_routes=["doc_text"],
             selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            active_file_name="2001_05865.txt",
+            selected_source_title=document_title,
         ),
         retrieve=retrieve,
         generate=lambda *_args: (_ for _ in ()).throw(
@@ -148,9 +186,105 @@ def test_6f024d4c_true_unanswerable_remains_fail_closed_after_retry():
         ),
     )
 
-    assert calls == 2
+    assert len(calls) == 2
+    assert calls[0][0] == 1
+    assert calls[0][1] == question
+    assert calls[1][0] == 2
+    assert calls[1][1] == f"{question} {document_title}"
+    assert calls[1][1].count(question) == 1
+    assert all(
+        token not in calls[1][1]
+        for token in ("actor:", "predicate:", "object:", "object_role:")
+    )
+    assert calls[1][2]["document_context"] == {
+        "kind": "selected_document_title",
+        "text": document_title,
+    }
     assert result.retrieve_decision.status == "poor"
     assert result.guardrail_decision.action == "abstain"
+
+
+def test_specific_free_text_recovery_does_not_add_document_heading():
+    question = "What NDCG score did the final submission achieve?"
+    document_title = (
+        "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+    )
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
+        return {"evidence": []}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="free_text",
+            verification_domain="qasper",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("empty retrieval must remain fail closed")
+        ),
+    )
+
+    assert [query for query, _metadata in calls] == [question, question]
+    assert "document_context" not in calls[1][1]
+    assert result.guardrail_decision.action == "abstain"
+
+
+def test_6f024d4c_context_recovery_does_not_force_answer_relation_authority():
+    question = "What was the baseline?"
+    document_title = (
+        "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+    )
+
+    def retrieve(request, _decision):
+        if request.retrieval_round_id == 1:
+            return {"evidence": []}
+        assert request.retrieval_query == f"{question} {document_title}"
+        return {
+            "evidence": [
+                _evidence(
+                    "ensemble",
+                    "Our final submission is an ensemble of three discriminative models.",
+                    source_id="runtime-file-1",
+                )
+            ]
+        }
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="free_text",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "The ensemble of three discriminative models.",
+    )
+
+    assert result.evidence_bundle.metadata["canonical_candidate_count"] == 1
+    assert result.guardrail_decision.action == "abstain"
+    assert result.verify_decision.typed_authority["reason"] == (
+        "question_predicate_unresolved"
+    )
 
 
 def test_auto_route_optional_doc_element_does_not_force_element_index():

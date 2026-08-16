@@ -192,6 +192,20 @@ def selected_source_fallback_text(
     return str(hits[0].get("text") or "") if hits else ""
 
 
+def selected_source_title(
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> str:
+    if len(documents) != 1 or len(selected_file_ids) != 1:
+        return ""
+    if not str(selected_file_ids[0] or "").strip():
+        return ""
+    title = documents[0].metadata.get("title")
+    if not isinstance(title, str):
+        return ""
+    return " ".join(title.split())
+
+
 def _index_relation_rows(index_table: Any, file_id: str) -> list[Any]:
     if isinstance(index_table, Sequence):
         return [

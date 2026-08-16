@@ -6,7 +6,9 @@ from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import build_controller_outputs
 from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.finance_numeric_answer import finance_numeric_answer
-from ktem.docqa.retrieval_rounds import retrieve_with_rounds
+from ktem.docqa.query_plan_schema import EvidenceSlot, QueryPlan
+from ktem.docqa.retrieval_rounds import _retrieve_first_round, retrieve_with_rounds
+from ktem.docqa.typed_retrieval_recovery import typed_qasper_recovery_requests
 
 
 @pytest.mark.parametrize(
@@ -222,6 +224,120 @@ def test_quality_retry_query_is_never_empty():
         "Which method performed better?",
     ]
     assert all(query.strip() for query in queries)
+
+
+def test_qasper_initial_round_preserves_distinct_planned_slot_queries():
+    question = "Did the authors compare model A with model B?"
+    plan = _qasper_comparison_plan()
+    request = DocQARequest(
+        prompt=question,
+        retrieval_query=question,
+        task_type="boolean",
+        verification_domain="qasper",
+    )
+    calls: list[tuple[str, str, dict[str, str]]] = []
+
+    def retrieve(current_request, _decision):
+        calls.append(
+            (
+                current_request.retrieval_slot_id,
+                current_request.retrieval_query,
+                dict(current_request.retrieval_query_metadata),
+            )
+        )
+        return {"evidence": []}
+
+    metadata = _retrieve_first_round(
+        request,
+        SimpleNamespace(legacy_route="doc_text"),
+        retrieve,
+        plan,
+    )
+
+    assert calls == [
+        (
+            "support:left_subject",
+            "model A comparison results",
+            {
+                "contract_id": "initial_retrieval_query.v1",
+                "query_kind": "initial",
+            },
+        ),
+        (
+            "support:right_subject",
+            "model B comparison results",
+            {
+                "contract_id": "initial_retrieval_query.v1",
+                "query_kind": "initial",
+            },
+        ),
+    ]
+    assert [item["query_id"] for item in metadata["retrieval_query_contracts"]] == [
+        "round1:support:left_subject",
+        "round1:support:right_subject",
+    ]
+    assert not hasattr(request, "retrieval_query_metadata")
+
+
+def test_qasper_recovery_keeps_distinct_slot_queries_and_structured_frame():
+    question = "Did the authors compare model A with model B?"
+    plan = _qasper_comparison_plan()
+    request = DocQARequest(
+        prompt=question,
+        retrieval_query=question,
+        task_type="boolean",
+        verification_domain="qasper",
+    )
+    request.planned_query_plan = plan
+    request.query_plan = plan
+    recovery = typed_qasper_recovery_requests(
+        request,
+        [
+            {
+                "query_id": "round2:support:left_subject",
+                "slot_id": "support:left_subject",
+                "query": "model A comparison results",
+            },
+            {
+                "query_id": "round2:support:right_subject",
+                "slot_id": "support:right_subject",
+                "query": "model B comparison results",
+            },
+        ],
+    )
+
+    assert recovery[0]["query"] != recovery[1]["query"]
+    assert all(item["query"].count(question) == 1 for item in recovery)
+    assert "model A comparison results" in recovery[0]["query"]
+    assert "model B comparison results" in recovery[1]["query"]
+    assert all(
+        token not in item["query"]
+        for item in recovery
+        for token in ("actor:", "predicate:", "object_role:")
+    )
+    assert all(item["query_metadata"]["typed_frame"] for item in recovery)
+
+
+def _qasper_comparison_plan() -> QueryPlan:
+    return QueryPlan(
+        answer_type="boolean",
+        question_type="cross_page",
+        evidence_slots=(
+            EvidenceSlot(
+                slot_id="support:left_subject",
+                role="support",
+                statement_kind="boolean_proposition",
+                query="model A comparison results",
+            ),
+            EvidenceSlot(
+                slot_id="support:right_subject",
+                role="support",
+                statement_kind="boolean_proposition",
+                query="model B comparison results",
+            ),
+        ),
+        constraints={"verification_domain": "qasper"},
+    )
 
 
 def test_missing_required_slot_after_second_round_blocks_generation():

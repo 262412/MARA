@@ -9,6 +9,7 @@ from . import generation_contract
 from .benchmark_prompts import build_benchmark_prompt
 from .docqa_runtime_sources import (
     selected_source_fallback_text,
+    selected_source_title,
     source_identity_crosswalk,
 )
 from .engine_accessors import config_value, field_value
@@ -46,6 +47,10 @@ def docqa_request_kwargs(
         "active_file_name": getattr(active_record, "name", ""),
         "page_number": None,
         "selected_text": selected_source_fallback_text(
+            documents,
+            selected_file_ids,
+        ),
+        "selected_source_title": selected_source_title(
             documents,
             selected_file_ids,
         ),

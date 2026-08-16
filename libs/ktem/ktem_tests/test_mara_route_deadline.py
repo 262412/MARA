@@ -38,7 +38,7 @@ def test_mara_route_probe_deadline_commits_typed_abstention(monkeypatch):
     assert deadline["blocking_stage"] == "route_probe"
 
 
-def test_qasper_route_probe_uses_same_typed_initial_query(monkeypatch):
+def test_qasper_route_probe_uses_unmodified_initial_question(monkeypatch):
     question = "Do the authors conduct experiments on the dataset?"
     captured: list[str] = []
 
@@ -79,7 +79,4 @@ def test_qasper_route_probe_uses_same_typed_initial_query(monkeypatch):
     )
 
     assert preparation.deadline_execution is None
-    assert len(captured) == 1
-    assert "actor:current_paper" in captured[0]
-    assert "predicate:evaluate" in captured[0]
-    assert "object:dataset" in captured[0]
+    assert captured == [question]

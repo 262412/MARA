@@ -43,7 +43,9 @@ def _recovery_events(result: Any) -> list[dict[str, Any]]:
     ]
 
 
-def test_retrieved_unverified_text_route_runs_one_targeted_retrieval_after_rebind() -> None:
+def test_retrieved_unverified_text_route_runs_one_targeted_retrieval_after_rebind() -> (
+    None
+):
     calls: list[tuple[str, int]] = []
 
     def retrieve(request: DocQARequest, decision: Any) -> dict[str, Any]:
@@ -278,15 +280,21 @@ def test_missing_required_slot_records_concrete_bounded_stop_reason() -> None:
     ]
 
 
-def test_missing_boolean_slot_uses_typed_second_round_query_and_records_delta() -> (
+def test_missing_boolean_slot_uses_natural_language_recovery_query_and_records_delta() -> (
     None
 ):
-    calls: list[tuple[int, str]] = []
+    calls: list[tuple[int, str, dict[str, Any]]] = []
     request = _request(route_policy="doc")
     request.allowed_routes = ["doc_text"]
 
     def retrieve(request: DocQARequest, _decision: Any) -> dict[str, Any]:
-        calls.append((request.retrieval_round_id, request.retrieval_query))
+        calls.append(
+            (
+                request.retrieval_round_id,
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
         return {
             "evidence": [
                 _evidence(
@@ -302,11 +310,30 @@ def test_missing_boolean_slot_uses_typed_second_round_query_and_records_delta() 
         generate=lambda *_args: "yes",
     )
 
-    assert [round_id for round_id, _query in calls] == [1, 2]
+    assert [round_id for round_id, _query, _metadata in calls] == [1, 2]
+    assert calls[0][1] == QUESTION
+    assert calls[0][2] == {
+        "contract_id": "initial_retrieval_query.v1",
+        "query_kind": "initial",
+    }
     second_query = calls[-1][1]
-    assert "actor:current_paper" in second_query
-    assert "predicate:evaluate" in second_query
-    assert "object:dataset" in second_query
+    assert second_query.count(QUESTION) == 1
+    assert second_query != QUESTION
+    assert all(
+        token not in second_query
+        for token in ("actor:", "predicate:", "object:", "object_role:")
+    )
+    assert calls[-1][2]["contract_id"] == "recovery_query.v1"
+    assert calls[-1][2]["query_kind"] == "recovery"
+    assert calls[-1][2]["typed_frame"] == {
+        "actor": "current_paper",
+        "predicate": "evaluate",
+        "object": "dataset",
+        "object_role": "proposition_object",
+        "qualifier": "none",
+        "quantifier": "none",
+        "scope": "document",
+    }
     [recovery] = [
         event
         for event in result.controller_trace
@@ -319,18 +346,20 @@ def test_missing_boolean_slot_uses_typed_second_round_query_and_records_delta() 
     assert recovery["stop_reason"] == "max_retrieval_rounds_exhausted"
 
 
-def test_qasper_first_round_uses_typed_required_slot_frame() -> None:
-    calls: list[tuple[int, str]] = []
+def test_qasper_first_round_uses_the_original_question_once() -> None:
+    calls: list[tuple[int, str, dict[str, Any]]] = []
     request = _request(route_policy="doc")
     request.allowed_routes = ["doc_text"]
 
     def retrieve(request: DocQARequest, _decision: Any) -> dict[str, Any]:
-        calls.append((request.retrieval_round_id, request.retrieval_query))
-        text = (
-            EXACT_AUTHORITY
-            if "predicate:evaluate" in request.retrieval_query
-            else "The paper introduces a dialogue system."
+        calls.append(
+            (
+                request.retrieval_round_id,
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
         )
+        text = EXACT_AUTHORITY if request.retrieval_query == QUESTION else NEAR_MATCH
         return {"evidence": [_evidence(f"round-{len(calls)}", text)]}
 
     result = execute_controller_turn(
@@ -341,7 +370,14 @@ def test_qasper_first_round_uses_typed_required_slot_frame() -> None:
 
     assert len(calls) == 1
     assert calls[0][0] == 1
-    assert "actor:current_paper" in calls[0][1]
-    assert "predicate:evaluate" in calls[0][1]
-    assert "object:dataset" in calls[0][1]
+    assert calls[0][1] == QUESTION
+    assert calls[0][1].count(QUESTION) == 1
+    assert all(
+        token not in calls[0][1]
+        for token in ("actor:", "predicate:", "object:", "object_role:")
+    )
+    assert calls[0][2] == {
+        "contract_id": "initial_retrieval_query.v1",
+        "query_kind": "initial",
+    }
     assert result.verify_decision.status == "supported"

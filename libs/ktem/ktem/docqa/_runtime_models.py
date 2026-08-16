@@ -23,6 +23,7 @@ class DocQARequest:
     active_file_name: str = ""
     page_number: Optional[int] = None
     selected_text: str = ""
+    selected_source_title: str = ""
     graph_context: dict[str, Any] = field(default_factory=dict)
     graph_source_ids: Optional[list[str]] = None
     settings: Optional[dict[str, Any]] = None
