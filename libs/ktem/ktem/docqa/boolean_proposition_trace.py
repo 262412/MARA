@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .boolean_evidence_scope import (
@@ -7,6 +8,7 @@ from .boolean_evidence_scope import (
     _closed_quantifier,
     _requires_current_paper_scope,
     _section_role,
+    evidence_item_text,
 )
 from .boolean_proposition_compatibility import _object_compatibility
 from .boolean_proposition_evidence import classify_boolean_evidence_candidates
@@ -76,29 +78,58 @@ def boolean_proposition_binding_trace(
 
 
 def _assessment_trace(value: BooleanEvidenceAssessment) -> dict[str, Any]:
+    assessment = value.as_dict()
     return {
+        **assessment,
+        **_exact_span_trace(value),
         "proposition_candidate_id": value.span_id,
-        "evidence_id": identity_of(value.item).key,
         "span": value.span_text,
         "normalized_relation": value.proposition.action,
-        "predicate": value.proposition.predicate,
-        "actor": value.proposition.actor,
-        "object": value.proposition.object,
-        "qualifier": value.proposition.qualifier,
-        "quantifier": value.proposition.quantifier,
-        "scope": value.proposition.scope,
         "relation_match_reason": (
             "normalized_relation_family_match"
             if value.relation_score > 0
             else "normalized_relation_mismatch"
         ),
-        "actor_score": value.actor_score,
-        "scope_score": value.scope_score,
-        "object_score": value.object_score,
-        "polarity": value.proposition.polarity,
-        "classification": value.classification,
-        "reason": value.reason,
     }
+
+
+def _exact_span_trace(value: BooleanEvidenceAssessment) -> dict[str, Any]:
+    source = evidence_item_text(value.item)
+    quote = value.span_text
+    matches = list(re.finditer(re.escape(quote), source)) if quote else []
+    if len(matches) != 1:
+        return {
+            "evidence_ref": "",
+            "exact_span_id": "",
+            "quote": quote,
+            "span_start": None,
+            "span_end": None,
+            "canonical_start": None,
+            "canonical_end": None,
+        }
+    start, end = matches[0].span()
+    canonical_base = _optional_int(value.item.get("canonical_start"))
+    canonical_start = canonical_base + start if canonical_base is not None else None
+    canonical_end = canonical_base + end if canonical_base is not None else None
+    ref_start = canonical_start if canonical_start is not None else start
+    ref_end = canonical_end if canonical_end is not None else end
+    evidence_ref = f"{value.evidence_id}#quote:{ref_start}:{ref_end}"
+    return {
+        "evidence_ref": evidence_ref,
+        "exact_span_id": evidence_ref,
+        "quote": quote,
+        "span_start": start,
+        "span_end": end,
+        "canonical_start": canonical_start,
+        "canonical_end": canonical_end,
+    }
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _assessment_evidence_ids(

@@ -4,12 +4,14 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from .boolean_authority_schema import BooleanAuthorityState
+
 TYPED_PROPOSITION_AUTHORITY_CONTRACT = "typed_proposition_authority.v1"
 
 
 @dataclass(frozen=True)
 class TypedPropositionAuthority:
-    state: str
+    state: BooleanAuthorityState
     reason: str
     answer_type: str
     question: str
@@ -70,7 +72,7 @@ def verified_authority(
     bindings: dict[str, tuple[str, ...]],
     atoms: list[dict[str, Any]],
     *,
-    state: str,
+    state: BooleanAuthorityState,
     reason: str,
     canonical_answer_polarity: str = "",
     query_plan_state_version: int,

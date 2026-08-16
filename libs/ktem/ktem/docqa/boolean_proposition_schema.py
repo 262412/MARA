@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .boolean_authority_schema import BooleanAuthorityState, candidate_authority_state
+from .evidence_identity import identity_of
+
 
 @dataclass(frozen=True)
 class BooleanProposition:
@@ -30,6 +33,7 @@ class BooleanProposition:
         return {
             "actor": self.actor,
             "predicate": self.predicate,
+            "relation": self.action,
             "action": self.action,
             "object": self.object,
             "arguments": list(self.arguments),
@@ -69,6 +73,31 @@ class BooleanEvidenceAssessment:
     span_text: str = ""
     actor_score: float = 0.0
     scope_score: float = 0.0
+    candidate_relevance: bool = False
+
+    @property
+    def evidence_id(self) -> str:
+        return identity_of(self.item).key
+
+    @property
+    def authority_state(self) -> BooleanAuthorityState:
+        return candidate_authority_state(self.candidate_relevance)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            **self.proposition.as_dict(),
+            "evidence_id": self.evidence_id,
+            "span_id": self.span_id,
+            "exact_span": self.span_text,
+            "classification": self.classification,
+            "relation_score": self.relation_score,
+            "object_score": self.object_score,
+            "actor_score": self.actor_score,
+            "scope_score": self.scope_score,
+            "candidate_relevance": self.candidate_relevance,
+            "authority_state": self.authority_state,
+            "reason": self.reason,
+        }
 
 
 @dataclass(frozen=True)

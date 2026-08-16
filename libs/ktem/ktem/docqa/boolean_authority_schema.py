@@ -1,7 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, TypeAlias
+
+BooleanAuthorityState: TypeAlias = Literal[
+    "missing",
+    "retrieved_unverified",
+    "verified_support",
+    "verified_conflict",
+]
+BOOLEAN_AUTHORITY_STATES: tuple[BooleanAuthorityState, ...] = (
+    "missing",
+    "retrieved_unverified",
+    "verified_support",
+    "verified_conflict",
+)
+
+
+def candidate_authority_state(relevant: bool) -> BooleanAuthorityState:
+    return "retrieved_unverified" if relevant else "missing"
 
 
 @dataclass(frozen=True)

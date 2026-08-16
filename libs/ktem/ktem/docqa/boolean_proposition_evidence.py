@@ -130,6 +130,30 @@ def _assess_proposition_span(
         span_text=span,
         actor_score=actor_score,
         scope_score=scope_score,
+        candidate_relevance=_candidate_relevance(
+            classification,
+            relation_score=relation_score,
+            object_score=object_score,
+            actor_score=actor_score,
+            scope_score=scope_score,
+        ),
+    )
+
+
+def _candidate_relevance(
+    classification: str,
+    *,
+    relation_score: float,
+    object_score: float,
+    actor_score: float,
+    scope_score: float,
+) -> bool:
+    return bool(
+        classification != "insufficient_scope"
+        and relation_score > 0
+        and object_score >= 0.6
+        and actor_score > 0
+        and scope_score > 0
     )
 
 
