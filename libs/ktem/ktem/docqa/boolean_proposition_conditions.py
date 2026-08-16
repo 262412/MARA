@@ -7,6 +7,47 @@ from .boolean_proposition_context import normalized_object_tokens
 from .boolean_proposition_tokens import _relation_surface_tokens
 from .boolean_relations import primary_boolean_relation
 
+_PROSPECTIVE_LANGUAGE_RE = re.compile(
+    r"\b(?:could|may|might|would|should|will)\b"
+    r"|\b(?:plan|planned|intend|intended)\s+to\b"
+    r"|\b(?:future|hypothetical|prospective|potential)\b",
+    re.IGNORECASE,
+)
+
+
+def non_authoritative_proposition_span(question: str, span: str) -> bool:
+    """Bind prospective language to the target relation before rejecting it."""
+
+    if _PROSPECTIVE_LANGUAGE_RE.search(str(question or "")):
+        return False
+    relation = primary_boolean_relation(question)
+    surfaces = sorted(_relation_surface_tokens(relation), key=len, reverse=True)
+    if not relation or not surfaces:
+        return False
+    target = "|".join(re.escape(value) for value in surfaces)
+    for match in re.finditer(rf"\b(?:{target})\b", str(span or ""), re.IGNORECASE):
+        prefix = str(span or "")[max(0, match.start() - 120) : match.start()]
+        if re.search(
+            r"\b(?:could|may|might|would|should|will)\s+" r"(?:[a-z][a-z-]*\s+){0,3}$",
+            prefix,
+            re.IGNORECASE,
+        ):
+            return True
+        if re.search(
+            r"\b(?:plan|planned|intend|intended)\s+to\s+" r"(?:[a-z][a-z-]*\s+){0,3}$",
+            prefix,
+            re.IGNORECASE,
+        ):
+            return True
+        if re.search(
+            r"\b(?:future|hypothetical|prospective|potential)\b"
+            r"(?:\s+[a-z][a-z-]*){0,6}\s+$",
+            prefix,
+            re.IGNORECASE,
+        ):
+            return True
+    return False
+
 
 def containment_marker_polarity(question: str, text: str) -> bool | None:
     """Bind ``subject with/without object`` to an asked containment frame."""

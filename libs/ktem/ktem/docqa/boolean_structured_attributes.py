@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
+from .boolean_evidence_text import _nearest_heading
 from .boolean_structured_schema import StructuredBooleanResolution
 from .boolean_structured_text import _concept_stems, _sentence_windows
 
@@ -354,14 +356,15 @@ def _derogatory_label_analysis_resolutions(
         current_focus = re.search(
             r"\b(?:primary|main)\s+focus\s+of\s+this\s+study\b"
             r"[^.!?]{0,160}\b(?:compar|analy[sz]|study)\w*\b"
-            r"[^.!?]{0,120}\b(?:labels?|words?|terms?)\b",
+            r"[^.!?]{0,120}\b(?:labels?|words?|terms?)\b[^.!?]{0,100}",
             lowered,
         )
-        derogatory_label = re.search(
-            r"\b(?:derogatory|offensive|outdated)\b",
-            lowered,
-        )
-        if current_focus and derogatory_label:
+        if current_focus and _prospective_derogatory_analysis_focus(
+            current_focus.group(0)
+        ):
+            continue
+        labels = _explicit_focus_labels(current_focus.group(0)) if current_focus else ()
+        if current_focus and _named_derogatory_label_statement(window, labels):
             output.append(
                 StructuredBooleanResolution(
                     polarity="yes",
@@ -371,3 +374,103 @@ def _derogatory_label_analysis_resolutions(
                 )
             )
     return tuple(output)
+
+
+def derogatory_label_analysis_scope_span(reason: str, quote: str) -> str:
+    """Return the exact local sentence that owns the structured proposition."""
+
+    if reason != "explicit_current_derogatory_label_analysis":
+        return ""
+    for statement in re.split(r"(?<=[.!?])\s+|(?:\r?\n)+", str(quote or "")):
+        if not re.search(
+            r"\b(?:primary|main)\s+focus\s+of\s+this\s+study\b",
+            statement,
+            flags=re.IGNORECASE,
+        ):
+            continue
+        if _prospective_derogatory_analysis_focus(statement):
+            return ""
+        if statement.lstrip().startswith(("'", '"', "‘", "“")):
+            return ""
+        return statement.strip()
+    return ""
+
+
+def structured_scope_barrier(item: dict[str, Any], quote: str) -> bool:
+    metadata = item.get("metadata")
+    nested = metadata if isinstance(metadata, dict) else {}
+    explicit_scope = " ".join(
+        str(container.get(field) or "")
+        for container in (item, nested)
+        for field in ("section_id", "section_title", "section", "heading")
+    )
+    nearest_heading = _nearest_heading(item, quote)
+    return bool(
+        re.search(
+            r"\b(?:related\s+work|prior\s+work|previous\s+work|future\s+work|"
+            r"limitations?)\b",
+            " ".join((explicit_scope, nearest_heading)).replace("_", " "),
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _prospective_derogatory_analysis_focus(statement: str) -> bool:
+    relation = r"(?:compar|analy[sz]|inspect|study)\w*"
+    modal = r"(?:will|would|could|may|might|plan(?:n[e]d)?|intend(?:ed)?)"
+    return bool(
+        re.search(
+            rf"\b(?:primary|main)\s+focus\s+of\s+this\s+study\b"
+            rf"[^.!?]{{0,80}}\b{modal}\b[^.!?]{{0,40}}\b{relation}\b",
+            statement,
+            flags=re.IGNORECASE,
+        )
+        or re.search(
+            rf"\b(?:we|this\s+study)\s+{modal}\b" rf"[^.!?]{{0,30}}\b{relation}\b",
+            statement,
+            flags=re.IGNORECASE,
+        )
+        or re.search(
+            r"\b(?:future|prospective|planned)\s+"
+            r"(?:work|study|analysis|evaluation)\b",
+            statement,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _explicit_focus_labels(focus: str) -> tuple[str, ...]:
+    patterns = (
+        r"\b(?:labels?|words?|terms?)\s+(?P<left>[a-z][a-z-]*)\s+"
+        r"(?:and|or)\s+(?P<right>[a-z][a-z-]*)\b",
+        r"\b(?:labels?|words?|terms?)\b[^.!?]{0,40}"
+        r"\b(?:specifically|including|such\s+as)\s+"
+        r"(?P<left>[a-z][a-z-]*)\s+(?:and|or)\s+"
+        r"(?P<right>[a-z][a-z-]*)\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, str(focus or ""), flags=re.IGNORECASE)
+        if match is not None:
+            return tuple(
+                dict.fromkeys(
+                    (match.group("left").casefold(), match.group("right").casefold())
+                )
+            )
+    return ()
+
+
+def _named_derogatory_label_statement(
+    window: str,
+    labels: tuple[str, ...],
+) -> bool:
+    if not labels:
+        return False
+    for statement in re.split(r"(?<=[.!?])\s+|(?:\r?\n)+", str(window or "")):
+        lowered = statement.casefold()
+        if re.search(r"\b(?:prior|previous)\s+(?:work|stud(?:y|ies))\b", lowered):
+            continue
+        if not re.search(r"\b(?:derogatory|offensive|outdated)\b", lowered):
+            continue
+        if any(re.search(rf"\b{re.escape(label)}\b", lowered) for label in labels):
+            return True
+    return False
