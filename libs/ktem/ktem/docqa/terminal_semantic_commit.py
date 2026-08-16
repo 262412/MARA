@@ -23,6 +23,7 @@ TERMINAL_OUTCOMES = frozenset(
         "cancelled",
     }
 )
+OPERATIONAL_TERMINAL_OUTCOMES = frozenset({"execution_failed", "timeout", "cancelled"})
 
 _V2_FIELDS = frozenset(
     {
@@ -121,11 +122,19 @@ def build_terminal_semantic_commit(
     rendered_answer = str(
         answer if presentation_answer is None else presentation_answer
     )
-    authoritative_evidence = tuple(_authoritative_evidence(evidence_bundle))
-    citations = tuple(
-        str(value).strip()
-        for value in verify.get("verified_citations") or []
-        if str(value).strip()
+    authoritative_evidence = (
+        ()
+        if resolved_outcome in OPERATIONAL_TERMINAL_OUTCOMES
+        else tuple(_authoritative_evidence(evidence_bundle))
+    )
+    citations = (
+        ()
+        if resolved_outcome in OPERATIONAL_TERMINAL_OUTCOMES
+        else tuple(
+            str(value).strip()
+            for value in verify.get("verified_citations") or []
+            if str(value).strip()
+        )
     )
     answer_status = "answered" if resolved_outcome == "answered" else "abstained"
     unsigned = {
@@ -244,6 +253,7 @@ def _valid_v3_projection(commit: dict[str, Any]) -> bool:
         and isinstance(commit.get("presentation_answer"), str)
         and isinstance(commit.get("outcome_reason"), str)
         and _valid_projection_values(commit)
+        and _valid_outcome_authority(outcome, commit)
     )
 
 
@@ -259,6 +269,12 @@ def _valid_projection_values(commit: dict[str, Any]) -> bool:
         and isinstance(citations, list)
         and all(isinstance(item, str) for item in citations)
     )
+
+
+def _valid_outcome_authority(outcome: str, commit: dict[str, Any]) -> bool:
+    if outcome not in OPERATIONAL_TERMINAL_OUTCOMES:
+        return True
+    return not commit["authoritative_evidence"] and not commit["citations"]
 
 
 def _valid_projection_hash(value: Any) -> bool:

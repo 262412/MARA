@@ -146,6 +146,64 @@ def deadline_exhausted_result(
         ABSTAIN_MESSAGE,
         trace,
         stage_timings,
+        terminal_outcome="timeout",
+        terminal_outcome_reason="route_deadline_exhausted",
+    )
+
+
+def operational_failure_result(
+    request: Any,
+    decision: ControllerDecision | None,
+    workflow_plan: dict[str, Any],
+    error: Exception,
+    failure_stage: str,
+    stage_timings: PipelineStageTimings,
+) -> RouteExecutionResult:
+    reason = f"{failure_stage}_failed"
+    decision = decision or ControllerDecision(
+        route="abstain",
+        legacy_route="abstain",
+        policy="operational_failure",
+        controller_mode="runtime",
+        requires_retrieval=False,
+        reason=reason,
+    )
+    bundle = getattr(request, "route_last_evidence_bundle", None)
+    if not isinstance(bundle, EvidenceBundle):
+        bundle = EvidenceBundle(route=decision.legacy_route, items=[], metadata={})
+    retrieve_decision = RetrieveDecision(status="error", reason=reason, retry=False)
+    verify_decision = VerifyDecision(
+        mode=str(getattr(request, "verification_mode", "") or "off"),
+        status="execution_failed",
+        reason=reason,
+        action="error",
+    )
+    guardrail = GuardrailDecision(
+        status="execution_failed",
+        action="error",
+        reason=reason,
+    )
+    trace = [
+        {
+            "stage": "terminal_outcome",
+            "outcome": "execution_failed",
+            "reason": reason,
+            "error_type": type(error).__name__,
+        }
+    ]
+    return result(
+        request,
+        decision,
+        retrieve_decision,
+        verify_decision,
+        guardrail,
+        bundle,
+        workflow_plan,
+        ABSTAIN_MESSAGE,
+        trace,
+        stage_timings,
+        terminal_outcome="execution_failed",
+        terminal_outcome_reason=reason,
     )
 
 
@@ -204,6 +262,8 @@ def result(
     stage_timings: PipelineStageTimings | None = None,
     *,
     raw_generated_answer: str | None = None,
+    terminal_outcome: str | None = None,
+    terminal_outcome_reason: str = "",
 ) -> RouteExecutionResult:
     trace_prefix = [*route_budget_trace(request), *list(trace_prefix or [])]
     bundle = with_verification_evidence(bundle, verify_decision, request)
@@ -221,6 +281,8 @@ def result(
         guardrail_decision,
         bundle,
         raw_generated_answer=raw_generated_answer,
+        terminal_outcome=terminal_outcome,
+        terminal_outcome_reason=terminal_outcome_reason,
     )
     prefix, suffix = _partition_trace(trace_prefix)
     return RouteExecutionResult(
