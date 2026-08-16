@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ktem.docqa.terminal_semantic_commit import build_terminal_semantic_commit
+
 from scripts.slurm.validate_contract_smoke import QASPER_HARD_GATES
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -104,6 +106,27 @@ def _write_run(
     )
 
 
+def _attach_terminal_commit(prediction: dict[str, Any]) -> None:
+    terminal_commit = build_terminal_semantic_commit(
+        "yes",
+        {
+            "status": "supported",
+            "action": "return",
+            "canonical_answer_polarity": "yes",
+            "verified_citations": ["span:paper:s1"],
+        },
+        {"status": "ok", "action": "return"},
+        {
+            "items": [_evidence()],
+            "metadata": {"verified_claim_support_evidence": [_evidence()]},
+        },
+        presentation_answer="yes",
+    ).as_dict()
+    prediction["engine_terminal_state"]["terminal_semantic_commit"] = terminal_commit
+    prediction["engine_terminal_commit"] = terminal_commit
+    prediction["terminal_semantic_commit"] = terminal_commit
+
+
 def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
     run_dir = tmp_path / "run"
     requirements = list(QASPER_REQUIREMENTS)
@@ -127,6 +150,7 @@ def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
             "post_engine_answerability_llm_call_count": 0,
         }
     )
+    _attach_terminal_commit(first)
     first["evidence_metadata"].update(
         {
             "qasper_answerability": {

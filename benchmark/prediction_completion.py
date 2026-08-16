@@ -24,6 +24,10 @@ from .task_answer_contracts import (
     apply_task_answer_contract,
     synchronize_terminal_answer_state,
 )
+from .terminal_outcome_contract import (
+    apply_benchmark_outcome_classification,
+    apply_terminal_outcome_record,
+)
 from .verifier_observability import prediction_verifier_observability
 
 
@@ -50,6 +54,7 @@ def complete_prediction(
         dataset_name=dataset_name,
         benchmark_role=benchmark_role,
     )
+    apply_terminal_outcome_record(prediction)
     normalize_operational_fields(prediction)
     add_amortized_preparation_timing(
         prediction,
@@ -196,6 +201,7 @@ def _score_and_diagnose(
     )
     prediction["diagnostics"] = prediction_diagnostics(prediction)
     prediction["verifier_observability"] = prediction_verifier_observability(prediction)
+    apply_benchmark_outcome_classification(prediction)
     add_prediction_taxonomy(prediction)
     add_mara_oriented_metrics(prediction, dataset_name=dataset_name)
     prediction["stage_metrics"] = prediction_stage_metrics(prediction)

@@ -35,7 +35,9 @@ from .summary_records import (
     adapter_metadata_summary,
     benchmark_identity_summary,
     per_example_metric_records,
+    route_role,
 )
+from .terminal_outcome_contract import terminal_outcome_route_fields
 from .timing_summary import route_timing_fields, timing_summary
 from .verification_metrics import verification_summary
 from .verifier_observability import (
@@ -560,13 +562,14 @@ def _route_metric_table(
                     route_predictions, "unsupported_claim_rate"
                 ),
                 "avg_abstention_rate": _avg_metric(route_predictions, "abstained"),
+                **terminal_outcome_route_fields(route_predictions),
                 **route_verifier_observability_fields(route_predictions),
                 "avg_multimodal_answer_support": _avg_metric(
                     route_predictions, "multimodal_answer_support"
                 ),
                 **route_timing_fields(route_predictions),
                 **stage_metric_summary(route_predictions),
-                "benchmark_role": _route_role(route_predictions),
+                "benchmark_role": route_role(route_predictions),
             }
         )
     return rows
@@ -590,11 +593,3 @@ def _role_predictions(
         for prediction in predictions
         if str(prediction.get("benchmark_role") or "qa_quality") in roles
     ]
-
-
-def _route_role(predictions: list[dict[str, Any]]) -> str:
-    for prediction in predictions:
-        role = str(prediction.get("benchmark_role") or "").strip()
-        if role:
-            return role
-    return "qa_quality"

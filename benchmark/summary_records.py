@@ -76,6 +76,14 @@ def adapter_metadata_summary(
     }
 
 
+def route_role(predictions: list[dict[str, Any]]) -> str:
+    for prediction in predictions:
+        role = str(prediction.get("benchmark_role") or "").strip()
+        if role:
+            return role
+    return "qa_quality"
+
+
 def _observed_values(predictions: list[dict[str, Any]], key: str) -> list[str]:
     values: list[str] = []
     for prediction in predictions:

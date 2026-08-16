@@ -116,6 +116,9 @@ def _derive_retrieval_traces(predictions: list[dict[str, Any]]) -> list[dict[str
             "claim_verification",
             "verifier_observability",
             "presentation",
+            "engine_terminal_state",
+            "engine_terminal_commit",
+            "terminal_semantic_commit",
         ):
             if key in prediction:
                 trace[key] = prediction[key]
@@ -127,6 +130,16 @@ def _derive_retrieval_traces(predictions: list[dict[str, Any]]) -> list[dict[str
             trace["cache"] = prediction["cache"]
         if "cost" in prediction:
             trace["cost"] = prediction["cost"]
+        for key in (
+            "engine_terminal_answer",
+            "engine_terminal_projection_hash",
+            "terminal_outcome",
+            "terminal_outcome_reason",
+            "terminal_outcome_classification",
+            "terminal_outcome_contract_violation",
+        ):
+            if key in prediction:
+                trace[key] = prediction[key]
         traces.append(trace)
     return traces
 
@@ -147,6 +160,19 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         f"- Documents: `{summary.get('num_documents')}`",
     ]
     lines.extend(headline_score_lines(summary))
+    outcome_counts = summary.get("terminal_outcome_counts")
+    if isinstance(outcome_counts, dict):
+        lines.append(
+            "- Terminal outcomes (answered/true abstention/false abstention/"
+            "execution failed/timeout/cancelled/unclassified): "
+            f"`{outcome_counts.get('answered', 0)}/"
+            f"{outcome_counts.get('true_abstention', 0)}/"
+            f"{outcome_counts.get('false_abstention', 0)}/"
+            f"{outcome_counts.get('execution_failed', 0)}/"
+            f"{outcome_counts.get('timeout', 0)}/"
+            f"{outcome_counts.get('cancelled', 0)}/"
+            f"{outcome_counts.get('unclassified', 0)}`"
+        )
     lines.extend(
         [
             f"- Diagnostic EM: `{summary.get('avg_em')}`",

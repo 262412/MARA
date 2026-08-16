@@ -13,6 +13,7 @@ from .external_adapter_summary import (
     external_adapter_summary_metadata_by_route,
 )
 from .manifest import load_manifest
+from .operational_terminal_outcome import operational_terminal_fields
 from .performance_timing import apply_engine_failure_diagnostics, measure_duration
 from .prediction_completion import complete_prediction
 from .research_adapters import research_adapter_metric_metadata, route_backend_metadata
@@ -240,6 +241,12 @@ def _error_prediction(
     route_config: BenchmarkConfig,
     exc: Exception,
 ) -> dict[str, Any]:
+    error_type = _error_type(exc)
+    outcome = "timeout" if error_type == "route_timeout" else "execution_failed"
+    terminal_fields = operational_terminal_fields(
+        outcome=outcome,
+        reason=error_type,
+    )
     return {
         "example_id": example.example_id,
         "document_id": document.document_id,
@@ -297,10 +304,11 @@ def _error_prediction(
         "expected_formats": example.expected_formats,
         "expected_guardrails": example.expected_guardrails,
         "error": str(exc),
-        "error_type": _error_type(exc),
+        "error_type": error_type,
         "route_timeout_seconds": route_timeout_seconds(
             exc, route_config.route_timeout_seconds
         ),
+        **terminal_fields,
     }
 
 
@@ -353,6 +361,26 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "route_timeout_seconds": item.get("route_timeout_seconds"),
         "engine_terminal_commit": item.get("engine_terminal_commit", {}),
         "terminal_semantic_commit": item.get("terminal_semantic_commit", {}),
+        "engine_terminal_answer": item.get("engine_terminal_answer", ""),
+        "engine_terminal_state": item.get("engine_terminal_state", {}),
+        "engine_verify_decision": item.get("engine_verify_decision", {}),
+        "engine_terminal_guardrail_decision": item.get(
+            "engine_terminal_guardrail_decision", {}
+        ),
+        "engine_terminal_evidence_bundle": item.get(
+            "engine_terminal_evidence_bundle", {}
+        ),
+        "engine_terminal_projection_hash": item.get(
+            "engine_terminal_projection_hash", ""
+        ),
+        "terminal_outcome": item.get("terminal_outcome", ""),
+        "terminal_outcome_reason": item.get("terminal_outcome_reason", ""),
+        "terminal_outcome_classification": item.get(
+            "terminal_outcome_classification", ""
+        ),
+        "terminal_outcome_contract_violation": item.get(
+            "terminal_outcome_contract_violation", False
+        ),
     }
 
 

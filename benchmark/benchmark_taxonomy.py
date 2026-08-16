@@ -6,6 +6,7 @@ from typing import Any
 FAILURE_TAXONOMY_TYPES = (
     "answer_mismatch",
     "timeout",
+    "cancelled",
     "backend_unavailable",
     "empty_retrieval",
     "false_abstention",
@@ -48,6 +49,8 @@ def add_prediction_taxonomy(prediction: dict[str, Any]) -> None:
 def classify_failure_taxonomy(prediction: dict[str, Any]) -> str:
     if _is_timeout(prediction):
         return "timeout"
+    if _is_cancelled(prediction):
+        return "cancelled"
     if _is_backend_unavailable(prediction):
         return "backend_unavailable"
     if _is_execution_error(prediction):
@@ -209,6 +212,8 @@ def _prediction_routing_taxonomy(prediction: dict[str, Any]) -> str:
 
 
 def _is_timeout(prediction: dict[str, Any]) -> bool:
+    if str(prediction.get("terminal_outcome") or "") == "timeout":
+        return True
     error_type = str(prediction.get("error_type") or "").strip()
     diagnostics = dict(prediction.get("diagnostics") or {})
     return (
@@ -221,9 +226,11 @@ def _is_backend_unavailable(prediction: dict[str, Any]) -> bool:
     statuses = [
         prediction.get("backend_status"),
         prediction.get("route_backend_status"),
-        (prediction.get("backend_metadata") or {}).get("backend_status")
-        if isinstance(prediction.get("backend_metadata"), dict)
-        else None,
+        (
+            (prediction.get("backend_metadata") or {}).get("backend_status")
+            if isinstance(prediction.get("backend_metadata"), dict)
+            else None
+        ),
     ]
     if any(
         str(status or "").strip().lower() in _BACKEND_UNAVAILABLE_STATUSES
@@ -246,7 +253,13 @@ def _is_backend_unavailable(prediction: dict[str, Any]) -> bool:
 
 
 def _is_execution_error(prediction: dict[str, Any]) -> bool:
+    if str(prediction.get("terminal_outcome") or "") == "execution_failed":
+        return True
     return bool(str(prediction.get("error") or "").strip())
+
+
+def _is_cancelled(prediction: dict[str, Any]) -> bool:
+    return str(prediction.get("terminal_outcome") or "") == "cancelled"
 
 
 def _is_empty_retrieval(prediction: dict[str, Any]) -> bool:
