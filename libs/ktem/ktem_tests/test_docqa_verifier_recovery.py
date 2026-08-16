@@ -113,7 +113,7 @@ def test_controller_auto_rebinds_before_bounded_route_switch():
     assert transition["authority_state_after"] == "verified_support"
 
 
-def test_controller_auto_switches_route_when_no_relevant_proposition_exists():
+def test_controller_auto_stops_when_recovery_repeats_the_same_proposition_gap():
     calls: list[tuple[str, int]] = []
 
     def retrieve(request: DocQARequest, decision: Any) -> dict[str, Any]:
@@ -134,15 +134,12 @@ def test_controller_auto_switches_route_when_no_relevant_proposition_exists():
         generate=lambda *_args: "yes",
     )
 
-    assert calls == [("doc_text", 1), ("doc_text", 2), ("hybrid", 1)]
-    assert result.answer == "yes"
-    [transition] = _stage_events(result, "route_switch")
-    assert transition["from_route"] == "doc_text"
-    assert transition["to_route"] == "hybrid"
-    assert transition["failure_type"] == "retrieval_adequacy_failure"
-    assert transition["recovered_evidence_ids"]
-    assert transition["reverification_status"] == "supported"
-    assert transition["reverification_evidence_ids"]
+    assert calls == [("doc_text", 1), ("doc_text", 2)]
+    assert result.answer == ABSTAIN_MESSAGE
+    assert not _stage_events(result, "route_switch")
+    [recovery] = _stage_events(result, "targeted_retrieval")
+    assert recovery["recovery_outcome"] == "no_progress"
+    assert recovery["stop_reason"] == "recovery_no_progress"
 
 
 def test_crag_guarded_records_critic_retrieval_rebind_and_reverify_once():
