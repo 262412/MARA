@@ -12,6 +12,11 @@ from .evidence import EvidenceBundle
 from .evidence_identity import identity_of
 from .qasper_relation_frame import question_relation_frame
 from .query_planning import ensure_request_query_plan, request_planning_question
+from .recovery_progress import (
+    semantic_progress_evidence_ids,
+    semantic_progress_slot_states,
+    semantic_recovery_has_progress,
+)
 from .route_budget import route_budget_metadata
 
 
@@ -156,12 +161,22 @@ def typed_retrieval_recovery_trace(
     after_ids = _bundle_evidence_ids(recovered_bundle)
     before_slots = _typed_slot_states(initial_bundle)
     after_slots = _typed_slot_states(recovered_bundle)
+    before_semantic_ids = semantic_progress_evidence_ids(initial_bundle)
+    after_semantic_ids = semantic_progress_evidence_ids(recovered_bundle)
+    before_semantic_slots = semantic_progress_slot_states(
+        initial_bundle,
+        before_slots,
+    )
+    after_semantic_slots = semantic_progress_slot_states(
+        recovered_bundle,
+        after_slots,
+    )
     answer_relation_required = _answer_relation_required(
         ensure_request_query_plan(request)
     )
     stop_reason = str(recovered_bundle.metadata.get("retrieval_stop_reason") or "")
     recovery_outcome = "retrieval_evidence_improved"
-    if not stop_reason and before_ids == after_ids and before_slots == after_slots:
+    if not typed_retrieval_recovery_has_progress(initial_bundle, recovered_bundle):
         stop_reason = "recovery_no_progress"
         recovery_outcome = "no_progress"
     elif stop_reason:
@@ -188,14 +203,37 @@ def typed_retrieval_recovery_trace(
         "removed_evidence_ids": [
             value for value in before_ids if value not in after_ids
         ],
+        "semantic_evidence_ids_before": before_semantic_ids,
+        "semantic_evidence_ids_after": after_semantic_ids,
+        "new_semantic_evidence_ids": [
+            value for value in after_semantic_ids if value not in before_semantic_ids
+        ],
+        "removed_semantic_evidence_ids": [
+            value for value in before_semantic_ids if value not in after_semantic_ids
+        ],
         "slot_states_before": before_slots,
         "slot_states_after": after_slots,
         "slot_state_changed": before_slots != after_slots,
+        "semantic_slot_states_before": before_semantic_slots,
+        "semantic_slot_states_after": after_semantic_slots,
+        "semantic_slot_state_changed": (before_semantic_slots != after_semantic_slots),
         "retrieval_status": retrieve_decision.status,
         "recovery_outcome": recovery_outcome,
         "stop_reason": stop_reason,
         **route_budget_metadata(request),
     }
+
+
+def typed_retrieval_recovery_has_progress(
+    initial_bundle: EvidenceBundle,
+    recovered_bundle: EvidenceBundle,
+) -> bool:
+    return semantic_recovery_has_progress(
+        initial_bundle,
+        recovered_bundle,
+        _typed_slot_states(initial_bundle),
+        _typed_slot_states(recovered_bundle),
+    )
 
 
 def _answer_relation_required(plan: Any) -> bool:
