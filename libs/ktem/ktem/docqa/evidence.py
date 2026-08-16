@@ -36,6 +36,7 @@ from .required_slot_selection import (
     required_slot_candidate_limit,
     required_slot_shortlist,
 )
+from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 from .source_identity_crosswalk import canonicalize_evidence_sources
 
 MAX_RERANK_CANDIDATES = 80
@@ -54,6 +55,7 @@ class _EvidenceStages:
     page_ranking_trace: dict[str, Any] | None
     fusion_trace: dict[str, Any] | None
     reranker_trace: dict[str, Any] | None
+    assessments: SelectionAssessmentSnapshot
 
 
 def build_evidence_bundle(
@@ -71,7 +73,9 @@ def build_evidence_bundle(
         query_plan,
     )
     deduped = stages.selection_candidates
-    deduped, planning_metadata = select_planned_evidence(request, deduped)
+    deduped, planning_metadata = select_planned_evidence(
+        request, deduped, assessments=stages.assessments
+    )
     metadata = dict(evidence_metadata)
     metadata["schema_version"] = EVIDENCE_BUNDLE_SCHEMA_VERSION
     metadata["dedupe_trace"] = stages.dedupe_trace
@@ -80,9 +84,9 @@ def build_evidence_bundle(
     metadata["candidate_evidence"] = stages.canonical_candidates
     metadata["candidate_ranked_evidence"] = stages.ranked_candidates
     metadata["candidate_ranking_contract"] = "global_ranked_v1"
-    metadata[
-        "pre_rerank_required_slot_candidates_restored"
-    ] = stages.required_slot_restored
+    metadata["pre_rerank_required_slot_candidates_restored"] = (
+        stages.required_slot_restored
+    )
     metadata["reranker_input_evidence"] = stages.reranker_input
     metadata["reranker_input_contract"] = "required_slot_restored.v1"
     if route == "hybrid":
@@ -130,6 +134,7 @@ def _build_evidence_stages(
 ) -> _EvidenceStages:
     deduped, dedupe_trace = canonicalize_and_dedupe_evidence(items)
     canonical_candidates = list(deduped)
+    assessments = SelectionAssessmentSnapshot.build(query_plan, canonical_candidates)
     planning_question = request_planning_question(request)
     fusion_trace = None
     if route == "hybrid":
@@ -148,6 +153,7 @@ def _build_evidence_stages(
         ranked_candidates,
         query_plan,
         candidate_limit=reranker_candidate_limit,
+        assessments=assessments,
     )
     reranker_scored = reranker_input
     reranker_trace = None
@@ -172,6 +178,7 @@ def _build_evidence_stages(
         reranked,
         reranker_input,
     )
+    assessments = assessments.expanded(query_plan, selection_candidates)
     page_ranking_trace = None
     if route == "hybrid":
         selection_candidates, page_ranking_trace = select_page_first_evidence(
@@ -191,6 +198,7 @@ def _build_evidence_stages(
         page_ranking_trace=page_ranking_trace,
         fusion_trace=fusion_trace,
         reranker_trace=reranker_trace,
+        assessments=assessments,
     )
 
 

@@ -8,6 +8,7 @@ from .boolean_proposition_conditions import non_authoritative_proposition_span
 from .boolean_proposition_evidence import (
     _assessment_rank,
     _proposition_content_tokens,
+    boolean_proposition_authority_level,
     classify_boolean_evidence_candidates,
 )
 from .boolean_proposition_tokens import _content_tokens
@@ -21,6 +22,7 @@ def boolean_proposition_candidate_score(
     item: dict[str, Any],
     *,
     metric: str = "",
+    classified_candidates: tuple[Any, ...] | None = None,
 ) -> float:
     """Rank local proposition candidates without asserting authority."""
 
@@ -44,10 +46,14 @@ def boolean_proposition_candidate_score(
         return quality_score
     if structured_boolean_authority(proposition_question, candidate_item) is not None:
         return 3.0
-    assessments = classify_boolean_evidence_candidates(
-        proposition_question,
-        "",
-        candidate_item,
+    assessments = (
+        classified_candidates
+        if classified_candidates is not None
+        else classify_boolean_evidence_candidates(
+            proposition_question,
+            "",
+            candidate_item,
+        )
     )
     compatible = _compatible_candidates(
         assessments,
@@ -70,6 +76,37 @@ def boolean_proposition_candidate_score(
         + assessment.object_score
         + (0.25 * context_coverage)
     )
+
+
+def boolean_proposition_selection_assessment(
+    question: str,
+    item: dict[str, Any],
+    *,
+    metric: str = "",
+) -> tuple[float, str]:
+    """Compute selection relevance and authority from one typed classification."""
+
+    proposition_question = semantic_boolean_proposition_question(
+        _normalize_requirement_terms(metric or question)
+    )
+    candidate_item = _normalized_requirement_item(item)
+    classified = classify_boolean_evidence_candidates(
+        proposition_question,
+        "",
+        candidate_item,
+    )
+    score = boolean_proposition_candidate_score(
+        question,
+        candidate_item,
+        metric=metric,
+        classified_candidates=classified,
+    )
+    authority_level = boolean_proposition_authority_level(
+        proposition_question,
+        candidate_item,
+        classified_candidates=classified,
+    )
+    return score, authority_level
 
 
 def _quality_candidate_score(

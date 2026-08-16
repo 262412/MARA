@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import math
-import re
 from typing import Any
 
 from .evidence_identity import evidence_aliases, identity_of
+from .evidence_selection_similarity import evidence_item_text as _item_text
+from .evidence_selection_similarity import selection_similarity as _similarity
+from .evidence_selection_similarity import selection_tokens as _tokens
 from .evidence_selection_trace import build_selection_trace
 from .evidence_set_objective import marginal_set_gain
 from .evidence_structure import structure_coverage_context
@@ -12,7 +13,8 @@ from .execution_slot_lineage import (
     is_atomic_operand_candidate,
     linked_dimension_candidate,
 )
-from .query_planning import QueryPlan, bind_evidence_slots, retrieval_budget
+from .query_evidence_binding import bind_evidence_slots
+from .query_planning import QueryPlan, retrieval_budget
 from .required_slot_selection import (
     required_slot_candidate_limit,
     required_slot_context_quota,
@@ -20,6 +22,7 @@ from .required_slot_selection import (
     slot_requires_selection,
 )
 from .required_slot_selection import slot_score as _slot_score
+from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 from .selection_query_anchors import anchor_coverage, phrase_bigram_coverage
 from .selection_score_normalization import (
     normalized_selection_scores,
@@ -31,8 +34,6 @@ from .selection_values import string_values as _string_values
 MMR_LAMBDA = 0.7
 RERANK_CANDIDATE_LIMIT = 30
 
-_TOKEN_RE = re.compile(r"[\w.%$€£¥-]+", re.UNICODE)
-
 
 def select_evidence_for_plan(
     query: str,
@@ -40,55 +41,27 @@ def select_evidence_for_plan(
     plan: QueryPlan,
     *,
     mmr_lambda: float = MMR_LAMBDA,
+    assessments: SelectionAssessmentSnapshot | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], QueryPlan]:
-    candidates, restored_required, budget = _selection_context(items, plan)
+    assessments = assessments or SelectionAssessmentSnapshot.build(plan, items)
+    assessments = assessments.expanded(plan, items)
+    candidates, restored_required, budget = _selection_context(
+        items,
+        plan,
+        assessments=assessments,
+    )
     selected: list[dict[str, Any]] = []
     selected_ids: set[str] = set()
 
-    _seed_unplanned_selection(query, candidates, plan, selected, selected_ids)
-    _select_required_slot_evidence(
+    _select_plan_requirements(
         query,
         candidates,
         plan,
         selected,
         selected_ids,
         max_pages=budget["max_pages"],
-        phase="execution_operand",
+        assessments=assessments,
     )
-    _select_execution_parents(
-        query,
-        candidates,
-        plan,
-        selected,
-        selected_ids,
-        max_pages=budget["max_pages"],
-    )
-    _select_execution_dimensions(
-        candidates,
-        plan,
-        selected,
-        selected_ids,
-        max_pages=budget["max_pages"],
-    )
-    _select_required_slot_evidence(
-        query,
-        candidates,
-        plan,
-        selected,
-        selected_ids,
-        max_pages=budget["max_pages"],
-        phase="dimension",
-    )
-    _select_required_slot_evidence(
-        query,
-        candidates,
-        plan,
-        selected,
-        selected_ids,
-        max_pages=budget["max_pages"],
-        phase="factual",
-    )
-
     context = _complete_context_selection(
         query,
         candidates,
@@ -97,8 +70,9 @@ def select_evidence_for_plan(
         selected_ids,
         budget=budget,
         mmr_lambda=mmr_lambda,
+        assessments=assessments,
     )
-    bound = bind_evidence_slots(plan, selected)
+    bound = bind_evidence_slots(plan, selected, assessments=assessments)
     trace = build_selection_trace(
         candidates,
         selected,
@@ -108,8 +82,60 @@ def select_evidence_for_plan(
             **context,
             "required_slot_candidates_restored": restored_required,
         },
+        assessments=assessments,
     )
     return [without_selection_annotations(item) for item in selected], trace, bound
+
+
+def _select_plan_requirements(
+    query: str,
+    candidates: list[dict[str, Any]],
+    plan: QueryPlan,
+    selected: list[dict[str, Any]],
+    selected_ids: set[str],
+    *,
+    max_pages: int,
+    assessments: SelectionAssessmentSnapshot,
+) -> None:
+    _seed_unplanned_selection(query, candidates, plan, selected, selected_ids)
+    _select_required_slot_evidence(
+        query,
+        candidates,
+        plan,
+        selected,
+        selected_ids,
+        max_pages=max_pages,
+        phase="execution_operand",
+        assessments=assessments,
+    )
+    _select_execution_parents(
+        query,
+        candidates,
+        plan,
+        selected,
+        selected_ids,
+        max_pages=max_pages,
+        assessments=assessments,
+    )
+    _select_execution_dimensions(
+        candidates,
+        plan,
+        selected,
+        selected_ids,
+        max_pages=max_pages,
+        assessments=assessments,
+    )
+    for phase in ("dimension", "factual"):
+        _select_required_slot_evidence(
+            query,
+            candidates,
+            plan,
+            selected,
+            selected_ids,
+            max_pages=max_pages,
+            phase=phase,
+            assessments=assessments,
+        )
 
 
 def _complete_context_selection(
@@ -121,6 +147,7 @@ def _complete_context_selection(
     *,
     budget: dict[str, int],
     mmr_lambda: float,
+    assessments: SelectionAssessmentSnapshot,
 ) -> dict[str, Any]:
     page_modality_count = 0
     if plan.constraints.get("requires_visual") or plan.question_type == "visual":
@@ -157,6 +184,7 @@ def _complete_context_selection(
         max_items=budget["max_items"],
         max_pages=budget["max_pages"],
         mmr_lambda=mmr_lambda,
+        assessments=assessments,
     )
     return {
         "continuation_expansion_count": continuation_count,
@@ -177,6 +205,7 @@ def _select_execution_parents(
     selected_ids: set[str],
     *,
     max_pages: int,
+    assessments: SelectionAssessmentSnapshot,
 ) -> None:
     for slot in plan.evidence_slots:
         if not (
@@ -190,12 +219,12 @@ def _select_execution_parents(
                 item
                 for item in candidates
                 if not is_atomic_operand_candidate(item)
-                and _slot_score(plan, slot, item) > 0
+                and _slot_score(plan, slot, item, assessments=assessments) > 0
                 and _identity(item) not in selected_ids
                 and _page_allowed(item, selected, max_pages)
             ),
             key=lambda item: (
-                -_slot_score(plan, slot, item),
+                -_slot_score(plan, slot, item, assessments=assessments),
                 -_relevance(query, item),
                 _identity(item),
             ),
@@ -212,6 +241,7 @@ def _select_execution_dimensions(
     selected_ids: set[str],
     *,
     max_pages: int,
+    assessments: SelectionAssessmentSnapshot,
 ) -> None:
     execution_slots = [
         slot
@@ -222,7 +252,10 @@ def _select_execution_dimensions(
         item
         for item in selected
         if is_atomic_operand_candidate(item)
-        and any(_slot_score(plan, slot, item) > 0 for slot in execution_slots)
+        and any(
+            _slot_score(plan, slot, item, assessments=assessments) > 0
+            for slot in execution_slots
+        )
     ]
     for operand in selected_operands:
         dimension = linked_dimension_candidate(operand, candidates)
@@ -237,6 +270,8 @@ def _select_execution_dimensions(
 def _selection_context(
     items: list[dict[str, Any]],
     plan: QueryPlan,
+    *,
+    assessments: SelectionAssessmentSnapshot,
 ) -> tuple[list[dict[str, Any]], int, dict[str, int]]:
     candidates, restored_required = required_slot_shortlist(
         items,
@@ -245,6 +280,7 @@ def _selection_context(
             plan,
             base_limit=RERANK_CANDIDATE_LIMIT,
         ),
+        assessments=assessments,
     )
     return (
         normalized_selection_scores(candidates, identity_of=_identity),
@@ -280,6 +316,7 @@ def _select_required_slot_evidence(
     *,
     max_pages: int,
     phase: str,
+    assessments: SelectionAssessmentSnapshot,
 ) -> None:
     used_required_locators: set[tuple[str, str]] = set()
     distinct_slot_ids = set(plan.constraints.get("distinct_source_page_slot_ids") or [])
@@ -290,7 +327,10 @@ def _select_required_slot_evidence(
     ]
     required_slots.sort(
         key=lambda slot: (
-            sum(_slot_score(plan, slot, item) > 0 for item in candidates),
+            sum(
+                _slot_score(plan, slot, item, assessments=assessments) > 0
+                for item in candidates
+            ),
             slot.slot_id,
         )
     )
@@ -298,7 +338,7 @@ def _select_required_slot_evidence(
         ranked = sorted(
             candidates,
             key=lambda item: (
-                -_slot_score(plan, slot, item),
+                -_slot_score(plan, slot, item, assessments=assessments),
                 -_relevance(query, item),
                 _identity(item),
             ),
@@ -306,7 +346,7 @@ def _select_required_slot_evidence(
         remaining_quota = required_slot_context_quota(slot, candidates)
         for match in ranked:
             if not (
-                _slot_score(plan, slot, match) > 0
+                _slot_score(plan, slot, match, assessments=assessments) > 0
                 and (
                     not (slot.required_for_execution and slot.role == "operand")
                     or is_atomic_operand_candidate(match)
@@ -431,6 +471,7 @@ def _fill_with_mmr(
     max_items: int,
     max_pages: int,
     mmr_lambda: float,
+    assessments: SelectionAssessmentSnapshot,
 ) -> None:
     while len(selected) < max_items:
         remaining = [
@@ -446,7 +487,13 @@ def _fill_with_mmr(
             key=lambda item: (
                 -(
                     _mmr_score(query, item, selected, mmr_lambda)
-                    + marginal_set_gain(item, selected, plan)
+                    + marginal_set_gain(
+                        item,
+                        selected,
+                        plan,
+                        assessments=assessments,
+                        hot_loop=True,
+                    )
                 ),
                 _identity(item),
             ),
@@ -516,39 +563,6 @@ def _relevance(query: str, item: dict[str, Any]) -> float:
     )
 
 
-def _similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
-    embedding_similarity = _embedding_cosine(left, right)
-    if embedding_similarity is not None:
-        return embedding_similarity
-    a = _tokens(_item_text(left))
-    b = _tokens(_item_text(right))
-    return len(a & b) / len(a | b) if a and b else 0.0
-
-
-def _embedding_cosine(left: dict[str, Any], right: dict[str, Any]) -> float | None:
-    a = _embedding(left)
-    b = _embedding(right)
-    if not a or not b or len(a) != len(b):
-        return None
-    denominator = math.sqrt(sum(value * value for value in a)) * math.sqrt(
-        sum(value * value for value in b)
-    )
-    if denominator == 0:
-        return None
-    return sum(x * y for x, y in zip(a, b)) / denominator
-
-
-def _embedding(item: dict[str, Any]) -> list[float]:
-    metadata = dict(item.get("metadata") or {})
-    value = metadata.get("semantic_embedding") or metadata.get("embedding") or []
-    if not isinstance(value, (list, tuple)):
-        return []
-    try:
-        return [float(item) for item in value]
-    except (TypeError, ValueError):
-        return []
-
-
 def _page_allowed(
     item: dict[str, Any], selected: list[dict[str, Any]], max_pages: int
 ) -> bool:
@@ -580,14 +594,3 @@ def _append_selected(
 
 def _identity(item: dict[str, Any]) -> str:
     return identity_of(item).key
-
-
-def _item_text(item: dict[str, Any]) -> str:
-    return " ".join(
-        str(item.get(field) or "")
-        for field in ("text", "ocr_text", "vlm_text", "caption")
-    )
-
-
-def _tokens(text: str) -> set[str]:
-    return {token.lower() for token in _TOKEN_RE.findall(str(text or ""))}

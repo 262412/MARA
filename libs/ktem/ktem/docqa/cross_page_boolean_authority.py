@@ -7,6 +7,7 @@ from .boolean_evidence_scope import boolean_proposition_evidence_score
 from .query_evidence_text import evidence_text
 from .query_phrase_extraction import source_page_locator
 from .query_plan_schema import EvidenceSlot, QueryPlan
+from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 
 SlotStatus = Callable[
     [EvidenceSlot, tuple[str, ...], dict[str, dict[str, Any]]],
@@ -20,6 +21,7 @@ def reconcile_cross_page_boolean_proposition(
     evidence_by_identity: dict[str, dict[str, Any]],
     *,
     status_for: SlotStatus,
+    assessments: SelectionAssessmentSnapshot | None = None,
 ) -> list[EvidenceSlot]:
     explicit_pages = tuple(
         str(value).strip()
@@ -51,10 +53,12 @@ def reconcile_cross_page_boolean_proposition(
         return bound_slots
     proposition = bound_slots[proposition_index]
     proposition_ids = _proposition_ids(
+        plan,
         proposition,
         page_slots,
         explicit_pages,
         evidence_by_identity,
+        assessments=assessments,
     )
     reconciled = list(bound_slots)
     reconciled[proposition_index] = replace(
@@ -66,10 +70,13 @@ def reconcile_cross_page_boolean_proposition(
 
 
 def _proposition_ids(
+    plan: QueryPlan,
     proposition: EvidenceSlot,
     page_slots: list[EvidenceSlot],
     explicit_pages: tuple[str, ...],
     evidence_by_identity: dict[str, dict[str, Any]],
+    *,
+    assessments: SelectionAssessmentSnapshot | None,
 ) -> tuple[str, ...]:
     if any(len(slot.evidence_ids) != 1 for slot in page_slots):
         return ()
@@ -88,7 +95,11 @@ def _proposition_ids(
     if _duplicate_content(resolved_items):
         return ()
     if any(
-        boolean_proposition_evidence_score(proposition.metric, item) <= 0
+        (
+            assessments.authority_level(plan, proposition, item) == "none"
+            if assessments is not None
+            else boolean_proposition_evidence_score(proposition.metric, item) <= 0
+        )
         for item in resolved_items
     ):
         return ()

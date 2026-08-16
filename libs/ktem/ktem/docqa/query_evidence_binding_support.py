@@ -103,6 +103,7 @@ def candidate_score_for_slot(
     item: dict[str, Any],
     *,
     requires_structure: bool = False,
+    boolean_assessment_score: float | None = None,
 ) -> float:
     """Score retrieval candidates separately from strict authority matching."""
 
@@ -136,11 +137,9 @@ def candidate_score_for_slot(
     if not modality_matches(slot.modality, modality):
         return 0.0
     query = str(slot.query or slot.metric or "").strip()
-    return boolean_proposition_candidate_score(
-        query,
-        item,
-        metric=slot.metric,
-    )
+    if boolean_assessment_score is not None:
+        return boolean_assessment_score
+    return boolean_proposition_candidate_score(query, item, metric=slot.metric)
 
 
 def agreement_attributes(item: dict[str, Any]) -> dict[str, str]:
