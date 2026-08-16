@@ -32,6 +32,7 @@ from .boolean_scope_quantifiers import (
     _quantified_object_scope_complete,
     _scope_excerpt,
 )
+from .boolean_structured_attributes import current_derogatory_label_analysis_scope
 from .boolean_structured_resolution import structured_boolean_resolutions
 from .evidence_identity import identity_of
 
@@ -180,11 +181,15 @@ def _quantified_scope_decision(
         (
             "quantified_scope_requires_current_paper_actor"
             if not actor_scope_valid
-            else "quantified_object_scope_complete"
-            if complete
-            else "other_than_alternative_unproven"
-            if re.search(r"\bother\s+than\b", question, re.IGNORECASE)
-            else "quantified_object_scope_incomplete"
+            else (
+                "quantified_object_scope_complete"
+                if complete
+                else (
+                    "other_than_alternative_unproven"
+                    if re.search(r"\bother\s+than\b", question, re.IGNORECASE)
+                    else "quantified_object_scope_incomplete"
+                )
+            )
         ),
     )
 
@@ -346,10 +351,8 @@ def _structured_candidate_scope(
         actor = "current_paper"
         if section_role == "unknown":
             section_role = "methods"
-    if resolution.reason == "explicit_current_derogatory_label_analysis" and re.search(
-        r"\b(?:primary|main)\s+focus\s+of\s+this\s+study\b",
-        resolution.quote,
-        flags=re.IGNORECASE,
+    if current_derogatory_label_analysis_scope(
+        resolution.reason, resolution.quote, actor, section_role
     ):
         actor = "current_paper"
         section_role = "methods"

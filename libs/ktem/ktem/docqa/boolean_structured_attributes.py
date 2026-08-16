@@ -354,14 +354,11 @@ def _derogatory_label_analysis_resolutions(
         current_focus = re.search(
             r"\b(?:primary|main)\s+focus\s+of\s+this\s+study\b"
             r"[^.!?]{0,160}\b(?:compar|analy[sz]|study)\w*\b"
-            r"[^.!?]{0,120}\b(?:labels?|words?|terms?)\b",
+            r"[^.!?]{0,120}\b(?:labels?|words?|terms?)\b[^.!?]{0,100}",
             lowered,
         )
-        derogatory_label = re.search(
-            r"\b(?:derogatory|offensive|outdated)\b",
-            lowered,
-        )
-        if current_focus and derogatory_label:
+        labels = _explicit_focus_labels(current_focus.group(0)) if current_focus else ()
+        if current_focus and _named_derogatory_label_statement(window, labels):
             output.append(
                 StructuredBooleanResolution(
                     polarity="yes",
@@ -371,3 +368,58 @@ def _derogatory_label_analysis_resolutions(
                 )
             )
     return tuple(output)
+
+
+def current_derogatory_label_analysis_scope(
+    reason: str,
+    quote: str,
+    actor: str,
+    section_role: str,
+) -> bool:
+    return bool(
+        reason == "explicit_current_derogatory_label_analysis"
+        and section_role not in {"related_work", "future_work"}
+        and actor not in {"cited_work", "other_authors"}
+        and re.search(
+            r"\b(?:primary|main)\s+focus\s+of\s+this\s+study\b",
+            quote,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _explicit_focus_labels(focus: str) -> tuple[str, ...]:
+    patterns = (
+        r"\b(?:labels?|words?|terms?)\s+(?P<left>[a-z][a-z-]*)\s+"
+        r"(?:and|or)\s+(?P<right>[a-z][a-z-]*)\b",
+        r"\b(?:labels?|words?|terms?)\b[^.!?]{0,40}"
+        r"\b(?:specifically|including|such\s+as)\s+"
+        r"(?P<left>[a-z][a-z-]*)\s+(?:and|or)\s+"
+        r"(?P<right>[a-z][a-z-]*)\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, str(focus or ""), flags=re.IGNORECASE)
+        if match is not None:
+            return tuple(
+                dict.fromkeys(
+                    (match.group("left").casefold(), match.group("right").casefold())
+                )
+            )
+    return ()
+
+
+def _named_derogatory_label_statement(
+    window: str,
+    labels: tuple[str, ...],
+) -> bool:
+    if not labels:
+        return False
+    for statement in re.split(r"(?<=[.!?])\s+|(?:\r?\n)+", str(window or "")):
+        lowered = statement.casefold()
+        if re.search(r"\b(?:prior|previous)\s+(?:work|stud(?:y|ies))\b", lowered):
+            continue
+        if not re.search(r"\b(?:derogatory|offensive|outdated)\b", lowered):
+            continue
+        if any(re.search(rf"\b{re.escape(label)}\b", lowered) for label in labels):
+            return True
+    return False

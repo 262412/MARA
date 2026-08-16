@@ -43,6 +43,7 @@ _RELATION_GROUPS = {
         "benchmark",
         "conduct",
         "evaluate",
+        "evaluation",
         "experiment",
         "perform",
         "present",

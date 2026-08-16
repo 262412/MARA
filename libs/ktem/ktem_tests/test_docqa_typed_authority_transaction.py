@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
@@ -7,6 +9,7 @@ from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.query_evidence_binding import bind_evidence_slots
 from ktem.docqa.query_plan_schema import EvidenceSlot, QueryPlan
 from ktem.docqa.query_planning import build_query_plan
+from ktem.docqa.typed_proposition_authority_atoms import exact_boolean_atom
 from ktem.docqa.verification import verify_decision, with_verification_evidence
 from ktem.docqa.verification_schema import VerifyDecision
 from ktem.docqa.verification_slot_support import enforce_verification_slot_support
@@ -85,6 +88,37 @@ def test_exact_boolean_authority_atomically_replaces_provisional_slot_binding() 
     assert slot.status == "verified_support"
     assert slot.evidence_ids == (authoritative_id,)
     assert projected.metadata["typed_authority"] == decision.typed_authority
+
+
+def test_boolean_authority_atom_requires_explicit_canonical_polarity() -> None:
+    question = "Did the authors evaluate the model on clinical tasks?"
+    evidence = _item(
+        "authoritative",
+        "We evaluated the model on clinical tasks.",
+    )
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    request = _qasper_request(question, plan)
+    bundle = EvidenceBundle(route="doc_text", items=[evidence])
+    verified = verify_decision(
+        request,
+        RetrieveDecision(status="good", reason="retrieved"),
+        bundle,
+        "yes",
+    )
+    missing_polarity = replace(
+        verified,
+        canonical_answer_polarity="",
+        claim_results=[
+            {**result, "canonical_answer_polarity": ""}
+            for result in verified.claim_results
+        ],
+    )
+
+    assert exact_boolean_atom(missing_polarity, bundle, question=question) is None
 
 
 def test_failed_authority_binding_clears_exact_claim_and_citations() -> None:

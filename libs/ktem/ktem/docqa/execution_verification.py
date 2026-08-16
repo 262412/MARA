@@ -60,6 +60,20 @@ def verify_generated_answer(
         if ragtruth_contract_request(request):
             bundle.metadata["task_contract_fallback"] = "ragtruth_empty_generation"
             answer = ragtruth_empty_answer
+        elif _typed_qasper_boolean_request(request):
+            bundle.metadata["typed_boolean_generation_recovery"] = (
+                "empty_generation_requires_fresh_authority"
+            )
+            trace_prefix = [
+                *list(trace_prefix or []),
+                {
+                    "stage": "typed_boolean_generation_recovery",
+                    "candidate_before": extract_final_answer_text(answer).strip(),
+                    "candidate_after": "",
+                    "reason": "empty_generation_requires_fresh_authority",
+                    "action": "fresh_typed_verification",
+                },
+            ]
         else:
             verify_decision = timings.measure(
                 "verification_seconds",
@@ -89,6 +103,21 @@ def verify_generated_answer(
         verify=verify,
         guardrail_factory=guardrail_factory,
         abstain_message=abstain_message,
+    )
+
+
+def _typed_qasper_boolean_request(request: Any) -> bool:
+    domain = str(getattr(request, "verification_domain", "") or "").casefold()
+    if not (domain == "qasper" or domain.startswith("qasper_")):
+        return False
+    plan = getattr(request, "query_plan", None)
+    answer_type = (
+        plan.get("answer_type")
+        if isinstance(plan, dict)
+        else getattr(plan, "answer_type", "")
+    )
+    return str(answer_type or getattr(request, "task_type", "")).casefold() == (
+        "boolean"
     )
 
 

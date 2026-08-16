@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .boolean_current_experiment import current_experiment_slot_score
+from .boolean_current_experiment import is_current_experiment_question
 from .boolean_evidence_scope import (
     _closed_quantifier,
     _has_closed_quantifier,
@@ -18,6 +18,7 @@ from .boolean_proposition_compatibility import (
     _object_compatibility,
     _relation_compatibility,
 )
+from .boolean_proposition_conditions import non_authoritative_proposition_span
 from .boolean_proposition_context import (
     actor_scope_scores,
     bounded_proposition_context,
@@ -41,6 +42,7 @@ from .boolean_proposition_schema import (
 from .boolean_proposition_tokens import _content_tokens, _relation_surface_tokens
 from .boolean_quality_control_evidence import quality_control_evidence_kind
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
+from .boolean_structured_authority import structured_boolean_authority
 from .evidence_identity import identity_of
 from .query_phrase_extraction import semantic_boolean_proposition_question
 
@@ -295,7 +297,10 @@ def _classify_proposition_span(
     object_score: float,
     scope_rejection: str,
 ) -> tuple[str, str]:
-    if (
+    if non_authoritative_proposition_span(question, span):
+        classification = "insufficient_scope"
+        reason = "prospective_proposition_not_current_authority"
+    elif (
         (actor in {"cited_work", "other_authors"} or section_role == "related_work")
         and not _prior_work_scope_question(question)
         or section_role == "future_work"
@@ -450,17 +455,13 @@ def boolean_proposition_evidence_score(
         return 3.0
     if quality_kind == "annotation_artifact_control":
         return 1.0
-    current_experiment_score = current_experiment_slot_score(question, item)
-    if current_experiment_score is not None:
-        return current_experiment_score
+    if structured_boolean_authority(question, item) is not None:
+        return 3.0
+    if is_current_experiment_question(question):
+        return 0.0
     assessments = classify_boolean_evidence_candidates(question, "", item)
     compatible = [
-        assessment
-        for assessment in assessments
-        if assessment.actor_score > 0
-        and assessment.scope_score > 0
-        and assessment.relation_score > 0
-        and assessment.object_score >= 0.6
+        assessment for assessment in assessments if assessment.candidate_relevance
     ]
     if not compatible:
         return 0.0
