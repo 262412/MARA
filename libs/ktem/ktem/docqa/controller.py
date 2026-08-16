@@ -452,6 +452,7 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "second_round_queries",
         "second_round_requests",
         "retrieval_rounds",
+        "retrieval_query_contracts",
         "ranking_trace",
         "reranker_aggregate_trace",
         "materialization_trace",
