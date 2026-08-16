@@ -161,3 +161,24 @@ def test_generic_boolean_second_round_queries_cover_evidence_stage_gap_families(
     for question, expected_terms in cases:
         query = boolean_retrieval_query(question, second_round=True)
         assert all(term in query for term in expected_terms)
+
+
+def test_boolean_relation_aliases_do_not_leak_between_unrelated_relations():
+    compare_query = boolean_retrieval_query(
+        "Did the authors compare the models?",
+        second_round=True,
+    )
+    train_query = boolean_retrieval_query(
+        "Did the authors train the model?",
+        second_round=True,
+    )
+
+    assert all(term in compare_query for term in ("contrast", "outperform"))
+    assert all(term not in compare_query for term in ("fine-tune", "optimize"))
+    assert all(term in train_query for term in ("fine-tune", "optimize"))
+    assert all(term not in train_query for term in ("contrast", "outperform"))
+    assert all(
+        fixture_term not in compare_query.casefold()
+        and fixture_term not in train_query.casefold()
+        for fixture_term in ("wikipedia", "sri", "parallel", "indexing")
+    )

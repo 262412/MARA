@@ -8,7 +8,6 @@ from ktem.docqa.execution import (
     deadline_exhausted_controller_result,
 )
 from ktem.docqa.route_budget import RouteDeadlineExhausted, run_blocking_route_stage
-from ktem.docqa.typed_retrieval_recovery import typed_qasper_initial_query
 
 from .mara_controller import planner_trace_payload
 from .mara_route_probe import (
@@ -48,13 +47,12 @@ def prepare_controller_route(
     initial_trace: dict[str, Any],
 ) -> RoutePreparation:
     try:
-        probe_query = typed_qasper_initial_query(execution_request, routing_message)
         route_probe = run_blocking_route_stage(
             execution_request,
             "route_probe",
             controller_route_probe,
             pipeline,
-            probe_query,
+            str(routing_message or "").strip(),
             history,
             understanding,
         )
