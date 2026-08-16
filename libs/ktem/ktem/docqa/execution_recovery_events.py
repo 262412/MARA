@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .controller import VerifyDecision
+from .controller import RetrieveDecision, VerifyDecision
 from .evidence import EvidenceBundle
 from .query_planning import ensure_request_query_plan
+from .recovery_progress import (
+    semantic_progress_evidence_ids,
+    semantic_progress_slot_states,
+)
 from .route_budget import route_budget_metadata
 from .route_selection import ControllerDecision
 from .typed_retrieval_recovery import verifier_recovery_frame
@@ -74,6 +78,23 @@ def recovery_trace_fields(
     removed_ids = [value for value in before_ids if value not in after_ids]
     before_slots = typed_slot_states(initial_bundle)
     after_slots = typed_slot_states(recovered_bundle)
+    before_semantic_ids = semantic_progress_evidence_ids(initial_bundle)
+    after_semantic_ids = semantic_progress_evidence_ids(recovered_bundle)
+    new_semantic_ids = [
+        value for value in after_semantic_ids if value not in before_semantic_ids
+    ]
+    removed_semantic_ids = [
+        value for value in before_semantic_ids if value not in after_semantic_ids
+    ]
+    before_semantic_slots = semantic_progress_slot_states(
+        initial_bundle,
+        before_slots,
+    )
+    after_semantic_slots = semantic_progress_slot_states(
+        recovered_bundle,
+        after_slots,
+    )
+    semantic_slot_state_changed = before_semantic_slots != after_semantic_slots
     typed = verify_decision.typed_authority
     typed = typed if isinstance(typed, dict) else {}
     return {
@@ -86,11 +107,18 @@ def recovery_trace_fields(
         "evidence_ids_after": after_ids,
         "new_evidence_ids": new_ids,
         "removed_evidence_ids": removed_ids,
+        "semantic_evidence_ids_before": before_semantic_ids,
+        "semantic_evidence_ids_after": after_semantic_ids,
+        "new_semantic_evidence_ids": new_semantic_ids,
+        "removed_semantic_evidence_ids": removed_semantic_ids,
         "slot_states_before": before_slots,
         "slot_states_after": after_slots,
         "slot_state_changed": before_slots != after_slots,
+        "semantic_slot_states_before": before_semantic_slots,
+        "semantic_slot_states_after": after_semantic_slots,
+        "semantic_slot_state_changed": semantic_slot_state_changed,
         "proposition_binding_changed": bool(
-            new_ids or removed_ids or before_slots != after_slots
+            new_semantic_ids or removed_semantic_ids or semantic_slot_state_changed
         ),
         "candidate_answer_before": candidate_answer,
         "candidate_answer_after": candidate_answer,
@@ -106,7 +134,27 @@ def recovery_trace_fields(
 
 
 def recovery_has_progress(fields: dict[str, Any]) -> bool:
-    return bool(fields.get("new_evidence_ids") or fields.get("slot_state_changed"))
+    return bool(
+        fields.get("new_semantic_evidence_ids")
+        or fields.get("semantic_slot_state_changed")
+        or fields.get("authority_changed")
+    )
+
+
+def retrieval_no_progress_decision(
+    trace: list[dict[str, Any]],
+    decision: RetrieveDecision,
+) -> RetrieveDecision | None:
+    if not any(event.get("stop_reason") == "recovery_no_progress" for event in trace):
+        return None
+    return RetrieveDecision(
+        status=decision.status,
+        reason=(
+            "Retrieval recovery produced no new semantic candidate or slot state. "
+            "stop_reason=recovery_no_progress."
+        ),
+        retry=False,
+    )
 
 
 def same_route_verifier_recovery_trace(
