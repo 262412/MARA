@@ -12,13 +12,17 @@ def _evidence(
     text: str,
     *,
     section_id: str = "results",
+    page_label: str = "",
 ) -> dict[str, object]:
-    return {
+    item: dict[str, object] = {
         "evidence_id": evidence_id,
         "source_id": "paper",
         "section_id": section_id,
         "text": text,
     }
+    if page_label:
+        item["page_label"] = page_label
+    return item
 
 
 def _run_boolean(
@@ -414,6 +418,46 @@ def test_generated_abstention_without_exact_authority_remains_fail_closed() -> N
     assert result.verify_decision.input_answer_polarity == ""
     assert result.verify_decision.canonical_answer_polarity == ""
     assert result.guardrail_decision.action == "abstain"
+
+
+def test_truncated_generation_recovers_unique_exact_boolean_authority() -> None:
+    question = "Did the authors evaluate the model on clinical tasks?"
+    item = _evidence(
+        "exact-authority",
+        "We evaluated the model on clinical tasks.",
+    )
+
+    result = _run_boolean(question, r"$$ \text{", [item])
+
+    assert result.answer == "yes"
+    assert result.verify_decision.status == "supported"
+    assert result.verify_decision.canonical_answer_polarity == "yes"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+    assert result.verify_decision.authoritative_evidence_id == identity_of(item).key
+    assert result.guardrail_decision.action == "return"
+    assert result.engine_terminal_commit["semantic_answer"] == "yes"
+    assert result.engine_terminal_commit["citations"] == [identity_of(item).key]
+
+
+def test_truncated_generation_with_lexical_candidate_remains_fail_closed() -> None:
+    question = "Did the authors release source code?"
+    item = _evidence(
+        "lexical-only",
+        "The source code section discusses release engineering terminology.",
+    )
+
+    result = _run_boolean(question, r"$$ \text{", [item])
+
+    assert result.answer == ABSTAIN_MESSAGE
+    assert result.verify_decision.status == "unknown"
+    assert result.verify_decision.canonical_answer_polarity == ""
+    assert result.verify_decision.typed_authority["state"] == "missing"
+    assert result.verify_decision.typed_authority["reason"] == (
+        "exact_boolean_authority_missing"
+    )
+    assert result.guardrail_decision.action == "abstain"
+    assert result.engine_terminal_commit["semantic_answer"] == "unanswerable"
+    assert result.engine_terminal_commit["citations"] == []
 
 
 def test_requirement_negative_qualifier_overrides_exclusive_requirement_match() -> None:

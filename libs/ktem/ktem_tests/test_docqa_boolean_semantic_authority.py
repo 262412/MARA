@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import pytest
 from ktem.docqa.boolean_claim_verification import boolean_claim_authority
+from ktem.docqa.boolean_proposition_candidates import (
+    boolean_proposition_candidate_score,
+)
 
 
 def _item(text: str, *, section_id: str = "results") -> dict[str, object]:
@@ -124,7 +127,9 @@ def test_semantic_authority_remains_fail_closed_across_scope_or_missing_assertio
     assert authority.supporting == ()
 
 
-def test_direct_application_to_an_alternative_corpus_defeats_primary_only_scope() -> None:
+def test_direct_application_to_an_alternative_corpus_defeats_primary_only_scope() -> (
+    None
+):
     question = "Do the authors evaluate their method on any corpus other than Alpha?"
     items = [
         _item("We evaluate the method on the Alpha corpus using abstracts only."),
@@ -267,3 +272,100 @@ def test_deictic_method_identity_binds_to_an_explicit_current_method() -> None:
     assert authority is not None
     assert authority.status == "supported"
     assert authority.canonical_answer_polarity == "yes"
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    (
+        "We will evaluate the model on clinical tasks.",
+        "We plan to evaluate the model on clinical tasks.",
+        "We intend to evaluate the model on clinical tasks.",
+    ),
+)
+def test_prospective_proposition_never_becomes_current_authority(
+    evidence: str,
+) -> None:
+    authority = boolean_claim_authority(
+        "Did the authors evaluate the model on clinical tasks?",
+        "unanswerable",
+        [_item(evidence)],
+        allow_missing_polarity=True,
+    )
+
+    assert authority is not None
+    assert authority.status == "unknown"
+    assert authority.canonical_answer_polarity == ""
+    assert authority.supporting == ()
+    assert authority.reason == "no_exact_boolean_authority"
+    assert (
+        boolean_proposition_candidate_score(
+            "Did the authors evaluate the model on clinical tasks?",
+            _item(evidence),
+        )
+        == 0.0
+    )
+
+
+def test_modal_language_outside_target_clause_does_not_block_authority() -> None:
+    evidence = (
+        "We evaluated the model on the current clinical tasks, while future "
+        "work could extend the clinical task suite."
+    )
+
+    authority = boolean_claim_authority(
+        "Did the authors evaluate the model on clinical tasks?",
+        "unanswerable",
+        [_item(evidence)],
+        allow_missing_polarity=True,
+    )
+
+    assert authority is not None
+    assert authority.status == "supported"
+    assert authority.canonical_answer_polarity == "yes"
+    [support] = authority.supporting
+    assert "we evaluated the model" in support.quote.lower()
+    assert (
+        boolean_proposition_candidate_score(
+            "Did the authors evaluate the model on clinical tasks?",
+            _item(evidence),
+        )
+        > 0.0
+    )
+
+
+def test_nominalized_evaluation_establishes_exact_boolean_authority() -> None:
+    evidence = "Our evaluation of the model covers clinical tasks."
+    authority = boolean_claim_authority(
+        "Did the authors evaluate the model on clinical tasks?",
+        "unanswerable",
+        [_item(evidence)],
+        allow_missing_polarity=True,
+    )
+
+    assert authority is not None
+    assert authority.status == "supported"
+    assert authority.canonical_answer_polarity == "yes"
+    [support] = authority.supporting
+    assert support.relation == "evaluate"
+    assert support.object == "clinical model task"
+    assert support.quote == evidence
+
+
+def test_deictic_dataset_cannot_bind_to_multiple_distinct_objects() -> None:
+    items = [
+        {**_item("We evaluated the Alpha dataset."), "evidence_id": "alpha"},
+        {**_item("We evaluated the Beta dataset."), "evidence_id": "beta"},
+    ]
+
+    authority = boolean_claim_authority(
+        "Did the authors evaluate this dataset?",
+        "unanswerable",
+        items,
+        allow_missing_polarity=True,
+    )
+
+    assert authority is not None
+    assert authority.status == "conflicting"
+    assert authority.canonical_answer_polarity == ""
+    assert authority.supporting == ()
+    assert authority.reason == "ambiguous_deictic_object_binding"

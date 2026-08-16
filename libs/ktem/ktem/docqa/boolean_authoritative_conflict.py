@@ -41,6 +41,34 @@ def authoritative_conflict_claim(
     )
 
 
+def ambiguous_authority_claim(
+    prompt: str,
+    input_polarity: str,
+    probe_polarity: str,
+    authorities: tuple[BooleanEvidenceAuthority, ...],
+    object_bindings: dict[str, str],
+) -> BooleanClaimAuthority:
+    conflict = ambiguous_authority_payload(authorities, object_bindings)
+    if conflict is None:
+        return BooleanClaimAuthority(
+            claim=f"{probe_polarity}: {prompt}",
+            status="unknown",
+            input_answer_polarity=input_polarity,
+            canonical_answer_polarity="",
+            semantic_correction_applied=False,
+            reason="ambiguous_deictic_object_binding_incomplete",
+        )
+    return BooleanClaimAuthority(
+        claim=f"{probe_polarity}: {prompt}",
+        status="conflicting",
+        input_answer_polarity=input_polarity,
+        canonical_answer_polarity="",
+        semantic_correction_applied=False,
+        reason="ambiguous_deictic_object_binding",
+        authoritative_conflict=conflict,
+    )
+
+
 def authoritative_conflict_payload(
     authorities: Iterable[BooleanEvidenceAuthority],
 ) -> dict[str, Any] | None:
@@ -75,6 +103,34 @@ def authoritative_conflict_payload(
     }
 
 
+def ambiguous_authority_payload(
+    authorities: tuple[BooleanEvidenceAuthority, ...],
+    object_bindings: dict[str, str],
+) -> dict[str, Any] | None:
+    atoms = _deduplicated_authorities(authorities)
+    binding_values = {str(value).strip() for value in object_bindings.values()}
+    if len(atoms) < 2 or len(binding_values) < 2:
+        return None
+    atom_keys = {authority_atom_key(value) for value in atoms}
+    if not atom_keys or any(not all(key) for key in atom_keys):
+        return None
+    return {
+        "contract_id": BOOLEAN_AUTHORITATIVE_CONFLICT_CONTRACT,
+        "status": "verified_conflict",
+        "conflict_kind": "ambiguous_deictic_object_binding",
+        "positive_authorities": [],
+        "negative_authorities": [],
+        "ambiguity_authorities": atoms,
+        "object_bindings": dict(sorted(object_bindings.items())),
+        "required_slot_ids": [],
+        "verified_required_slot_ids": [],
+        "required_evidence_ids": list(
+            dict.fromkeys(str(value["evidence_id"]) for value in atoms)
+        ),
+        "required_evidence_coverage": 0.0,
+    }
+
+
 def authority_atom_key(authority: dict[str, Any]) -> tuple[str, str]:
     return (
         str(authority.get("evidence_id") or "").strip(),
@@ -99,7 +155,11 @@ def authority_sides_are_disjoint(
 def conflict_authorities(conflict: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         dict(value)
-        for field in ("positive_authorities", "negative_authorities")
+        for field in (
+            "positive_authorities",
+            "negative_authorities",
+            "ambiguity_authorities",
+        )
         for value in conflict.get(field) or []
         if isinstance(value, dict)
     ]
@@ -108,6 +168,18 @@ def conflict_authorities(conflict: dict[str, Any]) -> list[dict[str, Any]]:
 def conflict_sides_are_complete(conflict: dict[str, Any]) -> bool:
     if conflict.get("contract_id") != BOOLEAN_AUTHORITATIVE_CONFLICT_CONTRACT:
         return False
+    if conflict.get("conflict_kind") == "ambiguous_deictic_object_binding":
+        authorities = _dict_values(conflict.get("ambiguity_authorities"))
+        bindings = conflict.get("object_bindings")
+        keys = {authority_atom_key(value) for value in authorities}
+        return bool(
+            len(authorities) >= 2
+            and len(keys) == len(authorities)
+            and all(all(key) for key in keys)
+            and all(_authority_entry_complete(value) for value in authorities)
+            and isinstance(bindings, dict)
+            and len({str(value).strip() for value in bindings.values()}) >= 2
+        )
     positive = _dict_values(conflict.get("positive_authorities"))
     negative = _dict_values(conflict.get("negative_authorities"))
     return bool(
@@ -202,7 +274,9 @@ def _deduplicated_authorities(
     return [output[key] for key in sorted(output)]
 
 
-def _authority_entry_complete(value: dict[str, Any], polarity: str) -> bool:
+def _authority_entry_complete(
+    value: dict[str, Any], polarity: str | None = None
+) -> bool:
     key = authority_atom_key(value)
     start = value.get("span_start")
     end = value.get("span_end")
@@ -213,7 +287,8 @@ def _authority_entry_complete(value: dict[str, Any], polarity: str) -> bool:
         and isinstance(start, int)
         and isinstance(end, int)
         and 0 <= start < end
-        and value.get("polarity") == polarity
+        and value.get("polarity") in {"yes", "no"}
+        and (polarity is None or value.get("polarity") == polarity)
         and str(value.get("source_id") or "").strip()
         and str(value.get("page_label") or "").strip()
         and str(value.get("actor") or "").strip()

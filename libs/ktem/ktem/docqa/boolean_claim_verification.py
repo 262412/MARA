@@ -6,6 +6,7 @@ from typing import Any
 from .boolean_authoritative_conflict import authoritative_conflict_claim
 from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuthority
 from .boolean_authority_selection import _best_authority, _deduplicated_authorities
+from .boolean_deictic_authority import ambiguous_deictic_object_authority
 from .boolean_evidence_scope import (
     ClosedScopeResolution,
     _actor,
@@ -14,6 +15,7 @@ from .boolean_evidence_scope import (
     evidence_item_text,
     resolve_closed_scope_boolean,
 )
+from .boolean_proposition_conditions import non_authoritative_proposition_span
 from .boolean_proposition_context import (
     PropositionContextWindow,
     exact_proposition_context,
@@ -57,9 +59,7 @@ def boolean_claim_authority(
     input_polarity = canonical_boolean_answer_polarity(answer)
     if not input_polarity and not allow_missing_polarity:
         return None
-    authority_items = [
-        item for item in evidence_items if not _title_or_heading_item(item)
-    ]
+    authority_items = _authority_items(evidence_items)
     probe_polarity = input_polarity or "yes"
     closed_scope = resolve_closed_scope_boolean(prompt, authority_items)
     resolved = _authority_from_closed_scope(prompt, closed_scope)
@@ -88,6 +88,10 @@ def boolean_claim_authority(
             supporting,
             contradicting,
         )
+    if ambiguous := ambiguous_deictic_object_authority(
+        prompt, input_polarity, probe_polarity, supporting or contradicting
+    ):
+        return ambiguous
     if supporting:
         return _supported_authority(
             prompt,
@@ -227,9 +231,7 @@ def _exclusive_requirement_authority(
             polarity = (
                 "no"
                 if _requirement_negative_clause(quote, question_terms)
-                else "yes"
-                if asked_object_present
-                else "no"
+                else "yes" if asked_object_present else "no"
             )
             identity = identity_of(item).key
             span_id = _span_identity(identity, window)
@@ -395,6 +397,10 @@ def _title_or_heading_item(item: dict[str, Any]) -> bool:
     return bool(re.search(r"\btitle\b|\bheading\b", kind))
 
 
+def _authority_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in items if not _title_or_heading_item(item)]
+
+
 def _exact_window(
     item: dict[str, Any],
     span: str,
@@ -431,13 +437,7 @@ def _assertive_relation(
         return False
     if re.search(r"\b(?:discuss|describe|mention)\w*\b", span):
         return False
-    if not re.search(
-        r"\b(?:could|may|might|would|should)\b", prompt, re.I
-    ) and re.search(
-        r"\b(?:could|may|might|would|should)\b",
-        span,
-        re.I,
-    ):
+    if non_authoritative_proposition_span(semantic_prompt, span):
         return False
     return True
 

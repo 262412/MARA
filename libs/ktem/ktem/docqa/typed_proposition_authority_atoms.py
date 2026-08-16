@@ -29,6 +29,14 @@ def exact_boolean_atom(
     )
     if result is None:
         return None
+    result_polarity = str(result.get("canonical_answer_polarity") or "")
+    decision_polarity = str(decision.canonical_answer_polarity or "")
+    if (
+        result_polarity not in {"yes", "no"}
+        or decision_polarity not in {"yes", "no"}
+        or result_polarity != decision_polarity
+    ):
+        return None
     lookup = unambiguous_evidence_alias_lookup(evidence_bundle.items)
     evidence_id = str(result.get("authoritative_evidence_id") or "")
     item = lookup.get(evidence_id)
@@ -113,6 +121,7 @@ def _boolean_atom_is_complete(
         and atom["arguments"]
         and atom["qualifier"]
         and atom["quantifier"]
+        and atom["polarity"] in {"yes", "no"}
     )
 
 
