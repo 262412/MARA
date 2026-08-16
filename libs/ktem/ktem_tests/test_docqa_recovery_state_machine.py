@@ -267,12 +267,16 @@ def test_missing_required_slot_records_concrete_bounded_stop_reason() -> None:
 
     assert result.retrieve_decision.status == "poor"
     assert result.retrieve_decision.retry is False
-    assert "max_retrieval_rounds_exhausted" in result.retrieve_decision.reason
+    assert "recovery_no_progress" in result.retrieve_decision.reason
     stops = [
         event
         for event in result.controller_trace
         if event.get("stop_reason")
-        in {"max_retrieval_rounds_exhausted", "route_switch_candidates_exhausted"}
+        in {
+            "max_retrieval_rounds_exhausted",
+            "recovery_no_progress",
+            "route_switch_candidates_exhausted",
+        }
     ]
     assert stops
     assert result.evidence_bundle.metadata["missing_required_slot_ids"] == [
@@ -343,7 +347,8 @@ def test_missing_boolean_slot_uses_natural_language_recovery_query_and_records_d
     assert recovery["recovery_action"] == "targeted_slot_retrieval"
     assert recovery["slot_states_before"][0]["status"] == "missing"
     assert recovery["slot_states_after"][0]["status"] == "missing"
-    assert recovery["stop_reason"] == "max_retrieval_rounds_exhausted"
+    assert recovery["stop_reason"] == "recovery_no_progress"
+    assert recovery["new_semantic_evidence_ids"] == []
 
 
 def test_qasper_first_round_uses_the_original_question_once() -> None:

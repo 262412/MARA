@@ -26,6 +26,9 @@ from .typed_retrieval_recovery import (
     typed_qasper_recovery_requests as _typed_qasper_recovery_requests,
 )
 from .typed_retrieval_recovery import (
+    typed_retrieval_recovery_has_progress as _typed_retrieval_recovery_has_progress,
+)
+from .typed_retrieval_recovery import (
     typed_retrieval_recovery_trace as _typed_retrieval_recovery_trace,
 )
 from .typed_retrieval_recovery import verification_slot_id as _verification_slot_id
@@ -140,6 +143,9 @@ def _complete_second_round(
         merged_metadata,
     )
     recovered_bundle = _with_retrieval_rounds(recovered_bundle, 2)
+    typed_recovery_no_progress = _qasper_typed_recovery_required(
+        request
+    ) and not _typed_retrieval_recovery_has_progress(initial_bundle, recovered_bundle)
     request.route_last_evidence_bundle = recovered_bundle
     retrieve_decision = _evaluate(
         request,
@@ -148,6 +154,8 @@ def _complete_second_round(
         evaluate,
         attempted_retry=True,
     )
+    if typed_recovery_no_progress:
+        recovered_bundle.metadata["retrieval_stop_reason"] = "recovery_no_progress"
     if _qasper_typed_recovery_required(request):
         recovered_bundle.metadata[
             "typed_retrieval_recovery_trace"
