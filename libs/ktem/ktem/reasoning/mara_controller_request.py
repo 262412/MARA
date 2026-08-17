@@ -12,10 +12,26 @@ def controller_routing_message(pipeline: Any, message: str) -> str:
     ).strip()
 
 
-def controller_execution_request(
+def _selected_source_context(
     pipeline: Any,
-    message: str,
-) -> SimpleNamespace:
+    docqa_request: Any,
+) -> tuple[list[Any], str]:
+    selected_file_ids = list(
+        getattr(pipeline, "selected_file_ids", None)
+        or getattr(docqa_request, "selected_file_ids", None)
+        or []
+    )
+    selected_source_title = " ".join(
+        str(
+            getattr(pipeline, "selected_source_title", None)
+            or getattr(docqa_request, "selected_source_title", None)
+            or ""
+        ).split()
+    )
+    return selected_file_ids, selected_source_title
+
+
+def controller_execution_request(pipeline: Any, message: str) -> SimpleNamespace:
     controller_mode = str(getattr(pipeline, "controller_mode", "") or "").strip()
     docqa_request = getattr(pipeline, "docqa_request", None)
     planning_question = controller_routing_message(pipeline, message)
@@ -29,6 +45,9 @@ def controller_execution_request(
         or getattr(docqa_request, "answer_type", None)
         or task_type
     ).strip()
+    selected_file_ids, selected_source_title = _selected_source_context(
+        pipeline, docqa_request
+    )
     return SimpleNamespace(
         prompt=message,
         controller_question=str(
@@ -84,7 +103,8 @@ def controller_execution_request(
         active_file_name=getattr(pipeline, "active_file_name", "") or "",
         page_number=getattr(pipeline, "page_number", None),
         selected_text=getattr(pipeline, "selected_text", "") or "",
-        selected_file_ids=list(getattr(pipeline, "selected_file_ids", None) or []),
+        selected_file_ids=selected_file_ids,
+        selected_source_title=selected_source_title,
         graph_context=getattr(pipeline, "graph_context", None) or {},
         visual_generator_backend=str(
             getattr(pipeline, "visual_generator_backend", "") or ""

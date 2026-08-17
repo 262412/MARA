@@ -269,6 +269,10 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     pipeline.retrieval_query = str(
         getattr(request, "retrieval_query", "") or ""
     ).strip()
+    pipeline.selected_file_ids = list(getattr(request, "selected_file_ids", None) or [])
+    pipeline.selected_source_title = " ".join(
+        str(getattr(request, "selected_source_title", "") or "").split()
+    )
     pipeline.dataset_family = str(getattr(request, "dataset_family", "") or "").strip()
     pipeline.task_type = request.task_type or ""
     pipeline.agent_mode = request.agent_mode or getattr(pipeline, "agent_mode", "auto")
@@ -374,6 +378,7 @@ def _backend_metadata(
 def copy_request_fields(target: Any, source: Any) -> None:
     target.controller_question = getattr(source, "controller_question", "")
     target.retrieval_query = getattr(source, "retrieval_query", "")
+    target.selected_source_title = getattr(source, "selected_source_title", "")
     target.dataset_family = getattr(source, "dataset_family", "")
     target.source_identity_crosswalk = getattr(
         source, "source_identity_crosswalk", None

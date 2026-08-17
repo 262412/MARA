@@ -55,12 +55,16 @@ def _runtime_for_pipeline_context(monkeypatch, document_path: Path) -> DocQARunt
 
     monkeypatch.setattr(runtime_module, "reasonings", {"mara": _FakeReasoning})
     runtime = object.__new__(DocQARuntime)
-    runtime._resolve_user_id = lambda _user_id=None: "benchmark-user"
-    runtime.load_settings = lambda _user_id=None: {"reasoning.use": "mara"}
-    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[_FakeIndex()]))
-    runtime._web_search_cls = None
-    runtime.file_index = _FakeFileIndex()
-    runtime._preview = _FakePreview()
+    setattr(runtime, "_resolve_user_id", lambda _user_id=None: "benchmark-user")
+    setattr(runtime, "load_settings", lambda _user_id=None: {"reasoning.use": "mara"})
+    setattr(
+        runtime,
+        "_app",
+        SimpleNamespace(index_manager=SimpleNamespace(indices=[_FakeIndex()])),
+    )
+    setattr(runtime, "_web_search_cls", None)
+    setattr(runtime, "file_index", _FakeFileIndex())
+    setattr(runtime, "_preview", _FakePreview())
     return runtime
 
 
