@@ -87,9 +87,9 @@ function rendererWorkbenchSmokeScript(
         ? { ok: true, data: null }
         : await bridge.getLatestAnswerTask();
       const pages = [
-        ["Resources", "资源状态", "Resources"],
-        ["Help", "帮助与快捷键", "Help"],
-        ["Settings", "模型设置", "Settings"],
+        ["Resources", "Resource status", "Resources"],
+        ["Help", "Help and shortcuts", "Help"],
+        ["Settings", "Model settings", "Settings"],
       ];
       let navigationOk = true;
       for (const [label, heading, title] of pages) {
@@ -111,7 +111,7 @@ function rendererWorkbenchSmokeScript(
         modelSettings?.ok === true &&
         !serializedSettings.includes('"credential":') &&
         !serializedSettings.includes("mara-desktop-smoke");
-      button("工作台")?.click();
+      button("Workbench")?.click();
       await wait(25);
       window.dispatchEvent(new KeyboardEvent("keydown", {
         bubbles: true,
@@ -161,7 +161,7 @@ function rendererWorkbenchSmokeScript(
           "embedding",
           "smoke-embedding",
         );
-        button("保存并应用")?.click();
+        button("Save and apply")?.click();
         let savedSettings = null;
         let readyDoctor = null;
         let readyRuntime = null;
@@ -205,13 +205,13 @@ function rendererWorkbenchSmokeScript(
           readyDoctor.data.query_provider === expectedProvider &&
           readyDoctor.data.embedding_provider === expectedProvider;
       }
-      button("工作台")?.click();
+      button("Workbench")?.click();
       await wait(25);
       let input = document.querySelector("#task-input");
       const draftEditable =
         input instanceof HTMLTextAreaElement &&
         !input.disabled &&
-        document.querySelector("[data-page-title]")?.textContent?.includes("新任务") === true;
+        document.querySelector("[data-page-title]")?.textContent?.includes("New task") === true;
       if (!(input instanceof HTMLTextAreaElement)) return {};
       inputValue(input, "alpha beta");
       await wait(0);
@@ -258,12 +258,12 @@ function rendererWorkbenchSmokeScript(
           (latestAfter.data === null ||
             latestAfter.data.task_id === latestBefore?.data?.task_id);
         const configure = Array.from(document.querySelectorAll("button"))
-          .find((candidate) => candidate.textContent?.includes("配置模型"));
+          .find((candidate) => candidate.textContent?.includes("Configure model"));
         configurationActionVisible =
           Boolean(configure) && document.body.innerText.includes("llm_not_configured");
         configure?.click();
         await wait(25);
-        button("工作台")?.click();
+        button("Workbench")?.click();
         await wait(25);
         input = document.querySelector("#task-input");
         draftPromptPreserved =

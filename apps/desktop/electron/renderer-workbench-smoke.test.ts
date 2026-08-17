@@ -127,7 +127,7 @@ test("packaged renderer settings smoke saves through the real page and refreshes
 
   assert.match(source, /chat\.provider/);
   assert.match(source, /embedding\.provider/);
-  assert.match(source, /保存并应用/);
+  assert.match(source, /Save and apply/);
   assert.match(source, /query_ready/);
   assert.match(source, /indexing_ready/);
   assert.match(source, /openai_compatible/);
