@@ -79,16 +79,22 @@ test("Settings saves separate chat and embedding routes through one typed action
   );
   try {
     const selects = rendered.document.querySelectorAll<HTMLSelectElement>("select");
-    assert.equal(selects.length, 2);
-    await selectValue(selects[0]!, "openai_compatible");
-    await selectValue(selects[1]!, "ollama");
+    assert.equal(selects.length, 3);
+    await selectValue(
+      rendered.document.querySelector<HTMLSelectElement>("select[name='chat.provider']")!,
+      "openai_compatible",
+    );
+    await selectValue(
+      rendered.document.querySelector<HTMLSelectElement>("select[name='embedding.provider']")!,
+      "ollama",
+    );
     const fields = rendered.document.querySelectorAll<HTMLInputElement>("input");
     await setInputValue(inputByName(fields, "chat.base_url"), "https://api.openai.com/v1");
     await setInputValue(inputByName(fields, "chat.model"), "gpt-4o-mini");
     await setInputValue(inputByName(fields, "chat.credential"), "new-secret");
     await setInputValue(inputByName(fields, "embedding.base_url"), "http://127.0.0.1:11434/v1");
     await setInputValue(inputByName(fields, "embedding.model"), "nomic-embed-text");
-    await click(buttonWithText(rendered.document, "保存并应用"));
+    await click(buttonWithText(rendered.document, "Save and apply"));
 
     assert.deepEqual(saved, [
       {
@@ -108,7 +114,7 @@ test("Settings saves separate chat and embedding routes through one typed action
         },
       },
     ]);
-    assert.match(rendered.document.body.textContent ?? "", /仅保留到本次应用会话/);
+    assert.match(rendered.document.body.textContent ?? "", /remain only for this app session/);
   } finally {
     await rendered.cleanup();
   }

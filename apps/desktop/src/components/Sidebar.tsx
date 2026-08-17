@@ -1,6 +1,7 @@
 import type { SessionSummary } from "../../shared/session-contracts";
 import type { ResourceState } from "../resource-state";
 import type { AppPage } from "../navigation";
+import { useLanguage } from "../i18n";
 import { Icon, type IconName } from "./Icon";
 
 type SidebarProps = {
@@ -27,11 +28,11 @@ type SidebarProps = {
   sessionCreatePending: boolean;
 };
 
-const navigation: Array<{ id: AppPage; label: string; icon: IconName }> = [
-  { id: "workbench", label: "工作台", icon: "workbench" },
-  { id: "files", label: "Files", icon: "files" },
-  { id: "resources", label: "Resources", icon: "resources" },
-  { id: "help", label: "Help", icon: "help" },
+const navigation: Array<{ id: AppPage; icon: IconName }> = [
+  { id: "workbench", icon: "workbench" },
+  { id: "files", icon: "files" },
+  { id: "resources", icon: "resources" },
+  { id: "help", icon: "help" },
 ];
 
 export function Sidebar({
@@ -55,19 +56,20 @@ export function Sidebar({
   sessionActionError,
   sessionCreatePending,
 }: SidebarProps) {
+  const { t } = useLanguage();
   const visibleSessions =
     sessions.status === "success"
-      ? filterSessions(sessions.data, searchQuery)
+      ? filterSessions(sessions.data, searchQuery, t("common.unnamedTask"))
       : [];
   const actionPending = sessionAction !== undefined || sessionCreatePending;
 
   return (
-    <aside className="sidebar" aria-label="应用导航">
+    <aside className="sidebar" aria-label={t("nav.appNavigation")}>
       <div className="brand">
         <span className="brand-mark" aria-hidden="true">M</span>
         <div>
           <strong>MARA</strong>
-          <span>Local research</span>
+          <span>{t("brand.localResearch")}</span>
         </div>
       </div>
 
@@ -78,11 +80,11 @@ export function Sidebar({
         type="button"
       >
         <Icon name="add" />
-        {sessionCreatePending ? "正在新建…" : "新建任务"}
+        {sessionCreatePending ? t("sidebar.newTaskPending") : t("sidebar.newTask")}
         <kbd>Ctrl N</kbd>
       </button>
 
-      <nav className="primary-nav" aria-label="主要页面">
+      <nav className="primary-nav" aria-label={t("nav.primaryPages")}>
         {navigation.map((item) => (
           <button
             aria-current={active === item.id ? "page" : undefined}
@@ -92,13 +94,13 @@ export function Sidebar({
             type="button"
           >
             <Icon name={item.icon} />
-            {item.label}
+            {t(`nav.${item.id}` as Parameters<typeof t>[0])}
           </button>
         ))}
       </nav>
 
       <div className="recent-heading">
-        <label htmlFor="session-search">最近任务</label>
+        <label htmlFor="session-search">{t("sidebar.recentTasks")}</label>
       </div>
       <div className="session-search">
         <Icon name="search" size={15} />
@@ -106,7 +108,7 @@ export function Sidebar({
           autoComplete="off"
           id="session-search"
           onChange={(event) => onSearchQueryChange(event.target.value)}
-          placeholder="搜索最近任务"
+          placeholder={t("sidebar.searchRecentTasks")}
           type="search"
           value={searchQuery}
         />
@@ -118,21 +120,21 @@ export function Sidebar({
           </p>
         ) : null}
         {sessions.status === "loading" ? (
-          <p className="sidebar-state">正在读取最近任务…</p>
+          <p className="sidebar-state">{t("sidebar.loadingRecentTasks")}</p>
         ) : null}
         {sessions.status === "failed" ? (
           <div className="sidebar-state" role="alert">
             <span>{sessions.message}</span>
-            <button onClick={onRetrySessions} type="button">重试</button>
+            <button onClick={onRetrySessions} type="button">{t("common.retry")}</button>
           </div>
         ) : null}
         {sessions.status === "success" && sessions.data.length === 0 ? (
-          <p className="sidebar-state">还没有保存的任务</p>
+          <p className="sidebar-state">{t("sidebar.noSavedTasks")}</p>
         ) : null}
         {sessions.status === "success" &&
         sessions.data.length > 0 &&
         visibleSessions.length === 0 ? (
-          <p className="sidebar-state">未找到匹配的任务</p>
+          <p className="sidebar-state">{t("sidebar.noMatchingTasks")}</p>
         ) : null}
         {sessions.status === "success"
           ? visibleSessions.map((session) => {
@@ -157,7 +159,7 @@ export function Sidebar({
                       className="sr-only"
                       htmlFor={`session-name-${session.conversation_id}`}
                     >
-                      任务名称
+                      {t("sidebar.sessionName")}
                     </label>
                     <input
                       autoFocus
@@ -171,7 +173,7 @@ export function Sidebar({
                     />
                     {rowPending ? (
                       <span className="session-action-status">
-                        正在重命名…
+                        {t("sidebar.renaming")}
                       </span>
                     ) : (
                       <div className="session-editor-actions">
@@ -179,10 +181,10 @@ export function Sidebar({
                           disabled={editingSessionName.trim().length === 0}
                           type="submit"
                         >
-                          保存
+                          {t("common.save")}
                         </button>
                         <button onClick={onCancelRename} type="button">
-                          取消
+                          {t("common.cancel")}
                         </button>
                       </div>
                     )}
@@ -206,34 +208,41 @@ export function Sidebar({
                     onClick={() => onSelectSession(session.conversation_id)}
                     type="button"
                   >
-                    <span>{session.name || "未命名任务"}</span>
+                    <span>{session.name || t("common.unnamedTask")}</span>
                     <small>
-                      {session.message_count} 条消息 · {session.graph_source_count} 个图谱来源
+                      {t("common.messageCount", {
+                        messages: session.message_count,
+                        sources: session.graph_source_count,
+                      })}
                     </small>
                   </button>
                   {rowPending ? (
                     <span className="session-action-status">
                       {sessionAction.action === "delete"
-                        ? "正在删除…"
-                        : "正在重命名…"}
+                        ? t("sidebar.deleting")
+                        : t("sidebar.renaming")}
                     </span>
                   ) : (
                     <div className="task-actions">
                       <button
-                        aria-label={`重命名${session.name || "未命名任务"}`}
+                        aria-label={t("sidebar.renameAria", {
+                          name: session.name || t("common.unnamedTask"),
+                        })}
                         disabled={actionPending}
                         onClick={() => onStartRename(session)}
                         type="button"
                       >
-                        重命名
+                        {t("sidebar.rename")}
                       </button>
                       <button
-                        aria-label={`删除${session.name || "未命名任务"}`}
+                        aria-label={t("sidebar.deleteAria", {
+                          name: session.name || t("common.unnamedTask"),
+                        })}
                         disabled={actionPending}
                         onClick={() => onDeleteSession(session)}
                         type="button"
                       >
-                        删除
+                        {t("sidebar.delete")}
                       </button>
                     </div>
                   )}
@@ -251,13 +260,13 @@ export function Sidebar({
           type="button"
         >
           <Icon name="settings" />
-          Settings
+          {t("nav.settings")}
         </button>
         <div className="data-space">
           <span className="status-dot healthy" />
           <div>
-            <strong>本地数据空间</strong>
-            <span>默认工作区</span>
+            <strong>{t("sidebar.localDataSpace")}</strong>
+            <span>{t("sidebar.defaultWorkspace")}</span>
           </div>
         </div>
       </div>
@@ -268,13 +277,14 @@ export function Sidebar({
 export function filterSessions(
   sessions: SessionSummary[],
   query: string,
+  unnamedTask = "Untitled task",
 ): SessionSummary[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   if (!normalizedQuery) {
     return sessions;
   }
   return sessions.filter((session) =>
-    (session.name || "未命名任务")
+    (session.name || unnamedTask)
       .toLocaleLowerCase()
       .includes(normalizedQuery),
   );

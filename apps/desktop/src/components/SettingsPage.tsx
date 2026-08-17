@@ -9,6 +9,7 @@ import type {
   ModelSettingsStatus,
 } from "../../shared/model-contracts";
 import type { SidecarError } from "../../shared/runtime-contracts";
+import { useLanguage } from "../i18n";
 import type { ResourceState } from "../resource-state";
 
 type SettingsPageProps = {
@@ -28,6 +29,7 @@ export function SettingsPage({
   savePending,
   settings,
 }: SettingsPageProps) {
+  const { language, setLanguage, t } = useLanguage();
   const [chat, setChat] = useState<ModelRouteInput>(emptyRoute());
   const [embedding, setEmbedding] = useState<ModelRouteInput>(emptyRoute());
 
@@ -43,28 +45,48 @@ export function SettingsPage({
     <main className="standalone-page settings-page" id="main-workspace">
       <header className="standalone-header">
         <div>
-          <p className="eyebrow">Settings</p>
-          <h1 data-page-title tabIndex={-1}>模型设置</h1>
-          <p>Chat LLM 与 Embedding 独立配置；保存后仅重启 Sidecar。</p>
+          <p className="eyebrow">{t("settings.eyebrow")}</p>
+          <h1 data-page-title tabIndex={-1}>{t("settings.title")}</h1>
+          <p>{t("settings.description")}</p>
         </div>
-        <button onClick={onRetry} type="button">重新读取</button>
+        <button onClick={onRetry} type="button">{t("settings.reload")}</button>
       </header>
-      {settings.status === "loading" ? <PageState>正在读取模型设置…</PageState> : null}
+      {settings.status === "loading" ? <PageState>{t("settings.loading")}</PageState> : null}
       {settings.status === "failed" ? (
         <PageState role="alert">
-          {settings.message} · 请求 ID：{settings.error?.request_id ?? "未知"}
+          {settings.message} · {t("common.requestId", {
+            id: settings.error?.request_id ?? t("common.unknown"),
+          })}
         </PageState>
       ) : null}
       {status && !status.secure_storage_available ? (
         <div className="settings-warning" role="status">
-          系统安全加密当前不可用。新凭据仅保留到本次应用会话，退出后需要重新输入。
+          {t("settings.secureStorageWarning")}
         </div>
       ) : null}
       {status?.source === "compatibility" ? (
         <div className="settings-compatibility">
-          现有环境或 Desktop `.env` 仍会兼容读取；保存此页面不会改写旧文件。
+          {t("settings.compatibilityNotice")}
         </div>
       ) : null}
+      <section className="language-settings" aria-labelledby="language-settings-title">
+        <div>
+          <h2 id="language-settings-title">{t("settings.languageTitle")}</h2>
+          <p>{t("settings.languageDescription")}</p>
+        </div>
+        <label htmlFor="language-select">
+          {t("settings.languageLabel")}
+          <select
+            id="language-select"
+            name="language"
+            onChange={(event) => setLanguage(event.target.value as "en" | "zh")}
+            value={language}
+          >
+            <option value="en">{t("settings.english")}</option>
+            <option value="zh">{t("settings.chinese")}</option>
+          </select>
+        </label>
+      </section>
       <ReadinessSummary doctor={doctor} />
       <form
         className="model-settings-form"
@@ -78,24 +100,24 @@ export function SettingsPage({
           onChange={setChat}
           route={chat}
           status={status?.chat}
-          title="Chat LLM"
+          title={t("settings.chatLlm")}
         />
         <ModelRouteEditor
           kind="embedding"
           onChange={setEmbedding}
           route={embedding}
           status={status?.embedding}
-          title="Embedding"
+          title={t("settings.embedding")}
         />
         {saveError ? (
           <div className="settings-error" role="alert">
             <strong>{saveError.message}</strong>
-            <span>请求 ID：{saveError.request_id}</span>
+            <span>{t("common.requestId", { id: saveError.request_id })}</span>
           </div>
         ) : null}
         <div className="settings-actions">
           <button disabled={savePending || settings.status !== "success"} type="submit">
-            {savePending ? "正在保存并重启…" : "保存并应用"}
+            {savePending ? t("settings.savePending") : t("settings.save")}
           </button>
         </div>
       </form>
@@ -116,21 +138,22 @@ function ModelRouteEditor({
   status?: ModelRouteStatus;
   title: string;
 }) {
+  const { t } = useLanguage();
   const update = (values: Partial<ModelRouteInput>) => onChange({ ...route, ...values });
   return (
     <fieldset className="model-route-card">
       <legend>{title}</legend>
       <label>
-        Provider
+        {t("settings.provider")}
         <select
           name={`${kind}.provider`}
           onChange={(event) => onChange(defaultRoute(event.target.value as ModelProvider, kind))}
           value={route.provider}
         >
-          <option value="none">未配置</option>
+          <option value="none">{t("settings.notConfigured")}</option>
           <option value="openai_compatible">OpenAI-compatible</option>
           <option value="azure_openai">Azure OpenAI</option>
-          <option value="ollama">本地 Ollama</option>
+          <option value="ollama">{t("settings.localOllama")}</option>
         </select>
       </label>
       {route.provider !== "none" ? (
@@ -146,7 +169,9 @@ function ModelRouteEditor({
             />
           </label>
           <label>
-            {route.provider === "azure_openai" ? "Deployment" : "Model"}
+            {route.provider === "azure_openai"
+              ? t("settings.deployment")
+              : t("settings.model")}
             <input
               name={`${kind}.model`}
               onChange={(event) => update({ model: event.target.value })}
@@ -156,7 +181,7 @@ function ModelRouteEditor({
           </label>
           {route.provider === "azure_openai" ? (
             <label>
-              API version
+              {t("settings.apiVersion")}
               <input
                 name={`${kind}.api_version`}
                 onChange={(event) => update({ api_version: event.target.value })}
@@ -167,44 +192,49 @@ function ModelRouteEditor({
           ) : null}
           {route.provider !== "ollama" ? (
             <label>
-              API key
+              {t("settings.apiKey")}
               <input
                 autoComplete="new-password"
                 name={`${kind}.credential`}
                 onChange={(event) => update({ credential: event.target.value || null })}
-                placeholder={status?.credential_present ? "已安全保存；留空保持不变" : "输入凭据"}
+                placeholder={
+                  status?.credential_present
+                    ? t("settings.savedCredentialPlaceholder")
+                    : t("settings.enterCredential")
+                }
                 type="password"
                 value={route.credential ?? ""}
               />
             </label>
           ) : null}
           <small className="credential-state">
-            {credentialDescription(status, route.provider)}
+            {credentialDescription(status, route.provider, t)}
           </small>
         </>
       ) : (
-        <p>该能力保持未配置，相关操作会 fail closed。</p>
+        <p>{t("settings.failClosed")}</p>
       )}
     </fieldset>
   );
 }
 
 function ReadinessSummary({ doctor }: { doctor: ResourceState<DoctorPayload> }) {
+  const { t } = useLanguage();
   if (doctor.status === "loading") {
-    return <PageState>正在检查模型 readiness…</PageState>;
+    return <PageState>{t("settings.readinessLoading")}</PageState>;
   }
   if (doctor.status === "failed") {
-    return <PageState role="alert">无法读取 Doctor readiness。</PageState>;
+    return <PageState role="alert">{t("settings.readinessFailed")}</PageState>;
   }
   return (
-    <section className="settings-readiness" aria-label="模型准备状态">
+    <section className="settings-readiness" aria-label={t("settings.readinessAria")}>
       <div>
-        <strong>查询</strong>
-        <span>{doctor.data.query_ready ? "已准备" : doctor.data.query_message}</span>
+        <strong>{t("common.query")}</strong>
+        <span>{doctor.data.query_ready ? t("settings.prepared") : doctor.data.query_message}</span>
       </div>
       <div>
-        <strong>索引</strong>
-        <span>{doctor.data.indexing_ready ? "已准备" : doctor.data.indexing_message}</span>
+        <strong>{t("common.index")}</strong>
+        <span>{doctor.data.indexing_ready ? t("settings.prepared") : doctor.data.indexing_message}</span>
       </div>
     </section>
   );
@@ -267,16 +297,17 @@ function editableRoute(route: ModelRouteStatus): ModelRouteInput {
 function credentialDescription(
   status: ModelRouteStatus | undefined,
   provider: ModelProvider,
+  t: ReturnType<typeof useLanguage>["t"],
 ): string {
   if (provider === "ollama") {
-    return "本地 Ollama 不要求 API key。";
+    return t("settings.ollamaNoApiKey");
   }
   if (!status?.credential_present) {
-    return "尚未保存凭据。";
+    return t("settings.noCredential");
   }
   return status.credential_storage === "secure"
-    ? "凭据已由操作系统安全存储保护。"
-    : "凭据仅保留到本次应用会话。";
+    ? t("settings.secureCredential")
+    : t("settings.sessionCredential");
 }
 
 function PageState({

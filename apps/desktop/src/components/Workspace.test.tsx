@@ -83,14 +83,14 @@ function render(
 }
 
 test("Workspace covers unselected, loading, success, empty, and failed sessions", () => {
-  assert.match(render(undefined), /从左侧选择一个任务/);
-  assert.match(render({ status: "loading" }), /正在读取会话/);
+  assert.match(render(undefined), /Select a task from the left/);
+  assert.match(render({ status: "loading" }), /Loading session/);
 
   const success = render({ status: "success", data: detail });
   assert.match(success, /Research session/);
   assert.match(success, /What is MARA/);
   assert.match(success, /A local research assistant/);
-  assert.match(success, /1 个来源/);
+  assert.match(success, /1 sources/);
   assert.doesNotMatch(success, /Agent 研究方向研报/);
 
   assert.match(
@@ -98,12 +98,12 @@ test("Workspace covers unselected, loading, success, empty, and failed sessions"
       status: "success",
       data: { ...detail, messages: [] },
     }),
-    /这个任务还没有消息/,
+    /This task has no messages/,
   );
 
-  const failed = render({ status: "failed", message: "无法读取会话" });
-  assert.match(failed, /无法读取会话/);
-  assert.match(failed, /重试/);
+  const failed = render({ status: "failed", message: "Could not read session" });
+  assert.match(failed, /Could not read session/);
+  assert.match(failed, /Retry/);
 });
 
 test("Workspace renders streaming, success, failed, and cancelled answers", () => {
@@ -115,14 +115,14 @@ test("Workspace renders streaming, success, failed, and cancelled answers", () =
     answer: "Partial answer",
     citations: [],
   });
-  assert.match(running, /正在生成/);
+  assert.match(running, /Generating/);
   assert.match(running, /Partial answer/);
-  assert.match(running, /停止/);
+  assert.match(running, /Stop/);
 
   const success = render(session, queryTask);
   assert.match(success, /The evidence changed/);
   assert.match(success, /paper.pdf/);
-  assert.match(success, /第 2 页/);
+  assert.match(success, /Page 2/);
   assert.match(success, /Grounded evidence/);
 
   const failed = render(session, {
@@ -136,7 +136,7 @@ test("Workspace renders streaming, success, failed, and cancelled answers", () =
     retryable: true,
   });
   assert.match(failed, /MARA could not complete the answer/);
-  assert.match(failed, /重试回答/);
+  assert.match(failed, /Retry answer/);
 
   const cancelled = render(session, {
     ...queryTask,
@@ -148,8 +148,8 @@ test("Workspace renders streaming, success, failed, and cancelled answers", () =
     },
     retryable: true,
   });
-  assert.match(cancelled, /生成已停止/);
-  assert.match(cancelled, /重试回答/);
+  assert.match(cancelled, /Generation stopped/);
+  assert.match(cancelled, /Retry answer/);
 
   const modelMissing = render(session, {
     ...queryTask,
@@ -163,10 +163,10 @@ test("Workspace renders streaming, success, failed, and cancelled answers", () =
     },
     retryable: false,
   });
-  assert.match(modelMissing, /检查模型 ID/);
-  assert.match(modelMissing, /提供方请求 ID：provider-request-404/);
-  assert.match(modelMissing, /打开模型设置/);
-  assert.doesNotMatch(modelMissing, /重试回答/);
+  assert.match(modelMissing, /Check the model ID/);
+  assert.match(modelMissing, /Provider request ID: provider-request-404/);
+  assert.match(modelMissing, /Open model settings/);
+  assert.doesNotMatch(modelMissing, /Retry answer/);
 });
 
 test("all assistant answer states share semantic Markdown rendering", () => {
@@ -233,9 +233,9 @@ test("persistence guidance follows the safe operation diagnostic", () => {
     },
     retryable: true,
   });
-  assert.match(replaceBlocked, /Windows 暂时阻止状态文件更新/);
-  assert.match(replaceBlocked, /当前部分回答尚未安全保存/);
-  assert.doesNotMatch(replaceBlocked, /重设.*AppData|目录的写入权限/);
+  assert.match(replaceBlocked, /Windows temporarily blocked the state file update/);
+  assert.match(replaceBlocked, /The current partial answer was not safely saved/);
+  assert.doesNotMatch(replaceBlocked, /resetting.*AppData|application data write access/);
 
   const writeBlockedProbe = render(session, {
     ...queryTask,
@@ -253,8 +253,8 @@ test("persistence guidance follows the safe operation diagnostic", () => {
     },
     retryable: true,
   });
-  assert.match(writeBlockedProbe, /恢复探测.*无法创建检查点/);
-  assert.doesNotMatch(writeBlockedProbe, /Windows 暂时阻止/);
+  assert.match(writeBlockedProbe, /replacement recovery probe could not create a checkpoint/);
+  assert.doesNotMatch(writeBlockedProbe, /Windows temporarily blocked/);
 
   const smokeFault = render(session, {
     ...queryTask,
@@ -272,8 +272,8 @@ test("persistence guidance follows the safe operation diagnostic", () => {
     },
     retryable: true,
   });
-  assert.match(smokeFault, /内部构建验证故障/);
-  assert.doesNotMatch(smokeFault, /目录的写入权限/);
+  assert.match(smokeFault, /internal build verification fault/);
+  assert.doesNotMatch(smokeFault, /application data write access/);
 
   const preflightWriteFailure = render(session, undefined, 1, {
     code: "query_state_permission_denied",
@@ -287,14 +287,14 @@ test("persistence guidance follows the safe operation diagnostic", () => {
       },
     },
   });
-  assert.match(preflightWriteFailure, /检查应用数据写入策略/);
+  assert.match(preflightWriteFailure, /check application data write access/);
   assert.match(preflightWriteFailure, /preflight-request/);
 });
 
 test("Workspace truthfully explains why the composer is unavailable", () => {
   const session = { status: "success" as const, data: detail };
-  assert.match(render(undefined), /先选择或新建任务/);
-  assert.match(render(session, undefined, 0), /请先在 Sources 中选择来源/);
+  assert.match(render(undefined), /Select or create a task first/);
+  assert.match(render(session, undefined, 0), /Select sources in Sources first/);
   assert.match(
     render(session, {
       ...queryTask,
@@ -302,7 +302,7 @@ test("Workspace truthfully explains why the composer is unavailable", () => {
       status: "running",
       stage: "generating",
     }),
-    /另一个任务的回答仍在生成/,
+    /Another task is still generating an answer/,
   );
   assert.match(render(session), /local-model/);
 });

@@ -31,18 +31,21 @@ import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
 import { refreshFilesForTerminalTask } from "./index-task-state";
 import { mergeQueryTaskSnapshot } from "./query-task-state";
-import { PAGE_TITLES, type AppPage } from "./navigation";
+import { type AppPage } from "./navigation";
+import { LanguageProvider, useLanguage, type Translate } from "./i18n";
 import type { ResourceState } from "./resource-state";
 import { useDesktopResource } from "./useDesktopResource";
 
-const unavailableRuntime: RuntimeStatus = {
-  state: "failed",
-  protocol: 1,
-  capabilities: [],
-  message: "Desktop bridge 不可用。",
-};
-
 export default function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
+  );
+}
+
+function AppContent() {
+  const { t } = useLanguage();
   const [activeNav, setActiveNav] = useState<AppPage>("workbench");
   const draftGeneration = useRef(0);
   const [workspaceId, setWorkspaceId] = useState("draft:0");
@@ -86,45 +89,55 @@ export default function App() {
   const [runtime, setRuntime] = useState<RuntimeStatus>(
     window.desktop
       ? { state: "starting", protocol: 1, capabilities: [] }
-      : unavailableRuntime,
+      : unavailableRuntime(t("errors.desktopBridgeUnavailable")),
   );
   const loadDoctor = useCallback(
     () =>
       window.desktop?.getDoctor() ??
-      unavailableResult("Doctor 仅能在 MARA Desktop 中使用。"),
-    [],
+      unavailableResult(t("errors.doctorDesktopOnly")),
+    [t],
   );
   const loadFiles = useCallback(
     () =>
       window.desktop?.listFiles() ??
-      unavailableResult("Files 仅能在 MARA Desktop 中使用。"),
-    [],
+      unavailableResult(t("errors.filesDesktopOnly")),
+    [t],
   );
   const loadSessions = useCallback(
     () =>
       window.desktop?.listSessions() ??
-      unavailableResult("Sessions 仅能在 MARA Desktop 中使用。"),
-    [],
+      unavailableResult(t("errors.sessionsDesktopOnly")),
+    [t],
   );
   const loadModelSettings = useCallback(
     () =>
       window.desktop?.getModelSettings() ??
       unavailableResult<ModelSettingsStatus>(
-        "模型设置仅能在 MARA Desktop 中使用。",
+        t("errors.modelSettingsDesktopOnly"),
       ),
-    [],
+    [t],
   );
-  const doctor = useDesktopResource(loadDoctor);
-  const files = useDesktopResource(loadFiles);
-  const sessions = useDesktopResource(loadSessions);
-  const modelSettings = useDesktopResource(loadModelSettings);
-  const indexing = indexingReadiness(doctor.resource);
-  const querying = queryReadiness(doctor.resource);
+  const doctor = useDesktopResource(loadDoctor, t("errors.desktopBridgeUnavailable"));
+  const files = useDesktopResource(loadFiles, t("errors.desktopBridgeUnavailable"));
+  const sessions = useDesktopResource(loadSessions, t("errors.desktopBridgeUnavailable"));
+  const modelSettings = useDesktopResource(
+    loadModelSettings,
+    t("errors.desktopBridgeUnavailable"),
+  );
+  const indexing = indexingReadiness(doctor.resource, t);
+  const querying = queryReadiness(doctor.resource, t);
 
   useEffect(() => {
-    document.title = `${PAGE_TITLES[activeNav]} · MARA`;
+    document.title = t(`nav.${activeNav}` as Parameters<typeof t>[0]);
+    document.title = t("common.pageTitle", { page: document.title });
     document.querySelector<HTMLElement>("[data-page-title]")?.focus();
-  }, [activeNav]);
+  }, [activeNav, t]);
+
+  useEffect(() => {
+    if (!window.desktop) {
+      setRuntime(unavailableRuntime(t("errors.desktopBridgeUnavailable")));
+    }
+  }, [t]);
 
   useEffect(() => {
     const generation = ++sessionRequestGeneration.current;
@@ -139,11 +152,13 @@ export default function App() {
         result = await (
           window.desktop?.getSession(selectedSessionId) ??
           unavailableResult<SessionDetail>(
-            "会话详情仅能在 MARA Desktop 中使用。",
+            t("errors.sessionDetailsDesktopOnly"),
           )
         );
       } catch {
-        result = await unavailableResult<SessionDetail>("会话读取未能完成。");
+        result = await unavailableResult<SessionDetail>(
+          t("errors.sessionReadFailed"),
+        );
       }
       if (generation !== sessionRequestGeneration.current) {
         return;
@@ -163,7 +178,7 @@ export default function App() {
         sessionRequestGeneration.current += 1;
       }
     };
-  }, [selectedSessionId, sessionReload]);
+  }, [selectedSessionId, sessionReload, t]);
   const updateIndexTask = useCallback(
     (task: IndexTask) => {
       setIndexTask(task);
@@ -206,7 +221,9 @@ export default function App() {
     void window.desktop
       .getRuntimeStatus()
       .then(setRuntime)
-      .catch(() => setRuntime(unavailableRuntime));
+      .catch(() =>
+        setRuntime(unavailableRuntime(t("errors.desktopBridgeUnavailable"))),
+      );
     void window.desktop.getLatestIndexTask().then((result) => {
       if (result.ok && result.data) {
         updateIndexTask(result.data);
@@ -225,7 +242,7 @@ export default function App() {
       removeTaskListener();
       removeAnswerListener();
     };
-  }, [updateAnswerTask, updateIndexTask]);
+  }, [t, updateAnswerTask, updateIndexTask]);
 
   const runFileImport = useCallback(
     async (
@@ -262,12 +279,12 @@ export default function App() {
         () =>
           window.desktop?.importFiles() ??
           unavailableResult<IndexTask | null>(
-            "文件导入仅能在 MARA Desktop 中使用。",
+            t("errors.fileImportDesktopOnly"),
           ),
         "file_import_failed",
-        "文件导入未能完成。",
+        t("errors.fileImportFailed"),
       ),
-    [runFileImport],
+    [runFileImport, t],
   );
 
   const importDroppedFiles = useCallback(
@@ -276,12 +293,12 @@ export default function App() {
         () =>
           window.desktop?.importDroppedFiles(droppedFiles) ??
           unavailableResult<IndexTask>(
-            "文件拖放仅能在 MARA Desktop 中使用。",
+            t("errors.fileDropDesktopOnly"),
           ),
         "file_drop_failed",
-        "拖放文件未能导入。",
+        t("errors.fileDropFailed"),
       ),
-    [runFileImport],
+    [runFileImport, t],
   );
 
   const cancelIndexTask = useCallback(async () => {
@@ -297,7 +314,7 @@ export default function App() {
     try {
       const result = await (
         window.desktop?.cancelIndexTask(indexTask.task_id) ??
-        unavailableResult<IndexTask>("索引任务仅能在 MARA Desktop 中管理。")
+        unavailableResult<IndexTask>(t("errors.indexTaskDesktopOnly"))
       );
       if (result.ok) {
         updateIndexTask(result.data);
@@ -306,13 +323,16 @@ export default function App() {
       }
     } catch {
       setFileActionError(
-        rendererSidecarError("index_cancel_failed", "取消索引未能完成。"),
+        rendererSidecarError(
+          "index_cancel_failed",
+          t("errors.indexCancelFailed"),
+        ),
       );
     } finally {
       indexActionLock.current = false;
       setIndexActionPending(false);
     }
-  }, [indexTask, updateIndexTask]);
+  }, [indexTask, t, updateIndexTask]);
 
   const retryIndexTask = useCallback(async () => {
     if (!indexTask) {
@@ -327,7 +347,7 @@ export default function App() {
     try {
       const result = await (
         window.desktop?.retryIndexTask(indexTask.task_id) ??
-        unavailableResult<IndexTask>("索引任务仅能在 MARA Desktop 中管理。")
+        unavailableResult<IndexTask>(t("errors.indexTaskDesktopOnly"))
       );
       if (result.ok) {
         updateIndexTask(result.data);
@@ -336,13 +356,16 @@ export default function App() {
       }
     } catch {
       setFileActionError(
-        rendererSidecarError("index_retry_failed", "重试索引未能完成。"),
+        rendererSidecarError(
+          "index_retry_failed",
+          t("errors.indexRetryFailed"),
+        ),
       );
     } finally {
       indexActionLock.current = false;
       setIndexActionPending(false);
     }
-  }, [indexTask, updateIndexTask]);
+  }, [indexTask, t, updateIndexTask]);
 
   const deleteFiles = useCallback(
     async (targets: FileRecord[]) => {
@@ -354,8 +377,10 @@ export default function App() {
       }
       const confirmation =
         targets.length === 1
-          ? `删除“${targets[0].name || "未命名文件"}”的索引和受管副本？`
-          : `删除选中的 ${targets.length} 个文件索引和受管副本？此操作不可撤销。`;
+          ? t("errors.deleteFileConfirm", {
+              name: targets[0].name || t("common.unnamedFile"),
+            })
+          : t("errors.deleteFilesConfirm", { count: targets.length });
       if (!window.confirm(confirmation)) {
         return;
       }
@@ -366,7 +391,7 @@ export default function App() {
       try {
         const result = await (
           window.desktop?.deleteFiles(fileIds) ??
-          unavailableResult<string[]>("文件删除仅能在 MARA Desktop 中使用。")
+          unavailableResult<string[]>(t("errors.fileDeleteDesktopOnly"))
         );
         if (result.ok) {
           setSelectedFileIds((selected) =>
@@ -382,7 +407,10 @@ export default function App() {
         }
       } catch {
         setFileActionError(
-          rendererSidecarError("file_delete_failed", "文件删除未能完成。"),
+          rendererSidecarError(
+            "file_delete_failed",
+            t("errors.fileDeleteFailed"),
+          ),
         );
         files.retry();
       } finally {
@@ -390,7 +418,7 @@ export default function App() {
         setDeletingFileIds([]);
       }
     },
-    [files.retry],
+    [files.retry, t],
   );
 
   useEffect(() => {
@@ -460,7 +488,7 @@ export default function App() {
           const created = await (
             window.desktop?.createSession() ??
             unavailableResult<SessionDetail>(
-              "新建任务仅能在 MARA Desktop 中使用。",
+              t("errors.newTaskDesktopOnly"),
             )
           );
           if (!created.ok) {
@@ -478,7 +506,7 @@ export default function App() {
             conversation_id: conversationId,
             prompt,
             selected_file_ids: selectedSourceIds,
-          }) ?? unavailableResult<QueryTask>("问答仅能在 MARA Desktop 中使用。")
+          }) ?? unavailableResult<QueryTask>(t("errors.qaDesktopOnly"))
         );
         if (result.ok) {
           updateAnswerTask(result.data, true);
@@ -487,7 +515,10 @@ export default function App() {
         }
       } catch {
         setAnswerActionError(
-          rendererSidecarError("query_submit_failed", "问题未能提交。"),
+          rendererSidecarError(
+            "query_submit_failed",
+            t("errors.questionSubmitFailed"),
+          ),
         );
       } finally {
         sessionCreateLock.current = false;
@@ -502,6 +533,7 @@ export default function App() {
       selectedSessionId,
       selectedSourceIds,
       sessions.retry,
+      t,
       updateAnswerTask,
     ],
   );
@@ -516,7 +548,7 @@ export default function App() {
     try {
       const result = await (
         window.desktop?.cancelAnswer(answerTask.task_id) ??
-        unavailableResult<QueryTask>("回答任务仅能在 MARA Desktop 中管理。")
+        unavailableResult<QueryTask>(t("errors.answerTaskDesktopOnly"))
       );
       if (result.ok) {
         updateAnswerTask(result.data);
@@ -525,13 +557,16 @@ export default function App() {
       }
     } catch {
       setAnswerActionError(
-        rendererSidecarError("query_cancel_failed", "停止回答未能完成。"),
+        rendererSidecarError(
+          "query_cancel_failed",
+          t("errors.answerCancelFailed"),
+        ),
       );
     } finally {
       answerActionLock.current = false;
       setAnswerActionPending(false);
     }
-  }, [answerTask, updateAnswerTask]);
+  }, [answerTask, t, updateAnswerTask]);
 
   const retryAnswer = useCallback(async () => {
     if (!answerTask || answerActionLock.current) {
@@ -543,7 +578,7 @@ export default function App() {
     try {
       const result = await (
         window.desktop?.retryAnswer(answerTask.task_id) ??
-        unavailableResult<QueryTask>("回答任务仅能在 MARA Desktop 中管理。")
+        unavailableResult<QueryTask>(t("errors.answerTaskDesktopOnly"))
       );
       if (result.ok) {
         updateAnswerTask(result.data, true);
@@ -552,13 +587,16 @@ export default function App() {
       }
     } catch {
       setAnswerActionError(
-        rendererSidecarError("query_retry_failed", "重试回答未能完成。"),
+        rendererSidecarError(
+          "query_retry_failed",
+          t("errors.answerRetryFailed"),
+        ),
       );
     } finally {
       answerActionLock.current = false;
       setAnswerActionPending(false);
     }
-  }, [answerTask, updateAnswerTask]);
+  }, [answerTask, t, updateAnswerTask]);
 
   const startDraft = useCallback(() => {
     if (sessionCreateLock.current || sessionMutationLock.current) {
@@ -589,7 +627,7 @@ export default function App() {
         const result = await (
           window.desktop?.saveModelSettings(settings) ??
           unavailableResult<ModelSettingsStatus>(
-            "模型设置仅能在 MARA Desktop 中保存。",
+            t("errors.modelSettingsSaveDesktopOnly"),
           )
         );
         if (!result.ok) {
@@ -602,7 +640,7 @@ export default function App() {
         setModelSettingsSaveError(
           rendererSidecarError(
             "model_settings_apply_failed",
-            "模型设置未能保存并应用。",
+            t("errors.modelSettingsApplyFailed"),
           ),
         );
       } finally {
@@ -610,7 +648,7 @@ export default function App() {
         setModelSettingsSavePending(false);
       }
     },
-    [doctor.retry, modelSettings.retry],
+    [doctor.retry, modelSettings.retry, t],
   );
 
   useEffect(() => {
@@ -648,9 +686,9 @@ export default function App() {
 
   const startSessionRename = useCallback((session: SessionSummary) => {
     setEditingSessionId(session.conversation_id);
-    setEditingSessionName(session.name || "未命名任务");
+    setEditingSessionName(session.name || t("common.unnamedTask"));
     setSessionActionError(undefined);
-  }, []);
+  }, [t]);
 
   const cancelSessionRename = useCallback(() => {
     if (sessionMutationLock.current) {
@@ -679,7 +717,7 @@ export default function App() {
         const result = await (
           window.desktop?.renameSession(conversationId, name) ??
           unavailableResult<SessionDetail>(
-            "会话重命名仅能在 MARA Desktop 中使用。",
+            t("errors.renameDesktopOnly"),
           )
         );
         if (result.ok) {
@@ -693,13 +731,13 @@ export default function App() {
           setSessionActionError(result.error.message);
         }
       } catch {
-        setSessionActionError("会话重命名未能完成。");
+        setSessionActionError(t("errors.renameFailed"));
       } finally {
         sessionMutationLock.current = false;
         setSessionAction(undefined);
       }
     },
-    [selectedSessionId, sessions.retry],
+    [selectedSessionId, sessions.retry, t],
   );
 
   const deleteSession = useCallback(
@@ -707,10 +745,10 @@ export default function App() {
       if (sessionMutationLock.current || sessionCreateLock.current) {
         return;
       }
-      const name = session.name || "未命名任务";
+      const name = session.name || t("common.unnamedTask");
       if (
         !window.confirm(
-          `删除“${name}”会永久删除该会话及其消息记录；此操作不可撤销。`,
+          t("errors.deleteSessionConfirm", { name }),
         )
       ) {
         return;
@@ -722,7 +760,7 @@ export default function App() {
       try {
         const result = await (
           window.desktop?.deleteSession(conversationId) ??
-          unavailableResult<string>("会话删除仅能在 MARA Desktop 中使用。")
+          unavailableResult<string>(t("errors.deleteSessionDesktopOnly"))
         );
         if (result.ok) {
           if (selectedSessionId === conversationId) {
@@ -747,19 +785,25 @@ export default function App() {
           sessions.retry();
         }
       } catch {
-        setSessionActionError("会话删除未能完成。");
+        setSessionActionError(t("errors.deleteSessionFailed"));
         sessions.retry();
       } finally {
         sessionMutationLock.current = false;
         setSessionAction(undefined);
       }
     },
-    [answerTask?.conversation_id, editingSessionId, selectedSessionId, sessions.retry],
+    [
+      answerTask?.conversation_id,
+      editingSessionId,
+      selectedSessionId,
+      sessions.retry,
+      t,
+    ],
   );
 
   return (
     <>
-      <a className="skip-link" href="#main-workspace">跳到主工作区</a>
+      <a className="skip-link" href="#main-workspace">{t("nav.skipToMain")}</a>
       <div className="app-shell">
         <Sidebar
           active={activeNav}
@@ -880,6 +924,15 @@ export default function App() {
   );
 }
 
+function unavailableRuntime(message: string): RuntimeStatus {
+  return {
+    state: "failed",
+    protocol: 1,
+    capabilities: [],
+    message,
+  };
+}
+
 function unavailableResult<T>(message: string): Promise<DesktopResult<T>> {
   return Promise.resolve({
     ok: false,
@@ -914,6 +967,7 @@ type WorkbenchQueryReadiness = Pick<
 
 function indexingReadiness(
   doctor: ResourceState<DoctorPayload>,
+  t: Translate,
 ): FilesIndexingReadiness {
   if (doctor.status === "success") {
     return {
@@ -928,7 +982,7 @@ function indexingReadiness(
     return {
       indexing_ready: false,
       indexing_issue_code: doctor.error?.code ?? "doctor_unavailable",
-      indexing_message: "无法确认文件索引准备状态。",
+      indexing_message: t("errors.indexingUnavailable"),
       indexing_action: "none",
       request_id: doctor.error?.request_id ?? "doctor-unavailable",
     };
@@ -936,7 +990,7 @@ function indexingReadiness(
   return {
     indexing_ready: false,
     indexing_issue_code: "indexing_status_pending",
-    indexing_message: "正在检查文件索引准备状态。",
+    indexing_message: t("errors.indexingPending"),
     indexing_action: "none",
     request_id: "doctor-pending",
   };
@@ -944,6 +998,7 @@ function indexingReadiness(
 
 function queryReadiness(
   doctor: ResourceState<DoctorPayload>,
+  t: Translate,
 ): WorkbenchQueryReadiness {
   if (doctor.status === "success") {
     return {
@@ -959,7 +1014,7 @@ function queryReadiness(
     return {
       query_ready: false,
       query_issue_code: doctor.error?.code ?? "doctor_unavailable",
-      query_message: "无法确认问答模型准备状态。",
+      query_message: t("errors.queryUnavailable"),
       query_action: "none",
       query_retryable: true,
       request_id: doctor.error?.request_id ?? "doctor-unavailable",
@@ -968,7 +1023,7 @@ function queryReadiness(
   return {
     query_ready: false,
     query_issue_code: "query_status_pending",
-    query_message: "正在检查问答模型准备状态。",
+    query_message: t("errors.queryPending"),
     query_action: "none",
     query_retryable: true,
     request_id: "doctor-pending",

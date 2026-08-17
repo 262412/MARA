@@ -72,22 +72,22 @@ function render(state: ResourceState<DoctorPayload>, answerTask?: QueryTask) {
 }
 
 test("Doctor panel covers loading, success, failed, and degraded states", () => {
-  assert.match(render({ status: "loading" }), /正在运行 Doctor/);
-  assert.match(render({ status: "success", data: doctor }), /Doctor 通过/);
+  assert.match(render({ status: "loading" }), /Running Doctor/);
+  assert.match(render({ status: "success", data: doctor }), /Doctor passed/);
   assert.match(
-    render({ status: "failed", message: "Doctor 暂不可用" }),
-    /Doctor 暂不可用/,
+    render({ status: "failed", message: "Doctor unavailable" }),
+    /Doctor unavailable/,
   );
   assert.match(
-    render({ status: "failed", message: "Doctor 暂不可用" }),
-    /重试/,
+    render({ status: "failed", message: "Doctor unavailable" }),
+    /Retry/,
   );
   assert.match(
     render({
       status: "success",
-      data: { ...doctor, ok: false, issues: ["默认索引不可用"] },
+      data: { ...doctor, ok: false, issues: ["Default index unavailable"] },
     }),
-    /默认索引不可用/,
+    /Default index unavailable/,
   );
 });
 
@@ -167,6 +167,6 @@ test("Sources panel renders real file states and selected identities", () => {
 
   assert.match(markup, /real-paper.pdf/);
   assert.match(markup, /42 tokens/);
-  assert.match(markup, /已选择 1 个来源/);
+  assert.match(markup, /Selected 1 sources/);
   assert.doesNotMatch(markup, /agent_verifiable_trajectories/);
 });

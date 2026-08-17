@@ -12,6 +12,7 @@ import type { ResourceState } from "./resource-state";
 
 export function useDesktopResource<T>(
   loader: () => Promise<DesktopResult<T>>,
+  requestFailedMessage = "Desktop request could not be completed.",
 ): {
   resource: ResourceState<T>;
   retry: () => void;
@@ -32,7 +33,7 @@ export function useDesktopResource<T>(
         ok: false,
         error: {
           code: "desktop_request_failed",
-          message: "Desktop 请求未能完成。",
+          message: requestFailedMessage,
           details: null,
           retryable: true,
           request_id: "renderer-request",
@@ -51,7 +52,7 @@ export function useDesktopResource<T>(
             error: result.error,
           },
     );
-  }, [loader]);
+  }, [loader, requestFailedMessage]);
 
   useEffect(() => {
     void load();

@@ -2,6 +2,7 @@ import type { DoctorPayload } from "../../shared/doctor-contracts";
 import type { FileRecord } from "../../shared/file-contracts";
 import type { QueryTask } from "../../shared/query-contracts";
 import type { RuntimeStatus } from "../../shared/runtime-contracts";
+import { useLanguage } from "../i18n";
 import type { ResourceState } from "../resource-state";
 import { Icon } from "./Icon";
 
@@ -34,13 +35,14 @@ export function Inspector({
   runtime,
   selectedSourceIds,
 }: InspectorProps) {
+  const { t } = useLanguage();
   return (
-    <aside className="inspector" aria-label="上下文检查器">
-      <div className="inspector-tabs" role="tablist" aria-label="检查器视图">
+    <aside className="inspector" aria-label={t("inspector.context")}>
+      <div className="inspector-tabs" role="tablist" aria-label={t("inspector.view")}>
         {([
-          ["preview", "Preview"],
-          ["sources", "Sources"],
-          ["run", "Run"],
+          ["preview", t("inspector.preview")],
+          ["sources", t("inspector.sources")],
+          ["run", t("inspector.run")],
         ] as const).map(([id, label]) => (
           <button
             aria-selected={activeTab === id}
@@ -54,7 +56,7 @@ export function Inspector({
           </button>
         ))}
         <button
-          aria-label="关闭检查器"
+          aria-label={t("inspector.close")}
           className="inspector-close"
           onClick={onClose}
           type="button"
@@ -93,6 +95,7 @@ function Preview({
   files: ResourceState<FileRecord[]>;
   selectedSourceIds: string[];
 }) {
+  const { t } = useLanguage();
   const selected =
     files.status === "success"
       ? files.data.filter((file) => selectedSourceIds.includes(file.file_id))
@@ -101,14 +104,14 @@ function Preview({
     <div className="inspector-content preview-content" role="tabpanel">
       <div className="preview-unavailable">
         <Icon name="files" size={22} />
-        <h2>预览尚未接入</h2>
-        <p>本切片只显示真实来源身份；原生文档预览将在后续 Gate 3 切片实现。</p>
+        <h2>{t("inspector.previewUnavailable")}</h2>
+        <p>{t("inspector.previewDetail")}</p>
         {selected.length > 0 ? (
           <ul>
             {selected.map((file) => <li key={file.file_id}>{file.name}</li>)}
           </ul>
         ) : (
-          <span>请先在 Sources 中选择文件。</span>
+          <span>{t("inspector.selectSources")}</span>
         )}
       </div>
     </div>
@@ -126,23 +129,28 @@ function Sources({
   onToggleSource: (fileId: string) => void;
   selectedSourceIds: string[];
 }) {
+  const { t } = useLanguage();
   return (
     <div className="inspector-content sources-content" role="tabpanel">
       <div className="section-heading">
         <div>
-          <h2>当前来源</h2>
-          <p>已选择 {selectedSourceIds.length} 个来源</p>
+          <h2>{t("inspector.currentSources")}</h2>
+          <p>{t("inspector.selectedSources", { count: selectedSourceIds.length })}</p>
         </div>
       </div>
-      {files.status === "loading" ? <InspectorState>正在读取来源…</InspectorState> : null}
+      {files.status === "loading" ? (
+        <InspectorState>{t("inspector.loadingSources")}</InspectorState>
+      ) : null}
       {files.status === "failed" ? (
         <InspectorState role="alert">
           <span>{files.message}</span>
-          <button className="small-button" onClick={onRetryFiles} type="button">重试</button>
+          <button className="small-button" onClick={onRetryFiles} type="button">
+            {t("common.retry")}
+          </button>
         </InspectorState>
       ) : null}
       {files.status === "success" && files.data.length === 0 ? (
-        <InspectorState>还没有已索引文件。请先从 Files 导入并完成索引。</InspectorState>
+        <InspectorState>{t("inspector.noIndexedFiles")}</InspectorState>
       ) : null}
       {files.status === "success"
         ? files.data.map((file, index) => {
@@ -156,10 +164,17 @@ function Sources({
                 />
                 <span className="source-index">{index + 1}</span>
                 <span>
-                  <strong>{file.name || "未命名文件"}</strong>
-                  <small>{file.tokens.toLocaleString()} tokens · {file.loader || "未知读取器"}</small>
+                  <strong>{file.name || t("common.unnamedFile")}</strong>
+                  <small>
+                    {t("common.tokensAndLoader", {
+                      tokens: file.tokens.toLocaleString(),
+                      loader: file.loader || t("common.unknown"),
+                    })}
+                  </small>
                 </span>
-                <span className="indexed">{selected ? "已选择" : "已索引"}</span>
+                <span className="indexed">
+                  {selected ? t("inspector.selected") : t("inspector.indexed")}
+                </span>
               </label>
             );
           })
@@ -189,30 +204,35 @@ function RunStatus({
   answerTask?: QueryTask;
   onRetryDoctor: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="inspector-content run-content" role="tabpanel">
       <div className="runtime-card">
         <span className={`status-dot ${runtime.state === "healthy" ? "healthy" : ""}`} />
         <div>
-          <strong>Python Sidecar</strong>
-          <span>{runtime.state === "healthy" ? "运行正常" : runtime.message ?? runtime.state}</span>
+          <strong>{t("inspector.sidecar")}</strong>
+          <span>
+            {runtime.state === "healthy"
+              ? t("inspector.runningNormally")
+              : runtime.message ?? runtime.state}
+          </span>
         </div>
         <code>v{runtime.version ?? "—"}</code>
       </div>
       <h2>Doctor</h2>
       {doctor.status === "loading" ? (
-        <p className="doctor-state">正在运行 Doctor…</p>
+        <p className="doctor-state">{t("inspector.loadingDoctor")}</p>
       ) : null}
       {doctor.status === "failed" ? (
         <div className="doctor-state failed" role="alert">
           <strong>{doctor.message}</strong>
           <span>
             {doctor.error?.request_id
-              ? `请求 ID：${doctor.error.request_id}`
-              : "请检查 Sidecar 后重试。"}
+              ? t("common.requestId", { id: doctor.error.request_id })
+              : t("inspector.checkSidecar")}
           </span>
           <button className="small-button" onClick={onRetryDoctor} type="button">
-            重试
+            {t("common.retry")}
           </button>
         </div>
       ) : null}
@@ -220,21 +240,27 @@ function RunStatus({
       {answerTask?.error?.persistence ? (
         <QueryPersistenceSummary task={answerTask} />
       ) : null}
-      <button className="diagnostics-button" disabled type="button">诊断中心将在后续切片启用</button>
+      <button className="diagnostics-button" disabled type="button">
+        {t("inspector.diagnosticsUnavailable")}
+      </button>
     </div>
   );
 }
 
 function QueryPersistenceSummary({ task }: { task: QueryTask }) {
+  const { t } = useLanguage();
   const diagnostic = task.error?.persistence;
   if (!diagnostic) {
     return null;
   }
   return (
-    <section className="query-persistence-diagnostic" aria-label="回答状态诊断">
-      <strong>回答状态诊断</strong>
+    <section
+      className="query-persistence-diagnostic"
+      aria-label={t("inspector.answerDiagnostics")}
+    >
+      <strong>{t("inspector.answerDiagnostics")}</strong>
       <code>{diagnostic.fingerprint}</code>
-      <small>任务 ID：{task.task_id}</small>
+      <small>{t("inspector.persistenceTask", { id: task.task_id })}</small>
       <small>
         {diagnostic.operation} · errno {diagnostic.errno ?? "—"} · WinError{" "}
         {diagnostic.winerror ?? "—"} · retry {diagnostic.retry_count} · probe{" "}
@@ -245,14 +271,17 @@ function QueryPersistenceSummary({ task }: { task: QueryTask }) {
 }
 
 function DoctorSummary({ doctor }: { doctor: DoctorPayload }) {
+  const { t } = useLanguage();
   return (
     <div className={doctor.ok ? "doctor-summary" : "doctor-summary degraded"}>
-      <strong>{doctor.ok ? "Doctor 通过" : "Doctor 发现问题"}</strong>
+      <strong>
+        {doctor.ok ? t("inspector.doctorPassed") : t("inspector.doctorIssues")}
+      </strong>
       <dl>
-        <div><dt>文件</dt><dd>{doctor.file_count}</dd></div>
-        <div><dt>会话</dt><dd>{doctor.session_count}</dd></div>
-        <div><dt>LLM</dt><dd>{doctor.llm_default || "未配置"}</dd></div>
-        <div><dt>Embedding</dt><dd>{doctor.embedding_default || "未配置"}</dd></div>
+        <div><dt>{t("common.file")}</dt><dd>{doctor.file_count}</dd></div>
+        <div><dt>{t("common.session")}</dt><dd>{doctor.session_count}</dd></div>
+        <div><dt>{t("common.llm")}</dt><dd>{doctor.llm_default || t("inspector.notConfigured")}</dd></div>
+        <div><dt>{t("common.embedding")}</dt><dd>{doctor.embedding_default || t("inspector.notConfigured")}</dd></div>
       </dl>
       {doctor.issues.map((issue) => <p className="doctor-issue" key={issue}>{issue}</p>)}
       {doctor.warnings.map((warning) => <p className="doctor-warning" key={warning}>{warning}</p>)}

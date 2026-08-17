@@ -15,6 +15,7 @@ import type {
 } from "../../shared/query-contracts";
 import type { DoctorPayload } from "../../shared/doctor-contracts";
 import type { SidecarError } from "../../shared/runtime-contracts";
+import { useLanguage, type Translate } from "../i18n";
 import type { SessionDetail, SessionMessage } from "../../shared/session-contracts";
 import type { ResourceState } from "../resource-state";
 import { submittedPromptTransition } from "../query-task-state";
@@ -81,6 +82,7 @@ export function Workspace({
   promptValue,
   workspaceId = "workspace",
 }: WorkspaceProps) {
+  const { t } = useLanguage();
   const [localPrompt, setLocalPrompt] = useState("");
   const prompt = promptValue ?? localPrompt;
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -111,6 +113,7 @@ export function Workspace({
     active,
     backgroundActive,
     answerActionPending,
+    t,
   );
   const canSubmit = !disabledReason && prompt.trim().length > 0;
   const setPrompt = (value: string) => {
@@ -153,14 +156,14 @@ export function Workspace({
         inputRef.current?.focus();
       } else if (event.key === "Escape" && active) {
         event.preventDefault();
-        if (window.confirm("停止当前回答？已经生成的内容会保留。")) {
+        if (window.confirm(t("workspace.answerStopConfirm"))) {
           onCancelAnswer();
         }
       }
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [active, onCancelAnswer]);
+  }, [active, onCancelAnswer, t]);
 
   const submit = () => {
     const normalized = prompt.trim();
@@ -197,15 +200,17 @@ export function Workspace({
     <main className="workspace" id="main-workspace">
       <header className="workspace-toolbar">
         <div>
-          <p className="eyebrow">研究任务</p>
-          <h1 data-page-title tabIndex={-1}>{isDraft ? "新任务" : detail?.name || "工作台"}</h1>
+          <p className="eyebrow">{t("workspace.researchTask")}</p>
+          <h1 data-page-title tabIndex={-1}>
+            {isDraft ? t("workspace.newTask") : detail?.name || t("workspace.workbench")}
+          </h1>
         </div>
         <div className="toolbar-actions">
           <button className="source-count" onClick={onOpenSources} type="button">
-            {selectedSourceCount} 个已选来源
+            {t("workspace.selectedSources", { count: selectedSourceCount })}
           </button>
           <button
-            aria-label="显示或隐藏检查器"
+            aria-label={t("workspace.toggleInspector")}
             className="icon-button"
             onClick={onToggleInspector}
             type="button"
@@ -215,24 +220,24 @@ export function Workspace({
         </div>
       </header>
 
-      <section className="conversation" aria-label="任务对话">
+      <section className="conversation" aria-label={t("workspace.conversation")}>
         {isDraft ? (
-          <WorkspaceState>这是一个新草稿。选择来源并输入问题后，首次发送才会保存任务。</WorkspaceState>
+          <WorkspaceState>{t("workspace.draftState")}</WorkspaceState>
         ) : null}
         {!isDraft && !session ? (
-          <WorkspaceState>从左侧选择一个任务以查看真实 MARA 会话。</WorkspaceState>
+          <WorkspaceState>{t("workspace.selectTask")}</WorkspaceState>
         ) : null}
         {session?.status === "loading" ? (
-          <WorkspaceState>正在读取会话…</WorkspaceState>
+          <WorkspaceState>{t("workspace.loadingSession")}</WorkspaceState>
         ) : null}
         {session?.status === "failed" ? (
           <WorkspaceState role="alert">
             <span>{session.message}</span>
-            <button onClick={onRetrySession} type="button">重试</button>
+            <button onClick={onRetrySession} type="button">{t("common.retry")}</button>
           </WorkspaceState>
         ) : null}
         {detail && history.length === 0 && !visibleTask ? (
-          <WorkspaceState>这个任务还没有消息。选择来源后即可提问。</WorkspaceState>
+          <WorkspaceState>{t("workspace.emptySession")}</WorkspaceState>
         ) : null}
         {history.map((message, index) => (
           <SavedMessage key={`${message.role}-${index}`} message={message} />
@@ -252,10 +257,12 @@ export function Workspace({
         {answerActionError ? (
           <div className="answer-action-error" role="alert">
             <span>{answerActionError.message}</span>
-            <span>{queryActionErrorAction(answerActionError)}</span>
+            <span>{queryActionErrorAction(answerActionError, t)}</span>
             <small>
-              错误代码：{answerActionError.code} · 请求 ID：
-              {answerActionError.request_id}
+              {t("workspace.errorCodeRequest", {
+                code: answerActionError.code,
+                id: answerActionError.request_id,
+              })}
             </small>
           </div>
         ) : null}
@@ -264,36 +271,42 @@ export function Workspace({
             <span>{disabledReason}</span>
             {!queryReadiness.query_ready ? (
               <small>
-                {queryReadiness.query_issue_code ?? "query_unavailable"} · 请求 ID：
-                {queryReadiness.request_id}
+                {t("workspace.queryCodeRequest", {
+                  code: queryReadiness.query_issue_code ?? "query_unavailable",
+                  id: queryReadiness.request_id,
+                })}
               </small>
             ) : null}
             {!queryReadiness.query_ready &&
             ["configure_llm", "configure_credentials"].includes(
               queryReadiness.query_action,
             ) ? (
-              <button onClick={onOpenSettings} type="button">配置模型</button>
+              <button onClick={onOpenSettings} type="button">
+                {t("common.configureModel")}
+              </button>
             ) : null}
           </div>
         ) : null}
         <div className="context-row">
           <button className="context-chip" onClick={onOpenSources} type="button">
             <Icon name="files" size={14} />
-            {selectedSourceCount} 个来源
+            {t("common.sourceCount", { count: selectedSourceCount })}
           </button>
-          <span className="context-model" title="模型由 MARA 本地配置提供">
-            {modelName || "默认模型路由"}
+          <span className="context-model" title={t("workspace.modelProvidedLocally")}>
+            {modelName || t("common.defaultModelRoute")}
           </span>
         </div>
         <div className={`composer${disabledReason ? " composer-disabled" : ""}`}>
-          <label className="sr-only" htmlFor="task-input">向所选来源提问</label>
+          <label className="sr-only" htmlFor="task-input">
+            {t("workspace.askSelectedSources")}
+          </label>
           <textarea
             aria-describedby={disabledReason ? "composer-notice composer-shortcut" : "composer-shortcut"}
             id="task-input"
             maxLength={20_000}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={handlePromptKeyDown}
-            placeholder="向所选来源提问…"
+            placeholder={t("workspace.askPlaceholder")}
             ref={inputRef}
             rows={2}
             value={prompt}
@@ -301,21 +314,21 @@ export function Workspace({
           <div className="composer-footer">
             <button className="add-source" onClick={onOpenSources} type="button">
               <Icon name="add" size={16} />
-              来源
+              {t("workspace.sources")}
             </button>
             <button
-              aria-label="发送问题"
+              aria-label={t("workspace.sendQuestion")}
               className="send-button"
               disabled={!canSubmit}
               onClick={submit}
-              title="Enter 发送；Alt+Enter 换行"
+              title={t("workspace.sendShortcutTitle")}
               type="button"
             >
               <Icon name="send" size={17} />
             </button>
           </div>
           <span className="sr-only" id="composer-shortcut">
-            Enter 发送，Alt+Enter 换行，Ctrl 或 Command 加 Enter 也可发送。
+            {t("workspace.sendShortcut")}
           </span>
         </div>
       </div>
@@ -324,17 +337,18 @@ export function Workspace({
 }
 
 function SavedMessage({ message }: { message: SessionMessage }) {
+  const { t } = useLanguage();
   if (message.role === "user") {
     return (
       <div className="message user-message">
-        <div className="message-label">你</div>
+        <div className="message-label">{t("workspace.you")}</div>
         <p>{message.content}</p>
       </div>
     );
   }
   return (
     <article className="message assistant-message">
-      <AssistantHeading detail="已保存的回答" />
+      <AssistantHeading detail={t("workspace.savedAnswer")} />
       <AssistantMarkdown content={message.content} />
     </article>
   );
@@ -353,30 +367,41 @@ function CurrentAnswer({
   onRetry: () => void;
   task: QueryTask;
 }) {
+  const { t } = useLanguage();
   const active = task.status === "queued" || task.status === "running";
   return (
     <div className="current-answer" aria-busy={active} aria-live="polite">
       <div className="message user-message">
-        <div className="message-label">你</div>
+        <div className="message-label">{t("workspace.you")}</div>
         <p>{task.prompt}</p>
       </div>
       <article className={`message assistant-message answer-${task.status}`}>
-        <AssistantHeading detail={answerStatus(task)} />
+        <AssistantHeading detail={answerStatus(task, t)} />
         {task.answer ? <AssistantMarkdown content={task.answer} /> : null}
-        {active && !task.answer ? <p className="answer-placeholder">正在检索所选来源…</p> : null}
+        {active && !task.answer ? (
+          <p className="answer-placeholder">{t("workspace.searchingSources")}</p>
+        ) : null}
         {task.error ? (
           <div className="answer-error" role="alert">
-            {task.status === "cancelled" ? "生成已停止。" : task.error.message}
-            <p>{queryErrorAction(task.error)}</p>
+            {task.status === "cancelled"
+              ? t("workspace.answerStopped")
+              : task.error.message}
+            <p>{queryErrorAction(task.error, t)}</p>
             {task.answer && !task.answer_saved ? (
-              <p>当前部分回答尚未安全保存；最后一次已确认状态仍保留在本地。</p>
+              <p>{t("workspace.partialAnswerNotSaved")}</p>
             ) : null}
-            <small>错误代码：{task.error.code} · 任务 ID：{task.task_id}</small>
+            <small>
+              {t("common.errorCode", { code: task.error.code })} · {t("common.taskId", { id: task.task_id })}
+            </small>
             {task.error.provider_request_id ? (
-              <small>提供方请求 ID：{task.error.provider_request_id}</small>
+              <small>
+                {t("common.providerRequestId", {
+                  id: task.error.provider_request_id,
+                })}
+              </small>
             ) : null}
             {task.error.diagnostic ? (
-              <small>诊断：{task.error.diagnostic}</small>
+              <small>{t("common.diagnostic", { value: task.error.diagnostic })}</small>
             ) : null}
           </div>
         ) : null}
@@ -384,17 +409,19 @@ function CurrentAnswer({
         <div className="answer-actions">
           {active ? (
             <button disabled={actionPending} onClick={onCancel} type="button">
-              {actionPending ? "正在停止…" : "停止"}
+              {actionPending ? t("workspace.stopping") : t("workspace.stop")}
             </button>
           ) : null}
           {task.retryable ? (
             <button disabled={actionPending} onClick={onRetry} type="button">
-              {actionPending ? "正在重试…" : "重试回答"}
+              {actionPending
+                ? t("workspace.retrying")
+                : t("workspace.retryAnswer")}
             </button>
           ) : null}
           {task.error && queryErrorNeedsSettings(task.error.code) ? (
             <button disabled={actionPending} onClick={onOpenSettings} type="button">
-              打开模型设置
+              {t("workspace.openModelSettings")}
             </button>
           ) : null}
         </div>
@@ -413,60 +440,61 @@ function queryErrorNeedsSettings(code: string): boolean {
   ].includes(code);
 }
 
-function queryErrorAction(error: QueryTaskError): string {
-  const persistenceAction = persistenceErrorAction(error.persistence);
+function queryErrorAction(error: QueryTaskError, t: Translate): string {
+  const persistenceAction = persistenceErrorAction(error.persistence, t);
   if (persistenceAction) {
     return persistenceAction;
   }
   const actions: Record<string, string> = {
-    llm_model_not_found: "请检查模型 ID 和提供方地址，然后重新保存设置。",
-    llm_model_unsupported: "请在设置中选择该提供方支持的聊天模型。",
-    llm_model_access_denied: "请确认当前账号拥有该模型的访问权限。",
-    llm_authentication_failed: "请在设置中更新模型凭据。",
-    llm_credentials_missing: "请在设置中补充模型凭据。",
-    llm_rate_limited: "请稍后重试；无需重新安装 MARA。",
-    llm_provider_unreachable: "请检查网络或本地模型服务后重试。",
-    llm_dependency_missing: "当前安装缺少提供方依赖，请修复或重新安装 MARA。",
-    query_storage_full: "请释放应用数据所在磁盘的空间，然后重试。",
-    query_state_locked: "请关闭额外的 MARA 实例，然后重试。",
-    query_state_permission_denied: "请检查 MARA 应用数据的写入策略，然后重试。",
-    query_state_replace_blocked: "状态文件替换持续受阻；原文件已保留，可安全重试。",
-    query_state_read_only: "请让 MARA 应用数据目录恢复可写，然后重试。",
-    query_state_corrupt: "回答状态文件已保留，请先修复状态文件再继续。",
-    query_persistence_failed: "请确认应用数据存储可用，然后重试。",
+    llm_model_not_found: t("workspace.queryActionModelNotFound"),
+    llm_model_unsupported: t("workspace.queryActionModelUnsupported"),
+    llm_model_access_denied: t("workspace.queryActionAccessDenied"),
+    llm_authentication_failed: t("workspace.queryActionAuthFailed"),
+    llm_credentials_missing: t("workspace.queryActionCredentialsMissing"),
+    llm_rate_limited: t("workspace.queryActionRateLimited"),
+    llm_provider_unreachable: t("workspace.queryActionProviderUnreachable"),
+    llm_dependency_missing: t("workspace.queryActionDependencyMissing"),
+    query_storage_full: t("workspace.queryActionStorageFull"),
+    query_state_locked: t("workspace.queryActionLocked"),
+    query_state_permission_denied: t("workspace.queryActionPermission"),
+    query_state_replace_blocked: t("workspace.queryActionReplaceBlocked"),
+    query_state_read_only: t("workspace.queryActionReadOnly"),
+    query_state_corrupt: t("workspace.queryActionCorrupt"),
+    query_persistence_failed: t("workspace.queryActionPersistence"),
   };
-  return actions[error.code] ?? "请记录任务 ID 后重试；若持续失败，请联系维护者。";
+  return actions[error.code] ?? t("workspace.queryActionDefault");
 }
 
-function queryActionErrorAction(error: SidecarError): string {
+function queryActionErrorAction(error: SidecarError, t: Translate): string {
   return queryErrorAction({
     code: error.code,
     message: error.message,
     retryable: error.retryable,
     persistence: persistenceDiagnosticFromDetails(error.details),
-  });
+  }, t);
 }
 
 function persistenceErrorAction(
   persistence: QueryPersistenceDiagnostic | null | undefined,
+  t: Translate,
 ): string | undefined {
   if (persistence?.smoke_mode) {
-    return "检测到内部构建验证故障；普通版本不应启用此模式，请更换正式构建。";
+    return t("workspace.persistenceSmoke");
   }
   if (persistence?.operation === "write_temp") {
-    return "MARA 无法创建回答检查点，请检查应用数据写入策略后重试。";
+    return t("workspace.persistenceWrite");
   }
   if (
     persistence?.operation === "atomic_replace" &&
     persistence.post_failure_probe === "write_blocked"
   ) {
-    return "替换恢复探测也无法创建检查点，请检查 MARA 应用数据写入策略后重试。";
+    return t("workspace.persistenceReplaceProbe");
   }
   if (persistence?.operation === "atomic_replace") {
-    return "Windows 暂时阻止状态文件更新；原文件未损坏，可安全重试。";
+    return t("workspace.persistenceReplace");
   }
   if (persistence?.operation === "flush") {
-    return "回答检查点未能安全落盘；请稍后重试，无需重设整个 AppData 权限。";
+    return t("workspace.persistenceFlush");
   }
   return undefined;
 }
@@ -515,15 +543,18 @@ function AssistantHeading({ detail }: { detail: string }) {
 }
 
 function Citations({ citations }: { citations: QueryCitation[] }) {
+  const { t } = useLanguage();
   return (
-    <ol className="answer-citations" aria-label="回答引用">
+    <ol className="answer-citations" aria-label={t("workspace.citations")}>
       {citations.map((citation, index) => (
         <li key={citation.citation_id}>
           <span className="citation-number">{index + 1}</span>
           <div>
             <strong>{citation.file_name}</strong>
             <small>
-              {citation.page_label ? `第 ${citation.page_label} 页` : "文件级证据"}
+              {citation.page_label
+                ? t("workspace.page", { page: citation.page_label })
+                : t("workspace.fileEvidence")}
               {citation.element_id ? ` · ${citation.element_id}` : ""}
             </small>
             {citation.quote ? <blockquote>{citation.quote}</blockquote> : null}
@@ -560,48 +591,53 @@ function composerDisabledReason(
   active: boolean,
   backgroundActive: boolean,
   actionPending: boolean,
+  t: Translate,
 ): string | undefined {
   if (!isDraft && session?.status === "loading") {
-    return "正在读取任务；你可以先编辑问题。";
+    return t("workspace.loadingTaskEditable");
   }
   if (!isDraft && !detail) {
-    return "先选择或新建任务。";
+    return t("workspace.selectOrCreateTask");
   }
   if (!queryReadiness.query_ready) {
     return queryReadiness.query_message;
   }
   if (selectedSourceCount === 0) {
-    return "请先在 Sources 中选择来源。";
+    return t("workspace.selectSourcesFirst");
   }
   if (actionPending) {
-    return "正在处理回答操作…";
+    return t("workspace.answerActionPending");
   }
   if (active) {
-    return "当前回答仍在生成；可先停止，再提交新问题。";
+    return t("workspace.answerStillGenerating");
   }
   if (backgroundActive) {
-    return "另一个任务的回答仍在生成；请返回该任务停止或等待完成。";
+    return t("workspace.backgroundAnswerGenerating");
   }
   return undefined;
 }
 
-function answerStatus(task: QueryTask): string {
+function answerStatus(task: QueryTask, t: Translate): string {
   if (task.status === "queued") {
-    return "正在排队";
+    return t("workspace.statusQueued");
   }
   if (task.status === "running") {
-    return "正在生成";
+    return t("workspace.statusRunning");
   }
   if (task.status === "success") {
-    return "回答已保存";
+    return t("workspace.statusSuccess");
   }
   if (task.status === "cancelled") {
-    return task.answer ? "生成已停止，内容未完成" : "生成已停止";
+    return task.answer
+      ? t("workspace.statusCancelledWithAnswer")
+      : t("workspace.statusCancelled");
   }
   if (task.stage === "storage_error" && task.answer) {
-    return "部分回答未安全保存";
+    return t("workspace.statusPartialNotSaved");
   }
-  return task.answer ? "回答未完成" : "生成失败";
+  return task.answer
+    ? t("workspace.statusIncomplete")
+    : t("workspace.statusFailed");
 }
 
 function WorkspaceState({

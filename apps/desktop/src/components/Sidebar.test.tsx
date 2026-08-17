@@ -57,16 +57,16 @@ function render(
 }
 
 test("Sessions list covers loading, success, empty, and failed states", () => {
-  assert.match(render({ status: "loading" }), /正在读取最近任务/);
+  assert.match(render({ status: "loading" }), /Loading recent tasks/);
   assert.match(render({ status: "success", data: [session] }), /Research session/);
-  assert.match(render({ status: "success", data: [] }), /还没有保存的任务/);
+  assert.match(render({ status: "success", data: [] }), /No saved tasks yet/);
   assert.match(
-    render({ status: "failed", message: "无法读取会话" }),
-    /无法读取会话/,
+    render({ status: "failed", message: "Could not read sessions" }),
+    /Could not read sessions/,
   );
   assert.match(
-    render({ status: "failed", message: "无法读取会话" }),
-    /重试/,
+    render({ status: "failed", message: "Could not read sessions" }),
+    /Retry/,
   );
 });
 
@@ -94,7 +94,7 @@ test("Sessions search is case-insensitive and renders a no-match state", () => {
       { status: "success", data: [session] },
       { searchQuery: "missing" },
     ),
-    /未找到匹配的任务/,
+    /No matching tasks/,
   );
 });
 
@@ -104,7 +104,7 @@ test("Session actions cover editing, pending, and failed states", () => {
       { status: "success", data: [session] },
       { sessionCreatePending: true },
     ),
-    /正在新建/,
+    /Creating/,
   );
   const editing = render(
     { status: "success", data: [session] },
@@ -113,10 +113,10 @@ test("Session actions cover editing, pending, and failed states", () => {
       editingSessionName: "Renamed session",
     },
   );
-  assert.match(editing, /任务名称/);
+  assert.match(editing, /Task name/);
   assert.match(editing, /value="Renamed session"/);
-  assert.match(editing, /保存/);
-  assert.match(editing, /取消/);
+  assert.match(editing, /Save/);
+  assert.match(editing, /Cancel/);
 
   const deleting = render(
     { status: "success", data: [session] },
@@ -124,12 +124,12 @@ test("Session actions cover editing, pending, and failed states", () => {
       sessionAction: { conversationId: "session-1", action: "delete" },
     },
   );
-  assert.match(deleting, /正在删除/);
+  assert.match(deleting, /Deleting/);
   assert.match(
     render(
       { status: "success", data: [session] },
-      { sessionActionError: "会话删除失败" },
+      { sessionActionError: "Session deletion failed" },
     ),
-    /role="alert">会话删除失败/,
+    /role="alert">Session deletion failed/,
   );
 });

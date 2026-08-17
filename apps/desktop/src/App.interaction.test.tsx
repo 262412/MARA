@@ -15,6 +15,7 @@ import type {
 import App from "./App";
 import {
   click,
+  dispatch,
   flushPromises,
   renderInDom,
   setInputValue,
@@ -227,7 +228,7 @@ test("cold start stays on an editable draft without creating a history row", asy
     const input = rendered.document.querySelector<HTMLTextAreaElement>("#task-input");
     assert.ok(input);
     assert.equal(input.disabled, false);
-    assert.match(rendered.document.body.textContent ?? "", /新任务/);
+    assert.match(rendered.document.body.textContent ?? "", /New task/);
     assert.equal(calls.createSession, 0);
     assert.deepEqual(calls.getSession, []);
   } finally {
@@ -246,10 +247,10 @@ test("history selection followed by New task returns to a clean draft", async ()
     assert.deepEqual(calls.getSession, [historicalSession.conversation_id]);
     const input = rendered.document.querySelector<HTMLTextAreaElement>("#task-input")!;
     await setInputValue(input, "discard this draft");
-    await click(buttonWithText(rendered.document, "新建任务"));
+    await click(buttonWithText(rendered.document, "New task"));
     assert.equal(calls.createSession, 0);
     assert.equal(input.value, "");
-    assert.match(rendered.document.body.textContent ?? "", /新任务/);
+    assert.match(rendered.document.body.textContent ?? "", /New task/);
   } finally {
     await rendered.cleanup();
   }
@@ -299,9 +300,9 @@ test("Resources, Help, and Settings are distinct navigable pages", async () => {
   try {
     await act(flushPromises);
     for (const [label, heading, title] of [
-      ["Resources", "资源状态", "Resources"],
-      ["Help", "帮助与快捷键", "Help"],
-      ["Settings", "模型设置", "Settings"],
+      ["Resources", "Resource status", "Resources"],
+      ["Help", "Help and shortcuts", "Help"],
+      ["Settings", "Model settings", "Settings"],
     ]) {
       const navigation = buttonWithText(rendered.document, label);
       await click(navigation);
@@ -309,6 +310,41 @@ test("Resources, Help, and Settings are distinct navigable pages", async () => {
       assert.match(rendered.document.body.textContent ?? "", new RegExp(heading));
       assert.match(rendered.document.title, new RegExp(title));
     }
+  } finally {
+    await rendered.cleanup();
+  }
+});
+
+test("Desktop defaults to English and switches the full UI to Chinese", async () => {
+  const { bridge } = desktopBridge();
+  const rendered = await renderInDom(<App />, (window) => {
+    window.desktop = bridge;
+  });
+  try {
+    await act(flushPromises);
+    assert.match(rendered.document.body.textContent ?? "", /New task/);
+    assert.doesNotMatch(rendered.document.body.textContent ?? "", /新建任务/);
+
+    await click(buttonWithText(rendered.document, "Settings"));
+    const language = rendered.document.querySelector<HTMLSelectElement>(
+      "#language-select",
+    );
+    assert.ok(language);
+    assert.equal(language.value, "en");
+    language.value = "zh";
+    await dispatch(
+      language,
+      new rendered.window.Event("change", { bubbles: true }),
+    );
+
+    assert.equal(language.value, "zh");
+    assert.equal(rendered.window.localStorage.getItem("mara.desktop.language"), "zh");
+    assert.equal(rendered.document.documentElement.lang, "zh-CN");
+    assert.match(rendered.document.body.textContent ?? "", /模型设置/);
+    assert.match(rendered.document.body.textContent ?? "", /新建任务/);
+    assert.equal(rendered.document.title, "设置 · MARA");
+    await click(buttonWithText(rendered.document, "工作台"));
+    assert.match(rendered.document.body.textContent ?? "", /研究任务/);
   } finally {
     await rendered.cleanup();
   }
@@ -341,7 +377,7 @@ test("a failed first session creation preserves the draft and sources", async ()
     assert.deepEqual(calls.submitQuestion, []);
     assert.equal(input.value, "Keep this question");
     assert.match(rendered.document.body.textContent ?? "", /create-request-1/);
-    assert.match(rendered.document.body.textContent ?? "", /1 个已选来源/);
+    assert.match(rendered.document.body.textContent ?? "", /1 selected sources/);
   } finally {
     await rendered.cleanup();
   }
@@ -353,7 +389,7 @@ test("an unconfigured LLM blocks tasks, keeps the prompt, and opens Settings", a
     ok: false,
     query_ready: false,
     query_issue_code: "llm_not_configured",
-    query_message: "请先配置 Chat LLM。",
+    query_message: "Configure Chat LLM first.",
     query_action: "configure_llm",
     query_retryable: false,
     query_provider: "",
@@ -374,9 +410,9 @@ test("an unconfigured LLM blocks tasks, keeps the prompt, and opens Settings", a
     assert.equal(calls.createSession, 0);
     assert.deepEqual(calls.submitQuestion, []);
     assert.equal(input.value, "Do not lose this draft");
-    await click(buttonWithText(rendered.document, "配置模型"));
-    assert.match(rendered.document.body.textContent ?? "", /模型设置/);
-    await click(buttonWithText(rendered.document, "工作台"));
+    await click(buttonWithText(rendered.document, "Configure model"));
+    assert.match(rendered.document.body.textContent ?? "", /Model settings/);
+    await click(buttonWithText(rendered.document, "Workbench"));
     assert.equal(
       rendered.document.querySelector<HTMLTextAreaElement>("#task-input")?.value,
       "Do not lose this draft",
@@ -393,7 +429,7 @@ test("Ctrl or Command plus comma opens Settings", async () => {
   });
   try {
     await dispatchKey(rendered, rendered.window, { ctrlKey: true, key: "," });
-    assert.match(rendered.document.body.textContent ?? "", /模型设置/);
+    assert.match(rendered.document.body.textContent ?? "", /Model settings/);
     assert.equal(
       buttonWithText(rendered.document, "Settings").getAttribute("aria-current"),
       "page",
@@ -416,7 +452,7 @@ test("page navigation does not cancel an active answer task", async () => {
   });
   try {
     await act(flushPromises);
-    for (const label of ["Resources", "Help", "Settings", "工作台"]) {
+    for (const label of ["Resources", "Help", "Settings", "Workbench"]) {
       await click(buttonWithText(rendered.document, label));
     }
     assert.equal(calls.cancelAnswer, 0);

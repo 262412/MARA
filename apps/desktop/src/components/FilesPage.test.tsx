@@ -89,28 +89,28 @@ function render(
 }
 
 test("Files page covers loading, success, empty, and failed states", () => {
-  assert.match(render({ status: "loading" }), /正在读取文件/);
+  assert.match(render({ status: "loading" }), /Loading files/);
   assert.match(render({ status: "success", data: [file] }), /paper\.pdf/);
-  assert.match(render({ status: "success", data: [] }), /还没有已索引文件/);
+  assert.match(render({ status: "success", data: [] }), /No indexed files yet/);
   assert.match(
-    render({ status: "failed", message: "无法读取文件" }),
-    /无法读取文件/,
+    render({ status: "failed", message: "Could not read files" }),
+    /Could not read files/,
   );
   assert.match(
-    render({ status: "failed", message: "无法读取文件" }),
-    /重试/,
+    render({ status: "failed", message: "Could not read files" }),
+    /Retry/,
   );
 });
 
 test("Files page exposes import, progress, cancellation, retry, and deletion", () => {
   const running = render({ status: "success", data: [file] }, task);
-  assert.match(running, /添加文件/);
-  assert.match(running, /正在索引 1\/2/);
-  assert.match(running, /取消索引/);
-  assert.match(running, /删除 paper\.pdf/);
-  assert.match(running, /选择 paper\.pdf/);
-  assert.match(running, /选择全部文件/);
-  assert.match(running, /将文件拖到此页面/);
+  assert.match(running, /Add files/);
+  assert.match(running, /Indexing 1\/2/);
+  assert.match(running, /Cancel indexing/);
+  assert.match(running, /Delete paper\.pdf/);
+  assert.match(running, /Select paper\.pdf/);
+  assert.match(running, /Select all files/);
+  assert.match(running, /Drop files on this page/);
   assert.match(running, /Ctrl\+O/);
 
   const failed = render(
@@ -127,21 +127,21 @@ test("Files page exposes import, progress, cancellation, retry, and deletion", (
     },
     {
       code: "file_delete_failed",
-      message: "无法删除文件",
+      message: "Could not delete files",
       details: null,
       retryable: true,
       request_id: "delete-request",
     },
   );
-  assert.match(failed, /索引失败/);
-  assert.match(failed, /重试索引/);
-  assert.match(failed, /无法删除文件/);
+  assert.match(failed, /Indexing failed/);
+  assert.match(failed, /Retry indexing/);
+  assert.match(failed, /Could not delete files/);
 
   const cancelled = render(
     { status: "success", data: [] },
     { ...task, status: "cancelled", retryable: true },
   );
-  assert.match(cancelled, /索引已取消/);
+  assert.match(cancelled, /Indexing cancelled/);
   assert.doesNotMatch(cancelled, /下一个纵向切片/);
 });
 
@@ -158,10 +158,10 @@ test("Files page exposes accessible bulk selection and destructive action state"
     ["file-1", "file-2"],
   );
 
-  assert.match(selected, /已选 2 个/);
-  assert.match(selected, /删除所选/);
+  assert.match(selected, /Selected 2/);
+  assert.match(selected, /Delete selected/);
   assert.match(selected, /aria-selected="true"/);
-  assert.match(selected, /aria-label="选择全部文件"/);
+  assert.match(selected, /aria-label="Select all files"/);
 });
 
 test("Files page activates its drop target only for file payloads", () => {
@@ -187,11 +187,11 @@ test("Files page blocks import and drop until embedding is configured", () => {
     },
   );
 
-  assert.match(blocked, /配置 Embedding/);
+  assert.match(blocked, /Configure Embedding/);
   assert.match(blocked, /embedding_not_configured/);
   assert.match(blocked, /doctor-no-embedding/);
-  assert.match(blocked, /保存配置后重启 MARA Desktop/);
-  assert.match(blocked, /添加文件<\/button>/);
+  assert.match(blocked, /Restart MARA Desktop after saving the configuration/);
+  assert.match(blocked, /Add files<\/button>/);
   assert.match(blocked, /disabled=""/);
-  assert.doesNotMatch(blocked, /释放文件以开始索引/);
+  assert.doesNotMatch(blocked, /Release files to start indexing/);
 });

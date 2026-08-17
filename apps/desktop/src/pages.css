@@ -78,6 +78,45 @@
   background: #302b1f;
 }
 
+.language-settings {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 16px;
+  background: var(--panel-elevated);
+}
+
+.language-settings h2 {
+  margin: 0 0 5px;
+  font-size: 13px;
+}
+
+.language-settings p {
+  margin: 0;
+  color: var(--secondary);
+  font-size: 11px;
+}
+
+.language-settings label {
+  display: grid;
+  min-width: 180px;
+  color: var(--secondary);
+  font-size: 10px;
+  gap: 5px;
+}
+
+.language-settings select {
+  padding: 8px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--panel);
+}
+
 .resource-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
