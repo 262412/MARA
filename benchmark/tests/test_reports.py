@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from benchmark.jsonl import read_jsonl
 from benchmark.reports import write_reports
 
 EXPECTED_COMPACT_LIMITS = {
@@ -14,7 +15,7 @@ EXPECTED_COMPACT_LIMITS = {
 
 
 def _read_jsonl(path):
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    return read_jsonl(path)
 
 
 def test_write_reports_does_not_leave_summary_when_raw_artifact_write_fails(
@@ -95,6 +96,8 @@ def test_write_reports_emits_required_artifacts_with_jsonl_and_route_metadata(tm
     run_dir = write_reports(report, tmp_path, "Phase 2 Suite")
 
     assert sorted(path.name for path in run_dir.iterdir()) == [
+        "artifact_complete.json",
+        "artifact_manifest.json",
         "documents.json",
         "predictions.jsonl",
         "report.md",
@@ -118,7 +121,6 @@ def test_write_reports_emits_required_artifacts_with_jsonl_and_route_metadata(tm
         == report["documents"]
     )
     assert _read_jsonl(run_dir / "retrieval_traces.jsonl") == report["retrieval_traces"]
-
     markdown = (run_dir / "report.md").read_text(encoding="utf-8")
     assert "predictions.jsonl" in markdown
     assert "retrieval_traces.jsonl" in markdown

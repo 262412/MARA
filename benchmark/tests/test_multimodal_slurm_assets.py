@@ -13,6 +13,10 @@ SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/multimodal_route_rerun.sbatch"
 TEXT_SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/text_route_rerun.sbatch"
 RUNTIME_HELPER = PROJECT_ROOT / "scripts/slurm/benchmark_runtime_isolation.sh"
 ARTIFACT_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_benchmark_predictions.py"
+EXECUTION_PLAN_BUILDER = PROJECT_ROOT / "scripts/slurm/build_benchmark_execution_plan.py"
+SUBMIT_FULLSYSTEM = PROJECT_ROOT / "scripts/slurm/submit_fullsystem_jobs.sh"
+CLEANUP_BARRIER = PROJECT_ROOT / "scripts/slurm/benchmark_cleanup_barrier.sbatch"
+SYNTHESIS_SCRIPT = PROJECT_ROOT / "scripts/slurm/synthesize_benchmark_run.py"
 CONTRACT_SMOKE_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_contract_smoke.py"
 INDEX_CONTRACT = PROJECT_ROOT / "scripts/slurm/benchmark_index_contract.py"
 SEMANTIC_EVALUATOR_NORMALIZER = (
@@ -43,6 +47,28 @@ def test_multimodal_slurm_script_is_parseable_and_uses_safe_storage_layout():
     assert "/mnt/scratch/users/tbczhang/outputs/MARA" in text
     assert "/mnt/data2/users/tbczhang" not in text
     assert "projects/MARA/outputs" not in text
+
+
+def test_fullsystem_submission_uses_wave_dependencies_and_cleanup_barriers():
+    _require_posix_bash()
+    for script in (SUBMIT_FULLSYSTEM, CLEANUP_BARRIER):
+        result = subprocess.run(
+            ["bash", "-n", str(script)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+    text = SUBMIT_FULLSYSTEM.read_text(encoding="utf-8")
+    assert "MARA_FULLSYSTEM_WAVE_SIZE" in text
+    assert "MARA_FULLSYSTEM_MIN_FREE_INODES" in text
+    assert "lfs quota -u" in text
+    assert "afterany:" in text
+    assert "afterok:${PREVIOUS_BARRIER}" in text
+    assert CLEANUP_BARRIER.name in text
+    assert "MARA_RUNTIME_DIR_LIST" in text
+    assert EXECUTION_PLAN_BUILDER.name in text
+    assert SYNTHESIS_SCRIPT.name in text
 
 
 def test_multimodal_slurm_script_health_checks_backends_and_runs_no_think_routes():
@@ -268,6 +294,17 @@ def test_text_route_slurm_script_rejects_all_failed_artifacts():
     assert text.index("validate_benchmark_predictions.py") < text.index(
         "mara_cleanup_benchmark_runtime"
     )
+
+
+def test_route_wrappers_require_published_artifacts_and_scoped_contracts():
+    for script in (TEXT_SLURM_SCRIPT, SLURM_SCRIPT):
+        text = script.read_text(encoding="utf-8")
+        assert "MARA_EXECUTION_JOB_CONTRACT" in text
+        assert "artifact_manifest.json" in text
+        assert "artifact_complete.json" in text
+        assert "--require-complete-marker" in text
+        assert "--expected-keys-file" in text
+        assert "--manifest \"$MANIFEST\"" in text
 
 
 def test_multimodal_slurm_script_forwards_offline_semantic_evaluator_contract():

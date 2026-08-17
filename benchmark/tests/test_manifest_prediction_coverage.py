@@ -132,3 +132,38 @@ def test_validator_rejects_duplicate_manifest_identity(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "duplicate example_id" in result.stderr
+
+
+def test_validator_accepts_scoped_expected_keys_and_physical_lf_unicode_records(
+    tmp_path: Path,
+) -> None:
+    predictions = tmp_path / "predictions.jsonl"
+    expected_keys = tmp_path / "expected_keys.json"
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "one",
+                "route": "controller",
+                "evidence": "before\u2028middle\u2029after\u0085",
+                "error": None,
+            }
+        ],
+    )
+    _write_json(expected_keys, {"expected_keys": [["one", "controller"]]})
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--expected-keys-file",
+            str(expected_keys),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "execution_key_coverage=1/1" in result.stdout
