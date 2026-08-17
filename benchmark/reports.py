@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
-import os
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .artifact_publication import (
+    atomic_write_json,
+    atomic_write_jsonl,
+    atomic_write_text,
+    publish_artifact_contract,
+)
 from .baseline_registry import assert_writable_benchmark_output
 from .dataset_decision_report import (
     phase2_failure_counts_markdown,
@@ -85,8 +90,7 @@ def _to_slug(text: str) -> str:
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    text = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
-    path.write_text(text, encoding="utf-8")
+    atomic_write_jsonl(path, rows)
 
 
 def _derive_retrieval_traces(predictions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -246,10 +250,7 @@ def write_reports(
         retrieval_traces = _artifact_rows(retrieval_traces, artifact_detail)
 
     _write_jsonl(predictions_path, predictions)
-    documents_path.write_text(
-        json.dumps(documents, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_json(documents_path, documents)
     _write_jsonl(retrieval_traces_path, retrieval_traces)
     route_metric_table = _route_metric_table(summary)
     if route_metric_table:
@@ -272,11 +273,9 @@ def write_reports(
     if route_metric_table:
         markdown.append("- Route Metrics: `route_metrics.csv`")
     markdown += _report_markdown_sections(summary, route_metric_table)
-    markdown_path.write_text("\n".join(markdown), encoding="utf-8")
-    summary_path.write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_text(markdown_path, "\n".join(markdown) + "\n")
+    atomic_write_json(summary_path, summary)
+    publish_artifact_contract(run_dir)
     return run_dir
 
 
@@ -463,32 +462,15 @@ def _diagnostic_failure_counts_markdown(summary: dict[str, Any]) -> list[str]:
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fieldnames = _csv_fieldnames(rows)
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="",
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as handle:
-            temporary_path = Path(handle.name)
-            writer = csv.DictWriter(
-                handle,
-                fieldnames=fieldnames,
-                extrasaction="raise",
-            )
-            writer.writeheader()
-            writer.writerows(rows)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary_path, path)
-        temporary_path = None
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(
+        output,
+        fieldnames=fieldnames,
+        extrasaction="raise",
+    )
+    writer.writeheader()
+    writer.writerows(rows)
+    atomic_write_text(path, output.getvalue())
 
 
 def _csv_fieldnames(rows: list[dict[str, Any]]) -> list[str]:

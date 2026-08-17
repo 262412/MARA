@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ..jsonl import read_jsonl
+
 
 def ensure_list(value: Any) -> list[Any]:
     if value is None:
@@ -18,11 +20,7 @@ def load_json(path: str | Path) -> Any:
 
 
 def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
-    return [
-        json.loads(line)
-        for line in Path(path).read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [dict(value) for value in read_jsonl(path)]
 
 
 def pick(record: dict[str, Any], *keys: str, default: Any = None) -> Any:

@@ -263,6 +263,7 @@ ROUTE="${MARA_MULTIMODAL_ROUTE:-${MARA_PHASE3_ROUTE:-all}}"
 LIMIT="${MARA_MULTIMODAL_LIMIT:-${MARA_PHASE3_LIMIT:-20}}"
 SAMPLE_SEED="${MARA_MULTIMODAL_SAMPLE_SEED:-${MARA_PHASE3_SAMPLE_SEED:-0}}"
 ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-240}}"
+EXECUTION_CONTRACT="${MARA_EXECUTION_JOB_CONTRACT:-}"
 
 # python -m benchmark run executes through the job-owned interpreter below.
 "$MARA_BENCHMARK_PYTHON" -m benchmark run \
@@ -290,7 +291,24 @@ if [[ -z "$RUN_DIR" || ! -f "$RUN_DIR/summary.json" || ! -f "$RUN_DIR/prediction
   exit 1
 fi
 
-VALIDATION_ARGS=(--require-all-usable --manifest "$MANIFEST")
+test -f "$RUN_DIR/artifact_manifest.json"
+test -f "$RUN_DIR/artifact_complete.json"
+if [[ -n "$EXECUTION_CONTRACT" ]]; then
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --expected-keys-file "$EXECUTION_CONTRACT"
+  )
+else
+  # Manual unsharded runs keep the full-manifest validator contract.
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --manifest "$MANIFEST"
+  )
+fi
 if [[ "$REQUIRE_HYBRID_ELIGIBLE" == "1" ]]; then
   VALIDATION_ARGS+=(--require-hybrid-eligible)
 fi

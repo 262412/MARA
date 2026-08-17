@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from benchmark.contract_invariant_metrics import (  # noqa: E402
     contract_invariant_summary,
 )
+from benchmark.jsonl import read_jsonl  # noqa: E402
 from benchmark.terminal_outcome_contract import (  # noqa: E402
     terminal_outcome_summary_fields,
 )
@@ -143,13 +144,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _load_predictions(path: Path) -> list[dict[str, Any]]:
-    return [
-        value
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-        for value in [json.loads(line)]
-        if isinstance(value, dict)
-    ]
+    return [value for value in read_jsonl(path) if isinstance(value, dict)]
 
 
 def _records(value: Any) -> list[dict[str, Any]]:

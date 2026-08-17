@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .financebench_pages import align_financebench_page
+from .jsonl import read_jsonl
 from .manifest import write_manifest
 
 
@@ -13,11 +14,7 @@ def _load_json(path: Path) -> Any:
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [dict(value) for value in read_jsonl(path)]
 
 
 def _pick(record: dict[str, Any], *keys: str, default: Any = None) -> Any:

@@ -35,6 +35,7 @@ SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
 SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
 SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
 ARTIFACT_DETAIL="${MARA_TEXT_ARTIFACT_DETAIL:-compact}"
+EXECUTION_CONTRACT="${MARA_EXECUTION_JOB_CONTRACT:-}"
 REQUIRE_CONTRACT_SMOKE="${MARA_REQUIRE_CONTRACT_SMOKE:-0}"
 CONTRACT_SMOKE_SUITE_KIND="${MARA_CONTRACT_SMOKE_SUITE_KIND:-}"
 SUITE_NAME="${NAME}-${RUN_ID}"
@@ -170,6 +171,7 @@ log "output=${OUT_ROOT}"
 log "suite=${SUITE_NAME}"
 log "route=${ROUTE} limit=${LIMIT} sample_seed=${SAMPLE_SEED} max_context=${MAX_CONTEXT_LENGTH} route_timeout=${ROUTE_TIMEOUT_SECONDS}"
 log "artifact_detail=${ARTIFACT_DETAIL} require_contract_smoke=${REQUIRE_CONTRACT_SMOKE} contract_smoke_suite_kind=${CONTRACT_SMOKE_SUITE_KIND:-none}"
+log "execution_contract=${EXECUTION_CONTRACT:-none}"
 log "text_llm_base_url=${TEXT_LLM_BASE_URL}"
 log "retrieval_base_url=${RETRIEVAL_BASE_URL}"
 log "node=${SLURMD_NODENAME:-$(hostname)}"
@@ -294,7 +296,24 @@ test -f "$RUN_DIR/summary.json"
 test -f "$RUN_DIR/route_metrics.csv"
 test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
-VALIDATION_ARGS=(--require-all-usable --manifest "$MANIFEST")
+test -f "$RUN_DIR/artifact_manifest.json"
+test -f "$RUN_DIR/artifact_complete.json"
+if [[ -n "$EXECUTION_CONTRACT" ]]; then
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --expected-keys-file "$EXECUTION_CONTRACT"
+  )
+else
+  # Manual unsharded runs keep the full-manifest validator contract.
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --manifest "$MANIFEST"
+  )
+fi
 if [[ "${SUITE_NAME,,}" == *qasper* ]]; then
   VALIDATION_ARGS+=(
     --require-qasper-answerability

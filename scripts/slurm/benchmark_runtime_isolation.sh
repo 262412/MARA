@@ -407,11 +407,18 @@ mara_install_benchmark_runtime_cleanup() {
   # the original exit status even if a defensive cleanup check reports a fault.
   trap '
     _mara_benchmark_exit_status=$?
+    _mara_benchmark_cleanup_status=0
     if declare -F cleanup >/dev/null 2>&1; then
       cleanup || true
     fi
     if [[ "${MARA_BENCHMARK_RUNTIME_CLEANED:-0}" != "1" && -n "${MARA_BENCHMARK_RUNTIME_DIR:-}" ]]; then
-      mara_cleanup_benchmark_runtime || printf "MARA benchmark runtime cleanup refused; preserving unverified runtime\n" >&2
+      if ! mara_cleanup_benchmark_runtime; then
+        _mara_benchmark_cleanup_status=2
+        printf "MARA benchmark runtime cleanup refused; preserving unverified runtime\n" >&2
+      fi
+    fi
+    if (( _mara_benchmark_cleanup_status != 0 && _mara_benchmark_exit_status == 0 )); then
+      _mara_benchmark_exit_status=$_mara_benchmark_cleanup_status
     fi
     exit "$_mara_benchmark_exit_status"
   ' EXIT

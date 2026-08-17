@@ -9,16 +9,12 @@ from typing import Any
 from ktem.docqa.evidence_identity import exact_evidence_aliases
 
 from .dataset_native_scores import qasper_evidence_f1_for_prediction
+from .jsonl import read_jsonl
 from .qasper_evidence_identity import canonical_evidence_identity, canonical_quote_spans
 
 
 def read_prediction_jsonl(path: str | Path) -> list[dict[str, Any]]:
-    predictions = []
-    with Path(path).open(encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                predictions.append(dict(json.loads(line)))
-    return predictions
+    return [dict(value) for value in read_jsonl(path)]
 
 
 def compare_prediction_runs(
