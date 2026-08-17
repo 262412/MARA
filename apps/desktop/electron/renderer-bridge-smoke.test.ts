@@ -93,7 +93,7 @@ test("packaged renderer smoke verifies the real unconfigured Files UI", async ()
 
   assert.match(script, /bridge\.getDoctor\(\)/);
   assert.match(script, /bridge\.getLatestIndexTask\(\)/);
-  assert.match(script, /文件索引尚未准备好/);
+  assert.match(script, /File indexing is not ready/);
   assert.match(script, /embedding_not_configured/);
   assert.deepEqual(messages, [
     "renderer_indexing=embedding_not_configured ui_blocked=true latest_task=empty status_success",

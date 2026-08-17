@@ -50,7 +50,7 @@ function rendererBridgeSmokeScript(): string {
           sessionsOk: false,
           modelSettingsOk: false,
           unavailableMessageVisible: document.body.innerText.includes(
-            "仅能在 MARA Desktop 中使用。",
+            "Desktop bridge unavailable.",
           ),
         };
       }
@@ -72,7 +72,7 @@ function rendererBridgeSmokeScript(): string {
           modelSettings?.ok === true &&
           !JSON.stringify(modelSettings.data).includes('"credential":'),
         unavailableMessageVisible: document.body.innerText.includes(
-          "仅能在 MARA Desktop 中使用。",
+          "Desktop bridge unavailable.",
         ),
       };
     })()
@@ -148,10 +148,10 @@ function indexingBlockedRendererSmokeScript(): string {
         const bodyText = document.body.innerText;
         const buttons = Array.from(document.querySelectorAll("button"));
         const addButton = buttons.find((button) =>
-          button.textContent?.includes("添加文件"),
+          button.textContent?.includes("Add files"),
         );
         const configButton = buttons.find((button) =>
-          button.textContent?.includes("配置 Embedding"),
+          button.textContent?.includes("Configure Embedding"),
         );
         const result = {
           addButtonDisabled: addButton?.disabled === true,
@@ -160,9 +160,9 @@ function indexingBlockedRendererSmokeScript(): string {
             doctor?.ok === true &&
             doctor.data?.indexing_ready === false &&
             doctor.data?.indexing_issue_code === "embedding_not_configured",
-          dropPromptVisible: bodyText.includes("释放文件以开始索引"),
+          dropPromptVisible: bodyText.includes("Release files to start indexing"),
           issueCodeVisible:
-            bodyText.includes("文件索引尚未准备好") &&
+            bodyText.includes("File indexing is not ready") &&
             bodyText.includes("embedding_not_configured"),
           latestTaskEmpty: latestTask?.ok === true && latestTask.data === null,
         };
@@ -180,7 +180,7 @@ function indexingBlockedRendererSmokeScript(): string {
         configActionVisible: false,
         doctorBlocked: false,
         dropPromptVisible: document.body.innerText.includes(
-          "释放文件以开始索引",
+          "Release files to start indexing",
         ),
         issueCodeVisible: false,
         latestTaskEmpty: false,
