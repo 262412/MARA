@@ -204,6 +204,54 @@ def test_6f024d4c_true_unanswerable_remains_fail_closed_after_retry():
     assert result.guardrail_decision.action == "abstain"
 
 
+def test_c9b8d385_true_unanswerable_recovery_uses_selected_document_title():
+    question = "What type of inflections are considered?"
+    document_title = (
+        "Copenhagen at CoNLL--SIGMORPHON 2018: Multilingual Inflection in "
+        "Context with Explicit Morphosyntactic Decoding"
+    )
+    calls: list[tuple[int, str, dict[str, Any]]] = []
+
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_round_id,
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
+        return {"evidence": []}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="qasper_qa",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            active_file_name="1809_01541.txt",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("unanswerable QASPER request must not generate")
+        ),
+    )
+
+    assert [round_id for round_id, _query, _metadata in calls] == [1, 2]
+    assert calls[1][1] == f"{question} {document_title}"
+    assert calls[1][2]["document_context"] == {
+        "kind": "selected_document_title",
+        "text": document_title,
+    }
+    assert result.retrieve_decision.status == "poor"
+    assert result.guardrail_decision.action == "abstain"
+
+
 def test_specific_free_text_recovery_does_not_add_document_heading():
     question = "What NDCG score did the final submission achieve?"
     document_title = (

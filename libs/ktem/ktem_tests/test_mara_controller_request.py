@@ -33,6 +33,25 @@ def test_controller_request_propagates_answer_type_for_query_planning():
     assert request.generation_seed == 20260724
 
 
+def test_controller_request_preserves_structured_selected_source_context():
+    pipeline = SimpleNamespace(
+        controller_question="What was the baseline?",
+        retrieval_query="What was the baseline?",
+        selected_file_ids=["runtime-file-1"],
+        selected_source_title=(
+            "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+        ),
+        active_file_id="runtime-file-1",
+        active_file_name="2001_05865.txt",
+        dataset_family="qasper",
+    )
+
+    request = controller_execution_request(pipeline, "What was the baseline?")
+
+    assert request.selected_file_ids == ["runtime-file-1"]
+    assert request.selected_source_title == pipeline.selected_source_title
+
+
 def _fake_answer_stream(_self, _message, _conv_id, _history, **_kwargs):
     yield Document(channel="chat", content="grounded answer")
     return Document(channel="chat", content="grounded answer")

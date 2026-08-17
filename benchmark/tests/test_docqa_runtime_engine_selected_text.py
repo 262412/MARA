@@ -1,15 +1,67 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import ktem.docqa.runtime as runtime_module
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa._runtime_turn import build_turn_request
+from ktem.docqa.runtime import DocQARuntime
 from ktem.docqa.typed_retrieval_recovery import typed_qasper_recovery_requests
+from ktem.reasoning.mara_controller_request import controller_execution_request
 
 from benchmark.engines import DocQARuntimeEngine
 from benchmark.schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 
 QASPER_FIXTURE = Path(__file__).parent / "fixtures" / "qasper_2001_05865.txt"
 QASPER_TITLE = "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+
+
+def _runtime_for_pipeline_context(monkeypatch, document_path: Path) -> DocQARuntime:
+    class _FakeReasoning:
+        @staticmethod
+        def get_info():
+            return {"id": "mara"}
+
+        @staticmethod
+        def get_pipeline(_settings, _state, _retrievers):
+            return SimpleNamespace(agent_mode="auto")
+
+    class _FakeIndex:
+        id = 7
+
+        @staticmethod
+        def get_retriever_pipelines(_settings, _user_id, _selected_input):
+            return []
+
+    class _FakeFileIndex:
+        id = 7
+
+        @staticmethod
+        def resolve_selected_ids(_user_id, selected_input):
+            return list(selected_input or [])
+
+    class _FakePreview:
+        @staticmethod
+        def resolve_sources(file_ids, *, user_id=None, strict=True):
+            assert user_id == "benchmark-user"
+            assert strict is True
+            return [
+                SimpleNamespace(
+                    file_id=file_id,
+                    name="2001_05865.txt",
+                    path=document_path,
+                )
+                for file_id in file_ids
+            ]
+
+    monkeypatch.setattr(runtime_module, "reasonings", {"mara": _FakeReasoning})
+    runtime = object.__new__(DocQARuntime)
+    runtime._resolve_user_id = lambda _user_id=None: "benchmark-user"
+    runtime.load_settings = lambda _user_id=None: {"reasoning.use": "mara"}
+    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[_FakeIndex()]))
+    runtime._web_search_cls = None
+    runtime.file_index = _FakeFileIndex()
+    runtime._preview = _FakePreview()
+    return runtime
 
 
 def test_docqa_runtime_engine_sends_selected_short_text_to_runtime_request(tmp_path):
@@ -38,7 +90,9 @@ def test_docqa_runtime_engine_sends_selected_short_text_to_runtime_request(tmp_p
     assert kwargs["selected_text"] == "The short source text should reach generation."
 
 
-def test_qasper_long_document_title_reaches_runtime_recovery_query(tmp_path):
+def test_qasper_long_document_title_reaches_runtime_recovery_query(
+    tmp_path, monkeypatch
+):
     question = "What was the baseline?"
     assert QASPER_FIXTURE.stat().st_size == 4471
     engine = DocQARuntimeEngine(
@@ -74,13 +128,23 @@ def test_qasper_long_document_title_reaches_runtime_recovery_query(tmp_path):
         DocQARequest(**kwargs),
         SimpleNamespace(conversation_id="conversation", state={}, messages=[]),
         resolved_user_id=1,
-        selected_inputs={},
+        selected_inputs={7: ["runtime-file-1"]},
         request_file_ids=["runtime-file-1"],
         load_settings=lambda _user_id: {},
     )
     assert runtime_request.selected_source_title == QASPER_TITLE
+    runtime = _runtime_for_pipeline_context(monkeypatch, QASPER_FIXTURE)
+    prepared = runtime._prepare_pipeline(runtime_request)
+    assert prepared.pipeline.selected_file_ids == ["runtime-file-1"]
+    assert prepared.pipeline.selected_source_title == QASPER_TITLE
+    controller_request = controller_execution_request(
+        prepared.pipeline,
+        runtime_request.prompt,
+    )
+    assert controller_request.selected_file_ids == ["runtime-file-1"]
+    assert controller_request.selected_source_title == QASPER_TITLE
     [recovery] = typed_qasper_recovery_requests(
-        runtime_request,
+        controller_request,
         [{"query_id": "round2:quality_retry", "query": question}],
     )
     assert recovery["query"] == f"{question} {QASPER_TITLE}"
