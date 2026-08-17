@@ -12,6 +12,7 @@ from .artifact_publication import (
     atomic_write_jsonl,
     atomic_write_text,
     publish_artifact_contract,
+    verify_artifact_contract,
 )
 from .baseline_registry import assert_writable_benchmark_output
 from .dataset_decision_report import (
@@ -276,6 +277,7 @@ def write_reports(
     atomic_write_text(markdown_path, "\n".join(markdown) + "\n")
     atomic_write_json(summary_path, summary)
     publish_artifact_contract(run_dir)
+    verify_artifact_contract(run_dir)
     return run_dir
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +46,6 @@ def synthesize_execution_plan(
         raise ValueError(f"unsupported execution plan: {plan_path}")
 
     job_results: dict[str, dict[str, Any]] = {}
-    rows_by_group: dict[str, list[dict[str, Any]]] = {}
     for job in plan.get("jobs", []):
         result = _collect_job(
             job,
@@ -53,15 +53,18 @@ def synthesize_execution_plan(
             require_slurm_clean=require_slurm_clean,
         )
         job_results[job["job_key"]] = result
-        if result["valid"]:
-            rows_by_group.setdefault(result["group_key"], []).extend(result["rows"])
 
     group_results = []
     overall_valid = True
     for group in plan.get("groups", []):
+        group_job_results = [
+            job_results[job["job_key"]]
+            for job in plan.get("jobs", [])
+            if job["group_key"] == group["group_key"]
+        ]
         result = _synthesize_group(
             group,
-            rows_by_group.get(group["group_key"], []),
+            group_job_results,
             output_dir=output_dir,
             validator_path=Path(validator_path).resolve() if validator_path else None,
             require_all_usable=require_all_usable,
@@ -96,6 +99,7 @@ def synthesize_execution_plan(
             result["valid"] for result in job_results.values()
         ),
         "expected_union_key_count": plan.get("expected_union_key_count"),
+        **_aggregate_union_diagnostics(group_results),
         "valid": overall_valid and len(job_results) == len(plan.get("jobs", [])),
         "jobs": list(job_results.values()),
         "groups": group_results,
@@ -104,6 +108,18 @@ def synthesize_execution_plan(
     if not synthesis["valid"]:
         raise SystemExit(f"benchmark synthesis failed; see {output_dir / 'synthesis.json'}")
     return synthesis
+
+
+def _aggregate_union_diagnostics(group_results: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        key: sum(result.get(key, 0) for result in group_results)
+        for key in (
+            "union_key_count",
+            "overlap_key_count",
+            "missing_key_count",
+            "unexpected_key_count",
+        )
+    }
 
 
 def _collect_job(
@@ -164,7 +180,7 @@ def _collect_job(
 
 def _synthesize_group(
     group: dict[str, Any],
-    rows: list[dict[str, Any]],
+    job_results: list[dict[str, Any]],
     *,
     output_dir: Path,
     validator_path: Path | None,
@@ -175,17 +191,28 @@ def _synthesize_group(
         raise FileExistsError(f"synthesis group already exists: {group_dir}")
     group_dir.mkdir(parents=True)
     execution_manifest = Path(group["execution_manifest"])
-    expected = {
-        (str(example_id), route_id)
-        for example_id in group["selected_example_ids"]
-        for route_id in group["manifest_route_ids"]
-    }
+    rows = [
+        row
+        for result in job_results
+        if result["valid"]
+        for row in result["rows"]
+    ]
+    diagnostics = _union_diagnostics(group, job_results)
     try:
         if file_sha256(execution_manifest) != group["execution_manifest_sha256"]:
             raise ValueError("execution manifest digest changed after plan publication")
         observed = _prediction_keys(rows)
-        if observed != expected:
-            raise ValueError(_key_mismatch_message(expected, observed))
+        if any(
+            diagnostics[key] != 0
+            for key in ("overlap_key_count", "missing_key_count", "unexpected_key_count")
+        ):
+            raise ValueError(
+                "execution union check failed: "
+                f"union={diagnostics['union_key_count']} "
+                f"overlap={diagnostics['overlap_key_count']} "
+                f"missing={diagnostics['missing_key_count']} "
+                f"unexpected={diagnostics['unexpected_key_count']}"
+            )
         if require_all_usable and any(not _prediction_is_usable(row) for row in rows):
             raise ValueError("merged group contains an unusable prediction")
         atomic_write_jsonl(group_dir / "predictions.jsonl", rows)
@@ -198,7 +225,7 @@ def _synthesize_group(
                 "manifest_sha256": group["manifest_sha256"],
                 "execution_manifest": str(execution_manifest),
                 "num_predictions": len(rows),
-                "expected_predictions": len(expected),
+                "expected_predictions": diagnostics["expected_key_count"],
             },
         )
         atomic_write_text(group_dir / "report.md", f"# {group['group_key']}\n")
@@ -219,7 +246,7 @@ def _synthesize_group(
             "artifact_dir": str(group_dir),
             "artifact_digest": file_sha256(group_dir / "artifact_manifest.json"),
             "observed_key_count": len(observed),
-            "expected_key_count": len(expected),
+            **diagnostics,
             "validator_stdout": validation.stdout,
         }
     except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -229,8 +256,35 @@ def _synthesize_group(
             "artifact_dir": str(group_dir),
             "failure_reason": str(exc),
             "observed_key_count": len(rows),
-            "expected_key_count": len(expected),
+            **diagnostics,
         }
+
+
+def _union_diagnostics(
+    group: dict[str, Any],
+    job_results: list[dict[str, Any]],
+) -> dict[str, int]:
+    expected = {
+        (str(example_id), route_id)
+        for example_id in group["selected_example_ids"]
+        for route_id in group["manifest_route_ids"]
+    }
+    observed_counts: Counter[tuple[str, str]] = Counter()
+    for result in job_results:
+        if not result["valid"]:
+            continue
+        for row in result["rows"]:
+            observed_counts[
+                (str(row.get("example_id") or "").strip(), str(row.get("route") or "").strip())
+            ] += 1
+    observed = set(observed_counts)
+    return {
+        "expected_key_count": len(expected),
+        "union_key_count": len(observed),
+        "overlap_key_count": sum(count > 1 for count in observed_counts.values()),
+        "missing_key_count": len(expected - observed),
+        "unexpected_key_count": len(observed - expected),
+    }
 
 
 def _run_full_manifest_validator(

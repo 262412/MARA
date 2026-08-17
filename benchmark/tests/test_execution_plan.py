@@ -153,3 +153,11 @@ def test_synthesis_rejects_missing_shard_key(tmp_path):
         assert "benchmark synthesis failed" in str(exc)
     else:
         raise AssertionError("synthesis unexpectedly accepted a missing shard")
+    synthesis = json.loads(
+        (tmp_path / "synthesis" / "synthesis.json").read_text(encoding="utf-8")
+    )
+    assert synthesis["valid"] is False
+    assert synthesis["union_key_count"] == 2
+    assert synthesis["overlap_key_count"] == 0
+    assert synthesis["missing_key_count"] == 2
+    assert synthesis["unexpected_key_count"] == 0
