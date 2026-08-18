@@ -63,6 +63,15 @@ def score_evidence_for_slot(
     locator_score = _locator_score(slot.locator, item)
     if locator_score is None:
         return 0.0
+    modality = str(item.get("modality") or item.get("element_type") or "").lower()
+    if slot.statement_kind == "visual_support":
+        if not modality_matches(slot.modality, modality):
+            return 0.0
+        if str(item.get("evidence_level") or "").lower() != "page":
+            return 0.0
+        if not str(item.get("evidence_id") or item.get("source_id") or "").strip():
+            return 0.0
+        return 1.0 + (locator_score or 0.0)
     if slot.role == "dimension":
         detected_scale = evidence_scale(text, item)
         if not detected_scale or (slot.scale and slot.scale != detected_scale):
@@ -88,7 +97,6 @@ def score_evidence_for_slot(
         return 0.0
     if not _finance_operand_matches(slot, item, text):
         return 0.0
-    modality = str(item.get("modality") or item.get("element_type") or "").lower()
     if not modality_matches(slot.modality, modality):
         return 0.0
     return _slot_score(slot, text, modality, locator_score, boolean_score) + (
@@ -267,6 +275,17 @@ def _slot_score(
 
 
 def slot_item_materialized(slot: EvidenceSlot, item: dict[str, Any]) -> bool:
+    if slot.statement_kind == "visual_support":
+        return (
+            str(item.get("evidence_level") or "").lower() == "page"
+            and bool(
+                str(item.get("evidence_id") or item.get("source_id") or "").strip()
+            )
+            and modality_matches(
+                slot.modality,
+                str(item.get("modality") or item.get("element_type") or ""),
+            )
+        )
     if slot.role == "dimension":
         return bool(
             item.get("scale")

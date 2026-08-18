@@ -21,6 +21,8 @@ def heuristic_slots(
     verification_domain: str = "",
 ) -> tuple[EvidenceSlot, ...]:
     multi_evidence = bool(capabilities.get("requires_multiple_evidence"))
+    if capabilities.get("requires_visual"):
+        return _visual_support_slots(question, metric)
     if question_type == "multi_period_numeric":
         return _period_operand_slots(
             periods,
@@ -57,20 +59,6 @@ def heuristic_slots(
             page_labels=_page_labels(capabilities),
             allow_duplicate_queries=True,
         )
-    if capabilities.get("requires_visual"):
-        return (
-            EvidenceSlot(
-                slot_id="support:visual_primary",
-                role="support",
-                metric=metric,
-                modality=modality_hint(question),
-                query=question,
-                locator=EvidenceLocator(
-                    figure_label=str(capabilities.get("figure_label") or ""),
-                    table_label=str(capabilities.get("table_label") or ""),
-                ),
-            ),
-        )
     primary_support = _primary_support_slots(
         question,
         answer_type,
@@ -82,6 +70,28 @@ def heuristic_slots(
     if primary_support:
         return primary_support
     return ()
+
+
+def _visual_support_slots(
+    question: str,
+    metric: str,
+) -> tuple[EvidenceSlot, ...]:
+    hinted_modality = modality_hint(question)
+    return (
+        EvidenceSlot(
+            slot_id="support:visual_primary",
+            role="support",
+            metric=metric or question,
+            modality=(
+                hinted_modality
+                if hinted_modality and hinted_modality != "auto"
+                else "page_image"
+            ),
+            statement_kind="visual_support",
+            query=question,
+            locator=EvidenceLocator(),
+        ),
+    )
 
 
 def _primary_support_slots(

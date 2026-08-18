@@ -12,6 +12,19 @@ def controller_routing_message(pipeline: Any, message: str) -> str:
     ).strip()
 
 
+def _pipeline_or_request_value(
+    pipeline: Any,
+    docqa_request: Any,
+    field_name: str,
+    fallback: str = "",
+) -> str:
+    return str(
+        getattr(pipeline, field_name, None)
+        or getattr(docqa_request, field_name, None)
+        or fallback
+    ).strip()
+
+
 def _selected_source_context(
     pipeline: Any,
     docqa_request: Any,
@@ -35,16 +48,11 @@ def controller_execution_request(pipeline: Any, message: str) -> SimpleNamespace
     controller_mode = str(getattr(pipeline, "controller_mode", "") or "").strip()
     docqa_request = getattr(pipeline, "docqa_request", None)
     planning_question = controller_routing_message(pipeline, message)
-    task_type = str(
-        getattr(pipeline, "task_type", None)
-        or getattr(docqa_request, "task_type", None)
-        or ""
-    ).strip()
-    answer_type = str(
-        getattr(pipeline, "answer_type", None)
-        or getattr(docqa_request, "answer_type", None)
-        or task_type
-    ).strip()
+    task_type = _pipeline_or_request_value(pipeline, docqa_request, "task_type")
+    answer_type = _pipeline_or_request_value(
+        pipeline, docqa_request, "answer_type", task_type
+    )
+    modality = _pipeline_or_request_value(pipeline, docqa_request, "modality")
     selected_file_ids, selected_source_title = _selected_source_context(
         pipeline, docqa_request
     )
@@ -58,6 +66,7 @@ def controller_execution_request(pipeline: Any, message: str) -> SimpleNamespace
         ).strip(),
         task_type=task_type,
         answer_type=answer_type,
+        modality=modality,
         route_timeout_seconds=getattr(pipeline, "route_timeout_seconds", None),
         route_deadline_monotonic=getattr(
             pipeline,

@@ -367,6 +367,7 @@ class MaraAgentPipeline(FullQAPipeline):
         query: str,
         *,
         task_type: str | None = None,
+        modality: str | None = None,
         qa_scope: str | None = None,
         active_file_id: str | None = None,
         page_number: int | None = None,
@@ -374,6 +375,7 @@ class MaraAgentPipeline(FullQAPipeline):
         return understand_mara_query(
             query,
             task_type=task_type,
+            modality=modality,
             qa_scope=qa_scope,
             active_file_id=active_file_id,
             page_number=page_number,
@@ -504,6 +506,7 @@ class MaraAgentPipeline(FullQAPipeline):
         understanding = self.understand_query(
             routing_message,
             task_type=getattr(self, "task_type", None),
+            modality=getattr(self, "modality", None),
             qa_scope=getattr(self, "qa_scope", None),
             active_file_id=getattr(self, "active_file_id", None),
             page_number=getattr(self, "page_number", None),

@@ -496,6 +496,7 @@ def render_execution_answer(
         "inventory_turnover",
         "inventory_turnover_average",
         "fixed_asset_turnover",
+        "cash_conversion_cycle",
         "quick_ratio",
     }:
         return format_decimal(value)

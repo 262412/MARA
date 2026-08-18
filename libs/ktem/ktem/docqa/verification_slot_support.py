@@ -55,19 +55,14 @@ def claim_aware_slot_support(
             identity = identity_of(item).key
         except ValueError:
             continue
-        exact_boolean_authority = _exact_boolean_authority_matches(
+        if _claim_result_supports_item(
+            claim,
             result,
             item,
             identity,
-        )
-        if exact_boolean_authority or (
-            not boolean_authority_required
-            and claim_supported(
-                claim,
-                [item],
-                prompt=prompt,
-                domain=domain,
-            )
+            boolean_authority_required=boolean_authority_required,
+            prompt=prompt,
+            domain=domain,
         ):
             resolved_support.append((identity, item))
 
@@ -98,6 +93,28 @@ def claim_aware_slot_support(
         if support_ids:
             reconciled[slot_id] = tuple(dict.fromkeys(support_ids))
     return reconciled
+
+
+def _claim_result_supports_item(
+    claim: str,
+    result: dict[str, Any],
+    item: dict[str, Any],
+    identity: str,
+    *,
+    boolean_authority_required: bool,
+    prompt: str,
+    domain: str,
+) -> bool:
+    if str(result.get("authority_status") or "") == "visual_page":
+        return True
+    if _exact_boolean_authority_matches(result, item, identity):
+        return True
+    return not boolean_authority_required and claim_supported(
+        claim,
+        [item],
+        prompt=prompt,
+        domain=domain,
+    )
 
 
 def unsupported_verification_slots(

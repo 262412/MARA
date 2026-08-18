@@ -258,7 +258,7 @@ def _has_supported_formula_intent(question: str) -> bool:
     return any(
         term in question
         for term in (
-            "capital expenditure",
+            "capital expenditure", "cash conversion cycle", "ccc",
             "capital spending",
             "current ratio",
             "debt to equity",

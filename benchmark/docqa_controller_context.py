@@ -90,6 +90,8 @@ def controller_request_context(example: Any, config: BenchmarkConfig, config_get
         controller_kwargs["verification_domain"] = controller_domain
     if controller_domain == "qasper" and not controller_kwargs.get("verification_mode"):
         controller_kwargs["verification_mode"] = "strict"
+    if controller_domain == "slidevqa" and not controller_kwargs.get("verification_mode"):
+        controller_kwargs["verification_mode"] = "light"
     if controller_domain == "ragtruth":
         controller_kwargs["allowed_routes"] = ["doc_text"]
         controller_kwargs["verification_mode"] = "off"
@@ -106,6 +108,8 @@ def controller_request_context(example: Any, config: BenchmarkConfig, config_get
         "retrieval_query": prompt.retrieval_query,
         "dataset_family": controller_domain,
         "task_type": runtime_task_type,
+        "answer_type": field_value(example, "answer_type", runtime_task_type),
+        "modality": field_value(example, "modality", None),
         **controller_kwargs,
     }
 

@@ -52,6 +52,8 @@ def calculation_steps(
         return _multi_period_ratio_average_steps(input_ids)
     if question_type == "inventory_turnover_average":
         return _inventory_turnover_average_steps(input_ids)
+    if question_type == "cash_conversion_cycle":
+        return _cash_conversion_cycle_steps(input_ids)
     if question_type == "fixed_asset_turnover":
         return fixed_asset_turnover_steps(input_ids)
     if question_type == "revolving_credit_capacity" and len(input_ids) > 1:
@@ -144,6 +146,76 @@ def _inventory_turnover_average_steps(
         "result",
         "ratio",
     )
+
+
+def _cash_conversion_cycle_steps(
+    input_ids: tuple[str, ...],
+) -> tuple[tuple[CalculationStep, ...], str, str]:
+    inventory_ids = _period_pair(input_ids, "inventory_")
+    receivables_ids = _period_pair(input_ids, "accounts_receivable_")
+    payables_ids = _period_pair(input_ids, "accounts_payable_")
+    cogs_id = next(
+        input_id
+        for input_id in input_ids
+        if input_id.startswith("cost_of_goods_sold_")
+    )
+    revenue_id = next(
+        input_id for input_id in input_ids if input_id.startswith("net_sales_")
+    )
+    inventory_previous, inventory_target = inventory_ids
+    receivables_previous, receivables_target = receivables_ids
+    payables_previous, payables_target = payables_ids
+    return (
+        (
+            CalculationStep("average_inventory", "average", inventory_ids),
+            CalculationStep(
+                "dio_numerator",
+                "multiply",
+                ("average_inventory",),
+                constant=Decimal("365"),
+                constant_source="formula",
+            ),
+            CalculationStep("dio", "divide", ("dio_numerator", cogs_id)),
+            CalculationStep("average_receivables", "average", receivables_ids),
+            CalculationStep(
+                "dso_numerator",
+                "multiply",
+                ("average_receivables",),
+                constant=Decimal("365"),
+                constant_source="formula",
+            ),
+            CalculationStep("dso", "divide", ("dso_numerator", revenue_id)),
+            CalculationStep(
+                "inventory_change",
+                "subtract",
+                (inventory_target, inventory_previous),
+            ),
+            CalculationStep("dpo_denominator", "add", (cogs_id, "inventory_change")),
+            CalculationStep("average_payables", "average", payables_ids),
+            CalculationStep(
+                "dpo_numerator",
+                "multiply",
+                ("average_payables",),
+                constant=Decimal("365"),
+                constant_source="formula",
+            ),
+            CalculationStep("dpo", "divide", ("dpo_numerator", "dpo_denominator")),
+            CalculationStep("operating_cycle", "add", ("dio", "dso")),
+            CalculationStep("result", "subtract", ("operating_cycle", "dpo")),
+        ),
+        "result",
+        "days",
+    )
+
+
+def _period_pair(input_ids: tuple[str, ...], prefix: str) -> tuple[str, str]:
+    values = sorted(
+        (input_id for input_id in input_ids if input_id.startswith(prefix)),
+        key=lambda input_id: input_id.rsplit("_", 1)[-1],
+    )
+    if len(values) != 2:
+        raise ValueError(f"invalid_cash_conversion_cycle_inputs:{prefix}")
+    return values[0], values[1]
 
 
 def _multi_period_ratio_average_steps(

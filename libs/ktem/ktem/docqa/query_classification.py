@@ -66,7 +66,14 @@ def normalized_answer_type(
     causal_intent: bool,
 ) -> str:
     value = str(answer_type or "").strip().lower()
-    if value in {"qa", "qasper_qa"} and _BOOLEAN_QUESTION_RE.search(question.strip()):
+    if value in {
+        "qa",
+        "qasper_qa",
+        "extractive",
+        "span",
+        "short_answer",
+        "multiple_choice",
+    } and _BOOLEAN_QUESTION_RE.search(question.strip()):
         return "boolean"
     if causal_intent:
         return (

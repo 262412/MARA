@@ -38,6 +38,7 @@ from .verification_logic import (
     _verify_claims,
     normalize_verification_mode,
 )
+from .visual_evidence_authority import validated_visual_answer_authority
 from .verification_slot_support import (
     claim_aware_slot_support,
     conflict_aware_slot_support,
@@ -70,6 +71,15 @@ def verify_decision(
         return _missing_slot_decision(
             request, retrieve_decision, mode, answer, missing_slots
         )
+    visual_decision = _visual_verification_decision(
+        request,
+        retrieve_decision,
+        evidence_bundle,
+        mode=mode,
+        answer=answer,
+    )
+    if visual_decision is not None:
+        return visual_decision
     prompt, domain, claims = _verification_context(request, answer)
     if retrieve_decision.status != "good" and not _can_verify_available_evidence(
         evidence_bundle,
@@ -112,6 +122,43 @@ def verify_decision(
         return typed_decision
     return enforce_verification_slot_support(
         request, decision, evidence_bundle, prompt=prompt, domain=domain
+    )
+
+
+def _visual_verification_decision(
+    request: Any,
+    retrieve_decision: Any,
+    evidence_bundle: EvidenceBundle,
+    *,
+    mode: str,
+    answer: str,
+) -> VerifyDecision | None:
+    domain = normalize_verification_domain(
+        getattr(request, "verification_domain", None)
+    )
+    if domain != "slidevqa" or retrieve_decision.status != "good":
+        return None
+    authority = validated_visual_answer_authority(evidence_bundle, answer)
+    if authority is None:
+        return None
+    evidence_ids = list(authority["evidence_ids"])
+    claim = str(authority["answer"]).strip()
+    claim_result = {
+        "claim_id": "claim:1",
+        "claim": claim,
+        "status": "supported",
+        "supporting_evidence_ids": evidence_ids,
+        "authority_status": "visual_page",
+        "verified_slot_state": "verified_support",
+    }
+    return VerifyDecision(
+        mode=mode,
+        status="supported",
+        reason="Visual answer is bound to selected page-image evidence.",
+        action="generate",
+        claims=[claim],
+        verified_citations=evidence_ids,
+        claim_results=[claim_result],
     )
 
 

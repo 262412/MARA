@@ -275,6 +275,8 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     )
     pipeline.dataset_family = str(getattr(request, "dataset_family", "") or "").strip()
     pipeline.task_type = request.task_type or ""
+    pipeline.answer_type = request.answer_type or pipeline.task_type
+    pipeline.modality = str(getattr(request, "modality", "") or "").strip()
     pipeline.agent_mode = request.agent_mode or getattr(pipeline, "agent_mode", "auto")
     pipeline.artifact_type = request.artifact_type or ""
     pipeline.controller_mode = request.controller_mode or "off"
@@ -385,6 +387,8 @@ def copy_request_fields(target: Any, source: Any) -> None:
     )
     target.reranker_name = getattr(source, "reranker_name", None)
     target.task_type = source.task_type
+    target.answer_type = source.answer_type
+    target.modality = source.modality
     target.agent_mode = source.agent_mode
     target.artifact_type = source.artifact_type
     target.note_ids = source.note_ids

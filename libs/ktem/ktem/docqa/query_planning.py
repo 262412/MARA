@@ -114,6 +114,8 @@ def _build_heuristic_query_plan(
         tokens,
         boolean_question=normalized_type == "boolean",
     )
+    if str(verification_domain or "").strip().lower() == "slidevqa":
+        capabilities["requires_visual"] = True
     planned_question_type = question_type(
         tokens,
         normalized_type,

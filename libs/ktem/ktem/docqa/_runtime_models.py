@@ -32,6 +32,8 @@ class DocQARequest:
     max_context_length: Optional[int] = None
     reasoning_type: Optional[str] = None
     task_type: Optional[str] = None
+    answer_type: Optional[str] = None
+    modality: Optional[str] = None
     agent_mode: Optional[str] = None
     artifact_type: Optional[str] = None
     note_ids: Optional[list[str]] = None

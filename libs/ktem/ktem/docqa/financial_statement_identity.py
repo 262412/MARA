@@ -68,6 +68,8 @@ def required_financial_identity(metric: str) -> tuple[str, str]:
     normalized = str(metric or "").strip().lower()
     if normalized == "inventory":
         return "balance_sheet", "consolidated"
+    if normalized in {"accounts receivable", "accounts payable"}:
+        return "balance_sheet", "consolidated"
     if normalized in {
         "adjusted ebitda",
     }:

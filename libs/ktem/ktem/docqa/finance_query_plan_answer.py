@@ -198,6 +198,19 @@ def _formula_answer(
             inputs=inputs,
             formula="cost_of_goods_sold / average(inventory_years)",
         )
+    if formula_id == "cash_conversion_cycle":
+        return FinanceNumericAnswer(
+            answer="",
+            confidence=0.95,
+            question_type="cash_conversion_cycle",
+            inputs=inputs,
+            formula=(
+                "365 * average(inventory_previous, inventory_target) / cogs_target "
+                "+ 365 * average(receivables_previous, receivables_target) "
+                "/ revenue_target - 365 * average(payables_previous, payables_target) "
+                "/ (cogs_target + inventory_target - inventory_previous)"
+            ),
+        )
     return None
 
 
