@@ -161,3 +161,65 @@ def test_synthesis_rejects_missing_shard_key(tmp_path):
     assert synthesis["overlap_key_count"] == 0
     assert synthesis["missing_key_count"] == 2
     assert synthesis["unexpected_key_count"] == 0
+
+
+def test_synthesis_streams_shards_into_atomic_group_artifact(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    _manifest(manifest)
+    output_root = tmp_path / "artifacts"
+    definitions = [
+        JobDefinition(
+            "text",
+            "plan_test",
+            "all",
+            shard_index,
+            2,
+            2,
+            60,
+            f"plan-test-shard{shard_index}",
+            manifest,
+            output_root,
+        )
+        for shard_index in range(2)
+    ]
+    plan = build_execution_plan(
+        definitions,
+        output_plan=tmp_path / "plan.json",
+        output_table=tmp_path / "jobs.tsv",
+        source_sha="clean-sha",
+        sample_seed=7,
+    )
+
+    for job in plan["jobs"]:
+        write_reports(
+            {
+                "summary": {
+                    "suite_name": job["suite_name"],
+                    "dataset_name": "plan_test",
+                    "num_examples": len(job["selected_example_ids"]),
+                    "num_documents": 1,
+                },
+                "predictions": [
+                    {"example_id": example_id, "route": route, "error": None}
+                    for example_id, route in job["expected_keys"]
+                ],
+                "documents": [],
+            },
+            output_root,
+            job["suite_name"],
+        )
+
+    synthesis = synthesize_execution_plan(
+        tmp_path / "plan.json",
+        tmp_path / "synthesis",
+        table_path=tmp_path / "jobs.tsv",
+        require_all_usable=True,
+    )
+
+    assert synthesis["valid"] is True
+    assert synthesis["completed_job_count"] == 2
+    assert synthesis["expected_union_key_count"] == 8
+    assert synthesis["union_key_count"] == 8
+    assert synthesis["overlap_key_count"] == 0
+    assert synthesis["missing_key_count"] == 0
+    assert synthesis["unexpected_key_count"] == 0

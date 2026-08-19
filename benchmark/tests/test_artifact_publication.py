@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from benchmark.artifact_publication import verify_artifact_contract
+from benchmark.artifact_publication import atomic_write_jsonl, verify_artifact_contract
 from benchmark.jsonl import read_jsonl
 from benchmark.reports import write_reports
 
@@ -32,6 +32,20 @@ def test_jsonl_artifact_keeps_unicode_line_separator_characters_inside_records(t
     manifest = json.loads((run_dir / "artifact_manifest.json").read_text())
     assert manifest["files"]["predictions.jsonl"]["line_count"] == 1
     assert verify_artifact_contract(run_dir)["complete"] is True
+
+
+def test_atomic_jsonl_write_accepts_a_streaming_iterable(tmp_path):
+    output = tmp_path / "stream.jsonl"
+    atomic_write_jsonl(
+        output,
+        ({"example_id": str(index), "route": "text"} for index in range(3)),
+    )
+
+    assert read_jsonl(output) == [
+        {"example_id": "0", "route": "text"},
+        {"example_id": "1", "route": "text"},
+        {"example_id": "2", "route": "text"},
+    ]
 
 
 def test_artifact_contract_rejects_post_marker_mutation(tmp_path):
