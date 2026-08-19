@@ -113,7 +113,7 @@ def _rebuild_abstention(prediction: dict[str, Any]) -> None:
 
 
 def _clear_abstained_query_plan_state(prediction: dict[str, Any]) -> None:
-    """Remove stale verified FinanceBench state when terminal authority fails."""
+    """Remove stale verified state while retaining the last retrieval binding."""
 
     for metadata in _metadata_targets(prediction):
         for key in ("query_plan", "bound_query_plan", "terminal_query_plan"):
@@ -137,6 +137,18 @@ def _clear_abstained_query_plan_state(prediction: dict[str, Any]) -> None:
 
 def _abstained_slot(slot: dict[str, Any]) -> dict[str, Any]:
     state = dict(slot)
+    evidence_ids = [
+        str(evidence_id).strip()
+        for evidence_id in state.get("evidence_ids") or []
+        if str(evidence_id or "").strip()
+    ]
+    if evidence_ids and state.get("status") in {
+        "filled",
+        "retrieved_partial",
+        "retrieved_unverified",
+    }:
+        state["evidence_ids"] = evidence_ids
+        return state
     state["status"] = "missing"
     state["evidence_ids"] = []
     return state

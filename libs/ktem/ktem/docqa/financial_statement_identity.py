@@ -194,6 +194,8 @@ def _statement_kind(text: str) -> str:
             "statements of income",
             "statement of operations",
             "statements of operations",
+            "statement of earnings",
+            "statements of earnings",
             "income statement",
         )
     ) or re.search(r"\bst\s+atements?\s+of\s+income\b", text):

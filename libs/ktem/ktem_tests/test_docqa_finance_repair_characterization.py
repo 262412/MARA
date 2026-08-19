@@ -481,3 +481,71 @@ def test_02416_wrong_authority_clears_query_plan_and_slot_states_atomically() ->
             state.get("status") == "missing" and not state.get("evidence_ids")
             for state in metadata.get("verification_slot_states", [])
         )
+
+
+def test_abstention_preserves_partial_query_plan_binding_with_binding_trace() -> None:
+    partial_id = "cell:general-mills:earnings:2019:cost-of-sales"
+    partial_plan = {
+        "state_authority": "verified_calculation_plan",
+        "evidence_slots": [
+            {
+                "slot_id": "operand:cost_of_goods_sold:2019",
+                "role": "operand",
+                "status": "filled",
+                "evidence_ids": [partial_id],
+            },
+            {
+                "slot_id": "operand:net_sales:2019",
+                "role": "operand",
+                "status": "missing",
+                "evidence_ids": [],
+            },
+        ],
+    }
+    prediction: dict[str, Any] = {
+        "predicted_answer": "0.0",
+        "answer_for_scoring": "0.0",
+        "finance_citation_authority_status": "invalid",
+        "evidence_metadata": {
+            "query_plan": partial_plan,
+            "bound_query_plan": dict(partial_plan),
+            "finance_numeric_trace": {
+                "authoritative_query_plan": {
+                    **partial_plan,
+                    "binding_trace": [
+                        {
+                            "slot_id": "operand:cost_of_goods_sold:2019",
+                            "preserved_existing_binding": True,
+                            "after_identity": partial_id,
+                        },
+                        {
+                            "slot_id": "operand:net_sales:2019",
+                            "preserved_existing_binding": False,
+                            "after_identity": "",
+                        },
+                    ],
+                }
+            },
+        },
+    }
+
+    assert synchronize_terminal_answer_state(prediction)
+
+    final_plan = prediction["evidence_metadata"]["query_plan"]
+    slots = {slot["slot_id"]: slot for slot in final_plan["evidence_slots"]}
+    assert slots["operand:cost_of_goods_sold:2019"] == {
+        **slots["operand:cost_of_goods_sold:2019"],
+        "status": "filled",
+        "evidence_ids": [partial_id],
+    }
+    assert slots["operand:net_sales:2019"]["status"] == "missing"
+    assert slots["operand:net_sales:2019"]["evidence_ids"] == []
+    assert final_plan["state_authority"] == "abstained.v1"
+
+    trace = prediction["evidence_metadata"]["finance_numeric_trace"][
+        "authoritative_query_plan"
+    ]["binding_trace"]
+    trace_by_slot = {item["slot_id"]: item for item in trace}
+    assert trace_by_slot["operand:cost_of_goods_sold:2019"]["after_identity"] in set(
+        slots["operand:cost_of_goods_sold:2019"]["evidence_ids"]
+    )
