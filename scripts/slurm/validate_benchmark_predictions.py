@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import sys
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,7 @@ from benchmark.artifact_publication import (  # noqa: E402
     file_sha256,
     verify_artifact_contract,
 )
-from benchmark.jsonl import read_jsonl  # noqa: E402
+from benchmark.jsonl import iter_jsonl  # noqa: E402
 
 
 def _prediction_is_usable(prediction: dict[str, Any]) -> bool:
@@ -27,41 +28,32 @@ def _prediction_is_usable(prediction: dict[str, Any]) -> bool:
 
 
 def _required_hybrid_eligibility(
-    predictions: list[dict[str, Any]],
+    predictions: Iterable[dict[str, Any]],
 ) -> tuple[int, int]:
-    decisions: list[dict[str, Any]] = []
+    required: list[bool] = []
     for row in predictions:
         decision = row.get("controller_decision")
         if isinstance(decision, dict):
-            decisions.append(decision)
-    required: list[bool] = []
-    for decision in decisions:
-        value = decision.get("required_evidence_route_available")
-        if isinstance(value, bool):
-            required.append(value)
+            value = decision.get("required_evidence_route_available")
+            if isinstance(value, bool):
+                required.append(value)
     return sum(required), len(required)
 
 
 def _qasper_answerability_coverage(
-    predictions: list[dict[str, Any]],
+    predictions: Iterable[dict[str, Any]],
     *,
     manifest_path: Path | None = None,
 ) -> tuple[int, int]:
-    usable = [row for row in predictions if _prediction_is_usable(row)]
-    if manifest_path is None:
-        required = [
-            row
-            for row in usable
-            if str(row.get("answer_type") or "").strip().lower() == "boolean"
-        ]
-    else:
+    answer_types: dict[str, str] | None = None
+    if manifest_path is not None:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if not isinstance(manifest, dict):
             raise SystemExit("QASPER manifest must be a JSON object")
         examples = manifest.get("examples")
         if not isinstance(examples, list):
             raise SystemExit("QASPER manifest must contain an examples list")
-        answer_types: dict[str, str] = {}
+        answer_types = {}
         for example in examples:
             if not isinstance(example, dict):
                 raise SystemExit("QASPER manifest examples must be objects")
@@ -76,8 +68,15 @@ def _qasper_answerability_coverage(
                 str(example.get("answer_type") or "").strip().lower()
             )
 
-        required = []
-        for row in usable:
+    covered = 0
+    required_count = 0
+    for row in predictions:
+        if not _prediction_is_usable(row):
+            continue
+        if answer_types is None:
+            if str(row.get("answer_type") or "").strip().lower() != "boolean":
+                continue
+        else:
             example_id = str(row.get("example_id") or "").strip()
             if not example_id or example_id not in answer_types:
                 raise SystemExit(
@@ -92,21 +91,18 @@ def _qasper_answerability_coverage(
                     "QASPER manifest/prediction answer type mismatch for "
                     f"{example_id}: boolean != {prediction_answer_type or '<missing>'}"
                 )
-            required.append(row)
-
-    covered = 0
-    for row in required:
+        required_count += 1
         metadata = row.get("evidence_metadata")
         trace = (
             metadata.get("qasper_answerability") if isinstance(metadata, dict) else None
         )
         if isinstance(trace, dict) and trace:
             covered += 1
-    return covered, len(required)
+    return covered, required_count
 
 
 def _manifest_prediction_coverage(
-    predictions: list[dict[str, Any]],
+    predictions: Iterable[dict[str, Any]],
     manifest_path: Path,
 ) -> tuple[int, int]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -129,7 +125,7 @@ def _manifest_prediction_coverage(
 
 
 def _expected_key_coverage(
-    predictions: list[dict[str, Any]],
+    predictions: Iterable[dict[str, Any]],
     expected_keys_path: Path,
 ) -> tuple[int, int]:
     payload = json.loads(expected_keys_path.read_text(encoding="utf-8"))
@@ -178,7 +174,7 @@ def _key_sha256(keys: list[tuple[str, str]]) -> str:
 
 
 def _prediction_key_coverage(
-    predictions: list[dict[str, Any]],
+    predictions: Iterable[dict[str, Any]],
     expected_keys: list[tuple[str, str]],
     *,
     label: str,
@@ -223,6 +219,22 @@ def _unique_manifest_ids(values: list[Any], field: str) -> list[str]:
     if not identifiers:
         raise SystemExit(f"benchmark manifest contains no {field} values")
     return identifiers
+
+
+def _iter_prediction_dicts(path: Path) -> Iterator[dict[str, Any]]:
+    for value in iter_jsonl(path):
+        if not isinstance(value, dict):
+            raise SystemExit("benchmark JSONL predictions must contain JSON objects")
+        yield dict(value)
+
+
+def _prediction_counts(path: Path) -> tuple[int, int]:
+    total_count = 0
+    usable_count = 0
+    for prediction in _iter_prediction_dicts(path):
+        total_count += 1
+        usable_count += _prediction_is_usable(prediction)
+    return total_count, usable_count
 
 
 def _parse_args() -> argparse.Namespace:
@@ -275,40 +287,38 @@ def main() -> None:
         verify_artifact_contract(args.artifact_dir)
 
     predictions_path = args.predictions
-    predictions = list(read_jsonl(predictions_path))
-    if any(not isinstance(row, dict) for row in predictions):
-        raise SystemExit("benchmark JSONL predictions must contain JSON objects")
-    predictions = [dict(row) for row in predictions]
-    usable_count = sum(_prediction_is_usable(row) for row in predictions)
-    print(f"total_predictions={len(predictions)}")
+    total_count, usable_count = _prediction_counts(predictions_path)
+    print(f"total_predictions={total_count}")
     print(f"usable_predictions={usable_count}")
-    if not predictions:
+    if not total_count:
         raise SystemExit("benchmark artifact contains zero predictions")
-    if args.expected_count is not None and len(predictions) != args.expected_count:
+    if args.expected_count is not None and total_count != args.expected_count:
         raise SystemExit(
-            f"expected {args.expected_count} predictions but found {len(predictions)}"
+            f"expected {args.expected_count} predictions but found {total_count}"
         )
     if args.manifest is not None:
         covered_count, required_count = _manifest_prediction_coverage(
-            predictions,
+            _iter_prediction_dicts(predictions_path),
             args.manifest,
         )
         print(f"manifest_prediction_coverage={covered_count}/{required_count}")
     if args.expected_keys_file is not None:
         covered_count, required_count = _expected_key_coverage(
-            predictions,
+            _iter_prediction_dicts(predictions_path),
             args.expected_keys_file,
         )
         print(f"execution_key_coverage={covered_count}/{required_count}")
     if usable_count == 0:
         raise SystemExit("benchmark artifact contains zero usable predictions")
-    if args.require_all_usable and usable_count != len(predictions):
+    if args.require_all_usable and usable_count != total_count:
         raise SystemExit(
             "formal benchmark artifact requires every prediction to be usable: "
-            f"{usable_count}/{len(predictions)} usable"
+            f"{usable_count}/{total_count} usable"
         )
     if args.require_hybrid_eligible:
-        eligible_count, required_count = _required_hybrid_eligibility(predictions)
+        eligible_count, required_count = _required_hybrid_eligibility(
+            _iter_prediction_dicts(predictions_path)
+        )
         print(f"required_hybrid_eligible={eligible_count}/{required_count}")
         if required_count == 0:
             raise SystemExit(
@@ -323,7 +333,7 @@ def main() -> None:
         raise SystemExit("--qasper-manifest requires --require-qasper-answerability")
     if args.require_qasper_answerability:
         covered_count, required_count = _qasper_answerability_coverage(
-            predictions,
+            _iter_prediction_dicts(predictions_path),
             manifest_path=args.qasper_manifest,
         )
         print(f"qasper_answerability_coverage={covered_count}/{required_count}")

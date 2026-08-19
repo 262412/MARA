@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,7 @@ from .artifact_publication import (
     verify_artifact_contract,
 )
 from .execution_plan import _write_plan_and_table
-from .jsonl import read_jsonl
+from .jsonl import iter_jsonl
 
 REQUIRED_JOB_ARTIFACTS = (
     "summary.json",
@@ -138,7 +139,7 @@ def _collect_job(
         "artifact_complete": False,
         "artifact_digest": "",
         "artifact_dir": "",
-        "rows": [],
+        "prediction_count": 0,
     }
     if require_slurm_clean and (slurm_state != "COMPLETED" or slurm_exit_code != "0:0"):
         result["failure_reason"] = f"slurm state={slurm_state} exit_code={slurm_exit_code}"
@@ -155,14 +156,19 @@ def _collect_job(
         return result
     try:
         marker = verify_artifact_contract(artifact_dir)
-        rows = [dict(value) for value in read_jsonl(artifact_dir / "predictions.jsonl")]
-        observed = _prediction_keys(rows)
+        observed: set[tuple[str, str]] = set()
+        prediction_count = 0
+        for row in _iter_prediction_rows(artifact_dir):
+            key = _prediction_key(row)
+            if key in observed:
+                raise ValueError(f"duplicate prediction key: {key}")
+            observed.add(key)
+            prediction_count += 1
+            if require_all_usable and not _prediction_is_usable(row):
+                raise ValueError("job contains an unusable prediction")
         expected = {tuple(key) for key in job["expected_keys"]}
         if observed != expected:
             result["failure_reason"] = _key_mismatch_message(expected, observed)
-            return result
-        if require_all_usable and any(not _prediction_is_usable(row) for row in rows):
-            result["failure_reason"] = "job contains an unusable prediction"
             return result
         result.update(
             {
@@ -170,7 +176,7 @@ def _collect_job(
                 "artifact_complete": True,
                 "artifact_digest": str(marker["artifact_manifest_sha256"]),
                 "artifact_dir": str(artifact_dir),
-                "rows": rows,
+                "prediction_count": prediction_count,
             }
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -191,17 +197,16 @@ def _synthesize_group(
         raise FileExistsError(f"synthesis group already exists: {group_dir}")
     group_dir.mkdir(parents=True)
     execution_manifest = Path(group["execution_manifest"])
-    rows = [
-        row
-        for result in job_results
-        if result["valid"]
-        for row in result["rows"]
-    ]
-    diagnostics = _union_diagnostics(group, job_results)
+    observed_counts: Counter[tuple[str, str]] = Counter()
     try:
         if file_sha256(execution_manifest) != group["execution_manifest_sha256"]:
             raise ValueError("execution manifest digest changed after plan publication")
-        observed = _prediction_keys(rows)
+
+        atomic_write_jsonl(
+            group_dir / "predictions.jsonl",
+            _iter_merged_rows(job_results, require_all_usable, observed_counts),
+        )
+        diagnostics = _union_diagnostics(group, observed_counts)
         if any(
             diagnostics[key] != 0
             for key in ("overlap_key_count", "missing_key_count", "unexpected_key_count")
@@ -213,9 +218,6 @@ def _synthesize_group(
                 f"missing={diagnostics['missing_key_count']} "
                 f"unexpected={diagnostics['unexpected_key_count']}"
             )
-        if require_all_usable and any(not _prediction_is_usable(row) for row in rows):
-            raise ValueError("merged group contains an unusable prediction")
-        atomic_write_jsonl(group_dir / "predictions.jsonl", rows)
         atomic_write_json(
             group_dir / "summary.json",
             {
@@ -224,7 +226,7 @@ def _synthesize_group(
                 "manifest": group["manifest"],
                 "manifest_sha256": group["manifest_sha256"],
                 "execution_manifest": str(execution_manifest),
-                "num_predictions": len(rows),
+                "num_predictions": diagnostics["union_key_count"],
                 "expected_predictions": diagnostics["expected_key_count"],
             },
         )
@@ -245,7 +247,7 @@ def _synthesize_group(
             "valid": True,
             "artifact_dir": str(group_dir),
             "artifact_digest": file_sha256(group_dir / "artifact_manifest.json"),
-            "observed_key_count": len(observed),
+            "observed_key_count": diagnostics["union_key_count"],
             **diagnostics,
             "validator_stdout": validation.stdout,
         }
@@ -255,28 +257,20 @@ def _synthesize_group(
             "valid": False,
             "artifact_dir": str(group_dir),
             "failure_reason": str(exc),
-            "observed_key_count": len(rows),
-            **diagnostics,
+            "observed_key_count": len(observed_counts),
+            **_union_diagnostics(group, observed_counts),
         }
 
 
 def _union_diagnostics(
     group: dict[str, Any],
-    job_results: list[dict[str, Any]],
+    observed_counts: Counter[tuple[str, str]],
 ) -> dict[str, int]:
     expected = {
         (str(example_id), route_id)
         for example_id in group["selected_example_ids"]
         for route_id in group["manifest_route_ids"]
     }
-    observed_counts: Counter[tuple[str, str]] = Counter()
-    for result in job_results:
-        if not result["valid"]:
-            continue
-        for row in result["rows"]:
-            observed_counts[
-                (str(row.get("example_id") or "").strip(), str(row.get("route") or "").strip())
-            ] += 1
     observed = set(observed_counts)
     return {
         "expected_key_count": len(expected),
@@ -314,16 +308,34 @@ def _run_full_manifest_validator(
     return subprocess.run(command, check=False, capture_output=True, text=True)
 
 
-def _prediction_keys(rows: list[dict[str, Any]]) -> set[tuple[str, str]]:
-    keys: set[tuple[str, str]] = set()
-    for row in rows:
-        key = (str(row.get("example_id") or "").strip(), str(row.get("route") or "").strip())
-        if not key[0] or not key[1]:
-            raise ValueError("prediction is missing example_id or route")
-        if key in keys:
-            raise ValueError(f"duplicate prediction key: {key}")
-        keys.add(key)
-    return keys
+def _iter_prediction_rows(artifact_dir: Path) -> Iterator[dict[str, Any]]:
+    for value in iter_jsonl(artifact_dir / "predictions.jsonl"):
+        if not isinstance(value, dict):
+            raise ValueError("benchmark JSONL predictions must contain JSON objects")
+        yield dict(value)
+
+
+def _iter_merged_rows(
+    job_results: list[dict[str, Any]],
+    require_all_usable: bool,
+    observed_counts: Counter[tuple[str, str]],
+) -> Iterator[dict[str, Any]]:
+    for result in job_results:
+        if not result["valid"]:
+            continue
+        for row in _iter_prediction_rows(Path(result["artifact_dir"])):
+            key = _prediction_key(row)
+            observed_counts[key] += 1
+            if require_all_usable and not _prediction_is_usable(row):
+                raise ValueError("merged group contains an unusable prediction")
+            yield row
+
+
+def _prediction_key(row: dict[str, Any]) -> tuple[str, str]:
+    key = (str(row.get("example_id") or "").strip(), str(row.get("route") or "").strip())
+    if not key[0] or not key[1]:
+        raise ValueError("prediction is missing example_id or route")
+    return key
 
 
 def _key_mismatch_message(expected: set[tuple[str, str]], observed: set[tuple[str, str]]) -> str:

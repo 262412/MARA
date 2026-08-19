@@ -58,10 +58,31 @@ def atomic_write_json(path: str | Path, value: Any) -> None:
 
 
 def atomic_write_jsonl(path: str | Path, rows: Iterable[dict[str, Any]]) -> None:
-    atomic_write_text(
-        path,
-        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
-    )
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False))
+                handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, destination)
+        temporary_path = None
+        _fsync_directory(destination.parent)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def publish_artifact_contract(run_dir: str | Path) -> dict[str, Any]:

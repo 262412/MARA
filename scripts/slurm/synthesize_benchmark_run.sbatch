@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=mara-benchmark-synthesis
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=4G
-#SBATCH --time=00:30:00
+#SBATCH --mem=8G
+#SBATCH --time=01:00:00
 
 set -euo pipefail
 
