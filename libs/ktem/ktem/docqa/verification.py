@@ -38,13 +38,14 @@ from .verification_logic import (
     _verify_claims,
     normalize_verification_mode,
 )
-from .visual_evidence_authority import validated_visual_answer_authority
 from .verification_slot_support import (
     claim_aware_slot_support,
     conflict_aware_slot_support,
     enforce_verification_slot_support,
     slot_value,
 )
+from .visual_evidence_authority import TYPED_VISUAL_EVIDENCE_PATH_CONTRACT
+from .visual_verification import visual_verification_decision
 
 
 def verify_decision(
@@ -71,7 +72,7 @@ def verify_decision(
         return _missing_slot_decision(
             request, retrieve_decision, mode, answer, missing_slots
         )
-    visual_decision = _visual_verification_decision(
+    visual_decision = visual_verification_decision(
         request,
         retrieve_decision,
         evidence_bundle,
@@ -122,43 +123,6 @@ def verify_decision(
         return typed_decision
     return enforce_verification_slot_support(
         request, decision, evidence_bundle, prompt=prompt, domain=domain
-    )
-
-
-def _visual_verification_decision(
-    request: Any,
-    retrieve_decision: Any,
-    evidence_bundle: EvidenceBundle,
-    *,
-    mode: str,
-    answer: str,
-) -> VerifyDecision | None:
-    domain = normalize_verification_domain(
-        getattr(request, "verification_domain", None)
-    )
-    if domain != "slidevqa" or retrieve_decision.status != "good":
-        return None
-    authority = validated_visual_answer_authority(evidence_bundle, answer)
-    if authority is None:
-        return None
-    evidence_ids = list(authority["evidence_ids"])
-    claim = str(authority["answer"]).strip()
-    claim_result = {
-        "claim_id": "claim:1",
-        "claim": claim,
-        "status": "supported",
-        "supporting_evidence_ids": evidence_ids,
-        "authority_status": "visual_page",
-        "verified_slot_state": "verified_support",
-    }
-    return VerifyDecision(
-        mode=mode,
-        status="supported",
-        reason="Visual answer is bound to selected page-image evidence.",
-        action="generate",
-        claims=[claim],
-        verified_citations=evidence_ids,
-        claim_results=[claim_result],
     )
 
 
@@ -348,10 +312,10 @@ def _reconciled_verification_slots(
     decision: VerifyDecision,
     bundle: EvidenceBundle,
 ) -> dict[str, tuple[str, ...]]:
-    if (
-        decision.typed_authority.get("contract_id")
-        == TYPED_PROPOSITION_AUTHORITY_CONTRACT
-    ):
+    if decision.typed_authority.get("contract_id") in {
+        TYPED_PROPOSITION_AUTHORITY_CONTRACT,
+        TYPED_VISUAL_EVIDENCE_PATH_CONTRACT,
+    }:
         return typed_slot_bindings(decision)
     if decision.status == "verified_conflict":
         return conflict_aware_slot_support(request, decision, bundle)
@@ -438,10 +402,13 @@ def _synchronize_verified_claim_query_plan(
         plan, QueryPlan
     ):
         return
+    visual_contract = decision.typed_authority.get("contract_id")
+    visual_typed = visual_contract == TYPED_VISUAL_EVIDENCE_PATH_CONTRACT
     verification_support_slots = [
         slot
         for slot in plan.evidence_slots
-        if slot.required_for_verification and slot.role == "support"
+        if slot.required_for_verification
+        and (slot.role == "support" or (visual_typed and slot.role == "operand"))
     ]
     if not verification_support_slots or any(
         not reconciled_slots.get(slot.slot_id) for slot in verification_support_slots
@@ -492,8 +459,8 @@ def _synchronize_verified_claim_query_plan(
                 if decision.status == "verified_conflict"
                 else "verified_claim_support.v1"
             ),
-            "authority_projection_contract": (
-                TYPED_PROPOSITION_AUTHORITY_CONTRACT if decision.typed_authority else ""
+            "authority_projection_contract": str(
+                decision.typed_authority.get("contract_id") or ""
             ),
         }
     )

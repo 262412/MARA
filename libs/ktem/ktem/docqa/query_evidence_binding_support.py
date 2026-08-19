@@ -28,6 +28,22 @@ from .query_plan_schema import EvidenceLocator, EvidenceSlot
 
 _TOKEN_RE = re.compile(r"[a-z0-9%$€£¥]+", re.IGNORECASE)
 _MIN_OPERAND_METRIC_COVERAGE = 0.75
+_VISUAL_METRIC_CONNECTORS = {
+    "across",
+    "change",
+    "during",
+    "fiscal",
+    "from",
+    "in",
+    "of",
+    "over",
+    "period",
+    "periods",
+    "the",
+    "to",
+    "year",
+    "years",
+}
 
 
 def binding_quality(slot: EvidenceSlot, item: dict[str, Any]) -> float:
@@ -99,7 +115,14 @@ def score_evidence_for_slot(
         return 0.0
     if not modality_matches(slot.modality, modality):
         return 0.0
-    return _slot_score(slot, text, modality, locator_score, boolean_score) + (
+    return _slot_score(
+        slot,
+        text,
+        modality,
+        locator_score,
+        boolean_score,
+        visual_metric_coverage=_visual_metric_coverage(slot, item),
+    ) + (
         finance_narrative_support_quality(slot.metric, item)
         if slot.role == "support"
         else 0.0
@@ -246,6 +269,8 @@ def _slot_score(
     modality: str,
     locator_score: float,
     boolean_score: float,
+    *,
+    visual_metric_coverage: float = 0.0,
 ) -> float:
     text_tokens = _tokens(text)
     metric_token_sets = [
@@ -254,6 +279,7 @@ def _slot_score(
         if alias
     ]
     metric_coverage = _metric_coverage(metric_token_sets, text_tokens)
+    metric_coverage = max(metric_coverage, visual_metric_coverage)
     if (
         slot.role == "operand"
         and slot.metric
@@ -272,6 +298,29 @@ def _slot_score(
         0.25 if modality in {"table", "formula"} and slot.role == "operand" else 0.0
     )
     return score
+
+
+def _visual_metric_coverage(slot: EvidenceSlot, item: dict[str, Any]) -> float:
+    metadata = item.get("metadata")
+    if (
+        str(item.get("evidence_level") or "").lower() != "cell"
+        or not isinstance(metadata, dict)
+        or not str(metadata.get("visual_extraction_source") or "").strip()
+    ):
+        return 0.0
+    metric_tokens = {
+        token
+        for token in _tokens(slot.metric)
+        if token not in _VISUAL_METRIC_CONNECTORS
+    }
+    row_tokens = _tokens(
+        " ".join(
+            str(item.get(field) or "") for field in ("row_label", "caption", "text")
+        )
+    )
+    if not metric_tokens or not row_tokens:
+        return 0.0
+    return len(metric_tokens & row_tokens) / len(metric_tokens)
 
 
 def slot_item_materialized(slot: EvidenceSlot, item: dict[str, Any]) -> bool:

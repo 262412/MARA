@@ -206,6 +206,7 @@ def _resolve_boolean_transaction(
         reason="exact_boolean_proposition",
         canonical_answer_polarity=decision.canonical_answer_polarity,
         query_plan_state_version=state_version,
+        required_slot_ids=required_slot_ids,
     )
     slot_ids = list(bindings)
     claim_results = [
@@ -259,9 +260,11 @@ def _resolve_free_text_transaction(
         reason = (
             "claim_extension_unverified"
             if extension_unverified
-            else "required_support_slot_missing"
-            if not required_slots
-            else resolution.reason
+            else (
+                "required_support_slot_missing"
+                if not required_slots
+                else resolution.reason
+            )
         )
         authority = _missing_authority(
             "free_text", question, answer, required_slot_ids, reason
@@ -277,6 +280,7 @@ def _resolve_free_text_transaction(
         question=question,
         answer=answer,
         required_slots=required_slots,
+        required_slot_ids=required_slot_ids,
         atoms=list(resolution.atoms),
         reason=resolution.reason,
     )
@@ -289,6 +293,7 @@ def _commit_free_text_transaction(
     question: str,
     answer: str,
     required_slots: list[Any],
+    required_slot_ids: list[str],
     atoms: list[dict[str, Any]],
     reason: str,
 ) -> VerifyDecision:
@@ -299,9 +304,11 @@ def _commit_free_text_transaction(
     claims = list(decision.claims) or [str(answer or "").strip()]
     claim_results = [
         _free_text_claim_result(
-            decision.claim_results[index]
-            if index < len(decision.claim_results)
-            else {},
+            (
+                decision.claim_results[index]
+                if index < len(decision.claim_results)
+                else {}
+            ),
             claim=claim,
             claim_id=f"claim:{index + 1}",
             atom=atoms[min(index, len(atoms) - 1)],
@@ -319,6 +326,7 @@ def _commit_free_text_transaction(
         state="verified_support",
         reason=reason,
         query_plan_state_version=state_version,
+        required_slot_ids=required_slot_ids,
     )
     return replace(
         decision,
@@ -422,6 +430,7 @@ def _commit_conflict_transaction(
         state="verified_conflict",
         reason="authoritative_conflict_abstention",
         query_plan_state_version=state_version,
+        required_slot_ids=list(bindings),
     )
     slot_ids = list(bindings)
     claim_results = [
@@ -484,9 +493,11 @@ def _commit_query_plan(
     authoritative = replace(
         plan,
         evidence_slots=tuple(
-            replace(slot, status=status, evidence_ids=bindings[slot.slot_id])
-            if slot.slot_id in bindings
-            else slot
+            (
+                replace(slot, status=status, evidence_ids=bindings[slot.slot_id])
+                if slot.slot_id in bindings
+                else slot
+            )
             for slot in plan.evidence_slots
         ),
     )

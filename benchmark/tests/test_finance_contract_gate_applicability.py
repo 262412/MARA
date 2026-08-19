@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from benchmark.contract_gate_metrics import prediction_gate_metrics
+from benchmark.runner import _benchmark_role
 
 
 def _prediction(*, route: str, role: str) -> dict[str, object]:
@@ -50,3 +51,10 @@ def test_qa_quality_retrieval_route_keeps_citation_and_evidence_stage_gates_stri
     assert metrics["answerable_document_qa"] == 1.0
     assert metrics["evidence_stages_recorded"] == 0.0
     assert metrics["required_evidence_stages_nonempty"] == 0.0
+
+
+def test_direct_answer_is_always_diagnostic_even_if_manifest_marks_quality():
+    assert _benchmark_role({"benchmark_role": "qa_quality"}, "direct_answer") == (
+        "diagnostic"
+    )
+    assert _benchmark_role({"benchmark_role": "qa_quality"}, "direct") == ("diagnostic")

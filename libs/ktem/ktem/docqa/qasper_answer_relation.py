@@ -119,9 +119,9 @@ def resolve_qasper_answer_relation(
             question_tokens=question_tokens,
             question_anchors=question_anchors,
             answer_numbers=answer_numbers,
-            previous_actor=str(selected_atoms[-1].get("actor") or "")
-            if selected_atoms
-            else "",
+            previous_actor=(
+                str(selected_atoms[-1].get("actor") or "") if selected_atoms else ""
+            ),
         )
         if atom is None:
             return AnswerRelationResolution("missing", reason)
@@ -553,7 +553,7 @@ def _numbers(value: str) -> set[str]:
 def _qualifier(*values: str) -> str:
     text = " ".join(values).lower()
     match = re.search(
-        r"\b(?:at\s+least|at\s+most|more\s+than|less\s+than|only|approximately|about|now)\b",
+        r"\b(?:at\s+least|at\s+most|more\s+than|less\s+than|only|approximately|now)\b",
         text,
     )
     return match.group(0) if match else "none"

@@ -57,6 +57,9 @@ def verified_claim_support_groups(
     resolved_groups = [group for group in groups.values() if group]
     if resolved_groups:
         return resolved_groups
+    decision_groups = _verified_decision_support_groups(prediction, alias_lookup)
+    if decision_groups:
+        return decision_groups
     for metadata in _metadata_sources(prediction):
         authoritative = _qasper_authoritative_items(metadata, alias_lookup)
         if authoritative:
@@ -88,3 +91,31 @@ def _qasper_authoritative_items(
     evidence_id = str(trace.get("authoritative_quote_evidence_id") or "").strip()
     item = alias_lookup.get(evidence_id)
     return [item] if item is not None else []
+
+
+def _verified_decision_support_groups(
+    prediction: dict[str, Any],
+    alias_lookup: dict[str, dict[str, Any]],
+) -> list[list[dict[str, Any]]]:
+    decision = prediction.get("verify_decision")
+    if not isinstance(decision, dict):
+        decision = prediction.get("engine_verify_decision")
+    if not isinstance(decision, dict):
+        return []
+    groups: list[list[dict[str, Any]]] = []
+    for result in decision.get("claim_results") or []:
+        if (
+            not isinstance(result, dict)
+            or str(result.get("status") or "") != "supported"
+        ):
+            continue
+        group: list[dict[str, Any]] = []
+        for evidence_id in result.get("supporting_evidence_ids") or []:
+            item = alias_lookup.get(str(evidence_id).strip())
+            if item is not None and all(
+                identity_of(existing).key != identity_of(item).key for existing in group
+            ):
+                group.append(item)
+        if group:
+            groups.append(group)
+    return groups

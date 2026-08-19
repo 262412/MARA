@@ -64,6 +64,21 @@ def missing_authority(
     ).as_dict()
 
 
+def exact_slot_set_contract(
+    required_slot_ids: list[str] | tuple[str, ...],
+    verified_support_slot_ids: list[str] | tuple[str, ...],
+    slot_bindings: dict[str, Any],
+) -> bool:
+    """Check the one authoritative set of typed proposition slots."""
+
+    required = {str(value).strip() for value in required_slot_ids if str(value).strip()}
+    verified = {
+        str(value).strip() for value in verified_support_slot_ids if str(value).strip()
+    }
+    bound = {str(value).strip() for value in slot_bindings if str(value).strip()}
+    return required == verified == bound
+
+
 def verified_authority(
     answer_type: str,
     question: str,
@@ -76,7 +91,17 @@ def verified_authority(
     reason: str,
     canonical_answer_polarity: str = "",
     query_plan_state_version: int,
+    required_slot_ids: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
+    required = (
+        list(required_slot_ids) if required_slot_ids is not None else list(bindings)
+    )
+    verified = list(bindings)
+    if not exact_slot_set_contract(required, verified, bindings):
+        raise ValueError(
+            "Typed proposition authority requires exact required, verified, and "
+            "bound slot sets."
+        )
     return TypedPropositionAuthority(
         state=state,
         reason=reason,
@@ -88,8 +113,8 @@ def verified_authority(
             for result in claim_results
             if str(result.get("claim_id") or "")
         ),
-        required_slot_ids=tuple(bindings),
-        verified_slot_ids=tuple(bindings),
+        required_slot_ids=tuple(required),
+        verified_slot_ids=tuple(verified),
         slot_bindings=tuple(bindings.items()),
         authority_atoms=tuple(atoms),
         canonical_answer_polarity=canonical_answer_polarity,

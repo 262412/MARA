@@ -38,8 +38,7 @@ from .required_slot_selection import (
 )
 from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 from .source_identity_crosswalk import canonicalize_evidence_sources
-
-MAX_RERANK_CANDIDATES = 80
+from .visual_evidence_authority import project_visual_evidence
 
 
 @dataclass(frozen=True)
@@ -147,7 +146,7 @@ def _build_evidence_stages(
     ranked_candidates = list(deduped)
     reranker_candidate_limit = required_slot_candidate_limit(
         query_plan,
-        base_limit=MAX_RERANK_CANDIDATES,
+        base_limit=80,
     )
     reranker_input, restored = required_slot_shortlist(
         ranked_candidates,
@@ -243,6 +242,7 @@ def _initial_evidence_items(
         items.extend(_rank_route_items(element_items, request, "doc_element"))
     if route in {"graph_global", "hybrid"}:
         items.extend(graph_items(request, evidence_metadata))
+    items = project_visual_evidence(items, evidence_metadata)
     items = _materialize_execution_cells(request, items, evidence_metadata)
     return canonicalize_evidence_sources(items, crosswalk)
 

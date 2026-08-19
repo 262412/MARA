@@ -22,7 +22,10 @@ _PREDICATE_PATTERNS = {
     "recruit": r"\brecruit(?:s|ed|ing)?\b",
     "evaluate": r"\b(?:evaluat(?:e|es|ed|ing)|assess(?:es|ed|ing)?)\b",
     "train": r"\btrain(?:s|ed|ing)?\b",
-    "improve": r"\bimprov(?:e|es|ed|ing)\b",
+    "improve": r"\b(?:improv(?:e|es|ed|ing|ement)|better|outperform(?:s|ed|ing)?|"
+    r"increase(?:s|d|ing)?)\b",
+    "novel": r"\b(?:novel(?:ty)?|new(?:ly)?|innovative|introduc(?:e|es|ed|ing))\b",
+    "baseline": r"\b(?:baseline|prior|previous|compared\s+(?:with|to))\b",
     "calculate": r"\bcalculat(?:e|es|ed|ing)\b",
     "compute": r"\bcomput(?:e|es|ed|ing)\b",
     "derive": r"\bderiv(?:e|es|ed|ing)\b",
@@ -69,16 +72,17 @@ def question_relation_frame(question: str) -> QuestionRelationFrame:
     )
     if qualification is not None:
         return qualification
-    account_for = _account_for_frame(
-        lowered,
-        actor=actor,
-        object_type=object_type,
-        scope=scope,
-        qualifier=qualifier,
-        quantifier=quantifier,
-    )
-    if account_for is not None:
-        return account_for
+    for relation_builder in (_account_for_frame, _typed_relation_frame):
+        relation = relation_builder(
+            lowered,
+            actor=actor,
+            object_type=object_type,
+            scope=scope,
+            qualifier=qualifier,
+            quantifier=quantifier,
+        )
+        if relation is not None:
+            return relation
     if re.search(r"\bhow\s+(?:many|much)\b|\b(?:number|count)\s+of\b", lowered):
         return _frame(
             actor,
@@ -257,6 +261,50 @@ def _account_for_frame(
     )
 
 
+def _typed_relation_frame(
+    question: str,
+    *,
+    actor: str,
+    object_type: str,
+    scope: str,
+    qualifier: str,
+    quantifier: str,
+) -> QuestionRelationFrame | None:
+    if re.search(r"\bimprov(?:e|es|ed|ing|ement)\b", question):
+        return _frame(
+            actor,
+            "improve",
+            "change",
+            object_type,
+            scope,
+            qualifier,
+            quantifier,
+            "comparison",
+        )
+    if re.search(r"\bnovel(?:ty)?\b", question):
+        return _frame(
+            actor,
+            "novel",
+            "property",
+            object_type,
+            scope,
+            qualifier,
+            quantifier,
+        )
+    if re.search(r"\bbaseline\b", question):
+        return _frame(
+            actor,
+            "baseline",
+            "reference",
+            object_type,
+            scope,
+            qualifier,
+            quantifier,
+            "comparison",
+        )
+    return None
+
+
 def _definition_frame(
     question: str,
     *,
@@ -320,6 +368,18 @@ def _predicate_is_explicit(predicate: str, quote: str) -> bool:
             _PREDICATE_PATTERNS["rely_on"],
             _PREDICATE_PATTERNS["leverage"],
             _PREDICATE_PATTERNS["use"],
+        ),
+        "novel": (
+            _PREDICATE_PATTERNS["novel"],
+            r"\b(?:first|newly\s+introduced|innovation)\b",
+        ),
+        "baseline": (
+            _PREDICATE_PATTERNS["baseline"],
+            r"\b(?:reference\s+method|comparison\s+method|prior\s+work)\b",
+        ),
+        "improve": (
+            _PREDICATE_PATTERNS["improve"],
+            r"\b(?:gain|improvement|higher|lower|better|outperform)\w*\b",
         ),
     }
     if predicate in semantic_patterns:
@@ -394,7 +454,7 @@ def _numbers(value: str) -> set[str]:
 def _qualifier(value: str) -> str:
     match = re.search(
         r"\b(?:at\s+least|at\s+most|more\s+than|less\s+than|only|approximately|"
-        r"about|now)\b",
+        r"now)\b",
         str(value or "").lower(),
     )
     return match.group(0) if match else "none"

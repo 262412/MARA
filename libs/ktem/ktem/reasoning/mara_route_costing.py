@@ -14,7 +14,10 @@ def effective_route_confidences(
     dataset = dataset_text(dataset_family, latency_budget)
     if (
         is_mmdocrag_dataset(dataset)
-        and not features["visual_intent"]
+        and not (
+            features["visual_intent"]
+            or features.get("requires_typed_visual_evidence", False)
+        )
         and effective.get("text", 0.0) >= 0.65
     ):
         effective["visual"] = min(effective.get("visual", 0.0), 0.45)
@@ -51,7 +54,26 @@ def select_route_preserving_required_evidence(
     expected_quality: dict[str, float],
     route_scores: dict[str, float],
 ) -> tuple[str, bool]:
-    preserve_required_evidence = (
+    preserve_typed_visual_evidence = (
+        features.get("requires_typed_visual_evidence", False)
+        and planner_route in {"doc_page_image", "hybrid"}
+        and (not allowed_routes or planner_route in allowed_routes)
+        and planner_route not in skipped_routes
+        and expected_quality.get(planner_route, 0.0) > 0.0
+    )
+    typed_visual_route = (
+        planner_route
+        if preserve_typed_visual_evidence
+        else (
+            "doc_page_image"
+            if features.get("requires_typed_visual_evidence", False)
+            and (not allowed_routes or "doc_page_image" in allowed_routes)
+            and "doc_page_image" not in skipped_routes
+            and expected_quality.get("doc_page_image", 0.0) > 0.0
+            else ""
+        )
+    )
+    preserve_required_evidence = bool(typed_visual_route) or (
         features["structured_calculation"]
         and planner_route == "hybrid"
         and (not allowed_routes or "hybrid" in allowed_routes)
@@ -59,9 +81,13 @@ def select_route_preserving_required_evidence(
         and expected_quality.get("hybrid", 0.0) > 0.0
     )
     route = (
-        "hybrid"
-        if preserve_required_evidence
-        else select_route(route_scores, allowed_routes, skipped_routes)
+        typed_visual_route
+        if typed_visual_route
+        else (
+            "hybrid"
+            if preserve_required_evidence
+            else select_route(route_scores, allowed_routes, skipped_routes)
+        )
     )
     return route, preserve_required_evidence
 

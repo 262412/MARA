@@ -2,9 +2,22 @@ from __future__ import annotations
 
 from typing import Any
 
+from .element_record_contract import element_record_from_mapping
 from .evidence_identity import identity_of
 
 VISUAL_EVIDENCE_AUTHORITY_CONTRACT = "visual_evidence_authority.v1"
+TYPED_VISUAL_EVIDENCE_PATH_CONTRACT = "typed_visual_evidence_path.v1"
+_VISUAL_EXTRACTION_KEYS = (
+    "visual_extractions",
+    "structured_visual_evidence",
+    "table_cells",
+    "ocr_cells",
+    "vlm_cells",
+    "extracted_elements",
+    "visual_elements",
+    "ocr_table",
+    "vlm_table",
+)
 _NON_ANSWER_MARKERS = (
     "could not retrieve enough evidence",
     "no vlm backend is configured",
@@ -29,12 +42,16 @@ def record_visual_answer_authority(
     metadata = getattr(bundle, "metadata", None)
     if not isinstance(metadata, dict):
         return False
-    metadata["visual_answer_authority"] = {
+    authority: dict[str, Any] = {
         "contract_id": VISUAL_EVIDENCE_AUTHORITY_CONTRACT,
         "answer": value,
         "evidence_ids": evidence_ids,
         "backend": str(backend or "visual_generator"),
     }
+    typed_path = typed_visual_evidence_path(bundle)
+    if typed_path is not None:
+        authority["typed_visual_path"] = typed_path
+    metadata["visual_answer_authority"] = authority
     return True
 
 
@@ -58,10 +75,97 @@ def validated_visual_answer_authority(
     evidence_ids = _unique_strings(authority.get("evidence_ids"))
     if not evidence_ids or not set(evidence_ids) <= selected_ids:
         return None
+    selected_item_ids = _selected_item_ids(bundle)
+    typed_path = authority.get("typed_visual_path")
+    if typed_path is not None and not _typed_path_is_selected(
+        typed_path,
+        selected_item_ids,
+    ):
+        return None
     return {
         **authority,
         "answer": str(authority["answer"]).strip(),
         "evidence_ids": evidence_ids,
+        **({"typed_visual_path": typed_path} if typed_path is not None else {}),
+    }
+
+
+def project_visual_evidence_to_typed_items(
+    items: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Project structured OCR/VLM/table output into canonical evidence items."""
+
+    projected = list(items)
+    seen = {identity_of(item).key for item in projected}
+    added = 0
+    rejected = 0
+    for parent in items:
+        if not _is_visual_parent(parent):
+            continue
+        for index, extraction in enumerate(_visual_extractions(parent)):
+            record = _typed_visual_record(parent, extraction, index)
+            if record is None:
+                rejected += 1
+                continue
+            identity = identity_of(record).key
+            if identity in seen:
+                continue
+            seen.add(identity)
+            projected.append(record)
+            added += 1
+    projection = {
+        "contract_id": TYPED_VISUAL_EVIDENCE_PATH_CONTRACT,
+        "parent_count": sum(_is_visual_parent(item) for item in items),
+        "projected_count": added,
+        "rejected_count": rejected,
+    }
+    return projected, projection
+
+
+def project_visual_evidence(
+    items: list[dict[str, Any]], metadata: dict[str, Any]
+) -> list[dict[str, Any]]:
+    projected, projection = project_visual_evidence_to_typed_items(items)
+    metadata["visual_typed_projection"] = projection
+    return projected
+
+
+def typed_visual_evidence_path(bundle: Any) -> dict[str, Any] | None:
+    metadata = getattr(bundle, "metadata", None)
+    plan = metadata.get("query_plan") if isinstance(metadata, dict) else None
+    if not isinstance(plan, dict):
+        return None
+    slots = plan.get("evidence_slots")
+    if not isinstance(slots, list):
+        return None
+    required = [
+        slot
+        for slot in slots
+        if isinstance(slot, dict)
+        and (
+            slot.get("required_for_execution") or slot.get("required_for_verification")
+        )
+        and slot.get("role") in {"operand", "support"}
+    ]
+    bindings = {
+        str(slot.get("slot_id")): [
+            str(value) for value in slot.get("evidence_ids") or []
+        ]
+        for slot in required
+        if str(slot.get("slot_id") or "").strip()
+        and str(slot.get("status") or "")
+        in {"filled", "retrieved_unverified", "verified_support"}
+        and slot.get("evidence_ids")
+    }
+    required_ids = [str(slot.get("slot_id")) for slot in required]
+    if not required_ids or set(bindings) != set(required_ids):
+        return None
+    return {
+        "contract_id": TYPED_VISUAL_EVIDENCE_PATH_CONTRACT,
+        "required_slot_ids": required_ids,
+        "verified_support_slot_ids": required_ids,
+        "slot_bindings": bindings,
+        "query_plan_state_version": int(plan.get("state_version") or 0),
     }
 
 
@@ -96,6 +200,134 @@ def _page_evidence_ids(bundle: Any) -> list[str]:
             if evidence_id in output
         ]
     return output
+
+
+def _selected_item_ids(bundle: Any) -> set[str]:
+    return {
+        identity_of(item).key
+        for item in getattr(bundle, "items", []) or []
+        if isinstance(item, dict)
+    }
+
+
+def _typed_path_is_selected(path: Any, selected_ids: set[str]) -> bool:
+    if not isinstance(path, dict):
+        return False
+    required = {
+        str(value).strip()
+        for value in path.get("required_slot_ids") or []
+        if str(value).strip()
+    }
+    bindings = path.get("slot_bindings")
+    if not required or not isinstance(bindings, dict) or set(bindings) != required:
+        return False
+    return all(
+        str(evidence_id).strip() in selected_ids
+        for values in bindings.values()
+        for evidence_id in values or []
+    )
+
+
+def _is_visual_parent(item: dict[str, Any]) -> bool:
+    modality = str(item.get("modality") or item.get("element_type") or "").lower()
+    return modality in {"page_image", "image", "figure", "slide"}
+
+
+def _visual_extractions(item: dict[str, Any]) -> list[dict[str, Any]]:
+    containers = [item, item.get("metadata") or {}]
+    output: list[dict[str, Any]] = []
+    for container in containers:
+        if not isinstance(container, dict):
+            continue
+        for key in _VISUAL_EXTRACTION_KEYS:
+            value = container.get(key)
+            if isinstance(value, dict):
+                value = (
+                    value.get("cells") or value.get("elements") or value.get("items")
+                )
+            if isinstance(value, list):
+                output.extend(dict(entry) for entry in value if isinstance(entry, dict))
+    return output
+
+
+def _typed_visual_record(
+    parent: dict[str, Any], extraction: dict[str, Any], index: int
+) -> dict[str, Any] | None:
+    parent_metadata = dict(parent.get("metadata") or {})
+    value = dict(extraction)
+    nested = value.get("metadata")
+    if isinstance(nested, dict):
+        value = {**nested, **value}
+    file_id = str(parent.get("file_id") or parent.get("source_id") or "").strip()
+    page_label = str(parent.get("page_label") or parent.get("page") or "").strip()
+    if not file_id or not page_label:
+        return None
+    table_id = str(
+        value.get("table_id") or value.get("table_instance_id") or ""
+    ).strip()
+    cell_id = str(value.get("cell_id") or "").strip()
+    row_index = value.get("row_index")
+    column_index = value.get("column_index")
+    if not cell_id and table_id and row_index is not None and column_index is not None:
+        cell_id = f"{table_id}:{row_index}:{column_index}"
+    element_id = str(value.get("element_id") or "").strip()
+    if not cell_id and not element_id and not str(value.get("span_id") or "").strip():
+        element_id = f"visual-extraction-{index}"
+    text = str(
+        value.get("text") or value.get("ocr_text") or value.get("vlm_text") or ""
+    ).strip()
+    raw_value = str(value.get("value") or "").strip()
+    if not text and not raw_value:
+        return None
+    record = {
+        **parent_metadata,
+        **value,
+        "file_id": file_id,
+        "source_id": file_id,
+        "page_label": page_label,
+        "element_id": element_id,
+        "cell_id": cell_id,
+        "evidence_id": str(
+            value.get("evidence_id") or f"visual:{file_id}:{page_label}:{index}"
+        ),
+        "modality": str(value.get("modality") or value.get("element_type") or "table"),
+        "evidence_level": (
+            "cell" if cell_id else str(value.get("evidence_level") or "element")
+        ),
+        "text": text or raw_value,
+        "ocr_text": str(value.get("ocr_text") or text),
+        "vlm_text": str(value.get("vlm_text") or ""),
+        "source_backrefs": list(
+            value.get("source_backrefs")
+            or parent.get("source_backrefs")
+            or [f"{file_id}#page:{page_label}"]
+        ),
+        "parent_element_id": str(
+            value.get("parent_element_id") or parent.get("evidence_id") or ""
+        ),
+    }
+    normalized = element_record_from_mapping(
+        record,
+        default_file_id=file_id,
+        default_file_name=str(parent.get("file_name") or ""),
+        default_page_label=page_label,
+        default_element_id=element_id,
+        default_modality=record["modality"],
+        default_evidence_id=record["evidence_id"],
+    )
+    if normalized is None:
+        return None
+    normalized_metadata = dict(normalized.get("metadata") or {})
+    normalized_metadata.update(
+        {
+            "visual_parent_evidence_id": str(parent.get("evidence_id") or ""),
+            "visual_extraction_source": str(
+                value.get("extraction_source") or "ocr_vlm_table"
+            ),
+        }
+    )
+    normalized["metadata"] = normalized_metadata
+    return normalized
 
 
 def _unique_strings(values: Any) -> list[str]:

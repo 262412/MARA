@@ -8,6 +8,7 @@ from ktem.reasoning.mara_route_costing import (
 )
 from ktem.reasoning.mara_route_costing import (
     effective_route_confidences,
+    is_mmdocrag_dataset,
     latency_budget_reason,
     route_confidence_trace_fields,
     select_route_preserving_required_evidence,
@@ -43,7 +44,12 @@ def score_adaptive_route(
     latency_budget: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     allowed = _allowed_routes(allowed_routes)
-    features = _question_features(understanding, question)
+    features = _route_features(
+        understanding,
+        question,
+        dataset_family=dataset_family,
+        allowed=allowed,
+    )
     probe = _normalized_route_probe(route_probe or {}, features)
     raw_confidences = _route_confidences(probe, features)
     confidences = effective_route_confidences(
@@ -107,6 +113,26 @@ def score_adaptive_route(
     )
 
 
+def _route_features(
+    understanding: dict[str, Any],
+    question: str,
+    *,
+    dataset_family: str,
+    allowed: list[str],
+) -> dict[str, Any]:
+    features = _question_features(understanding, question)
+    if (
+        is_mmdocrag_dataset(dataset_family)
+        and features["structured_calculation"]
+        and (
+            not allowed
+            or any(route in allowed for route in ("doc_page_image", "hybrid"))
+        )
+    ):
+        features["requires_typed_visual_evidence"] = True
+    return features
+
+
 def _select_initial_route(
     expected_quality: dict[str, float],
     expected_cost: dict[str, float],
@@ -161,8 +187,9 @@ def _adaptive_route_payload(
         latency_reason=latency_reason,
     )
     required_hybrid = features["structured_calculation"] and planner_route == "hybrid"
+    required_typed_visual = bool(features.get("requires_typed_visual_evidence", False))
     required_evidence_route_available = (
-        preserve_required_evidence if required_hybrid else None
+        preserve_required_evidence if required_hybrid or required_typed_visual else None
     )
     if preserve_required_evidence:
         cost_gate_decision = "required_evidence_preserved"
@@ -190,6 +217,7 @@ def _adaptive_route_payload(
         "latency_budget_reason": latency_reason,
         "cost_gate_decision": cost_gate_decision,
         "required_evidence_route_available": required_evidence_route_available,
+        "required_typed_visual_route": required_typed_visual,
         "selected_route_reason": reason,
         "route_selection_reason": reason,
         "route_selection_policy": "cost_aware_initial",

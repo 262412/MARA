@@ -156,6 +156,9 @@ def _question_features(
         "element_intent": _has_term(question_text, ELEMENT_INTENT_TERMS)
         or bool(set(modalities) & ELEMENT_MODALITIES),
         "structured_calculation": _has_term(question_text, CALCULATION_TERMS),
+        "requires_typed_visual_evidence": bool(
+            understanding.get("requires_typed_visual_evidence")
+        ),
         "graph_intent": task_type in SUMMARY_TASK_TYPES
         or _has_term(question_text, {"compare", "global", "overview", "summarize"}),
         "available_modalities": available_modalities,
@@ -309,7 +312,9 @@ def _expected_route_quality(
         "graph_global": 0.05 + graph,
         "hybrid": 0.2 + (text + max(visual, element)) / 2 if hybrid_allowed else 0.0,
     }
-    if features["visual_intent"]:
+    if features["visual_intent"] or features.get(
+        "requires_typed_visual_evidence", False
+    ):
         quality["doc_page_image"] += 0.32
         quality["doc_text"] -= 0.08
     if features["element_intent"]:
@@ -325,11 +330,17 @@ def _expected_route_quality(
         quality["graph_global"] += 0.35
     else:
         quality["graph_global"] -= 0.25
-    if text >= 0.65 and not features["visual_intent"]:
+    if text >= 0.65 and not (
+        features["visual_intent"]
+        or features.get("requires_typed_visual_evidence", False)
+    ):
         quality["doc_text"] += 0.25
         quality["doc_page_image"] -= 0.2
         quality["hybrid"] -= 0.1
-    if is_mmdocrag_dataset(dataset) and not features["visual_intent"]:
+    if is_mmdocrag_dataset(dataset) and not (
+        features["visual_intent"]
+        or features.get("requires_typed_visual_evidence", False)
+    ):
         quality["doc_text"] += 0.2
         quality["doc_page_image"] -= 0.2
         quality["hybrid"] -= 0.12
@@ -355,7 +366,9 @@ def _expected_route_cost(
         "graph_global": 0.1,
         "hybrid": 0.35,
     }
-    if features["visual_intent"]:
+    if features["visual_intent"] or features.get(
+        "requires_typed_visual_evidence", False
+    ):
         cost["doc_page_image"] -= 0.18
     if features["element_intent"] and _element_coverage_ok(probe["element"]):
         cost["doc_element"] -= 0.05
@@ -384,7 +397,10 @@ def _skipped_expensive_routes(
     if (
         is_mmdocrag_dataset(dataset)
         and confidences["text"] >= 0.65
-        and not features["visual_intent"]
+        and not (
+            features["visual_intent"]
+            or features.get("requires_typed_visual_evidence", False)
+        )
     ):
         skipped.extend(["doc_page_image", "hybrid"])
     if not _element_coverage_ok(probe["element"]):
@@ -396,6 +412,7 @@ def _skipped_expensive_routes(
             and expected_quality.get(route, 0.0)
             <= expected_quality.get("doc_text", 0.0)
             and route not in skipped
+            and not features.get("requires_typed_visual_evidence", False)
         ):
             skipped.append(route)
     return skipped

@@ -23,7 +23,13 @@ def metadata_citations_allowed(
         return False
     return bool(prediction.get("gold_evidence")) or any(
         family in dataset
-        for family in ("financebench", "slidevqa", "mmdocrag", "vidore")
+        for family in (
+            "financebench",
+            "slidevqa",
+            "mmdocrag",
+            "vidore",
+            "ragtruth",
+        )
     )
 
 

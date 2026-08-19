@@ -4,10 +4,8 @@ import json
 import re
 from typing import Any
 
-from .answer_abstention import apply_abstention_projection
 from .answer_modes import normalize_benchmark_answer_mode
 from .answer_repetition import deduplicate_final_answer as _deduplicate_final_answer
-from .answer_scoring_adapter import select_scoring_answer
 from .calculation_citation_projection import calculation_citation_items
 from .citation_claim_selection import minimum_verified_claim_support_items
 from .citation_rendering import citation_from_item as _citation_from_item
@@ -31,14 +29,12 @@ from .finance_citation_contract import (
 )
 from .qasper_answer_normalization import is_unanswerable_text as _is_unanswerable_text
 from .qasper_answer_normalization import (
-    normalize_qasper_contract_answer as _normalize_qasper_contract_answer,
-)
-from .qasper_answer_normalization import (
     record_qasper_metadata as _record_qasper_metadata,
 )
 from .qasper_terminal_commit import qasper_terminal_scoring_commit
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
-from .ragtruth_answer_finalizer import finalize_ragtruth_if_requested
+from .ragtruth_answer_finalizer import finalize_ragtruth_prediction
+from .standard_answer_finalizer import finalize_standard_prediction
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 _TRUNCATED_JSON_ANSWER_RE = re.compile(
@@ -61,70 +57,28 @@ def finalize_prediction_answer(
         prediction,
         dataset_name=dataset_name,
     )
-    if finalize_ragtruth_if_requested(
-        prediction, raw_answer, dataset_name, normalized_mode
-    ):
+    if _is_ragtruth_dataset(dataset_name):
+        finalize_ragtruth_prediction(
+            prediction,
+            raw_answer=raw_answer,
+            dataset_name=dataset_name,
+            mode=normalized_mode,
+            presentation_answer=presentation_answer,
+            preserve_semantic_answer=preserve_semantic_answer,
+        )
         return
-    raw_answer, repetition_removed, repetition_kind = _finalization_answer_source(
-        raw_answer,
-        prediction=prediction,
-        dataset_name=dataset_name,
-        preserve_semantic_answer=preserve_semantic_answer,
-    )
-    raw_answer, qasper_contract_normalized = _normalize_qasper_contract_answer(
-        raw_answer,
-        prediction=prediction,
-        dataset_name=dataset_name,
-    )
-    _prepare_finalization_evidence(prediction, dataset_name=dataset_name)
-    (
-        answer_for_user,
-        answer_text_for_user,
-        answer_for_scoring_source,
-        structured_answer,
-        truncated_answer,
-    ) = _prepare_standard_answer(
-        raw_answer,
-        prediction=prediction,
-        dataset_name=dataset_name,
-        mode=normalized_mode,
-    )
-    answer_for_scoring, source = select_scoring_answer(
-        answer_for_user=answer_for_user,
-        answer_for_scoring_source=answer_for_scoring_source,
-        structured_answer=structured_answer,
-        truncated_answer=truncated_answer,
-        dataset_name=dataset_name,
-        mode=normalized_mode,
-        preserve_semantic_answer=preserve_semantic_answer,
-    )
-    answer_for_user, answer_for_scoring, source = apply_abstention_projection(
-        prediction,
-        answer_for_user=answer_for_user,
-        answer_for_scoring=answer_for_scoring,
-        answer_text_for_user=answer_text_for_user,
-        presentation_answer=presentation_answer,
-        source=source,
-        preserve_semantic_answer=preserve_semantic_answer,
-    )
-    _store_finalized_answers(
-        prediction,
-        answer_for_user=answer_for_user,
-        answer_for_scoring=answer_for_scoring,
-        answer_text_for_user=answer_text_for_user,
-        dataset_name=dataset_name,
-        mode=normalized_mode,
-        source=source,
-        repetition_removed=repetition_removed,
-        repetition_kind=repetition_kind,
-    )
-    _record_standard_finalization(
+    finalize_standard_prediction(
         prediction,
         raw_answer=raw_answer,
-        answer_text_for_user=answer_text_for_user,
         dataset_name=dataset_name,
-        qasper_contract_normalized=qasper_contract_normalized,
+        mode=normalized_mode,
+        presentation_answer=presentation_answer,
+        preserve_semantic_answer=preserve_semantic_answer,
     )
+
+
+def _is_ragtruth_dataset(dataset_name: str) -> bool:
+    return "ragtruth" in str(dataset_name or "").strip().lower()
 
 
 def _prepare_finalization_evidence(
