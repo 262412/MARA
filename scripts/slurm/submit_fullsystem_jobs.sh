@@ -7,8 +7,13 @@ PROJECT_ROOT="${MARA_FULLSYSTEM_PROJECT_ROOT:?Set MARA_FULLSYSTEM_PROJECT_ROOT t
 EXPECTED_SHA="${MARA_FULLSYSTEM_EXPECTED_SHA:-$(git -C "$PROJECT_ROOT" rev-parse HEAD)}"
 MANIFEST_DIR="${MARA_FULLSYSTEM_MANIFEST_DIR:-${RUN_ROOT}/manifests}"
 SEED="${MARA_FULLSYSTEM_SAMPLE_SEED:-20260615}"
-WAVE_SIZE="${MARA_FULLSYSTEM_WAVE_SIZE:-4}"
+WAVE_SIZE="${MARA_FULLSYSTEM_WAVE_SIZE:-2}"
 MIN_FREE_INODES="${MARA_FULLSYSTEM_MIN_FREE_INODES:-50000}"
+INODES_PER_JOB_RESERVE="${MARA_FULLSYSTEM_INODES_PER_JOB_RESERVE:-20000}"
+TEXT_PARTITION="${MARA_FULLSYSTEM_TEXT_PARTITION:-gpu-a-lowsmall}"
+TEXT_GRES="${MARA_FULLSYSTEM_TEXT_GRES:-gpu:a100:2}"
+MULTIMODAL_PARTITION="${MARA_FULLSYSTEM_MULTIMODAL_PARTITION:-gpu-l40s-low}"
+MULTIMODAL_GRES="${MARA_FULLSYSTEM_MULTIMODAL_GRES:-gpu:l40s:2}"
 PLAN_PYTHON="${MARA_PLAN_PYTHON:-python3}"
 PLAN_DIR="${RUN_ROOT}/09_synthesis"
 PLAN_PATH="${PLAN_DIR}/benchmark_execution_plan.json"
@@ -24,6 +29,10 @@ if [[ ! "$WAVE_SIZE" =~ ^[1-9][0-9]*$ ]]; then
 fi
 if [[ ! "$MIN_FREE_INODES" =~ ^[0-9]+$ ]]; then
   echo "MARA_FULLSYSTEM_MIN_FREE_INODES must be a non-negative integer" >&2
+  exit 2
+fi
+if [[ ! "$INODES_PER_JOB_RESERVE" =~ ^[0-9]+$ ]]; then
+  echo "MARA_FULLSYSTEM_INODES_PER_JOB_RESERVE must be a non-negative integer" >&2
   exit 2
 fi
 if [[ "$(git -C "$PROJECT_ROOT" rev-parse HEAD)" != "$EXPECTED_SHA" ]]; then
@@ -71,14 +80,30 @@ check_inode_quota() {
     echo "Refusing submission: unable to parse fastscratch inode quota." >&2
     exit 2
   fi
-  if ((used_inodes + MIN_FREE_INODES >= soft_limit)); then
-    echo "Refusing submission: fastscratch inode headroom is below configured reserve; used=${used_inodes} soft_limit=${soft_limit} reserve=${MIN_FREE_INODES}" >&2
+  local projected_peak=$((used_inodes + WAVE_SIZE * INODES_PER_JOB_RESERVE))
+  if ((projected_peak + MIN_FREE_INODES >= soft_limit)); then
+    echo "Refusing submission: projected wave inode usage exceeds configured reserve; used=${used_inodes} projected_peak=${projected_peak} soft_limit=${soft_limit} wave_size=${WAVE_SIZE} per_job_reserve=${INODES_PER_JOB_RESERVE} reserve=${MIN_FREE_INODES}" >&2
     exit 2
   fi
-  printf 'inode_preflight=ok used=%s soft_limit=%s reserve=%s\n' "$used_inodes" "$soft_limit" "$MIN_FREE_INODES"
+  printf 'inode_preflight=ok used=%s projected_peak=%s soft_limit=%s wave_size=%s per_job_reserve=%s reserve=%s\n' \
+    "$used_inodes" "$projected_peak" "$soft_limit" "$WAVE_SIZE" "$INODES_PER_JOB_RESERVE" "$MIN_FREE_INODES"
+}
+
+check_partitions() {
+  if ! sinfo -h -p "$TEXT_PARTITION" >/dev/null 2>&1; then
+    echo "Refusing submission: text partition is unavailable: $TEXT_PARTITION" >&2
+    exit 2
+  fi
+  if ! sinfo -h -p "$MULTIMODAL_PARTITION" >/dev/null 2>&1; then
+    echo "Refusing submission: multimodal partition is unavailable: $MULTIMODAL_PARTITION" >&2
+    exit 2
+  fi
+  printf 'partition_preflight=text:%s gres:%s multimodal:%s gres:%s\n' \
+    "$TEXT_PARTITION" "$TEXT_GRES" "$MULTIMODAL_PARTITION" "$MULTIMODAL_GRES"
 }
 
 check_inode_quota
+check_partitions
 check_sha256 d97c07b630800b9f0f67d25ad149fece14f5cbf41105712a4fdaa20ddde9c597 "${MANIFEST_DIR}/alce-asqa-stat200.routes.json"
 check_sha256 3f894c95a58a0ca1e2f22968dd044e6d6c80cf726be98903cf87d3c0471efe2c "${MANIFEST_DIR}/financebench-stat150.routes.json"
 check_sha256 b880f78b55fcf55388261ebbb32df18e6c9a785a9d4f40d5d95d6b115a0b0a45 "${MANIFEST_DIR}/mmdocrag-dev15-stat120-controller-t360.routes.json"
@@ -171,11 +196,11 @@ submit_job() {
   IFS=',' read -r kind dataset route shard num_shards limit timeout suite manifest output_root <<<"$spec"
   local partition gres dependency_args=""
   if [[ "$kind" == "text" ]]; then
-    partition="gpu-a100-lowsmall"
-    gres="gpu:a100:2"
+    partition="$TEXT_PARTITION"
+    gres="$TEXT_GRES"
   else
-    partition="gpu-l40s-low"
-    gres="gpu:l40s:2"
+    partition="$MULTIMODAL_PARTITION"
+    gres="$MULTIMODAL_GRES"
   fi
   if [[ -n "$PREVIOUS_BARRIER" ]]; then
     dependency_args="--dependency=afterok:${PREVIOUS_BARRIER}"
