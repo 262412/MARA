@@ -6,10 +6,7 @@ from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import build_evidence_bundle
 from ktem.docqa.query_planning import ensure_request_query_plan
 from ktem.docqa.verification import verify_decision
-from ktem.docqa.visual_evidence_authority import (
-    TYPED_VISUAL_EVIDENCE_PATH_CONTRACT,
-    record_visual_answer_authority,
-)
+from ktem.docqa.visual_evidence_authority import record_visual_answer_authority
 from ktem.reasoning.mara_route_scorer import score_adaptive_route
 
 QUESTION = "How did the Total Shareholder Return change over the fiscal years from 2017 to 2021?"
@@ -97,7 +94,7 @@ def test_mmdoc_four_routes_project_page_extractions_to_typed_operands(route: str
     assert bound_values == set(VALUES.values())
 
 
-def test_mmdoc_visual_verification_commits_typed_operand_state_after_page_hit():
+def test_mmdoc_visual_verification_does_not_commit_filled_typed_slots():
     request = _request("doc_page_image")
     page = _page_item()
     bundle = build_evidence_bundle(
@@ -115,15 +112,11 @@ def test_mmdoc_visual_verification_commits_typed_operand_state_after_page_hit():
         answer,
     )
 
-    assert decision.status == "supported"
-    assert decision.typed_authority["contract_id"] == (
-        TYPED_VISUAL_EVIDENCE_PATH_CONTRACT
-    )
-    assert set(decision.verified_support_slot_ids) == {
-        f"operand:{year}" for year in VALUES
-    }
+    assert decision.status == "unsupported"
+    assert decision.typed_authority == {}
+    assert decision.verified_support_slot_ids == []
     assert all(
-        slot.status == "verified_support"
+        slot.status == "filled"
         for slot in request.query_plan.evidence_slots
         if slot.required_for_execution
     )

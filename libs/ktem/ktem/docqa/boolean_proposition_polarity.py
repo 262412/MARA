@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from .boolean_annotation_count import annotation_count_polarity
 from .boolean_evidence_scope import (
     _english_closed_scope,
     _has_closed_quantifier,
@@ -40,6 +41,15 @@ def evidence_polarity(
     *,
     desired_polarity: str,
 ) -> str:
+    annotation_evidence_polarity = annotation_count_polarity(question, text)
+    if annotation_evidence_polarity is not None:
+        annotation_question_polarity = annotation_count_polarity(question, question)
+        if annotation_question_polarity is not None:
+            return (
+                "yes"
+                if annotation_evidence_polarity == annotation_question_polarity
+                else "no"
+            )
     if _language_data_question(question) and _has_closed_quantifier(question):
         if _non_english_counterexample(text):
             return "no"
@@ -91,6 +101,9 @@ def _question_relation_polarity(question: str) -> bool | None:
 
 
 def _target_relation_polarity(question: str, text: str) -> bool | None:
+    annotation_polarity = annotation_count_polarity(question, text)
+    if annotation_polarity is not None:
+        return annotation_polarity
     target = primary_boolean_relation(question)
     lowered = str(text or "").lower()
     containment_polarity = containment_marker_polarity(question, lowered)

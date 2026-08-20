@@ -145,10 +145,18 @@ def retrieval_no_progress_decision(
     trace: list[dict[str, Any]],
     decision: RetrieveDecision,
 ) -> RetrieveDecision | None:
-    if not any(event.get("stop_reason") == "recovery_no_progress" for event in trace):
+    event = next(
+        (
+            value
+            for value in reversed(trace)
+            if value.get("stop_reason") == "recovery_no_progress"
+        ),
+        None,
+    )
+    if event is None:
         return None
     return RetrieveDecision(
-        status=decision.status,
+        status=("poor" if event.get("evidence_ids_after") == [] else decision.status),
         reason=(
             "Retrieval recovery produced no new semantic candidate or slot state. "
             "stop_reason=recovery_no_progress."

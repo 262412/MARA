@@ -4,6 +4,7 @@ from typing import Any
 
 from .element_record_contract import element_record_from_mapping
 from .evidence_identity import identity_of
+from .source_identity_crosswalk import SourceIdentityResolver
 
 VISUAL_EVIDENCE_AUTHORITY_CONTRACT = "visual_evidence_authority.v1"
 TYPED_VISUAL_EVIDENCE_PATH_CONTRACT = "typed_visual_evidence_path.v1"
@@ -75,11 +76,11 @@ def validated_visual_answer_authority(
     evidence_ids = _unique_strings(authority.get("evidence_ids"))
     if not evidence_ids or not set(evidence_ids) <= selected_ids:
         return None
-    selected_item_ids = _selected_item_ids(bundle)
+    selected_typed_item_ids = _selected_typed_item_ids(bundle)
     typed_path = authority.get("typed_visual_path")
     if typed_path is not None and not _typed_path_is_selected(
         typed_path,
-        selected_item_ids,
+        selected_typed_item_ids,
     ):
         return None
     return {
@@ -147,18 +148,24 @@ def typed_visual_evidence_path(bundle: Any) -> dict[str, Any] | None:
         )
         and slot.get("role") in {"operand", "support"}
     ]
-    bindings = {
-        str(slot.get("slot_id")): [
-            str(value) for value in slot.get("evidence_ids") or []
-        ]
-        for slot in required
-        if str(slot.get("slot_id") or "").strip()
-        and str(slot.get("status") or "")
-        in {"filled", "retrieved_unverified", "verified_support"}
-        and slot.get("evidence_ids")
-    }
+    bindings: dict[str, list[str]] = {}
+    for slot in required:
+        slot_id = str(slot.get("slot_id") or "").strip()
+        if not slot_id or str(slot.get("status") or "") != "verified_support":
+            return None
+        evidence_ids = _unique_strings(slot.get("evidence_ids"))
+        if not evidence_ids:
+            return None
+        bindings[slot_id] = evidence_ids
     required_ids = [str(slot.get("slot_id")) for slot in required]
     if not required_ids or set(bindings) != set(required_ids):
+        return None
+    selected_typed_ids = _selected_typed_item_ids(bundle)
+    if not selected_typed_ids or any(
+        evidence_id not in selected_typed_ids
+        for values in bindings.values()
+        for evidence_id in values
+    ):
         return None
     return {
         "contract_id": TYPED_VISUAL_EVIDENCE_PATH_CONTRACT,
@@ -167,6 +174,148 @@ def typed_visual_evidence_path(bundle: Any) -> dict[str, Any] | None:
         "slot_bindings": bindings,
         "query_plan_state_version": int(plan.get("state_version") or 0),
     }
+
+
+def bridge_element_records_to_page_records(
+    page_records: list[dict[str, Any]],
+    element_records: list[dict[str, Any]],
+    *,
+    pipeline: Any | None = None,
+    crosswalk: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    if not page_records or not element_records:
+        return page_records
+    resolver = SourceIdentityResolver(
+        crosswalk
+        if crosswalk is not None
+        else _pipeline_source_identity_crosswalk(pipeline)
+    )
+    by_source_page: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for record in element_records:
+        source_page = _source_page(record, resolver)
+        if source_page[0] and source_page[1]:
+            by_source_page.setdefault(source_page, []).extend(
+                _element_visual_extractions(record)
+            )
+    bridged: list[dict[str, Any]] = []
+    for page in page_records:
+        source_page = _source_page(page, resolver)
+        extractions = by_source_page.get(source_page, [])
+        if not extractions:
+            bridged.append(page)
+            continue
+        output = dict(page)
+        metadata = dict(output.get("metadata") or {})
+        existing = _metadata_visual_extractions(metadata)
+        seen = {_visual_extraction_key(item) for item in existing}
+        for extraction in extractions:
+            key = _visual_extraction_key(extraction)
+            if key not in seen:
+                existing.append(extraction)
+                seen.add(key)
+        metadata["visual_extractions"] = existing
+        output["metadata"] = metadata
+        bridged.append(output)
+    return bridged
+
+
+def _pipeline_source_identity_crosswalk(pipeline: Any | None) -> list[dict[str, Any]]:
+    request = getattr(pipeline, "docqa_request", None)
+    values = getattr(pipeline, "source_identity_crosswalk", None) or getattr(
+        request,
+        "source_identity_crosswalk",
+        None,
+    )
+    return [dict(value) for value in values or [] if isinstance(value, dict)]
+
+
+def _element_visual_extractions(record: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = dict(record.get("metadata") or {})
+    output: list[dict[str, Any]] = []
+    for key in (
+        "visual_extractions",
+        "structured_visual_evidence",
+        "table_cells",
+        "ocr_cells",
+        "vlm_cells",
+    ):
+        values = metadata.get(key)
+        if isinstance(values, dict):
+            values = (
+                values.get("cells") or values.get("elements") or values.get("items")
+            )
+        if isinstance(values, list):
+            output.extend(
+                _inherit_element_locator(record, value)
+                for value in values
+                if isinstance(value, dict)
+            )
+    return output
+
+
+def _inherit_element_locator(
+    parent: dict[str, Any], extraction: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        **extraction,
+        "file_id": extraction.get("file_id") or parent.get("file_id"),
+        "source_id": extraction.get("source_id") or parent.get("source_id"),
+        "page_label": extraction.get("page_label") or parent.get("page_label"),
+        "parent_element_id": extraction.get("parent_element_id")
+        or parent.get("element_id"),
+        "source_backrefs": extraction.get("source_backrefs")
+        or parent.get("source_backrefs"),
+    }
+
+
+def _metadata_visual_extractions(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    values = metadata.get("visual_extractions")
+    if isinstance(values, list):
+        return [dict(value) for value in values if isinstance(value, dict)]
+    return []
+
+
+def _visual_extraction_key(extraction: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(
+        str(extraction.get(key) or "").strip()
+        for key in ("evidence_id", "cell_id", "span_id", "element_id", "text")
+    )
+
+
+def _source_page(
+    record: dict[str, Any],
+    resolver: SourceIdentityResolver | None = None,
+) -> tuple[str, str]:
+    metadata = dict(record.get("metadata") or {})
+    source_values = (
+        record.get("source_id"),
+        record.get("file_id"),
+        record.get("document_id"),
+        metadata.get("source_id"),
+        metadata.get("file_id"),
+        record.get("file_name"),
+        metadata.get("file_name"),
+    )
+    source = ""
+    for value in source_values:
+        if not str(value or "").strip():
+            continue
+        if resolver is None or not resolver.records:
+            source = str(value).strip()
+            break
+        source = resolver.resolve(value)
+        if source:
+            break
+    return (
+        source,
+        str(
+            record.get("page_label")
+            or record.get("page")
+            or record.get("page_number")
+            or metadata.get("page_label")
+            or ""
+        ).strip(),
+    )
 
 
 def _page_evidence_ids(bundle: Any) -> list[str]:
@@ -202,12 +351,16 @@ def _page_evidence_ids(bundle: Any) -> list[str]:
     return output
 
 
-def _selected_item_ids(bundle: Any) -> set[str]:
-    return {
-        identity_of(item).key
-        for item in getattr(bundle, "items", []) or []
-        if isinstance(item, dict)
-    }
+def _selected_typed_item_ids(bundle: Any) -> set[str]:
+    selected: set[str] = set()
+    for item in getattr(bundle, "items", []) or []:
+        if not isinstance(item, dict) or not _is_typed_visual_item(item):
+            continue
+        try:
+            selected.add(identity_of(item).key)
+        except ValueError:
+            continue
+    return selected
 
 
 def _typed_path_is_selected(path: Any, selected_ids: set[str]) -> bool:
@@ -226,6 +379,14 @@ def _typed_path_is_selected(path: Any, selected_ids: set[str]) -> bool:
         for values in bindings.values()
         for evidence_id in values or []
     )
+
+
+def _is_typed_visual_item(item: dict[str, Any]) -> bool:
+    return str(item.get("evidence_level") or "").strip().lower() in {
+        "cell",
+        "span",
+        "element",
+    }
 
 
 def _is_visual_parent(item: dict[str, Any]) -> bool:

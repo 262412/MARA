@@ -13,6 +13,9 @@ from ktem.docqa.graph_index import (
 )
 from ktem.docqa.multimodal_index import build_local_page_image_records
 from ktem.docqa.query_planning import build_query_plan
+from ktem.docqa.visual_evidence_authority import (
+    bridge_element_records_to_page_records as _bridge_element_records_to_page_records,
+)
 from ktem.docqa.visual_retriever import rank_page_image_records
 
 from .mara_element_ingestion_trace import element_ingestion_trace
@@ -216,7 +219,11 @@ def _page_image_metadata_enabled(pipeline: Any) -> bool:
 def _page_image_records_for_pipeline(pipeline: Any) -> list[dict[str, Any]]:
     explicit_records = getattr(pipeline, "page_image_index_records", None)
     if explicit_records:
-        return [dict(item) for item in explicit_records if isinstance(item, dict)]
+        return _bridge_element_records_to_page_records(
+            [dict(item) for item in explicit_records if isinstance(item, dict)],
+            element_slot_candidates.element_records_for_pipeline(pipeline),
+            pipeline=pipeline,
+        )
 
     file_records = [
         dict(item)
@@ -241,10 +248,14 @@ def _page_image_records_for_pipeline(pipeline: Any) -> list[dict[str, Any]]:
     if page_number not in (None, ""):
         page_numbers = [int(str(page_number))]
     max_pages = None if page_numbers else _page_image_rank_candidate_limit(pipeline)
-    return build_local_page_image_records(
-        file_records,
-        page_numbers=page_numbers,
-        max_pages=max_pages,
+    return _bridge_element_records_to_page_records(
+        build_local_page_image_records(
+            file_records,
+            page_numbers=page_numbers,
+            max_pages=max_pages,
+        ),
+        element_slot_candidates.element_records_for_pipeline(pipeline),
+        pipeline=pipeline,
     )
 
 

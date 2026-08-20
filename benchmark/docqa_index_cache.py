@@ -9,6 +9,7 @@ from typing import Any
 from .docqa_image_documents import (
     element_index_records_from_documents,
     is_image_only_document,
+    mmdoc_element_index_records_from_documents,
 )
 from .docqa_runtime_sources import (
     document_paths,
@@ -241,7 +242,14 @@ class DocQAIndexCache:
     ) -> bool:
         if not route_requires_element(self.config):
             return True
-        if element_index_records_from_documents([document]):
+        if (
+            _uses_pdf_ocr_layout_producer(self.config)
+            and document.path.suffix.lower() == ".pdf"
+        ):
+            element_records = mmdoc_element_index_records_from_documents([document])
+        else:
+            element_records = element_index_records_from_documents([document])
+        if element_records:
             return True
         return has_element_index(runtime, file_id)
 
@@ -311,3 +319,11 @@ def qasper_deterministic_index_settings(
 def _is_qasper_suite(config: Any) -> bool:
     suite_name = str(config_value(config, "suite_name", "") or "").casefold()
     return "qasper" in suite_name
+
+
+def _uses_pdf_ocr_layout_producer(config: Any) -> bool:
+    dataset_contract = " ".join(
+        str(config_value(config, key, "") or "").casefold()
+        for key in ("suite_name", "verification_domain")
+    )
+    return "mmdoc" in dataset_contract or "multimodal_doc_qa" in dataset_contract

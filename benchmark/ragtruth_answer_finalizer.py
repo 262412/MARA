@@ -42,12 +42,14 @@ def finalize_ragtruth_prediction(
         _store_finalized_answers,
         attach_structured_citations_from_evidence,
     )
+    from .citation_adapters import project_ragtruth_claim_support
     from .finance_answer_finalization import metadata_citations_allowed
     from .ragtruth_answer_contract import ragtruth_finalization_metadata
 
     repair_metadata = ragtruth_finalization_metadata(raw_answer)
     normalized_answer = finalize_ragtruth_if_requested(raw_answer, dataset_name)
     _prepare_finalization_evidence(prediction, dataset_name=dataset_name)
+    project_ragtruth_claim_support(prediction)
     if metadata_citations_allowed(dataset_name, prediction):
         citations = attach_structured_citations_from_evidence(
             prediction,

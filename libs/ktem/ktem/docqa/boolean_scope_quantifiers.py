@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import re
 
+from .boolean_annotation_count import (
+    annotation_count_question,
+    annotation_count_scope_complete,
+    annotation_count_target,
+)
 from .boolean_proposition_tokens import _object_token
 from .boolean_relations import (
     boolean_relation_lemmas,
@@ -27,6 +32,8 @@ def _has_closed_quantifier(question: str) -> bool:
 def _closed_quantifier(question: str) -> str:
     value = str(question or "")
     lowered = value.lower()
+    if annotation_count_question(value):
+        return f"count:{annotation_count_target(value)}"
     if re.search(r"\b(?:only|exclusively|solely)\b", lowered):
         return "only"
     if re.search(r"\b(?:all|every|each)\b", lowered):
@@ -264,6 +271,8 @@ def _counted_quantified_scope_complete(
     quantifier: str,
 ) -> bool:
     required = int(quantifier.partition(":")[2])
+    if annotation_count_scope_complete(question, quote, required_count=required):
+        return True
     noun = _quantified_object_noun(question, quantifier)
     complete = any(
         _counted_object_scope_complete(span, noun, required=required)

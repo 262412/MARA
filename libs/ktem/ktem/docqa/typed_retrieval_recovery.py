@@ -111,7 +111,10 @@ def _recovery_document_context(request: Any) -> dict[str, str]:
     if not _answer_relation_required(plan):
         return {}
     frame = question_relation_frame(question)
-    if frame.actor != "unknown" or frame.predicate:
+    generic_baseline = (
+        frame.predicate == "baseline" and frame.expected_object_type == "answer object"
+    )
+    if frame.actor != "unknown" or (frame.predicate and not generic_baseline):
         return {}
     selected_file_ids = {
         str(value).strip()

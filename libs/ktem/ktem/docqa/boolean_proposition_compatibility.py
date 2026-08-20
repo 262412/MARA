@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from .boolean_annotation_count import annotation_count_object, annotation_count_question
 from .boolean_evidence_scope import (
     _english_closed_scope,
     _has_closed_quantifier,
@@ -47,6 +48,9 @@ def _relation_compatibility(question: str, text: str) -> float:
 
 
 def _object_compatibility(question: str, text: str) -> tuple[float, str]:
+    if annotation_count_question(question):
+        object_value = annotation_count_object(question, text)
+        return (1.0 if object_value else 0.0, "annotation count")
     question_relations = boolean_relation_lemmas(question)
     evidence_relations = boolean_relation_lemmas(text)
     relation_tokens = {

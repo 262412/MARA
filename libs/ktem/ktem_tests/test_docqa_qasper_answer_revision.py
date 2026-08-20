@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -11,6 +12,7 @@ from ktem.docqa.execution import ABSTAIN_MESSAGE, execute_controller_turn
 from ktem.docqa.execution_verification import _revise_qasper_answer_relation
 from ktem.docqa.pipeline_stage_timings import PipelineStageTimings
 from ktem.docqa.qasper_answer_revision import assess_qasper_answer_revision
+from ktem.docqa.query_planning import ensure_request_query_plan
 
 QUESTION = "What background knowledge do they leverage?"
 RAW_ANSWER = (
@@ -227,6 +229,37 @@ def test_typed_revision_assessment_records_ambiguous_direct_authorities() -> Non
     assert assessment.candidate_evidence_ids == tuple(
         sorted(identity_of(item).key for item in evidence)
     )
+
+
+@pytest.mark.parametrize("answer_type", ("evidence_qa", "qa"))
+def test_revision_normalizes_qasper_free_text_answer_type_aliases(
+    answer_type: str,
+) -> None:
+    request = _request()
+    request.query_plan = replace(
+        ensure_request_query_plan(request),
+        answer_type=answer_type,
+    )
+    initial = VerifyDecision(
+        mode="strict",
+        status="unknown",
+        reason="extended claims are unsupported",
+        action="revise",
+        typed_authority={
+            "state": "missing",
+            "reason": "claim_extension_unverified",
+        },
+    )
+
+    assessment = assess_qasper_answer_revision(
+        request,
+        initial,
+        [_evidence("direct", DIRECT_AUTHORITY)],
+    )
+
+    assert assessment.eligible is True
+    assert assessment.proposal is not None
+    assert assessment.proposal.revised_answer == "labeled features"
 
 
 @pytest.mark.parametrize(

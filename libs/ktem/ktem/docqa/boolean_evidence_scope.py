@@ -6,6 +6,7 @@ from typing import Any
 
 from . import boolean_current_experiment as current_experiment
 from . import boolean_evidence_text as evidence_text
+from .boolean_annotation_count import annotation_count_scope_complete_for_quantifier
 from .boolean_evidence_text import evidence_item_text
 from .boolean_ownership_provenance import own_data_provenance_rejection
 from .boolean_retrieval_queries import boolean_retrieval_query  # noqa: F401
@@ -152,6 +153,10 @@ def _quantified_scope_decision(
     quantifier: str,
     verdict: str,
 ) -> BooleanScopeDecision:
+    if actor == "unknown" and annotation_count_scope_complete_for_quantifier(
+        question, quote, quantifier
+    ):
+        actor = "current_paper"
     complete = _quantified_object_scope_complete(
         question,
         quote,

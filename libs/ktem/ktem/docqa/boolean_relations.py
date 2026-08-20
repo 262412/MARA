@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import re
 
+from .boolean_annotation_count import annotation_relation_present
+
 _RELATION_GROUPS = {
     "annotate": {
         "annotate",
+        "annotated",
+        "annotation",
+        "annotations",
+        "annotator",
+        "annotators",
         "construct",
         "crowdsource",
         "crowdsourced",
@@ -132,11 +139,14 @@ _QUESTION_RELATION_ALIASES = {
 
 
 def boolean_relation_lemmas(value: str) -> set[str]:
-    return {
+    relations = {
         relation
         for token in re.findall(r"[a-z]+(?:-[a-z]+)?", str(value or "").lower())
         if (relation := boolean_relation_lemma(token))
     }
+    if annotation_relation_present(value):
+        relations.add("annotate")
+    return relations
 
 
 def primary_boolean_relation(value: str) -> str:

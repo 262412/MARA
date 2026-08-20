@@ -331,7 +331,7 @@ def test_6f024d4c_context_recovery_does_not_force_answer_relation_authority():
     assert result.evidence_bundle.metadata["canonical_candidate_count"] == 1
     assert result.guardrail_decision.action == "abstain"
     assert result.verify_decision.typed_authority["reason"] == (
-        "question_predicate_unresolved"
+        "answer_relation_unresolved"
     )
 
 

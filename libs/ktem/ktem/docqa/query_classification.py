@@ -5,6 +5,13 @@ import re
 from .query_phrase_extraction import cross_page_support_queries
 
 _LONG_FORM_TERMS = {"describe", "explain", "how", "summarize", "why"}
+_DESCRIPTIVE_ANSWER_TYPES = {
+    "descriptive",
+    "long_form",
+    "long-form",
+    "narrative",
+    "text",
+}
 _CAUSAL_TERMS = {
     "cause",
     "caused",
@@ -66,7 +73,10 @@ def normalized_answer_type(
     causal_intent: bool,
 ) -> str:
     value = str(answer_type or "").strip().lower()
+    if value in _DESCRIPTIVE_ANSWER_TYPES:
+        value = "free_text"
     if value in {
+        "evidence_qa",
         "qa",
         "qasper_qa",
         "extractive",
@@ -85,7 +95,7 @@ def normalized_answer_type(
         return "numeric"
     if value in {"boolean", "free_text", "formula", "list", "unanswerable"}:
         return value
-    if value in {"qa", "qasper_qa"}:
+    if value in {"evidence_qa", "qa", "qasper_qa"}:
         return (
             "boolean"
             if _BOOLEAN_QUESTION_RE.search(question.strip())

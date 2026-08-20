@@ -7,6 +7,7 @@ from typing import Any
 from .boolean_evidence_scope import evidence_item_text
 from .boolean_proposition_polarity import target_relation_is_negated
 from .evidence_identity import identity_of
+from .query_classification import normalized_answer_type
 from .query_phrase_extraction import source_page_locator
 from .query_planning import ensure_request_query_plan, request_planning_question
 
@@ -173,6 +174,14 @@ def proposal_matches_verified_authority(
 def _eligible(request: Any, verify_decision: Any) -> bool:
     domain = str(getattr(request, "verification_domain", "") or "").lower()
     plan = ensure_request_query_plan(request)
+    question = request_planning_question(request)
+    normalized_type = normalized_answer_type(
+        str(plan.answer_type or ""),
+        set(_TOKEN_RE.findall(question.lower())),
+        question=question,
+        numeric_terms=set(),
+        causal_intent=False,
+    )
     required = [
         slot
         for slot in plan.evidence_slots
@@ -182,7 +191,7 @@ def _eligible(request: Any, verify_decision: Any) -> bool:
     typed = typed if isinstance(typed, dict) else {}
     return bool(
         domain == "qasper"
-        and str(plan.answer_type or "").lower() == "free_text"
+        and normalized_type == "free_text"
         and len(required) == 1
         and required[0].statement_kind == "answer_relation"
         and typed.get("state") == "missing"
