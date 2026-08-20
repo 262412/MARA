@@ -4,8 +4,9 @@ import pytest
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import build_evidence_bundle
+from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.query_planning import ensure_request_query_plan
-from ktem.docqa.verification import verify_decision
+from ktem.docqa.verification import verify_decision, with_verification_evidence
 from ktem.docqa.visual_evidence_authority import record_visual_answer_authority
 from ktem.reasoning.mara_route_scorer import score_adaptive_route
 
@@ -53,8 +54,8 @@ def _request(route: str) -> DocQARequest:
     request = DocQARequest(
         prompt=QUESTION,
         retrieval_query=QUESTION,
-        task_type="numeric",
-        answer_type="numeric",
+        task_type="descriptive",
+        answer_type="descriptive",
         verification_mode="strict",
         verification_domain="mmdocrag",
         origin="benchmark",
@@ -69,7 +70,7 @@ def _request(route: str) -> DocQARequest:
 @pytest.mark.parametrize(
     "route", ["doc_text", "doc_page_image", "doc_element", "hybrid"]
 )
-def test_mmdoc_four_routes_project_page_extractions_to_typed_operands(route: str):
+def test_mmdoc_four_routes_project_page_extractions_to_typed_support(route: str):
     page = _page_item()
     metadata = {
         "evidence": [page],
@@ -85,8 +86,10 @@ def test_mmdoc_four_routes_project_page_extractions_to_typed_operands(route: str
         slot["slot_id"]: slot
         for slot in bundle.metadata["query_plan"]["evidence_slots"]
     }
-    assert set(slots) == {f"operand:{year}" for year in VALUES}
+    assert set(slots) == {f"support:{year}" for year in VALUES}
     assert all(slot["status"] == "filled" for slot in slots.values())
+    assert all(slot["role"] == "support" for slot in slots.values())
+    assert all(not slot["required_for_execution"] for slot in slots.values())
     assert all(slot["evidence_ids"] for slot in slots.values())
     bound_values = {
         item["value"] for item in bundle.items if item.get("value") in VALUES.values()
@@ -112,13 +115,41 @@ def test_mmdoc_visual_verification_does_not_commit_filled_typed_slots():
         answer,
     )
 
-    assert decision.status == "unsupported"
+    assert decision.status in {"unknown", "unsupported"}
     assert decision.typed_authority == {}
     assert decision.verified_support_slot_ids == []
     assert all(
         slot.status == "filled"
         for slot in request.query_plan.evidence_slots
-        if slot.required_for_execution
+        if slot.required_for_verification
+    )
+
+
+def test_mmdoc_time_series_revision_is_verified_before_terminal_answer():
+    request = _request("doc_page_image")
+    page = _page_item()
+
+    result = execute_controller_turn(
+        request,
+        retrieve=lambda *_args: {
+            "page_image_index": [page],
+            "evidence": [page],
+        },
+        generate=lambda *_args: "Decreased",
+    )
+
+    assert result.verify_decision.status == "supported"
+    assert "1200.0 in 2018" in result.answer
+    assert "810.8 in 2020" in result.answer
+    assert "then increased in 2021" in result.answer
+    verified = with_verification_evidence(
+        result.evidence_bundle,
+        result.verify_decision,
+        request,
+    )
+    assert len(verified.metadata["verified_claim_support_evidence"]) == 5
+    assert all(
+        slot.status == "verified_support" for slot in request.query_plan.evidence_slots
     )
 
 

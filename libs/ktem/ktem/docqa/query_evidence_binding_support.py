@@ -88,6 +88,13 @@ def score_evidence_for_slot(
         if not str(item.get("evidence_id") or item.get("source_id") or "").strip():
             return 0.0
         return 1.0 + (locator_score or 0.0)
+    if slot.statement_kind == "visual_time_series_cell":
+        return _visual_time_series_cell_score(
+            slot,
+            item,
+            modality=modality,
+            locator_score=locator_score,
+        )
     if slot.role == "dimension":
         detected_scale = evidence_scale(text, item)
         if not detected_scale or (slot.scale and slot.scale != detected_scale):
@@ -321,6 +328,30 @@ def _visual_metric_coverage(slot: EvidenceSlot, item: dict[str, Any]) -> float:
     if not metric_tokens or not row_tokens:
         return 0.0
     return len(metric_tokens & row_tokens) / len(metric_tokens)
+
+
+def _visual_time_series_cell_score(
+    slot: EvidenceSlot,
+    item: dict[str, Any],
+    *,
+    modality: str,
+    locator_score: float,
+) -> float:
+    metadata = item.get("metadata")
+    if (
+        str(item.get("evidence_level") or "").strip().lower() != "cell"
+        or not isinstance(metadata, dict)
+        or not str(metadata.get("visual_extraction_source") or "").strip()
+        or item.get("value") in (None, "")
+        or str(item.get("period") or item.get("column_label") or "").strip()
+        != slot.period
+        or not modality_matches(slot.modality, modality)
+    ):
+        return 0.0
+    metric_coverage = _visual_metric_coverage(slot, item)
+    if metric_coverage < _MIN_OPERAND_METRIC_COVERAGE:
+        return 0.0
+    return locator_score + 2.0 + metric_coverage
 
 
 def slot_item_materialized(slot: EvidenceSlot, item: dict[str, Any]) -> bool:

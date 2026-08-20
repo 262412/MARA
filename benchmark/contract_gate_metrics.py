@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.query_plan_schema import slot_binding_state
 
 from .evidence_identity_metrics import reranker_lineage
@@ -184,7 +185,7 @@ def _citation_gate_metrics(
     accepted = _accepted_answer(prediction)
     applicable = _document_qa_applicable(prediction)
     required = applicable and accepted and bool(prediction.get("gold_evidence"))
-    emitted = _has_emitted_citation(prediction, metadata)
+    emitted = _has_verified_emitted_citation(prediction, metadata)
     execution = _calculation_executed(metadata) or _bundle_calculation_executed(
         prediction
     )
@@ -365,6 +366,24 @@ def _has_emitted_citation(
         return True
     answer = str(prediction.get("predicted_answer") or "")
     return bool("#page:" in answer or "#source" in answer or "#evidence:" in answer)
+
+
+def _has_verified_emitted_citation(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+) -> bool:
+    if not _has_emitted_citation(prediction, metadata):
+        return False
+    emitted = _records(metadata.get("emitted_citation_evidence"))
+    verified = _records(metadata.get("verified_claim_support_evidence"))
+    if not emitted or not verified:
+        return False
+    try:
+        emitted_ids = {identity_of(item).key for item in emitted}
+        verified_ids = {identity_of(item).key for item in verified}
+    except (TypeError, ValueError):
+        return False
+    return bool(emitted_ids and emitted_ids <= verified_ids)
 
 
 def _accepted_answer(prediction: dict[str, Any]) -> bool:

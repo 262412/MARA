@@ -242,6 +242,7 @@ def test_contract_invariant_summary_measures_runtime_artifact_contracts():
             "reranked_evidence": [item],
             "selected_evidence": [item],
             "generation_context_evidence": [item],
+            "verified_claim_support_evidence": [item],
             "emitted_citation_evidence": [item],
             "query_plan": {
                 "evidence_slots": [

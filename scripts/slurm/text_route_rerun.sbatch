@@ -77,7 +77,7 @@ require_path() {
 
 http_ok() {
   local url="$1"
-  curl -fsS --max-time 3 "$url" >/dev/null
+  curl -fsS --max-time 3 "$url" >/dev/null 2>&1
 }
 
 wait_http() {

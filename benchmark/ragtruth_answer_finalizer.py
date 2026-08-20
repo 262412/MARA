@@ -49,7 +49,10 @@ def finalize_ragtruth_prediction(
     repair_metadata = ragtruth_finalization_metadata(raw_answer)
     normalized_answer = finalize_ragtruth_if_requested(raw_answer, dataset_name)
     _prepare_finalization_evidence(prediction, dataset_name=dataset_name)
-    project_ragtruth_claim_support(prediction)
+    project_ragtruth_claim_support(
+        prediction,
+        final_answer=normalized_answer,
+    )
     if metadata_citations_allowed(dataset_name, prediction):
         citations = attach_structured_citations_from_evidence(
             prediction,

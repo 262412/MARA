@@ -18,6 +18,7 @@ from .qasper_answer_revision import (
     proposal_matches_verified_authority,
 )
 from .route_budget import run_blocking_route_stage
+from .visual_time_series import revise_visual_time_series_answer
 
 GuardrailFactory = Callable[[str, str, str], Any]
 RewriteFn = Callable[[Any, Any, EvidenceBundle, str], str]
@@ -61,9 +62,9 @@ def verify_generated_answer(
             bundle.metadata["task_contract_fallback"] = "ragtruth_empty_generation"
             answer = ragtruth_empty_answer
         elif _typed_qasper_boolean_request(request):
-            bundle.metadata[
-                "typed_boolean_generation_recovery"
-            ] = "empty_generation_requires_fresh_authority"
+            bundle.metadata["typed_boolean_generation_recovery"] = (
+                "empty_generation_requires_fresh_authority"
+            )
             trace_prefix = [
                 *list(trace_prefix or []),
                 {
@@ -209,6 +210,11 @@ def _verify_with_answer_revision(
     verify: VerifyFn,
     timings: PipelineStageTimings,
 ) -> tuple[str, VerifyDecision, dict[str, Any] | None]:
+    answer, visual_revision_trace = revise_visual_time_series_answer(
+        request,
+        bundle,
+        answer,
+    )
     verify_decision = _timed_verify(
         timings,
         verify,
@@ -217,7 +223,7 @@ def _verify_with_answer_revision(
         bundle,
         answer,
     )
-    return _revise_qasper_answer_relation(
+    answer, verify_decision, qasper_revision_trace = _revise_qasper_answer_relation(
         request,
         retrieve_decision,
         bundle,
@@ -225,6 +231,11 @@ def _verify_with_answer_revision(
         verify_decision,
         verify,
         timings,
+    )
+    return (
+        answer,
+        verify_decision,
+        qasper_revision_trace or visual_revision_trace,
     )
 
 

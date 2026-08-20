@@ -138,7 +138,7 @@ def bound_slot_status(
                 )
                 if assessments is not None
                 else boolean_proposition_authority_level(
-                    slot.metric,
+                    slot.query or slot.metric,
                     evidence_by_identity[evidence_id],
                 )
             )

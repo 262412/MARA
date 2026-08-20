@@ -9,6 +9,10 @@ from ktem.reasoning.mara_ragtruth_answering import route_ragtruth_answer
 
 from benchmark.alce_answer_grounding import apply_alce_answer_grounding
 from benchmark.answer_finalizer import finalize_prediction_answer
+from benchmark.citation_adapters import (
+    _payload_hash,
+    validated_adapter_authority_commit,
+)
 
 
 class _SequenceLLM:
@@ -70,6 +74,18 @@ def test_alce_producer_to_finalizer_projects_only_accepted_grounding():
         identity_of(value).key
         for value in prediction["evidence_metadata"]["emitted_citation_evidence"]
     ] == [identity]
+
+    commit = prediction["benchmark_adapter_authority_commit"]
+    commit["verified_citations"] = ["evidence:unselected:bogus"]
+    unsigned = {key: value for key, value in commit.items() if key != "projection_hash"}
+    commit["projection_hash"] = _payload_hash(unsigned)
+    assert (
+        validated_adapter_authority_commit(
+            prediction,
+            runtime_answer="John Boehner",
+        )
+        is None
+    )
 
 
 def test_alce_rejected_or_unsupported_grounding_fails_closed():

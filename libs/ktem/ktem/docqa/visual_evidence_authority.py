@@ -391,7 +391,13 @@ def _is_typed_visual_item(item: dict[str, Any]) -> bool:
 
 def _is_visual_parent(item: dict[str, Any]) -> bool:
     modality = str(item.get("modality") or item.get("element_type") or "").lower()
-    return modality in {"page_image", "image", "figure", "slide"}
+    if modality in {"page_image", "image", "figure", "slide"}:
+        return True
+    return bool(
+        modality in {"table", "element"}
+        and str(item.get("evidence_level") or "").strip().lower() != "cell"
+        and _visual_extractions(item)
+    )
 
 
 def _visual_extractions(item: dict[str, Any]) -> list[dict[str, Any]]:

@@ -21,7 +21,7 @@ QUESTION = (
 )
 
 
-def test_descriptive_manifest_answer_type_does_not_create_numeric_operands():
+def test_descriptive_multi_period_trend_creates_typed_visual_support_slots():
     plan = build_query_plan(
         QUESTION,
         answer_type="descriptive",
@@ -29,8 +29,32 @@ def test_descriptive_manifest_answer_type_does_not_create_numeric_operands():
     )
 
     assert plan.answer_type == "free_text"
-    assert plan.question_type == "long_form"
+    assert plan.question_type == "visual_time_series"
+    assert [slot.slot_id for slot in plan.evidence_slots] == [
+        "support:2017",
+        "support:2018",
+        "support:2019",
+        "support:2020",
+        "support:2021",
+    ]
     assert not any(slot.required_for_execution for slot in plan.evidence_slots)
+    assert all(slot.required_for_verification for slot in plan.evidence_slots)
+    assert all(
+        slot.statement_kind == "visual_time_series_cell" for slot in plan.evidence_slots
+    )
+    assert plan.constraints["requires_structure"] is True
+
+
+def test_plain_mmdoc_prose_question_does_not_create_time_series_slots():
+    plan = build_query_plan(
+        "Explain the company's shareholder engagement policy.",
+        answer_type="descriptive",
+        verification_domain="mmdocrag",
+    )
+
+    assert plan.answer_type == "free_text"
+    assert plan.question_type == "long_form"
+    assert plan.evidence_slots == ()
 
 
 def test_numeric_multi_period_answer_type_keeps_operand_contract():

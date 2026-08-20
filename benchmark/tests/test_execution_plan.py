@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmark.execution_plan import JobDefinition, build_execution_plan
+from benchmark.dependency_repair import record_dependency_repair
+from benchmark.execution_plan import (
+    JobDefinition,
+    build_execution_plan,
+    record_submission,
+)
 from benchmark.reports import write_reports
 from benchmark.synthesis import synthesize_execution_plan
 
@@ -86,6 +91,142 @@ def test_execution_plan_freezes_selected_ids_and_complete_execution_manifest(tmp
     assert "artifact_digest" in table_header
 
 
+def test_dependency_repair_updates_canonical_plan_and_table_with_audit(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    _manifest(manifest)
+    plan_path = tmp_path / "plan.json"
+    table_path = tmp_path / "jobs.tsv"
+    build_execution_plan(
+        [
+            JobDefinition(
+                "text",
+                "plan_test",
+                "all",
+                0,
+                1,
+                2,
+                60,
+                "plan-test",
+                manifest,
+                tmp_path / "artifacts",
+            )
+        ],
+        output_plan=plan_path,
+        output_table=table_path,
+        source_sha="clean-sha",
+        sample_seed=7,
+    )
+    record_submission(
+        plan_path,
+        table_path,
+        job_key="plan-test",
+        job_id="300",
+        wave_index=1,
+        dependency="afterok:100",
+    )
+    repair_record = tmp_path / "barrier_repair_100.txt"
+    repair_record.write_text(
+        "\n".join(
+            (
+                "original_job=100",
+                "original_job_action=cancelled",
+                "replacement_job=200",
+                "replacement_state=COMPLETED",
+                "replacement_dependency=verified_upstream_completed",
+                "downstream_job=300",
+                "downstream_dependency=afterok:200",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    record_dependency_repair(
+        plan_path,
+        table_path,
+        job_key="plan-test",
+        repair_record_path=repair_record,
+    )
+
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    assert plan["jobs"][0]["dependency"] == "afterok:200"
+    [audit] = plan["dependency_repairs"]
+    assert audit["contract_id"] == "benchmark_dependency_repair.v1"
+    assert audit["original_job_id"] == "100"
+    assert audit["replacement_job_id"] == "200"
+    header, row = table_path.read_text(encoding="utf-8").splitlines()
+    dependency_index = header.split("\t").index("dependency")
+    assert row.split("\t")[dependency_index] == "afterok:200"
+
+
+def test_dependency_repair_rejects_unfinished_replacement_without_mutation(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    _manifest(manifest)
+    plan_path = tmp_path / "plan.json"
+    table_path = tmp_path / "jobs.tsv"
+    build_execution_plan(
+        [
+            JobDefinition(
+                "text",
+                "plan_test",
+                "all",
+                0,
+                1,
+                2,
+                60,
+                "plan-test",
+                manifest,
+                tmp_path / "artifacts",
+            )
+        ],
+        output_plan=plan_path,
+        output_table=table_path,
+        source_sha="clean-sha",
+        sample_seed=7,
+    )
+    record_submission(
+        plan_path,
+        table_path,
+        job_key="plan-test",
+        job_id="300",
+        wave_index=1,
+        dependency="afterok:100",
+    )
+    original_plan = plan_path.read_bytes()
+    original_table = table_path.read_bytes()
+    repair_record = tmp_path / "barrier_repair_100.txt"
+    repair_record.write_text(
+        "\n".join(
+            (
+                "original_job=100",
+                "original_job_action=cancelled",
+                "replacement_job=200",
+                "replacement_state=PENDING",
+                "replacement_dependency=verified_upstream_completed",
+                "downstream_job=300",
+                "downstream_dependency=afterok:200",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    try:
+        record_dependency_repair(
+            plan_path,
+            table_path,
+            job_key="plan-test",
+            repair_record_path=repair_record,
+        )
+    except ValueError as exc:
+        assert "must be COMPLETED" in str(exc)
+    else:
+        raise AssertionError("unfinished replacement barrier was accepted")
+
+    assert plan_path.read_bytes() == original_plan
+    assert table_path.read_bytes() == original_table
+
+
 def test_synthesis_rejects_missing_shard_key(tmp_path):
     manifest = tmp_path / "manifest.json"
     _manifest(manifest)
@@ -157,9 +298,11 @@ def test_synthesis_rejects_missing_shard_key(tmp_path):
         (tmp_path / "synthesis" / "synthesis.json").read_text(encoding="utf-8")
     )
     assert synthesis["valid"] is False
-    assert synthesis["union_key_count"] == 2
+    assert synthesis["union_key_count"] == first["expected_key_count"]
     assert synthesis["overlap_key_count"] == 0
-    assert synthesis["missing_key_count"] == 2
+    assert synthesis["missing_key_count"] == (
+        plan["expected_union_key_count"] - first["expected_key_count"]
+    )
     assert synthesis["unexpected_key_count"] == 0
 
 

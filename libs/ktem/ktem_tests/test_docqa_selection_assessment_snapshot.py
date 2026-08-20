@@ -12,6 +12,8 @@ from ktem.docqa.boolean_proposition_evidence import boolean_proposition_authorit
 from ktem.docqa.evidence import build_evidence_bundle
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_set_objective import marginal_set_gain
+from ktem.docqa.query_evidence_binding import bind_evidence_slots
+from ktem.docqa.query_evidence_binding_support import score_evidence_for_slot
 from ktem.docqa.query_planning import build_query_plan
 from ktem.docqa.selection_assessment_snapshot import (
     SelectionAssessmentCacheMiss,
@@ -307,8 +309,59 @@ def test_snapshot_authority_remains_independent_from_candidate_relevance() -> No
 
     for item in items:
         assert snapshot.authority_level(plan, slot, item) == (
-            boolean_proposition_authority_level(slot.metric, item)
+            boolean_proposition_authority_level(slot.query or slot.metric, item)
         )
+
+
+@pytest.mark.parametrize(
+    ("question", "evidence", "section_id"),
+    (
+        (
+            "Do they use off-the-shelf NLP systems to build their assistant?",
+            (
+                "Natural Language Understanding (NLU): We implemented an NLU "
+                "unit utilizing handcrafted rules, Regular Expressions (RegEx) "
+                "and Elasticsearch (ES) API."
+            ),
+            "methods",
+        ),
+        (
+            "Does BERT reach the best performance among all the algorithms compared?",
+            (
+                "BERT remains 0.3 F1-score points behind the winning system and "
+                "would have achieved the second position among all competitors."
+            ),
+            "results",
+        ),
+    ),
+)
+def test_boolean_slot_authority_uses_lossless_query_not_normalized_metric(
+    question: str,
+    evidence: str,
+    section_id: str,
+) -> None:
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    item = _item(
+        "structured-authority",
+        evidence,
+        section_id=section_id,
+        score=0.9,
+    )
+    [slot] = plan.evidence_slots
+    snapshot = SelectionAssessmentSnapshot.build(plan, [item])
+
+    assert slot.query == question
+    assert snapshot.candidate_score(plan, slot, item) > 0
+    assert snapshot.authority_level(plan, slot, item) == "complete"
+    assert score_evidence_for_slot(slot, item) == 0
+    bound = bind_evidence_slots(plan, [item], assessments=snapshot)
+    [bound_slot] = bound.evidence_slots
+    assert bound_slot.status == "retrieved_unverified"
+    assert bound_slot.evidence_ids == (identity_of(item).key,)
 
 
 def test_snapshot_expands_only_truly_new_semantic_candidate(

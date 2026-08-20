@@ -31,7 +31,7 @@ def boolean_proposition_candidate_score(
     )
     context_question = _normalize_requirement_terms(combined_question)
     proposition_question = semantic_boolean_proposition_question(
-        _normalize_requirement_terms(metric or question)
+        _normalize_requirement_terms(question or metric)
     )
     candidate_item = _normalized_requirement_item(item)
     text = evidence_item_text(candidate_item)
@@ -87,7 +87,7 @@ def boolean_proposition_selection_assessment(
     """Compute selection relevance and authority from one typed classification."""
 
     proposition_question = semantic_boolean_proposition_question(
-        _normalize_requirement_terms(metric or question)
+        _normalize_requirement_terms(question or metric)
     )
     candidate_item = _normalized_requirement_item(item)
     classified = classify_boolean_evidence_candidates(

@@ -29,7 +29,13 @@ def query_plan_constraints(
             or (cross_page and "page" in lowered_question)
         ),
         "requires_structure": (
-            question_type in {"cross_page", "multi_period_numeric", "comparison_argmax"}
+            question_type
+            in {
+                "cross_page",
+                "multi_period_numeric",
+                "comparison_argmax",
+                "visual_time_series",
+            }
             or (
                 "finance" in str(verification_domain or "").lower()
                 and question_type == "numeric"

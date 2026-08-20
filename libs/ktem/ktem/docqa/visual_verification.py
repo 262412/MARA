@@ -11,6 +11,7 @@ from .visual_evidence_authority import (
     TYPED_VISUAL_EVIDENCE_PATH_CONTRACT,
     validated_visual_answer_authority,
 )
+from .visual_time_series import validated_visual_time_series_authority
 
 
 def visual_verification_decision(
@@ -28,6 +29,18 @@ def visual_verification_decision(
         domain == "slidevqa" or _is_mmdoc_domain(domain)
     ):
         return None
+    time_series_authority = validated_visual_time_series_authority(
+        request,
+        evidence_bundle,
+        answer,
+    )
+    if time_series_authority is not None:
+        return _typed_visual_decision(
+            request,
+            time_series_authority,
+            time_series_authority["typed_visual_path"],
+            mode=mode,
+        )
     authority = validated_visual_answer_authority(evidence_bundle, answer)
     if authority is None:
         return None

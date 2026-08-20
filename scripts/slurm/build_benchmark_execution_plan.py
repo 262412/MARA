@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from benchmark.dependency_repair import record_dependency_repair  # noqa: E402
 from benchmark.execution_plan import (  # noqa: E402
     build_execution_plan,
     parse_job_spec,
@@ -45,6 +46,12 @@ def _parse_args() -> argparse.Namespace:
     record.add_argument("--job-id", required=True)
     record.add_argument("--wave-index", type=int, required=True)
     record.add_argument("--dependency", default="")
+
+    repair = subparsers.add_parser("record-dependency-repair")
+    repair.add_argument("--plan", type=Path, required=True)
+    repair.add_argument("--table", type=Path, required=True)
+    repair.add_argument("--job-key", required=True)
+    repair.add_argument("--repair-record", type=Path, required=True)
     return parser.parse_args()
 
 
@@ -62,13 +69,22 @@ def main() -> None:
         print(f"job_table={args.output_table}")
         return
 
-    record_submission(
+    if args.command == "record-submission":
+        record_submission(
+            args.plan,
+            args.table,
+            job_key=args.job_key,
+            job_id=args.job_id,
+            wave_index=args.wave_index,
+            dependency=args.dependency,
+        )
+        return
+
+    record_dependency_repair(
         args.plan,
         args.table,
         job_key=args.job_key,
-        job_id=args.job_id,
-        wave_index=args.wave_index,
-        dependency=args.dependency,
+        repair_record_path=args.repair_record,
     )
 
 

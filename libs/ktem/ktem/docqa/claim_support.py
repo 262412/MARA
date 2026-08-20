@@ -68,9 +68,9 @@ def text_contradicts_claim(claim: str, evidence: str) -> bool:
         for fragment in re.split(r"(?:\r?\n)+|(?<=[.!?;])\s+", str(evidence or ""))
         if fragment.strip() and _shared_claim_context(claim, fragment)
     ]
-    return any(
-        _year_conflict(claim, fragment)
-        or _direction_conflict(claim, fragment)
+    temporal_conflict = _year_conflict(claim, " ".join(fragments))
+    return temporal_conflict or any(
+        _direction_conflict(claim, fragment)
         or _numeric_conflict(claim, fragment)
         or _negation_conflict(claim, fragment)
         for fragment in fragments
@@ -254,7 +254,8 @@ def _year_conflict(claim: str, evidence: str) -> bool:
     return bool(
         claim_years
         and evidence_years
-        and not claim_years.issubset(evidence_years)
+        and len(evidence_years) == 1
+        and claim_years.isdisjoint(evidence_years)
         and _shared_claim_context(claim, evidence)
     )
 
