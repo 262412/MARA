@@ -15,7 +15,9 @@ from .boolean_relations import (
 )
 from .boolean_scope_alternatives import (
     _other_than_scope_complete,
+    other_quantified_object_noun,
     other_quantified_scope_complete,
+    other_quantifier_present,
 )
 from .boolean_scope_language import _current_language_data_context  # noqa: F401
 from .boolean_scope_language import _english_closed_scope  # noqa: F401
@@ -42,11 +44,7 @@ def _closed_quantifier(question: str) -> str:
         return "both"
     if re.search(r"\b(?:some|any)\b", lowered):
         return "some" if re.search(r"\bsome\b", lowered) else "any"
-    if re.search(
-        r"\bother\s+(?:tasks?|benchmarks?|data|datasets?|corpora|corpus|"
-        r"languages?|methods?|models?|systems?)\b",
-        lowered,
-    ):
+    if other_quantifier_present(value):
         return "other"
     count_match = re.search(
         r"\b(?:the\s+)?(two|three|four|five|six|seven|eight|nine|[2-9])\s+"
@@ -85,6 +83,7 @@ def _quantified_object_scope_complete(
             _quantified_object_noun(question, "other"),
             quote,
             relation_spans,
+            question=question,
             verdict=verdict,
         )
     if quantifier.startswith("count:"):
@@ -158,16 +157,18 @@ def _only_quantified_scope_complete(
 ) -> bool:
     noun = _quantified_object_noun(question, "only")
     complete = any(
-        _quantifier_binds_object_noun(
-            span,
-            noun,
-            markers=("only", "exclusively", "solely"),
-        )
-        if noun
-        else re.search(
-            r"\b(?:only|exclusively|solely)\b",
-            span,
-            re.IGNORECASE,
+        (
+            _quantifier_binds_object_noun(
+                span,
+                noun,
+                markers=("only", "exclusively", "solely"),
+            )
+            if noun
+            else re.search(
+                r"\b(?:only|exclusively|solely)\b",
+                span,
+                re.IGNORECASE,
+            )
         )
         for span in relation_spans
     )
@@ -326,6 +327,8 @@ def _quantified_object_noun(question: str, quantifier: str) -> str:
         prefix = r"(?:all|every|each)"
     else:
         prefix = re.escape(quantifier)
+    if quantifier == "other" and (noun := other_quantified_object_noun(question)):
+        return noun
     if quantifier in {"any", "some"}:
         alternative = re.search(
             rf"\b{re.escape(quantifier)}\s+other\s+([a-z][a-z-]*s?)\b",

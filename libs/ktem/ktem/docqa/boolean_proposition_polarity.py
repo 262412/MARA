@@ -284,7 +284,7 @@ def _relation_match_is_negated(lowered: str, match: re.Match[str]) -> bool:
         r"are\s+not|wasn't|was\s+not|weren't|were\s+not|never)"
         r"(?:\s+[a-z]+ly){0,2}\s*|"
         r"\b(?:fail(?:ed|s)?|omit(?:ted|s)?|exclud(?:e|ed|es)|"
-        r"skip(?:ped|s)?|unable)\s+(?:to\s+)?)$",
+        r"skip(?:ped|s)?|unable|not\s+able)\s+(?:to\s+)?)$",
         local_prefix,
     )
     return bool(governed_prefix or re.search(r"^\s+(?:no|not\s+any)\b", local_suffix))

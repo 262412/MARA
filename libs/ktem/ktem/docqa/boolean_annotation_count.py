@@ -20,6 +20,10 @@ _NON_EXACT_COUNT_RE = re.compile(
     r"no\s+(?:fewer|more)\s+than|additional)\b",
     flags=re.IGNORECASE,
 )
+_PERCENTAGE_SUFFIX_RE = re.compile(
+    r"\s*(?:%|percent(?:age)?\b)",
+    flags=re.IGNORECASE,
+)
 
 _COUNT_VALUES = {
     "double": 2,
@@ -124,14 +128,15 @@ def annotation_count_scope_complete_for_quantifier(
 
 
 def _target_marker(value: str, target: int) -> re.Match[str] | None:
-    return next(
-        (
-            marker
-            for marker in _COUNT_MARKER_RE.finditer(str(value or ""))
-            if _COUNT_VALUES[marker.group("marker").lower()] == target
-        ),
-        None,
-    )
+    markers = [
+        marker
+        for marker in _COUNT_MARKER_RE.finditer(str(value or ""))
+        if _COUNT_VALUES[marker.group("marker").lower()] == target
+        and not _marker_is_percentage(value, marker)
+    ]
+    if not markers:
+        return None
+    return min(markers, key=lambda marker: _relation_distance(value, marker))
 
 
 def _count_marker_is_exact(value: str, target: int) -> bool:
@@ -140,6 +145,10 @@ def _count_marker_is_exact(value: str, target: int) -> bool:
         return False
     local = str(value or "")[max(0, marker.start() - 24) : marker.end() + 24]
     return not _NON_EXACT_COUNT_RE.search(local)
+
+
+def _marker_is_percentage(value: str, marker: re.Match[str]) -> bool:
+    return bool(_PERCENTAGE_SUFFIX_RE.match(str(value or ""), marker.end()))
 
 
 def _same_question_text(question: str, text: str) -> bool:

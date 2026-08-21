@@ -24,6 +24,108 @@ _METRIC_STOPWORDS = {
 }
 
 
+def audited_mmdoc_page_hit(prediction: dict[str, Any]) -> float | None:
+    """Score an MMDoc runtime page only through an audited locator crosswalk.
+
+    This is deliberately separate from generic page alignment: a runtime page
+    is equivalent to a gold page only when the crosswalk has already matched
+    every required period/value pair and metric anchor.  No page-distance or
+    neighbouring-page inference is performed here.
+    """
+
+    coverage = audited_mmdoc_page_coverage(prediction)
+    return None if coverage is None else float(coverage > 0.0)
+
+
+def audited_mmdoc_page_coverage(prediction: dict[str, Any]) -> float | None:
+    """Measure gold-locator coverage through exact audited MMDoc mappings."""
+
+    crosswalk = _crosswalk_from_prediction(prediction)
+    if not isinstance(crosswalk, dict) or not _is_audited_crosswalk(crosswalk):
+        return None
+    predicted_pages = {
+        str(page).strip()
+        for page in prediction.get("predicted_pages") or []
+        if str(page).strip()
+    }
+    gold_records = [
+        item for item in _records(prediction.get("gold_evidence")) if _page(item)
+    ]
+    if not gold_records or not predicted_pages:
+        return 0.0
+    mappings = _records(crosswalk.get("mappings"))
+    hits = sum(
+        any(
+            _mapping_matches_gold(mapping, gold)
+            and not predicted_pages.isdisjoint(_mapping_runtime_pages(mapping))
+            for mapping in mappings
+        )
+        for gold in gold_records
+    )
+    return hits / len(gold_records)
+
+
+def _crosswalk_from_prediction(prediction: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = prediction.get("evidence_metadata")
+    crosswalk = prediction.get("mmdoc_locator_crosswalk")
+    if not isinstance(crosswalk, dict) and isinstance(metadata, dict):
+        crosswalk = metadata.get("mmdoc_locator_crosswalk")
+    return crosswalk if isinstance(crosswalk, dict) else None
+
+
+def _mapping_matches_gold(mapping: dict[str, Any], expected: dict[str, Any]) -> bool:
+    gold = mapping.get("gold")
+    if not isinstance(gold, dict):
+        return False
+    return all(
+        (
+            str(gold.get("source_id") or "").strip().lower() in _source_ids(expected),
+            str(gold.get("page") or "").strip() == _page(expected),
+            str(gold.get("element_id") or "").strip().lower()
+            == str(expected.get("element_id") or "").strip().lower(),
+            _element_type_compatible(_element_type(expected), _element_type(gold)),
+        )
+    )
+
+
+def _mapping_identity_ids(mapping: dict[str, Any]) -> set[str]:
+    runtime = mapping.get("runtime")
+    return (
+        {
+            str(identity).strip()
+            for key in ("evidence_ids", "canonical_ids")
+            for identity in _list_values(runtime.get(key))
+            if str(identity).strip()
+        }
+        if isinstance(runtime, dict)
+        else set()
+    )
+
+
+def _mapping_runtime_pages(mapping: dict[str, Any]) -> set[str]:
+    runtime = mapping.get("runtime")
+    if not isinstance(runtime, dict):
+        return set()
+    return {
+        str(page).strip()
+        for page in _list_values(runtime.get("page_labels"))
+        if str(page).strip()
+    }
+
+
+def _evidence_canonical_ids(item: dict[str, Any]) -> set[str]:
+    return {value for value in (_evidence_id(item), _canonical_id(item)) if value}
+
+
+def _is_audited_crosswalk(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("contract_id") == MMDOC_LOCATOR_CROSSWALK_CONTRACT
+        and value.get("status") == "audited_exact_match"
+        and value.get("basis") == "exact_period_value_and_metric_anchors"
+    )
+
+
 def apply_mmdoc_locator_crosswalk(
     prediction: dict[str, Any],
     *,
@@ -153,9 +255,9 @@ def _audit_gold_locator(
     period_values = _period_values(quote)
     if not source_ids or not gold_page or not gold_element_id or not period_values:
         return None
-    anchor_match: tuple[dict[str, str], set[str], dict[str, dict[str, Any]]] | None = (
-        None
-    )
+    anchor_match: tuple[
+        dict[str, str], set[str], dict[str, dict[str, Any]]
+    ] | None = None
     for section in _quote_sections(quote):
         section_period_values = _period_values(section)
         if not section_period_values:

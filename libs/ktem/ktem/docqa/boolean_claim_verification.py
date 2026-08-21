@@ -7,11 +7,13 @@ from .boolean_authoritative_conflict import authoritative_conflict_claim
 from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuthority
 from .boolean_authority_selection import _best_authority, _deduplicated_authorities
 from .boolean_deictic_authority import ambiguous_deictic_object_authority
+from .boolean_empirical_authority import direct_experiment_relation
 from .boolean_evidence_scope import (
     _actor,
     _scope_rejection,
     _section_role,
     evidence_item_text,
+    validate_boolean_scope,
 )
 from .boolean_proposition_conditions import non_authoritative_proposition_span
 from .boolean_proposition_context import (
@@ -440,17 +442,53 @@ def _assertive_relation(
     prompt: str,
     assessment: BooleanEvidenceAssessment,
 ) -> bool:
-    span = assessment.span_text.lower()
+    raw_span = assessment.span_text
+    span = raw_span.lower()
     semantic_prompt = semantic_boolean_proposition_question(prompt)
     if not exact_span_asserts_boolean_relation(semantic_prompt, span):
         return False
+    if assessment.proposition.quantifier != "none":
+        scope = validate_boolean_scope(
+            prompt,
+            assessment.span_text,
+            assessment.proposition.polarity,
+            evidence_items=[assessment.item],
+        )
+        if not scope.scope_valid:
+            return False
     if assessment.object_score < 1.0 or not assessment.proposition.object:
         return False
     if re.search(r"\b(?:discuss|describe|mention)\w*\b", span):
         return False
     if non_authoritative_proposition_span(semantic_prompt, span):
         return False
+    if not direct_experiment_relation(
+        semantic_prompt,
+        raw_span,
+        evidence_item_text(assessment.item),
+    ):
+        return False
+    if _capability_limitation(semantic_prompt, span) and not re.search(
+        r"\b(?:able\s+to|capable\s+of|can|could)\b",
+        semantic_prompt,
+        flags=re.IGNORECASE,
+    ):
+        return False
     return True
+
+
+def _capability_limitation(question: str, span: str) -> bool:
+    if primary_boolean_relation(question) != "learn":
+        return False
+    return bool(
+        re.search(
+            r"\b(?:not\s+able\s+to|unable\s+to|could\s+not|cannot|"
+            r"can't|fail(?:ed)?\s+to)\s+(?:capture|learn|represent|model|"
+            r"encode|distinguish|characteri[sz]e)\w*\b",
+            span,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _required_object_terms(prompt: str) -> set[str]:

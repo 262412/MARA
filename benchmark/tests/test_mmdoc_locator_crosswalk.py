@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from benchmark.element_locator_metrics import element_locator_hit_score
+from benchmark.metrics import element_hit_score
 from benchmark.mmdoc_locator_crosswalk import apply_mmdoc_locator_crosswalk
+from benchmark.page_metric_contract import page_metric_contract
 from benchmark.stage_metrics import (
     prediction_stage_metric_status,
     prediction_stage_metrics,
@@ -126,7 +129,7 @@ def test_mmdoc_locator_crosswalk_projects_exact_visual_facts_to_gold_locator():
         "status": "measured",
         "source": "visual_final_binding_projection.v1",
     }
-    assert prediction_stage_metrics(prediction)["selected_evidence_coverage"] == 0.0
+    assert prediction_stage_metrics(prediction)["selected_evidence_coverage"] == 1.0
     assert (
         element_locator_hit_score(
             prediction["retrieved_hits"], prediction["gold_evidence"]
@@ -169,3 +172,153 @@ def test_mmdoc_locator_crosswalk_rejects_unverified_projection():
     assert crosswalk["status"] == "not_applicable"
     assert prediction_stage_metrics(prediction)["verified_slot_coverage"] is None
     assert "mmdoc_locator_crosswalk" not in prediction["evidence_metadata"]
+
+
+def test_mmdoc_crosswalk_exposes_audited_page_identity_without_projecting_selection():
+    prediction = _prediction()
+    prediction.update(
+        {
+            "predicted_answer": "answer",
+            "gold_answers": ["answer"],
+            "predicted_pages": ["35"],
+            "gold_pages": [34],
+        }
+    )
+    selected_before = [
+        dict(item) for item in prediction["evidence_metadata"]["selected_evidence"]
+    ]
+
+    apply_mmdoc_locator_crosswalk(prediction)
+
+    page_metrics = page_metric_contract(prediction)
+    assert page_metrics["strict_page_hit"] == 0.0
+    assert page_metrics["equivalent_page_hit"] == 1.0
+    assert page_metrics["legacy_page_hit"] == 1.0
+    assert prediction["evidence_metadata"]["selected_evidence"] == selected_before
+    assert prediction_stage_metrics(prediction)["selected_evidence_coverage"] == 1.0
+    assert (
+        element_hit_score(
+            prediction["predicted_element_ids"], prediction["gold_evidence"]
+        )
+        == 0.0
+    )
+    assert (
+        element_locator_hit_score(
+            prediction["retrieved_hits"], prediction["gold_evidence"]
+        )
+        == 1.0
+    )
+
+
+def test_mmdoc_selected_coverage_matches_audited_verified_identity_only():
+    prediction = _prediction()
+    selected_before = deepcopy(prediction["evidence_metadata"]["selected_evidence"])
+
+    apply_mmdoc_locator_crosswalk(prediction)
+
+    assert prediction_stage_metrics(prediction)["selected_evidence_coverage"] == 1.0
+    assert prediction["evidence_metadata"]["selected_evidence"] == selected_before
+    assert all(
+        "page_aliases" not in item and "element_id_aliases" not in item
+        for item in prediction["evidence_metadata"]["selected_evidence"]
+    )
+
+
+def test_mmdoc_selected_coverage_rejects_page_alias_without_audited_identity():
+    prediction = _prediction()
+    apply_mmdoc_locator_crosswalk(prediction)
+
+    selected = prediction["evidence_metadata"]["selected_evidence"]
+    for item in selected:
+        item["evidence_id"] = f"unrelated:{item['period']}"
+        item["canonical_id"] = f"cell:unrelated:{item['period']}"
+        item["cell_id"] = f"unrelated-cell:{item['period']}"
+        item["page_aliases"] = ["34"]
+        item["element_id_aliases"] = ["image5"]
+
+    assert prediction_stage_metrics(prediction)["selected_evidence_coverage"] == 0.0
+
+
+def test_mmdoc_selected_coverage_requires_a_later_verified_identity():
+    prediction = _prediction()
+    apply_mmdoc_locator_crosswalk(prediction)
+    prediction["evidence_metadata"]["verified_evidence"] = []
+    prediction["evidence_metadata"]["verified_claim_support_evidence"] = []
+
+    assert prediction_stage_metrics(prediction)["selected_evidence_coverage"] == 0.0
+
+
+def test_mmdoc_finalized_stages_replay_through_exact_crosswalk_identity():
+    prediction = _prediction()
+    apply_mmdoc_locator_crosswalk(prediction)
+    for key in (
+        "verified_evidence",
+        "verified_claim_support_evidence",
+        "cited_evidence",
+        "emitted_citation_evidence",
+    ):
+        for item in prediction["evidence_metadata"][key]:
+            item.pop("element_id_aliases", None)
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["selected_evidence_coverage"] == 1.0
+    assert metrics["verified_evidence_coverage"] == 1.0
+    assert metrics["verified_claim_support_evidence_coverage"] == 1.0
+    assert metrics["cited_evidence_coverage"] == 1.0
+    assert metrics["emitted_citation_evidence_coverage"] == 1.0
+
+
+def test_mmdoc_selected_projection_isolated_from_explicit_non_mmdoc_dataset():
+    prediction = _prediction()
+    apply_mmdoc_locator_crosswalk(prediction)
+    prediction["dataset_name"] = "qasper"
+
+    assert prediction_stage_metrics(prediction)["selected_evidence_coverage"] == 0.0
+
+
+def test_mmdoc_crosswalk_does_not_infer_an_unbound_neighbour_page():
+    prediction = _prediction()
+    prediction.update(
+        {
+            "predicted_answer": "answer",
+            "gold_answers": ["answer"],
+            "predicted_pages": ["36"],
+            "gold_pages": [34],
+        }
+    )
+
+    apply_mmdoc_locator_crosswalk(prediction)
+
+    page_metrics = page_metric_contract(prediction)
+    assert page_metrics["strict_page_hit"] == 0.0
+    assert page_metrics["equivalent_page_hit"] == 0.0
+    assert page_metrics["legacy_page_hit"] == 0.0
+
+
+def test_mmdoc_page_hit_and_coverage_keep_distinct_multi_gold_semantics():
+    prediction = _prediction()
+    prediction.update(
+        {
+            "predicted_answer": "answer",
+            "gold_answers": ["answer"],
+            "predicted_pages": ["35"],
+            "gold_pages": [34, 36],
+        }
+    )
+    prediction["gold_evidence"].append(
+        {
+            "source_id": "NYSE_TM_2021",
+            "page": 36,
+            "element_id": "image6",
+            "element_type": "table",
+            "image_quote": "Operating margin 2019 999.0",
+        }
+    )
+
+    apply_mmdoc_locator_crosswalk(prediction)
+
+    page_metrics = page_metric_contract(prediction)
+    assert page_metrics["strict_page_hit"] == 0.0
+    assert page_metrics["equivalent_page_hit"] == 1.0
+    assert page_metrics["equivalent_evidence_page_coverage"] == 0.5

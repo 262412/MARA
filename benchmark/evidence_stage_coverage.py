@@ -8,6 +8,8 @@ from ktem.docqa.evidence_locators import (
 )
 from ktem.docqa.source_identity_crosswalk import SourceIdentityResolver
 
+from .mmdoc_stage_coverage import audited_mmdoc_stage_coverage
+
 EvidenceKey = tuple[str, str, str, str]
 
 
@@ -26,6 +28,7 @@ def stage_coverage_values(
         for source, page, kind, local_id in gold
     }
     stages = {
+        "selected_evidence_coverage": _stage_records(metadata, "selected_evidence"),
         "canonical_candidate_evidence_coverage": candidate_pool,
         "post_fusion_evidence_coverage": _stage_records(
             metadata,
@@ -36,7 +39,6 @@ def stage_coverage_values(
             metadata,
             "reranker_input_evidence",
         ),
-        "selected_evidence_coverage": _stage_records(metadata, "selected_evidence"),
         "used_evidence_coverage": _stage_records(metadata, "used_evidence"),
         "generation_context_evidence_coverage": _stage_records(
             metadata,
@@ -57,6 +59,11 @@ def stage_coverage_values(
             "emitted_citation_evidence",
         ),
     }
+    stage_values = {
+        metric: evidence_coverage(items, prediction, gold)
+        for metric, items in stages.items()
+    }
+    stage_values.update(_audited_mmdoc_stage_values(prediction, stages))
     return {
         "candidate_recall_at_50": evidence_coverage(candidates, prediction, gold),
         "candidate_page_coverage_at_50": _page_coverage(
@@ -70,11 +77,31 @@ def stage_coverage_values(
             gold,
         ),
         "reranked_recall_at_10": evidence_coverage(reranked, prediction, gold),
-        **{
-            metric: evidence_coverage(items, prediction, gold)
-            for metric, items in stages.items()
-        },
+        **stage_values,
     }
+
+
+def _audited_mmdoc_stage_values(
+    prediction: dict[str, Any],
+    stages: dict[str, list[dict[str, Any]] | None],
+) -> dict[str, float]:
+    if gold_requirement_keys(prediction):
+        return {}
+    values: dict[str, float] = {}
+    for metric in (
+        "selected_evidence_coverage",
+        "verified_evidence_coverage",
+        "verified_claim_support_evidence_coverage",
+        "cited_evidence_coverage",
+        "emitted_citation_evidence_coverage",
+    ):
+        items = stages[metric]
+        if items is None:
+            continue
+        audited = audited_mmdoc_stage_coverage(prediction, items)
+        if audited is not None:
+            values[metric] = audited
+    return values
 
 
 def gold_requirement_keys(

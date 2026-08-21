@@ -10,6 +10,7 @@ def other_quantified_scope_complete(
     quote: str,
     relation_spans: list[str],
     *,
+    question: str = "",
     verdict: str,
 ) -> bool:
     """Require explicit alternative or closed-scope evidence for ``other``."""
@@ -29,7 +30,7 @@ def other_quantified_scope_complete(
         return bool(no_other or closed_relation)
     if verdict != "yes":
         return False
-    return any(
+    if any(
         re.search(
             rf"\b(?:other|another|additional)\b[^.!?;]{{0,60}}"
             rf"\b{re.escape(noun)}s?\b",
@@ -37,6 +38,57 @@ def other_quantified_scope_complete(
             flags=re.IGNORECASE,
         )
         for span in relation_spans
+    ):
+        return True
+    return _explicit_besides_alternative(question, quote, noun)
+
+
+def _explicit_besides_alternative(question: str, quote: str, noun: str) -> bool:
+    excluded_match = re.search(
+        r"\b(?:besides|other\s+than|apart\s+from|in\s+addition\s+to)\s+"
+        r"(?:the\s+)?([^,;?.]+)",
+        str(question or ""),
+        flags=re.IGNORECASE,
+    )
+    if excluded_match is None or not noun:
+        return False
+    excluded = _normalized_object_phrase(excluded_match.group(1))
+    normalized_quote = _normalized_object_phrase(quote)
+    if not excluded or excluded not in normalized_quote:
+        return False
+    if re.search(
+        rf"\b(?:and|also|additional|another|other|as\s+well\s+as|"
+        rf"in\s+addition\s+to)\b[^.!?;]{{0,60}}\b{re.escape(noun)}s?\b",
+        quote,
+        flags=re.IGNORECASE,
+    ):
+        return True
+    return False
+
+
+def other_quantified_object_noun(question: str) -> str:
+    match = re.search(
+        r"\bother\s+(?:[a-z0-9][a-z0-9-]*\s+){0,2}"
+        r"(?P<noun>[a-z][a-z-]*s?)\s+"
+        r"(?:besides|other\s+than|apart\s+from|in\s+addition\s+to)\b",
+        str(question or ""),
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return ""
+    noun = match.group("noun").lower()
+    return noun[:-1] if noun.endswith("s") else noun
+
+
+def other_quantifier_present(question: str) -> bool:
+    return bool(
+        re.search(
+            r"\bother\s+(?:[a-z0-9][a-z0-9-]*\s+){0,2}(?:tasks?|benchmarks?|"
+            r"data|datasets?|corpora|corpus|languages?|methods?|models?|"
+            r"systems?|metrics?)\b",
+            str(question or ""),
+            flags=re.IGNORECASE,
+        )
     )
 
 

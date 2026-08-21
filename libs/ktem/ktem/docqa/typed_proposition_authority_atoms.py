@@ -18,6 +18,20 @@ def exact_boolean_atom(
     *,
     question: str,
 ) -> dict[str, Any] | None:
+    atoms = exact_boolean_atoms(decision, evidence_bundle, question=question)
+    return atoms[0] if atoms else None
+
+
+def exact_boolean_atoms(
+    decision: VerifyDecision,
+    evidence_bundle: EvidenceBundle,
+    *,
+    question: str,
+) -> list[dict[str, Any]]:
+    """Return every independently grounded exact Boolean authority atom."""
+
+    atoms: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
     result = next(
         (
             value
@@ -28,7 +42,7 @@ def exact_boolean_atom(
         None,
     )
     if result is None:
-        return None
+        return []
     result_polarity = str(result.get("canonical_answer_polarity") or "")
     decision_polarity = str(decision.canonical_answer_polarity or "")
     if (
@@ -36,27 +50,105 @@ def exact_boolean_atom(
         or decision_polarity not in {"yes", "no"}
         or result_polarity != decision_polarity
     ):
-        return None
+        return []
     lookup = unambiguous_evidence_alias_lookup(evidence_bundle.items)
-    evidence_id = str(result.get("authoritative_evidence_id") or "")
-    item = lookup.get(evidence_id)
-    if item is None:
-        return None
-    try:
-        canonical_id = identity_of(item).key
-    except ValueError:
-        return None
-    atom = _boolean_atom_fields(result, decision, canonical_id)
-    if not _boolean_atom_is_complete(atom, item, evidence_id):
-        return None
-    if _requires_current_paper_actor(question) and atom["actor"] != "current_paper":
-        return None
-    source_id, page_label = source_page_locator(item)
+    spans = result.get("supporting_evidence_spans") or ()
+    candidates = [value for value in spans if isinstance(value, dict)] or [result]
+    for candidate in candidates:
+        normalized = _authority_candidate(candidate, result)
+        evidence_id = str(
+            normalized.get("authoritative_evidence_id")
+            or normalized.get("evidence_id")
+            or ""
+        )
+        item = lookup.get(evidence_id)
+        if item is None:
+            continue
+        try:
+            canonical_id = identity_of(item).key
+        except ValueError:
+            continue
+        atom = _boolean_atom_fields(normalized, decision, canonical_id)
+        if not _boolean_atom_is_complete(atom, item, canonical_id):
+            continue
+        if _requires_current_paper_actor(question) and atom["actor"] != "current_paper":
+            continue
+        key = (canonical_id, atom["evidence_ref"])
+        if key in seen:
+            continue
+        seen.add(key)
+        source_id, page_label = source_page_locator(item)
+        atoms.append(
+            {
+                **atom,
+                "source_id": source_id,
+                "page_label": page_label,
+                "reason": "exact_boolean_proposition",
+            }
+        )
+    return atoms
+
+
+def _authority_candidate(
+    candidate: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    if candidate is result:
+        return result
     return {
-        **atom,
-        "source_id": source_id,
-        "page_label": page_label,
-        "reason": "exact_boolean_proposition",
+        **result,
+        "authoritative_evidence_id": candidate.get(
+            "evidence_id",
+            candidate.get("evidence_identity", ""),
+        ),
+        "authoritative_evidence_ref": candidate.get(
+            "evidence_ref", candidate.get("authoritative_evidence_ref", "")
+        ),
+        "authoritative_span_id": candidate.get(
+            "span_id", candidate.get("authoritative_span_id", "")
+        ),
+        "authoritative_quote": candidate.get(
+            "quote", candidate.get("authoritative_quote", "")
+        ),
+        "authoritative_span_start": candidate.get(
+            "span_start", candidate.get("authoritative_span_start")
+        ),
+        "authoritative_span_end": candidate.get(
+            "span_end", candidate.get("authoritative_span_end")
+        ),
+        "authoritative_canonical_start": candidate.get(
+            "canonical_start", candidate.get("authoritative_canonical_start")
+        ),
+        "authoritative_canonical_end": candidate.get(
+            "canonical_end", candidate.get("authoritative_canonical_end")
+        ),
+        "actor": candidate.get("actor", result.get("actor", "")),
+        "relation": candidate.get(
+            "relation", candidate.get("predicate", result.get("relation", ""))
+        ),
+        "predicate": candidate.get(
+            "predicate", candidate.get("relation", result.get("predicate", ""))
+        ),
+        "object": candidate.get("object", result.get("object", "")),
+        "arguments": candidate.get(
+            "arguments",
+            candidate.get("predicate_arguments", result.get("arguments", ())),
+        ),
+        "predicate_arguments": candidate.get(
+            "predicate_arguments",
+            candidate.get("arguments", result.get("predicate_arguments", ())),
+        ),
+        "polarity": candidate.get(
+            "polarity", result.get("canonical_answer_polarity", "")
+        ),
+        "qualifier": candidate.get("qualifier", result.get("qualifier", "")),
+        "quantifier": candidate.get("quantifier", result.get("quantifier", "")),
+        "scope": candidate.get(
+            "scope", candidate.get("section_scope", result.get("scope", ""))
+        ),
+        "section_scope": candidate.get(
+            "section_scope", candidate.get("scope", result.get("section_scope", ""))
+        ),
     }
 
 

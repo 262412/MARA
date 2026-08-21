@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from .boolean_current_experiment import is_current_experiment_question
+from .boolean_empirical_actions import empirical_action_present
 from .boolean_evidence_scope import (
     _closed_quantifier,
     _has_closed_quantifier,
@@ -384,15 +385,22 @@ def _metalinguistic_relation_mention(question: str, span: str) -> bool:
     )
 
 
-def _assessment_rank(assessment: BooleanEvidenceAssessment) -> tuple[int, float, float]:
+def _assessment_rank(
+    assessment: BooleanEvidenceAssessment,
+) -> tuple[int, int, float, float]:
     class_rank = {
         "supports": 3,
         "contradicts": 3,
         "insufficient_scope": 2,
         "unrelated": 1,
     }
+    empirical_action = int(
+        assessment.proposition.action == "evaluate"
+        and empirical_action_present(assessment.span_text)
+    )
     return (
         class_rank[assessment.classification],
+        empirical_action,
         assessment.relation_score * assessment.object_score,
         assessment.object_score,
     )

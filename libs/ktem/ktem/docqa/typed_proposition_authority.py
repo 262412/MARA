@@ -17,7 +17,9 @@ from .query_plan_schema import QueryPlan
 from .typed_proposition_authority_atoms import (
     conflict_slot_bindings as _conflict_slot_bindings,
 )
-from .typed_proposition_authority_atoms import exact_boolean_atom as _exact_boolean_atom
+from .typed_proposition_authority_atoms import (
+    exact_boolean_atoms as _exact_boolean_atoms,
+)
 from .typed_proposition_authority_atoms import (
     free_text_claim_result as _free_text_claim_result,
 )
@@ -28,6 +30,9 @@ from .typed_proposition_authority_schema import TYPED_PROPOSITION_AUTHORITY_CONT
 from .typed_proposition_authority_schema import missing_authority as _missing_authority
 from .typed_proposition_authority_schema import (
     verified_authority as _verified_authority,
+)
+from .typed_proposition_authority_slots import (
+    boolean_slot_bindings as _boolean_slot_bindings,
 )
 from .verification_schema import VerifyDecision
 
@@ -175,8 +180,8 @@ def _resolve_boolean_transaction(
             required_slots=required_slots,
             required_slot_ids=required_slot_ids,
         )
-    atom = _exact_boolean_atom(decision, evidence_bundle, question=question)
-    if decision.status != "supported" or atom is None or not required_slots:
+    atoms = _exact_boolean_atoms(decision, evidence_bundle, question=question)
+    if decision.status != "supported" or not atoms or not required_slots:
         reason = (
             "required_support_slot_missing"
             if not required_slots
@@ -190,10 +195,38 @@ def _resolve_boolean_transaction(
             reason,
             typed_authority=authority,
         )
-    evidence_id = str(atom["evidence_id"])
-    bindings: dict[str, tuple[str, ...]] = {
-        str(slot.slot_id): (evidence_id,) for slot in required_slots
-    }
+    bindings, selected_atoms = _boolean_slot_bindings(request, required_slots, atoms)
+    if bindings is None or selected_atoms is None:
+        reason = "required_support_slot_binding_incomplete"
+        authority = _missing_authority(
+            "boolean", question, answer, required_slot_ids, reason
+        )
+        return coherent_authority_failure(
+            decision,
+            reason,
+            typed_authority=authority,
+        )
+    return _commit_boolean_transaction(
+        request,
+        decision,
+        question=question,
+        answer=answer,
+        required_slot_ids=required_slot_ids,
+        bindings=bindings,
+        atoms=selected_atoms,
+    )
+
+
+def _commit_boolean_transaction(
+    request: Any,
+    decision: VerifyDecision,
+    *,
+    question: str,
+    answer: str,
+    required_slot_ids: list[str],
+    bindings: dict[str, tuple[str, ...]],
+    atoms: list[dict[str, Any]],
+) -> VerifyDecision:
     state_version = _commit_query_plan(request, bindings, "verified_support")
     authority = _verified_authority(
         "boolean",
@@ -201,7 +234,7 @@ def _resolve_boolean_transaction(
         answer,
         decision.claim_results,
         bindings,
-        [atom],
+        atoms,
         state="verified_support",
         reason="exact_boolean_proposition",
         canonical_answer_polarity=decision.canonical_answer_polarity,
@@ -222,10 +255,13 @@ def _resolve_boolean_transaction(
         }
         for result in decision.claim_results
     ]
+    evidence_ids = list(
+        dict.fromkeys(value for ids in bindings.values() for value in ids)
+    )
     return replace(
         decision,
         claim_results=claim_results,
-        verified_citations=[evidence_id],
+        verified_citations=evidence_ids,
         verified_support_slot_ids=slot_ids,
         boolean_authority_status="verified_support",
         typed_authority=authority,
