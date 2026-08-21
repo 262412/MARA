@@ -410,7 +410,11 @@ def classify_boolean_evidence_set(
     question: str,
     answer: str,
     items: list[dict[str, Any]],
+    *,
+    preserve_support_spans: bool = False,
 ) -> BooleanEvidenceSet:
+    """Classify evidence, retaining exact support spans only when requested."""
+
     grouped: dict[str, list[BooleanEvidenceAssessment]] = {
         "supports": [],
         "contradicts": [],
@@ -425,11 +429,20 @@ def classify_boolean_evidence_set(
             grouped[assessment.classification].append(assessment)
     for classification, group_assessments in grouped.items():
         strongest: dict[
-            tuple[str, tuple[str, ...]],
+            tuple[str, tuple[str, ...], str],
             BooleanEvidenceAssessment,
         ] = {}
         for assessment in group_assessments:
-            key = (identity_of(assessment.item).key, assessment.proposition.key)
+            key = (
+                identity_of(assessment.item).key,
+                assessment.proposition.key,
+                (
+                    assessment.span_id
+                    if preserve_support_spans
+                    and classification in {"supports", "contradicts"}
+                    else ""
+                ),
+            )
             current = strongest.get(key)
             if current is None or (
                 _assessment_rank(assessment),

@@ -6,34 +6,12 @@ from .boolean_empirical_actions import empirical_action_present
 from .boolean_proposition_context import (
     bounded_proposition_context,
     normalized_object_tokens,
+    qualified_category_bridge,
+    specific_empirical_bridge_tokens,
 )
 from .boolean_proposition_evidence import exact_span_completes_boolean_proposition
 from .boolean_proposition_tokens import _relation_surface_tokens
 from .boolean_relations import primary_boolean_relation
-
-_EXPLICIT_CLASSIFICATION_RE = re.compile(
-    r"\b(?:is|are|was|were)\s+"
-    r"(?:(?:explicitly|commonly|generally)\s+)?"
-    r"(?:treated|classified|considered|regarded)\s+as\b",
-    flags=re.IGNORECASE,
-)
-_QUALIFIED_CATEGORY_TOKENS = {"corpus", "dataset", "language", "task"}
-_GENERIC_BRIDGE_TOKENS = {
-    "approach",
-    "baseline",
-    "component",
-    "data",
-    "dataset",
-    "experiment",
-    "language",
-    "method",
-    "model",
-    "performance",
-    "result",
-    "system",
-    "task",
-    "toolkit",
-}
 
 
 def direct_experiment_relation(question: str, span: str, context: str) -> bool:
@@ -64,8 +42,11 @@ def direct_experiment_relation(question: str, span: str, context: str) -> bool:
             if context_clause == empirical_clause:
                 continue
             context_tokens = normalized_object_tokens(context_clause, relation_tokens)
-            shared = (empirical_tokens & context_tokens) - _GENERIC_BRIDGE_TOKENS
-            qualified_category = _qualified_category_bridge(
+            shared = specific_empirical_bridge_tokens(
+                empirical_tokens,
+                context_tokens,
+            )
+            qualified_category = qualified_category_bridge(
                 question,
                 empirical_tokens,
                 context_tokens,
@@ -80,22 +61,3 @@ def direct_experiment_relation(question: str, span: str, context: str) -> bool:
             ):
                 return True
     return False
-
-
-def _qualified_category_bridge(
-    question: str,
-    empirical_tokens: set[str],
-    context_tokens: set[str],
-    context_clause: str,
-    relation_tokens: set[str],
-) -> bool:
-    question_tokens = normalized_object_tokens(question, relation_tokens)
-    category = (
-        question_tokens & empirical_tokens & context_tokens & _QUALIFIED_CATEGORY_TOKENS
-    )
-    qualifiers = (
-        (question_tokens & context_tokens) - empirical_tokens - _GENERIC_BRIDGE_TOKENS
-    )
-    return bool(
-        category and qualifiers and _EXPLICIT_CLASSIFICATION_RE.search(context_clause)
-    )

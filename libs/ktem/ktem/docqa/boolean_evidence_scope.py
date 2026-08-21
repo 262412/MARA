@@ -84,11 +84,12 @@ def validate_boolean_scope(
     evidence_items: list[dict[str, Any]] | None = None,
 ) -> BooleanScopeDecision:
     matching_item = evidence_text._matching_item(quote, evidence_items or [])
-    section_role = _section_role(matching_item, quote)
+    scope_quote = evidence_text._scope_quote(question, matching_item, quote)
+    section_role = _section_role(matching_item, scope_quote)
     context = (
-        str(quote or "")
+        scope_quote
         if current_experiment.is_current_experiment_question(question)
-        else evidence_text._bound_local_context(matching_item, quote)
+        else evidence_text._bound_local_context(matching_item, scope_quote)
     )
     actor = _actor(context, section_role)
     quantifier = _closed_quantifier(question)
@@ -97,7 +98,7 @@ def validate_boolean_scope(
         actor=actor,
         section_role=section_role,
         structured_scope_available=bool(matching_item),
-        quote=quote,
+        quote=scope_quote,
     )
     if scope_rejection:
         return BooleanScopeDecision(
@@ -128,7 +129,7 @@ def validate_boolean_scope(
     if not _language_data_question(question):
         return _quantified_scope_decision(
             question,
-            quote,
+            scope_quote,
             actor=actor,
             section_role=section_role,
             quantifier=quantifier,
@@ -139,7 +140,7 @@ def validate_boolean_scope(
         actor,
         section_role,
         quantifier,
-        quote,
+        scope_quote,
         verdict,
     )
 

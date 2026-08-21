@@ -8,6 +8,7 @@ from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuth
 from .boolean_authority_selection import _best_authority, _deduplicated_authorities
 from .boolean_deictic_authority import ambiguous_deictic_object_authority
 from .boolean_empirical_authority import direct_experiment_relation
+from .boolean_entity_type_authority import same_source_typed_entity_authorities
 from .boolean_evidence_scope import (
     _actor,
     _scope_rejection,
@@ -28,6 +29,7 @@ from .boolean_proposition_evidence import (
     proposition_qualifier,
 )
 from .boolean_relations import primary_boolean_relation
+from .boolean_scope_alternatives import explicit_besides_alternative_context
 from .boolean_structured_authority import structured_boolean_authorities
 from .evidence_identity import identity_of
 from .evidence_text import extract_final_answer_text
@@ -62,6 +64,7 @@ def boolean_claim_authority(
     authority_items = _authority_items(evidence_items)
     probe_polarity = input_polarity or "yes"
     structured = structured_boolean_authorities(prompt, authority_items)
+    composed = same_source_typed_entity_authorities(prompt, authority_items)
     resolved = _exclusive_requirement_authority(prompt, authority_items)
     if resolved is not None:
         canonical_polarity, authority = resolved
@@ -72,11 +75,14 @@ def boolean_claim_authority(
             (authority,),
             reason="exact_closed_scope_proposition",
         )
-    classified = classify_boolean_evidence_set(prompt, probe_polarity, authority_items)
+    classified = classify_boolean_evidence_set(
+        prompt, probe_polarity, authority_items, preserve_support_spans=True
+    )
     supporting, contradicting = _combined_exact_authorities(
         prompt,
         probe_polarity,
         structured,
+        composed,
         classified.supports,
         classified.contradicts,
     )
@@ -223,9 +229,7 @@ def _exclusive_requirement_authority(
             polarity = (
                 "no"
                 if _requirement_negative_clause(quote, question_terms)
-                else "yes"
-                if asked_object_present
-                else "no"
+                else "yes" if asked_object_present else "no"
             )
             identity = identity_of(item).key
             span_id = _span_identity(identity, window)
@@ -330,6 +334,7 @@ def _combined_exact_authorities(
     prompt: str,
     probe_polarity: str,
     structured: tuple[BooleanEvidenceAuthority, ...],
+    composed: tuple[BooleanEvidenceAuthority, ...],
     supporting_assessments: tuple[BooleanEvidenceAssessment, ...],
     contradicting_assessments: tuple[BooleanEvidenceAssessment, ...],
 ) -> tuple[tuple[BooleanEvidenceAuthority, ...], tuple[BooleanEvidenceAuthority, ...]]:
@@ -338,6 +343,10 @@ def _combined_exact_authorities(
     supporting.extend(value for value in structured if value.polarity == probe_polarity)
     contradicting.extend(
         value for value in structured if value.polarity != probe_polarity
+    )
+    supporting.extend(value for value in composed if value.polarity == probe_polarity)
+    contradicting.extend(
+        value for value in composed if value.polarity != probe_polarity
     )
     return (
         _deduplicated_authorities(supporting),
@@ -359,12 +368,13 @@ def _exact_authorities(
             assessment.item,
             assessment.span_text,
             question=(
-                ""
-                if exact_span_completes_boolean_proposition(
+                semantic_boolean_proposition_question(prompt)
+                if assessment.proposition.quantifier == "other"
+                or not exact_span_completes_boolean_proposition(
                     prompt,
                     assessment.span_text,
                 )
-                else semantic_boolean_proposition_question(prompt)
+                else ""
             ),
         )
         if window is None:
@@ -422,6 +432,23 @@ def _exact_window(
 ) -> PropositionContextWindow | None:
     text = evidence_item_text(item)
     canonical_start = _optional_int(item.get("canonical_start"))
+    alternative = explicit_besides_alternative_context(question, text, span)
+    if alternative is not None:
+        return PropositionContextWindow(
+            text=alternative.text,
+            start=alternative.start,
+            end=alternative.end,
+            canonical_start=(
+                canonical_start + alternative.start
+                if canonical_start is not None
+                else None
+            ),
+            canonical_end=(
+                canonical_start + alternative.end
+                if canonical_start is not None
+                else None
+            ),
+        )
     return exact_proposition_context(
         text,
         span,
