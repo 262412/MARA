@@ -151,43 +151,36 @@ def _unique_items_by_identity(
 def _canonical_answer(rows: list[tuple[Any, dict[str, Any], Decimal]]) -> str:
     ordered = sorted(rows, key=lambda row: _period_sort_key(str(row[0].period)))
     metric = _display_metric(ordered[0][1].get("row_label"))
-    observations = [
-        f"{_display_value(item.get('value'))} in {slot.period}"
-        for slot, item, _value in ordered
-    ]
-    series_text = _joined_observations(observations)
     values = [value for _slot, _item, value in ordered]
     periods = [str(slot.period) for slot, _item, _value in ordered]
+    period_scope = (
+        "years"
+        if all(re.fullmatch(r"(?:19|20)\d{2}", value) for value in periods)
+        else "periods"
+    )
     peak_index = max(range(len(values)), key=values.__getitem__)
     low_index = min(range(len(values)), key=values.__getitem__)
     if peak_index < low_index < len(values) - 1 and values[-1] > values[-2]:
-        trend = (
-            f"It peaked in {periods[peak_index]}, declined to its low in "
-            f"{periods[low_index]}, then increased in {periods[-1]}."
+        return (
+            f"{metric} peaked in {periods[peak_index]}, then declined in "
+            f"subsequent {period_scope}, reaching a low in {periods[low_index]} "
+            f"before increasing in {periods[-1]}."
         )
-    elif low_index < peak_index < len(values) - 1 and values[-1] < values[-2]:
-        trend = (
-            f"It reached its low in {periods[low_index]}, rose to its peak in "
-            f"{periods[peak_index]}, then decreased in {periods[-1]}."
+    if low_index < peak_index < len(values) - 1 and values[-1] < values[-2]:
+        return (
+            f"{metric} reached its low in {periods[low_index]}, then rose in "
+            f"subsequent {period_scope}, reaching a peak in {periods[peak_index]} "
+            f"before decreasing in {periods[-1]}."
         )
+    if values[-1] == values[0]:
+        ending = f"ending at the same level in {periods[-1]} as in {periods[0]}"
     else:
-        if values[-1] > values[0]:
-            direction = "higher"
-        elif values[-1] < values[0]:
-            direction = "lower"
-        else:
-            direction = "unchanged"
-        trend = (
-            f"Its peak was in {periods[peak_index]} and its low was in "
-            f"{periods[low_index]}, ending {direction} than in {periods[0]}."
-        )
-    return f"{metric} was {series_text}. {trend}"
-
-
-def _joined_observations(values: list[str]) -> str:
-    if len(values) == 2:
-        return " and ".join(values)
-    return ", ".join(values[:-1]) + f", and {values[-1]}"
+        direction = "higher" if values[-1] > values[0] else "lower"
+        ending = f"ending {direction} in {periods[-1]} than in {periods[0]}"
+    return (
+        f"{metric} peaked in {periods[peak_index]} and reached its low in "
+        f"{periods[low_index]}, {ending}."
+    )
 
 
 def _display_metric(value: Any) -> str:
@@ -197,10 +190,6 @@ def _display_metric(value: Any) -> str:
 
 def _normalized_metric(value: Any) -> str:
     return " ".join(_display_metric(value).casefold().split())
-
-
-def _display_value(value: Any) -> str:
-    return str(value or "").strip().replace(",", "")
 
 
 def _period_sort_key(value: str) -> tuple[int, str]:

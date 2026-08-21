@@ -174,7 +174,7 @@ def _proposition_frame(
     )
     resolution_text = _resolution_text(semantic_question, span, context)
     section_role = _section_role(item, span)
-    actor = contextual_actor(span, context, section_role)
+    actor = _resolved_actor(semantic_question, item, span, context, section_role)
     quantifier = _closed_quantifier(semantic_question)
     span_matches = _context_matches_proposition(semantic_question, span)
     span_qualifier = proposition_qualifier(span, question=semantic_question)
@@ -238,6 +238,22 @@ def _proposition_frame(
         section_role=section_role,
     )
     return proposition, section_role, scope_rejection, relation_score, object_score
+
+
+def _resolved_actor(
+    question: str,
+    item: dict[str, Any],
+    span: str,
+    context: str,
+    section_role: str,
+) -> str:
+    return contextual_actor(
+        span,
+        context,
+        section_role,
+        question=question,
+        document_text=evidence_item_text(item),
+    )
 
 
 def _deduplicated_assessments(

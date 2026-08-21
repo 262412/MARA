@@ -45,6 +45,22 @@ _GENERIC_EMPIRICAL_BRIDGE_TOKENS = {
     "task",
     "toolkit",
 }
+_DOCUMENT_CONTENT_QUESTION_RE = re.compile(
+    r"^\s*(?:does|did|has|have|is|was|were)\s+"
+    r"(?:the|this)\s+(?:paper|article|work)\b\s+"
+    r"(?:(?:also|further|explicitly|directly|primarily|mainly|itself)\s+)*"
+    r"(?:explore(?:s|d)?|exploring|discuss(?:es|ed|ing)?|review(?:s|ed|ing)?|"
+    r"survey(?:s|ed|ing)?|cover(?:s|ed|ing)?|describe(?:s|d)?|describing)\b",
+    flags=re.IGNORECASE,
+)
+_CURRENT_DOCUMENT_CONTENT_FRAME_RE = re.compile(
+    r"\b(?:this|the\s+present)\s+(?:paper|article|work)\s+"
+    r"(?:provide(?:s|d)?|providing|present(?:s|ed|ing)?|offer(?:s|ed|ing)?|"
+    r"give(?:s|n)?|giving|explore(?:s|d)?|exploring|discuss(?:es|ed|ing)?|"
+    r"review(?:s|ed|ing)?|survey(?:s|ed|ing)?|cover(?:s|ed|ing)?|"
+    r"describe(?:s|d)?|describing|aim(?:s|ed|ing)?\s+to)\b",
+    flags=re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -65,12 +81,25 @@ class PropositionContextWindow:
         }
 
 
-def contextual_actor(span: str, context: str, section_role: str) -> str:
+def contextual_actor(
+    span: str,
+    context: str,
+    section_role: str,
+    *,
+    question: str = "",
+    document_text: str = "",
+) -> str:
     actor = _actor(span, section_role)
     if actor != "unknown" or section_role in {"related_work", "future_work"}:
         return actor
     contextual = _actor(context, section_role)
-    return "current_paper" if contextual == "current_paper" else actor
+    if contextual == "current_paper":
+        return "current_paper"
+    if _DOCUMENT_CONTENT_QUESTION_RE.search(
+        question
+    ) and _CURRENT_DOCUMENT_CONTENT_FRAME_RE.search(document_text):
+        return "current_paper"
+    return actor
 
 
 def semantic_resolution_text(question: str, span: str, context: str) -> str:

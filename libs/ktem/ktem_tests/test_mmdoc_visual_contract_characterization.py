@@ -139,9 +139,11 @@ def test_mmdoc_time_series_revision_is_verified_before_terminal_answer():
     )
 
     assert result.verify_decision.status == "supported"
-    assert "1200.0 in 2018" in result.answer
-    assert "810.8 in 2020" in result.answer
-    assert "then increased in 2021" in result.answer
+    assert result.answer == (
+        "Total Shareholder Return peaked in 2018, then declined in subsequent "
+        "years, reaching a low in 2020 before increasing in 2021."
+    )
+    assert not any(value in result.answer for value in VALUES.values())
     verified = with_verification_evidence(
         result.evidence_bundle,
         result.verify_decision,
