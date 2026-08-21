@@ -79,6 +79,9 @@ def compare_prediction_runs(
         "unexpected_terminal_state_drift_count": _count(
             rows, "unexpected_terminal_state_drift"
         ),
+        "verified_support_regression_count": _count(
+            rows, "verified_support_regression"
+        ),
         "runtime_only_identity_drift_count": _count(
             rows, "runtime_only_identity_drift"
         ),
@@ -109,6 +112,10 @@ def _prediction_diff(
     expected_terminal = bool(
         expected_change and expected_change.get("allow_terminal_drift")
     )
+    verified_support_regression = _verified_support_regression(
+        baseline,
+        candidate,
+    )
     return {
         "example_id": str(baseline.get("example_id") or ""),
         "route": str(baseline.get("route") or ""),
@@ -133,7 +140,9 @@ def _prediction_diff(
         "scope_drift": _scope_state(baseline_trace) != _scope_state(candidate_trace),
         "authority_drift": _authority_state(baseline) != _authority_state(candidate),
         "terminal_state_drift": terminal_drift,
-        "unexpected_terminal_state_drift": terminal_drift and not expected_terminal,
+        "verified_support_regression": verified_support_regression,
+        "unexpected_terminal_state_drift": verified_support_regression
+        or (terminal_drift and not expected_terminal),
         "runtime_only_identity_drift": baseline_runtime != candidate_runtime
         and set(baseline_retrieval) == set(candidate_retrieval),
         "baseline_retrieved_evidence": baseline_retrieval,
@@ -241,9 +250,9 @@ def _canonical_terminal_state(prediction: dict[str, Any]) -> dict[str, Any]:
     return {
         "answer": _terminal_answer(prediction),
         "status": str(prediction.get("status") or ""),
-        "terminal_status": str(terminal.get("status") or "")
-        if isinstance(terminal, dict)
-        else "",
+        "terminal_status": (
+            str(terminal.get("status") or "") if isinstance(terminal, dict) else ""
+        ),
         "support": sorted(_canonical_support(prediction)),
         "citations": sorted(_canonical_citations(prediction)),
     }
@@ -305,6 +314,77 @@ def _authority_state(prediction: dict[str, Any]) -> tuple[str, ...]:
         str(trace.get("binding_status") or ""),
         str(trace.get("evidence_ref_binding_status") or ""),
         str(trace.get("evidence_ref_rebound") or ""),
+    )
+
+
+def _typed_authority_state(prediction: dict[str, Any]) -> str:
+    metadata = prediction.get("evidence_metadata") or {}
+    terminal_state = prediction.get("engine_terminal_state") or {}
+    terminal_verify = prediction.get("engine_verify_decision") or {}
+    verify = prediction.get("verify_decision") or {}
+    candidates = (
+        prediction.get("typed_authority"),
+        (
+            terminal_state.get("typed_authority")
+            if isinstance(terminal_state, dict)
+            else None
+        ),
+        (
+            terminal_verify.get("typed_authority")
+            if isinstance(terminal_verify, dict)
+            else None
+        ),
+        verify.get("typed_authority") if isinstance(verify, dict) else None,
+        metadata.get("typed_authority") if isinstance(metadata, dict) else None,
+    )
+    for value in candidates:
+        if isinstance(value, dict) and value.get("state") is not None:
+            return _normalized(value.get("state"))
+    trace = _qasper_trace(prediction)
+    return _normalized(
+        trace.get("runtime_typed_authority_state") or trace.get("typed_authority_state")
+    )
+
+
+def _answer_state_label(prediction: dict[str, Any]) -> str:
+    for key in ("answer_status", "terminal_outcome"):
+        value = _normalized(prediction.get(key))
+        if value:
+            return value
+    terminal = prediction.get("terminal_answer_state") or {}
+    if isinstance(terminal, dict):
+        return _normalized(terminal.get("status") or terminal.get("outcome"))
+    return ""
+
+
+def _is_answered(prediction: dict[str, Any]) -> bool:
+    return _answer_state_label(prediction) in {"answered", "answer"}
+
+
+def _is_abstention(prediction: dict[str, Any]) -> bool:
+    if _answer_state_label(prediction) in {
+        "abstained",
+        "safe_abstention",
+        "unanswerable",
+        "not_enough_evidence",
+    }:
+        return True
+    return _terminal_answer(prediction) in {"", "unanswerable"}
+
+
+def _verified_support_regression(
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+) -> bool:
+    candidate_authority = _typed_authority_state(candidate)
+    return (
+        _is_answered(baseline)
+        and _typed_authority_state(baseline) == "verified_support"
+        and (
+            _is_abstention(candidate)
+            or candidate_authority
+            in {"", "missing", "retrieved_unverified", "retrieved_partial"}
+        )
     )
 
 

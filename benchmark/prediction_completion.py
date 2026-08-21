@@ -11,6 +11,7 @@ from .mara_oriented_scores import (
     add_mara_oriented_metrics,
     promote_external_primary_score,
 )
+from .mmdoc_locator_crosswalk import apply_mmdoc_locator_crosswalk
 from .performance_timing import add_amortized_preparation_timing, record_stage_timing
 from .research_adapters import (
     research_adapter_metric_metadata,
@@ -191,6 +192,7 @@ def _score_and_diagnose(
     route: dict[str, Any],
     route_config: Any,
 ) -> None:
+    apply_mmdoc_locator_crosswalk(prediction, dataset_name=dataset_name)
     prediction["product_metrics"] = score_prediction(
         prediction,
         answer_key="predicted_answer",

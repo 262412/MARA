@@ -114,6 +114,21 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
     dedupe = dict(metadata.get("dedupe_trace") or {})
     materialization = dict(metadata.get("materialization_trace") or {})
     finance = dict(metadata.get("finance_numeric_trace") or {})
+    calculation = calculation_metrics(
+        finance,
+        applicable=(
+            "finance_numeric_trace" in metadata
+            or is_finance_numeric_prediction(prediction)
+        ),
+        rendered_answer=str(prediction.get("answer_for_scoring") or ""),
+        gold_numeric_match=_float_or_none(
+            (prediction.get("metrics") or {}).get("numeric_match")
+        ),
+        answerable=_gold_answerable(prediction),
+    )
+    verified_slot_coverage = calculation.get("verified_slot_coverage")
+    if verified_slot_coverage is None:
+        verified_slot_coverage = _final_visual_slot_coverage(metadata)
     return {
         **stage_coverage_values(
             prediction,
@@ -146,18 +161,8 @@ def prediction_stage_metrics(prediction: dict[str, Any]) -> dict[str, float | No
                 "materialization_seconds",
             )
         },
-        **calculation_metrics(
-            finance,
-            applicable=(
-                "finance_numeric_trace" in metadata
-                or is_finance_numeric_prediction(prediction)
-            ),
-            rendered_answer=str(prediction.get("answer_for_scoring") or ""),
-            gold_numeric_match=_float_or_none(
-                (prediction.get("metrics") or {}).get("numeric_match")
-            ),
-            answerable=_gold_answerable(prediction),
-        ),
+        **calculation,
+        "verified_slot_coverage": verified_slot_coverage,
         "claim_duplicate_rate": _claim_duplicate_rate(prediction),
         "final_answer_duplicate_rate": _final_answer_duplicate_rate(prediction),
         "final_answer_repetition_repair_rate": (
@@ -315,6 +320,11 @@ def prediction_stage_metric_status(
             reranked=reranked,
         )
     )
+    if _final_visual_slot_coverage(metadata) is not None:
+        status["verified_slot_coverage"] = {
+            "status": "measured",
+            "source": "visual_final_binding_projection.v1",
+        }
     status["calculation_pipeline"] = calculation_status(
         dict(metadata.get("finance_numeric_trace") or {}),
         applicable=(
@@ -396,9 +406,7 @@ def _identity_metric_status(
             "status": (
                 "measured"
                 if gold_support_count and support_available
-                else "not_applicable"
-                if not gold_support_count
-                else "unavailable"
+                else "not_applicable" if not gold_support_count else "unavailable"
             ),
             "gold_identity_count": gold_support_count,
             "candidate_count": len(candidate_pool),
@@ -554,6 +562,18 @@ def _float_or_none(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _final_visual_slot_coverage(metadata: dict[str, Any]) -> float | None:
+    projection = metadata.get("final_binding_projection")
+    if not isinstance(projection, dict):
+        return None
+    if (
+        projection.get("contract_id") != "visual_final_binding_projection.v1"
+        or projection.get("status") != "verified_support"
+    ):
+        return None
+    return _float_or_none(projection.get("verified_slot_coverage"))
 
 
 def _retrieval_metric_status(*, gold_count: int, trace_available: bool) -> str:

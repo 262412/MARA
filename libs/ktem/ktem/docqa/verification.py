@@ -45,6 +45,7 @@ from .verification_slot_support import (
     slot_value,
 )
 from .visual_evidence_authority import TYPED_VISUAL_EVIDENCE_PATH_CONTRACT
+from .visual_final_binding_projection import final_visual_binding_projection
 from .visual_verification import visual_verification_decision
 
 
@@ -303,6 +304,9 @@ def with_verification_evidence(
             decision,
             reconciled_slots,
         )
+        projection = final_visual_binding_projection(bundle, decision, request)
+        if projection is not None:
+            metadata["final_binding_projection"] = projection
     metadata["verify_decision"] = decision.as_dict()
     return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
 

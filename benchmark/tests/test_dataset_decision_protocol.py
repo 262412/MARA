@@ -101,6 +101,86 @@ def test_phase2_failure_type_splits_abstention_and_retriever_only_gaps():
     )
 
 
+def test_phase2_failure_type_uses_ragtruth_native_objective():
+    clean_negative = {
+        "route": "text_rag",
+        "predicted_answer": '{"hallucination list": []}',
+        "gold_answers": ["The response being verified."],
+        "retrieved_hits": [{"text": "source context"}],
+        "metrics": {"f1": 0.0},
+        "diagnostics": {"retrieved_count": 1, "failure_class": "none"},
+        "example_metadata": {
+            "dataset_family": "hallucination_verification",
+            "labels": [],
+        },
+    }
+    positive_labeled = {
+        **clean_negative,
+        "predicted_answer": '{"hallucination list": ["profit doubled"]}',
+        "gold_answers": ["Revenue rose and profit doubled."],
+        "example_metadata": {
+            "dataset_family": "hallucination_verification",
+            "labels": [{"label_type": "hallucination", "text": "profit doubled"}],
+        },
+    }
+    generic_qa = {
+        **clean_negative,
+        "example_metadata": {"dataset_family": "scientific_qa", "labels": []},
+    }
+
+    assert phase2_failure_type(clean_negative) == "none"
+    assert phase2_failure_type(positive_labeled) == "none"
+    assert phase2_failure_type(generic_qa) == "answer_mismatch_after_retrieval"
+
+
+def test_phase2_failure_type_requires_explicit_ragtruth_labels_for_clean_negative():
+    for metadata in (
+        {"dataset_family": "hallucination_verification"},
+        {
+            "dataset_family": "hallucination_verification",
+            "labels": {"not": "a list"},
+        },
+    ):
+        prediction = {
+            "route": "text_rag",
+            "predicted_answer": '{"hallucination list": []}',
+            "gold_answers": ["The response being verified."],
+            "retrieved_hits": [{"text": "source context"}],
+            "metrics": {"f1": 0.0},
+            "diagnostics": {"retrieved_count": 1, "failure_class": "none"},
+            "example_metadata": metadata,
+        }
+
+        assert phase2_failure_type(prediction) == "answer_mismatch_after_retrieval"
+
+
+def test_phase2_failure_type_rejects_malformed_json_without_labels():
+    prediction = {
+        "route": "text_rag",
+        "predicted_answer": "not json",
+        "gold_answers": ["The response being verified."],
+        "retrieved_hits": [{"text": "source context"}],
+        "metrics": {"f1": 1.0},
+        "diagnostics": {"retrieved_count": 1, "failure_class": "none"},
+        "example_metadata": {"dataset_family": "hallucination_verification"},
+    }
+
+    assert phase2_failure_type(prediction) == "answer_mismatch_after_retrieval"
+
+
+def test_phase2_failure_type_does_not_promote_ragtruth_detection_proxy():
+    prediction = {
+        "route": "text_rag",
+        "predicted_answer": '{"hallucination list": ["wrong span"]}',
+        "retrieved_hits": [{"text": "source context"}],
+        "metrics": {"f1": 0.0, "ragtruth_positive_detected": 1.0},
+        "diagnostics": {"retrieved_count": 1, "failure_class": "none"},
+        "example_metadata": {"dataset_family": "hallucination_verification"},
+    }
+
+    assert phase2_failure_type(prediction) == "answer_mismatch_after_retrieval"
+
+
 def test_phase2_failure_counts_groups_predictions_by_phase2_type():
     rows = phase2_failure_counts(
         "financebench_plan5_text_main_current",

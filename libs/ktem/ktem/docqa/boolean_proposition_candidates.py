@@ -13,6 +13,7 @@ from .boolean_proposition_evidence import (
 )
 from .boolean_proposition_tokens import _content_tokens
 from .boolean_quality_control_evidence import quality_control_evidence_kind
+from .boolean_retrieval_queries import boolean_retrieval_query
 from .boolean_structured_authority import structured_boolean_authority
 from .query_phrase_extraction import semantic_boolean_proposition_question
 
@@ -31,7 +32,7 @@ def boolean_proposition_candidate_score(
     )
     context_question = _normalize_requirement_terms(combined_question)
     proposition_question = semantic_boolean_proposition_question(
-        _normalize_requirement_terms(question or metric)
+        _normalize_requirement_terms(_semantic_proposition_question(question, metric))
     )
     candidate_item = _normalized_requirement_item(item)
     text = evidence_item_text(candidate_item)
@@ -87,7 +88,7 @@ def boolean_proposition_selection_assessment(
     """Compute selection relevance and authority from one typed classification."""
 
     proposition_question = semantic_boolean_proposition_question(
-        _normalize_requirement_terms(question or metric)
+        _normalize_requirement_terms(_semantic_proposition_question(question, metric))
     )
     candidate_item = _normalized_requirement_item(item)
     classified = classify_boolean_evidence_candidates(
@@ -161,6 +162,20 @@ _REQUIREMENT_CONTEXT_RE = re.compile(
     r"\b(?:require|required|requires|requirement|requirements|necessary|must)\b",
     re.IGNORECASE,
 )
+
+
+def _semantic_proposition_question(question: str, metric: str) -> str:
+    """Use the compact metric when ``question`` is a retrieval expansion."""
+
+    question_text = str(question or "").strip()
+    metric_text = str(metric or "").strip()
+    if (
+        metric_text
+        and question_text
+        and question_text != boolean_retrieval_query(question_text)
+    ):
+        return metric_text
+    return question_text or metric_text
 
 
 def _normalize_requirement_terms(value: str) -> str:

@@ -153,6 +153,44 @@ def test_mmdoc_time_series_revision_is_verified_before_terminal_answer():
     )
 
 
+def test_mmdoc_final_binding_projection_preserves_selection_snapshot():
+    request = _request("doc_page_image")
+    page = _page_item()
+
+    result = execute_controller_turn(
+        request,
+        retrieve=lambda *_args: {
+            "page_image_index": [page],
+            "evidence": [page],
+        },
+        generate=lambda *_args: "Decreased",
+    )
+
+    selection_trace = result.evidence_bundle.metadata["evidence_selection_trace"]
+    assert all(
+        binding["verification_satisfied"] is False
+        for binding in selection_trace["required_slot_bindings"]
+    )
+    projection = result.evidence_bundle.metadata["final_binding_projection"]
+    assert projection["contract_id"] == "visual_final_binding_projection.v1"
+    assert projection["status"] == "verified_support"
+    assert projection["verified_slot_coverage"] == 1.0
+    assert set(projection["slot_bindings"]) == {f"support:{year}" for year in VALUES}
+    assert projection["source_page_locators"] == [
+        {"source_id": "report", "page_label": "34"}
+    ]
+    terminal_projection = result.engine_terminal_evidence_bundle["metadata"][
+        "final_binding_projection"
+    ]
+    assert terminal_projection == projection
+    assert all(
+        binding["verification_satisfied"] is False
+        for binding in result.evidence_bundle.metadata["evidence_selection_trace"][
+            "required_slot_bindings"
+        ]
+    )
+
+
 def test_mmdoc_controller_does_not_cost_gate_away_required_visual_typed_route():
     payload = score_adaptive_route(
         {

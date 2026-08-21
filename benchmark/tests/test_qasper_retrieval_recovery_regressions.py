@@ -6,6 +6,7 @@ from typing import Any
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import evaluate_retrieval_quality
 from ktem.docqa.execution import execute_controller_turn
+from ktem.docqa.query_evidence_binding import bind_evidence_slots
 from ktem.docqa.query_plan_schema import EvidenceSlot, QueryPlan
 from ktem.docqa.query_planning import build_query_plan, missing_slot_requests
 
@@ -13,6 +14,14 @@ from benchmark.docqa_index_cache import DocQAIndexCache, route_requires_element
 from benchmark.schemas import BenchmarkDocument
 
 QUESTION = "Did the authors evaluate the model on clinical tasks?"
+TOOLKIT_QUESTION = "Do they experiment with the toolkits?"
+TOOLKIT_EVIDENCE = (
+    "We present GluonCV and GluonNLP, the deep learning toolkits for computer "
+    "vision and natural language processing. We demonstrate the performance of "
+    "GluonCV/NLP models in various computer vision and natural language "
+    "processing tasks. Specifically, we evaluate models on standard benchmark "
+    "data sets."
+)
 
 
 def _evidence(evidence_id: str, text: str, *, source_id: str = "paper") -> dict:
@@ -89,6 +98,97 @@ def test_qasper_missing_boolean_proposition_gets_one_local_second_round():
     assert result.evidence_bundle.metadata["canonical_candidate_count"] == 1
     [slot] = result.evidence_bundle.metadata["query_plan"]["evidence_slots"]
     assert slot["status"] == "retrieved_unverified"
+
+
+def test_qasper_expanded_boolean_query_keeps_toolkit_evidence_candidate():
+    plan = build_query_plan(
+        TOOLKIT_QUESTION,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    [slot] = plan.evidence_slots
+    bound = bind_evidence_slots(
+        plan,
+        [_evidence("toolkit-support", TOOLKIT_EVIDENCE)],
+    )
+
+    [bound_slot] = bound.evidence_slots
+    assert slot.metric == "they experiment with toolkits"
+    assert bound_slot.status == "retrieved_unverified"
+    assert bound_slot.evidence_ids
+
+
+def test_qasper_toolkit_boolean_regression_reaches_exact_authority():
+    calls: list[int] = []
+
+    def retrieve(request, _decision):
+        calls.append(request.retrieval_round_id)
+        return {"evidence": [_evidence("toolkit-support", TOOLKIT_EVIDENCE)]}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=TOOLKIT_QUESTION,
+            retrieval_query=TOOLKIT_QUESTION,
+            task_type="boolean",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            active_file_id="paper",
+            origin="benchmark",
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "Yes.",
+    )
+
+    assert calls == [1]
+    assert result.answer.lower().startswith("yes")
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+    assert result.verify_decision.boolean_authority_status == "verified_support"
+
+
+def _run_recovered_boolean_case(question: str, evidence_text: str):
+    evidence = _evidence("recovered-support", evidence_text)
+    return execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="boolean",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            active_file_id="paper",
+            origin="benchmark",
+        ),
+        retrieve=lambda *_args: {"evidence": [evidence]},
+        generate=lambda *_args: "yes",
+    )
+
+
+def test_qasper_recovered_off_the_shelf_case_remains_verified_no():
+    result = _run_recovered_boolean_case(
+        "Do they use off-the-shelf NLP systems to build their assistant?",
+        "Natural Language Understanding (NLU): We implemented an NLU unit "
+        "utilizing handcrafted rules, Regular Expressions (RegEx) and "
+        "Elasticsearch (ES) API.",
+    )
+
+    assert result.answer == "no"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+
+
+def test_qasper_recovered_bert_comparison_case_remains_verified_no():
+    result = _run_recovered_boolean_case(
+        "Does BERT reach the best performance among all the algorithms compared?",
+        "BERT remains 0.3 F1-score points behind the winning system and would "
+        "have achieved the second position among all competitors.",
+    )
+
+    assert result.answer == "no"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
 
 
 def test_unrelated_graph_entity_does_not_satisfy_qasper_boolean_slot():

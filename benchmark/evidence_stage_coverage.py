@@ -185,7 +185,14 @@ def _item_keys(
     pages = normalized_page_aliases(item) | {""}
     record = _record_key(item, resolver)
     kinds = {record[2], ""}
-    elements = {record[3], ""}
+    aliases = {
+        str(alias).strip().lower()
+        for alias in _element_id_aliases(item)
+        if str(alias).strip()
+    }
+    if aliases:
+        kinds.add("element")
+    elements = {record[3], ""} | aliases
     return {
         (source, page, kind, element)
         for source in sources
@@ -281,6 +288,16 @@ def _stage_records(
 
 def _item_sources(item: dict[str, Any]) -> set[str]:
     return normalized_source_aliases(item)
+
+
+def _element_id_aliases(item: dict[str, Any]) -> list[str]:
+    values = item.get("element_id_aliases")
+    metadata = item.get("metadata")
+    output = [values] if isinstance(values, str) else list(values or [])
+    if isinstance(metadata, dict):
+        nested = metadata.get("element_id_aliases")
+        output.extend([nested] if isinstance(nested, str) else list(nested or []))
+    return [str(value) for value in output]
 
 
 def _resolver(prediction: dict[str, Any]) -> SourceIdentityResolver:

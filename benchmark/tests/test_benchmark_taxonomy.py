@@ -88,6 +88,82 @@ def test_classify_failure_taxonomy_maps_quality_failures():
     assert classify_failure_taxonomy(_prediction(metrics={"f1": 1.0})) == "none"
 
 
+def test_classify_failure_taxonomy_uses_ragtruth_clean_negative_objective():
+    prediction = _prediction(
+        predicted_answer='{"hallucination list": []}',
+        gold_answers=["The response being verified."],
+        example_metadata={
+            "dataset_family": "hallucination_verification",
+            "labels": [],
+        },
+        metrics={"f1": 0.0},
+    )
+
+    assert classify_failure_taxonomy(prediction) == "none"
+
+
+def test_classify_failure_taxonomy_uses_ragtruth_positive_span_objective():
+    prediction = _prediction(
+        predicted_answer='{"hallucination list": ["profit doubled"]}',
+        gold_answers=["Revenue rose and profit doubled."],
+        example_metadata={
+            "dataset_family": "hallucination_verification",
+            "labels": [{"label_type": "hallucination", "text": "profit doubled"}],
+        },
+        metrics={"f1": 0.0},
+    )
+
+    assert classify_failure_taxonomy(prediction) == "none"
+
+
+def test_classify_failure_taxonomy_keeps_generic_qa_f1_mismatch():
+    prediction = _prediction(
+        predicted_answer='{"hallucination list": []}',
+        gold_answers=["The response being verified."],
+        metrics={"f1": 0.0},
+    )
+
+    assert classify_failure_taxonomy(prediction) == "answer_mismatch"
+
+
+def test_classify_failure_taxonomy_does_not_infer_clean_negative_without_labels():
+    for metadata in (
+        {"dataset_family": "hallucination_verification"},
+        {
+            "dataset_family": "hallucination_verification",
+            "labels": {"not": "a list"},
+        },
+    ):
+        prediction = _prediction(
+            predicted_answer='{"hallucination list": []}',
+            gold_answers=["The response being verified."],
+            example_metadata=metadata,
+            metrics={"f1": 0.0},
+        )
+
+        assert classify_failure_taxonomy(prediction) == "answer_mismatch"
+
+
+def test_classify_failure_taxonomy_rejects_malformed_json_without_labels():
+    prediction = _prediction(
+        predicted_answer="not json",
+        example_metadata={"dataset_family": "hallucination_verification"},
+        metrics={"f1": 1.0},
+    )
+
+    assert classify_failure_taxonomy(prediction) == "answer_mismatch"
+
+
+def test_classify_failure_taxonomy_does_not_promote_ragtruth_detection_proxy():
+    prediction = _prediction(
+        predicted_answer='{"hallucination list": ["wrong span"]}',
+        example_metadata={"dataset_family": "hallucination_verification"},
+        metrics={"f1": 0.0, "ragtruth_positive_detected": 1.0},
+    )
+
+    assert classify_failure_taxonomy(prediction) == "answer_mismatch"
+
+
 def test_classify_routing_taxonomy_normalizes_route_families():
     assert classify_routing_taxonomy({"route": "direct_answer"}) == "direct_baseline"
     assert classify_routing_taxonomy({"route": "text_rag"}) == "text_retrieval"

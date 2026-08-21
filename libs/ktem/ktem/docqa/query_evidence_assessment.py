@@ -4,6 +4,7 @@ from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .boolean_proposition_candidates import _semantic_proposition_question
 from .boolean_proposition_evidence import boolean_proposition_authority_level
 from .cross_page_boolean_authority import reconcile_cross_page_boolean_proposition
 from .evidence_identity import identity_of
@@ -138,7 +139,7 @@ def bound_slot_status(
                 )
                 if assessments is not None
                 else boolean_proposition_authority_level(
-                    slot.query or slot.metric,
+                    _semantic_proposition_question(slot.query, slot.metric),
                     evidence_by_identity[evidence_id],
                 )
             )

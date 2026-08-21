@@ -10,6 +10,75 @@ from .metrics import normalize_text, round_metric, token_f1_score
 
 _INLINE_CITATION_RE = re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
 
+_RAGTRUTH_TASK_FAMILIES = {
+    "ragtruth",
+    "hallucination_guardrail",
+    "hallucination_verification",
+}
+
+
+def is_ragtruth_prediction(prediction: dict[str, Any]) -> bool:
+    metadata = dict(prediction.get("example_metadata") or {})
+    candidates = (
+        prediction.get("dataset_family"),
+        metadata.get("dataset_family"),
+        prediction.get("dataset_name"),
+        metadata.get("dataset_name"),
+    )
+    for candidate in candidates:
+        normalized = str(candidate or "").strip().lower().replace("-", "_")
+        if normalized in _RAGTRUTH_TASK_FAMILIES or normalized.startswith("ragtruth_"):
+            return True
+    return False
+
+
+def ragtruth_native_objective(prediction: dict[str, Any]) -> float | None:
+    """Return the native hallucination score when it is available.
+
+    Raw answers are evaluated first so generic QA metrics cannot override the
+    task contract. Predictions that have already been rescored can fall back
+    to their persisted native fields.
+    """
+
+    computed = ragtruth_native_metrics(prediction)
+    if computed["ragtruth_json_valid"] == 0.0:
+        return 0.0
+    if (
+        computed["ragtruth_json_valid"] == 1.0
+        and _explicit_label_list(prediction) is not None
+    ):
+        return computed["ragtruth_hallucination_span_f1"]
+
+    metrics = dict(prediction.get("metrics") or {})
+    for key in ("ragtruth_hallucination_span_f1", "native_score"):
+        if key not in metrics:
+            continue
+        try:
+            return float(metrics[key])
+        except (TypeError, ValueError):
+            continue
+    if metrics.get("ragtruth_json_valid") is not None:
+        try:
+            if float(metrics["ragtruth_json_valid"]) == 0.0:
+                return 0.0
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _explicit_label_list(prediction: dict[str, Any]) -> list[Any] | None:
+    metadata = dict(prediction.get("example_metadata") or {})
+    if "labels" not in metadata and "hallucination_labels" not in metadata:
+        return None
+
+    labels = metadata.get("labels")
+    if labels:
+        return labels if isinstance(labels, list) else None
+    hallucination_labels = metadata.get("hallucination_labels")
+    if hallucination_labels is not None:
+        return hallucination_labels if isinstance(hallucination_labels, list) else None
+    return labels if isinstance(labels, list) else None
+
 
 def ragtruth_native_metrics(
     prediction: dict[str, Any],
