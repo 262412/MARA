@@ -37,6 +37,8 @@ SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-6
 ARTIFACT_DETAIL="${MARA_TEXT_ARTIFACT_DETAIL:-compact}"
 EXECUTION_CONTRACT="${MARA_EXECUTION_JOB_CONTRACT:-}"
 REQUIRE_CONTRACT_SMOKE="${MARA_REQUIRE_CONTRACT_SMOKE:-0}"
+REQUIRE_SEMANTIC_DEBUG_TRACE="${MARA_REQUIRE_SEMANTIC_DEBUG_TRACE:-0}"
+SEMANTIC_DEBUG_TRACE="${MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE:-0}"
 CONTRACT_SMOKE_SUITE_KIND="${MARA_CONTRACT_SMOKE_SUITE_KIND:-}"
 SUITE_NAME="${NAME}-${RUN_ID}"
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
@@ -55,6 +57,7 @@ export CODEX_HOME="${CODEX_HOME:-/users/tbczhang/fastscratch/.codex}"
 export MARA_TEXT_LLM_BASE_URL="$TEXT_LLM_BASE_URL"
 export MARA_RETRIEVAL_BASE_URL="$RETRIEVAL_BASE_URL"
 export MARA_LLM_BASE_URL="$TEXT_LLM_BASE_URL"
+export MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE="$SEMANTIC_DEBUG_TRACE"
 
 SERVICE_PIDS=()
 
@@ -170,7 +173,7 @@ log "manifest=${MANIFEST}"
 log "output=${OUT_ROOT}"
 log "suite=${SUITE_NAME}"
 log "route=${ROUTE} limit=${LIMIT} sample_seed=${SAMPLE_SEED} max_context=${MAX_CONTEXT_LENGTH} route_timeout=${ROUTE_TIMEOUT_SECONDS}"
-log "artifact_detail=${ARTIFACT_DETAIL} require_contract_smoke=${REQUIRE_CONTRACT_SMOKE} contract_smoke_suite_kind=${CONTRACT_SMOKE_SUITE_KIND:-none}"
+log "artifact_detail=${ARTIFACT_DETAIL} semantic_debug_trace=${SEMANTIC_DEBUG_TRACE} require_contract_smoke=${REQUIRE_CONTRACT_SMOKE} require_semantic_debug_trace=${REQUIRE_SEMANTIC_DEBUG_TRACE} contract_smoke_suite_kind=${CONTRACT_SMOKE_SUITE_KIND:-none}"
 log "execution_contract=${EXECUTION_CONTRACT:-none}"
 log "text_llm_base_url=${TEXT_LLM_BASE_URL}"
 log "retrieval_base_url=${RETRIEVAL_BASE_URL}"
@@ -298,6 +301,10 @@ test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
 test -f "$RUN_DIR/artifact_manifest.json"
 test -f "$RUN_DIR/artifact_complete.json"
+if [[ "$REQUIRE_SEMANTIC_DEBUG_TRACE" == "1" ]]; then
+  test -f "$RUN_DIR/semantic_debug_traces.jsonl"
+  test "$(wc -l < "$RUN_DIR/semantic_debug_traces.jsonl")" -gt 0
+fi
 if [[ -n "$EXECUTION_CONTRACT" ]]; then
   VALIDATION_ARGS=(
     --require-all-usable

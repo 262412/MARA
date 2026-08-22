@@ -8,6 +8,10 @@ from typing import Any
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.semantic_evidence_set_authority import PropositionVerifier
 
+from .mara_semantic_proposition_debug import (
+    SemanticPropositionDebugRecorder,
+    semantic_proposition_debug_enabled,
+)
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
     SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS,
@@ -38,13 +42,18 @@ def build_semantic_proposition_verifier(
     if llm is None:
         return None
     configured_auditor = getattr(pipeline, "semantic_entailment_auditor_llm", None)
-    return _SemanticPropositionVerifier(llm, audit_llm or configured_auditor or llm)
+    return _SemanticPropositionVerifier(
+        llm,
+        audit_llm or configured_auditor or llm,
+        debug_trace=semantic_proposition_debug_enabled(pipeline),
+    )
 
 
 class _SemanticPropositionVerifier:
-    def __init__(self, llm: Any, audit_llm: Any) -> None:
+    def __init__(self, llm: Any, audit_llm: Any, *, debug_trace: bool) -> None:
         self.llm = llm
         self.audit_llm = audit_llm
+        self.debug_recorder = SemanticPropositionDebugRecorder(debug_trace)
         self.cache: dict[str, dict[str, Any] | None] = {}
         self.cache_diagnostics: dict[str, dict[str, Any]] = {}
         self.failure_reasons: dict[str, str] = {}
@@ -70,13 +79,21 @@ class _SemanticPropositionVerifier:
         seed = _verifier_seed(request)
         model = _model_name(self.llm)
         if not slots or not packed:
-            return self._skipped_response(bundle, packing, slots, model, seed)
+            return self._skipped_response(bundle, question, packing, slots, model, seed)
         try:
             prompt = semantic_proposition_verifier_prompt(question, slots, packed)
         except ValueError:
             cache_key = _cache_key(question, slots, packed)
             self.cache[cache_key] = None
             self.failure_reasons[cache_key] = "prompt_bound_exceeded"
+            self.debug_recorder.record_pre_model(
+                "prompt_rejected",
+                cache_key,
+                question,
+                packing,
+                slots,
+                reason="prompt_bound_exceeded",
+            )
             self._trace(
                 bundle,
                 "failed",
@@ -90,18 +107,48 @@ class _SemanticPropositionVerifier:
         cache_key = _cache_key(question, slots, packed)
         if cache_key in self.cache:
             return self._cached_response(
-                bundle, cache_key, packing, slots, model, seed, len(prompt)
+                bundle,
+                cache_key,
+                question,
+                packing,
+                slots,
+                model,
+                seed,
+                len(prompt),
             )
+        return self._model_response(
+            bundle,
+            cache_key,
+            question,
+            prompt,
+            packing,
+            slots,
+            model,
+            seed,
+        )
+
+    def _model_response(
+        self,
+        bundle: EvidenceBundle,
+        cache_key: str,
+        question: str,
+        prompt: str,
+        packing: SemanticPropositionEvidencePacking,
+        slots: list[dict[str, str]],
+        model: str,
+        seed: int,
+    ) -> dict[str, Any] | None:
         outcome = run_semantic_proposition_transaction(
             self.llm,
             self.audit_llm,
             prompt,
             question=question,
-            packed=packed,
+            packed=packing.records,
             slots=slots,
             proposal_model=model,
             audit_model=_model_name(self.audit_llm),
             seed=seed,
+            capture_debug_trace=self.debug_recorder.enabled,
         )
         self.proposal_model_call_count += outcome.proposal_call_count
         self.audit_model_call_count += outcome.audit_call_count
@@ -116,6 +163,17 @@ class _SemanticPropositionVerifier:
         self.cache_diagnostics[cache_key] = deepcopy(diagnostics)
         if parsed is None:
             self.failure_reasons[cache_key] = reason
+        self.debug_recorder.record_model_transaction(
+            cache_key,
+            question,
+            packing,
+            slots,
+            status=status,
+            reason=reason,
+            verdict=str((parsed or {}).get("verdict") or ""),
+            diagnostics=diagnostics,
+            transaction=outcome.debug_trace,
+        )
         self._trace(
             bundle,
             status,
@@ -134,6 +192,7 @@ class _SemanticPropositionVerifier:
         self,
         bundle: EvidenceBundle,
         cache_key: str,
+        question: str,
         packing: SemanticPropositionEvidencePacking,
         slots: list[dict[str, str]],
         model: str,
@@ -142,6 +201,17 @@ class _SemanticPropositionVerifier:
     ) -> dict[str, Any] | None:
         cached = self.cache[cache_key]
         diagnostics = self.cache_diagnostics.get(cache_key, {})
+        self.debug_recorder.record_cache_reuse(
+            cache_key,
+            question,
+            packing,
+            slots,
+            cached=cached,
+            diagnostics=diagnostics,
+            failure_reason=self.failure_reasons.get(
+                cache_key, "cached_provider_call_failed"
+            ),
+        )
         self._trace(
             bundle,
             "cache_hit" if cached is not None else "cached_failure",
@@ -164,15 +234,27 @@ class _SemanticPropositionVerifier:
     def _skipped_response(
         self,
         bundle: EvidenceBundle,
+        question: str,
         packing: SemanticPropositionEvidencePacking,
         slots: list[dict[str, str]],
         model: str,
         seed: int,
     ) -> dict[str, Any]:
+        reason = (
+            "required_slots_missing" if not slots else "no_canonical_evidence_items"
+        )
+        self.debug_recorder.record_pre_model(
+            "skipped",
+            "",
+            question,
+            packing,
+            slots,
+            reason=reason,
+        )
         self._trace(
             bundle,
             "skipped",
-            "required_slots_missing" if not slots else "no_canonical_evidence_items",
+            reason,
             packing,
             slots,
             model,
@@ -209,6 +291,7 @@ class _SemanticPropositionVerifier:
             prompt_chars=prompt_chars,
             verdict=verdict,
             cache_hit=cache_hit,
+            debug_trace=self.debug_recorder.snapshot(),
             **diagnostics,
         )
 
@@ -302,9 +385,10 @@ def _record_trace(
     prompt_chars: int = 0,
     verdict: str = "",
     cache_hit: bool = False,
+    debug_trace: dict[str, Any] | None = None,
     **diagnostics: Any,
 ) -> None:
-    bundle.metadata["semantic_proposition_verifier"] = {
+    trace = {
         "contract_id": SEMANTIC_PROPOSITION_VERIFIER_RUNTIME_CONTRACT,
         "status": status,
         "reason": reason,
@@ -335,3 +419,6 @@ def _record_trace(
         },
         **diagnostics,
     }
+    if debug_trace is not None:
+        trace["debug_trace"] = debug_trace
+    bundle.metadata["semantic_proposition_verifier"] = trace

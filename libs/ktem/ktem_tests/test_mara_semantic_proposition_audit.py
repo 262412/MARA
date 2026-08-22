@@ -132,9 +132,12 @@ def _audit(*, second_fragment_entailed: bool = True) -> str:
     )
 
 
-def _verifier(llm: _SequenceLLM) -> Any:
+def _verifier(llm: _SequenceLLM, *, debug: bool = False) -> Any:
     return build_semantic_proposition_verifier(
-        SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
+        SimpleNamespace(
+            answering_pipeline=SimpleNamespace(llm=llm),
+            semantic_proposition_debug_trace=debug,
+        )
     )
 
 
@@ -247,3 +250,71 @@ def test_runtime_classifies_exhausted_output_without_recording_response_text() -
     )
     assert trace["response_chars"] == 1
     assert "response_text" not in trace
+    assert "debug_trace" not in trace
+
+
+def test_debug_trace_records_every_proposal_and_audit_output_without_changing_result() -> (
+    None
+):
+    llm = _SequenceLLM([_response(_proposal()), _response(_audit())])
+    verifier = _verifier(llm, debug=True)
+    bundle = EvidenceBundle(route="doc_text", items=_items())
+
+    result = verifier(_request(), QUESTION, "unanswerable", bundle)
+
+    assert result is not None and result["verdict"] == "yes"
+    debug = bundle.metadata["semantic_proposition_verifier"]["debug_trace"]
+    assert debug["contract_id"] == "semantic_proposition_debug_trace.v1"
+    [event] = debug["events"]
+    assert event["event"] == "model_transaction"
+    assert event["auditor_relationship"] == "same_instance"
+    assert event["transaction"]["proposal"]["attempts"][0]["raw_response"] == (
+        _proposal()
+    )
+    assert (
+        event["transaction"]["proposal"]["attempts"][0]["parsed_value"]["verdict"]
+        == "yes"
+    )
+    assert event["transaction"]["audit"]["attempts"][0]["raw_response"] == (_audit())
+    assert (
+        event["transaction"]["audit"]["attempts"][0]["parsed_value"]["jointly_entails"]
+        is True
+    )
+
+
+def test_debug_trace_preserves_cache_reuse_after_a_rejected_audit() -> None:
+    llm = _SequenceLLM(
+        [_response(_proposal()), _response(_audit(second_fragment_entailed=False))]
+    )
+    verifier = _verifier(llm, debug=True)
+    bundle = EvidenceBundle(route="doc_text", items=_items())
+
+    first = verifier(_request(), QUESTION, "yes", bundle)
+    second = verifier(_request(), QUESTION, "yes", bundle)
+
+    assert first == second
+    debug = bundle.metadata["semantic_proposition_verifier"]["debug_trace"]
+    assert [event["event"] for event in debug["events"]] == [
+        "model_transaction",
+        "cache_reuse",
+    ]
+    assert debug["events"][0]["outcome"]["audit_status"] == "rejected"
+    assert debug["events"][1]["source_event_index"] == 1
+    assert debug["events"][1]["cached_outcome"]["audit_status"] == "rejected"
+
+
+def test_debug_trace_can_be_enabled_by_the_slurm_environment(monkeypatch: Any) -> None:
+    monkeypatch.setenv("MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE", "1")
+    llm = _SequenceLLM([_response(_proposal()), _response(_audit())])
+    verifier = build_semantic_proposition_verifier(
+        SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
+    )
+    assert verifier is not None
+    bundle = EvidenceBundle(route="doc_text", items=_items())
+
+    verifier(_request(), QUESTION, "unanswerable", bundle)
+
+    assert (
+        bundle.metadata["semantic_proposition_verifier"]["debug_trace"]["contract_id"]
+        == "semantic_proposition_debug_trace.v1"
+    )

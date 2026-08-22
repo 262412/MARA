@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable, Mapping
 from typing import Any, TypeAlias
 
@@ -27,7 +26,6 @@ from .boolean_evidence_scope import (
     evidence_item_text,
 )
 from .boolean_proposition_arguments import _question_argument_tokens
-from .boolean_proposition_context import normalized_object_tokens
 from .boolean_proposition_polarity import evidence_polarity
 from .boolean_proposition_qualifiers import proposition_qualifier
 from .boolean_proposition_tokens import _relation_surface_tokens
@@ -37,42 +35,15 @@ from .evidence_identity import identity_of
 from .evidence_schema import EvidenceBundle
 from .query_phrase_extraction import source_page_locator
 from .semantic_entailment_audit import semantic_entailment_audit_validation_reason
+from .semantic_evidence_set_scope import semantic_scope_basis
+from .semantic_proposition_authority_debug import (
+    append_semantic_authority_debug_stage as _append_debug_stage,
+)
+from .semantic_proposition_authority_debug import (
+    begin_semantic_authority_debug_attempt as _begin_debug_attempt,
+)
 
 LOGGER = logging.getLogger(__name__)
-
-_GENERIC_SUBJECT_TOKENS = {
-    "are",
-    "author",
-    "can",
-    "classifier",
-    "collection",
-    "current",
-    "dataset",
-    "did",
-    "do",
-    "does",
-    "experiment",
-    "feature",
-    "framework",
-    "had",
-    "has",
-    "have",
-    "is",
-    "language",
-    "method",
-    "model",
-    "paper",
-    "study",
-    "system",
-    "task",
-    "their",
-    "they",
-    "this",
-    "toolkit",
-    "was",
-    "were",
-    "work",
-}
 
 PropositionVerifier: TypeAlias = Callable[
     [Any, str, str, EvidenceBundle],
@@ -96,17 +67,68 @@ def semantic_evidence_set_claim_authority(
     """Validate a verifier-selected exact premise set as one typed proposition."""
 
     response = _call_verifier(verifier, request, prompt, answer, bundle)
+    debug_trace = _begin_debug_attempt(bundle)
     if response is None:
-        _record_trace(bundle, "failed", "semantic_verifier_failed")
+        _append_debug_stage(
+            debug_trace, "verifier", "failed", "semantic_verifier_failed"
+        )
+        _record_trace(
+            bundle,
+            "failed",
+            "semantic_verifier_failed",
+            debug_trace=debug_trace,
+        )
         return None
+    verifier_trace = bundle.metadata.get("semantic_proposition_verifier") or {}
+    _append_debug_stage(
+        debug_trace,
+        "verifier",
+        str(verifier_trace.get("status") or "returned"),
+        str(verifier_trace.get("reason") or ""),
+    )
     header, header_reason = _validated_header(response, prompt)
     if header is None:
-        _record_trace(bundle, "rejected", header_reason)
+        _append_debug_stage(debug_trace, "header", "rejected", header_reason)
+        _record_trace(bundle, "rejected", header_reason, debug_trace=debug_trace)
         return None
+    _append_debug_stage(debug_trace, "header", "accepted", "")
     verdict, attestation = header
     if verdict == "insufficient_evidence":
-        _record_trace(bundle, "insufficient", "semantic_evidence_set_insufficient")
+        _append_debug_stage(
+            debug_trace,
+            "premises",
+            "not_required",
+            "semantic_evidence_set_insufficient",
+        )
+        _record_trace(
+            bundle,
+            "insufficient",
+            "semantic_evidence_set_insufficient",
+            debug_trace=debug_trace,
+        )
         return None
+    return _authority_from_verified_response(
+        request,
+        prompt,
+        answer,
+        bundle,
+        response,
+        verdict,
+        attestation,
+        debug_trace,
+    )
+
+
+def _authority_from_verified_response(
+    request: Any,
+    prompt: str,
+    answer: str,
+    bundle: EvidenceBundle,
+    response: Mapping[str, Any],
+    verdict: str,
+    attestation: dict[str, Any],
+    debug_trace: dict[str, Any] | None,
+) -> BooleanClaimAuthority | None:
     premises, slot_support, scope_basis, premise_reason = _validated_premises(
         request,
         prompt,
@@ -115,8 +137,10 @@ def semantic_evidence_set_claim_authority(
         bundle.items,
     )
     if premises is None:
-        _record_trace(bundle, "rejected", premise_reason)
+        _append_debug_stage(debug_trace, "premises", "rejected", premise_reason)
+        _record_trace(bundle, "rejected", premise_reason, debug_trace=debug_trace)
         return None
+    _append_debug_stage(debug_trace, "premises", "accepted", "")
     attestation = {
         **attestation,
         "premise_count": len(premises),
@@ -140,12 +164,15 @@ def semantic_evidence_set_claim_authority(
         canonical_polarity=verdict,
     )
     if status != "bound":
-        _record_trace(bundle, "rejected", status)
+        _append_debug_stage(debug_trace, "derivation", "rejected", status)
+        _record_trace(bundle, "rejected", status, debug_trace=debug_trace)
         return None
+    _append_debug_stage(debug_trace, "derivation", "bound", "")
     _record_trace(
         bundle,
         "verified",
         "semantic_evidence_set_bound",
+        debug_trace=debug_trace,
         premise_count=len(premises),
         derivation_id=derivation.derivation_id,
     )
@@ -287,7 +314,7 @@ def _validated_premises(
         return None, {}, "", "semantic_premise_cross_source"
     if _premises_overlap(premises):
         return None, {}, "", "semantic_premise_overlap"
-    scope_basis = _semantic_scope_basis(question, premises)
+    scope_basis = semantic_scope_basis(question, premises)
     if not scope_basis:
         return None, {}, "", "semantic_proposition_scope_incomplete"
     if (
@@ -474,69 +501,6 @@ def _premises_overlap(premises: list[BooleanEvidenceAuthority]) -> bool:
     return False
 
 
-def _semantic_scope_basis(
-    question: str,
-    premises: list[BooleanEvidenceAuthority],
-) -> str:
-    actors = {value.actor for value in premises}
-    if _explicit_current_paper_question(question):
-        return "explicit_current_actor" if "current_paper" in actors else ""
-    if "current_paper" in actors:
-        return "explicit_current_actor"
-    if actors & {"cited_work", "other_authors"}:
-        return "explicit_prior_work_actor"
-    return (
-        "named_question_subject"
-        if _named_question_subject_anchored(question, premises)
-        else ""
-    )
-
-
-def _explicit_current_paper_question(question: str) -> bool:
-    return bool(
-        re.search(
-            r"\b(?:the authors?|this (?:paper|article|study|work)|"
-            r"current (?:paper|study|work)|they|their)\b",
-            str(question or ""),
-            flags=re.IGNORECASE,
-        )
-    )
-
-
-def _named_question_subject_anchored(
-    question: str,
-    premises: list[BooleanEvidenceAuthority],
-) -> bool:
-    relation = primary_boolean_relation(question)
-    relation_tokens = _relation_surface_tokens(relation)
-    if not relation_tokens:
-        return False
-    pattern = re.compile(
-        r"\b(?:"
-        + "|".join(
-            re.escape(value) for value in sorted(relation_tokens, key=len, reverse=True)
-        )
-        + r")\b",
-        flags=re.IGNORECASE,
-    )
-    match = pattern.search(str(question or ""))
-    if match is None:
-        return False
-    subject_tokens = (
-        normalized_object_tokens(
-            str(question or "")[: match.start()],
-            relation_tokens,
-        )
-        - _GENERIC_SUBJECT_TOKENS
-    )
-    subject_tokens = {value for value in subject_tokens if len(value) >= 3}
-    evidence_tokens = normalized_object_tokens(
-        " ".join(value.quote for value in premises),
-        set(),
-    )
-    return bool(subject_tokens & evidence_tokens)
-
-
 def _required_slot_ids(request: Any) -> set[str]:
     plan = getattr(request, "query_plan", None)
     return {
@@ -551,14 +515,19 @@ def _record_trace(
     bundle: EvidenceBundle,
     status: str,
     reason: str,
+    *,
+    debug_trace: dict[str, Any] | None = None,
     **fields: Any,
 ) -> None:
-    bundle.metadata["semantic_proposition_authority"] = {
+    trace = {
         "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
         "status": status,
         "reason": reason,
         **fields,
     }
+    if debug_trace is not None:
+        trace["debug_trace"] = debug_trace
+    bundle.metadata["semantic_proposition_authority"] = trace
 
 
 def _optional_int(value: Any) -> int | None:

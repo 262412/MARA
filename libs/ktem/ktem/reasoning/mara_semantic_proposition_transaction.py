@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -20,6 +21,23 @@ from .mara_semantic_entailment_audit import (
     semantic_entailment_audit_prompt,
     semantic_entailment_audit_response_format,
     semantic_entailment_rejection_reason,
+)
+from .mara_semantic_proposition_debug import (
+    SemanticPropositionStageAttempt as _StageAttempt,
+)
+from .mara_semantic_proposition_debug import provider_failure as _provider_failure
+from .mara_semantic_proposition_debug import (
+    response_completion_tokens as _response_completion_tokens,
+)
+from .mara_semantic_proposition_debug import (
+    response_finish_reason as _response_finish_reason,
+)
+from .mara_semantic_proposition_debug import response_text as _response_text
+from .mara_semantic_proposition_debug import (
+    semantic_auditor_relationship as _auditor_relationship,
+)
+from .mara_semantic_proposition_debug import (
+    semantic_transaction_debug as _transaction_debug,
 )
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT,
@@ -43,6 +61,7 @@ class SemanticPropositionTransactionResult:
     diagnostics: dict[str, Any]
     proposal_call_count: int
     audit_call_count: int
+    debug_trace: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +73,7 @@ class _ParsedStage:
     retry_count: int
     provider_failure_reason: str
     call_count: int
+    attempts: tuple[_StageAttempt, ...]
 
 
 def run_semantic_proposition_transaction(
@@ -67,7 +87,14 @@ def run_semantic_proposition_transaction(
     proposal_model: str,
     audit_model: str,
     seed: int,
+    capture_debug_trace: bool = False,
 ) -> SemanticPropositionTransactionResult:
+    auditor_relationship = _auditor_relationship(
+        proposal_llm,
+        audit_llm,
+        proposal_model=proposal_model,
+        audit_model=audit_model,
+    )
     proposal = _proposal_stage(
         proposal_llm,
         prompt,
@@ -75,6 +102,14 @@ def run_semantic_proposition_transaction(
         slots=slots,
         model=proposal_model,
         seed=seed,
+    )
+    proposal_debug = _transaction_debug(
+        capture_debug_trace,
+        proposal,
+        None,
+        proposal_model=proposal_model,
+        audit_model=audit_model,
+        auditor_relationship=auditor_relationship,
     )
     diagnostics = _proposal_diagnostics(proposal)
     if proposal.provider_failure_reason:
@@ -84,6 +119,7 @@ def run_semantic_proposition_transaction(
             proposal.provider_failure_reason,
             diagnostics,
             proposal_calls=proposal.call_count,
+            debug_trace=proposal_debug,
         )
     if proposal.value is None:
         reason = _invalid_response_reason(
@@ -97,6 +133,7 @@ def run_semantic_proposition_transaction(
             reason,
             diagnostics,
             proposal_calls=proposal.call_count,
+            debug_trace=proposal_debug,
         )
     if proposal.value["verdict"] == "insufficient_evidence":
         diagnostics.update({"audit_status": "not_required", "audit_reason": ""})
@@ -106,6 +143,7 @@ def run_semantic_proposition_transaction(
             "strict_schema_parsed",
             diagnostics,
             proposal_calls=proposal.call_count,
+            debug_trace=proposal_debug,
         )
     return _audit_transaction(
         audit_llm,
@@ -115,6 +153,8 @@ def run_semantic_proposition_transaction(
         proposal_model=proposal_model,
         audit_model=audit_model,
         seed=seed,
+        capture_debug_trace=capture_debug_trace,
+        auditor_relationship=auditor_relationship,
     )
 
 
@@ -143,7 +183,7 @@ def _proposal_stage(
     model: str,
     seed: int,
 ) -> _ParsedStage:
-    def call(correction: str = "") -> tuple[Any | None, str]:
+    def call(correction: str = "") -> tuple[Any | None, str, str]:
         return _call_proposal(
             llm,
             prompt,
@@ -174,6 +214,8 @@ def _audit_transaction(
     proposal_model: str,
     audit_model: str,
     seed: int,
+    capture_debug_trace: bool,
+    auditor_relationship: str,
 ) -> SemanticPropositionTransactionResult:
     value = proposal.value or {}
     premises = value.get("premises") or []
@@ -193,6 +235,14 @@ def _audit_transaction(
             "audit_prompt_bound_exceeded",
             diagnostics,
             proposal_calls=proposal.call_count,
+            debug_trace=_transaction_debug(
+                capture_debug_trace,
+                proposal,
+                None,
+                proposal_model=proposal_model,
+                audit_model=audit_model,
+                auditor_relationship=auditor_relationship,
+            ),
         )
     audit = _audit_stage(audit_llm, prompt, len(premises), seed=seed + 1)
     diagnostics.update(_audit_diagnostics(audit, model=audit_model))
@@ -204,6 +254,14 @@ def _audit_transaction(
         proposal_model=proposal_model,
         audit_model=audit_model,
         seed=seed,
+        debug_trace=_transaction_debug(
+            capture_debug_trace,
+            proposal,
+            audit,
+            proposal_model=proposal_model,
+            audit_model=audit_model,
+            auditor_relationship=auditor_relationship,
+        ),
     )
 
 
@@ -216,7 +274,7 @@ def _audit_stage(
 ) -> _ParsedStage:
     labels = [f"P{index}" for index in range(1, premise_count + 1)]
 
-    def call(correction: str = "") -> tuple[Any | None, str]:
+    def call(correction: str = "") -> tuple[Any | None, str, str]:
         return _call_audit(
             llm,
             prompt,
@@ -235,19 +293,40 @@ def _audit_stage(
 
 
 def _parsed_stage(
-    call: Callable[[str], tuple[Any | None, str]],
+    call: Callable[[str], tuple[Any | None, str, str]],
     parse: Callable[[Any], Any],
 ) -> _ParsedStage:
-    response, provider_failure = call("")
+    response, provider_failure, provider_detail = call("")
     if response is None:
-        return _ParsedStage(None, None, "", "", 0, provider_failure, 1)
+        attempt = _StageAttempt(None, None, "", "", provider_failure, provider_detail)
+        return _ParsedStage(None, None, "", "", 0, provider_failure, 1, (attempt,))
     parsed = parse(response)
+    attempts = [
+        _StageAttempt(
+            response,
+            deepcopy(parsed.value),
+            "",
+            str(parsed.failure_reason or ""),
+            "",
+            "",
+        )
+    ]
     initial_failure = str(parsed.failure_reason or "")
     retry_count = 0
     if parsed.value is None and SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES:
         retry_count = 1
-        response, provider_failure = call(parsed.failure_reason)
+        response, provider_failure, provider_detail = call(parsed.failure_reason)
         if response is None:
+            attempts.append(
+                _StageAttempt(
+                    None,
+                    None,
+                    initial_failure,
+                    "",
+                    provider_failure,
+                    provider_detail,
+                )
+            )
             return _ParsedStage(
                 None,
                 None,
@@ -256,8 +335,19 @@ def _parsed_stage(
                 retry_count,
                 provider_failure,
                 2,
+                tuple(attempts),
             )
         parsed = parse(response)
+        attempts.append(
+            _StageAttempt(
+                response,
+                deepcopy(parsed.value),
+                initial_failure,
+                str(parsed.failure_reason or ""),
+                "",
+                "",
+            )
+        )
     return _ParsedStage(
         response,
         parsed.value,
@@ -266,6 +356,7 @@ def _parsed_stage(
         retry_count,
         "",
         1 + retry_count,
+        tuple(attempts),
     )
 
 
@@ -278,6 +369,7 @@ def _audit_result(
     proposal_model: str,
     audit_model: str,
     seed: int,
+    debug_trace: dict[str, Any] | None,
 ) -> SemanticPropositionTransactionResult:
     if audit.provider_failure_reason:
         return _result(
@@ -287,6 +379,7 @@ def _audit_result(
             diagnostics,
             proposal_calls=proposal.call_count,
             audit_calls=audit.call_count,
+            debug_trace=debug_trace,
         )
     if audit.value is None:
         reason = _invalid_response_reason(
@@ -302,6 +395,7 @@ def _audit_result(
             diagnostics,
             proposal_calls=proposal.call_count,
             audit_calls=audit.call_count,
+            debug_trace=debug_trace,
         )
     rejection_reason = semantic_entailment_rejection_reason(audit.value)
     if rejection_reason:
@@ -315,6 +409,7 @@ def _audit_result(
             diagnostics,
             proposal_calls=proposal.call_count,
             audit_calls=audit.call_count,
+            debug_trace=debug_trace,
         )
     value = proposal.value or {}
     value["entailment_audit"] = semantic_entailment_audit_attestation(
@@ -338,6 +433,7 @@ def _audit_result(
         diagnostics,
         proposal_calls=proposal.call_count,
         audit_calls=audit.call_count,
+        debug_trace=debug_trace,
     )
 
 
@@ -349,7 +445,7 @@ def _call_proposal(
     slots: list[dict[str, str]],
     seed: int,
     correction_reason: str,
-) -> tuple[Any | None, str]:
+) -> tuple[Any | None, str, str]:
     try:
         return (
             llm(
@@ -367,10 +463,11 @@ def _call_proposal(
                 seed=seed,
             ),
             "",
+            "",
         )
     except Exception as exc:
         LOGGER.exception("Semantic proposition verifier model call failed")
-        return None, _provider_failure_reason(exc)
+        return None, *_provider_failure(exc)
 
 
 def _call_audit(
@@ -380,7 +477,7 @@ def _call_audit(
     premise_labels: list[str],
     seed: int,
     correction_reason: str,
-) -> tuple[Any | None, str]:
+) -> tuple[Any | None, str, str]:
     try:
         return (
             llm(
@@ -397,10 +494,11 @@ def _call_audit(
                 seed=seed,
             ),
             "",
+            "",
         )
     except Exception as exc:
         LOGGER.exception("Semantic entailment audit model call failed")
-        return None, _provider_failure_reason(exc)
+        return None, *_provider_failure(exc)
 
 
 def _proposal_diagnostics(stage: _ParsedStage) -> dict[str, Any]:
@@ -443,6 +541,7 @@ def _result(
     *,
     proposal_calls: int,
     audit_calls: int = 0,
+    debug_trace: dict[str, Any] | None = None,
 ) -> SemanticPropositionTransactionResult:
     return SemanticPropositionTransactionResult(
         value=value,
@@ -451,6 +550,7 @@ def _result(
         diagnostics=diagnostics,
         proposal_call_count=proposal_calls,
         audit_call_count=audit_calls,
+        debug_trace=debug_trace,
     )
 
 
@@ -462,15 +562,6 @@ def _corrected_prompt(prompt: str, failure_reason: str) -> str:
         f"({failure_reason}). Return one complete object that follows every "
         "schema and cross-field requirement."
     )
-
-
-def _provider_failure_reason(exc: Exception) -> str:
-    message = str(exc).casefold()
-    if "maximum context length" in message or "context length exceeded" in message:
-        return "provider_context_length_exceeded"
-    if "grammar error" in message or "unimplemented keys" in message:
-        return "provider_response_schema_unsupported"
-    return "provider_call_failed"
 
 
 def _invalid_response_reason(
@@ -488,29 +579,3 @@ def _invalid_response_reason(
             else "provider_output_truncated"
         )
     return invalid_reason
-
-
-def _response_text(response: Any) -> str:
-    return str(
-        getattr(response, "text", "") or getattr(response, "content", "") or response
-    )
-
-
-def _response_completion_tokens(response: Any | None) -> int:
-    value = getattr(response, "completion_tokens", -1) if response is not None else -1
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return -1
-
-
-def _response_finish_reason(response: Any | None) -> str:
-    if response is None:
-        return ""
-    for key in ("additional_kwargs", "response_metadata"):
-        metadata = getattr(response, key, None)
-        if isinstance(metadata, dict):
-            reason = str(metadata.get("finish_reason") or "").strip()
-            if reason:
-                return reason
-    return str(getattr(response, "finish_reason", "") or "").strip()

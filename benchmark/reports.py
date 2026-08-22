@@ -19,6 +19,10 @@ from .dataset_decision_report import (
     phase2_summary_markdown,
 )
 from .multimodal_route_report import phase3_report_sections, phase3_summary_markdown
+from .qasper_semantic_debug_artifact import (
+    qasper_semantic_debug_rows,
+    qasper_semantic_debug_summary,
+)
 from .report_benchmark_taxonomy import (
     failure_taxonomy_by_route_markdown,
     failure_taxonomy_markdown,
@@ -235,14 +239,23 @@ def write_reports(
     retrieval_traces_path = run_dir / "retrieval_traces.jsonl"
     markdown_path = run_dir / "report.md"
     route_metrics_path = run_dir / "route_metrics.csv"
+    semantic_debug_path = run_dir / "semantic_debug_traces.jsonl"
 
+    source_predictions = [
+        dict(row)
+        for row in report.get("predictions", []) or []
+        if isinstance(row, dict)
+    ]
+    semantic_debug_rows = qasper_semantic_debug_rows(source_predictions)
     summary = {
         **dict(report.get("summary", {}) or {}),
         "artifact_detail": artifact_detail,
         "artifact_limits": dict(ARTIFACT_LIMITS),
     }
+    if semantic_debug_rows:
+        summary.update(qasper_semantic_debug_summary(semantic_debug_rows))
     config = report.get("config", {})
-    predictions = _artifact_rows(report.get("predictions", []), artifact_detail)
+    predictions = _artifact_rows(source_predictions, artifact_detail)
     documents = _artifact_rows(report.get("documents", []), artifact_detail)
     retrieval_traces = report.get("retrieval_traces")
     if retrieval_traces is None:
@@ -251,6 +264,8 @@ def write_reports(
         retrieval_traces = _artifact_rows(retrieval_traces, artifact_detail)
 
     _write_jsonl(predictions_path, predictions)
+    if semantic_debug_rows:
+        _write_jsonl(semantic_debug_path, semantic_debug_rows)
     atomic_write_json(documents_path, documents)
     _write_jsonl(retrieval_traces_path, retrieval_traces)
     route_metric_table = _route_metric_table(summary)
@@ -273,6 +288,8 @@ def write_reports(
     ]
     if route_metric_table:
         markdown.append("- Route Metrics: `route_metrics.csv`")
+    if semantic_debug_rows:
+        markdown.append("- Semantic Debug Traces: `semantic_debug_traces.jsonl`")
     markdown += _report_markdown_sections(summary, route_metric_table)
     atomic_write_text(markdown_path, "\n".join(markdown) + "\n")
     atomic_write_json(summary_path, summary)

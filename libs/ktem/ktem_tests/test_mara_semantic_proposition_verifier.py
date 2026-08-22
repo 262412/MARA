@@ -324,7 +324,10 @@ def test_runtime_verifier_classifies_and_caches_provider_failures(
 ) -> None:
     llm = _FailingLLM(message)
     verifier = build_semantic_proposition_verifier(
-        SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
+        SimpleNamespace(
+            answering_pipeline=SimpleNamespace(llm=llm),
+            semantic_proposition_debug_trace=True,
+        )
     )
     assert verifier is not None
     bundle = EvidenceBundle(route="doc_text", items=_items())
@@ -336,6 +339,10 @@ def test_runtime_verifier_classifies_and_caches_provider_failures(
     trace = bundle.metadata["semantic_proposition_verifier"]
     assert trace["status"] == "cached_failure"
     assert trace["reason"] == reason
+    transaction = trace["debug_trace"]["events"][0]["transaction"]
+    attempt = transaction["proposal"]["attempts"][0]
+    assert attempt["provider_failure_reason"] == reason
+    assert attempt["provider_failure_detail"] == message
 
 
 def test_runtime_verifier_fails_closed_on_invalid_json() -> None:

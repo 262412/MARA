@@ -13,7 +13,9 @@ SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/multimodal_route_rerun.sbatch"
 TEXT_SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/text_route_rerun.sbatch"
 RUNTIME_HELPER = PROJECT_ROOT / "scripts/slurm/benchmark_runtime_isolation.sh"
 ARTIFACT_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_benchmark_predictions.py"
-EXECUTION_PLAN_BUILDER = PROJECT_ROOT / "scripts/slurm/build_benchmark_execution_plan.py"
+EXECUTION_PLAN_BUILDER = (
+    PROJECT_ROOT / "scripts/slurm/build_benchmark_execution_plan.py"
+)
 SUBMIT_FULLSYSTEM = PROJECT_ROOT / "scripts/slurm/submit_fullsystem_jobs.sh"
 CLEANUP_BARRIER = PROJECT_ROOT / "scripts/slurm/benchmark_cleanup_barrier.sbatch"
 SYNTHESIS_SCRIPT = PROJECT_ROOT / "scripts/slurm/synthesize_benchmark_run.py"
@@ -201,6 +203,14 @@ def test_text_route_slurm_script_can_emit_and_validate_full_contract_artifacts()
     assert 'ARTIFACT_DETAIL="${MARA_TEXT_ARTIFACT_DETAIL:-compact}"' in text
     assert '--artifact-detail "$ARTIFACT_DETAIL"' in text
     assert 'REQUIRE_CONTRACT_SMOKE="${MARA_REQUIRE_CONTRACT_SMOKE:-0}"' in text
+    assert (
+        'REQUIRE_SEMANTIC_DEBUG_TRACE="${MARA_REQUIRE_SEMANTIC_DEBUG_TRACE:-0}"' in text
+    )
+    assert 'SEMANTIC_DEBUG_TRACE="${MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE:-0}"' in text
+    assert (
+        'export MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE="$SEMANTIC_DEBUG_TRACE"' in text
+    )
+    assert 'test -f "$RUN_DIR/semantic_debug_traces.jsonl"' in text
     assert str(CONTRACT_SMOKE_VALIDATOR.name) in text
     assert '--suite-kind "$CONTRACT_SMOKE_SUITE_KIND"' in text
     assert text.index(CONTRACT_SMOKE_VALIDATOR.name) < text.index(
@@ -304,7 +314,7 @@ def test_route_wrappers_require_published_artifacts_and_scoped_contracts():
         assert "artifact_complete.json" in text
         assert "--require-complete-marker" in text
         assert "--expected-keys-file" in text
-        assert "--manifest \"$MANIFEST\"" in text
+        assert '--manifest "$MANIFEST"' in text
 
 
 def test_multimodal_slurm_script_forwards_offline_semantic_evaluator_contract():
