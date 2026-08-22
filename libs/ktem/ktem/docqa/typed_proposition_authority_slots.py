@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .boolean_authority_schema import SEMANTIC_EVIDENCE_SET_RULE
 from .verification_schema import VerifyDecision
 
 
@@ -26,7 +27,11 @@ def boolean_slot_bindings(
     required_slots: list[Any],
     atoms: list[dict[str, Any]],
     derivations: list[dict[str, Any]] | None = None,
-) -> tuple[dict[str, tuple[str, ...]], list[dict[str, Any]]] | tuple[None, None]:
+) -> tuple[
+    dict[str, tuple[str, ...]] | None,
+    dict[str, tuple[str, ...]] | None,
+    list[dict[str, Any]] | None,
+]:
     """Bind exact atoms to pre-bound slots without inventing slot coverage."""
 
     atom_by_id: dict[str, list[dict[str, Any]]] = {}
@@ -35,13 +40,45 @@ def boolean_slot_bindings(
         if evidence_id:
             atom_by_id.setdefault(evidence_id, []).append(atom)
     if not atom_by_id:
-        return None, None
+        return None, None, None
 
     plan = getattr(request, "query_plan", None)
     constraints = getattr(plan, "constraints", {}) if plan is not None else {}
     requires_distinct = bool(
         isinstance(constraints, dict) and constraints.get("requires_distinct_evidence")
     )
+    semantic = _semantic_evidence_set_bindings(
+        required_slots,
+        derivations or [],
+        atoms,
+        requires_distinct=requires_distinct,
+    )
+    if semantic is not None:
+        return semantic
+    if any(
+        str(value.get("rule_id") or "") == SEMANTIC_EVIDENCE_SET_RULE
+        for value in derivations or []
+    ):
+        return None, None, None
+    return _single_or_composite_slot_bindings(
+        required_slots,
+        atom_by_id,
+        derivations or [],
+        requires_distinct=requires_distinct,
+    )
+
+
+def _single_or_composite_slot_bindings(
+    required_slots: list[Any],
+    atom_by_id: dict[str, list[dict[str, Any]]],
+    derivations: list[dict[str, Any]],
+    *,
+    requires_distinct: bool,
+) -> tuple[
+    dict[str, tuple[str, ...]] | None,
+    dict[str, tuple[str, ...]] | None,
+    list[dict[str, Any]] | None,
+]:
     proposition_slots = [
         slot for slot in required_slots if _is_boolean_proposition_slot(slot)
     ]
@@ -50,9 +87,10 @@ def boolean_slot_bindings(
     ]
     bindings: dict[str, tuple[str, ...]] = {}
     selected_ids: list[str] = []
-    proof_ids = _selected_proof_ids(derivations or [], atoms)
+    atoms = [atom for values in atom_by_id.values() for atom in values]
+    proof_ids = _selected_proof_ids(derivations, atoms)
     if derivations and not proof_ids:
-        return None, None
+        return None, None, None
 
     if not side_slots and len(proposition_slots) == 1:
         slot = proposition_slots[0]
@@ -62,7 +100,7 @@ def boolean_slot_bindings(
 
     side_binding = _bind_side_slots(side_slots, atom_by_id, requires_distinct)
     if side_binding is None:
-        return None, None
+        return None, None, None
     side_bindings, side_ids = side_binding
     bindings.update(side_bindings)
     selected_ids.extend(side_ids)
@@ -77,14 +115,14 @@ def boolean_slot_bindings(
             continue
         candidate_ids = _slot_atom_ids(slot, atom_by_id)
         if not candidate_ids:
-            return None, None
+            return None, None, None
         slot_selection: tuple[str, ...]
         if side_slots:
             selected_side_ids = tuple(dict.fromkeys(selected_ids))
             if any(
                 evidence_id not in candidate_ids for evidence_id in selected_side_ids
             ):
-                return None, None
+                return None, None, None
             slot_selection = selected_side_ids
         else:
             slot_selection = (candidate_ids[0],)
@@ -92,14 +130,93 @@ def boolean_slot_bindings(
         selected_ids.extend(slot_selection)
 
     if {str(slot.slot_id) for slot in required_slots} != set(bindings):
-        return None, None
+        return None, None, None
     selected_id_set = set(selected_ids)
     selected_atoms = [
         atom for atom in atoms if str(atom.get("evidence_id") or "") in selected_id_set
     ]
     if not selected_atoms:
-        return None, None
-    return bindings, selected_atoms
+        return None, None, None
+    return bindings, {}, selected_atoms
+
+
+def _semantic_evidence_set_bindings(
+    slots: list[Any],
+    derivations: list[dict[str, Any]],
+    atoms: list[dict[str, Any]],
+    *,
+    requires_distinct: bool,
+) -> (
+    tuple[
+        dict[str, tuple[str, ...]],
+        dict[str, tuple[str, ...]],
+        list[dict[str, Any]],
+    ]
+    | None
+):
+    selected = [
+        value
+        for value in derivations
+        if str(value.get("rule_id") or "") == SEMANTIC_EVIDENCE_SET_RULE
+    ]
+    if len(selected) != 1:
+        return None
+    atom_by_ref = {
+        str(atom.get("evidence_ref") or ""): atom
+        for atom in atoms
+        if str(atom.get("evidence_ref") or "")
+    }
+    slot_ids = {str(slot.slot_id) for slot in slots}
+    bound: dict[str, list[str]] = {slot_id: [] for slot_id in slot_ids}
+    bound_refs: dict[str, list[str]] = {slot_id: [] for slot_id in slot_ids}
+    for contribution in selected[0].get("premise_contributions") or []:
+        if not isinstance(contribution, dict):
+            return None
+        reference = str(contribution.get("evidence_ref") or "")
+        atom = atom_by_ref.get(reference)
+        supports = {
+            str(value).strip()
+            for value in contribution.get("supports_slot_ids") or []
+            if str(value).strip()
+        }
+        if atom is None or not supports or not supports <= slot_ids:
+            return None
+        evidence_id = str(atom.get("evidence_id") or "")
+        for slot_id in supports:
+            if evidence_id and evidence_id not in bound[slot_id]:
+                bound[slot_id].append(evidence_id)
+            if reference not in bound_refs[slot_id]:
+                bound_refs[slot_id].append(reference)
+    if any(not values for values in bound.values()):
+        return None
+    slot_by_id = {str(slot.slot_id): slot for slot in slots}
+    if requires_distinct and not _distinct_semantic_side_bindings(
+        bound_refs,
+        slot_by_id,
+    ):
+        return None
+    bindings = {slot_id: tuple(values) for slot_id, values in bound.items()}
+    ref_bindings = {slot_id: tuple(values) for slot_id, values in bound_refs.items()}
+    selected_ids = {value for values in bindings.values() for value in values}
+    selected_atoms = [
+        atom for atom in atoms if str(atom.get("evidence_id") or "") in selected_ids
+    ]
+    return (bindings, ref_bindings, selected_atoms) if selected_atoms else None
+
+
+def _distinct_semantic_side_bindings(
+    bindings: dict[str, list[str]],
+    slots: dict[str, Any],
+) -> bool:
+    side_values = [
+        values
+        for slot_id, values in bindings.items()
+        if not _is_boolean_proposition_slot(slots[slot_id])
+    ]
+    if any(len(values) != 1 for values in side_values):
+        return False
+    selected = [values[0] for values in side_values]
+    return len(selected) == len(set(selected))
 
 
 def _selected_proof_ids(

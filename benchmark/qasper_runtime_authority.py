@@ -52,8 +52,11 @@ def runtime_boolean_authority(
         required_ids,
         plan=plan,
     )
-    if typed_authority.get("authority_kind") == "composite":
-        return _runtime_composite_authority(
+    if typed_authority.get("authority_kind") in {
+        "composite",
+        "semantic_evidence_set",
+    }:
+        return _runtime_derived_authority(
             decision,
             plan=plan,
             slots=slots,
@@ -72,7 +75,7 @@ def runtime_boolean_authority(
     )
 
 
-def _runtime_composite_authority(
+def _runtime_derived_authority(
     decision: dict[str, Any],
     *,
     plan: dict[str, Any],
@@ -94,9 +97,14 @@ def _runtime_composite_authority(
         and plan.get("state_authority") == "verified_claim_support.v1"
         and slots
     )
+    authority_kind = str(typed_authority.get("authority_kind") or "")
     return {
         "complete": complete,
-        "authority_kind": "composite_polarity",
+        "authority_kind": (
+            "semantic_evidence_set_polarity"
+            if authority_kind == "semantic_evidence_set"
+            else "composite_polarity"
+        ),
         "status": "complete" if complete else "missing_or_inconsistent",
         "decision": decision,
         "plan": plan,

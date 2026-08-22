@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import Any
 
+from . import execution_results as _execution_results
 from .controller import RetrieveDecision, VerifyDecision
 from .engine_terminal_projection import (
     engine_terminal_projection as _engine_terminal_projection,
@@ -24,6 +26,7 @@ from .execution_models import (
     RetrieveFn,
     RewriteFn,
     RouteExecutionResult,
+    VerifyFn,
 )
 from .execution_planning import (
     build_execution_workflow_plan as _build_execution_workflow_plan,
@@ -66,6 +69,8 @@ from .route_capabilities import (
 )
 from .route_capabilities import route_switch_candidates as _route_switch_candidates
 from .route_selection import ControllerDecision
+from .semantic_evidence_set_authority import PropositionVerifier
+from .verification import verify_decision as _verification_verify_decision
 
 _controller_decision_from_payload = _controller_decision
 LOGGER = logging.getLogger(__name__)
@@ -84,6 +89,7 @@ __all__ = [
     "RewriteFn",
     "RouteExecutionResult",
     "VerifyDecision",
+    "VerifyFn",
     "_CANONICAL_ROUTES",
     "_build_execution_workflow_plan",
     "_complete_verifier_recovery",
@@ -139,8 +145,11 @@ def execute_controller_turn(
     retrieve: RetrieveFn,
     generate: GenerateFn,
     rewrite: RewriteFn | None = None,
+    verify: VerifyFn | None = None,
+    proposition_verifier: PropositionVerifier | None = None,
     agent_trace: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
+    verify = _configured_verify(verify, proposition_verifier)
     timings = PipelineStageTimings()
     try:
         decision, workflow_plan = timings.measure(
@@ -174,6 +183,7 @@ def execute_controller_turn(
             retrieve,
             generate,
             rewrite,
+            verify,
             timings,
         )
     except RouteDeadlineExhausted as error:
@@ -203,6 +213,7 @@ def _execute_retrieval_turn(
     retrieve: RetrieveFn,
     generate: GenerateFn,
     rewrite: RewriteFn | None,
+    verify: VerifyFn,
     timings: PipelineStageTimings,
 ) -> RouteExecutionResult:
     bundle, retrieve_decision = timings.measure(
@@ -228,14 +239,16 @@ def _execute_retrieval_turn(
         timings,
     )
     if retrieve_decision.status != "good":
-        return _guarded_result(
+        return _poor_retrieval_result(
             request,
             decision,
             retrieve_decision,
             bundle,
+            rewrite,
             workflow_plan,
             route_switch_trace,
             timings,
+            verify,
         )
     answer = timings.measure(
         "generation_seconds",
@@ -258,6 +271,7 @@ def _execute_retrieval_turn(
         workflow_plan,
         route_switch_trace,
         timings,
+        verify=verify,
     )
     return _recover_after_failed_verification(
         request,
@@ -267,4 +281,87 @@ def _execute_retrieval_turn(
         workflow_plan,
         route_switch_trace,
         timings,
+        verify,
+    )
+
+
+def _poor_retrieval_result(
+    request: Any,
+    decision: ControllerDecision,
+    retrieve_decision: RetrieveDecision,
+    bundle: EvidenceBundle,
+    rewrite: RewriteFn | None,
+    workflow_plan: dict[str, Any],
+    route_switch_trace: list[dict[str, Any]],
+    timings: PipelineStageTimings,
+    verify: VerifyFn,
+) -> RouteExecutionResult:
+    if _typed_boolean_candidate_evidence_available(request, bundle, verify):
+        return _verified_result(
+            request,
+            decision,
+            retrieve_decision,
+            bundle,
+            "",
+            rewrite,
+            workflow_plan,
+            route_switch_trace,
+            timings,
+            verify=verify,
+        )
+    return _guarded_result(
+        request,
+        decision,
+        retrieve_decision,
+        bundle,
+        workflow_plan,
+        route_switch_trace,
+        timings,
+        verify=verify,
+    )
+
+
+def _typed_boolean_candidate_evidence_available(
+    request: Any,
+    bundle: EvidenceBundle,
+    verify: VerifyFn,
+) -> bool:
+    plan = getattr(request, "query_plan", None)
+    answer_type = (
+        plan.get("answer_type")
+        if isinstance(plan, dict)
+        else getattr(plan, "answer_type", None)
+    )
+    return bool(
+        bundle.items
+        and str(answer_type or getattr(request, "task_type", "")).lower() == "boolean"
+        and getattr(verify, "_semantic_proposition_preflight", False)
+    )
+
+
+def _configured_verify(
+    verify: VerifyFn | None,
+    proposition_verifier: PropositionVerifier | None,
+) -> VerifyFn:
+    if proposition_verifier is None:
+        return verify or _default_verify
+    configured = partial(
+        _verification_verify_decision,
+        proposition_verifier=proposition_verifier,
+    )
+    setattr(configured, "_semantic_proposition_preflight", True)
+    return configured
+
+
+def _default_verify(
+    request: Any,
+    retrieve_decision: RetrieveDecision,
+    bundle: EvidenceBundle,
+    answer: str,
+) -> VerifyDecision:
+    return _execution_results._verify_decision(
+        request,
+        retrieve_decision,
+        bundle,
+        answer,
     )

@@ -153,6 +153,8 @@ def _trace_payload(
         "runtime_boolean_authority_kind": values["authority_kind"],
         "runtime_authority_failure_kind": failure_kind,
         "post_engine_answerability_llm_call_count": 0,
+        **semantic_proposition_authority_trace_fields(prediction),
+        **semantic_proposition_verifier_trace_fields(prediction),
         **authority_fields,
         "engine_verify_decision": deepcopy(
             prediction.get("engine_verify_decision") or {}
@@ -179,6 +181,9 @@ def typed_derivation_trace_fields(
         ),
         "runtime_typed_authority_premise_evidence_ids": list(
             typed_authority.get("derivation_premise_evidence_ids") or []
+        ),
+        "runtime_typed_authority_slot_ref_bindings": deepcopy(
+            typed_authority.get("slot_ref_bindings") or {}
         ),
     }
 
@@ -269,17 +274,88 @@ def typed_authority_trace_fields(
         if isinstance(atom, dict)
     ]
     first = atoms[0] if atoms else {}
-    composite = typed_authority.get("authority_kind") == "composite"
+    derived = typed_authority.get("authority_kind") in {
+        "composite",
+        "semantic_evidence_set",
+    }
     return _common_authority_fields(
         list(typed_authority.get("required_slot_ids") or []),
         list(typed_authority.get("required_evidence_ids") or []),
         complete=authority_established,
-        quote="" if composite else str(first.get("quote") or ""),
-        evidence_ref="" if composite else str(first.get("evidence_ref") or ""),
-        evidence_id="" if composite else str(first.get("evidence_id") or ""),
+        quote="" if derived else str(first.get("quote") or ""),
+        evidence_ref="" if derived else str(first.get("evidence_ref") or ""),
+        evidence_id="" if derived else str(first.get("evidence_id") or ""),
         quote_status=str(typed_authority.get("atom_status") or ""),
         conflict=boolean_authority.get("authoritative_conflict") or {},
     )
+
+
+def semantic_proposition_verifier_trace_fields(
+    prediction: dict[str, Any],
+) -> dict[str, Any]:
+    bundle = prediction.get("engine_terminal_evidence_bundle")
+    bundle = bundle if isinstance(bundle, dict) else {}
+    metadata = bundle.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    trace = metadata.get("semantic_proposition_verifier")
+    trace = trace if isinstance(trace, dict) else {}
+    return {
+        "runtime_semantic_proposition_verifier_contract_id": str(
+            trace.get("contract_id") or ""
+        ),
+        "runtime_semantic_proposition_verifier_status": str(trace.get("status") or ""),
+        "runtime_semantic_proposition_verifier_reason": str(trace.get("reason") or ""),
+        "runtime_semantic_proposition_verifier_model_call_count": _nonnegative_int(
+            trace.get("actual_model_call_count")
+        ),
+        "runtime_semantic_proposition_verifier_available_evidence_count": (
+            _nonnegative_int(trace.get("available_evidence_count"))
+        ),
+        "runtime_semantic_proposition_verifier_packed_evidence_count": (
+            _nonnegative_int(trace.get("packed_evidence_count"))
+        ),
+        "runtime_semantic_proposition_verifier_required_slot_count": _nonnegative_int(
+            trace.get("required_slot_count")
+        ),
+        "runtime_semantic_proposition_verifier_prompt_chars": _nonnegative_int(
+            trace.get("prompt_chars")
+        ),
+        "runtime_semantic_proposition_verifier_cache_hit": bool(trace.get("cache_hit")),
+        "runtime_semantic_proposition_verifier_verdict": str(
+            trace.get("verdict") or ""
+        ),
+    }
+
+
+def semantic_proposition_authority_trace_fields(
+    prediction: dict[str, Any],
+) -> dict[str, Any]:
+    bundle = prediction.get("engine_terminal_evidence_bundle")
+    bundle = bundle if isinstance(bundle, dict) else {}
+    metadata = bundle.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    trace = metadata.get("semantic_proposition_authority")
+    trace = trace if isinstance(trace, dict) else {}
+    return {
+        "runtime_semantic_proposition_authority_contract_id": str(
+            trace.get("contract_id") or ""
+        ),
+        "runtime_semantic_proposition_authority_status": str(trace.get("status") or ""),
+        "runtime_semantic_proposition_authority_reason": str(trace.get("reason") or ""),
+        "runtime_semantic_proposition_authority_premise_count": _nonnegative_int(
+            trace.get("premise_count")
+        ),
+        "runtime_semantic_proposition_authority_derivation_id": str(
+            trace.get("derivation_id") or ""
+        ),
+    }
+
+
+def _nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _common_authority_fields(

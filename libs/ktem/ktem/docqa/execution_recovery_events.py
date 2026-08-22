@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from .boolean_authoritative_conflict import authoritative_conflict_complete
 from .controller import RetrieveDecision, VerifyDecision
 from .evidence import EvidenceBundle
+from .execution_models import RouteExecutionResult
 from .query_planning import ensure_request_query_plan
 from .recovery_progress import (
     semantic_progress_evidence_ids,
@@ -281,6 +283,23 @@ def record_route_switch_reverification(result: Any) -> None:
         event.setdefault("reverification_status", result.verify_decision.status)
         event.setdefault("reverification_reason", result.verify_decision.reason)
         event.setdefault("reverification_evidence_ids", evidence_ids)
+
+
+def mark_resolved_initial_conflict(result: RouteExecutionResult) -> None:
+    decision = result.verify_decision
+    if decision.status != "verified_conflict" or not authoritative_conflict_complete(
+        decision.authoritative_conflict
+    ):
+        return
+    for event in reversed(result.controller_trace):
+        if event.get("stage") == "verifier":
+            event["stop_reason"] = "authority_conflict_resolved"
+            break
+
+
+def raw_candidate(result: RouteExecutionResult) -> str:
+    raw_answer = result.engine_terminal_state.get("raw_generated_answer")
+    return str(result.answer if raw_answer is None else raw_answer)
 
 
 def build_verifier_switch_event(

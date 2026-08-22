@@ -18,14 +18,14 @@ def minimum_verified_claim_support_items(
     span: str,
 ) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
-    composite_ids = _runtime_composite_support_ids(prediction)
+    derived_ids = _runtime_derived_support_ids(prediction)
     for group in verified_claim_support_groups(prediction, candidates):
         scoped = _scope_valid_group(prediction, group, span=span)
         if not scoped:
             continue
-        if composite_ids:
-            proof = _ordered_support_items(scoped, composite_ids)
-            if len(proof) != len(composite_ids):
+        if derived_ids:
+            proof = _ordered_support_items(scoped, derived_ids)
+            if len(proof) != len(derived_ids):
                 continue
             selected.extend(proof)
         else:
@@ -33,9 +33,12 @@ def minimum_verified_claim_support_items(
     return _deduplicated_items(selected)
 
 
-def _runtime_composite_support_ids(prediction: dict[str, Any]) -> list[str]:
+def _runtime_derived_support_ids(prediction: dict[str, Any]) -> list[str]:
     authority = runtime_boolean_authority(prediction)
-    if not authority["complete"] or authority["authority_kind"] != "composite_polarity":
+    if not authority["complete"] or authority["authority_kind"] not in {
+        "composite_polarity",
+        "semantic_evidence_set_polarity",
+    }:
         return []
     return list(
         dict.fromkeys(str(value) for value in authority["required_evidence_ids"])
@@ -88,7 +91,10 @@ def _runtime_authoritative_qasper_support(
     authority = runtime_boolean_authority(prediction)
     if not authority["complete"]:
         return []
-    if authority["authority_kind"] == "composite_polarity":
+    if authority["authority_kind"] in {
+        "composite_polarity",
+        "semantic_evidence_set_polarity",
+    }:
         return _ordered_support_items(items, authority["required_evidence_ids"])
     evidence_id = str(authority["evidence_id"])
     matches = [item for item in items if identity_of(item).key == evidence_id]

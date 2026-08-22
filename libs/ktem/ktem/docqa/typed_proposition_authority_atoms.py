@@ -38,7 +38,8 @@ def exact_boolean_atoms(
             value
             for value in decision.claim_results
             if str(value.get("status") or "") == "supported"
-            and str(value.get("authority_status") or "") in {"exact", "composite_exact"}
+            and str(value.get("authority_status") or "")
+            in {"exact", "composite_exact", "semantic_evidence_set"}
         ),
         None,
     )
@@ -87,7 +88,10 @@ def exact_boolean_atoms(
                 "reason": str(normalized.get("reason") or "exact_boolean_proposition"),
             }
         )
-    if str(result.get("authority_status") or "") == "composite_exact":
+    if str(result.get("authority_status") or "") in {
+        "composite_exact",
+        "semantic_evidence_set",
+    }:
         derivations = bound_boolean_derivations(
             decision,
             atoms,
@@ -111,7 +115,8 @@ def bound_boolean_derivations(
             value
             for value in decision.claim_results
             if str(value.get("status") or "") == "supported"
-            and str(value.get("authority_status") or "") == "composite_exact"
+            and str(value.get("authority_status") or "")
+            in {"composite_exact", "semantic_evidence_set"}
         ),
         None,
     )

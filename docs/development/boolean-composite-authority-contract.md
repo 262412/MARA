@@ -25,6 +25,10 @@ The design follows four established ideas:
 - [ProofWriter](https://aclanthology.org/2021.findings-acl.317/) distinguishes
   an open-world unknown from a proved false proposition and emits inspectable
   proofs.
+- [QASPER](https://aclanthology.org/2021.naacl-main.365/) requires evidence
+  that may be spread across multiple paper sections, tables, and figures. Its
+  official evaluator keeps each annotation's answer-and-evidence set as a
+  separate reference rather than flattening all annotators into one proof.
 
 MARA does not import code or model weights from these projects. Their evidence
 set, explicit-premise, and open-world semantics inform this local contract.
@@ -37,7 +41,9 @@ authority projection. Composite support adds:
 - `authority_derivations`: verified proof alternatives;
 - `selected_derivation_id`: the one proof used for the terminal decision;
 - `authority_atoms`: every exact evidence-span leaf in the selected proof;
-- `slot_bindings`: every evidence identity required by those leaves.
+- `slot_bindings`: every canonical evidence identity required by those leaves;
+- `slot_ref_bindings`: optional exact span references for rules where two
+  premises can occupy the same canonical evidence item.
 
 Each `boolean_authority_derivation.v1` record contains:
 
@@ -82,6 +88,47 @@ declaration to an empirical relation involving that exact entity. Both spans
 remain proof leaves and both must be cited. The former hidden projection that
 treated only the empirical sentence as complete authority is not used.
 
+### Grounded semantic evidence-set entailment
+
+`grounded_semantic_evidence_set_entailment.v1` handles propositions whose
+premise relationship is semantic rather than a registered lexical join. A
+conservative proposition verifier may select two to four exact, non-overlapping
+quotes from one source and return:
+
+- one `yes`, `no`, or `insufficient_evidence` verdict under
+  `semantic_proposition_verdict.v1`;
+- `support_mode=evidence_set`;
+- an all-premises-required attestation;
+- a distinct proposition fragment for every quote;
+- the exact QueryPlan verification slots supported by every premise; and
+- a model, seed, and verifier contract attestation.
+
+The model response is a proposal, not authority. Runtime code resolves every
+evidence label back to one canonical item, grounds every quote exactly, checks
+span offsets, source identity, overlap, scope, slot coverage, and derivation
+identity, then creates typed atoms. The derivation identity includes the full
+premise contribution mapping, so changing a proposition fragment or moving a
+premise to another slot invalidates the proof.
+
+Scope is validated at two levels. A local definition or component description
+may be a valid premise even when it does not independently establish the whole
+paper-level claim. The complete premise set must still establish either an
+explicit current-author action, an explicit prior-work actor for a prior-work
+question, or a named question subject grounded in the selected quotes. This
+prevents a useful local definition from being discarded while still blocking
+two generic descriptions from being promoted into an invented author action.
+
+`No` remains stricter than `Yes`: the selected evidence set must contain a
+deterministically resolvable negative or contradictory target relation.
+Missing retrieval, an empty evidence annotation, or a model's unsupported
+negative judgment cannot establish negative authority.
+
+The verifier runs only after deterministic Boolean verification remains
+unknown. It receives the question, required QueryPlan slots, and bounded
+canonical evidence excerpts, but not the generated answer. Calls use a stable
+seed and strict JSON schema, are cached by question/slot/evidence identity, and
+fail closed on provider errors or malformed output.
+
 ## Fail-closed invariants
 
 A composite proposition is verified only when all of the following hold:
@@ -100,6 +147,10 @@ A composite proposition is verified only when all of the following hold:
 9. QueryPlan's `boolean_support_group` matches the selected derivation.
 10. QueryPlan slots, verified claim support, verified citations, and typed
     authority bind every selected premise.
+11. Semantic proofs bind premise contributions into the derivation identity
+    and preserve exact span-level slot references.
+12. Semantic scope is complete at the proposition level, and negative
+    authority contains an explicit target-relation contradiction.
 
 If any invariant fails, the transaction is downgraded coherently to missing
 authority and the answer remains unknown or abstained. Missing evidence never
@@ -124,8 +175,23 @@ emits:
 - `runtime_typed_authority_selected_derivation_id`;
 - `runtime_typed_authority_premise_refs`;
 - `runtime_typed_authority_premise_evidence_ids`;
+- `runtime_typed_authority_slot_ref_bindings`;
+- `runtime_semantic_proposition_authority_status` and its reason;
+- `runtime_semantic_proposition_verifier_status`, model-call count, evidence
+  packing counts, cache status, and verdict;
 - `qasper_composite_authority_count`;
-- `qasper_composite_authority_invalid_count`.
+- `qasper_composite_authority_invalid_count`;
+- `qasper_semantic_evidence_set_authority_count`;
+- `qasper_semantic_evidence_set_authority_invalid_count`;
+- `qasper_semantic_proposition_verifier_call_count`;
+- `qasper_semantic_proposition_verifier_failure_count`.
+
+The converter also preserves QASPER figures/tables and emits
+`qasper_reference_sets.v1`, including annotation identity, answer type,
+per-annotation evidence, highlighted evidence, and support mode. Native answer
+and evidence scoring consumes these reference sets first and retains the legacy
+union only as a compatibility fallback. These benchmark fields audit the
+runtime contract; they do not manufacture authority or answers.
 
 All selected proof leaves are necessary citations. Therefore citation
 minimality uses the number of distinct required evidence identities, rather

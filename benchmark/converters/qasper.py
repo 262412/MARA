@@ -54,12 +54,34 @@ def _paper_text(paper: dict[str, Any]) -> str:
         if section_name:
             parts.append(f"## {section_name}")
         parts.extend(str(item) for item in ensure_list(section.get("paragraphs")))
+    figures = [
+        value
+        for value in ensure_list(paper.get("figures_and_tables"))
+        if isinstance(value, dict) and str(value.get("caption") or "").strip()
+    ]
+    if figures:
+        parts.append("## Figures and Tables")
+    for figure in figures:
+        file_name = str(figure.get("file") or "").strip()
+        if file_name:
+            parts.append(f"### {file_name}")
+        caption = str(figure.get("caption") or "").strip()
+        parts.append(
+            caption
+            if caption.startswith("FLOAT SELECTED:")
+            else f"FLOAT SELECTED: {caption}"
+        )
     return "\n\n".join(part for part in parts if part)
 
 
 def _example(document_id: str, qa: dict[str, Any], index: int) -> dict[str, Any]:
     answers, evidence, answer_annotations = _answers_evidence_and_annotations(qa)
     answer_type = _qasper_answer_type(answers)
+    reference_sets = _qasper_reference_sets(
+        document_id,
+        answer_annotations,
+        evidence,
+    )
     return {
         "example_id": str(qa.get("question_id") or f"{document_id}_{index}"),
         "document_ids": [document_id],
@@ -88,6 +110,8 @@ def _example(document_id: str, qa: dict[str, Any], index: int) -> dict[str, Any]
             "topic_background": qa.get("topic_background"),
             "qasper_answer_type": answer_type,
             "qasper_answer_annotations": answer_annotations,
+            "qasper_reference_set_contract": "qasper_reference_sets.v1",
+            "qasper_reference_sets": reference_sets,
         },
     }
 
@@ -114,7 +138,7 @@ def _answers_evidence_and_annotations(
         if not isinstance(answer, dict):
             continue
         answers.extend(_answer_texts(answer))
-        answer_annotations.append(_answer_annotation(answer))
+        answer_annotations.append(_answer_annotation(annotation))
         for item in ensure_list(answer.get("evidence")):
             text = str(item).strip()
             if text:
@@ -122,8 +146,10 @@ def _answers_evidence_and_annotations(
     return _dedupe(answers), _dedupe(evidence), answer_annotations
 
 
-def _answer_annotation(answer: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _answer_annotation(annotation: dict[str, Any]) -> dict[str, Any]:
+    answer = annotation.get("answer")
+    answer = answer if isinstance(answer, dict) else {}
+    payload = {
         "extractive_spans": [
             str(item).strip()
             for item in ensure_list(answer.get("extractive_spans"))
@@ -138,6 +164,66 @@ def _answer_annotation(answer: dict[str, Any]) -> dict[str, Any]:
             if str(item).strip()
         ],
     }
+    annotation_id = str(annotation.get("annotation_id") or "").strip()
+    worker_id = str(annotation.get("worker_id") or "").strip()
+    if annotation_id:
+        payload["annotation_id"] = annotation_id
+    if worker_id:
+        payload["worker_id"] = worker_id
+    if "highlighted_evidence" in answer:
+        payload["highlighted_evidence"] = [
+            str(item).strip()
+            for item in ensure_list(answer.get("highlighted_evidence"))
+            if str(item).strip()
+        ]
+    return payload
+
+
+def _qasper_reference_sets(
+    document_id: str,
+    annotations: list[dict[str, Any]],
+    union_evidence: list[str],
+) -> list[dict[str, Any]]:
+    evidence_sources = {
+        text: f"{document_id}#evidence:{index + 1}"
+        for index, text in enumerate(union_evidence)
+    }
+    output: list[dict[str, Any]] = []
+    for index, annotation in enumerate(annotations):
+        answers = _answer_texts(annotation)
+        evidence = [str(value) for value in annotation.get("evidence") or []]
+        highlighted = [
+            str(value) for value in annotation.get("highlighted_evidence") or []
+        ]
+        annotation_id = str(annotation.get("annotation_id") or "").strip()
+        output.append(
+            {
+                "reference_id": annotation_id or f"reference:{index + 1}",
+                "annotation_id": annotation_id,
+                "worker_id": str(annotation.get("worker_id") or "").strip(),
+                "answer_type": _qasper_answer_type(answers),
+                "answers": answers,
+                "gold_support_mode": _gold_support_mode(answers, evidence),
+                "evidence_texts": evidence,
+                "highlighted_evidence_texts": highlighted,
+                "evidence_source_ids": [
+                    evidence_sources[value]
+                    for value in evidence
+                    if value in evidence_sources
+                ],
+            }
+        )
+    return output
+
+
+def _gold_support_mode(answers: list[str], evidence: list[str]) -> str:
+    if any(value.startswith("FLOAT SELECTED:") for value in evidence):
+        return "multimodal"
+    if not evidence and _qasper_answer_type(answers) == "boolean" and answers == ["no"]:
+        return "absence_bounded"
+    if len(evidence) > 1:
+        return "paragraph_set"
+    return "single_span"
 
 
 def _answer_texts(answer: dict[str, Any]) -> list[str]:

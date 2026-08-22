@@ -36,6 +36,7 @@ from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_
 from .mara_route_preparation import prepare_controller_route, route_trace_payload
 from .mara_route_probe import page_image_route_available
 from .mara_route_retrieval import controller_text_retrieve, route_retrieval_metadata
+from .mara_semantic_proposition_verifier import build_semantic_proposition_verifier
 from .mara_visual_answering import route_visual_answer as _route_visual_answer
 from .mara_visual_gate import hybrid_should_use_visual_generator
 from .simple import FullQAPipeline
@@ -486,6 +487,7 @@ class MaraAgentPipeline(FullQAPipeline):
             retrieve=retrieve,
             generate=generate,
             rewrite=rewrite,
+            proposition_verifier=build_semantic_proposition_verifier(self),
             agent_trace=[planner_payload],
         )
         ensure_finance_numeric_trace(

@@ -19,6 +19,9 @@ BOOLEAN_AUTHORITY_STATES: tuple[BooleanAuthorityState, ...] = (
 BOOLEAN_AUTHORITY_DERIVATION_CONTRACT = "boolean_authority_derivation.v1"
 ARGUMENT_CONJUNCTION_RULE = "same_source_argument_conjunction.v1"
 ENTITY_TYPE_JOIN_RULE = "same_source_entity_type_join.v1"
+SEMANTIC_EVIDENCE_SET_RULE = "grounded_semantic_evidence_set_entailment.v1"
+SEMANTIC_PROPOSITION_VERDICT_CONTRACT = "semantic_proposition_verdict.v1"
+GROUNDED_SEMANTIC_VERIFIER_CONTRACT = "grounded_semantic_verifier.v1"
 
 
 def candidate_authority_state(relevant: bool) -> BooleanAuthorityState:
@@ -100,9 +103,11 @@ class BooleanAuthorityDerivation:
     premise_mode: str = "all_required"
     semantics: str = "open_world"
     status: str = "verified"
+    support_mode: str = ""
+    verifier_attestation: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "contract_id": BOOLEAN_AUTHORITY_DERIVATION_CONTRACT,
             "derivation_id": self.derivation_id,
             "rule_id": self.rule_id,
@@ -119,6 +124,11 @@ class BooleanAuthorityDerivation:
             "covered_argument_tokens": list(self.covered_argument_tokens),
             "bindings": dict(self.bindings),
         }
+        if self.support_mode:
+            payload["support_mode"] = self.support_mode
+        if self.verifier_attestation:
+            payload["verifier_attestation"] = deepcopy(self.verifier_attestation)
+        return payload
 
 
 @dataclass(frozen=True)

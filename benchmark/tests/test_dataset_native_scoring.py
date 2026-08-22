@@ -239,6 +239,43 @@ def test_qasper_native_score_uses_answer_annotations_when_gold_answers_are_missi
     assert metrics["native_score"] == 1.0
 
 
+def test_qasper_native_score_consumes_versioned_reference_sets() -> None:
+    prediction: dict[str, Any] = {
+        "predicted_answer": "Final answer: document retrieval",
+        "gold_answers": [],
+        "predicted_evidence": ["The reference-set paragraph."],
+        "metrics": {},
+        "example_metadata": {
+            "qasper_reference_set_contract": "qasper_reference_sets.v1",
+            "qasper_reference_sets": [
+                {
+                    "reference_id": "annotation-1",
+                    "answers": ["document retrieval"],
+                    "gold_support_mode": "single_span",
+                    "evidence_texts": ["The reference-set paragraph."],
+                }
+            ],
+            "qasper_answer_annotations": [
+                {
+                    "extractive_spans": ["stale legacy answer"],
+                    "free_form_answer": "",
+                    "yes_no": None,
+                    "unanswerable": None,
+                    "evidence": ["A stale legacy paragraph."],
+                }
+            ],
+        },
+    }
+
+    metrics, _metadata = native_metrics_for_prediction(
+        prediction,
+        dataset_name="qasper-dev",
+    )
+
+    assert metrics["qasper_f1"] == 1.0
+    assert metrics["qasper_evidence_f1"] == 1.0
+
+
 def test_mara_score_does_not_fallback_to_proxy_when_native_score_is_missing():
     prediction: dict[str, Any] = {
         "metrics": {

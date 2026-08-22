@@ -4,6 +4,11 @@ from typing import Any
 
 from ktem.docqa.boolean_authoritative_conflict import authoritative_conflict_complete
 from ktem.docqa.boolean_authority_derivation import boolean_derivation_contract_status
+from ktem.docqa.boolean_authority_schema import (
+    GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+    SEMANTIC_EVIDENCE_SET_RULE,
+    SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+)
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.typed_proposition_authority_schema import (
     TYPED_PROPOSITION_AUTHORITY_CONTRACT,
@@ -26,6 +31,8 @@ def typed_authority_audit(
     slot_ids = [str(slot.get("slot_id") or "") for slot in slots]
     bindings = authority.get("slot_bindings")
     bindings = bindings if isinstance(bindings, dict) else {}
+    ref_bindings = authority.get("slot_ref_bindings")
+    ref_bindings = ref_bindings if isinstance(ref_bindings, dict) else {}
     atoms = _records(authority.get("authority_atoms"))
     diagnostics = _atom_diagnostics(atoms, _records(bundle.get("items")))
     derivation = _derivation_diagnostics(
@@ -43,6 +50,7 @@ def typed_authority_audit(
         required_ids,
         slot_ids,
         bindings,
+        ref_bindings,
         atoms,
         diagnostics["status"],
         derivation,
@@ -65,6 +73,7 @@ def typed_authority_audit(
         "selected_derivation_id": derivation["selected_derivation_id"],
         "derivation_premise_refs": derivation["premise_refs"],
         "derivation_premise_evidence_ids": derivation["premise_evidence_ids"],
+        "slot_ref_bindings": ref_bindings,
     }
 
 
@@ -87,6 +96,7 @@ def _projection_complete(
     required_ids: list[str],
     slot_ids: list[str],
     bindings: dict[str, Any],
+    ref_bindings: dict[str, Any],
     atoms: list[dict[str, Any]],
     atom_status: str,
     derivation: dict[str, Any],
@@ -99,6 +109,7 @@ def _projection_complete(
             decision,
             projected_verified,
             bindings,
+            ref_bindings,
             atoms,
             claim_results,
             derivation,
@@ -131,6 +142,7 @@ def _projection_complete(
         projected_required,
         projected_verified,
         bindings,
+        ref_bindings,
         atoms,
         atom_status,
         claim_results,
@@ -143,6 +155,7 @@ def _missing_complete(
     decision: dict[str, Any],
     projected_verified: list[str],
     bindings: dict[str, Any],
+    ref_bindings: dict[str, Any],
     atoms: list[dict[str, Any]],
     claim_results: list[dict[str, Any]],
     derivation: dict[str, Any],
@@ -155,11 +168,17 @@ def _missing_complete(
         and not atoms
         and not projected_verified
         and not bindings
+        and not ref_bindings
         and derivation["status"] == "not_applicable"
         and not decision.get("selected_derivation_id")
         and not any(
             str(result.get("authority_status") or "")
-            in {"exact", "composite_exact", "verified_support"}
+            in {
+                "exact",
+                "composite_exact",
+                "semantic_evidence_set",
+                "verified_support",
+            }
             or str(result.get("verified_slot_state") or "")
             in {"verified_support", "verified_conflict"}
             for result in claim_results
@@ -176,6 +195,7 @@ def _support_complete(
     projected_required: list[str],
     projected_verified: list[str],
     bindings: dict[str, Any],
+    ref_bindings: dict[str, Any],
     atoms: list[dict[str, Any]],
     atom_status: str,
     claim_results: list[dict[str, Any]],
@@ -187,20 +207,39 @@ def _support_complete(
         for evidence_id in values or []
         if str(evidence_id)
     }
-    composite = any(
-        str(result.get("authority_status") or "") == "composite_exact"
-        for result in claim_results
+    claim_statuses = {
+        str(result.get("authority_status") or "") for result in claim_results
+    }
+    if "semantic_evidence_set" in claim_statuses:
+        expected_claim_status = "semantic_evidence_set"
+        expected_authority_kind = "semantic_evidence_set"
+    elif "composite_exact" in claim_statuses:
+        expected_claim_status = "composite_exact"
+        expected_authority_kind = "composite"
+    else:
+        expected_claim_status = "exact"
+        expected_authority_kind = "single_span"
+    derived = expected_authority_kind != "single_span"
+    semantic_ref_bindings_complete = (
+        _semantic_ref_bindings_complete(
+            slot_ids,
+            bindings,
+            ref_bindings,
+            atoms,
+            derivation,
+        )
+        if expected_authority_kind == "semantic_evidence_set"
+        else not ref_bindings
     )
     authority_kind_complete = bool(
         derivation["status"] == "bound"
-        and derivation["authority_kind"] == "composite"
+        and derivation["authority_kind"] == expected_authority_kind
         and not decision.get("authoritative_evidence_id")
         and set(derivation["premise_evidence_ids"]) == bound_ids
-        if composite
+        if derived
         else derivation["status"] == "not_applicable"
         and derivation["authority_kind"] == "single_span"
     )
-    expected_claim_status = "composite_exact" if composite else "exact"
     return bool(
         decision.get("status") == "supported"
         and slots
@@ -213,12 +252,45 @@ def _support_complete(
         and atoms
         and set(decision.get("verified_citations") or []) == bound_ids
         and authority_kind_complete
+        and semantic_ref_bindings_complete
         and all(
             result.get("status") == "supported"
             and result.get("authority_status") == expected_claim_status
             and result.get("verified_slot_state") == "verified_support"
             and set(result.get("verified_support_slot_ids") or []) == set(slot_ids)
             for result in claim_results
+        )
+    )
+
+
+def _semantic_ref_bindings_complete(
+    slot_ids: list[str],
+    bindings: dict[str, Any],
+    ref_bindings: dict[str, Any],
+    atoms: list[dict[str, Any]],
+    derivation: dict[str, Any],
+) -> bool:
+    atom_by_ref = {
+        str(atom.get("evidence_ref") or ""): str(atom.get("evidence_id") or "")
+        for atom in atoms
+        if str(atom.get("evidence_ref") or "")
+    }
+    normalized_refs = {
+        str(slot_id): _string_values(values) for slot_id, values in ref_bindings.items()
+    }
+    normalized_ids = {
+        str(slot_id): _string_values(values) for slot_id, values in bindings.items()
+    }
+    return bool(
+        set(normalized_refs) == set(slot_ids)
+        and set().union(*(set(values) for values in normalized_refs.values()))
+        == set(derivation["premise_refs"])
+        and all(
+            references
+            and all(reference in atom_by_ref for reference in references)
+            and {atom_by_ref[reference] for reference in references}
+            == set(normalized_ids.get(slot_id, []))
+            for slot_id, references in normalized_refs.items()
         )
     )
 
@@ -254,19 +326,34 @@ def _derivation_diagnostics(
     if len(selected) != 1:
         return _invalid_derivation("selected_derivation_unresolved", derivations)
     claim_results = _records(decision.get("claim_results"))
-    composite_claims = [
+    rule_id = str(selected[0].get("rule_id") or "")
+    authority_kind = (
+        "semantic_evidence_set"
+        if rule_id == SEMANTIC_EVIDENCE_SET_RULE
+        else "composite"
+    )
+    expected_claim_status = (
+        "semantic_evidence_set"
+        if authority_kind == "semantic_evidence_set"
+        else "composite_exact"
+    )
+    derived_claims = [
         result
         for result in claim_results
-        if str(result.get("authority_status") or "") == "composite_exact"
+        if str(result.get("authority_status") or "") == expected_claim_status
     ]
     if (
         str(decision.get("selected_derivation_id") or "") != selected_id
-        or len(composite_claims) != 1
-        or str(composite_claims[0].get("selected_derivation_id") or "") != selected_id
+        or len(derived_claims) != 1
+        or str(derived_claims[0].get("selected_derivation_id") or "") != selected_id
         or _records(decision.get("authority_derivations")) != derivations
-        or _records(composite_claims[0].get("authority_derivations")) != derivations
+        or _records(derived_claims[0].get("authority_derivations")) != derivations
     ):
-        return _invalid_derivation("derivation_projection_mismatch", derivations)
+        return _invalid_derivation(
+            "derivation_projection_mismatch",
+            derivations,
+            authority_kind=authority_kind,
+        )
     canonical_polarity = str(decision.get("canonical_answer_polarity") or "")
     status = boolean_derivation_contract_status(
         selected[0],
@@ -280,7 +367,7 @@ def _derivation_diagnostics(
     premise_refs = _string_values(selected[0].get("premise_refs"))
     return {
         "status": status,
-        "authority_kind": "composite",
+        "authority_kind": authority_kind,
         "count": len(derivations),
         "selected_derivation_id": selected_id,
         "premise_refs": premise_refs,
@@ -302,7 +389,7 @@ def _query_plan_derivation_status(
         max_premises = int(group.get("max_premises") or 0)
     except (TypeError, ValueError):
         max_premises = 0
-    if not (
+    valid = bool(
         group.get("operator") == "all"
         and group.get("premise_mode") == "all_required"
         and group.get("semantics") == "open_world"
@@ -311,7 +398,17 @@ def _query_plan_derivation_status(
         and str(group.get("quantifier") or "")
         == str((derivation.get("conclusion") or {}).get("quantifier") or "")
         and max_premises >= len(premise_refs)
-    ):
+    )
+    if str(derivation.get("rule_id") or "") == SEMANTIC_EVIDENCE_SET_RULE:
+        valid = bool(
+            valid
+            and group.get("support_mode") == "evidence_set"
+            and group.get("distinctness_basis") == "evidence_ref"
+            and group.get("verifier_contract_id") == GROUNDED_SEMANTIC_VERIFIER_CONTRACT
+            and group.get("verdict_contract_id")
+            == SEMANTIC_PROPOSITION_VERDICT_CONTRACT
+        )
+    if not valid:
         return "query_plan_derivation_mismatch"
     return "bound"
 
@@ -319,10 +416,20 @@ def _query_plan_derivation_status(
 def _invalid_derivation(
     status: str,
     derivations: list[dict[str, Any]],
+    *,
+    authority_kind: str | None = None,
 ) -> dict[str, Any]:
+    authority_kind = authority_kind or (
+        "semantic_evidence_set"
+        if any(
+            str(value.get("rule_id") or "") == SEMANTIC_EVIDENCE_SET_RULE
+            for value in derivations
+        )
+        else "composite"
+    )
     return {
         "status": status,
-        "authority_kind": "composite",
+        "authority_kind": authority_kind,
         "count": len(derivations),
         "selected_derivation_id": "",
         "premise_refs": [],

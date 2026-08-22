@@ -61,7 +61,7 @@ def verify_generated_answer(
         if ragtruth_contract_request(request):
             bundle.metadata["task_contract_fallback"] = "ragtruth_empty_generation"
             answer = ragtruth_empty_answer
-        elif _typed_qasper_boolean_request(request):
+        elif _typed_boolean_request(request, verify):
             bundle.metadata["typed_boolean_generation_recovery"] = (
                 "empty_generation_requires_fresh_authority"
             )
@@ -107,18 +107,21 @@ def verify_generated_answer(
     )
 
 
-def _typed_qasper_boolean_request(request: Any) -> bool:
-    domain = str(getattr(request, "verification_domain", "") or "").casefold()
-    if not (domain == "qasper" or domain.startswith("qasper_")):
-        return False
+def _typed_boolean_request(request: Any, verify: VerifyFn) -> bool:
     plan = getattr(request, "query_plan", None)
     answer_type = (
         plan.get("answer_type")
         if isinstance(plan, dict)
         else getattr(plan, "answer_type", "")
     )
-    return str(answer_type or getattr(request, "task_type", "")).casefold() == (
-        "boolean"
+    boolean_request = (
+        str(answer_type or getattr(request, "task_type", "")).casefold() == "boolean"
+    )
+    domain = str(getattr(request, "verification_domain", "") or "").casefold()
+    return boolean_request and (
+        domain == "qasper"
+        or domain.startswith("qasper_")
+        or bool(getattr(verify, "_semantic_proposition_preflight", False))
     )
 
 

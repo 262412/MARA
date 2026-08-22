@@ -6,13 +6,17 @@ from typing import Any
 from .boolean_authoritative_conflict import authoritative_conflict_complete
 from .controller import RetrieveDecision, VerifyDecision, evaluate_retrieval_quality
 from .evidence import EvidenceBundle
-from .execution_models import RetrieveFn, RewriteFn, RouteExecutionResult
+from .execution_models import RetrieveFn, RewriteFn, RouteExecutionResult, VerifyFn
 from .execution_planning import build_execution_workflow_plan
 from .execution_recovery_events import authority_state as _authority_state
 from .execution_recovery_events import bundle_evidence_ids as _bundle_evidence_ids
 from .execution_recovery_events import (
     copy_reverification_outcome as _copy_reverification_outcome,
 )
+from .execution_recovery_events import (
+    mark_resolved_initial_conflict as _mark_resolved_initial_conflict,
+)
+from .execution_recovery_events import raw_candidate as _raw_candidate
 from .execution_recovery_events import (
     record_route_switch_reverification as _record_route_switch_reverification,
 )
@@ -114,6 +118,7 @@ def recover_after_failed_verification(
     workflow_plan: dict[str, Any],
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
+    verify: VerifyFn,
 ) -> RouteExecutionResult:
     _record_route_switch_reverification(initial_result)
     if not required_typed_authority_missing(request, initial_result.verify_decision):
@@ -137,6 +142,7 @@ def recover_after_failed_verification(
             workflow_plan,
             trace_prefix,
             timings,
+            verify,
         )
         if not required_typed_authority_missing(request, rebound.verify_decision):
             return rebound
@@ -151,6 +157,7 @@ def recover_after_failed_verification(
                 policy,
                 [*trace_prefix, *recovery_trace],
                 timings,
+                verify,
             )
             if switched is not None:
                 return switched
@@ -167,6 +174,7 @@ def recover_after_failed_verification(
             workflow_plan,
             [*trace_prefix, *recovery_trace],
             timings,
+            verify,
         )
     return _same_route_verifier_recovery(
         request,
@@ -178,6 +186,7 @@ def recover_after_failed_verification(
         workflow_plan,
         trace_prefix,
         timings,
+        verify,
     )
 
 
@@ -189,6 +198,7 @@ def _rebind_existing_verifier_recovery(
     workflow_plan: dict[str, Any],
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
+    verify: VerifyFn,
 ) -> tuple[RouteExecutionResult, list[dict[str, Any]]]:
     before = _typed_slot_states(initial_result.evidence_bundle)
     rebound_bundle = timings.measure(
@@ -228,6 +238,7 @@ def _rebind_existing_verifier_recovery(
         workflow_plan,
         [*trace_prefix, *recovery_trace],
         timings,
+        verify,
         terminal_event=reverify,
     )
     return result, recovery_trace
@@ -259,6 +270,7 @@ def _controller_verifier_recovery(
     policy: str,
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
+    verify: VerifyFn,
 ) -> RouteExecutionResult | None:
     if policy != "controller_auto":
         return None
@@ -319,6 +331,7 @@ def _controller_verifier_recovery(
         workflow_plan,
         [*trace_prefix, event, reverify],
         timings,
+        verify,
         terminal_event=reverify,
     )
     _copy_reverification_outcome(event, reverify)
@@ -335,6 +348,7 @@ def _same_route_verifier_recovery(
     workflow_plan: dict[str, Any],
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
+    verify: VerifyFn,
 ) -> RouteExecutionResult:
     recovered = timings.measure(
         "retry_seconds",
@@ -391,6 +405,7 @@ def _same_route_verifier_recovery(
         workflow_plan,
         [*trace_prefix, *recovery_trace],
         timings,
+        verify,
         terminal_event=terminal_event,
     )
 
@@ -405,6 +420,7 @@ def complete_verifier_recovery(
     workflow_plan: dict[str, Any],
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
+    verify: VerifyFn,
     *,
     terminal_event: dict[str, Any],
 ) -> RouteExecutionResult:
@@ -432,6 +448,7 @@ def complete_verifier_recovery(
             workflow_plan,
             trace_prefix,
             timings,
+            verify=verify,
         )
     result = verified_result(
         request,
@@ -443,6 +460,7 @@ def complete_verifier_recovery(
         workflow_plan,
         trace_prefix,
         timings,
+        verify=verify,
     )
     _record_recovery_outcome(request, result, terminal_event)
     return result
@@ -576,20 +594,3 @@ def required_typed_authority_missing(
 def _typed_retrieval_recovery_trace(bundle: EvidenceBundle) -> list[dict[str, Any]]:
     event = bundle.metadata.get("typed_retrieval_recovery_trace")
     return [dict(event)] if isinstance(event, dict) else []
-
-
-def _mark_resolved_initial_conflict(result: RouteExecutionResult) -> None:
-    decision = result.verify_decision
-    if decision.status != "verified_conflict" or not authoritative_conflict_complete(
-        decision.authoritative_conflict
-    ):
-        return
-    for event in reversed(result.controller_trace):
-        if event.get("stage") == "verifier":
-            event["stop_reason"] = "authority_conflict_resolved"
-            break
-
-
-def _raw_candidate(result: RouteExecutionResult) -> str:
-    raw_answer = result.engine_terminal_state.get("raw_generated_answer")
-    return str(result.answer if raw_answer is None else raw_answer)

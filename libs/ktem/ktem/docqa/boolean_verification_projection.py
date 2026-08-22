@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from .boolean_authority_schema import BooleanEvidenceAuthority
+from .boolean_authority_schema import (
+    SEMANTIC_EVIDENCE_SET_RULE,
+    BooleanClaimAuthority,
+    BooleanEvidenceAuthority,
+)
 from .boolean_claim_verification import boolean_claim_authority
 from .verification_schema import VerifiedClaim
 
@@ -24,6 +28,12 @@ def boolean_verification(
     )
     if assessment is None:
         return None
+    return project_boolean_assessment(assessment)
+
+
+def project_boolean_assessment(
+    assessment: BooleanClaimAuthority,
+) -> tuple[list[str], list[VerifiedClaim]]:
     derivations = tuple(value.as_dict() for value in assessment.authority_derivations)
     selected = next(
         (
@@ -47,7 +57,7 @@ def boolean_verification(
         semantic_correction_applied=assessment.semantic_correction_applied,
         authority_status=_authority_status(
             conflict=bool(assessment.authoritative_conflict),
-            composite=selected is not None,
+            selected=selected,
             single=authority is not None,
         ),
         **_authority_identity_fields(authority),
@@ -81,10 +91,17 @@ def _unique_evidence_ids(
     return tuple(dict.fromkeys(value.evidence_id for value in authorities))
 
 
-def _authority_status(*, conflict: bool, composite: bool, single: bool) -> str:
+def _authority_status(
+    *,
+    conflict: bool,
+    selected: dict[str, Any] | None,
+    single: bool,
+) -> str:
     if conflict:
         return "exact_conflict"
-    if composite:
+    if selected and selected.get("rule_id") == SEMANTIC_EVIDENCE_SET_RULE:
+        return "semantic_evidence_set"
+    if selected:
         return "composite_exact"
     return "exact" if single else "missing"
 

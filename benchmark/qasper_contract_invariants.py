@@ -9,6 +9,7 @@ from ktem.docqa.evidence_locators import normalized_source_page_locators
 from .metrics import is_abstention_answer
 from .qasper_boolean_scope import scope_valid_support_items
 from .qasper_deterministic_support import deterministic_support_ids
+from .qasper_semantic_authority_metrics import semantic_evidence_set_authority_invalid
 
 
 def qasper_contract_metric_values(
@@ -143,6 +144,21 @@ def _runtime_audit_failure_metrics(
         "qasper_composite_authority_invalid_count": float(
             trace.get("runtime_typed_authority_kind") == "composite"
             and trace.get("runtime_typed_authority_derivation_status") != "bound"
+        ),
+        "qasper_semantic_evidence_set_authority_count": float(
+            trace.get("runtime_typed_authority_kind") == "semantic_evidence_set"
+            and trace.get("runtime_typed_authority_derivation_status") == "bound"
+            and bool(trace.get("runtime_typed_authority_complete"))
+        ),
+        "qasper_semantic_evidence_set_authority_invalid_count": float(
+            semantic_evidence_set_authority_invalid(trace)
+        ),
+        "qasper_semantic_proposition_verifier_call_count": float(
+            trace.get("runtime_semantic_proposition_verifier_model_call_count") or 0
+        ),
+        "qasper_semantic_proposition_verifier_failure_count": float(
+            trace.get("runtime_semantic_proposition_verifier_status")
+            in {"failed", "cached_failure"}
         ),
     }
 
@@ -404,7 +420,8 @@ def _required_boolean_citation_count(
     trace = metadata.get("qasper_answerability")
     trace = trace if isinstance(trace, dict) else {}
     if (
-        trace.get("runtime_typed_authority_kind") == "composite"
+        trace.get("runtime_typed_authority_kind")
+        in {"composite", "semantic_evidence_set"}
         and trace.get("runtime_typed_authority_derivation_status") == "bound"
     ):
         return max(1, len(_trace_ids(trace.get("verifier_required_evidence_ids"))))
@@ -484,6 +501,10 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "qasper_runtime_authority_frame_incomplete_count": 0.0,
         "qasper_composite_authority_count": 0.0,
         "qasper_composite_authority_invalid_count": 0.0,
+        "qasper_semantic_evidence_set_authority_count": 0.0,
+        "qasper_semantic_evidence_set_authority_invalid_count": 0.0,
+        "qasper_semantic_proposition_verifier_call_count": 0.0,
+        "qasper_semantic_proposition_verifier_failure_count": 0.0,
         "qasper_required_verification_applicable_count": 0.0,
         "qasper_required_slot_nonempty_state_count": 0.0,
         "qasper_required_slot_empty_state_count": 0.0,

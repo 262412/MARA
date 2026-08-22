@@ -8,6 +8,9 @@ from .boolean_authority_schema import (
     ARGUMENT_CONJUNCTION_RULE,
     BOOLEAN_AUTHORITY_DERIVATION_CONTRACT,
     ENTITY_TYPE_JOIN_RULE,
+    GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+    SEMANTIC_EVIDENCE_SET_RULE,
+    SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
 from .boolean_conjunction import boolean_conjunction_spec
 from .boolean_proposition_compatibility import boolean_argument_token_coverage
@@ -17,6 +20,7 @@ COMPOSITE_BOOLEAN_RULES = frozenset(
     {
         ARGUMENT_CONJUNCTION_RULE,
         ENTITY_TYPE_JOIN_RULE,
+        SEMANTIC_EVIDENCE_SET_RULE,
     }
 )
 
@@ -33,10 +37,15 @@ def boolean_derivation_identity_payload(
     conclusion: dict[str, Any],
     required_argument_tokens: tuple[str, ...] | list[str],
     bindings: dict[str, Any] | None = None,
+    support_mode: str = "",
+    verifier_attestation: dict[str, Any] | None = None,
+    premise_contributions: (
+        tuple[dict[str, Any], ...] | list[dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     """Return the canonical semantic identity of a derivation."""
 
-    return {
+    payload: dict[str, Any] = {
         "rule_id": str(rule_id or ""),
         "premise_refs": sorted(str(value) for value in premise_refs),
         "conclusion": conclusion,
@@ -47,6 +56,13 @@ def boolean_derivation_identity_payload(
             str(key): str(value) for key, value in sorted((bindings or {}).items())
         },
     }
+    if support_mode:
+        payload["support_mode"] = support_mode
+    if verifier_attestation:
+        payload["verifier_attestation"] = verifier_attestation
+    if premise_contributions is not None:
+        payload["premise_contributions"] = list(premise_contributions)
+    return payload
 
 
 def boolean_derivation_contract_status(
@@ -71,9 +87,7 @@ def boolean_derivation_contract_status(
     conclusion = conclusion if isinstance(conclusion, dict) else {}
     if not _conclusion_complete(conclusion, canonical_polarity=canonical_polarity):
         return "conclusion_incomplete"
-    if str(conclusion.get("relation") or conclusion.get("predicate") or "") != str(
-        primary_boolean_relation(question) or ""
-    ):
+    if not _conclusion_relation_matches(question, conclusion, rule_id=rule_id):
         return "conclusion_relation_mismatch"
 
     required = _strings(derivation.get("required_argument_tokens"))
@@ -86,6 +100,15 @@ def boolean_derivation_contract_status(
         premise_refs=premise_refs,
         conclusion=conclusion,
         required=required,
+        support_mode=str(derivation.get("support_mode") or ""),
+        verifier_attestation=(
+            derivation.get("verifier_attestation")
+            if isinstance(derivation.get("verifier_attestation"), dict)
+            else None
+        ),
+        premise_contributions=(
+            contributions if rule_id == SEMANTIC_EVIDENCE_SET_RULE else None
+        ),
     )
     if identity_status != "bound":
         return identity_status
@@ -112,6 +135,10 @@ def _derivation_header_status(derivation: dict[str, Any]) -> tuple[str, str]:
         or derivation.get("status") != "verified"
     ):
         return "semantics_mismatch", rule_id
+    if rule_id == SEMANTIC_EVIDENCE_SET_RULE and not _semantic_header_complete(
+        derivation
+    ):
+        return "semantic_attestation_incomplete", rule_id
     return "bound", rule_id
 
 
@@ -137,6 +164,7 @@ def _premise_context(
         premise_ids,
         atom_by_ref,
         contributions,
+        minimum_premises=2,
     )
     return status, premise_refs, atom_by_ref, contributions
 
@@ -146,8 +174,10 @@ def _premise_set_status(
     premise_ids: list[str],
     atom_by_ref: dict[str, dict[str, Any]],
     contributions: list[dict[str, Any]],
+    *,
+    minimum_premises: int,
 ) -> str:
-    if len(premise_refs) < 2 or len(premise_refs) != len(premise_ids):
+    if len(premise_refs) < minimum_premises or len(premise_refs) != len(premise_ids):
         return "premise_set_incomplete"
     if len(set(premise_refs)) != len(premise_refs):
         return "premise_ref_duplicate"
@@ -186,6 +216,9 @@ def _derivation_identity_status(
     premise_refs: list[str],
     conclusion: dict[str, Any],
     required: list[str],
+    support_mode: str,
+    verifier_attestation: dict[str, Any] | None,
+    premise_contributions: list[dict[str, Any]] | None,
 ) -> str:
     bindings = derivation.get("bindings")
     identity_payload = boolean_derivation_identity_payload(
@@ -194,6 +227,9 @@ def _derivation_identity_status(
         conclusion=conclusion,
         required_argument_tokens=required,
         bindings=bindings if isinstance(bindings, dict) else {},
+        support_mode=support_mode,
+        verifier_attestation=verifier_attestation,
+        premise_contributions=premise_contributions,
     )
     return (
         "bound"
@@ -230,6 +266,13 @@ def _rule_contract_status(
             question=question,
             conclusion=conclusion,
         )
+    if rule_id == SEMANTIC_EVIDENCE_SET_RULE:
+        return _semantic_evidence_set_status(
+            derivation,
+            contributions,
+            atom_by_ref=atom_by_ref,
+            conclusion=conclusion,
+        )
     return (
         "bound"
         if _entity_type_join_complete(
@@ -239,6 +282,90 @@ def _rule_contract_status(
             conclusion=conclusion,
         )
         else "entity_type_binding_incomplete"
+    )
+
+
+def _conclusion_relation_matches(
+    question: str,
+    conclusion: dict[str, Any],
+    *,
+    rule_id: str,
+) -> bool:
+    relation = str(conclusion.get("relation") or conclusion.get("predicate") or "")
+    expected = str(primary_boolean_relation(question) or "")
+    if rule_id == SEMANTIC_EVIDENCE_SET_RULE:
+        return relation == (expected or "entails")
+    return relation == expected
+
+
+def _semantic_header_complete(derivation: dict[str, Any]) -> bool:
+    attestation = derivation.get("verifier_attestation")
+    return bool(
+        derivation.get("support_mode") == "evidence_set"
+        and isinstance(attestation, dict)
+        and attestation.get("contract_id") == GROUNDED_SEMANTIC_VERIFIER_CONTRACT
+        and attestation.get("verdict_contract_id")
+        == SEMANTIC_PROPOSITION_VERDICT_CONTRACT
+        and str(attestation.get("model") or "")
+        and attestation.get("verdict") in {"yes", "no"}
+        and bool(attestation.get("complete_proposition"))
+        and attestation.get("scope_basis")
+        in {
+            "explicit_current_actor",
+            "explicit_prior_work_actor",
+            "named_question_subject",
+        }
+        and attestation.get("jointly_complete") is True
+        and attestation.get("each_premise_required") is True
+    )
+
+
+def _semantic_evidence_set_status(
+    derivation: dict[str, Any],
+    contributions: list[dict[str, Any]],
+    *,
+    atom_by_ref: dict[str, dict[str, Any]],
+    conclusion: dict[str, Any],
+) -> str:
+    attestation = derivation.get("verifier_attestation")
+    attestation = attestation if isinstance(attestation, dict) else {}
+    premise_refs = _strings(derivation.get("premise_refs"))
+    if int(attestation.get("premise_count") or 0) != len(premise_refs) or str(
+        attestation.get("verdict") or ""
+    ) != str(conclusion.get("polarity") or ""):
+        return "semantic_attestation_mismatch"
+    contribution_by_ref = {
+        str(value.get("evidence_ref") or ""): value for value in contributions
+    }
+    supported_slots: set[str] = set()
+    proposition_fragments: set[str] = set()
+    for index, reference in enumerate(premise_refs, start=1):
+        contribution = contribution_by_ref[reference]
+        atom = atom_by_ref[reference]
+        role = f"semantic_premise:{index}"
+        slot_ids = set(_strings(contribution.get("supports_slot_ids")))
+        fragment = str(contribution.get("proposition_fragment") or "").strip()
+        if (
+            contribution.get("role") != role
+            or int(contribution.get("order") or 0) != index
+            or str(atom.get("relation") or atom.get("predicate") or "")
+            != "semantic_premise"
+            or not fragment
+            or str(atom.get("object") or "") != fragment
+            or str(atom.get("polarity") or "") != str(conclusion.get("polarity") or "")
+            or str(atom.get("reason") or "") != "semantic_evidence_set_premise"
+            or not slot_ids
+        ):
+            return "semantic_premise_projection_mismatch"
+        normalized_fragment = " ".join(fragment.casefold().split())
+        if normalized_fragment in proposition_fragments:
+            return "semantic_premise_fragment_duplicate"
+        proposition_fragments.add(normalized_fragment)
+        supported_slots.update(slot_ids)
+    return (
+        "bound"
+        if supported_slots == set(_strings(attestation.get("required_slot_ids")))
+        else "semantic_slot_coverage_mismatch"
     )
 
 

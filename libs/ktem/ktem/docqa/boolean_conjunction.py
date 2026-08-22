@@ -4,7 +4,10 @@ import re
 from dataclasses import replace
 from typing import Any
 
-from .boolean_authority_schema import ARGUMENT_CONJUNCTION_RULE
+from .boolean_authority_schema import (
+    ARGUMENT_CONJUNCTION_RULE,
+    SEMANTIC_EVIDENCE_SET_RULE,
+)
 from .boolean_proposition_compatibility import boolean_argument_token_coverage
 from .boolean_scope_quantifiers import _closed_quantifier
 from .query_plan_schema import QueryPlan, with_plan_id
@@ -86,7 +89,7 @@ def derivation_support_group_constraint(
         existing_max = 0
     conclusion = derivation.get("conclusion")
     conclusion = conclusion if isinstance(conclusion, dict) else {}
-    return {
+    projected = {
         "operator": "all",
         "premise_mode": "all_required",
         "semantics": "open_world",
@@ -97,3 +100,17 @@ def derivation_support_group_constraint(
         ),
         "max_premises": max(existing_max, len(premise_refs)),
     }
+    if str(derivation.get("rule_id") or "") == SEMANTIC_EVIDENCE_SET_RULE:
+        attestation = derivation.get("verifier_attestation")
+        attestation = attestation if isinstance(attestation, dict) else {}
+        projected.update(
+            {
+                "support_mode": str(derivation.get("support_mode") or ""),
+                "distinctness_basis": "evidence_ref",
+                "verifier_contract_id": str(attestation.get("contract_id") or ""),
+                "verdict_contract_id": str(
+                    attestation.get("verdict_contract_id") or ""
+                ),
+            }
+        )
+    return projected

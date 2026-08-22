@@ -10,6 +10,7 @@ from .boolean_authoritative_conflict import (
     conflict_sides_are_complete,
     with_verified_conflict_slots,
 )
+from .boolean_authority_schema import SEMANTIC_EVIDENCE_SET_RULE
 from .boolean_conjunction import derivation_support_group_constraint
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_schema import EvidenceBundle
@@ -30,6 +31,10 @@ from .typed_proposition_authority_atoms import (
 from .typed_proposition_authority_atoms import (
     unknown_claim_result as _unknown_claim_result,
 )
+from .typed_proposition_authority_missing import (
+    with_missing_boolean_authority,
+    with_qasper_missing_authority,
+)
 from .typed_proposition_authority_schema import TYPED_PROPOSITION_AUTHORITY_CONTRACT
 from .typed_proposition_authority_schema import (
     has_composite_boolean_authority as _has_composite_boolean_authority,
@@ -47,27 +52,10 @@ from .typed_proposition_authority_slots import (
 )
 from .verification_schema import VerifyDecision
 
-
-def with_qasper_missing_authority(
-    request: Any,
-    decision: VerifyDecision,
-    *,
-    question: str,
-    answer: str,
-    domain: str,
-    reason: str,
-) -> VerifyDecision:
-    if not _qasper_domain(domain):
-        return decision
-    required_slot_ids = [slot.slot_id for slot in _required_support_slots(request)]
-    authority = _missing_authority(
-        _answer_type(request),
-        question,
-        answer,
-        required_slot_ids,
-        reason,
-    )
-    return replace(decision, typed_authority=authority)
+__all__ = [
+    "with_missing_boolean_authority",
+    "with_qasper_missing_authority",
+]
 
 
 def resolve_typed_proposition_authority_transaction(
@@ -209,13 +197,13 @@ def _resolve_boolean_transaction(
             reason,
             typed_authority=authority,
         )
-    bindings, selected_atoms = _boolean_slot_bindings(
+    bindings, slot_ref_bindings, selected_atoms = _boolean_slot_bindings(
         request,
         required_slots,
         atoms,
         derivations,
     )
-    if bindings is None or selected_atoms is None:
+    if bindings is None or slot_ref_bindings is None or selected_atoms is None:
         reason = "required_support_slot_binding_incomplete"
         authority = _missing_authority(
             "boolean", question, answer, required_slot_ids, reason
@@ -232,6 +220,7 @@ def _resolve_boolean_transaction(
         answer=answer,
         required_slot_ids=required_slot_ids,
         bindings=bindings,
+        slot_ref_bindings=slot_ref_bindings,
         atoms=selected_atoms,
         derivations=derivations,
     )
@@ -245,6 +234,7 @@ def _commit_boolean_transaction(
     answer: str,
     required_slot_ids: list[str],
     bindings: dict[str, tuple[str, ...]],
+    slot_ref_bindings: dict[str, tuple[str, ...]],
     atoms: list[dict[str, Any]],
     derivations: list[dict[str, Any]],
 ) -> VerifyDecision:
@@ -262,14 +252,11 @@ def _commit_boolean_transaction(
         bindings,
         atoms,
         state="verified_support",
-        reason=(
-            "composite_boolean_proposition"
-            if derivations
-            else "exact_boolean_proposition"
-        ),
+        reason=_boolean_authority_reason(derivations),
         canonical_answer_polarity=decision.canonical_answer_polarity,
         query_plan_state_version=state_version,
         required_slot_ids=required_slot_ids,
+        slot_ref_bindings=slot_ref_bindings,
         authority_derivations=derivations,
         selected_derivation_id=decision.selected_derivation_id,
     )
@@ -298,6 +285,14 @@ def _commit_boolean_transaction(
         boolean_authority_status="verified_support",
         typed_authority=authority,
     )
+
+
+def _boolean_authority_reason(derivations: list[dict[str, Any]]) -> str:
+    if not derivations:
+        return "exact_boolean_proposition"
+    if str(derivations[0].get("rule_id") or "") == SEMANTIC_EVIDENCE_SET_RULE:
+        return "semantic_evidence_set_proposition"
+    return "composite_boolean_proposition"
 
 
 def _resolve_free_text_transaction(

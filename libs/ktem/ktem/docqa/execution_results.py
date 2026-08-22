@@ -7,7 +7,12 @@ from .controller import RetrieveDecision, _verify_decision, evaluate_retrieval_q
 from .engine_terminal_projection import engine_terminal_projection
 from .evidence import EvidenceBundle, build_evidence_bundle
 from .execution_contracts import ABSTAIN_MESSAGE, RAGTRUTH_EMPTY_ANSWER
-from .execution_models import GuardrailDecision, RewriteFn, RouteExecutionResult
+from .execution_models import (
+    GuardrailDecision,
+    RewriteFn,
+    RouteExecutionResult,
+    VerifyFn,
+)
 from .execution_trace import execution_trace
 from .execution_verification import ragtruth_contract_request, verify_generated_answer
 from .pipeline_stage_timings import PipelineStageTimings
@@ -52,6 +57,8 @@ def guarded_result(
     workflow_plan: dict[str, Any],
     trace_prefix: list[dict[str, Any]] | None = None,
     stage_timings: PipelineStageTimings | None = None,
+    *,
+    verify: VerifyFn | None = None,
 ) -> RouteExecutionResult:
     if ragtruth_contract_request(request):
         bundle.metadata["task_contract_fallback"] = "ragtruth_empty_retrieval"
@@ -72,7 +79,12 @@ def guarded_result(
             trace_prefix,
             stage_timings,
         )
-    verify_decision = _verify_decision(request, retrieve_decision, bundle, "")
+    verify_decision = (verify or _verify_decision)(
+        request,
+        retrieve_decision,
+        bundle,
+        "",
+    )
     guardrail = GuardrailDecision(
         status="not_enough_evidence",
         action="abstain",
@@ -217,6 +229,8 @@ def verified_result(
     workflow_plan: dict[str, Any],
     trace_prefix: list[dict[str, Any]] | None = None,
     stage_timings: PipelineStageTimings | None = None,
+    *,
+    verify: VerifyFn | None = None,
 ) -> RouteExecutionResult:
     stage_timings = stage_timings or PipelineStageTimings()
     raw_generated_answer = str(answer or "")
@@ -229,7 +243,7 @@ def verified_result(
         rewrite,
         trace_prefix,
         stage_timings,
-        verify=_verify_decision,
+        verify=verify or _verify_decision,
         guardrail_factory=GuardrailDecision,
         abstain_message=ABSTAIN_MESSAGE,
         ragtruth_empty_answer=RAGTRUTH_EMPTY_ANSWER,

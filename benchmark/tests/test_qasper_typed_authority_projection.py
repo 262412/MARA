@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.execution import execute_controller_turn
+from ktem.docqa.query_planning import build_query_plan
 
 from benchmark.answer_finalizer import (
     attach_structured_citations_from_evidence,
@@ -104,6 +107,130 @@ def _composite_prediction(
     prediction = {
         **execution.as_dict(),
         "example_id": "composite-authority",
+        "question": question,
+        "answer_type": "boolean",
+        "predicted_answer": execution.answer,
+        "answer_for_user": execution.answer,
+        "route": "text_rag",
+        "gold_answers": ["yes"],
+        "evidence_metadata": deepcopy(execution.evidence_bundle.metadata),
+        "structured_citations": [],
+        "predicted_citations": [],
+    }
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed",
+        mode="scoring_adapter_v1",
+    )
+    return prediction
+
+
+def _semantic_evidence() -> list[dict[str, str]]:
+    return [
+        {
+            "evidence_id": "cross-lingual",
+            "source_id": "paper",
+            "section_id": "experiments",
+            "text": "Transfer was evaluated across two languages.",
+        },
+        {
+            "evidence_id": "single-language",
+            "source_id": "paper",
+            "section_id": "experiments",
+            "text": "The experiment included monolingual baselines for comparison.",
+        },
+    ]
+
+
+def _semantic_request(question: str) -> DocQARequest:
+    return DocQARequest(
+        prompt=question,
+        retrieval_query=question,
+        task_type="boolean",
+        verification_domain="qasper",
+        verification_mode="strict",
+        route_policy="doc",
+        allowed_routes=["doc_text"],
+        selected_file_ids=["paper"],
+        origin="benchmark",
+        query_plan=build_query_plan(
+            question,
+            answer_type="boolean",
+            verification_domain="qasper",
+        ),
+    )
+
+
+def _semantic_verdict(
+    request: Any,
+    _question: str,
+    _answer: str,
+    bundle: Any,
+) -> dict[str, Any]:
+    bundle.metadata["semantic_proposition_verifier"] = {
+        "contract_id": "semantic_proposition_verifier_runtime.v1",
+        "status": "parsed",
+        "reason": "strict_schema_parsed",
+        "actual_model_call_count": 1,
+        "available_evidence_count": 2,
+        "packed_evidence_count": 2,
+        "required_slot_count": 3,
+        "prompt_chars": 731,
+        "verdict": "yes",
+    }
+    slot_ids = [
+        slot.slot_id
+        for slot in request.query_plan.evidence_slots
+        if slot.required_for_verification
+    ]
+    premises = []
+    for index, item in enumerate(bundle.items):
+        side = "left_subject" if index == 0 else "right_subject"
+        premises.append(
+            {
+                "evidence_id": identity_of(item).key,
+                "quote": item["text"],
+                "proposition_fragment": (
+                    "cross-language evaluation was performed"
+                    if index == 0
+                    else "single-language baselines were compared"
+                ),
+                "supports_slot_ids": [
+                    slot_id
+                    for slot_id in slot_ids
+                    if slot_id == "support:proposition" or slot_id.endswith(side)
+                ],
+            }
+        )
+    return {
+        "contract_id": "semantic_proposition_verdict.v1",
+        "verdict": "yes",
+        "support_mode": "evidence_set",
+        "jointly_complete": True,
+        "each_premise_required": True,
+        "premises": premises,
+        "verifier": {
+            "contract_id": "grounded_semantic_verifier.v1",
+            "model": "test-double",
+            "seed": 7,
+        },
+    }
+
+
+def _semantic_prediction() -> dict:
+    question = "Did the authors compare cross-lingual and single-language evaluation?"
+    evidence = _semantic_evidence()
+    request = _semantic_request(question)
+
+    execution = execute_controller_turn(
+        request,
+        retrieve=lambda *_args: {"evidence": evidence},
+        generate=lambda *_args: "unanswerable",
+        proposition_verifier=_semantic_verdict,
+    )
+    prediction = {
+        **execution.as_dict(),
+        "example_id": "semantic-evidence-set-authority",
         "question": question,
         "answer_type": "boolean",
         "predicted_answer": execution.answer,
@@ -277,6 +404,96 @@ def test_composite_required_citations_are_not_counted_as_nonminimal() -> None:
     assert metrics["citation_nonminimal_count"] == 0.0
     assert metrics["qasper_composite_authority_count"] == 1.0
     assert metrics["qasper_composite_authority_invalid_count"] == 0.0
+
+
+def test_semantic_evidence_set_authority_round_trips_through_benchmark_audit() -> None:
+    prediction = _semantic_prediction()
+
+    typed = runtime_typed_proposition_authority(prediction)
+    boolean = runtime_boolean_authority(prediction, "yes")
+
+    assert typed["complete"] is True
+    assert typed["authority_kind"] == "semantic_evidence_set"
+    assert set(typed["slot_ref_bindings"]) == {
+        "support:proposition",
+        "support:left_subject",
+        "support:right_subject",
+    }
+    assert typed["derivation_status"] == "bound"
+    assert boolean["complete"] is True
+    assert boolean["authority_kind"] == "semantic_evidence_set_polarity"
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+    trace = prediction["evidence_metadata"]["qasper_answerability"]
+    contract_items = list(prediction["engine_terminal_evidence_bundle"]["items"])
+    cited = minimum_verified_claim_support_items(
+        prediction,
+        contract_items,
+        span="yes",
+    )
+    metrics = qasper_contract_metric_values(
+        prediction,
+        prediction["evidence_metadata"],
+        cited=cited,
+        contract_items=contract_items,
+    )
+
+    assert prediction["contract_action"] == "pass_through"
+    assert trace["runtime_typed_authority_kind"] == "semantic_evidence_set"
+    assert (
+        trace["runtime_typed_authority_slot_ref_bindings"] == typed["slot_ref_bindings"]
+    )
+    assert trace["runtime_semantic_proposition_authority_status"] == "verified"
+    assert trace["runtime_semantic_proposition_authority_premise_count"] == 2
+    assert trace["runtime_semantic_proposition_verifier_model_call_count"] == 1
+    assert trace["runtime_semantic_proposition_verifier_available_evidence_count"] == 2
+    assert trace["runtime_semantic_proposition_verifier_packed_evidence_count"] == 2
+    assert trace["runtime_semantic_proposition_verifier_required_slot_count"] == 3
+    assert trace["runtime_semantic_proposition_verifier_prompt_chars"] == 731
+    assert len(cited) == 2
+    assert metrics["qasper_semantic_evidence_set_authority_count"] == 1.0
+    assert metrics["qasper_semantic_evidence_set_authority_invalid_count"] == 0.0
+    assert metrics["qasper_semantic_proposition_verifier_call_count"] == 1.0
+    assert metrics["qasper_semantic_proposition_verifier_failure_count"] == 0.0
+    assert metrics["qasper_composite_authority_count"] == 0.0
+
+
+def test_semantic_runtime_rejects_tampered_slot_reference_binding() -> None:
+    prediction = _semantic_prediction()
+    authority = prediction["engine_verify_decision"]["typed_authority"]
+    authority["slot_ref_bindings"]["support:left_subject"] = ["tampered"]
+
+    audit = runtime_typed_proposition_authority(prediction)
+
+    assert audit["complete"] is False
+    assert audit["authority_kind"] == "semantic_evidence_set"
+
+
+def test_semantic_authority_rejection_is_a_hard_audit_failure() -> None:
+    prediction = _semantic_prediction()
+    metadata = prediction["engine_terminal_evidence_bundle"]["metadata"]
+    metadata["semantic_proposition_authority"] = {
+        "contract_id": "semantic_proposition_verdict.v1",
+        "status": "rejected",
+        "reason": "semantic_premise_quote_unbound",
+    }
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+    metrics = qasper_contract_metric_values(
+        prediction,
+        prediction["evidence_metadata"],
+        cited=[],
+        contract_items=list(prediction["engine_terminal_evidence_bundle"]["items"]),
+    )
+
+    assert metrics["qasper_semantic_evidence_set_authority_invalid_count"] == 1.0
 
 
 def test_entity_type_derivation_is_declared_in_runtime_query_plan() -> None:

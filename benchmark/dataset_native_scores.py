@@ -362,6 +362,15 @@ def _qasper_gold_answers(prediction: dict[str, Any]) -> list[str]:
     if gold_answers:
         return gold_answers
     metadata = dict(prediction.get("example_metadata") or {})
+    reference_sets = _qasper_reference_sets(metadata)
+    if reference_sets:
+        return _normalized_nonempty_strings(
+            [
+                answer
+                for reference in reference_sets
+                for answer in _nonempty_strings(reference.get("answers"))
+            ]
+        )
     annotations = metadata.get("qasper_answer_annotations")
     if not isinstance(annotations, list):
         return []
@@ -422,8 +431,17 @@ def _qasper_gold_evidence_references(
     prediction: dict[str, Any],
 ) -> list[list[str]]:
     metadata = dict(prediction.get("example_metadata") or {})
-    annotations = metadata.get("qasper_answer_annotations")
+    reference_sets = _qasper_reference_sets(metadata)
     references: list[list[str]] = []
+    for reference in reference_sets:
+        evidence = _nonempty_strings(reference.get("evidence_texts"))
+        if evidence or reference.get("gold_support_mode") == "absence_bounded":
+            references.append(evidence)
+    if references:
+        return references
+
+    annotations = metadata.get("qasper_answer_annotations")
+    references = []
     if isinstance(annotations, list):
         for annotation in annotations:
             if not isinstance(annotation, dict):
@@ -449,6 +467,15 @@ def _qasper_gold_evidence_references(
         if evidence:
             return [evidence]
     return []
+
+
+def _qasper_reference_sets(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    if metadata.get("qasper_reference_set_contract") != "qasper_reference_sets.v1":
+        return []
+    references = metadata.get("qasper_reference_sets")
+    if not isinstance(references, list):
+        return []
+    return [value for value in references if isinstance(value, dict)]
 
 
 def _qasper_predicted_evidence(prediction: dict[str, Any]) -> list[str]:

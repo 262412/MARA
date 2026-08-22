@@ -12,6 +12,7 @@ from .verification import VerifyDecision
 RetrieveFn = Callable[[Any, ControllerDecision], dict[str, Any]]
 GenerateFn = Callable[[Any, ControllerDecision, EvidenceBundle], str]
 RewriteFn = Callable[[Any, ControllerDecision, EvidenceBundle, str], str]
+VerifyFn = Callable[[Any, RetrieveDecision, EvidenceBundle, str], VerifyDecision]
 
 
 @dataclass(frozen=True)
