@@ -14,7 +14,12 @@ from ktem.reasoning.mara import MaraAgentPipeline
 from ktem.reasoning.mara_semantic_proposition_verifier import (
     SEMANTIC_PROPOSITION_VERIFIER_ITEM_CHARS,
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+    SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
     build_semantic_proposition_verifier,
+)
+from ktem.reasoning.mara_semantic_proposition_schema import (
+    parse_semantic_proposition_result,
+    semantic_proposition_response_format,
 )
 
 QUESTION = "Did the authors compare cross-lingual and single-language evaluation?"
@@ -103,6 +108,18 @@ def _model_response() -> str:
     )
 
 
+def _insufficient_response() -> str:
+    return json.dumps(
+        {
+            "verdict": "insufficient_evidence",
+            "support_mode": "evidence_set",
+            "jointly_complete": False,
+            "each_premise_required": False,
+            "premises": [],
+        }
+    )
+
+
 def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> None:
     llm = _RecordingLLM(_model_response())
     verifier = build_semantic_proposition_verifier(
@@ -139,6 +156,71 @@ def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> Non
     assert (
         bundle.metadata["semantic_proposition_verifier"]["actual_model_call_count"] == 1
     )
+
+
+def test_response_schema_uses_portable_subset_and_parser_rejects_duplicate_slots() -> None:
+    response_format = semantic_proposition_response_format(
+        ["E1", "E2"],
+        ["support:proposition", "support:left_subject"],
+    )
+    assert "uniqueItems" not in json.dumps(response_format)
+
+    response = json.loads(_model_response())
+    response["premises"][0]["supports_slot_ids"] = [
+        "support:proposition",
+        "support:proposition",
+    ]
+    packed = [
+        {"label": "E1", "evidence_id": "first"},
+        {"label": "E2", "evidence_id": "second"},
+    ]
+
+    assert (
+        parse_semantic_proposition_result(
+            json.dumps(response),
+            packed=packed,
+            slot_ids={
+                "support:proposition",
+                "support:left_subject",
+                "support:right_subject",
+            },
+            model="semantic-test-model",
+            seed=17,
+        )
+        is None
+    )
+
+
+def test_runtime_verifier_honors_request_evidence_budget() -> None:
+    llm = _RecordingLLM(_insufficient_response())
+    verifier = build_semantic_proposition_verifier(
+        SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
+    )
+    assert verifier is not None
+    request = _request()
+    request.max_context_length = 2000
+    items = [
+        {
+            "evidence_id": f"item-{index}",
+            "source_id": "paper",
+            "section_id": "experiments",
+            "text": f"Evidence {index}: " + ("x" * 1900),
+        }
+        for index in range(8)
+    ]
+    bundle = EvidenceBundle(route="doc_text", items=items)
+
+    verifier(request, QUESTION, "unanswerable", bundle)
+
+    assert len(llm.calls) == 1
+    messages, kwargs = llm.calls[0]
+    trace = bundle.metadata["semantic_proposition_verifier"]
+    assert kwargs["max_tokens"] == SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS
+    assert SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS <= 512
+    assert trace["evidence_char_budget"] == 2000
+    assert trace["packed_evidence_chars"] <= trace["evidence_char_budget"]
+    assert trace["dropped_evidence_count"] > 0
+    assert len(messages[1].content) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS
 
 
 def test_runtime_verifier_fails_closed_on_invalid_json() -> None:
