@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
-from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.boolean_authority_schema import SEMANTIC_PROPOSITION_VERDICT_CONTRACT
 from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.query_planning import build_query_plan
 
@@ -19,6 +18,9 @@ from benchmark.qasper_runtime_authority import (
     runtime_typed_proposition_authority,
 )
 from benchmark.task_answer_contracts import apply_task_answer_contract
+from benchmark.tests.qasper_semantic_test_fixtures import (
+    semantic_verdict as _semantic_verdict,
+)
 
 
 def _prediction(*, exact: bool) -> dict:
@@ -159,71 +161,6 @@ def _semantic_request(question: str) -> DocQARequest:
             verification_domain="qasper",
         ),
     )
-
-
-def _semantic_verdict(
-    request: Any,
-    _question: str,
-    _answer: str,
-    bundle: Any,
-) -> dict[str, Any]:
-    bundle.metadata["semantic_proposition_verifier"] = {
-        "contract_id": "semantic_proposition_verifier_runtime.v1",
-        "status": "parsed",
-        "reason": "strict_schema_parsed",
-        "actual_model_call_count": 1,
-        "available_evidence_count": 2,
-        "packed_evidence_count": 2,
-        "evidence_item_char_limit": 2000,
-        "estimated_input_token_budget": 3072,
-        "estimated_input_tokens": 220,
-        "minimum_model_context_tokens": 4096,
-        "packed_evidence_chars": 107,
-        "dropped_evidence_count": 0,
-        "truncated_evidence_count": 0,
-        "required_slot_count": 3,
-        "prompt_chars": 731,
-        "max_prompt_chars": 16000,
-        "max_output_tokens": 512,
-        "verdict": "yes",
-    }
-    slot_ids = [
-        slot.slot_id
-        for slot in request.query_plan.evidence_slots
-        if slot.required_for_verification
-    ]
-    premises = []
-    for index, item in enumerate(bundle.items):
-        side = "left_subject" if index == 0 else "right_subject"
-        premises.append(
-            {
-                "evidence_id": identity_of(item).key,
-                "quote": item["text"],
-                "proposition_fragment": (
-                    "cross-language evaluation was performed"
-                    if index == 0
-                    else "single-language baselines were compared"
-                ),
-                "supports_slot_ids": [
-                    slot_id
-                    for slot_id in slot_ids
-                    if slot_id == "support:proposition" or slot_id.endswith(side)
-                ],
-            }
-        )
-    return {
-        "contract_id": "semantic_proposition_verdict.v1",
-        "verdict": "yes",
-        "support_mode": "evidence_set",
-        "jointly_complete": True,
-        "each_premise_required": True,
-        "premises": premises,
-        "verifier": {
-            "contract_id": "grounded_semantic_verifier.v1",
-            "model": "test-double",
-            "seed": 7,
-        },
-    }
 
 
 def _semantic_prediction() -> dict:
@@ -421,16 +358,7 @@ def test_semantic_evidence_set_authority_round_trips_through_benchmark_audit() -
     typed = runtime_typed_proposition_authority(prediction)
     boolean = runtime_boolean_authority(prediction, "yes")
 
-    assert typed["complete"] is True
-    assert typed["authority_kind"] == "semantic_evidence_set"
-    assert set(typed["slot_ref_bindings"]) == {
-        "support:proposition",
-        "support:left_subject",
-        "support:right_subject",
-    }
-    assert typed["derivation_status"] == "bound"
-    assert boolean["complete"] is True
-    assert boolean["authority_kind"] == "semantic_evidence_set_polarity"
+    _assert_semantic_typed_authority(typed, boolean)
 
     apply_task_answer_contract(
         prediction,
@@ -452,13 +380,33 @@ def test_semantic_evidence_set_authority_round_trips_through_benchmark_audit() -
     )
 
     assert prediction["contract_action"] == "pass_through"
+    _assert_semantic_trace(trace, typed)
+    _assert_semantic_metrics(metrics, cited)
+
+
+def _assert_semantic_typed_authority(typed: dict, boolean: dict) -> None:
+    assert typed["complete"] is True
+    assert typed["authority_kind"] == "semantic_evidence_set"
+    assert set(typed["slot_ref_bindings"]) == {
+        "support:proposition",
+        "support:left_subject",
+        "support:right_subject",
+    }
+    assert typed["derivation_status"] == "bound"
+    assert boolean["complete"] is True
+    assert boolean["authority_kind"] == "semantic_evidence_set_polarity"
+
+
+def _assert_semantic_trace(trace: dict, typed: dict) -> None:
     assert trace["runtime_typed_authority_kind"] == "semantic_evidence_set"
     assert (
         trace["runtime_typed_authority_slot_ref_bindings"] == typed["slot_ref_bindings"]
     )
     assert trace["runtime_semantic_proposition_authority_status"] == "verified"
     assert trace["runtime_semantic_proposition_authority_premise_count"] == 2
-    assert trace["runtime_semantic_proposition_verifier_model_call_count"] == 1
+    assert trace["runtime_semantic_proposition_verifier_model_call_count"] == 2
+    assert trace["runtime_semantic_proposition_verifier_proposal_call_count"] == 1
+    assert trace["runtime_semantic_entailment_audit_call_count"] == 1
     assert trace["runtime_semantic_proposition_verifier_available_evidence_count"] == 2
     assert trace["runtime_semantic_proposition_verifier_packed_evidence_count"] == 2
     assert (
@@ -479,11 +427,28 @@ def test_semantic_evidence_set_authority_round_trips_through_benchmark_audit() -
     assert trace["runtime_semantic_proposition_verifier_required_slot_count"] == 3
     assert trace["runtime_semantic_proposition_verifier_prompt_chars"] == 731
     assert trace["runtime_semantic_proposition_verifier_max_prompt_chars"] == 16000
-    assert trace["runtime_semantic_proposition_verifier_max_output_tokens"] == 512
+    assert trace["runtime_semantic_proposition_verifier_max_output_tokens"] == 768
+    assert trace["runtime_semantic_proposition_verifier_proposal_retry_count"] == 0
+    assert trace["runtime_semantic_proposition_verifier_parse_failure_reason"] == ""
+    assert trace["runtime_semantic_proposition_verifier_finish_reason"] == "stop"
+    assert trace["runtime_semantic_proposition_verifier_completion_tokens"] == 244
+    assert trace["runtime_semantic_entailment_audit_status"] == "verified"
+    assert trace["runtime_semantic_entailment_audit_reason"] == ""
+    assert trace["runtime_semantic_entailment_audit_model"] == (
+        "independent-test-auditor"
+    )
+
+
+def _assert_semantic_metrics(metrics: dict, cited: list[dict]) -> None:
     assert len(cited) == 2
     assert metrics["qasper_semantic_evidence_set_authority_count"] == 1.0
     assert metrics["qasper_semantic_evidence_set_authority_invalid_count"] == 0.0
-    assert metrics["qasper_semantic_proposition_verifier_call_count"] == 1.0
+    assert metrics["qasper_semantic_proposition_verifier_call_count"] == 2.0
+    assert metrics["qasper_semantic_entailment_audit_call_count"] == 1.0
+    assert metrics["qasper_semantic_entailment_audit_failure_count"] == 0.0
+    assert metrics["qasper_semantic_entailment_audit_rejection_count"] == 0.0
+    assert metrics["qasper_semantic_proposition_output_truncation_count"] == 0.0
+    assert metrics["qasper_semantic_proposition_json_decode_failure_count"] == 0.0
     assert metrics["qasper_semantic_proposition_verifier_failure_count"] == 0.0
     assert metrics["qasper_semantic_proposition_verifier_context_overflow_count"] == 0.0
     assert (
@@ -507,7 +472,7 @@ def test_semantic_authority_rejection_is_a_hard_audit_failure() -> None:
     prediction = _semantic_prediction()
     metadata = prediction["engine_terminal_evidence_bundle"]["metadata"]
     metadata["semantic_proposition_authority"] = {
-        "contract_id": "semantic_proposition_verdict.v1",
+        "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
         "status": "rejected",
         "reason": "semantic_premise_quote_unbound",
     }
@@ -544,8 +509,7 @@ def test_entity_type_derivation_is_declared_in_runtime_query_plan() -> None:
                 "source_id": "paper",
                 "section_id": "experiments",
                 "text": (
-                    "In our experiments, we evaluate AtlasCV on two benchmark "
-                    "datasets."
+                    "In our experiments, we evaluate AtlasCV on two benchmark datasets."
                 ),
             },
         ],

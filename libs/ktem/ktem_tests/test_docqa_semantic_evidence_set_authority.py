@@ -5,12 +5,16 @@ from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.boolean_authority_derivation import boolean_derivation_contract_status
+from ktem.docqa.boolean_authority_schema import SEMANTIC_PROPOSITION_VERDICT_CONTRACT
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.query_planning import build_query_plan
 from ktem.docqa.verification import verify_decision
+from ktem_tests.semantic_entailment_test_helpers import (
+    audited_verdict as _audited_verdict,
+)
 
 QUESTION = "Did the authors compare cross-lingual and single-language evaluation?"
 
@@ -64,80 +68,90 @@ def _semantic_verdict(
     bundle: EvidenceBundle,
 ) -> dict[str, Any]:
     assert question == QUESTION
-    return {
-        "contract_id": "semantic_proposition_verdict.v1",
-        "verdict": "yes",
-        "support_mode": "evidence_set",
-        "jointly_complete": True,
-        "each_premise_required": True,
-        "premises": [
-            {
-                "evidence_id": identity_of(item).key,
-                "quote": item["text"],
-                "proposition_fragment": (
-                    "cross-lingual evaluation was performed"
-                    if index == 0
-                    else "single-language baselines were included for comparison"
-                ),
-                "supports_slot_ids": [
-                    "support:proposition",
-                    ("support:left_subject" if index == 0 else "support:right_subject"),
-                ],
-            }
-            for index, item in enumerate(bundle.items)
-        ],
-        "verifier": {
-            "contract_id": "grounded_semantic_verifier.v1",
-            "model": "test-double",
-            "seed": 7,
+    return _audited_verdict(
+        {
+            "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+            "verdict": "yes",
+            "support_mode": "evidence_set",
+            "jointly_complete": True,
+            "each_premise_required": True,
+            "premises": [
+                {
+                    "evidence_id": identity_of(item).key,
+                    "quote": item["text"],
+                    "proposition_fragment": (
+                        "cross-lingual evaluation was performed"
+                        if index == 0
+                        else "single-language baselines were included for comparison"
+                    ),
+                    "supports_slot_ids": [
+                        "support:proposition",
+                        (
+                            "support:left_subject"
+                            if index == 0
+                            else "support:right_subject"
+                        ),
+                    ],
+                }
+                for index, item in enumerate(bundle.items)
+            ],
+            "verifier": {
+                "contract_id": "grounded_semantic_verifier.v1",
+                "model": "test-double",
+                "seed": 7,
+            },
         },
-    }
+        question,
+    )
 
 
 def _same_item_semantic_verdict(
     _request: Any,
-    _question: str,
+    question: str,
     _answer: str,
     bundle: EvidenceBundle,
 ) -> dict[str, Any]:
     evidence_id = identity_of(bundle.items[0]).key
-    return {
-        "contract_id": "semantic_proposition_verdict.v1",
-        "verdict": "yes",
-        "support_mode": "evidence_set",
-        "jointly_complete": True,
-        "each_premise_required": True,
-        "premises": [
-            {
-                "evidence_id": evidence_id,
-                "quote": "We evaluated transfer in the cross-lingual setting.",
-                "proposition_fragment": "cross-lingual evaluation was performed",
-                "supports_slot_ids": [
-                    "support:proposition",
-                    "support:left_subject",
-                ],
+    return _audited_verdict(
+        {
+            "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+            "verdict": "yes",
+            "support_mode": "evidence_set",
+            "jointly_complete": True,
+            "each_premise_required": True,
+            "premises": [
+                {
+                    "evidence_id": evidence_id,
+                    "quote": "We evaluated transfer in the cross-lingual setting.",
+                    "proposition_fragment": "cross-lingual evaluation was performed",
+                    "supports_slot_ids": [
+                        "support:proposition",
+                        "support:left_subject",
+                    ],
+                },
+                {
+                    "evidence_id": evidence_id,
+                    "quote": (
+                        "The same experiment included single-language baselines "
+                        "for comparison."
+                    ),
+                    "proposition_fragment": (
+                        "single-language baselines were included for comparison"
+                    ),
+                    "supports_slot_ids": [
+                        "support:proposition",
+                        "support:right_subject",
+                    ],
+                },
+            ],
+            "verifier": {
+                "contract_id": "grounded_semantic_verifier.v1",
+                "model": "test-double",
+                "seed": 7,
             },
-            {
-                "evidence_id": evidence_id,
-                "quote": (
-                    "The same experiment included single-language baselines "
-                    "for comparison."
-                ),
-                "proposition_fragment": (
-                    "single-language baselines were included for comparison"
-                ),
-                "supports_slot_ids": [
-                    "support:proposition",
-                    "support:right_subject",
-                ],
-            },
-        ],
-        "verifier": {
-            "contract_id": "grounded_semantic_verifier.v1",
-            "model": "test-double",
-            "seed": 7,
         },
-    }
+        question,
+    )
 
 
 def test_semantic_evidence_set_commits_one_typed_boolean_proposition() -> None:
@@ -160,7 +174,7 @@ def test_semantic_evidence_set_commits_one_typed_boolean_proposition() -> None:
     [claim] = decision.claim_results
     assert claim["authority_status"] == "semantic_evidence_set"
     [derivation] = decision.typed_authority["authority_derivations"]
-    assert derivation["rule_id"] == "grounded_semantic_evidence_set_entailment.v1"
+    assert derivation["rule_id"] == "grounded_semantic_evidence_set_entailment.v2"
     assert derivation["support_mode"] == "evidence_set"
     assert derivation["verifier_attestation"]["model"] == "test-double"
     assert derivation["verifier_attestation"]["jointly_complete"] is True
@@ -206,33 +220,36 @@ def test_semantic_evidence_set_binds_a_named_subject_across_local_spans() -> Non
     ]
 
     def verifier(*_args: Any) -> dict[str, Any]:
-        return {
-            "contract_id": "semantic_proposition_verdict.v1",
-            "verdict": "yes",
-            "support_mode": "evidence_set",
-            "jointly_complete": True,
-            "each_premise_required": True,
-            "premises": [
-                {
-                    "evidence_id": identity_of(item).key,
-                    "quote": item["text"],
-                    "proposition_fragment": fragment,
-                    "supports_slot_ids": [slot_id],
-                }
-                for item, fragment in zip(
-                    items,
-                    (
-                        "Atlas provides more than 50 tasks",
-                        "Atlas tasks reference their data",
-                    ),
-                )
-            ],
-            "verifier": {
-                "contract_id": "grounded_semantic_verifier.v1",
-                "model": "test-double",
-                "seed": 7,
+        return _audited_verdict(
+            {
+                "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+                "verdict": "yes",
+                "support_mode": "evidence_set",
+                "jointly_complete": True,
+                "each_premise_required": True,
+                "premises": [
+                    {
+                        "evidence_id": identity_of(item).key,
+                        "quote": item["text"],
+                        "proposition_fragment": fragment,
+                        "supports_slot_ids": [slot_id],
+                    }
+                    for item, fragment in zip(
+                        items,
+                        (
+                            "Atlas provides more than 50 tasks",
+                            "Atlas tasks reference their data",
+                        ),
+                    )
+                ],
+                "verifier": {
+                    "contract_id": "grounded_semantic_verifier.v1",
+                    "model": "test-double",
+                    "seed": 7,
+                },
             },
-        }
+            question,
+        )
 
     decision = verify_decision(
         request,
@@ -265,27 +282,30 @@ def test_semantic_local_spans_do_not_invent_a_current_author_action() -> None:
     ]
 
     def verifier(*_args: Any) -> dict[str, Any]:
-        return {
-            "contract_id": "semantic_proposition_verdict.v1",
-            "verdict": "yes",
-            "support_mode": "evidence_set",
-            "jointly_complete": True,
-            "each_premise_required": True,
-            "premises": [
-                {
-                    "evidence_id": identity_of(item).key,
-                    "quote": item["text"],
-                    "proposition_fragment": f"registry premise {index}",
-                    "supports_slot_ids": [slot_id],
-                }
-                for index, item in enumerate(items, start=1)
-            ],
-            "verifier": {
-                "contract_id": "grounded_semantic_verifier.v1",
-                "model": "test-double",
-                "seed": 7,
+        return _audited_verdict(
+            {
+                "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+                "verdict": "yes",
+                "support_mode": "evidence_set",
+                "jointly_complete": True,
+                "each_premise_required": True,
+                "premises": [
+                    {
+                        "evidence_id": identity_of(item).key,
+                        "quote": item["text"],
+                        "proposition_fragment": f"registry premise {index}",
+                        "supports_slot_ids": [slot_id],
+                    }
+                    for index, item in enumerate(items, start=1)
+                ],
+                "verifier": {
+                    "contract_id": "grounded_semantic_verifier.v1",
+                    "model": "test-double",
+                    "seed": 7,
+                },
             },
-        }
+            question,
+        )
 
     decision = verify_decision(
         request,
@@ -313,27 +333,30 @@ def test_semantic_no_requires_an_explicit_negative_relation() -> None:
     ]
 
     def verifier(*_args: Any) -> dict[str, Any]:
-        return {
-            "contract_id": "semantic_proposition_verdict.v1",
-            "verdict": "no",
-            "support_mode": "evidence_set",
-            "jointly_complete": True,
-            "each_premise_required": True,
-            "premises": [
-                {
-                    "evidence_id": identity_of(item).key,
-                    "quote": item["text"],
-                    "proposition_fragment": f"positive premise {index}",
-                    "supports_slot_ids": [slot_id],
-                }
-                for index, item in enumerate(items, start=1)
-            ],
-            "verifier": {
-                "contract_id": "grounded_semantic_verifier.v1",
-                "model": "test-double",
-                "seed": 7,
+        return _audited_verdict(
+            {
+                "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+                "verdict": "no",
+                "support_mode": "evidence_set",
+                "jointly_complete": True,
+                "each_premise_required": True,
+                "premises": [
+                    {
+                        "evidence_id": identity_of(item).key,
+                        "quote": item["text"],
+                        "proposition_fragment": f"positive premise {index}",
+                        "supports_slot_ids": [slot_id],
+                    }
+                    for index, item in enumerate(items, start=1)
+                ],
+                "verifier": {
+                    "contract_id": "grounded_semantic_verifier.v1",
+                    "model": "test-double",
+                    "seed": 7,
+                },
             },
-        }
+            question,
+        )
 
     bundle = EvidenceBundle(route="doc_text", items=items)
     decision = verify_decision(
@@ -366,38 +389,42 @@ def test_semantic_no_can_bind_an_explicit_negative_relation() -> None:
     ]
 
     def verifier(*_args: Any) -> dict[str, Any]:
-        return {
-            "contract_id": "semantic_proposition_verdict.v1",
-            "verdict": "no",
-            "support_mode": "evidence_set",
-            "jointly_complete": True,
-            "each_premise_required": True,
-            "premises": [
-                {
-                    "evidence_id": identity_of(item).key,
-                    "quote": item["text"],
-                    "proposition_fragment": fragment,
-                    "supports_slot_ids": [
-                        slot_id
-                        for slot_id in slot_ids
-                        if slot_id == "support:proposition" or slot_id.endswith(side)
-                    ],
-                }
-                for item, fragment, side in zip(
-                    items,
-                    (
-                        "cross-lingual evaluation was performed",
-                        "single-language evaluation was not compared",
-                    ),
-                    ("left_subject", "right_subject"),
-                )
-            ],
-            "verifier": {
-                "contract_id": "grounded_semantic_verifier.v1",
-                "model": "test-double",
-                "seed": 7,
+        return _audited_verdict(
+            {
+                "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+                "verdict": "no",
+                "support_mode": "evidence_set",
+                "jointly_complete": True,
+                "each_premise_required": True,
+                "premises": [
+                    {
+                        "evidence_id": identity_of(item).key,
+                        "quote": item["text"],
+                        "proposition_fragment": fragment,
+                        "supports_slot_ids": [
+                            slot_id
+                            for slot_id in slot_ids
+                            if slot_id == "support:proposition"
+                            or slot_id.endswith(side)
+                        ],
+                    }
+                    for item, fragment, side in zip(
+                        items,
+                        (
+                            "cross-lingual evaluation was performed",
+                            "single-language evaluation was not compared",
+                        ),
+                        ("left_subject", "right_subject"),
+                    )
+                ],
+                "verifier": {
+                    "contract_id": "grounded_semantic_verifier.v1",
+                    "model": "test-double",
+                    "seed": 7,
+                },
             },
-        }
+            QUESTION,
+        )
 
     decision = verify_decision(
         request,

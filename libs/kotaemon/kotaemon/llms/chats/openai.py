@@ -163,6 +163,8 @@ class BaseChatOpenAI(ChatLLM):
     def prepare_output(self, resp: dict) -> LLMInterface:
         """Convert the OpenAI response into LLMInterface"""
         additional_kwargs = {}
+        if finish_reason := resp["choices"][0].get("finish_reason"):
+            additional_kwargs["finish_reason"] = finish_reason
         if "tool_calls" in resp["choices"][0]["message"]:
             additional_kwargs["tool_calls"] = resp["choices"][0]["message"][
                 "tool_calls"
@@ -348,6 +350,8 @@ class StructuredOutputChatOpenAI(ChatOpenAI):
     def prepare_output(self, resp: dict) -> StructuredOutputLLMInterface:
         """Convert the OpenAI response into StructuredOutputLLMInterface"""
         additional_kwargs = {}
+        if finish_reason := resp["choices"][0].get("finish_reason"):
+            additional_kwargs["finish_reason"] = finish_reason
 
         if "tool_calls" in resp["choices"][0]["message"]:
             additional_kwargs["tool_calls"] = resp["choices"][0]["message"][

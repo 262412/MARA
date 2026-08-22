@@ -40,7 +40,16 @@ class _RecordingLLM:
 
     def __call__(self, messages: Any, **kwargs: Any) -> Any:
         self.calls.append((messages, kwargs))
-        return SimpleNamespace(text=self.response)
+        schema_name = (
+            kwargs.get("response_format", {}).get("json_schema", {}).get("name")
+        )
+        return SimpleNamespace(
+            text=(
+                _audit_response()
+                if schema_name == "semantic_entailment_audit"
+                else self.response
+            )
+        )
 
 
 class _FailingLLM:
@@ -138,6 +147,24 @@ def _insufficient_response() -> str:
     )
 
 
+def _audit_response() -> str:
+    return json.dumps(
+        {
+            "premise_checks": [
+                {
+                    "premise_ref": label,
+                    "fragment_entailed": True,
+                    "scope_consistent": True,
+                }
+                for label in ("P1", "P2")
+            ],
+            "jointly_entails": True,
+            "each_premise_required": True,
+            "contradiction_free": True,
+        }
+    )
+
+
 def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> None:
     llm = _RecordingLLM(_model_response())
     verifier = build_semantic_proposition_verifier(
@@ -152,7 +179,7 @@ def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> Non
 
     assert first == second
     assert first is not None
-    assert len(llm.calls) == 1
+    assert len(llm.calls) == 2
     assert [value["evidence_id"] for value in first["premises"]] == [
         identity_of(item).key for item in _items()
     ]
@@ -172,7 +199,7 @@ def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> Non
     assert kwargs["response_format"]["json_schema"]["strict"] is True
     assert bundle.metadata["semantic_proposition_verifier"]["cache_hit"] is True
     assert (
-        bundle.metadata["semantic_proposition_verifier"]["actual_model_call_count"] == 1
+        bundle.metadata["semantic_proposition_verifier"]["actual_model_call_count"] == 2
     )
 
 
@@ -236,7 +263,12 @@ def test_runtime_verifier_honors_request_evidence_budget() -> None:
     messages, kwargs = llm.calls[0]
     trace = bundle.metadata["semantic_proposition_verifier"]
     assert kwargs["max_tokens"] == SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS
-    assert SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS <= 512
+    assert SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS == 768
+    assert (
+        SEMANTIC_PROPOSITION_VERIFIER_INPUT_TOKEN_BUDGET
+        + SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS
+        <= SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS
+    )
     assert trace["evidence_item_char_limit"] == 2000
     assert trace["estimated_input_token_budget"] == (
         SEMANTIC_PROPOSITION_VERIFIER_INPUT_TOKEN_BUDGET
@@ -358,7 +390,7 @@ def test_runtime_verifier_accepts_distinct_spans_from_one_canonical_item() -> No
     )
 
     assert result is not None
-    assert len(llm.calls) == 1
+    assert len(llm.calls) == 2
     assert result["premises"][0]["evidence_id"] == result["premises"][1]["evidence_id"]
 
 
@@ -375,8 +407,7 @@ def test_runtime_verdict_commits_typed_authority_and_query_plan_bindings() -> No
             "source_id": "paper",
             "section_id": "experiments",
             "text": (
-                "The same experiment included single-language baselines for "
-                "comparison."
+                "The same experiment included single-language baselines for comparison."
             ),
         },
     ]
@@ -425,7 +456,11 @@ def test_mara_route_injects_the_semantic_verifier(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(mara_module, "execute_controller_turn", fake_execute)
     pipeline = MaraAgentPipeline(retrievers=[])
-    pipeline.answering_pipeline = SimpleNamespace(llm=_RecordingLLM(_model_response()))
+    setattr(
+        pipeline,
+        "answering_pipeline",
+        SimpleNamespace(llm=_RecordingLLM(_model_response())),
+    )
 
     with pytest.raises(StopExecution):
         pipeline.execute_controller_route(

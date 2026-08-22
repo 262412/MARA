@@ -36,6 +36,7 @@ from .boolean_scope_quantifiers import _closed_quantifier
 from .evidence_identity import identity_of
 from .evidence_schema import EvidenceBundle
 from .query_phrase_extraction import source_page_locator
+from .semantic_entailment_audit import semantic_entailment_audit_validation_reason
 
 LOGGER = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ def semantic_evidence_set_claim_authority(
     if response is None:
         _record_trace(bundle, "failed", "semantic_verifier_failed")
         return None
-    header, header_reason = _validated_header(response)
+    header, header_reason = _validated_header(response, prompt)
     if header is None:
         _record_trace(bundle, "rejected", header_reason)
         return None
@@ -176,6 +177,7 @@ def _call_verifier(
 
 def _validated_header(
     response: Mapping[str, Any],
+    question: str,
 ) -> tuple[tuple[str, dict[str, Any]] | None, str]:
     if response.get("contract_id") != SEMANTIC_PROPOSITION_VERDICT_CONTRACT:
         return None, "semantic_verdict_contract_mismatch"
@@ -189,6 +191,24 @@ def _validated_header(
         or response.get("each_premise_required") is not True
     ):
         return None, "semantic_joint_entailment_incomplete"
+    raw_premises = response.get("premises")
+    premises = (
+        [value for value in raw_premises if isinstance(value, Mapping)]
+        if isinstance(raw_premises, list)
+        else []
+    )
+    audit_reason = (
+        semantic_entailment_audit_validation_reason(
+            question,
+            verdict,
+            premises,
+            response.get("entailment_audit"),
+        )
+        if verdict in {"yes", "no"}
+        else ""
+    )
+    if audit_reason:
+        return None, audit_reason
     verifier = response.get("verifier")
     if not isinstance(verifier, Mapping):
         return None, "semantic_verifier_attestation_missing"
@@ -203,6 +223,7 @@ def _validated_header(
         "verdict": verdict,
         "jointly_complete": response.get("jointly_complete") is True,
         "each_premise_required": response.get("each_premise_required") is True,
+        "entailment_audit": dict(response.get("entailment_audit") or {}),
     }
     return (verdict, attestation), ""
 

@@ -293,12 +293,28 @@ def typed_authority_trace_fields(
 def semantic_proposition_verifier_trace_fields(
     prediction: dict[str, Any],
 ) -> dict[str, Any]:
+    trace = _semantic_proposition_verifier_trace(prediction)
+    return {
+        **_semantic_verifier_runtime_trace_fields(trace),
+        **_semantic_proposal_response_trace_fields(trace),
+        **_semantic_entailment_audit_trace_fields(trace),
+    }
+
+
+def _semantic_proposition_verifier_trace(
+    prediction: dict[str, Any],
+) -> dict[str, Any]:
     bundle = prediction.get("engine_terminal_evidence_bundle")
     bundle = bundle if isinstance(bundle, dict) else {}
     metadata = bundle.get("metadata")
     metadata = metadata if isinstance(metadata, dict) else {}
     trace = metadata.get("semantic_proposition_verifier")
-    trace = trace if isinstance(trace, dict) else {}
+    return trace if isinstance(trace, dict) else {}
+
+
+def _semantic_verifier_runtime_trace_fields(
+    trace: dict[str, Any],
+) -> dict[str, Any]:
     return {
         "runtime_semantic_proposition_verifier_contract_id": str(
             trace.get("contract_id") or ""
@@ -307,6 +323,12 @@ def semantic_proposition_verifier_trace_fields(
         "runtime_semantic_proposition_verifier_reason": str(trace.get("reason") or ""),
         "runtime_semantic_proposition_verifier_model_call_count": _nonnegative_int(
             trace.get("actual_model_call_count")
+        ),
+        "runtime_semantic_proposition_verifier_proposal_call_count": (
+            _nonnegative_int(trace.get("proposal_model_call_count"))
+        ),
+        "runtime_semantic_entailment_audit_call_count": _nonnegative_int(
+            trace.get("audit_model_call_count")
         ),
         "runtime_semantic_proposition_verifier_available_evidence_count": (
             _nonnegative_int(trace.get("available_evidence_count"))
@@ -350,6 +372,66 @@ def semantic_proposition_verifier_trace_fields(
         "runtime_semantic_proposition_verifier_cache_hit": bool(trace.get("cache_hit")),
         "runtime_semantic_proposition_verifier_verdict": str(
             trace.get("verdict") or ""
+        ),
+    }
+
+
+def _semantic_proposal_response_trace_fields(
+    trace: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "runtime_semantic_proposition_verifier_proposal_retry_count": (
+            _nonnegative_int(trace.get("proposal_retry_count"))
+        ),
+        "runtime_semantic_proposition_verifier_initial_parse_failure_reason": str(
+            trace.get("initial_parse_failure_reason") or ""
+        ),
+        "runtime_semantic_proposition_verifier_parse_failure_reason": str(
+            trace.get("parse_failure_reason") or ""
+        ),
+        "runtime_semantic_proposition_verifier_finish_reason": str(
+            trace.get("response_finish_reason") or ""
+        ),
+        "runtime_semantic_proposition_verifier_completion_tokens": _nonnegative_int(
+            trace.get("response_completion_tokens")
+        ),
+        "runtime_semantic_proposition_verifier_response_chars": _nonnegative_int(
+            trace.get("response_chars")
+        ),
+    }
+
+
+def _semantic_entailment_audit_trace_fields(
+    trace: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "runtime_semantic_entailment_audit_contract_id": str(
+            trace.get("audit_contract_id") or ""
+        ),
+        "runtime_semantic_entailment_audit_model": str(trace.get("audit_model") or ""),
+        "runtime_semantic_entailment_audit_status": str(
+            trace.get("audit_status") or ""
+        ),
+        "runtime_semantic_entailment_audit_reason": str(
+            trace.get("audit_reason") or ""
+        ),
+        "runtime_semantic_entailment_audit_retry_count": _nonnegative_int(
+            trace.get("audit_retry_count")
+        ),
+        "runtime_semantic_entailment_audit_parse_failure_reason": str(
+            trace.get("audit_parse_failure_reason") or ""
+        ),
+        "runtime_semantic_entailment_audit_finish_reason": str(
+            trace.get("audit_response_finish_reason") or ""
+        ),
+        "runtime_semantic_entailment_audit_completion_tokens": _nonnegative_int(
+            trace.get("audit_response_completion_tokens")
+        ),
+        "runtime_semantic_entailment_audit_response_chars": _nonnegative_int(
+            trace.get("audit_response_chars")
+        ),
+        "runtime_semantic_entailment_audit_proposal_digest": str(
+            trace.get("audit_proposal_digest") or ""
         ),
     }
 

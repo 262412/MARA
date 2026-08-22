@@ -11,6 +11,12 @@ QASPER_AUTHORITY_DIAGNOSTIC_FIELDS = (
     "qasper_semantic_proposition_verifier_failure_count",
     "qasper_semantic_proposition_verifier_context_overflow_count",
     "qasper_semantic_proposition_verifier_schema_unsupported_count",
+    "qasper_semantic_proposition_output_truncation_count",
+    "qasper_semantic_proposition_json_decode_failure_count",
+    "qasper_semantic_proposition_parse_contract_rejection_count",
+    "qasper_semantic_entailment_audit_call_count",
+    "qasper_semantic_entailment_audit_failure_count",
+    "qasper_semantic_entailment_audit_rejection_count",
     "qasper_required_slot_authority_empty_count",
     "qasper_required_slot_authority_missing_count",
 )

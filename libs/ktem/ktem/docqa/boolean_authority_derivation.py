@@ -15,6 +15,7 @@ from .boolean_authority_schema import (
 from .boolean_conjunction import boolean_conjunction_spec
 from .boolean_proposition_compatibility import boolean_argument_token_coverage
 from .boolean_relations import primary_boolean_relation
+from .semantic_entailment_audit import semantic_entailment_audit_validation_reason
 
 COMPOSITE_BOOLEAN_RULES = frozenset(
     {
@@ -272,6 +273,7 @@ def _rule_contract_status(
             contributions,
             atom_by_ref=atom_by_ref,
             conclusion=conclusion,
+            question=question,
         )
     return (
         "bound"
@@ -317,6 +319,7 @@ def _semantic_header_complete(derivation: dict[str, Any]) -> bool:
         }
         and attestation.get("jointly_complete") is True
         and attestation.get("each_premise_required") is True
+        and isinstance(attestation.get("entailment_audit"), dict)
     )
 
 
@@ -326,6 +329,7 @@ def _semantic_evidence_set_status(
     *,
     atom_by_ref: dict[str, dict[str, Any]],
     conclusion: dict[str, Any],
+    question: str,
 ) -> str:
     attestation = derivation.get("verifier_attestation")
     attestation = attestation if isinstance(attestation, dict) else {}
@@ -339,6 +343,7 @@ def _semantic_evidence_set_status(
     }
     supported_slots: set[str] = set()
     proposition_fragments: set[str] = set()
+    audit_premises: list[dict[str, Any]] = []
     for index, reference in enumerate(premise_refs, start=1):
         contribution = contribution_by_ref[reference]
         atom = atom_by_ref[reference]
@@ -362,6 +367,22 @@ def _semantic_evidence_set_status(
             return "semantic_premise_fragment_duplicate"
         proposition_fragments.add(normalized_fragment)
         supported_slots.update(slot_ids)
+        audit_premises.append(
+            {
+                "evidence_id": str(atom.get("evidence_id") or ""),
+                "quote": str(atom.get("quote") or ""),
+                "proposition_fragment": fragment,
+                "supports_slot_ids": sorted(slot_ids),
+            }
+        )
+    audit_reason = semantic_entailment_audit_validation_reason(
+        question,
+        str(conclusion.get("polarity") or ""),
+        audit_premises,
+        attestation.get("entailment_audit"),
+    )
+    if audit_reason:
+        return audit_reason
     return (
         "bound"
         if supported_slots == set(_strings(attestation.get("required_slot_ids")))

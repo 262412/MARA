@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from ktem.docqa.boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
+
+
+@dataclass(frozen=True)
+class SemanticPropositionParse:
+    value: dict[str, Any] | None
+    failure_reason: str = ""
 
 
 def semantic_proposition_response_format(
@@ -78,10 +85,27 @@ def parse_semantic_proposition_result(
     model: str,
     seed: int,
 ) -> dict[str, Any] | None:
+    return parse_semantic_proposition_response(
+        response_text,
+        packed=packed,
+        slot_ids=slot_ids,
+        model=model,
+        seed=seed,
+    ).value
+
+
+def parse_semantic_proposition_response(
+    response_text: str,
+    *,
+    packed: list[dict[str, str]],
+    slot_ids: set[str],
+    model: str,
+    seed: int,
+) -> SemanticPropositionParse:
     try:
         payload = json.loads(response_text)
     except (TypeError, json.JSONDecodeError):
-        return None
+        return SemanticPropositionParse(None, "json_decode_error")
     if not isinstance(payload, dict) or set(payload) != {
         "verdict",
         "support_mode",
@@ -89,55 +113,57 @@ def parse_semantic_proposition_result(
         "each_premise_required",
         "premises",
     }:
-        return None
+        return SemanticPropositionParse(None, "top_level_schema_invalid")
     verdict = payload.get("verdict")
     if verdict not in {"yes", "no", "insufficient_evidence"}:
-        return None
+        return SemanticPropositionParse(None, "verdict_invalid")
     if payload.get("support_mode") != "evidence_set":
-        return None
+        return SemanticPropositionParse(None, "support_mode_invalid")
     if not isinstance(payload.get("jointly_complete"), bool) or not isinstance(
         payload.get("each_premise_required"), bool
     ):
-        return None
+        return SemanticPropositionParse(None, "entailment_flags_invalid")
     raw_premises = payload.get("premises")
     if not isinstance(raw_premises, list) or len(raw_premises) > 4:
-        return None
+        return SemanticPropositionParse(None, "premise_collection_invalid")
     if verdict in {"yes", "no"} and (
         not 2 <= len(raw_premises) <= 4
         or payload["jointly_complete"] is not True
         or payload["each_premise_required"] is not True
     ):
-        return None
+        return SemanticPropositionParse(None, "verdict_payload_inconsistent")
     if verdict == "insufficient_evidence" and (
         raw_premises
         or payload["jointly_complete"] is not False
         or payload["each_premise_required"] is not False
     ):
-        return None
+        return SemanticPropositionParse(None, "verdict_payload_inconsistent")
     label_to_id = {value["label"]: value["evidence_id"] for value in packed}
-    premises = _parse_premises(raw_premises, label_to_id, slot_ids)
+    premises, premise_reason = _parse_premises(raw_premises, label_to_id, slot_ids)
     if premises is None:
-        return None
-    return {
-        "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
-        "verdict": verdict,
-        "support_mode": "evidence_set",
-        "jointly_complete": payload["jointly_complete"],
-        "each_premise_required": payload["each_premise_required"],
-        "premises": premises,
-        "verifier": {
-            "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
-            "model": model,
-            "seed": seed,
+        return SemanticPropositionParse(None, premise_reason)
+    return SemanticPropositionParse(
+        {
+            "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+            "verdict": verdict,
+            "support_mode": "evidence_set",
+            "jointly_complete": payload["jointly_complete"],
+            "each_premise_required": payload["each_premise_required"],
+            "premises": premises,
+            "verifier": {
+                "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+                "model": model,
+                "seed": seed,
+            },
         },
-    }
+    )
 
 
 def _parse_premises(
     raw_premises: list[Any],
     label_to_id: dict[str, str],
     slot_ids: set[str],
-) -> list[dict[str, Any]] | None:
+) -> tuple[list[dict[str, Any]] | None, str]:
     premises: list[dict[str, Any]] = []
     for raw in raw_premises:
         if not isinstance(raw, dict) or set(raw) != {
@@ -146,7 +172,7 @@ def _parse_premises(
             "proposition_fragment",
             "supports_slot_ids",
         }:
-            return None
+            return None, "premise_schema_invalid"
         evidence_id = label_to_id.get(str(raw.get("evidence_ref") or ""))
         quote = raw.get("quote")
         fragment = raw.get("proposition_fragment")
@@ -155,7 +181,10 @@ def _parse_premises(
             not evidence_id
             or not isinstance(quote, str)
             or not isinstance(fragment, str)
-            or not isinstance(supports, list)
+        ):
+            return None, "premise_value_invalid"
+        if (
+            not isinstance(supports, list)
             or not supports
             or any(
                 not isinstance(value, str) or value not in slot_ids
@@ -163,7 +192,7 @@ def _parse_premises(
             )
             or len(set(supports)) != len(supports)
         ):
-            return None
+            return None, "premise_slot_binding_invalid"
         premises.append(
             {
                 "evidence_id": evidence_id,
@@ -173,4 +202,6 @@ def _parse_premises(
             }
         )
     premise_spans = {(value["evidence_id"], value["quote"]) for value in premises}
-    return premises if len(premise_spans) == len(premises) else None
+    if len(premise_spans) != len(premises):
+        return None, "premise_span_duplicate"
+    return premises, ""

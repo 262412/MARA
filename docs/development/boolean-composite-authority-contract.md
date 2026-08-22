@@ -22,6 +22,11 @@ The design follows four established ideas:
   together.
 - [EntailmentBank](https://aclanthology.org/2021.emnlp-main.585/) represents
   explanations as multi-premise entailment steps from facts to a hypothesis.
+- [FActScore](https://aclanthology.org/2023.emnlp-main.741/) separates atomic
+  claim construction from checking each claim against a reliable source.
+- [MiniCheck](https://arxiv.org/abs/2404.10774) treats grounded fact checking as
+  an independent claim-versus-document decision and explicitly covers claims
+  that require synthesis across several sentences.
 - [ProofWriter](https://aclanthology.org/2021.findings-acl.317/) distinguishes
   an open-world unknown from a proved false proposition and emits inspectable
   proofs.
@@ -90,25 +95,42 @@ treated only the empirical sentence as complete authority is not used.
 
 ### Grounded semantic evidence-set entailment
 
-`grounded_semantic_evidence_set_entailment.v1` handles propositions whose
+`grounded_semantic_evidence_set_entailment.v2` handles propositions whose
 premise relationship is semantic rather than a registered lexical join. A
-conservative proposition verifier may select two to four exact, non-overlapping
+conservative proposition proposer may select two to four exact, non-overlapping
 quotes from one source and return:
 
 - one `yes`, `no`, or `insufficient_evidence` verdict under
-  `semantic_proposition_verdict.v1`;
+  `semantic_proposition_verdict.v2`;
 - `support_mode=evidence_set`;
 - an all-premises-required attestation;
 - a distinct proposition fragment for every quote;
 - the exact QueryPlan verification slots supported by every premise; and
 - a model, seed, and verifier contract attestation.
 
-The model response is a proposal, not authority. Runtime code resolves every
-evidence label back to one canonical item, grounds every quote exactly, checks
-span offsets, source identity, overlap, scope, slot coverage, and derivation
-identity, then creates typed atoms. The derivation identity includes the full
-premise contribution mapping, so changing a proposition fragment or moving a
-premise to another slot invalidates the proof.
+The first model response is a proposal, not authority. Before typed commit, a
+separate `semantic_entailment_audit.v1` transaction receives only the exact
+question, proposed polarity, quotes, and proposition fragments. It must verify
+that every quote entails its fragment without extension, every fragment keeps
+the requested actor and scope, the complete set entails the proposed answer,
+every premise is necessary, and the set is contradiction-free. The audit has a
+separate prompt, schema, seed, and model-call boundary. Deployments may route it
+to a dedicated audit model; the default runtime reuses the configured answering
+model through that independent boundary.
+
+An accepted audit records per-premise quote and fragment digests plus a digest
+of the complete proposed transaction. The audit is included in the verifier
+attestation and therefore in the deterministic derivation identity. Runtime and
+benchmark validators recompute the proposal digest from the typed atoms and
+premise contributions. Re-identifying a derivation after changing a fragment,
+quote, slot binding, polarity, or audit cannot make it valid.
+
+After audit, runtime code resolves every evidence label back to one canonical
+item, grounds every quote exactly, checks span offsets, source identity,
+overlap, scope, slot coverage, audit binding, and derivation identity, then
+creates typed atoms. An audit rejection is a normal fail-closed
+`insufficient_evidence` outcome. A missing, malformed, or provider-failed audit
+is a verifier failure and cannot publish authority.
 
 Scope is validated at two levels. A local definition or component description
 may be a valid premise even when it does not independently establish the whole
@@ -135,7 +157,13 @@ on `uniqueItems`. Prompt packing preserves complete canonical excerpts first,
 prioritizes QueryPlan-bound evidence and then the upstream reranker order, and
 only uses a question-relevant partial window when a lower-priority full excerpt
 cannot fit. A conservative estimate caps the complete system-plus-user input at
-3072 tokens and the response at 512 tokens for a 4096-token minimum context.
+3072 tokens and the proposal response at 768 tokens for a 4096-token minimum
+context. This leaves a 256-token context reserve while accommodating a complete
+four-premise JSON proof. A parse failure receives one bounded corrective retry.
+If it still fails, runtime records whether the provider exhausted its output
+budget or the local cross-field parser rejected the object; response text is not
+persisted. The audit prompt is bounded separately and has a 256-token response
+budget.
 
 ## Fail-closed invariants
 
@@ -159,6 +187,8 @@ A composite proposition is verified only when all of the following hold:
     and preserve exact span-level slot references.
 12. Semantic scope is complete at the proposition level, and negative
     authority contains an explicit target-relation contradiction.
+13. Every semantic premise fragment and the joint conclusion have a verified,
+    proposal-bound independent entailment audit.
 
 If any invariant fails, the transaction is downgraded coherently to missing
 authority and the answer remains unknown or abstained. Missing evidence never
@@ -188,7 +218,10 @@ emits:
 - `runtime_semantic_proposition_verifier_status`, model-call count, evidence
   packing count, per-item character limit, conservative input-token estimate and
   budget, dropped/truncated evidence counts, prompt/output bounds, cache status,
-  and verdict;
+  verdict, retry count, parse reason, finish reason, response token count, and
+  response size;
+- `runtime_semantic_entailment_audit_status`, reason, model, call/retry counts,
+  response diagnostics, contract, and proposal digest;
 - `qasper_composite_authority_count`;
 - `qasper_composite_authority_invalid_count`;
 - `qasper_semantic_evidence_set_authority_count`;
@@ -196,7 +229,13 @@ emits:
 - `qasper_semantic_proposition_verifier_call_count`;
 - `qasper_semantic_proposition_verifier_failure_count`;
 - `qasper_semantic_proposition_verifier_context_overflow_count`;
-- `qasper_semantic_proposition_verifier_schema_unsupported_count`.
+- `qasper_semantic_proposition_verifier_schema_unsupported_count`;
+- `qasper_semantic_proposition_output_truncation_count`;
+- `qasper_semantic_proposition_json_decode_failure_count`;
+- `qasper_semantic_proposition_parse_contract_rejection_count`;
+- `qasper_semantic_entailment_audit_call_count`;
+- `qasper_semantic_entailment_audit_failure_count`;
+- `qasper_semantic_entailment_audit_rejection_count`.
 
 The converter also preserves QASPER figures/tables and emits
 `qasper_reference_sets.v1`, including annotation identity, answer type,
