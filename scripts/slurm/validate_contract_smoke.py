@@ -126,6 +126,7 @@ QASPER_HARD_GATES = {
     "qasper_runtime_authority_missing_count": ("eq", 0.0),
     "qasper_runtime_semantic_verifier_failure_count": ("eq", 0.0),
     "qasper_runtime_scope_failure_count": ("eq", 0.0),
+    "qasper_composite_authority_invalid_count": ("eq", 0.0),
     "qasper_quote_validation_ref_mismatch_count": ("eq", 0.0),
     "answerable_false_abstention_count": ("eq", 0.0),
     "boolean_scope_violation_count": ("eq", 0.0),

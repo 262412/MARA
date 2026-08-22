@@ -17,6 +17,10 @@ from .evidence_schema import EvidenceBundle
 from .query_plan_schema import EvidenceSlot, _slot_from_payload
 from .query_planning import score_evidence_for_slot
 from .typed_proposition_authority import coherent_authority_failure
+from .typed_proposition_authority_atoms import (
+    bound_boolean_derivations,
+    exact_boolean_atoms,
+)
 from .verification_evidence_mapping import verification_slots
 
 
@@ -46,25 +50,19 @@ def claim_aware_slot_support(
     selected_items = list(evidence_bundle.items) if evidence_bundle is not None else []
     selected_lookup = unambiguous_evidence_alias_lookup(selected_items)
     boolean_authority_required = _requires_typed_boolean_authority(request)
-    resolved_support: list[tuple[str, dict[str, Any]]] = []
-    for claim, evidence_id, result in supported_claims:
-        item = selected_lookup.get(evidence_id)
-        if item is None:
-            continue
-        try:
-            identity = identity_of(item).key
-        except ValueError:
-            continue
-        if _claim_result_supports_item(
-            claim,
-            result,
-            item,
-            identity,
-            boolean_authority_required=boolean_authority_required,
-            prompt=prompt,
-            domain=domain,
-        ):
-            resolved_support.append((identity, item))
+    composite_ids = _validated_composite_support_ids(
+        decision,
+        evidence_bundle,
+        prompt=prompt,
+    )
+    resolved_support = _resolved_claim_support(
+        supported_claims,
+        selected_lookup,
+        boolean_authority_required=boolean_authority_required,
+        composite_ids=composite_ids,
+        prompt=prompt,
+        domain=domain,
+    )
 
     reconciled: dict[str, tuple[str, ...]] = {}
     for slot in verification_slots(request):
@@ -92,7 +90,42 @@ def claim_aware_slot_support(
                 support_ids.append(evidence_id)
         if support_ids:
             reconciled[slot_id] = tuple(dict.fromkeys(support_ids))
+    used_ids = {value for values in reconciled.values() for value in values}
+    if composite_ids and not composite_ids <= used_ids:
+        return {}
     return reconciled
+
+
+def _resolved_claim_support(
+    supported_claims: list[tuple[str, str, dict[str, Any]]],
+    selected_lookup: dict[str, dict[str, Any]],
+    *,
+    boolean_authority_required: bool,
+    composite_ids: set[str],
+    prompt: str,
+    domain: str,
+) -> list[tuple[str, dict[str, Any]]]:
+    resolved = []
+    for claim, evidence_id, result in supported_claims:
+        item = selected_lookup.get(evidence_id)
+        if item is None:
+            continue
+        try:
+            identity = identity_of(item).key
+        except ValueError:
+            continue
+        if _claim_result_supports_item(
+            claim,
+            result,
+            item,
+            identity,
+            boolean_authority_required=boolean_authority_required,
+            prompt=prompt,
+            domain=domain,
+            composite_ids=composite_ids,
+        ):
+            resolved.append((identity, item))
+    return resolved
 
 
 def _claim_result_supports_item(
@@ -104,17 +137,48 @@ def _claim_result_supports_item(
     boolean_authority_required: bool,
     prompt: str,
     domain: str,
+    composite_ids: set[str],
 ) -> bool:
     if str(result.get("authority_status") or "") == "visual_page":
         return True
     if _exact_boolean_authority_matches(result, item, identity):
         return True
+    if str(result.get("authority_status") or "") == "composite_exact":
+        return identity in composite_ids
     return not boolean_authority_required and claim_supported(
         claim,
         [item],
         prompt=prompt,
         domain=domain,
     )
+
+
+def _validated_composite_support_ids(
+    decision: Any,
+    evidence_bundle: EvidenceBundle | None,
+    *,
+    prompt: str,
+) -> set[str]:
+    if evidence_bundle is None:
+        return set()
+    if not any(
+        str(result.get("authority_status") or "") == "composite_exact"
+        for result in decision.claim_results
+    ):
+        return set()
+    atoms = exact_boolean_atoms(decision, evidence_bundle, question=prompt)
+    derivations = bound_boolean_derivations(
+        decision,
+        atoms,
+        question=prompt,
+    )
+    if len(derivations) != 1:
+        return set()
+    return {
+        str(value).strip()
+        for value in derivations[0].get("premise_evidence_ids") or ()
+        if str(value).strip()
+    }
 
 
 def unsupported_verification_slots(

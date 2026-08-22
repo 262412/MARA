@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .boolean_conjunction import boolean_conjunction_spec
 from .finance_query_planning import finance_comparison_excluded_entities
 
 
@@ -13,6 +14,7 @@ def query_plan_constraints(
     verification_domain: str,
     segment_comparison: bool,
     capabilities: dict[str, Any] | None = None,
+    answer_type: str = "",
 ) -> dict[str, Any]:
     capabilities = dict(capabilities or {})
     cross_page = bool(
@@ -49,4 +51,9 @@ def query_plan_constraints(
                 "excluded_entities": finance_comparison_excluded_entities(question),
             }
         )
+    conjunction = (
+        boolean_conjunction_spec(question) if answer_type == "boolean" else None
+    )
+    if conjunction is not None:
+        constraints["boolean_support_group"] = conjunction
     return constraints

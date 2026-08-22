@@ -2,11 +2,30 @@ from __future__ import annotations
 
 from typing import Any
 
+from .verification_schema import VerifyDecision
+
+
+def typed_slot_bindings(decision: VerifyDecision) -> dict[str, tuple[str, ...]]:
+    authority = decision.typed_authority
+    if not isinstance(authority, dict):
+        return {}
+    payload = authority.get("slot_bindings")
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        str(slot_id): tuple(
+            str(value).strip() for value in values or [] if str(value).strip()
+        )
+        for slot_id, values in payload.items()
+        if str(slot_id).strip() and isinstance(values, (list, tuple))
+    }
+
 
 def boolean_slot_bindings(
     request: Any,
     required_slots: list[Any],
     atoms: list[dict[str, Any]],
+    derivations: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, tuple[str, ...]], list[dict[str, Any]]] | tuple[None, None]:
     """Bind exact atoms to pre-bound slots without inventing slot coverage."""
 
@@ -31,10 +50,13 @@ def boolean_slot_bindings(
     ]
     bindings: dict[str, tuple[str, ...]] = {}
     selected_ids: list[str] = []
+    proof_ids = _selected_proof_ids(derivations or [], atoms)
+    if derivations and not proof_ids:
+        return None, None
 
     if not side_slots and len(proposition_slots) == 1:
         slot = proposition_slots[0]
-        proposition_selection = (next(iter(atom_by_id)),)
+        proposition_selection = proof_ids or (next(iter(atom_by_id)),)
         bindings[str(slot.slot_id)] = proposition_selection
         selected_ids.extend(proposition_selection)
 
@@ -49,6 +71,10 @@ def boolean_slot_bindings(
         proposition_slots if side_slots or len(proposition_slots) != 1 else []
     )
     for slot in proposition_slots_to_bind:
+        if proof_ids:
+            bindings[str(slot.slot_id)] = proof_ids
+            selected_ids.extend(proof_ids)
+            continue
         candidate_ids = _slot_atom_ids(slot, atom_by_id)
         if not candidate_ids:
             return None, None
@@ -74,6 +100,35 @@ def boolean_slot_bindings(
     if not selected_atoms:
         return None, None
     return bindings, selected_atoms
+
+
+def _selected_proof_ids(
+    derivations: list[dict[str, Any]],
+    atoms: list[dict[str, Any]],
+) -> tuple[str, ...]:
+    if not derivations:
+        return ()
+    if len(derivations) != 1:
+        return ()
+    premise_refs = [
+        str(value).strip()
+        for value in derivations[0].get("premise_refs") or ()
+        if str(value).strip()
+    ]
+    atom_by_ref = {
+        str(atom.get("evidence_ref") or ""): atom
+        for atom in atoms
+        if str(atom.get("evidence_ref") or "")
+    }
+    if not premise_refs or set(premise_refs) != set(atom_by_ref):
+        return ()
+    return tuple(
+        dict.fromkeys(
+            str(atom_by_ref[reference].get("evidence_id") or "")
+            for reference in premise_refs
+            if str(atom_by_ref[reference].get("evidence_id") or "")
+        )
+    )
 
 
 def _bind_side_slots(

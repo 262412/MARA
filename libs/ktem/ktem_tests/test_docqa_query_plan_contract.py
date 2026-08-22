@@ -90,3 +90,37 @@ def test_verified_terminal_slot_states_retain_bound_reference_semantics():
     assert not evidence_slot_references_are_bound(
         EvidenceSlot(slot_id="support:proposition", role="support")
     )
+
+
+def test_planner_boolean_plan_receives_static_conjunction_obligation():
+    question = "Did the authors evaluate both clinical and legal datasets?"
+
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="general",
+        planner_payload={
+            "plan_id": "planner:unconstrained",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "evidence_slots": [
+                {
+                    "slot_id": "support:boolean_proposition",
+                    "role": "support",
+                    "statement_kind": "boolean_proposition",
+                    "query": question,
+                }
+            ],
+        },
+    )
+
+    obligation = plan.constraints["boolean_support_group"]
+    assert obligation["operator"] == "all"
+    assert obligation["semantics"] == "open_world"
+    assert obligation["premise_mode"] == "all_required"
+    assert set(obligation["required_argument_tokens"]) == {
+        "clinical",
+        "dataset",
+        "legal",
+    }
+    assert plan.plan_id != "planner:unconstrained"

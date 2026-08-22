@@ -73,6 +73,7 @@ def answerability_trace(
         "projection_present": projection_present,
         "typed_applicable": runtime_typed_authority_applicable,
         "typed_complete": runtime_typed_authority_complete,
+        "authority_kind": authority.get("authority_kind", ""),
     }
     return _trace_payload(
         prediction,
@@ -148,11 +149,36 @@ def _trace_payload(
             "quote_grounding_status", ""
         ),
         "runtime_typed_authority_frame_status": typed_authority.get("frame_status", ""),
+        **typed_derivation_trace_fields(typed_authority),
+        "runtime_boolean_authority_kind": values["authority_kind"],
         "runtime_authority_failure_kind": failure_kind,
         "post_engine_answerability_llm_call_count": 0,
         **authority_fields,
         "engine_verify_decision": deepcopy(
             prediction.get("engine_verify_decision") or {}
+        ),
+    }
+
+
+def typed_derivation_trace_fields(
+    typed_authority: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "runtime_typed_authority_kind": typed_authority.get("authority_kind", ""),
+        "runtime_typed_authority_derivation_status": typed_authority.get(
+            "derivation_status", ""
+        ),
+        "runtime_typed_authority_derivation_count": typed_authority.get(
+            "derivation_count", 0
+        ),
+        "runtime_typed_authority_selected_derivation_id": typed_authority.get(
+            "selected_derivation_id", ""
+        ),
+        "runtime_typed_authority_premise_refs": list(
+            typed_authority.get("derivation_premise_refs") or []
+        ),
+        "runtime_typed_authority_premise_evidence_ids": list(
+            typed_authority.get("derivation_premise_evidence_ids") or []
         ),
     }
 
@@ -243,13 +269,14 @@ def typed_authority_trace_fields(
         if isinstance(atom, dict)
     ]
     first = atoms[0] if atoms else {}
+    composite = typed_authority.get("authority_kind") == "composite"
     return _common_authority_fields(
         list(typed_authority.get("required_slot_ids") or []),
         list(typed_authority.get("required_evidence_ids") or []),
         complete=authority_established,
-        quote=str(first.get("quote") or ""),
-        evidence_ref=str(first.get("evidence_ref") or ""),
-        evidence_id=str(first.get("evidence_id") or ""),
+        quote="" if composite else str(first.get("quote") or ""),
+        evidence_ref="" if composite else str(first.get("evidence_ref") or ""),
+        evidence_id="" if composite else str(first.get("evidence_id") or ""),
         quote_status=str(typed_authority.get("atom_status") or ""),
         conflict=boolean_authority.get("authoritative_conflict") or {},
     )

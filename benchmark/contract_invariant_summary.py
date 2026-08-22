@@ -277,6 +277,8 @@ def _qasper_authority_summary(
         "qasper_runtime_canonical_identity_mismatch_count",
         "qasper_runtime_quote_grounding_failure_count",
         "qasper_runtime_authority_frame_incomplete_count",
+        "qasper_composite_authority_count",
+        "qasper_composite_authority_invalid_count",
         "qasper_required_slot_authority_empty_count",
         "qasper_required_slot_authority_missing_count",
         "qasper_complete_to_unanswerable_empty_authority_count",

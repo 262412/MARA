@@ -42,11 +42,17 @@ def test_same_source_named_entity_type_completes_an_empirical_proposition() -> N
     assert authority is not None
     assert authority.status == "supported"
     assert authority.canonical_answer_polarity == "yes"
-    [support] = authority.supporting
-    assert support.evidence_id == identity_of(experiment).key
-    assert support.quote == experiment["text"]
-    assert support.object == "toolkit"
-    assert support.reason == "same_source_entity_type_empirical_proposition"
+    assert {support.evidence_id for support in authority.supporting} == {
+        identity_of(definition).key,
+        identity_of(experiment).key,
+    }
+    [derivation] = authority.authority_derivations
+    assert derivation.derivation_id == authority.selected_derivation_id
+    assert derivation.rule_id == "same_source_entity_type_join.v1"
+    assert set(derivation.premise_evidence_ids) == {
+        identity_of(definition).key,
+        identity_of(experiment).key,
+    }
 
 
 @pytest.mark.parametrize(

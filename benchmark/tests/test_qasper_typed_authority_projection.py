@@ -5,8 +5,16 @@ from copy import deepcopy
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.execution import execute_controller_turn
 
-from benchmark.answer_finalizer import finalize_prediction_answer
-from benchmark.qasper_runtime_authority import runtime_typed_proposition_authority
+from benchmark.answer_finalizer import (
+    attach_structured_citations_from_evidence,
+    finalize_prediction_answer,
+)
+from benchmark.citation_claim_selection import minimum_verified_claim_support_items
+from benchmark.qasper_contract_invariants import qasper_contract_metric_values
+from benchmark.qasper_runtime_authority import (
+    runtime_boolean_authority,
+    runtime_typed_proposition_authority,
+)
 from benchmark.task_answer_contracts import apply_task_answer_contract
 
 
@@ -47,6 +55,61 @@ def _prediction(*, exact: bool) -> dict:
         "answer_for_user": execution.answer,
         "route": "text_rag",
         "gold_answers": [answer if exact else "unanswerable"],
+        "evidence_metadata": deepcopy(execution.evidence_bundle.metadata),
+        "structured_citations": [],
+        "predicted_citations": [],
+    }
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed",
+        mode="scoring_adapter_v1",
+    )
+    return prediction
+
+
+def _composite_prediction(
+    *,
+    question: str = "Did the authors evaluate both clinical and legal datasets?",
+    evidence: list[dict] | None = None,
+) -> dict:
+    evidence = evidence or [
+        {
+            "evidence_id": "clinical",
+            "source_id": "paper",
+            "section_id": "experiments",
+            "text": "We evaluate the model on a clinical dataset.",
+        },
+        {
+            "evidence_id": "legal",
+            "source_id": "paper",
+            "section_id": "experiments",
+            "text": "We evaluate the model on a legal dataset.",
+        },
+    ]
+    execution = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="boolean",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            origin="benchmark",
+        ),
+        retrieve=lambda *_args: {"evidence": evidence},
+        generate=lambda *_args: "yes",
+    )
+    prediction = {
+        **execution.as_dict(),
+        "example_id": "composite-authority",
+        "question": question,
+        "answer_type": "boolean",
+        "predicted_answer": execution.answer,
+        "answer_for_user": execution.answer,
+        "route": "text_rag",
+        "gold_answers": ["yes"],
         "evidence_metadata": deepcopy(execution.evidence_bundle.metadata),
         "structured_citations": [],
         "predicted_citations": [],
@@ -129,4 +192,129 @@ def test_safe_missing_projection_contains_no_exact_claim_or_citation() -> None:
     assert not any(
         result.get("authority_status") == "exact"
         for result in decision["claim_results"]
+    )
+
+
+def test_composite_runtime_authority_binds_every_premise() -> None:
+    prediction = _composite_prediction()
+
+    typed = runtime_typed_proposition_authority(prediction)
+    boolean = runtime_boolean_authority(prediction, "yes")
+
+    assert typed["complete"] is True
+    assert typed["authority_kind"] == "composite"
+    assert typed["derivation_status"] == "bound"
+    assert typed["derivation_count"] == 1
+    assert boolean["complete"] is True
+    assert boolean["authority_kind"] == "composite_polarity"
+    assert len(boolean["required_evidence_ids"]) == 2
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+    trace = prediction["evidence_metadata"]["qasper_answerability"]
+    assert prediction["contract_action"] == "pass_through"
+    assert trace["runtime_typed_authority_kind"] == "composite"
+    assert trace["runtime_typed_authority_derivation_status"] == "bound"
+    assert trace["evidence_quote"] == ""
+    assert trace["evidence_ref"] == ""
+    assert trace["authoritative_quote_evidence_id"] == ""
+    assert len(trace["runtime_typed_authority_premise_refs"]) == 2
+    assert set(trace["runtime_typed_authority_premise_evidence_ids"]) == {
+        "evidence:paper:clinical",
+        "evidence:paper:legal",
+    }
+
+
+def test_composite_runtime_rejects_a_missing_premise_atom() -> None:
+    prediction = _composite_prediction()
+    authority = prediction["engine_verify_decision"]["typed_authority"]
+    authority["authority_atoms"] = authority["authority_atoms"][:1]
+
+    audit = runtime_typed_proposition_authority(prediction)
+
+    assert audit["complete"] is False
+    assert audit["derivation_status"] == "premise_atom_mismatch"
+
+
+def test_composite_runtime_rejects_query_plan_operator_drift() -> None:
+    prediction = _composite_prediction()
+    plan = prediction["engine_terminal_evidence_bundle"]["metadata"]["query_plan"]
+    plan["constraints"]["boolean_support_group"]["operator"] = "any"
+
+    audit = runtime_typed_proposition_authority(prediction)
+
+    assert audit["complete"] is False
+    assert audit["derivation_status"] == "query_plan_derivation_mismatch"
+
+
+def test_composite_required_citations_are_not_counted_as_nonminimal() -> None:
+    prediction = _composite_prediction()
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+    contract_items = list(prediction["engine_terminal_evidence_bundle"]["items"])
+    cited = minimum_verified_claim_support_items(
+        prediction,
+        contract_items,
+        span="yes",
+    )
+    emitted = attach_structured_citations_from_evidence(prediction, span="yes")
+
+    metrics = qasper_contract_metric_values(
+        prediction,
+        prediction["evidence_metadata"],
+        cited=cited,
+        contract_items=contract_items,
+    )
+
+    assert len(cited) == 2
+    assert len(emitted) == 2
+    assert metrics["citation_nonminimal_count"] == 0.0
+    assert metrics["qasper_composite_authority_count"] == 1.0
+    assert metrics["qasper_composite_authority_invalid_count"] == 0.0
+
+
+def test_entity_type_derivation_is_declared_in_runtime_query_plan() -> None:
+    prediction = _composite_prediction(
+        question="Did the authors experiment with the toolkits?",
+        evidence=[
+            {
+                "evidence_id": "definition",
+                "source_id": "paper",
+                "section_id": "introduction",
+                "text": (
+                    "We present AtlasCV and AtlasNLP, two open-source toolkits "
+                    "for research."
+                ),
+            },
+            {
+                "evidence_id": "experiment",
+                "source_id": "paper",
+                "section_id": "experiments",
+                "text": (
+                    "In our experiments, we evaluate AtlasCV on two benchmark "
+                    "datasets."
+                ),
+            },
+        ],
+    )
+
+    audit = runtime_typed_proposition_authority(prediction)
+    plan = audit["authority"]
+    terminal_plan = prediction["engine_terminal_evidence_bundle"]["metadata"][
+        "query_plan"
+    ]
+
+    assert audit["complete"] is True
+    assert audit["derivation_status"] == "bound"
+    assert plan["authority_derivations"][0]["rule_id"] == (
+        "same_source_entity_type_join.v1"
+    )
+    assert terminal_plan["constraints"]["boolean_support_group"]["rule_id"] == (
+        "same_source_entity_type_join.v1"
     )

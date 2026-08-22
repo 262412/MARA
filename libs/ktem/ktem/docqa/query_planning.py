@@ -4,6 +4,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from .boolean_conjunction import with_boolean_support_group
 from .boolean_evidence_scope import boolean_retrieval_query
 from .finance_agreement_identity import agreement_date
 from .finance_evidence_dimensions import requested_scale
@@ -83,7 +84,7 @@ def build_query_plan(
         and planned.answer_type == "numeric"
         and registry_status in {"supported", "unsupported"}
     ):
-        return planned
+        return with_boolean_support_group(planned, question)
     return _build_heuristic_query_plan(
         question,
         answer_type=answer_type,
@@ -148,6 +149,7 @@ def _build_heuristic_query_plan(
         verification_domain=verification_domain,
         segment_comparison=segment_comparison,
         capabilities=capabilities,
+        answer_type=normalized_type,
     )
     _add_finance_formula_constraint(
         constraints,

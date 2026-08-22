@@ -9,6 +9,25 @@ from .boolean_authority_schema import BooleanAuthorityState
 TYPED_PROPOSITION_AUTHORITY_CONTRACT = "typed_proposition_authority.v1"
 
 
+def qasper_authority_domain(domain: str) -> bool:
+    normalized = str(domain or "").strip().lower()
+    return normalized == "qasper" or normalized.startswith("qasper_")
+
+
+def planned_answer_type(request: Any) -> str:
+    plan = getattr(request, "query_plan", None)
+    value = getattr(plan, "answer_type", None) if plan is not None else None
+    return str(value or getattr(request, "task_type", "") or "free_text").lower()
+
+
+def has_composite_boolean_authority(decision: Any) -> bool:
+    return any(
+        str(result.get("authority_status") or "") == "composite_exact"
+        for result in getattr(decision, "claim_results", ())
+        if isinstance(result, dict)
+    )
+
+
 @dataclass(frozen=True)
 class TypedPropositionAuthority:
     state: BooleanAuthorityState
@@ -20,6 +39,8 @@ class TypedPropositionAuthority:
     verified_slot_ids: tuple[str, ...] = ()
     slot_bindings: tuple[tuple[str, tuple[str, ...]], ...] = ()
     authority_atoms: tuple[dict[str, Any], ...] = ()
+    authority_derivations: tuple[dict[str, Any], ...] = ()
+    selected_derivation_id: str = ""
     claim_ids: tuple[str, ...] = ()
     canonical_answer_polarity: str = ""
     query_plan_state_version: int | None = None
@@ -40,6 +61,10 @@ class TypedPropositionAuthority:
                 for slot_id, evidence_ids in self.slot_bindings
             },
             "authority_atoms": [deepcopy(atom) for atom in self.authority_atoms],
+            "authority_derivations": [
+                deepcopy(derivation) for derivation in self.authority_derivations
+            ],
+            "selected_derivation_id": self.selected_derivation_id,
             "canonical_answer_polarity": self.canonical_answer_polarity,
         }
         if self.query_plan_state_version is not None:
@@ -92,6 +117,8 @@ def verified_authority(
     canonical_answer_polarity: str = "",
     query_plan_state_version: int,
     required_slot_ids: list[str] | tuple[str, ...] | None = None,
+    authority_derivations: list[dict[str, Any]] | None = None,
+    selected_derivation_id: str = "",
 ) -> dict[str, Any]:
     required = (
         list(required_slot_ids) if required_slot_ids is not None else list(bindings)
@@ -117,6 +144,8 @@ def verified_authority(
         verified_slot_ids=tuple(verified),
         slot_bindings=tuple(bindings.items()),
         authority_atoms=tuple(atoms),
+        authority_derivations=tuple(authority_derivations or ()),
+        selected_derivation_id=selected_derivation_id,
         canonical_answer_polarity=canonical_answer_polarity,
         query_plan_state_version=query_plan_state_version,
     ).as_dict()

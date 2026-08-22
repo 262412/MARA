@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ktem.docqa.boolean_authoritative_conflict import authoritative_conflict_complete
+from ktem.docqa.boolean_authority_derivation import boolean_derivation_contract_status
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.typed_proposition_authority_schema import (
     TYPED_PROPOSITION_AUTHORITY_CONTRACT,
@@ -15,6 +16,7 @@ def typed_authority_audit(
     slots: list[dict[str, Any]],
     verified_slots: list[dict[str, Any]],
     required_ids: list[str],
+    plan: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     authority = decision.get("typed_authority")
     authority = authority if isinstance(authority, dict) else {}
@@ -26,6 +28,12 @@ def typed_authority_audit(
     bindings = bindings if isinstance(bindings, dict) else {}
     atoms = _records(authority.get("authority_atoms"))
     diagnostics = _atom_diagnostics(atoms, _records(bundle.get("items")))
+    derivation = _derivation_diagnostics(
+        decision,
+        authority,
+        atoms,
+        plan=plan,
+    )
     complete, reason = _projection_complete(
         state,
         decision,
@@ -37,6 +45,7 @@ def typed_authority_audit(
         bindings,
         atoms,
         diagnostics["status"],
+        derivation,
     )
     return {
         "applicable": True,
@@ -50,6 +59,12 @@ def typed_authority_audit(
         "identity_status": diagnostics["identity_status"],
         "quote_grounding_status": diagnostics["quote_grounding_status"],
         "frame_status": diagnostics["frame_status"],
+        "authority_kind": derivation["authority_kind"],
+        "derivation_status": derivation["status"],
+        "derivation_count": derivation["count"],
+        "selected_derivation_id": derivation["selected_derivation_id"],
+        "derivation_premise_refs": derivation["premise_refs"],
+        "derivation_premise_evidence_ids": derivation["premise_evidence_ids"],
     }
 
 
@@ -74,6 +89,7 @@ def _projection_complete(
     bindings: dict[str, Any],
     atoms: list[dict[str, Any]],
     atom_status: str,
+    derivation: dict[str, Any],
 ) -> tuple[bool, str]:
     projected_required = _string_values(authority.get("required_slot_ids"))
     projected_verified = _string_values(authority.get("verified_slot_ids"))
@@ -85,6 +101,7 @@ def _projection_complete(
             bindings,
             atoms,
             claim_results,
+            derivation,
         )
         return (
             complete,
@@ -117,6 +134,7 @@ def _projection_complete(
         atoms,
         atom_status,
         claim_results,
+        derivation,
     )
     return complete, "verified_support" if complete else "support_projection_mismatch"
 
@@ -127,6 +145,7 @@ def _missing_complete(
     bindings: dict[str, Any],
     atoms: list[dict[str, Any]],
     claim_results: list[dict[str, Any]],
+    derivation: dict[str, Any],
 ) -> bool:
     return bool(
         decision.get("status") in {"not_enough_evidence", "unknown", "unsupported"}
@@ -136,8 +155,11 @@ def _missing_complete(
         and not atoms
         and not projected_verified
         and not bindings
+        and derivation["status"] == "not_applicable"
+        and not decision.get("selected_derivation_id")
         and not any(
-            str(result.get("authority_status") or "") in {"exact", "verified_support"}
+            str(result.get("authority_status") or "")
+            in {"exact", "composite_exact", "verified_support"}
             or str(result.get("verified_slot_state") or "")
             in {"verified_support", "verified_conflict"}
             for result in claim_results
@@ -157,6 +179,7 @@ def _support_complete(
     atoms: list[dict[str, Any]],
     atom_status: str,
     claim_results: list[dict[str, Any]],
+    derivation: dict[str, Any],
 ) -> bool:
     bound_ids = {
         str(evidence_id)
@@ -164,6 +187,20 @@ def _support_complete(
         for evidence_id in values or []
         if str(evidence_id)
     }
+    composite = any(
+        str(result.get("authority_status") or "") == "composite_exact"
+        for result in claim_results
+    )
+    authority_kind_complete = bool(
+        derivation["status"] == "bound"
+        and derivation["authority_kind"] == "composite"
+        and not decision.get("authoritative_evidence_id")
+        and set(derivation["premise_evidence_ids"]) == bound_ids
+        if composite
+        else derivation["status"] == "not_applicable"
+        and derivation["authority_kind"] == "single_span"
+    )
+    expected_claim_status = "composite_exact" if composite else "exact"
     return bool(
         decision.get("status") == "supported"
         and slots
@@ -174,14 +211,123 @@ def _support_complete(
         and set(required_ids) == bound_ids
         and atom_status == "bound"
         and atoms
+        and set(decision.get("verified_citations") or []) == bound_ids
+        and authority_kind_complete
         and all(
             result.get("status") == "supported"
-            and result.get("authority_status") == "exact"
+            and result.get("authority_status") == expected_claim_status
             and result.get("verified_slot_state") == "verified_support"
             and set(result.get("verified_support_slot_ids") or []) == set(slot_ids)
             for result in claim_results
         )
     )
+
+
+def _derivation_diagnostics(
+    decision: dict[str, Any],
+    authority: dict[str, Any],
+    atoms: list[dict[str, Any]],
+    *,
+    plan: dict[str, Any] | None,
+) -> dict[str, Any]:
+    derivations = _records(authority.get("authority_derivations"))
+    selected_id = str(authority.get("selected_derivation_id") or "")
+    if not derivations and not selected_id:
+        state = str(authority.get("state") or "")
+        return {
+            "status": "not_applicable",
+            "authority_kind": (
+                "none"
+                if state == "missing"
+                else "conflict" if state == "verified_conflict" else "single_span"
+            ),
+            "count": 0,
+            "selected_derivation_id": "",
+            "premise_refs": [],
+            "premise_evidence_ids": [],
+        }
+    selected = [
+        value
+        for value in derivations
+        if str(value.get("derivation_id") or "") == selected_id
+    ]
+    if len(selected) != 1:
+        return _invalid_derivation("selected_derivation_unresolved", derivations)
+    claim_results = _records(decision.get("claim_results"))
+    composite_claims = [
+        result
+        for result in claim_results
+        if str(result.get("authority_status") or "") == "composite_exact"
+    ]
+    if (
+        str(decision.get("selected_derivation_id") or "") != selected_id
+        or len(composite_claims) != 1
+        or str(composite_claims[0].get("selected_derivation_id") or "") != selected_id
+        or _records(decision.get("authority_derivations")) != derivations
+        or _records(composite_claims[0].get("authority_derivations")) != derivations
+    ):
+        return _invalid_derivation("derivation_projection_mismatch", derivations)
+    canonical_polarity = str(decision.get("canonical_answer_polarity") or "")
+    status = boolean_derivation_contract_status(
+        selected[0],
+        atoms,
+        question=str(authority.get("question") or ""),
+        canonical_polarity=canonical_polarity,
+    )
+    if status == "bound" and plan is not None:
+        status = _query_plan_derivation_status(plan, selected[0])
+    premise_ids = _string_values(selected[0].get("premise_evidence_ids"))
+    premise_refs = _string_values(selected[0].get("premise_refs"))
+    return {
+        "status": status,
+        "authority_kind": "composite",
+        "count": len(derivations),
+        "selected_derivation_id": selected_id,
+        "premise_refs": premise_refs,
+        "premise_evidence_ids": premise_ids,
+    }
+
+
+def _query_plan_derivation_status(
+    plan: dict[str, Any],
+    derivation: dict[str, Any],
+) -> str:
+    constraints = plan.get("constraints")
+    constraints = constraints if isinstance(constraints, dict) else {}
+    group = constraints.get("boolean_support_group")
+    group = group if isinstance(group, dict) else {}
+    required = _string_values(derivation.get("required_argument_tokens"))
+    premise_refs = _string_values(derivation.get("premise_refs"))
+    try:
+        max_premises = int(group.get("max_premises") or 0)
+    except (TypeError, ValueError):
+        max_premises = 0
+    if not (
+        group.get("operator") == "all"
+        and group.get("premise_mode") == "all_required"
+        and group.get("semantics") == "open_world"
+        and str(group.get("rule_id") or "") == str(derivation.get("rule_id") or "")
+        and _string_values(group.get("required_argument_tokens")) == required
+        and str(group.get("quantifier") or "")
+        == str((derivation.get("conclusion") or {}).get("quantifier") or "")
+        and max_premises >= len(premise_refs)
+    ):
+        return "query_plan_derivation_mismatch"
+    return "bound"
+
+
+def _invalid_derivation(
+    status: str,
+    derivations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "authority_kind": "composite",
+        "count": len(derivations),
+        "selected_derivation_id": "",
+        "premise_refs": [],
+        "premise_evidence_ids": [],
+    }
 
 
 def _atom_diagnostics(

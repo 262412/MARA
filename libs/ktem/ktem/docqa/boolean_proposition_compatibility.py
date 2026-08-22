@@ -88,3 +88,21 @@ def _object_compatibility(question: str, text: str) -> tuple[float, str]:
     shared = question_tokens & evidence_tokens
     score = len(shared) / len(question_tokens)
     return score, proposition_object
+
+
+def boolean_argument_token_coverage(
+    question: str,
+    text: str,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return normalized required arguments and the subset asserted in ``text``."""
+
+    question_relations = boolean_relation_lemmas(question)
+    evidence_relations = boolean_relation_lemmas(text)
+    relation_tokens = {
+        token
+        for relation in question_relations | evidence_relations
+        for token in _relation_surface_tokens(relation)
+    }
+    required = _question_argument_tokens(question, relation_tokens) - {""}
+    evidence = normalized_object_tokens(text, relation_tokens) - {""}
+    return tuple(sorted(required)), tuple(sorted(required & evidence))

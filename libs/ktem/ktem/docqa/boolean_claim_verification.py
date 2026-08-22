@@ -4,11 +4,15 @@ import re
 from typing import Any
 
 from .boolean_authoritative_conflict import authoritative_conflict_claim
-from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuthority
+from .boolean_authority_schema import (
+    BooleanClaimAuthority,
+    BooleanEvidenceAuthority,
+    supported_boolean_claim,
+)
 from .boolean_authority_selection import _best_authority, _deduplicated_authorities
+from .boolean_composite_resolution import composite_boolean_claim_authority
 from .boolean_deictic_authority import ambiguous_deictic_object_authority
 from .boolean_empirical_authority import direct_experiment_relation
-from .boolean_entity_type_authority import same_source_typed_entity_authorities
 from .boolean_evidence_scope import (
     _actor,
     _scope_rejection,
@@ -64,11 +68,10 @@ def boolean_claim_authority(
     authority_items = _authority_items(evidence_items)
     probe_polarity = input_polarity or "yes"
     structured = structured_boolean_authorities(prompt, authority_items)
-    composed = same_source_typed_entity_authorities(prompt, authority_items)
     resolved = _exclusive_requirement_authority(prompt, authority_items)
     if resolved is not None:
         canonical_polarity, authority = resolved
-        return _supported_authority(
+        return supported_boolean_claim(
             prompt,
             input_polarity,
             canonical_polarity,
@@ -82,7 +85,6 @@ def boolean_claim_authority(
         prompt,
         probe_polarity,
         structured,
-        composed,
         classified.supports,
         classified.contradicts,
     )
@@ -124,7 +126,7 @@ def _resolve_boolean_authority_decision(
             if any(value in structured for value in supporting)
             else "exact_boolean_proposition"
         )
-        return _supported_authority(
+        return supported_boolean_claim(
             prompt,
             input_polarity,
             probe_polarity,
@@ -138,7 +140,7 @@ def _resolve_boolean_authority_decision(
             if any(value in structured for value in contradicting)
             else "exact_opposite_boolean_proposition"
         )
-        return _supported_authority(
+        return supported_boolean_claim(
             prompt,
             input_polarity,
             canonical_polarity,
@@ -146,10 +148,17 @@ def _resolve_boolean_authority_decision(
             contradicting=(),
             reason=reason,
         )
+    composite = composite_boolean_claim_authority(
+        prompt,
+        input_polarity,
+        authority_items,
+    )
+    if composite is not None:
+        return composite
     resolved = _negative_requirement_authority(prompt, authority_items)
     if resolved is not None:
         canonical_polarity, authority = resolved
-        return _supported_authority(
+        return supported_boolean_claim(
             prompt,
             input_polarity,
             canonical_polarity,
@@ -181,27 +190,6 @@ def boolean_evidence_assessment(
         assessment.status,
         tuple(value.evidence_id for value in assessment.supporting),
         tuple(value.evidence_id for value in assessment.contradicting),
-    )
-
-
-def _supported_authority(
-    prompt: str,
-    input_polarity: str,
-    canonical_polarity: str,
-    supporting: tuple[BooleanEvidenceAuthority, ...],
-    *,
-    contradicting: tuple[BooleanEvidenceAuthority, ...] = (),
-    reason: str,
-) -> BooleanClaimAuthority:
-    return BooleanClaimAuthority(
-        claim=f"{canonical_polarity}: {prompt}",
-        status="supported",
-        input_answer_polarity=input_polarity,
-        canonical_answer_polarity=canonical_polarity,
-        semantic_correction_applied=input_polarity != canonical_polarity,
-        supporting=supporting,
-        contradicting=contradicting,
-        reason=reason,
     )
 
 
@@ -334,7 +322,6 @@ def _combined_exact_authorities(
     prompt: str,
     probe_polarity: str,
     structured: tuple[BooleanEvidenceAuthority, ...],
-    composed: tuple[BooleanEvidenceAuthority, ...],
     supporting_assessments: tuple[BooleanEvidenceAssessment, ...],
     contradicting_assessments: tuple[BooleanEvidenceAssessment, ...],
 ) -> tuple[tuple[BooleanEvidenceAuthority, ...], tuple[BooleanEvidenceAuthority, ...]]:
@@ -343,10 +330,6 @@ def _combined_exact_authorities(
     supporting.extend(value for value in structured if value.polarity == probe_polarity)
     contradicting.extend(
         value for value in structured if value.polarity != probe_polarity
-    )
-    supporting.extend(value for value in composed if value.polarity == probe_polarity)
-    contradicting.extend(
-        value for value in composed if value.polarity != probe_polarity
     )
     return (
         _deduplicated_authorities(supporting),

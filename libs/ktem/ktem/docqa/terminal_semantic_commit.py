@@ -252,7 +252,7 @@ def _incoherent_authority_projection(verify: dict[str, Any]) -> bool:
     typed_state = str(typed.get("state") or "").lower()
     exact_claim = any(
         str(result.get("authority_status") or "").lower()
-        in {"exact", "verified_support"}
+        in {"exact", "composite_exact", "verified_support"}
         for result in verify.get("claim_results") or []
         if isinstance(result, dict)
     )

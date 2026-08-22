@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from .boolean_authority_derivation import boolean_derivation_contract_status
 from .boolean_evidence_scope import evidence_item_text
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_identity import identity_of
@@ -37,7 +38,7 @@ def exact_boolean_atoms(
             value
             for value in decision.claim_results
             if str(value.get("status") or "") == "supported"
-            and str(value.get("authority_status") or "") == "exact"
+            and str(value.get("authority_status") or "") in {"exact", "composite_exact"}
         ),
         None,
     )
@@ -83,10 +84,58 @@ def exact_boolean_atoms(
                 **atom,
                 "source_id": source_id,
                 "page_label": page_label,
-                "reason": "exact_boolean_proposition",
+                "reason": str(normalized.get("reason") or "exact_boolean_proposition"),
             }
         )
+    if str(result.get("authority_status") or "") == "composite_exact":
+        derivations = bound_boolean_derivations(
+            decision,
+            atoms,
+            question=question,
+        )
+        if len(derivations) != 1:
+            return []
     return atoms
+
+
+def bound_boolean_derivations(
+    decision: VerifyDecision,
+    atoms: list[dict[str, Any]],
+    *,
+    question: str,
+) -> list[dict[str, Any]]:
+    """Return the selected derivation only after independently binding every leaf."""
+
+    result = next(
+        (
+            value
+            for value in decision.claim_results
+            if str(value.get("status") or "") == "supported"
+            and str(value.get("authority_status") or "") == "composite_exact"
+        ),
+        None,
+    )
+    if result is None:
+        return []
+    selected_id = str(
+        result.get("selected_derivation_id") or decision.selected_derivation_id or ""
+    )
+    derivations = [
+        value
+        for value in result.get("authority_derivations") or ()
+        if isinstance(value, dict)
+        and str(value.get("derivation_id") or "") == selected_id
+    ]
+    if len(derivations) != 1:
+        return []
+    selected = derivations[0]
+    status = boolean_derivation_contract_status(
+        selected,
+        atoms,
+        question=question,
+        canonical_polarity=str(decision.canonical_answer_polarity or ""),
+    )
+    return [deepcopy(selected)] if status == "bound" else []
 
 
 def _authority_candidate(
@@ -149,6 +198,7 @@ def _authority_candidate(
         "section_scope": candidate.get(
             "section_scope", candidate.get("scope", result.get("section_scope", ""))
         ),
+        "reason": candidate.get("reason", result.get("reason", "")),
     }
 
 
@@ -289,6 +339,8 @@ def unknown_claim_result(result: dict[str, Any]) -> dict[str, Any]:
         "authoritative_conflict": {},
         "verified_slot_state": "",
         "verified_support_slot_ids": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
     }
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
@@ -15,10 +16,10 @@ from .query_plan_schema import QueryPlan, slot_binding_state
 from .query_planning import request_planning_question
 from .typed_proposition_authority import (
     TYPED_PROPOSITION_AUTHORITY_CONTRACT,
-    resolve_qasper_authority_transaction,
-    typed_slot_bindings,
+    resolve_typed_proposition_authority_transaction,
     with_qasper_missing_authority,
 )
+from .typed_proposition_authority_slots import typed_slot_bindings
 from .verification_evidence_mapping import (
     blocking_verification_slots,
     claim_support_identities_by_claim,
@@ -112,7 +113,7 @@ def verify_decision(
         prompt=prompt,
         domain=domain,
     )
-    typed_decision = resolve_qasper_authority_transaction(
+    typed_decision = resolve_typed_proposition_authority_transaction(
         request,
         decision,
         evidence_bundle,
@@ -357,6 +358,10 @@ def _boolean_authority_metadata(decision: VerifyDecision) -> dict[str, Any]:
         "qualifier": decision.qualifier,
         "scope": decision.section_scope,
         "quantifier": decision.quantifier,
+        "authority_derivations": [
+            deepcopy(value) for value in decision.authority_derivations
+        ],
+        "selected_derivation_id": decision.selected_derivation_id,
     }
 
 

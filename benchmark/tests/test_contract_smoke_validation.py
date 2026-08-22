@@ -301,6 +301,7 @@ def test_qasper_contract_smoke_declares_runtime_authority_hard_gates():
         "qasper_runtime_authority_missing_count",
         "qasper_runtime_semantic_verifier_failure_count",
         "qasper_runtime_scope_failure_count",
+        "qasper_composite_authority_invalid_count",
         "qasper_quote_validation_ref_mismatch_count",
         "qasper_terminal_state_missing_count",
         "qasper_invalid_typed_label_count",

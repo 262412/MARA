@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias
 
@@ -15,6 +16,9 @@ BOOLEAN_AUTHORITY_STATES: tuple[BooleanAuthorityState, ...] = (
     "verified_support",
     "verified_conflict",
 )
+BOOLEAN_AUTHORITY_DERIVATION_CONTRACT = "boolean_authority_derivation.v1"
+ARGUMENT_CONJUNCTION_RULE = "same_source_argument_conjunction.v1"
+ENTITY_TYPE_JOIN_RULE = "same_source_entity_type_join.v1"
 
 
 def candidate_authority_state(relevant: bool) -> BooleanAuthorityState:
@@ -81,6 +85,43 @@ class BooleanEvidenceAuthority:
 
 
 @dataclass(frozen=True)
+class BooleanAuthorityDerivation:
+    """One verified proof alternative whose premises are jointly required."""
+
+    derivation_id: str
+    rule_id: str
+    premise_refs: tuple[str, ...]
+    premise_evidence_ids: tuple[str, ...]
+    conclusion: dict[str, Any]
+    required_argument_tokens: tuple[str, ...]
+    covered_argument_tokens: tuple[str, ...]
+    premise_contributions: tuple[dict[str, Any], ...]
+    bindings: tuple[tuple[str, str], ...] = ()
+    premise_mode: str = "all_required"
+    semantics: str = "open_world"
+    status: str = "verified"
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "contract_id": BOOLEAN_AUTHORITY_DERIVATION_CONTRACT,
+            "derivation_id": self.derivation_id,
+            "rule_id": self.rule_id,
+            "premise_mode": self.premise_mode,
+            "semantics": self.semantics,
+            "status": self.status,
+            "premise_refs": list(self.premise_refs),
+            "premise_evidence_ids": list(self.premise_evidence_ids),
+            "premise_contributions": [
+                deepcopy(value) for value in self.premise_contributions
+            ],
+            "conclusion": deepcopy(self.conclusion),
+            "required_argument_tokens": list(self.required_argument_tokens),
+            "covered_argument_tokens": list(self.covered_argument_tokens),
+            "bindings": dict(self.bindings),
+        }
+
+
+@dataclass(frozen=True)
 class BooleanClaimAuthority:
     claim: str
     status: str
@@ -91,3 +132,30 @@ class BooleanClaimAuthority:
     contradicting: tuple[BooleanEvidenceAuthority, ...] = ()
     reason: str = ""
     authoritative_conflict: dict[str, Any] | None = None
+    authority_derivations: tuple[BooleanAuthorityDerivation, ...] = ()
+    selected_derivation_id: str = ""
+
+
+def supported_boolean_claim(
+    prompt: str,
+    input_polarity: str,
+    canonical_polarity: str,
+    supporting: tuple[BooleanEvidenceAuthority, ...],
+    *,
+    contradicting: tuple[BooleanEvidenceAuthority, ...] = (),
+    reason: str,
+    authority_derivations: tuple[BooleanAuthorityDerivation, ...] = (),
+    selected_derivation_id: str = "",
+) -> BooleanClaimAuthority:
+    return BooleanClaimAuthority(
+        claim=f"{canonical_polarity}: {prompt}",
+        status="supported",
+        input_answer_polarity=input_polarity,
+        canonical_answer_polarity=canonical_polarity,
+        semantic_correction_applied=input_polarity != canonical_polarity,
+        supporting=supporting,
+        contradicting=contradicting,
+        reason=reason,
+        authority_derivations=authority_derivations,
+        selected_derivation_id=selected_derivation_id,
+    )
