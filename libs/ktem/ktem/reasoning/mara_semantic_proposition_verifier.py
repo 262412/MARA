@@ -10,14 +10,19 @@ from ktem.docqa.boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
-from ktem.docqa.boolean_evidence_scope import evidence_item_text
-from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_schema import EvidenceBundle
-from ktem.docqa.query_phrase_extraction import source_page_locator
 from ktem.docqa.semantic_evidence_set_authority import PropositionVerifier
 
 from kotaemon.base import HumanMessage, SystemMessage
 
+from .mara_semantic_proposition_packing import (
+    SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+    SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS,
+    SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT,
+    SemanticPropositionEvidencePacking,
+    pack_semantic_proposition_evidence,
+    semantic_proposition_verifier_prompt,
+)
 from .mara_semantic_proposition_schema import (
     parse_semantic_proposition_result,
     semantic_proposition_response_format,
@@ -27,30 +32,9 @@ SEMANTIC_PROPOSITION_VERIFIER_RUNTIME_CONTRACT = (
     "semantic_proposition_verifier_runtime.v1"
 )
 SEMANTIC_PROPOSITION_VERIFIER_SEED = 20260724
-SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS = 768
-SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS = 12
-SEMANTIC_PROPOSITION_VERIFIER_ITEM_CHARS = 2000
-SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS = 30000
+SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS = 512
 
 LOGGER = logging.getLogger(__name__)
-
-_SYSTEM_PROMPT = (
-    "You are a conservative document-grounded proposition verifier. Decide the "
-    "complete yes/no proposition in the question from the labeled retrieved "
-    "evidence excerpts only. Return yes or no only when two to four distinct "
-    "premises from one source are jointly sufficient, every selected premise is "
-    "necessary, and no selected premise alone establishes the complete "
-    "proposition. Otherwise return insufficient_evidence. For every premise, "
-    "copy one exact contiguous quote, state the proposition fragment entailed by "
-    "that quote, and bind it to the verification slots it supports. Treat actor, "
-    "scope, modality, comparison direction, negation, quantifiers, and time as "
-    "strict. Do not use outside knowledge. Missing mentions or incomplete "
-    "retrieval never prove no; an explicit negative or contradiction is required. "
-    "For questions about the authors or current study, at least one premise must "
-    "explicitly anchor their action. For questions about a named subject, the "
-    "premise set must explicitly anchor that subject. Conflicting evidence is "
-    "insufficient. Never copy the excerpt delimiters."
-)
 
 
 def build_semantic_proposition_verifier(pipeline: Any) -> PropositionVerifier | None:
@@ -64,6 +48,7 @@ class _SemanticPropositionVerifier:
     def __init__(self, llm: Any) -> None:
         self.llm = llm
         self.cache: dict[str, dict[str, Any] | None] = {}
+        self.failure_reasons: dict[str, str] = {}
         self.actual_model_call_count = 0
 
     def __call__(
@@ -74,20 +59,28 @@ class _SemanticPropositionVerifier:
         bundle: EvidenceBundle,
     ) -> dict[str, Any] | None:
         slots = _required_slots(request)
-        packed = _packed_evidence(request, bundle)
+        packing = pack_semantic_proposition_evidence(
+            request,
+            question,
+            slots,
+            bundle,
+        )
+        packed = packing.records
         seed = _verifier_seed(request)
         model = _model_name(self.llm)
         if not slots or not packed:
-            return self._skipped_response(bundle, packed, slots, model, seed)
+            return self._skipped_response(bundle, packing, slots, model, seed)
         try:
-            prompt = _verifier_prompt(question, slots, packed)
+            prompt = semantic_proposition_verifier_prompt(question, slots, packed)
         except ValueError:
-            self.cache[_cache_key(question, slots, packed)] = None
+            cache_key = _cache_key(question, slots, packed)
+            self.cache[cache_key] = None
+            self.failure_reasons[cache_key] = "prompt_bound_exceeded"
             self._trace(
                 bundle,
                 "failed",
                 "prompt_bound_exceeded",
-                packed,
+                packing,
                 slots,
                 model,
                 seed,
@@ -96,16 +89,17 @@ class _SemanticPropositionVerifier:
         cache_key = _cache_key(question, slots, packed)
         if cache_key in self.cache:
             return self._cached_response(
-                bundle, cache_key, packed, slots, model, seed, len(prompt)
+                bundle, cache_key, packing, slots, model, seed, len(prompt)
             )
-        response = self._model_response(prompt, packed, slots, seed)
+        response, failure_reason = self._model_response(prompt, packed, slots, seed)
         if response is None:
             self.cache[cache_key] = None
+            self.failure_reasons[cache_key] = failure_reason
             self._trace(
                 bundle,
                 "failed",
-                "model_call_failed",
-                packed,
+                failure_reason,
+                packing,
                 slots,
                 model,
                 seed,
@@ -120,11 +114,13 @@ class _SemanticPropositionVerifier:
             seed=seed,
         )
         self.cache[cache_key] = deepcopy(parsed)
+        if parsed is None:
+            self.failure_reasons[cache_key] = "invalid_model_json"
         self._trace(
             bundle,
             "parsed" if parsed is not None else "failed",
             "strict_schema_parsed" if parsed is not None else "invalid_model_json",
-            packed,
+            packing,
             slots,
             model,
             seed,
@@ -139,32 +135,37 @@ class _SemanticPropositionVerifier:
         packed: list[dict[str, str]],
         slots: list[dict[str, str]],
         seed: int,
-    ) -> Any | None:
+    ) -> tuple[Any | None, str]:
         self.actual_model_call_count += 1
         try:
-            return self.llm(
-                [
-                    SystemMessage(content=_SYSTEM_PROMPT),
-                    HumanMessage(content=prompt),
-                ],
-                max_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
-                response_format=semantic_proposition_response_format(
-                    [value["label"] for value in packed],
-                    [value["slot_id"] for value in slots],
+            return (
+                self.llm(
+                    [
+                        SystemMessage(
+                            content=SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT
+                        ),
+                        HumanMessage(content=prompt),
+                    ],
+                    max_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
+                    response_format=semantic_proposition_response_format(
+                        [value["label"] for value in packed],
+                        [value["slot_id"] for value in slots],
+                    ),
+                    temperature=0,
+                    top_p=1,
+                    seed=seed,
                 ),
-                temperature=0,
-                top_p=1,
-                seed=seed,
+                "",
             )
-        except Exception:
+        except Exception as exc:
             LOGGER.exception("Semantic proposition verifier model call failed")
-            return None
+            return None, _provider_failure_reason(exc)
 
     def _cached_response(
         self,
         bundle: EvidenceBundle,
         cache_key: str,
-        packed: list[dict[str, str]],
+        packing: SemanticPropositionEvidencePacking,
         slots: list[dict[str, str]],
         model: str,
         seed: int,
@@ -174,8 +175,12 @@ class _SemanticPropositionVerifier:
         self._trace(
             bundle,
             "cache_hit" if cached is not None else "cached_failure",
-            "evidence_signature_reused",
-            packed,
+            (
+                "evidence_signature_reused"
+                if cached is not None
+                else self.failure_reasons.get(cache_key, "cached_provider_call_failed")
+            ),
+            packing,
             slots,
             model,
             seed,
@@ -188,7 +193,7 @@ class _SemanticPropositionVerifier:
     def _skipped_response(
         self,
         bundle: EvidenceBundle,
-        packed: list[dict[str, str]],
+        packing: SemanticPropositionEvidencePacking,
         slots: list[dict[str, str]],
         model: str,
         seed: int,
@@ -197,7 +202,7 @@ class _SemanticPropositionVerifier:
             bundle,
             "skipped",
             "required_slots_missing" if not slots else "no_canonical_evidence_items",
-            packed,
+            packing,
             slots,
             model,
             seed,
@@ -209,7 +214,7 @@ class _SemanticPropositionVerifier:
         bundle: EvidenceBundle,
         status: str,
         reason: str,
-        packed: list[dict[str, str]],
+        packing: SemanticPropositionEvidencePacking,
         slots: list[dict[str, str]],
         model: str,
         seed: int,
@@ -222,7 +227,7 @@ class _SemanticPropositionVerifier:
             bundle,
             status=status,
             reason=reason,
-            packed=packed,
+            packing=packing,
             slots=slots,
             model=model,
             seed=seed,
@@ -277,96 +282,6 @@ def _slot_description(slot: Any) -> str:
     return "; ".join(f"{key}={value}" for key, value in fields if value)
 
 
-def _packed_evidence(request: Any, bundle: EvidenceBundle) -> list[dict[str, str]]:
-    preferred = _preferred_evidence_ids(request)
-    records: list[tuple[int, int, dict[str, str]]] = []
-    seen: set[str] = set()
-    for index, item in enumerate(bundle.items):
-        try:
-            identity = identity_of(item)
-        except ValueError:
-            continue
-        evidence_id = identity.key
-        text = evidence_item_text(item).strip()
-        if not text or evidence_id in seen:
-            continue
-        seen.add(evidence_id)
-        source_id, page_label = source_page_locator(item)
-        records.append(
-            (
-                0 if evidence_id in preferred else 1,
-                index,
-                {
-                    "evidence_id": evidence_id,
-                    "source_id": source_id or identity.source_id,
-                    "page_label": page_label,
-                    "section_id": str(item.get("section_id") or "").strip(),
-                    "text": text[:SEMANTIC_PROPOSITION_VERIFIER_ITEM_CHARS],
-                },
-            )
-        )
-    selected = [value for _priority, _index, value in sorted(records)]
-    selected = selected[:SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS]
-    for index, record in enumerate(selected, start=1):
-        record["label"] = f"E{index}"
-    return selected
-
-
-def _preferred_evidence_ids(request: Any) -> set[str]:
-    plan = getattr(request, "query_plan", None)
-    raw_slots = (
-        plan.get("evidence_slots", [])
-        if isinstance(plan, dict)
-        else getattr(plan, "evidence_slots", ()) or ()
-    )
-    return {
-        str(evidence_id).strip()
-        for slot in raw_slots
-        for evidence_id in (
-            slot.get("evidence_ids", [])
-            if isinstance(slot, dict)
-            else getattr(slot, "evidence_ids", ()) or ()
-        )
-        if str(evidence_id).strip()
-    }
-
-
-def _verifier_prompt(
-    question: str,
-    slots: list[dict[str, str]],
-    packed: list[dict[str, str]],
-) -> str:
-    slot_text = "\n".join(
-        f"- {value['slot_id']}: {value['description'] or 'complete proposition support'}"
-        for value in slots
-    )
-    evidence_text = "\n\n".join(
-        "\n".join(
-            (
-                f"[{value['label']}] source={value['source_id']} "
-                f"page={value['page_label'] or '-'} section={value['section_id'] or '-'}",
-                "<evidence>",
-                value["text"],
-                "</evidence>",
-            )
-        )
-        for value in packed
-    )
-    prompt = (
-        "/no_think\n"
-        f"QUESTION:\n{question.strip()}\n\n"
-        f"REQUIRED VERIFICATION SLOTS:\n{slot_text}\n\n"
-        f"RETRIEVED EVIDENCE EXCERPTS:\n{evidence_text}\n\n"
-        "Return exactly one JSON object. For yes or no, jointly_complete and "
-        "each_premise_required must both be true and premises must contain two "
-        "to four records. For insufficient_evidence, use false for both flags "
-        "and an empty premises array."
-    )
-    if len(prompt) > SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS:
-        raise ValueError("Semantic proposition verifier prompt exceeded its bound.")
-    return prompt
-
-
 def _insufficient_result(model: str, seed: int) -> dict[str, Any]:
     return {
         "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
@@ -413,6 +328,15 @@ def _model_name(llm: Any) -> str:
     return f"{type(llm).__module__}.{type(llm).__name__}"
 
 
+def _provider_failure_reason(exc: Exception) -> str:
+    message = str(exc).casefold()
+    if "maximum context length" in message or "context length exceeded" in message:
+        return "provider_context_length_exceeded"
+    if "grammar error" in message or "unimplemented keys" in message:
+        return "provider_response_schema_unsupported"
+    return "provider_call_failed"
+
+
 def _response_text(response: Any) -> str:
     return str(
         getattr(response, "text", "") or getattr(response, "content", "") or response
@@ -424,7 +348,7 @@ def _record_trace(
     *,
     status: str,
     reason: str,
-    packed: list[dict[str, str]],
+    packing: SemanticPropositionEvidencePacking,
     slots: list[dict[str, str]],
     model: str,
     seed: int,
@@ -442,11 +366,22 @@ def _record_trace(
         "cache_hit": cache_hit,
         "actual_model_call_count": actual_model_call_count,
         "available_evidence_count": len(bundle.items),
-        "packed_evidence_count": len(packed),
+        "packed_evidence_count": len(packing.records),
+        "evidence_item_char_limit": packing.item_char_limit,
+        "estimated_input_token_budget": packing.input_token_budget,
+        "estimated_input_tokens": packing.estimated_input_tokens,
+        "minimum_model_context_tokens": (
+            SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS
+        ),
+        "packed_evidence_chars": packing.packed_chars,
+        "dropped_evidence_count": packing.dropped_count,
+        "truncated_evidence_count": packing.truncated_count,
         "required_slot_count": len(slots),
         "prompt_chars": prompt_chars,
+        "max_prompt_chars": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+        "max_output_tokens": SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
         "verdict": verdict,
         "evidence_label_map": {
-            value["label"]: value["evidence_id"] for value in packed
+            value["label"]: value["evidence_id"] for value in packing.records
         },
     }

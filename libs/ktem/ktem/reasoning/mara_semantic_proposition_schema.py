@@ -44,7 +44,6 @@ def semantic_proposition_response_format(
                                 "supports_slot_ids": {
                                     "type": "array",
                                     "minItems": 1,
-                                    "uniqueItems": True,
                                     "items": {"type": "string", "enum": slot_ids},
                                 },
                             },
@@ -162,6 +161,7 @@ def _parse_premises(
                 not isinstance(value, str) or value not in slot_ids
                 for value in supports
             )
+            or len(set(supports)) != len(supports)
         ):
             return None
         premises.append(

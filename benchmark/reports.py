@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -36,6 +35,7 @@ from .report_identity_compaction import (
     IDENTITY_TRACE_LIMITS,
     compact_identity_evidence_list,
 )
+from .report_qasper_authority import qasper_authority_diagnostics_markdown
 from .report_route_metrics import route_metrics_markdown
 from .report_route_rankings import route_ranking_markdown
 from .report_summary_metrics import diagnostic_metric_lines
@@ -370,6 +370,10 @@ def _report_markdown_sections(
         ]
     for title, lines in (
         ("Route Ranking", route_ranking_markdown(summary)),
+        (
+            "QASPER Authority Diagnostics",
+            qasper_authority_diagnostics_markdown(summary),
+        ),
         *phase3_report_sections(summary),
         ("Skipped Routes", _skipped_route_markdown(summary)),
         ("Multimodal Backend Health", _backend_health_markdown(summary)),

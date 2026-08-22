@@ -129,6 +129,14 @@ canonical evidence excerpts, but not the generated answer. Calls use a stable
 seed and strict JSON schema, are cached by question/slot/evidence identity, and
 fail closed on provider errors or malformed output.
 
+The provider-facing schema stays within the backend's supported grammar subset;
+set uniqueness is enforced again by the strict local parser instead of relying
+on `uniqueItems`. Prompt packing preserves complete canonical excerpts first,
+prioritizes QueryPlan-bound evidence and then the upstream reranker order, and
+only uses a question-relevant partial window when a lower-priority full excerpt
+cannot fit. A conservative estimate caps the complete system-plus-user input at
+3072 tokens and the response at 512 tokens for a 4096-token minimum context.
+
 ## Fail-closed invariants
 
 A composite proposition is verified only when all of the following hold:
@@ -178,13 +186,17 @@ emits:
 - `runtime_typed_authority_slot_ref_bindings`;
 - `runtime_semantic_proposition_authority_status` and its reason;
 - `runtime_semantic_proposition_verifier_status`, model-call count, evidence
-  packing counts, cache status, and verdict;
+  packing count, per-item character limit, conservative input-token estimate and
+  budget, dropped/truncated evidence counts, prompt/output bounds, cache status,
+  and verdict;
 - `qasper_composite_authority_count`;
 - `qasper_composite_authority_invalid_count`;
 - `qasper_semantic_evidence_set_authority_count`;
 - `qasper_semantic_evidence_set_authority_invalid_count`;
 - `qasper_semantic_proposition_verifier_call_count`;
-- `qasper_semantic_proposition_verifier_failure_count`.
+- `qasper_semantic_proposition_verifier_failure_count`;
+- `qasper_semantic_proposition_verifier_context_overflow_count`;
+- `qasper_semantic_proposition_verifier_schema_unsupported_count`.
 
 The converter also preserves QASPER figures/tables and emits
 `qasper_reference_sets.v1`, including annotation identity, answer type,

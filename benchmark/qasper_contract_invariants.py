@@ -10,6 +10,7 @@ from .metrics import is_abstention_answer
 from .qasper_boolean_scope import scope_valid_support_items
 from .qasper_deterministic_support import deterministic_support_ids
 from .qasper_semantic_authority_metrics import semantic_evidence_set_authority_invalid
+from .qasper_semantic_verifier_metrics import semantic_verifier_failure_metrics
 
 
 def qasper_contract_metric_values(
@@ -156,10 +157,7 @@ def _runtime_audit_failure_metrics(
         "qasper_semantic_proposition_verifier_call_count": float(
             trace.get("runtime_semantic_proposition_verifier_model_call_count") or 0
         ),
-        "qasper_semantic_proposition_verifier_failure_count": float(
-            trace.get("runtime_semantic_proposition_verifier_status")
-            in {"failed", "cached_failure"}
-        ),
+        **semantic_verifier_failure_metrics(trace),
     }
 
 
@@ -505,6 +503,8 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "qasper_semantic_evidence_set_authority_invalid_count": 0.0,
         "qasper_semantic_proposition_verifier_call_count": 0.0,
         "qasper_semantic_proposition_verifier_failure_count": 0.0,
+        "qasper_semantic_proposition_verifier_context_overflow_count": 0.0,
+        "qasper_semantic_proposition_verifier_schema_unsupported_count": 0.0,
         "qasper_required_verification_applicable_count": 0.0,
         "qasper_required_slot_nonempty_state_count": 0.0,
         "qasper_required_slot_empty_state_count": 0.0,

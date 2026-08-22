@@ -174,8 +174,17 @@ def _semantic_verdict(
         "actual_model_call_count": 1,
         "available_evidence_count": 2,
         "packed_evidence_count": 2,
+        "evidence_item_char_limit": 2000,
+        "estimated_input_token_budget": 3072,
+        "estimated_input_tokens": 220,
+        "minimum_model_context_tokens": 4096,
+        "packed_evidence_chars": 107,
+        "dropped_evidence_count": 0,
+        "truncated_evidence_count": 0,
         "required_slot_count": 3,
         "prompt_chars": 731,
+        "max_prompt_chars": 16000,
+        "max_output_tokens": 512,
         "verdict": "yes",
     }
     slot_ids = [
@@ -452,13 +461,34 @@ def test_semantic_evidence_set_authority_round_trips_through_benchmark_audit() -
     assert trace["runtime_semantic_proposition_verifier_model_call_count"] == 1
     assert trace["runtime_semantic_proposition_verifier_available_evidence_count"] == 2
     assert trace["runtime_semantic_proposition_verifier_packed_evidence_count"] == 2
+    assert (
+        trace["runtime_semantic_proposition_verifier_evidence_item_char_limit"] == 2000
+    )
+    assert (
+        trace["runtime_semantic_proposition_verifier_estimated_input_token_budget"]
+        == 3072
+    )
+    assert trace["runtime_semantic_proposition_verifier_estimated_input_tokens"] == 220
+    assert (
+        trace["runtime_semantic_proposition_verifier_minimum_model_context_tokens"]
+        == 4096
+    )
+    assert trace["runtime_semantic_proposition_verifier_packed_evidence_chars"] == 107
+    assert trace["runtime_semantic_proposition_verifier_dropped_evidence_count"] == 0
+    assert trace["runtime_semantic_proposition_verifier_truncated_evidence_count"] == 0
     assert trace["runtime_semantic_proposition_verifier_required_slot_count"] == 3
     assert trace["runtime_semantic_proposition_verifier_prompt_chars"] == 731
+    assert trace["runtime_semantic_proposition_verifier_max_prompt_chars"] == 16000
+    assert trace["runtime_semantic_proposition_verifier_max_output_tokens"] == 512
     assert len(cited) == 2
     assert metrics["qasper_semantic_evidence_set_authority_count"] == 1.0
     assert metrics["qasper_semantic_evidence_set_authority_invalid_count"] == 0.0
     assert metrics["qasper_semantic_proposition_verifier_call_count"] == 1.0
     assert metrics["qasper_semantic_proposition_verifier_failure_count"] == 0.0
+    assert metrics["qasper_semantic_proposition_verifier_context_overflow_count"] == 0.0
+    assert (
+        metrics["qasper_semantic_proposition_verifier_schema_unsupported_count"] == 0.0
+    )
     assert metrics["qasper_composite_authority_count"] == 0.0
 
 

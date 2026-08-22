@@ -314,11 +314,38 @@ def semantic_proposition_verifier_trace_fields(
         "runtime_semantic_proposition_verifier_packed_evidence_count": (
             _nonnegative_int(trace.get("packed_evidence_count"))
         ),
+        "runtime_semantic_proposition_verifier_evidence_item_char_limit": (
+            _nonnegative_int(trace.get("evidence_item_char_limit"))
+        ),
+        "runtime_semantic_proposition_verifier_estimated_input_token_budget": (
+            _nonnegative_int(trace.get("estimated_input_token_budget"))
+        ),
+        "runtime_semantic_proposition_verifier_estimated_input_tokens": (
+            _nonnegative_int(trace.get("estimated_input_tokens"))
+        ),
+        "runtime_semantic_proposition_verifier_minimum_model_context_tokens": (
+            _nonnegative_int(trace.get("minimum_model_context_tokens"))
+        ),
+        "runtime_semantic_proposition_verifier_packed_evidence_chars": (
+            _nonnegative_int(trace.get("packed_evidence_chars"))
+        ),
+        "runtime_semantic_proposition_verifier_dropped_evidence_count": (
+            _nonnegative_int(trace.get("dropped_evidence_count"))
+        ),
+        "runtime_semantic_proposition_verifier_truncated_evidence_count": (
+            _nonnegative_int(trace.get("truncated_evidence_count"))
+        ),
         "runtime_semantic_proposition_verifier_required_slot_count": _nonnegative_int(
             trace.get("required_slot_count")
         ),
         "runtime_semantic_proposition_verifier_prompt_chars": _nonnegative_int(
             trace.get("prompt_chars")
+        ),
+        "runtime_semantic_proposition_verifier_max_prompt_chars": _nonnegative_int(
+            trace.get("max_prompt_chars")
+        ),
+        "runtime_semantic_proposition_verifier_max_output_tokens": _nonnegative_int(
+            trace.get("max_output_tokens")
         ),
         "runtime_semantic_proposition_verifier_cache_hit": bool(trace.get("cache_hit")),
         "runtime_semantic_proposition_verifier_verdict": str(

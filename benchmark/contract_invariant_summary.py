@@ -283,6 +283,8 @@ def _qasper_authority_summary(
         "qasper_semantic_evidence_set_authority_invalid_count",
         "qasper_semantic_proposition_verifier_call_count",
         "qasper_semantic_proposition_verifier_failure_count",
+        "qasper_semantic_proposition_verifier_context_overflow_count",
+        "qasper_semantic_proposition_verifier_schema_unsupported_count",
         "qasper_required_slot_authority_empty_count",
         "qasper_required_slot_authority_missing_count",
         "qasper_complete_to_unanswerable_empty_authority_count",
