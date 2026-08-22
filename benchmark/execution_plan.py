@@ -7,46 +7,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .artifact_publication import atomic_write_json, atomic_write_text, file_sha256
+from .artifact_publication import atomic_write_json, file_sha256
+from .execution_ledger import write_plan_and_table as _write_plan_and_table
 from .jsonl import read_jsonl
 from .sampling import select_examples
 
 PLAN_SCHEMA_VERSION = "benchmark_execution_plan.v1"
-JOB_TABLE_COLUMNS = (
-    "job_key",
-    "group_key",
-    "job_id",
-    "wave_index",
-    "dependency",
-    "state",
-    "kind",
-    "dataset",
-    "route",
-    "shard_index",
-    "num_shards",
-    "limit",
-    "timeout_seconds",
-    "suite_name",
-    "manifest",
-    "manifest_sha256",
-    "execution_manifest",
-    "execution_manifest_sha256",
-    "manifest_example_count",
-    "selected_example_ids_json",
-    "expected_route_ids_json",
-    "expected_key_count",
-    "expected_keys_json",
-    "expected_key_sha256",
-    "output_root",
-    "contract_path",
-    "artifact_complete",
-    "artifact_digest",
-    "artifact_dir",
-    "exit_code",
-    "slurm_state",
-    "slurm_exit_code",
-    "failure_reason",
-)
 
 
 @dataclass(frozen=True)
@@ -161,7 +127,9 @@ def _build_jobs(
     manifest_cache: dict[Path, tuple[list[dict[str, Any]], list[str]]] = {}
     for definition in definitions:
         if definition.suite_name in seen_job_keys:
-            raise ValueError(f"duplicate execution plan job key: {definition.suite_name}")
+            raise ValueError(
+                f"duplicate execution plan job key: {definition.suite_name}"
+            )
         seen_job_keys.add(definition.suite_name)
         scope = _job_scope(definition, sample_seed, manifest_cache)
         group = _merge_group(groups, definition, scope)
@@ -179,7 +147,9 @@ def _job_scope(
     manifest_cache: dict[Path, tuple[list[dict[str, Any]], list[str]]],
 ) -> dict[str, Any]:
     if definition.manifest not in manifest_cache:
-        manifest_cache[definition.manifest] = _load_manifest_selection(definition.manifest)
+        manifest_cache[definition.manifest] = _load_manifest_selection(
+            definition.manifest
+        )
     examples, route_ids_for_manifest = manifest_cache[definition.manifest]
     selected = select_examples(
         examples,
@@ -188,12 +158,16 @@ def _job_scope(
         shard_index=definition.shard_index,
         num_shards=definition.num_shards,
     )
-    selected_ids = [_example_id(example, index) for index, example in enumerate(selected)]
+    selected_ids = [
+        _example_id(example, index) for index, example in enumerate(selected)
+    ]
     manifest_example_ids = [
         _example_id(example, index) for index, example in enumerate(examples)
     ]
     if len(manifest_example_ids) != len(set(manifest_example_ids)):
-        raise ValueError(f"manifest contains duplicate example IDs: {definition.manifest}")
+        raise ValueError(
+            f"manifest contains duplicate example IDs: {definition.manifest}"
+        )
     route_ids = _active_route_ids(route_ids_for_manifest, definition.route)
     return {
         "examples": examples,
@@ -286,6 +260,19 @@ def _job_record(
         "artifact_digest": "",
         "artifact_dir": "",
         "exit_code": "",
+        "slurm_state": "",
+        "slurm_exit_code": "",
+        "failure_reason": "",
+        "producer_completion_state": "",
+        "producer_exit_code": "",
+        "producer_artifact_complete": False,
+        "producer_artifact_digest": "",
+        "producer_artifact_dir": "",
+        "producer_failure_reason": "",
+        "producer_completion_contract": "",
+        "runtime_contract_path": "",
+        "runtime_contract_sha256": "",
+        "completion_reconciliation_contract": "",
     }
 
 
@@ -363,65 +350,14 @@ def record_submission(
     _write_plan_and_table(plan, plan_path, table_path)
 
 
-def _write_plan_and_table(plan: dict[str, Any], plan_path: Path, table_path: Path) -> None:
-    atomic_write_json(plan_path, plan)
-    rows = []
-    for job in plan.get("jobs", []):
-        rows.append(
-            {
-                "job_key": job["job_key"],
-                "group_key": job["group_key"],
-                "job_id": job.get("job_id", ""),
-                "wave_index": job.get("wave_index", ""),
-                "dependency": job.get("dependency", ""),
-                "state": job.get("state", "PLANNED"),
-                "kind": job["kind"],
-                "dataset": job["dataset"],
-                "route": job["route"],
-                "shard_index": job["shard_index"],
-                "num_shards": job["num_shards"],
-                "limit": job["limit"],
-                "timeout_seconds": job["timeout_seconds"],
-                "suite_name": job["suite_name"],
-                "manifest": job["manifest"],
-                "manifest_sha256": job["manifest_sha256"],
-                "execution_manifest": job.get("execution_manifest", ""),
-                "execution_manifest_sha256": job.get("execution_manifest_sha256", ""),
-                "manifest_example_count": job["manifest_example_count"],
-                "selected_example_ids_json": json.dumps(
-                    job["selected_example_ids"], ensure_ascii=False, separators=(",", ":")
-                ),
-                "expected_route_ids_json": json.dumps(
-                    job["expected_route_ids"], ensure_ascii=False, separators=(",", ":")
-                ),
-                "expected_key_count": job["expected_key_count"],
-                "expected_keys_json": json.dumps(
-                    job["expected_keys"], ensure_ascii=False, separators=(",", ":")
-                ),
-                "expected_key_sha256": job["expected_key_sha256"],
-                "output_root": job["output_root"],
-                "contract_path": job["contract_path"],
-                "artifact_complete": job.get("artifact_complete", False),
-                "artifact_digest": job.get("artifact_digest", ""),
-                "artifact_dir": job.get("artifact_dir", ""),
-                "exit_code": job.get("exit_code", ""),
-                "slurm_state": job.get("slurm_state", ""),
-                "slurm_exit_code": job.get("slurm_exit_code", ""),
-                "failure_reason": job.get("failure_reason", ""),
-            }
-        )
-    lines = ["\t".join(JOB_TABLE_COLUMNS)]
-    for row in rows:
-        lines.append("\t".join(_table_value(row[column]) for column in JOB_TABLE_COLUMNS))
-    atomic_write_text(table_path, "\n".join(lines) + "\n")
-
-
 def _active_route_ids(routes: list[str], requested_route: str) -> list[str]:
     route_ids = []
     for route in routes:
         route_id = str(route).strip()
         if not route_id or route_id in route_ids:
-            raise ValueError(f"manifest contains duplicate or blank route_id: {route_id!r}")
+            raise ValueError(
+                f"manifest contains duplicate or blank route_id: {route_id!r}"
+            )
         route_ids.append(route_id)
     if requested_route in {"all", "*", ""}:
         return route_ids or ["all"]
@@ -446,8 +382,12 @@ def _load_manifest_selection(
             examples = payload.get("examples", [])
             routes_payload = payload.get("routes") or payload.get("route_matrix") or []
         else:
-            raise ValueError(f"manifest must contain an object or list: {manifest_path}")
-    if not isinstance(examples, list) or any(not isinstance(item, dict) for item in examples):
+            raise ValueError(
+                f"manifest must contain an object or list: {manifest_path}"
+            )
+    if not isinstance(examples, list) or any(
+        not isinstance(item, dict) for item in examples
+    ):
         raise ValueError(f"manifest examples must be objects: {manifest_path}")
     if not isinstance(routes_payload, list) or any(
         not isinstance(item, dict) for item in routes_payload
@@ -567,16 +507,10 @@ def _payload_sha256(payload: dict[str, Any]) -> str:
     content = dict(payload)
     content.pop("plan_sha256", None)
     return hashlib.sha256(
-        json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
-            "utf-8"
-        )
+        json.dumps(
+            content, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
     ).hexdigest()
-
-
-def _table_value(value: Any) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return str(value)
 
 
 def _slug(value: str) -> str:

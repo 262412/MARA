@@ -231,6 +231,27 @@ def test_runtime_cleanup_rejects_foreign_owner_and_preserves_runtime(tmp_path):
     assert result.returncode == 0, result.stderr
 
 
+def test_exit_trap_preserves_unreconciled_planned_runtime(tmp_path):
+    runtime_root = tmp_path / "benchmark_runs"
+    result = _bash(
+        f"""
+        set -euo pipefail
+        export MARA_PROJECT_ROOT={PROJECT_ROOT}
+        export MARA_BENCHMARK_RUNTIME_ROOT={runtime_root}
+        export MARA_EXECUTION_PLAN={tmp_path / 'plan.json'}
+        export SLURM_JOB_ID=909
+        source {RUNTIME_HELPER}
+        mara_install_benchmark_runtime_cleanup
+        mara_configure_benchmark_runtime unreconciled-suite
+        """,
+    )
+
+    assert result.returncode == 2
+    assert "producer completion is unreconciled" in result.stderr
+    [owner_file] = runtime_root.rglob(".owner")
+    assert owner_file.parent.is_dir()
+
+
 def test_slurm_scripts_bootstrap_and_run_with_frozen_runtime_interpreter():
     for script in (TEXT_SLURM_SCRIPT, MULTIMODAL_SLURM_SCRIPT):
         text = script.read_text(encoding="utf-8")

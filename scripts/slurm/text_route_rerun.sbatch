@@ -109,12 +109,17 @@ start_service() {
 }
 
 cleanup() {
+  local producer_status=$?
   local pid
   for pid in "${SERVICE_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
     fi
   done
+  if [[ "${MARA_BENCHMARK_COMPLETION_RECORDED:-0}" != "1" ]]; then
+    mara_reconcile_benchmark_completion "$producer_status" ||
+      log "producer completion reconciliation failed; preserving runtime for audit"
+  fi
 }
 trap cleanup EXIT
 
@@ -150,6 +155,7 @@ if [[ -n "$GIT_STATUS" && "${MARA_ALLOW_DIRTY_BENCHMARK:-0}" != "1" ]]; then
   exit 2
 fi
 export MARA_BENCHMARK_GIT_COMMIT="$GIT_COMMIT"
+export MARA_BENCHMARK_GIT_DIRTY="$GIT_DIRTY"
 mara_bootstrap_benchmark_runtime
 export MARA_BENCHMARK_INDEX_CONTRACT="$(
   "$MARA_BENCHMARK_PYTHON" \
@@ -301,6 +307,7 @@ test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
 test -f "$RUN_DIR/artifact_manifest.json"
 test -f "$RUN_DIR/artifact_complete.json"
+export MARA_BENCHMARK_ARTIFACT_DIR="$RUN_DIR"
 if [[ "$REQUIRE_SEMANTIC_DEBUG_TRACE" == "1" ]]; then
   test -f "$RUN_DIR/semantic_debug_traces.jsonl"
   test "$(wc -l < "$RUN_DIR/semantic_debug_traces.jsonl")" -gt 0
@@ -342,5 +349,6 @@ if [[ "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
     --suite-kind "$CONTRACT_SMOKE_SUITE_KIND"
 fi
 
+mara_reconcile_benchmark_completion 0
 log "outputs=${RUN_DIR}"
 mara_cleanup_benchmark_runtime
