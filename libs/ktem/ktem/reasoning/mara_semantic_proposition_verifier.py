@@ -17,6 +17,7 @@ from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS,
     SemanticPropositionEvidencePacking,
     pack_semantic_proposition_evidence,
+    required_semantic_proposition_slots,
     semantic_proposition_verifier_prompt,
 )
 from .mara_semantic_proposition_transaction import (
@@ -26,7 +27,7 @@ from .mara_semantic_proposition_transaction import (
 )
 
 SEMANTIC_PROPOSITION_VERIFIER_RUNTIME_CONTRACT = (
-    "semantic_proposition_verifier_runtime.v1"
+    "semantic_proposition_verifier_runtime.v2"
 )
 SEMANTIC_PROPOSITION_VERIFIER_SEED = 20260724
 
@@ -46,14 +47,25 @@ def build_semantic_proposition_verifier(
         llm,
         audit_llm or configured_auditor or llm,
         debug_trace=semantic_proposition_debug_enabled(pipeline),
+        release_mode=bool(
+            getattr(pipeline, "semantic_proposition_release_mode", False)
+        ),
     )
 
 
 class _SemanticPropositionVerifier:
-    def __init__(self, llm: Any, audit_llm: Any, *, debug_trace: bool) -> None:
+    def __init__(
+        self,
+        llm: Any,
+        audit_llm: Any,
+        *,
+        debug_trace: bool,
+        release_mode: bool,
+    ) -> None:
         self.llm = llm
         self.audit_llm = audit_llm
         self.debug_recorder = SemanticPropositionDebugRecorder(debug_trace)
+        self.release_mode = release_mode
         self.cache: dict[str, dict[str, Any] | None] = {}
         self.cache_diagnostics: dict[str, dict[str, Any]] = {}
         self.failure_reasons: dict[str, str] = {}
@@ -68,7 +80,7 @@ class _SemanticPropositionVerifier:
         _answer: str,
         bundle: EvidenceBundle,
     ) -> dict[str, Any] | None:
-        slots = _required_slots(request)
+        slots = required_semantic_proposition_slots(request)
         packing = pack_semantic_proposition_evidence(
             request,
             question,
@@ -78,12 +90,19 @@ class _SemanticPropositionVerifier:
         packed = packing.records
         seed = _verifier_seed(request)
         model = _model_name(self.llm)
+        audit_model = _model_name(self.audit_llm)
+        cache_key = _semantic_cache_key(
+            packing.semantic_pack_digest,
+            proposal_model=model,
+            audit_model=audit_model,
+            seed=seed,
+            release_mode=self.release_mode,
+        )
         if not slots or not packed:
             return self._skipped_response(bundle, question, packing, slots, model, seed)
         try:
             prompt = semantic_proposition_verifier_prompt(question, slots, packed)
         except ValueError:
-            cache_key = _cache_key(question, slots, packed)
             self.cache[cache_key] = None
             self.failure_reasons[cache_key] = "prompt_bound_exceeded"
             self.debug_recorder.record_pre_model(
@@ -104,7 +123,6 @@ class _SemanticPropositionVerifier:
                 seed,
             )
             return None
-        cache_key = _cache_key(question, slots, packed)
         if cache_key in self.cache:
             return self._cached_response(
                 bundle,
@@ -148,6 +166,8 @@ class _SemanticPropositionVerifier:
             proposal_model=model,
             audit_model=_model_name(self.audit_llm),
             seed=seed,
+            release_mode=self.release_mode,
+            semantic_pack_digest=packing.semantic_pack_digest,
             capture_debug_trace=self.debug_recorder.enabled,
         )
         self.proposal_model_call_count += outcome.proposal_call_count
@@ -227,6 +247,10 @@ class _SemanticPropositionVerifier:
             prompt_chars=prompt_chars,
             verdict=str((cached or {}).get("verdict") or ""),
             cache_hit=True,
+            cache_source="route_local_semantic_pack",
+            cache_source_event_index=self.debug_recorder.cache_event_indices.get(
+                cache_key
+            ),
             **diagnostics,
         )
         return deepcopy(cached)
@@ -260,7 +284,7 @@ class _SemanticPropositionVerifier:
             model,
             seed,
         )
-        return insufficient_semantic_result(model, seed)
+        return insufficient_semantic_result(model, seed, question)
 
     def _trace(
         self,
@@ -275,6 +299,7 @@ class _SemanticPropositionVerifier:
         prompt_chars: int = 0,
         verdict: str = "",
         cache_hit: bool = False,
+        cache_source: str = "model_transaction",
         **diagnostics: Any,
     ) -> None:
         _record_trace(
@@ -291,7 +316,9 @@ class _SemanticPropositionVerifier:
             prompt_chars=prompt_chars,
             verdict=verdict,
             cache_hit=cache_hit,
+            cache_source=cache_source,
             debug_trace=self.debug_recorder.snapshot(),
+            release_mode=self.release_mode,
             **diagnostics,
         )
 
@@ -302,64 +329,30 @@ def _answering_llm(pipeline: Any) -> Any | None:
     return llm if callable(llm) else None
 
 
-def _required_slots(request: Any) -> list[dict[str, str]]:
-    plan = getattr(request, "query_plan", None)
-    raw_slots = (
-        plan.get("evidence_slots", [])
-        if isinstance(plan, dict)
-        else getattr(plan, "evidence_slots", ()) or ()
-    )
-    slots: list[dict[str, str]] = []
-    for slot in raw_slots:
-        required = (
-            slot.get("required_for_verification", False)
-            if isinstance(slot, dict)
-            else getattr(slot, "required_for_verification", False)
-        )
-        slot_id = _slot_value(slot, "slot_id")
-        if required and slot_id:
-            slots.append(
-                {
-                    "slot_id": slot_id,
-                    "description": _slot_description(slot),
-                }
-            )
-    return slots
-
-
-def _slot_value(slot: Any, key: str) -> str:
-    value = slot.get(key) if isinstance(slot, dict) else getattr(slot, key, "")
-    return str(value or "").strip()
-
-
-def _slot_description(slot: Any) -> str:
-    fields = [
-        (key, _slot_value(slot, key))
-        for key in ("role", "entity", "metric", "period", "statement_kind", "query")
-    ]
-    return "; ".join(f"{key}={value}" for key, value in fields if value)
-
-
-def _cache_key(
-    question: str,
-    slots: list[dict[str, str]],
-    packed: list[dict[str, str]],
-) -> str:
-    payload = {
-        "question": question,
-        "slot_ids": [value["slot_id"] for value in slots],
-        "evidence": [
-            (value["evidence_id"], value["source_id"], value["text"])
-            for value in packed
-        ],
-    }
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
 def _verifier_seed(request: Any) -> int:
     seed = getattr(request, "generation_seed", None)
     return SEMANTIC_PROPOSITION_VERIFIER_SEED if seed is None else int(seed)
+
+
+def _semantic_cache_key(
+    semantic_pack_digest: str,
+    *,
+    proposal_model: str,
+    audit_model: str,
+    seed: int,
+    release_mode: bool,
+) -> str:
+    payload = {
+        "semantic_pack_digest": semantic_pack_digest,
+        "proposal_model": proposal_model,
+        "audit_model": audit_model,
+        "seed": seed,
+        "release_mode": release_mode,
+        "proposal_contract": "semantic_proposition_verdict.v3",
+        "audit_contract": "semantic_entailment_audit.v2",
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _model_name(llm: Any) -> str:
@@ -385,6 +378,7 @@ def _record_trace(
     prompt_chars: int = 0,
     verdict: str = "",
     cache_hit: bool = False,
+    cache_source: str = "model_transaction",
     debug_trace: dict[str, Any] | None = None,
     **diagnostics: Any,
 ) -> None:
@@ -395,6 +389,10 @@ def _record_trace(
         "model": model,
         "seed": seed,
         "cache_hit": cache_hit,
+        "cache_source": cache_source,
+        "semantic_pack_digest": packing.semantic_pack_digest,
+        "question_proposition": dict(packing.question_proposition),
+        "release_mode": bool(diagnostics.get("release_mode", False)),
         "actual_model_call_count": actual_model_call_count,
         "proposal_model_call_count": proposal_model_call_count,
         "audit_model_call_count": audit_model_call_count,

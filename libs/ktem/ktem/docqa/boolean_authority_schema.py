@@ -19,11 +19,11 @@ BOOLEAN_AUTHORITY_STATES: tuple[BooleanAuthorityState, ...] = (
 BOOLEAN_AUTHORITY_DERIVATION_CONTRACT = "boolean_authority_derivation.v1"
 ARGUMENT_CONJUNCTION_RULE = "same_source_argument_conjunction.v1"
 ENTITY_TYPE_JOIN_RULE = "same_source_entity_type_join.v1"
-SEMANTIC_EVIDENCE_SET_RULE = "grounded_semantic_evidence_set_entailment.v2"
-SEMANTIC_PROPOSITION_VERDICT_CONTRACT = "semantic_proposition_verdict.v2"
-GROUNDED_SEMANTIC_VERIFIER_CONTRACT = "grounded_semantic_verifier.v1"
-SEMANTIC_ENTAILMENT_AUDIT_CONTRACT = "semantic_entailment_audit.v1"
-GROUNDED_SEMANTIC_AUDITOR_CONTRACT = "grounded_semantic_auditor.v1"
+SEMANTIC_EVIDENCE_SET_RULE = "grounded_semantic_evidence_set_entailment.v3"
+SEMANTIC_PROPOSITION_VERDICT_CONTRACT = "semantic_proposition_verdict.v3"
+GROUNDED_SEMANTIC_VERIFIER_CONTRACT = "grounded_semantic_verifier.v2"
+SEMANTIC_ENTAILMENT_AUDIT_CONTRACT = "semantic_entailment_audit.v2"
+GROUNDED_SEMANTIC_AUDITOR_CONTRACT = "grounded_semantic_auditor.v2"
 
 
 def candidate_authority_state(relevant: bool) -> BooleanAuthorityState:

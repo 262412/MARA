@@ -95,28 +95,50 @@ treated only the empirical sentence as complete authority is not used.
 
 ### Grounded semantic evidence-set entailment
 
-`grounded_semantic_evidence_set_entailment.v2` handles propositions whose
-premise relationship is semantic rather than a registered lexical join. A
-conservative proposition proposer may select two to four exact, non-overlapping
-quotes from one source and return:
+`grounded_semantic_evidence_set_entailment.v3` handles propositions whose
+premise relationship is semantic rather than a registered lexical join. It
+separates two proof modes instead of treating every semantic proof as a
+conjunction:
+
+- `atomic_semantic` contains exactly one premise that entails the complete
+  typed conclusion;
+- `composite_conjunction` contains two to four non-overlapping premises that
+  are all necessary and jointly entail the complete typed conclusion.
+
+A conservative proposition proposer selects canonical runtime-provided spans
+from one source and returns:
 
 - one `yes`, `no`, or `insufficient_evidence` verdict under
-  `semantic_proposition_verdict.v2`;
+  `semantic_proposition_verdict.v3`;
 - `support_mode=evidence_set`;
+- the explicit proof mode;
 - an all-premises-required attestation;
 - a distinct proposition fragment for every quote;
 - the exact QueryPlan verification slots supported by every premise; and
 - a model, seed, and verifier contract attestation.
 
-The first model response is a proposal, not authority. Before typed commit, a
-separate `semantic_entailment_audit.v1` transaction receives only the exact
-question, proposed polarity, quotes, and proposition fragments. It must verify
-that every quote entails its fragment without extension, every fragment keeps
-the requested actor and scope, the complete set entails the proposed answer,
-every premise is necessary, and the set is contradiction-free. The audit has a
-separate prompt, schema, seed, and model-call boundary. Deployments may route it
-to a dedicated audit model; the default runtime reuses the configured answering
-model through that independent boundary.
+The runtime first creates a `question_proposition.v1` value containing the
+complete question surface plus its actor, predicate, argument surfaces, scope,
+qualifier, quantifier, modality, negation, and time fields. A proposed polarity
+creates a digest-bound `typed_conclusion.v1`. The first model response is only a
+proof proposal, never authority.
+
+Before typed commit, a separate `semantic_entailment_audit.v2` transaction
+receives the typed question, typed conclusion, proof mode, exact quotes, and
+proposition fragments. It checks every premise independently and checks the
+complete conclusion's polarity, quantifier, and scope. The resulting
+`conclusion_audit.v1` is bound to the exact conclusion digest. Release-mode
+QASPER execution fails before the proposer call if proposer and auditor are the
+same model instance; a separate instance of the same model or a distinct model
+still performs a separate request, parse, and attestation.
+
+The local parser performs deterministic cross-field checks in addition to the
+provider schema. In particular, `jointly_entails=true` cannot coexist with a
+false premise check. Such a response enters bounded `proof_repair`: the runtime
+may prune rejected premises only if the remaining proof still covers every
+required slot, otherwise it asks the proposer to rebuild from the canonical
+selectors. Either path discards the old audit and runs the complete independent
+audit again. A second contradictory audit is not repaired recursively.
 
 An accepted audit records per-premise quote and fragment digests plus a digest
 of the complete proposed transaction. The audit is included in the verifier
@@ -125,10 +147,15 @@ benchmark validators recompute the proposal digest from the typed atoms and
 premise contributions. Re-identifying a derivation after changing a fragment,
 quote, slot binding, polarity, or audit cannot make it valid.
 
-After audit, runtime code resolves every evidence label back to one canonical
-item, grounds every quote exactly, checks span offsets, source identity,
-overlap, scope, slot coverage, audit binding, and derivation identity, then
-creates typed atoms. An audit rejection is a normal fail-closed
+Before either model call, runtime deterministically segments the packed text
+into bounded canonical sentence/spans. The proposer returns selector IDs, not
+free-form quotes; the local parser materializes each exact quote and its local
+and canonical offsets. The provider schema deliberately keeps the selector as
+a bounded string rather than embedding a potentially large dynamic enum; exact
+selector membership is enforced locally. After audit, runtime resolves every
+evidence identity back to one canonical item and rechecks quote bytes, offsets,
+source identity, overlap, scope, slot coverage, audit binding, and derivation
+identity before creating typed atoms. An audit rejection is a normal fail-closed
 `insufficient_evidence` outcome. A missing, malformed, or provider-failed audit
 is a verifier failure and cannot publish authority.
 
@@ -146,10 +173,13 @@ Missing retrieval, an empty evidence annotation, or a model's unsupported
 negative judgment cannot establish negative authority.
 
 The verifier runs only after deterministic Boolean verification remains
-unknown. It receives the question, required QueryPlan slots, and bounded
-canonical evidence excerpts, but not the generated answer. Calls use a stable
-seed and strict JSON schema, are cached by question/slot/evidence identity, and
-fail closed on provider errors or malformed output.
+unknown. It receives the typed question, required QueryPlan slots, and bounded
+canonical evidence spans, but not the generated answer. Calls use a stable seed
+and strict JSON schema. The route-local cache is keyed by a semantic-pack digest
+over the typed proposition, complete slot descriptions, actual ordered prompt
+spans and offsets, stable evidence provenance, packing limits, system prompt,
+and contract versions. Runtime UUID churn is deliberately absent from this
+digest.
 
 The provider-facing schema stays within the backend's supported grammar subset;
 set uniqueness is enforced again by the strict local parser instead of relying
@@ -162,8 +192,16 @@ context. This leaves a 256-token context reserve while accommodating a complete
 four-premise JSON proof. A parse failure receives one bounded corrective retry.
 If it still fails, runtime records whether the provider exhausted its output
 budget or the local cross-field parser rejected the object; response text is not
-persisted. The audit prompt is bounded separately and has a 256-token response
-budget.
+persisted. The audit prompt is bounded separately and has a 512-token output
+cap.
+
+Recovery is recorded as one of `proof_repair`, `quote_rebind`, or
+`evidence_retrieval`. Controller recovery records both raw-evidence and
+semantic-pack digests before and after the transition. A fresh semantic model
+verification is allowed only when the semantic-pack digest changes; changes to
+runtime IDs, unselected text, or other non-prompt state cannot create a new
+verification attempt. Proof repair remains an internal audited transaction and
+always performs its required full re-audit.
 
 ## Fail-closed invariants
 
@@ -189,6 +227,12 @@ A composite proposition is verified only when all of the following hold:
     authority contains an explicit target-relation contradiction.
 13. Every semantic premise fragment and the joint conclusion have a verified,
     proposal-bound independent entailment audit.
+14. Proof-mode cardinality is exact: one premise for `atomic_semantic`, and two
+    to four all-required premises for `composite_conjunction`.
+15. The typed question, typed conclusion, conclusion audit, auditor
+    relationship, and semantic-pack digest remain bound through commit.
+16. A repaired proof has a complete fresh audit; recovery cannot reverify an
+    unchanged semantic pack.
 
 If any invariant fails, the transaction is downgraded coherently to missing
 authority and the answer remains unknown or abstained. Missing evidence never
@@ -222,6 +266,13 @@ emits:
   response size;
 - `runtime_semantic_entailment_audit_status`, reason, model, call/retry counts,
   response diagnostics, contract, and proposal digest;
+- `runtime_semantic_proof_mode`, `runtime_semantic_question_proposition`, and
+  `runtime_semantic_typed_conclusion`;
+- `runtime_semantic_auditor_relationship` and
+  `runtime_semantic_conclusion_audit`;
+- `runtime_semantic_pack_digest`, cache source and source-event index;
+- `runtime_semantic_recovery_transitions` and the latest typed recovery
+  transition;
 - `qasper_composite_authority_count`;
 - `qasper_composite_authority_invalid_count`;
 - `qasper_semantic_evidence_set_authority_count`;

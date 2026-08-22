@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from copy import deepcopy
+from copy import copy, deepcopy
 from time import monotonic
 from typing import Any
 
@@ -308,7 +308,30 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
         None,
     )
     _apply_visual_backends(pipeline, request)
+    configure_semantic_proposition_runtime(pipeline, request)
     pipeline.docqa_request = request
+
+
+def configure_semantic_proposition_runtime(pipeline: Any, request: Any) -> None:
+    """Give strict QASPER benchmark runs an independent audit instance."""
+
+    release_mode = (
+        str(getattr(request, "origin", "") or "").strip().casefold() == "benchmark"
+        and str(getattr(request, "verification_domain", "") or "").strip().casefold()
+        == "qasper"
+        and str(getattr(request, "verification_mode", "") or "").strip().casefold()
+        == "strict"
+    )
+    pipeline.semantic_proposition_release_mode = release_mode
+    if not release_mode:
+        return
+    configured = getattr(pipeline, "semantic_entailment_auditor_llm", None)
+    answering = getattr(getattr(pipeline, "answering_pipeline", None), "llm", None)
+    if callable(configured) and configured is not answering:
+        return
+    auditor = copy(answering)
+    if callable(auditor) and auditor is not answering:
+        pipeline.semantic_entailment_auditor_llm = auditor
 
 
 def build_visual_retriever_backend(backend_name: str):

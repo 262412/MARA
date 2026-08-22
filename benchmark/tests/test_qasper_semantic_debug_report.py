@@ -24,7 +24,7 @@ def test_write_reports_publishes_optional_semantic_debug_artifact(tmp_path):
                             "status": "parsed",
                             "audit_status": "verified",
                             "debug_trace": {
-                                "contract_id": "semantic_proposition_debug_trace.v1",
+                                "contract_id": "semantic_proposition_debug_trace.v2",
                                 "events": [],
                             },
                         },

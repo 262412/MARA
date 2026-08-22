@@ -4,8 +4,8 @@ from collections import Counter
 from copy import deepcopy
 from typing import Any, Iterable, Mapping
 
-QASPER_SEMANTIC_DEBUG_CONTRACT = "qasper_semantic_pipeline_debug.v1"
-SEMANTIC_PROPOSITION_DEBUG_CONTRACT = "semantic_proposition_debug_trace.v1"
+QASPER_SEMANTIC_DEBUG_CONTRACT = "qasper_semantic_pipeline_debug.v2"
+SEMANTIC_PROPOSITION_DEBUG_CONTRACT = "semantic_proposition_debug_trace.v2"
 
 _RECOVERY_STAGES = {
     "evidence_rebind",
@@ -133,25 +133,8 @@ def _findings(row: Mapping[str, Any]) -> list[dict[str, str]]:
                 "proposal and entailment audit used the same model instance",
             )
         )
-    if any(_reused_rejected_audit(event) for event in events):
-        findings.append(
-            _finding(
-                "rejected_audit_result_reused",
-                "recovery_risk",
-                "recovery reused an evidence-signature result rejected by the audit",
-            )
-        )
-    if any(
-        event.get("stop_reason") == "recovery_no_progress"
-        for event in row.get("recovery_events", [])
-    ):
-        findings.append(
-            _finding(
-                "recovery_stopped_without_state_change",
-                "recovery_state",
-                "recovery terminated because evidence, slots, and authority did not change",
-            )
-        )
+    findings.extend(_audit_contract_findings(verifier))
+    findings.extend(_recovery_state_findings(row))
     if int(debug_trace.get("dropped_event_count") or 0) > 0:
         findings.append(
             _finding(
@@ -179,11 +162,86 @@ def _findings(row: Mapping[str, Any]) -> list[dict[str, str]]:
     return findings
 
 
-def _reused_rejected_audit(event: Mapping[str, Any]) -> bool:
-    outcome = _mapping(event.get("cached_outcome"))
-    return (
-        event.get("event") == "cache_reuse"
-        and outcome.get("audit_status") == "rejected"
+def _audit_contract_findings(verifier: Mapping[str, Any]) -> list[dict[str, str]]:
+    findings = []
+    if _verified_conclusion_audit_missing(verifier):
+        findings.append(
+            _finding(
+                "verified_audit_conclusion_contract_missing",
+                "inconsistency",
+                "a verified semantic audit has no complete typed conclusion audit",
+            )
+        )
+    if _proof_repair_without_full_reaudit(verifier):
+        findings.append(
+            _finding(
+                "proof_repair_without_full_reaudit",
+                "inconsistency",
+                "proof repair was recorded without a complete independent reaudit",
+            )
+        )
+    return findings
+
+
+def _recovery_state_findings(row: Mapping[str, Any]) -> list[dict[str, str]]:
+    findings = []
+    if any(
+        _reverify_without_pack_change(event) for event in row.get("recovery_events", [])
+    ):
+        findings.append(
+            _finding(
+                "reverify_without_semantic_pack_change",
+                "recovery_state",
+                "semantic reverification ran although the semantic pack was unchanged",
+            )
+        )
+    if any(
+        event.get("stop_reason") == "recovery_no_progress"
+        for event in row.get("recovery_events", [])
+    ):
+        findings.append(
+            _finding(
+                "recovery_stopped_without_state_change",
+                "recovery_state",
+                "recovery terminated because evidence, slots, and authority did not change",
+            )
+        )
+    return findings
+
+
+def _verified_conclusion_audit_missing(verifier: Mapping[str, Any]) -> bool:
+    if not str(verifier.get("audit_status") or "").startswith("verified"):
+        return False
+    audit = _mapping(verifier.get("conclusion_audit"))
+    return bool(
+        audit.get("contract_id") != "conclusion_audit.v1"
+        or any(
+            audit.get(field) is not True
+            for field in (
+                "conclusion_entailed",
+                "polarity_consistent",
+                "quantifier_consistent",
+                "scope_consistent",
+            )
+        )
+    )
+
+
+def _proof_repair_without_full_reaudit(verifier: Mapping[str, Any]) -> bool:
+    transitions = verifier.get("recovery_transitions") or []
+    repaired = any(
+        isinstance(value, Mapping) and value.get("to") == "proof_repair"
+        for value in transitions
+    )
+    return bool(repaired and verifier.get("full_reaudit") is not True)
+
+
+def _reverify_without_pack_change(event: Any) -> bool:
+    return bool(
+        isinstance(event, Mapping)
+        and event.get("stage") == "reverify"
+        and event.get("semantic_pack_digest_applicable") is True
+        and event.get("semantic_pack_digest_changed") is not True
     )
 
 

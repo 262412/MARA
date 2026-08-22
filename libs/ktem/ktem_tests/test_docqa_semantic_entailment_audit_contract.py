@@ -9,13 +9,16 @@ from ktem.docqa.boolean_authority_derivation import (
     boolean_derivation_id,
     boolean_derivation_identity_payload,
 )
-from ktem.docqa.boolean_authority_schema import SEMANTIC_PROPOSITION_VERDICT_CONTRACT
+from ktem.docqa.boolean_authority_schema import (
+    GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+    SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+)
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.query_planning import build_query_plan
-from ktem.docqa.semantic_entailment_audit import semantic_entailment_audit_attestation
 from ktem.docqa.verification import verify_decision
+from ktem_tests.semantic_entailment_test_helpers import audited_verdict
 
 QUESTION = "Did the authors compare cross-lingual and single-language evaluation?"
 
@@ -88,23 +91,19 @@ def _verdict(*, audited: bool) -> dict[str, Any]:
         "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
         "verdict": "yes",
         "support_mode": "evidence_set",
+        "proof_mode": "composite_conjunction",
         "jointly_complete": True,
         "each_premise_required": True,
         "premises": premises,
         "verifier": {
-            "contract_id": "grounded_semantic_verifier.v1",
+            "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
             "model": "proposal-test-double",
             "seed": 7,
         },
     }
-    if audited:
-        response["entailment_audit"] = semantic_entailment_audit_attestation(
-            QUESTION,
-            "yes",
-            premises,
-            model="audit-test-double",
-            seed=8,
-        )
+    response = audited_verdict(response, QUESTION)
+    if not audited:
+        response.pop("entailment_audit")
     return response
 
 

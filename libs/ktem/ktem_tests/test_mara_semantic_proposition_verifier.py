@@ -17,10 +17,6 @@ from ktem.reasoning.mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_INPUT_TOKEN_BUDGET,
     SEMANTIC_PROPOSITION_VERIFIER_ITEM_CHARS,
 )
-from ktem.reasoning.mara_semantic_proposition_schema import (
-    parse_semantic_proposition_result,
-    semantic_proposition_response_format,
-)
 from ktem.reasoning.mara_semantic_proposition_verifier import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
@@ -83,7 +79,7 @@ def _request() -> DocQARequest:
     )
 
 
-def _items() -> list[dict[str, str]]:
+def _items() -> list[dict[str, Any]]:
     return [
         {
             "evidence_id": "cross-lingual",
@@ -105,12 +101,12 @@ def _model_response() -> str:
         {
             "verdict": "yes",
             "support_mode": "evidence_set",
+            "proof_mode": "composite_conjunction",
             "jointly_complete": True,
             "each_premise_required": True,
             "premises": [
                 {
-                    "evidence_ref": "E1",
-                    "quote": "Transfer was evaluated across two languages.",
+                    "span_selector": "E1:S1",
                     "proposition_fragment": "cross-language evaluation was performed",
                     "supports_slot_ids": [
                         "support:proposition",
@@ -118,10 +114,7 @@ def _model_response() -> str:
                     ],
                 },
                 {
-                    "evidence_ref": "E2",
-                    "quote": (
-                        "The experiment included monolingual baselines for comparison."
-                    ),
+                    "span_selector": "E2:S1",
                     "proposition_fragment": (
                         "single-language baselines were included for comparison"
                     ),
@@ -140,6 +133,7 @@ def _insufficient_response() -> str:
         {
             "verdict": "insufficient_evidence",
             "support_mode": "evidence_set",
+            "proof_mode": "none",
             "jointly_complete": False,
             "each_premise_required": False,
             "premises": [],
@@ -161,6 +155,12 @@ def _audit_response() -> str:
             "jointly_entails": True,
             "each_premise_required": True,
             "contradiction_free": True,
+            "conclusion_check": {
+                "conclusion_entailed": True,
+                "polarity_consistent": True,
+                "quantifier_consistent": True,
+                "scope_consistent": True,
+            },
         }
     )
 
@@ -183,11 +183,15 @@ def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> Non
     assert [value["evidence_id"] for value in first["premises"]] == [
         identity_of(item).key for item in _items()
     ]
-    assert first["verifier"] == {
-        "contract_id": "grounded_semantic_verifier.v1",
-        "model": "semantic-test-model",
-        "seed": 17,
-    }
+    assert first["verifier"]["contract_id"] == "grounded_semantic_verifier.v2"
+    assert first["verifier"]["model"] == "semantic-test-model"
+    assert first["verifier"]["seed"] == 17
+    assert first["verifier"]["release_mode"] is False
+    assert first["verifier"]["auditor_relationship"] == "same_instance"
+    assert (
+        first["verifier"]["semantic_pack_digest"]
+        == bundle.metadata["semantic_proposition_verifier"]["semantic_pack_digest"]
+    )
     messages, kwargs = llm.calls[0]
     assert "unanswerable" not in messages[1].content
     assert "at least one premise must explicitly anchor their action" in (
@@ -200,41 +204,6 @@ def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> Non
     assert bundle.metadata["semantic_proposition_verifier"]["cache_hit"] is True
     assert (
         bundle.metadata["semantic_proposition_verifier"]["actual_model_call_count"] == 2
-    )
-
-
-def test_response_schema_uses_portable_subset_and_parser_rejects_duplicate_slots() -> (
-    None
-):
-    response_format = semantic_proposition_response_format(
-        ["E1", "E2"],
-        ["support:proposition", "support:left_subject"],
-    )
-    assert "uniqueItems" not in json.dumps(response_format)
-
-    response = json.loads(_model_response())
-    response["premises"][0]["supports_slot_ids"] = [
-        "support:proposition",
-        "support:proposition",
-    ]
-    packed = [
-        {"label": "E1", "evidence_id": "first"},
-        {"label": "E2", "evidence_id": "second"},
-    ]
-
-    assert (
-        parse_semantic_proposition_result(
-            json.dumps(response),
-            packed=packed,
-            slot_ids={
-                "support:proposition",
-                "support:left_subject",
-                "support:right_subject",
-            },
-            model="semantic-test-model",
-            seed=17,
-        )
-        is None
     )
 
 
@@ -380,7 +349,7 @@ def test_runtime_verifier_preserves_full_canonical_chunk_window() -> None:
 
 def test_runtime_verifier_accepts_distinct_spans_from_one_canonical_item() -> None:
     response = json.loads(_model_response())
-    response["premises"][1]["evidence_ref"] = "E1"
+    response["premises"][1]["span_selector"] = "E1:S2"
     items = _items()
     items[0]["text"] = f"{items[0]['text']} {items[1]['text']}"
     llm = _RecordingLLM(json.dumps(response))
@@ -419,8 +388,6 @@ def test_runtime_verdict_commits_typed_authority_and_query_plan_bindings() -> No
         },
     ]
     response = json.loads(_model_response())
-    response["premises"][0]["quote"] = items[0]["text"]
-    response["premises"][1]["quote"] = items[1]["text"]
     llm = _RecordingLLM(json.dumps(response))
     verifier = build_semantic_proposition_verifier(
         SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))

@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-SEMANTIC_PROPOSITION_DEBUG_CONTRACT = "semantic_proposition_debug_trace.v1"
+SEMANTIC_PROPOSITION_DEBUG_CONTRACT = "semantic_proposition_debug_trace.v2"
 SEMANTIC_PROPOSITION_DEBUG_ENV = "MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE"
 SEMANTIC_PROPOSITION_DEBUG_MAX_EVENTS = 16
 SEMANTIC_PROPOSITION_DEBUG_RESPONSE_CHARS = 16_000
@@ -92,7 +92,9 @@ class SemanticPropositionDebugRecorder:
         event.update(
             {
                 "auditor_relationship": str(
-                    (transaction or {}).get("auditor_relationship") or ""
+                    (transaction or {}).get("auditor_relationship")
+                    or diagnostics.get("auditor_relationship")
+                    or ""
                 ),
                 "outcome": {
                     "status": status,
@@ -100,6 +102,16 @@ class SemanticPropositionDebugRecorder:
                     "verdict": verdict,
                     "audit_status": str(diagnostics.get("audit_status") or ""),
                     "audit_reason": str(diagnostics.get("audit_reason") or ""),
+                    "proof_mode": str(diagnostics.get("proof_mode") or ""),
+                    "typed_conclusion": deepcopy(
+                        diagnostics.get("typed_conclusion") or {}
+                    ),
+                    "conclusion_audit": deepcopy(
+                        diagnostics.get("conclusion_audit") or {}
+                    ),
+                    "recovery_transitions": deepcopy(
+                        diagnostics.get("recovery_transitions") or []
+                    ),
                 },
                 "transaction": deepcopy(transaction or {}),
             }
@@ -123,6 +135,7 @@ class SemanticPropositionDebugRecorder:
         event.update(
             {
                 "source_event_index": self.cache_event_indices.get(cache_key),
+                "cache_source": "route_local_semantic_pack",
                 "cached_outcome": {
                     "status": "cache_hit" if cached is not None else "cached_failure",
                     "reason": (
@@ -177,6 +190,12 @@ class SemanticPropositionDebugRecorder:
         return {
             "event": event_name,
             "cache_key": cache_key,
+            "semantic_pack_digest": str(
+                getattr(packing, "semantic_pack_digest", "") or ""
+            ),
+            "question_proposition": deepcopy(
+                getattr(packing, "question_proposition", {}) or {}
+            ),
             "route_evidence_signature": [
                 value["evidence_id"] for value in packing.records
             ],

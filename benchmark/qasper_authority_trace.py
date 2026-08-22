@@ -153,6 +153,7 @@ def _trace_payload(
         "runtime_boolean_authority_kind": values["authority_kind"],
         "runtime_authority_failure_kind": failure_kind,
         "post_engine_answerability_llm_call_count": 0,
+        "runtime_semantic_recovery_transition": _latest_recovery_transition(prediction),
         **semantic_proposition_authority_trace_fields(prediction),
         **semantic_proposition_verifier_trace_fields(prediction),
         **authority_fields,
@@ -160,6 +161,16 @@ def _trace_payload(
             prediction.get("engine_verify_decision") or {}
         ),
     }
+
+
+def _latest_recovery_transition(prediction: dict[str, Any]) -> dict[str, Any]:
+    for event in reversed(prediction.get("controller_trace") or []):
+        if not isinstance(event, dict):
+            continue
+        transition = event.get("recovery_transition")
+        if isinstance(transition, dict):
+            return deepcopy(transition)
+    return {}
 
 
 def typed_derivation_trace_fields(
@@ -370,8 +381,39 @@ def _semantic_verifier_runtime_trace_fields(
             trace.get("max_output_tokens")
         ),
         "runtime_semantic_proposition_verifier_cache_hit": bool(trace.get("cache_hit")),
+        **_semantic_verifier_contract_trace_fields(trace),
         "runtime_semantic_proposition_verifier_verdict": str(
             trace.get("verdict") or ""
+        ),
+    }
+
+
+def _semantic_verifier_contract_trace_fields(
+    trace: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "runtime_semantic_proposition_cache_source": str(
+            trace.get("cache_source") or ""
+        ),
+        "runtime_semantic_proposition_cache_source_event_index": _nonnegative_int(
+            trace.get("cache_source_event_index")
+        ),
+        "runtime_semantic_pack_digest": str(trace.get("semantic_pack_digest") or ""),
+        "runtime_semantic_question_proposition": deepcopy(
+            trace.get("question_proposition") or {}
+        ),
+        "runtime_semantic_proof_mode": str(trace.get("proof_mode") or ""),
+        "runtime_semantic_typed_conclusion": deepcopy(
+            trace.get("typed_conclusion") or {}
+        ),
+        "runtime_semantic_auditor_relationship": str(
+            trace.get("auditor_relationship") or ""
+        ),
+        "runtime_semantic_recovery_transitions": deepcopy(
+            trace.get("recovery_transitions") or []
+        ),
+        "runtime_semantic_conclusion_audit": deepcopy(
+            trace.get("conclusion_audit") or {}
         ),
     }
 
@@ -456,6 +498,15 @@ def semantic_proposition_authority_trace_fields(
         ),
         "runtime_semantic_proposition_authority_derivation_id": str(
             trace.get("derivation_id") or ""
+        ),
+        "runtime_semantic_proposition_authority_proof_mode": str(
+            trace.get("proof_mode") or ""
+        ),
+        "runtime_semantic_proposition_authority_typed_conclusion": deepcopy(
+            trace.get("typed_conclusion") or {}
+        ),
+        "runtime_semantic_proposition_authority_pack_digest": str(
+            trace.get("semantic_pack_digest") or ""
         ),
     }
 

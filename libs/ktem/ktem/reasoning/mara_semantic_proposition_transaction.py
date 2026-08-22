@@ -1,56 +1,47 @@
 from __future__ import annotations
 
-import logging
-from copy import deepcopy
-from dataclasses import dataclass
-from typing import Any, Callable
+from dataclasses import dataclass, replace
+from typing import Any
 
 from ktem.docqa.boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
-    SEMANTIC_ENTAILMENT_AUDIT_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+)
+from ktem.docqa.question_proposition import (
+    QuestionProposition,
+    build_question_proposition,
+    typed_conclusion,
 )
 from ktem.docqa.semantic_entailment_audit import semantic_entailment_audit_attestation
 
-from kotaemon.base import HumanMessage, SystemMessage
-
+from .mara_semantic_conclusion_binding import (
+    conclusion_audit_binding_reason,
+    record_verified_conclusion_audit,
+)
 from .mara_semantic_entailment_audit import (
     SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-    SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT,
-    parse_semantic_entailment_audit,
     semantic_entailment_audit_prompt,
-    semantic_entailment_audit_response_format,
     semantic_entailment_rejection_reason,
 )
-from .mara_semantic_proposition_debug import (
-    SemanticPropositionStageAttempt as _StageAttempt,
-)
-from .mara_semantic_proposition_debug import provider_failure as _provider_failure
-from .mara_semantic_proposition_debug import (
-    response_completion_tokens as _response_completion_tokens,
-)
-from .mara_semantic_proposition_debug import (
-    response_finish_reason as _response_finish_reason,
-)
-from .mara_semantic_proposition_debug import response_text as _response_text
-from .mara_semantic_proposition_debug import (
-    semantic_auditor_relationship as _auditor_relationship,
+from .mara_semantic_proof_repair import (
+    merge_proof_repair_debug,
+    proof_rebuild_prompt,
+    prune_invalid_premises,
+    requires_proof_repair,
 )
 from .mara_semantic_proposition_debug import (
-    semantic_transaction_debug as _transaction_debug,
+    semantic_auditor_relationship,
+    semantic_transaction_debug,
 )
-from .mara_semantic_proposition_packing import (
-    SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT,
+from .mara_semantic_proposition_stages import (
+    SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
+    ParsedSemanticStage,
+    audit_diagnostics,
+    audit_stage,
+    invalid_response_reason,
+    proposal_diagnostics,
+    proposal_stage,
 )
-from .mara_semantic_proposition_schema import (
-    parse_semantic_proposition_response,
-    semantic_proposition_response_format,
-)
-
-SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS = 768
-SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES = 1
-
-LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -65,15 +56,21 @@ class SemanticPropositionTransactionResult:
 
 
 @dataclass(frozen=True)
-class _ParsedStage:
-    response: Any | None
-    value: dict[str, Any] | None
-    failure_reason: str
-    initial_failure_reason: str
-    retry_count: int
-    provider_failure_reason: str
-    call_count: int
-    attempts: tuple[_StageAttempt, ...]
+class _TransactionContext:
+    proposal_llm: Any
+    audit_llm: Any
+    proposal_prompt: str
+    question: str
+    packed: list[dict[str, Any]]
+    slots: list[dict[str, str]]
+    proposition: QuestionProposition
+    proposal_model: str
+    audit_model: str
+    seed: int
+    release_mode: bool
+    semantic_pack_digest: str
+    capture_debug_trace: bool
+    auditor_relationship: str
 
 
 def run_semantic_proposition_transaction(
@@ -82,20 +79,54 @@ def run_semantic_proposition_transaction(
     prompt: str,
     *,
     question: str,
-    packed: list[dict[str, str]],
+    packed: list[dict[str, Any]],
     slots: list[dict[str, str]],
     proposal_model: str,
     audit_model: str,
     seed: int,
+    release_mode: bool = False,
+    semantic_pack_digest: str = "",
     capture_debug_trace: bool = False,
 ) -> SemanticPropositionTransactionResult:
-    auditor_relationship = _auditor_relationship(
+    relationship = semantic_auditor_relationship(
         proposal_llm,
         audit_llm,
         proposal_model=proposal_model,
         audit_model=audit_model,
     )
-    proposal = _proposal_stage(
+    diagnostics = {
+        "audit_status": "not_started",
+        "audit_reason": "",
+        "auditor_relationship": relationship,
+        "semantic_pack_digest": semantic_pack_digest,
+        "recovery_transitions": [],
+    }
+    if release_mode and relationship == "same_instance":
+        diagnostics["audit_reason"] = "release_conclusion_auditor_not_independent"
+        return _result(
+            None,
+            "failed",
+            "release_conclusion_auditor_not_independent",
+            diagnostics,
+            proposal_calls=0,
+        )
+    context = _TransactionContext(
+        proposal_llm=proposal_llm,
+        audit_llm=audit_llm,
+        proposal_prompt=prompt,
+        question=question,
+        packed=packed,
+        slots=slots,
+        proposition=build_question_proposition(question),
+        proposal_model=proposal_model,
+        audit_model=audit_model,
+        seed=seed,
+        release_mode=release_mode,
+        semantic_pack_digest=semantic_pack_digest,
+        capture_debug_trace=capture_debug_trace,
+        auditor_relationship=relationship,
+    )
+    proposal = proposal_stage(
         proposal_llm,
         prompt,
         packed=packed,
@@ -103,15 +134,38 @@ def run_semantic_proposition_transaction(
         model=proposal_model,
         seed=seed,
     )
-    proposal_debug = _transaction_debug(
-        capture_debug_trace,
-        proposal,
-        None,
-        proposal_model=proposal_model,
-        audit_model=audit_model,
-        auditor_relationship=auditor_relationship,
-    )
-    diagnostics = _proposal_diagnostics(proposal)
+    diagnostics.update(proposal_diagnostics(proposal))
+    return _complete_proposal(context, proposal, diagnostics)
+
+
+def insufficient_semantic_result(
+    model: str, seed: int, question: str = ""
+) -> dict[str, Any]:
+    result = {
+        "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+        "verdict": "insufficient_evidence",
+        "support_mode": "evidence_set",
+        "proof_mode": "none",
+        "jointly_complete": False,
+        "each_premise_required": False,
+        "premises": [],
+        "verifier": {
+            "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+            "model": model,
+            "seed": seed,
+        },
+    }
+    if question:
+        result["question_proposition"] = build_question_proposition(question).as_dict()
+    return result
+
+
+def _complete_proposal(
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+) -> SemanticPropositionTransactionResult:
+    debug_trace = _transaction_debug(context, proposal, None)
     if proposal.provider_failure_reason:
         return _result(
             None,
@@ -119,10 +173,10 @@ def run_semantic_proposition_transaction(
             proposal.provider_failure_reason,
             diagnostics,
             proposal_calls=proposal.call_count,
-            debug_trace=proposal_debug,
+            debug_trace=debug_trace,
         )
     if proposal.value is None:
-        reason = _invalid_response_reason(
+        reason = invalid_response_reason(
             proposal.response,
             max_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
             invalid_reason="invalid_model_json",
@@ -133,9 +187,10 @@ def run_semantic_proposition_transaction(
             reason,
             diagnostics,
             proposal_calls=proposal.call_count,
-            debug_trace=proposal_debug,
+            debug_trace=debug_trace,
         )
     if proposal.value["verdict"] == "insufficient_evidence":
+        _bind_runtime_fields(proposal.value, context)
         diagnostics.update({"audit_status": "not_required", "audit_reason": ""})
         return _result(
             proposal.value,
@@ -143,234 +198,108 @@ def run_semantic_proposition_transaction(
             "strict_schema_parsed",
             diagnostics,
             proposal_calls=proposal.call_count,
-            debug_trace=proposal_debug,
+            debug_trace=debug_trace,
         )
-    return _audit_transaction(
-        audit_llm,
-        question,
-        proposal,
-        diagnostics,
-        proposal_model=proposal_model,
-        audit_model=audit_model,
-        seed=seed,
-        capture_debug_trace=capture_debug_trace,
-        auditor_relationship=auditor_relationship,
-    )
-
-
-def insufficient_semantic_result(model: str, seed: int) -> dict[str, Any]:
-    return {
-        "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
-        "verdict": "insufficient_evidence",
-        "support_mode": "evidence_set",
-        "jointly_complete": False,
-        "each_premise_required": False,
-        "premises": [],
-        "verifier": {
-            "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
-            "model": model,
-            "seed": seed,
-        },
-    }
-
-
-def _proposal_stage(
-    llm: Any,
-    prompt: str,
-    *,
-    packed: list[dict[str, str]],
-    slots: list[dict[str, str]],
-    model: str,
-    seed: int,
-) -> _ParsedStage:
-    def call(correction: str = "") -> tuple[Any | None, str, str]:
-        return _call_proposal(
-            llm,
-            prompt,
-            packed=packed,
-            slots=slots,
-            seed=seed,
-            correction_reason=correction,
-        )
-
-    def parse(response: Any) -> Any:
-        return parse_semantic_proposition_response(
-            _response_text(response),
-            packed=packed,
-            slot_ids={value["slot_id"] for value in slots},
-            model=model,
-            seed=seed,
-        )
-
-    return _parsed_stage(call, parse)
+    return _audit_transaction(context, proposal, diagnostics)
 
 
 def _audit_transaction(
-    audit_llm: Any,
-    question: str,
-    proposal: _ParsedStage,
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
     diagnostics: dict[str, Any],
     *,
-    proposal_model: str,
-    audit_model: str,
-    seed: int,
-    capture_debug_trace: bool,
-    auditor_relationship: str,
+    allow_proof_repair: bool = True,
 ) -> SemanticPropositionTransactionResult:
     value = proposal.value or {}
-    premises = value.get("premises") or []
+    _bind_runtime_fields(value, context)
+    conclusion = typed_conclusion(context.proposition, str(value.get("verdict") or ""))
+    value["typed_conclusion"] = conclusion.as_dict()
     try:
         prompt = semantic_entailment_audit_prompt(
-            question,
-            str(value.get("verdict") or ""),
-            premises,
+            context.proposition,
+            conclusion,
+            str(value.get("proof_mode") or ""),
+            value.get("premises") or [],
         )
     except ValueError:
-        diagnostics.update(
-            {"audit_status": "failed", "audit_reason": "audit_prompt_bound_exceeded"}
-        )
-        return _result(
-            None,
-            "failed",
-            "audit_prompt_bound_exceeded",
-            diagnostics,
-            proposal_calls=proposal.call_count,
-            debug_trace=_transaction_debug(
-                capture_debug_trace,
-                proposal,
-                None,
-                proposal_model=proposal_model,
-                audit_model=audit_model,
-                auditor_relationship=auditor_relationship,
-            ),
-        )
-    audit = _audit_stage(audit_llm, prompt, len(premises), seed=seed + 1)
-    diagnostics.update(_audit_diagnostics(audit, model=audit_model))
-    return _audit_result(
-        question,
-        proposal,
-        audit,
-        diagnostics,
-        proposal_model=proposal_model,
-        audit_model=audit_model,
-        seed=seed,
-        debug_trace=_transaction_debug(
-            capture_debug_trace,
-            proposal,
-            audit,
-            proposal_model=proposal_model,
-            audit_model=audit_model,
-            auditor_relationship=auditor_relationship,
-        ),
+        return _audit_prompt_failure(context, proposal, diagnostics)
+    audit = audit_stage(
+        context.audit_llm,
+        prompt,
+        len(value.get("premises") or []),
+        seed=context.seed + 1,
     )
-
-
-def _audit_stage(
-    llm: Any,
-    prompt: str,
-    premise_count: int,
-    *,
-    seed: int,
-) -> _ParsedStage:
-    labels = [f"P{index}" for index in range(1, premise_count + 1)]
-
-    def call(correction: str = "") -> tuple[Any | None, str, str]:
-        return _call_audit(
-            llm,
-            prompt,
-            premise_labels=labels,
-            seed=seed,
-            correction_reason=correction,
-        )
-
-    def parse(response: Any) -> Any:
-        return parse_semantic_entailment_audit(
-            _response_text(response),
-            premise_labels=labels,
-        )
-
-    return _parsed_stage(call, parse)
-
-
-def _parsed_stage(
-    call: Callable[[str], tuple[Any | None, str, str]],
-    parse: Callable[[Any], Any],
-) -> _ParsedStage:
-    response, provider_failure, provider_detail = call("")
-    if response is None:
-        attempt = _StageAttempt(None, None, "", "", provider_failure, provider_detail)
-        return _ParsedStage(None, None, "", "", 0, provider_failure, 1, (attempt,))
-    parsed = parse(response)
-    attempts = [
-        _StageAttempt(
-            response,
-            deepcopy(parsed.value),
-            "",
-            str(parsed.failure_reason or ""),
-            "",
-            "",
-        )
-    ]
-    initial_failure = str(parsed.failure_reason or "")
-    retry_count = 0
-    if parsed.value is None and SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES:
-        retry_count = 1
-        response, provider_failure, provider_detail = call(parsed.failure_reason)
-        if response is None:
-            attempts.append(
-                _StageAttempt(
-                    None,
-                    None,
-                    initial_failure,
-                    "",
-                    provider_failure,
-                    provider_detail,
-                )
-            )
-            return _ParsedStage(
-                None,
-                None,
-                "",
-                initial_failure,
-                retry_count,
-                provider_failure,
-                2,
-                tuple(attempts),
-            )
-        parsed = parse(response)
-        attempts.append(
-            _StageAttempt(
-                response,
-                deepcopy(parsed.value),
-                initial_failure,
-                str(parsed.failure_reason or ""),
-                "",
-                "",
-            )
-        )
-    return _ParsedStage(
-        response,
-        parsed.value,
-        str(parsed.failure_reason or ""),
-        initial_failure,
-        retry_count,
-        "",
-        1 + retry_count,
-        tuple(attempts),
-    )
+    diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
+    result = _audit_result(context, proposal, audit, diagnostics)
+    if not allow_proof_repair or not requires_proof_repair(audit):
+        return result
+    return _repair_transaction(context, proposal, audit, diagnostics, result)
 
 
 def _audit_result(
-    question: str,
-    proposal: _ParsedStage,
-    audit: _ParsedStage,
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
+    audit: ParsedSemanticStage,
     diagnostics: dict[str, Any],
-    *,
-    proposal_model: str,
-    audit_model: str,
-    seed: int,
-    debug_trace: dict[str, Any] | None,
 ) -> SemanticPropositionTransactionResult:
+    debug_trace = _transaction_debug(context, proposal, audit)
+    failure = _audit_failure_result(
+        context,
+        proposal,
+        audit,
+        diagnostics,
+        debug_trace,
+    )
+    if failure is not None:
+        return failure
+    value = proposal.value or {}
+    value["entailment_audit"] = semantic_entailment_audit_attestation(
+        context.question,
+        value["verdict"],
+        value["premises"],
+        model=context.audit_model,
+        seed=context.seed + 1,
+        proof_mode=str(value.get("proof_mode") or ""),
+        proposition=context.proposition,
+        conclusion=typed_conclusion(context.proposition, str(value["verdict"])),
+        auditor_relationship=context.auditor_relationship,
+        audit_result=audit.value,
+    )
+    binding_reason = conclusion_audit_binding_reason(
+        context.question,
+        value,
+        context.proposition,
+        release_mode=context.release_mode,
+    )
+    if binding_reason:
+        diagnostics.update({"audit_status": "rejected", "audit_reason": binding_reason})
+        return _audit_rejection_result(
+            context,
+            proposal,
+            audit,
+            diagnostics,
+            debug_trace,
+            "semantic_entailment_audit_binding_rejected",
+        )
+    record_verified_conclusion_audit(diagnostics, value)
+    return _result(
+        value,
+        "parsed",
+        "strict_schema_and_entailment_audit",
+        diagnostics,
+        proposal_calls=proposal.call_count,
+        audit_calls=audit.call_count,
+        debug_trace=debug_trace,
+    )
+
+
+def _audit_failure_result(
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+    debug_trace: dict[str, Any] | None,
+) -> SemanticPropositionTransactionResult | None:
     if audit.provider_failure_reason:
         return _result(
             None,
@@ -382,7 +311,7 @@ def _audit_result(
             debug_trace=debug_trace,
         )
     if audit.value is None:
-        reason = _invalid_response_reason(
+        reason = invalid_response_reason(
             audit.response,
             max_tokens=SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
             invalid_reason="invalid_entailment_audit_json",
@@ -398,38 +327,35 @@ def _audit_result(
             debug_trace=debug_trace,
         )
     rejection_reason = semantic_entailment_rejection_reason(audit.value)
-    if rejection_reason:
-        diagnostics.update(
-            {"audit_status": "rejected", "audit_reason": rejection_reason}
-        )
-        return _result(
-            insufficient_semantic_result(proposal_model, seed),
-            "audit_rejected",
-            "semantic_entailment_audit_rejected",
-            diagnostics,
-            proposal_calls=proposal.call_count,
-            audit_calls=audit.call_count,
-            debug_trace=debug_trace,
-        )
-    value = proposal.value or {}
-    value["entailment_audit"] = semantic_entailment_audit_attestation(
-        question,
-        value["verdict"],
-        value["premises"],
-        model=audit_model,
-        seed=seed + 1,
+    if not rejection_reason:
+        return None
+    diagnostics.update({"audit_status": "rejected", "audit_reason": rejection_reason})
+    return _audit_rejection_result(
+        context,
+        proposal,
+        audit,
+        diagnostics,
+        debug_trace,
+        "semantic_entailment_audit_rejected",
     )
-    diagnostics.update(
-        {
-            "audit_status": "verified",
-            "audit_reason": "",
-            "audit_proposal_digest": value["entailment_audit"]["proposal_digest"],
-        }
+
+
+def _audit_rejection_result(
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+    debug_trace: dict[str, Any] | None,
+    reason: str,
+) -> SemanticPropositionTransactionResult:
+    value = insufficient_semantic_result(
+        context.proposal_model, context.seed, context.question
     )
+    _bind_runtime_fields(value, context)
     return _result(
         value,
-        "parsed",
-        "strict_schema_and_entailment_audit",
+        "audit_rejected",
+        reason,
         diagnostics,
         proposal_calls=proposal.call_count,
         audit_calls=audit.call_count,
@@ -437,100 +363,208 @@ def _audit_result(
     )
 
 
-def _call_proposal(
-    llm: Any,
-    prompt: str,
-    *,
-    packed: list[dict[str, str]],
-    slots: list[dict[str, str]],
-    seed: int,
-    correction_reason: str,
-) -> tuple[Any | None, str, str]:
-    try:
-        return (
-            llm(
-                [
-                    SystemMessage(content=SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT),
-                    HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
-                ],
-                max_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
-                response_format=semantic_proposition_response_format(
-                    [value["label"] for value in packed],
-                    [value["slot_id"] for value in slots],
-                ),
-                temperature=0,
-                top_p=1,
-                seed=seed,
-            ),
-            "",
-            "",
-        )
-    except Exception as exc:
-        LOGGER.exception("Semantic proposition verifier model call failed")
-        return None, *_provider_failure(exc)
-
-
-def _call_audit(
-    llm: Any,
-    prompt: str,
-    *,
-    premise_labels: list[str],
-    seed: int,
-    correction_reason: str,
-) -> tuple[Any | None, str, str]:
-    try:
-        return (
-            llm(
-                [
-                    SystemMessage(content=SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT),
-                    HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
-                ],
-                max_tokens=SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-                response_format=semantic_entailment_audit_response_format(
-                    premise_labels
-                ),
-                temperature=0,
-                top_p=1,
-                seed=seed,
-            ),
-            "",
-            "",
-        )
-    except Exception as exc:
-        LOGGER.exception("Semantic entailment audit model call failed")
-        return None, *_provider_failure(exc)
-
-
-def _proposal_diagnostics(stage: _ParsedStage) -> dict[str, Any]:
-    return {
-        "proposal_retry_count": stage.retry_count,
-        "initial_parse_failure_reason": stage.initial_failure_reason,
-        "parse_failure_reason": stage.failure_reason,
-        "response_finish_reason": _response_finish_reason(stage.response),
-        "response_completion_tokens": _response_completion_tokens(stage.response),
-        "response_chars": (
-            len(_response_text(stage.response)) if stage.response is not None else 0
-        ),
-        "audit_status": "not_started",
-        "audit_reason": "",
+def _repair_transaction(
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+    initial_result: SemanticPropositionTransactionResult,
+) -> SemanticPropositionTransactionResult:
+    repaired = prune_invalid_premises(proposal, audit, context.slots)
+    repair_kind = "pruned" if repaired is not None else "rebuilt"
+    transition = {
+        "from": "semantic_audit",
+        "to": "proof_repair",
+        "reason": "premise_false_jointly_entails_true",
+        "outcome": "pruned" if repaired is not None else "rebuild_required",
     }
+    diagnostics.setdefault("recovery_transitions", []).append(transition)
+    diagnostics["proof_repair_count"] = (
+        int(diagnostics.get("proof_repair_count") or 0) + 1
+    )
+    if repaired is None:
+        repaired, terminal = _rebuild_proposal(
+            context, proposal, audit, diagnostics, initial_result, transition
+        )
+        if terminal is not None:
+            return terminal
+    assert repaired is not None
+    repaired_result = _audit_transaction(
+        replace(context, seed=context.seed + 10),
+        repaired,
+        diagnostics,
+        allow_proof_repair=False,
+    )
+    diagnostics["proof_reaudit_count"] = (
+        int(diagnostics.get("proof_reaudit_count") or 0) + 1
+    )
+    diagnostics["full_reaudit"] = True
+    if repaired_result.status == "parsed":
+        diagnostics.update(
+            {
+                "audit_status": "verified_after_proof_repair",
+                "audit_reason": "premise_false_jointly_entails_true",
+            }
+        )
+    return _finalize_repair_result(
+        proposal,
+        audit,
+        repaired,
+        initial_result,
+        repaired_result,
+        transition,
+        repair_kind,
+    )
 
 
-def _audit_diagnostics(stage: _ParsedStage, *, model: str) -> dict[str, Any]:
-    return {
-        "audit_contract_id": SEMANTIC_ENTAILMENT_AUDIT_CONTRACT,
-        "audit_model": model,
-        "audit_status": "failed" if stage.value is None else "parsed",
-        "audit_reason": stage.provider_failure_reason,
-        "audit_retry_count": stage.retry_count,
-        "audit_initial_parse_failure_reason": stage.initial_failure_reason,
-        "audit_parse_failure_reason": stage.failure_reason,
-        "audit_response_finish_reason": _response_finish_reason(stage.response),
-        "audit_response_completion_tokens": _response_completion_tokens(stage.response),
-        "audit_response_chars": (
-            len(_response_text(stage.response)) if stage.response is not None else 0
+def _rebuild_proposal(
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+    initial_result: SemanticPropositionTransactionResult,
+    transition: dict[str, Any],
+) -> tuple[ParsedSemanticStage | None, SemanticPropositionTransactionResult | None]:
+    prompt = proof_rebuild_prompt(context.proposal_prompt, audit)
+    if prompt is None:
+        transition["outcome"] = "rebuild_prompt_bound_exceeded"
+        return None, replace(
+            initial_result,
+            debug_trace=_repair_debug(
+                initial_result, None, transition, None, "rebuilt"
+            ),
+        )
+    repaired = proposal_stage(
+        context.proposal_llm,
+        prompt,
+        packed=context.packed,
+        slots=context.slots,
+        model=context.proposal_model,
+        seed=context.seed + 10,
+    )
+    diagnostics["proof_rebuild_count"] = (
+        int(diagnostics.get("proof_rebuild_count") or 0) + 1
+    )
+    diagnostics["proof_rebuild_proposal_call_count"] = repaired.call_count
+    if repaired.value is None:
+        transition["outcome"] = "rebuild_failed"
+        repaired_debug = _transaction_debug(context, repaired, None)
+        return None, replace(
+            initial_result,
+            proposal_call_count=proposal.call_count + repaired.call_count,
+            debug_trace=_repair_debug(
+                initial_result, repaired_debug, transition, None, "rebuilt"
+            ),
+        )
+    if repaired.value.get("verdict") != "insufficient_evidence":
+        transition["outcome"] = "rebuilt"
+        return repaired, None
+    transition["outcome"] = "rebuilt_as_insufficient"
+    _bind_runtime_fields(repaired.value, replace(context, seed=context.seed + 10))
+    repaired_debug = _transaction_debug(context, repaired, None)
+    return None, _result(
+        repaired.value,
+        "parsed",
+        "proof_rebuild_insufficient_evidence",
+        diagnostics,
+        proposal_calls=proposal.call_count + repaired.call_count,
+        audit_calls=audit.call_count,
+        debug_trace=_repair_debug(
+            initial_result,
+            repaired_debug,
+            transition,
+            repaired.value,
+            "rebuilt",
         ),
-    }
+    )
+
+
+def _finalize_repair_result(
+    proposal: ParsedSemanticStage,
+    audit: ParsedSemanticStage,
+    repaired: ParsedSemanticStage,
+    initial_result: SemanticPropositionTransactionResult,
+    repaired_result: SemanticPropositionTransactionResult,
+    transition: dict[str, Any],
+    repair_kind: str,
+) -> SemanticPropositionTransactionResult:
+    proposal_calls = (
+        proposal.call_count
+        if repair_kind == "pruned"
+        else proposal.call_count + repaired_result.proposal_call_count
+    )
+    return replace(
+        repaired_result,
+        proposal_call_count=proposal_calls,
+        audit_call_count=audit.call_count + repaired_result.audit_call_count,
+        debug_trace=_repair_debug(
+            initial_result,
+            repaired_result.debug_trace,
+            transition,
+            repaired.value,
+            repair_kind,
+        ),
+    )
+
+
+def _repair_debug(
+    initial_result: SemanticPropositionTransactionResult,
+    repaired_debug: dict[str, Any] | None,
+    transition: dict[str, Any],
+    repaired_value: dict[str, Any] | None,
+    repair_kind: str,
+) -> dict[str, Any] | None:
+    return merge_proof_repair_debug(
+        initial_result.debug_trace,
+        repaired_debug,
+        transition=transition,
+        repaired_proposal=repaired_value,
+        repair_kind=repair_kind,
+    )
+
+
+def _audit_prompt_failure(
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+) -> SemanticPropositionTransactionResult:
+    diagnostics.update(
+        {"audit_status": "failed", "audit_reason": "audit_prompt_bound_exceeded"}
+    )
+    return _result(
+        None,
+        "failed",
+        "audit_prompt_bound_exceeded",
+        diagnostics,
+        proposal_calls=proposal.call_count,
+        debug_trace=_transaction_debug(context, proposal, None),
+    )
+
+
+def _bind_runtime_fields(value: dict[str, Any], context: _TransactionContext) -> None:
+    value["question_proposition"] = context.proposition.as_dict()
+    value["verifier"].update(
+        {
+            "release_mode": context.release_mode,
+            "auditor_relationship": context.auditor_relationship,
+            "semantic_pack_digest": context.semantic_pack_digest,
+        }
+    )
+
+
+def _transaction_debug(
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
+    audit: ParsedSemanticStage | None,
+) -> dict[str, Any] | None:
+    return semantic_transaction_debug(
+        context.capture_debug_trace,
+        proposal,
+        audit,
+        proposal_model=context.proposal_model,
+        audit_model=context.audit_model,
+        auditor_relationship=context.auditor_relationship,
+    )
 
 
 def _result(
@@ -552,30 +586,3 @@ def _result(
         audit_call_count=audit_calls,
         debug_trace=debug_trace,
     )
-
-
-def _corrected_prompt(prompt: str, failure_reason: str) -> str:
-    if not failure_reason:
-        return prompt
-    return (
-        f"{prompt}\n\nYour previous response was rejected by the local parser "
-        f"({failure_reason}). Return one complete object that follows every "
-        "schema and cross-field requirement."
-    )
-
-
-def _invalid_response_reason(
-    response: Any,
-    *,
-    max_tokens: int,
-    invalid_reason: str,
-) -> str:
-    finish_reason = _response_finish_reason(response).casefold()
-    completion_tokens = _response_completion_tokens(response)
-    if finish_reason in {"length", "max_tokens"} or completion_tokens >= max_tokens:
-        return (
-            "semantic_entailment_audit_output_truncated"
-            if invalid_reason == "invalid_entailment_audit_json"
-            else "provider_output_truncated"
-        )
-    return invalid_reason

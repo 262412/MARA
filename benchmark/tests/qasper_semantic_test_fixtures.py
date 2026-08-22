@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from ktem.docqa.boolean_authority_schema import SEMANTIC_PROPOSITION_VERDICT_CONTRACT
+from ktem.docqa.boolean_authority_schema import (
+    GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+    SEMANTIC_ENTAILMENT_AUDIT_CONTRACT,
+    SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+)
 from ktem.docqa.evidence_identity import identity_of
-from ktem.docqa.semantic_entailment_audit import semantic_entailment_audit_attestation
+from ktem_tests.semantic_entailment_test_helpers import audited_verdict
 
 
 def semantic_verdict(
@@ -30,29 +34,25 @@ def semantic_verdict(
         "each_premise_required": True,
         "premises": premises,
         "verifier": {
-            "contract_id": "grounded_semantic_verifier.v1",
+            "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
             "model": "test-double",
             "seed": 7,
         },
     }
-    response["entailment_audit"] = semantic_entailment_audit_attestation(
-        question,
-        "yes",
-        premises,
-        model="independent-test-auditor",
-        seed=8,
-    )
-    bundle.metadata["semantic_proposition_verifier"]["audit_proposal_digest"] = (
-        response["entailment_audit"]["proposal_digest"]
-    )
+    response = audited_verdict(response, question)
+    response["verifier"]["release_mode"] = True
+    bundle.metadata["semantic_proposition_verifier"][
+        "audit_proposal_digest"
+    ] = response["entailment_audit"]["proposal_digest"]
     return response
 
 
 def _runtime_trace() -> dict[str, Any]:
     return {
-        "contract_id": "semantic_proposition_verifier_runtime.v1",
+        "contract_id": "semantic_proposition_verifier_runtime.v2",
         "status": "parsed",
         "reason": "strict_schema_and_entailment_audit",
+        "release_mode": True,
         "actual_model_call_count": 2,
         "proposal_model_call_count": 1,
         "audit_model_call_count": 1,
@@ -78,7 +78,7 @@ def _runtime_trace() -> dict[str, Any]:
         "response_chars": 910,
         "audit_status": "verified",
         "audit_reason": "",
-        "audit_contract_id": "semantic_entailment_audit.v1",
+        "audit_contract_id": SEMANTIC_ENTAILMENT_AUDIT_CONTRACT,
         "audit_model": "independent-test-auditor",
         "audit_retry_count": 0,
         "audit_initial_parse_failure_reason": "",

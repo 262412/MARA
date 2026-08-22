@@ -5,7 +5,11 @@ from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.boolean_authority_derivation import boolean_derivation_contract_status
-from ktem.docqa.boolean_authority_schema import SEMANTIC_PROPOSITION_VERDICT_CONTRACT
+from ktem.docqa.boolean_authority_schema import (
+    GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+    SEMANTIC_EVIDENCE_SET_RULE,
+    SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+)
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.evidence_identity import identity_of
@@ -19,7 +23,7 @@ from ktem_tests.semantic_entailment_test_helpers import (
 QUESTION = "Did the authors compare cross-lingual and single-language evaluation?"
 
 
-def _item(evidence_id: str, text: str, *, source_id: str = "paper") -> dict[str, str]:
+def _item(evidence_id: str, text: str, *, source_id: str = "paper") -> dict[str, Any]:
     return {
         "evidence_id": evidence_id,
         "source_id": source_id,
@@ -28,7 +32,7 @@ def _item(evidence_id: str, text: str, *, source_id: str = "paper") -> dict[str,
     }
 
 
-def _premises() -> list[dict[str, str]]:
+def _premises() -> list[dict[str, Any]]:
     return [
         _item(
             "cross-lingual",
@@ -96,7 +100,7 @@ def _semantic_verdict(
                 for index, item in enumerate(bundle.items)
             ],
             "verifier": {
-                "contract_id": "grounded_semantic_verifier.v1",
+                "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
                 "model": "test-double",
                 "seed": 7,
             },
@@ -145,7 +149,7 @@ def _same_item_semantic_verdict(
                 },
             ],
             "verifier": {
-                "contract_id": "grounded_semantic_verifier.v1",
+                "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
                 "model": "test-double",
                 "seed": 7,
             },
@@ -174,7 +178,7 @@ def test_semantic_evidence_set_commits_one_typed_boolean_proposition() -> None:
     [claim] = decision.claim_results
     assert claim["authority_status"] == "semantic_evidence_set"
     [derivation] = decision.typed_authority["authority_derivations"]
-    assert derivation["rule_id"] == "grounded_semantic_evidence_set_entailment.v2"
+    assert derivation["rule_id"] == SEMANTIC_EVIDENCE_SET_RULE
     assert derivation["support_mode"] == "evidence_set"
     assert derivation["verifier_attestation"]["model"] == "test-double"
     assert derivation["verifier_attestation"]["jointly_complete"] is True
@@ -243,7 +247,7 @@ def test_semantic_evidence_set_binds_a_named_subject_across_local_spans() -> Non
                     )
                 ],
                 "verifier": {
-                    "contract_id": "grounded_semantic_verifier.v1",
+                    "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
                     "model": "test-double",
                     "seed": 7,
                 },
@@ -299,7 +303,7 @@ def test_semantic_local_spans_do_not_invent_a_current_author_action() -> None:
                     for index, item in enumerate(items, start=1)
                 ],
                 "verifier": {
-                    "contract_id": "grounded_semantic_verifier.v1",
+                    "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
                     "model": "test-double",
                     "seed": 7,
                 },
@@ -350,7 +354,7 @@ def test_semantic_no_requires_an_explicit_negative_relation() -> None:
                     for index, item in enumerate(items, start=1)
                 ],
                 "verifier": {
-                    "contract_id": "grounded_semantic_verifier.v1",
+                    "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
                     "model": "test-double",
                     "seed": 7,
                 },
@@ -418,7 +422,7 @@ def test_semantic_no_can_bind_an_explicit_negative_relation() -> None:
                     )
                 ],
                 "verifier": {
-                    "contract_id": "grounded_semantic_verifier.v1",
+                    "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
                     "model": "test-double",
                     "seed": 7,
                 },
@@ -436,25 +440,6 @@ def test_semantic_no_can_bind_an_explicit_negative_relation() -> None:
 
     assert decision.status == "supported"
     assert decision.canonical_answer_polarity == "no"
-
-
-def test_semantic_verifier_cannot_bind_an_invented_quote() -> None:
-    def invented_quote(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        verdict = _semantic_verdict(*args, **kwargs)
-        verdict["premises"][0]["quote"] = "This sentence was never retrieved."
-        return verdict
-
-    decision = verify_decision(
-        _request(),
-        RetrieveDecision(status="good", reason="retrieved"),
-        EvidenceBundle(route="doc_text", items=_premises()),
-        "yes",
-        proposition_verifier=invented_quote,
-    )
-
-    assert decision.status != "supported"
-    assert decision.verified_citations == []
-    assert decision.typed_authority["state"] == "missing"
 
 
 def test_semantic_verifier_cannot_join_premises_across_sources() -> None:

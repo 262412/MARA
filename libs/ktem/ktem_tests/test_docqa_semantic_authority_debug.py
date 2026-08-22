@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ktem.docqa.boolean_authority_schema import SEMANTIC_PROPOSITION_VERDICT_CONTRACT
+from ktem.docqa.boolean_authority_schema import (
+    GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+    SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+)
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.evidence_identity import identity_of
@@ -27,11 +30,11 @@ def test_debug_trace_preserves_audit_verified_then_authority_rejected_stages() -
     def verifier(*_args: Any) -> dict[str, Any]:
         bundle = _args[-1]
         bundle.metadata["semantic_proposition_verifier"] = {
-            "contract_id": "semantic_proposition_verifier_runtime.v1",
+            "contract_id": "semantic_proposition_verifier_runtime.v2",
             "status": "parsed",
             "audit_status": "verified",
             "debug_trace": {
-                "contract_id": "semantic_proposition_debug_trace.v1",
+                "contract_id": "semantic_proposition_debug_trace.v2",
                 "events": [{"event_index": 1, "event": "model_transaction"}],
             },
         }
@@ -52,7 +55,7 @@ def test_debug_trace_preserves_audit_verified_then_authority_rejected_stages() -
                     for index, item in enumerate(items, start=1)
                 ],
                 "verifier": {
-                    "contract_id": "grounded_semantic_verifier.v1",
+                    "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
                     "model": "test-double",
                     "seed": 7,
                 },

@@ -15,6 +15,7 @@ from .boolean_authority_schema import (
 from .boolean_conjunction import boolean_conjunction_spec
 from .boolean_proposition_compatibility import boolean_argument_token_coverage
 from .boolean_relations import primary_boolean_relation
+from .question_proposition import build_question_proposition, typed_conclusion
 from .semantic_entailment_audit import semantic_entailment_audit_validation_reason
 
 COMPOSITE_BOOLEAN_RULES = frozenset(
@@ -146,12 +147,7 @@ def _derivation_header_status(derivation: dict[str, Any]) -> tuple[str, str]:
 def _premise_context(
     derivation: dict[str, Any],
     atoms: list[dict[str, Any]],
-) -> tuple[
-    str,
-    list[str],
-    dict[str, dict[str, Any]],
-    list[dict[str, Any]],
-]:
+) -> tuple[str, list[str], dict[str, dict[str, Any]], list[dict[str, Any]]]:
     premise_refs = _strings(derivation.get("premise_refs"))
     premise_ids = _strings(derivation.get("premise_evidence_ids"), unique=False)
     atom_by_ref = {
@@ -165,7 +161,15 @@ def _premise_context(
         premise_ids,
         atom_by_ref,
         contributions,
-        minimum_premises=2,
+        minimum_premises=(
+            1
+            if str(derivation.get("rule_id") or "") == SEMANTIC_EVIDENCE_SET_RULE
+            and str(
+                (derivation.get("verifier_attestation") or {}).get("proof_mode") or ""
+            )
+            == "atomic_semantic"
+            else 2
+        ),
     )
     return status, premise_refs, atom_by_ref, contributions
 
@@ -319,6 +323,8 @@ def _semantic_header_complete(derivation: dict[str, Any]) -> bool:
         }
         and attestation.get("jointly_complete") is True
         and attestation.get("each_premise_required") is True
+        and attestation.get("proof_mode")
+        in {"atomic_semantic", "composite_conjunction"}
         and isinstance(attestation.get("entailment_audit"), dict)
     )
 
@@ -380,6 +386,13 @@ def _semantic_evidence_set_status(
         str(conclusion.get("polarity") or ""),
         audit_premises,
         attestation.get("entailment_audit"),
+        proof_mode=str(attestation.get("proof_mode") or ""),
+        proposition=build_question_proposition(question),
+        conclusion=typed_conclusion(
+            build_question_proposition(question),
+            str(conclusion.get("polarity") or ""),
+        ),
+        release_mode=bool(attestation.get("release_mode")),
     )
     if audit_reason:
         return audit_reason
