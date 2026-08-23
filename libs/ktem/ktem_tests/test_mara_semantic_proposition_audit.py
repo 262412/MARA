@@ -178,6 +178,19 @@ def _audit_with_false_premise_but_joint_entailment() -> str:
     return json.dumps(payload)
 
 
+def _insufficient_proposal() -> str:
+    return json.dumps(
+        {
+            "verdict": "insufficient_evidence",
+            "support_mode": "evidence_set",
+            "proof_mode": "none",
+            "jointly_complete": False,
+            "each_premise_required": False,
+            "premises": [],
+        }
+    )
+
+
 def _atomic_request() -> DocQARequest:
     question = "Did the authors evaluate transfer across languages?"
     return DocQARequest(
@@ -333,7 +346,11 @@ def test_runtime_can_route_the_audit_to_a_dedicated_model() -> None:
 
 def test_runtime_downgrades_a_self_attested_but_unaudited_extension() -> None:
     llm = _SequenceLLM(
-        [_response(_proposal()), _response(_audit(second_fragment_entailed=False))]
+        [
+            _response(_proposal()),
+            _response(_audit(second_fragment_entailed=False)),
+            _response(_insufficient_proposal()),
+        ]
     )
     verifier = _verifier(llm)
     bundle = EvidenceBundle(route="doc_text", items=_items())
@@ -344,9 +361,12 @@ def test_runtime_downgrades_a_self_attested_but_unaudited_extension() -> None:
     assert result["verdict"] == "insufficient_evidence"
     assert result["premises"] == []
     trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["status"] == "audit_rejected"
+    assert trace["status"] == "parsed"
     assert trace["audit_status"] == "rejected"
     assert trace["audit_reason"] == "premise_fragment_not_entailed"
+    assert trace["proof_repair_count"] == 1
+    assert trace["recovery_transitions"][-1]["to"] == "proof_repair"
+    assert trace["recovery_transitions"][-1]["outcome"] == ("rebuilt_as_insufficient")
 
 
 def test_false_premise_with_joint_entailment_true_triggers_repair_and_full_review() -> (
@@ -498,7 +518,11 @@ def test_debug_trace_records_every_proposal_and_audit_output_without_changing_re
 
 def test_debug_trace_preserves_cache_reuse_after_a_rejected_audit() -> None:
     llm = _SequenceLLM(
-        [_response(_proposal()), _response(_audit(second_fragment_entailed=False))]
+        [
+            _response(_proposal()),
+            _response(_audit(second_fragment_entailed=False)),
+            _response(_insufficient_proposal()),
+        ]
     )
     verifier = _verifier(llm, debug=True)
     bundle = EvidenceBundle(route="doc_text", items=_items())

@@ -41,10 +41,47 @@ def semantic_verdict(
     }
     response = audited_verdict(response, question)
     response["verifier"]["release_mode"] = True
-    bundle.metadata["semantic_proposition_verifier"][
-        "audit_proposal_digest"
-    ] = response["entailment_audit"]["proposal_digest"]
+    bundle.metadata["semantic_proposition_verifier"]["audit_proposal_digest"] = (
+        response["entailment_audit"]["proposal_digest"]
+    )
     return response
+
+
+def semantic_repair_diagnostics() -> dict[str, Any]:
+    """Return trace fields produced by a repaired semantic transaction."""
+
+    local_consistency = {
+        "contract_id": "deterministic_local_premise_consistency.v1",
+        "status": "auditor_internal_inconsistency",
+        "inconsistent_premise_refs": ["P1"],
+    }
+    return {
+        "question_proposition_resolution": {
+            "contract_id": "question_proposition_resolution.v1",
+            "status": "repaired",
+        },
+        "audit_call_rejection_count": 2,
+        "auditor_internal_inconsistency": True,
+        "auditor_internal_inconsistency_count": 1,
+        "local_premise_consistency": local_consistency,
+        "local_premise_consistency_history": [local_consistency],
+        "audit_verified_but_runtime_rejected_count": 1,
+        "runtime_contract_rejection_count": 1,
+        "rejected_transactions": [
+            {
+                "runtime_rejection_reason": "semantic_premise_scope_rejected",
+                "typed_conclusion": {"conclusion_id": "rejected"},
+                "semantic_proof_digest": "before",
+            }
+        ],
+        "semantic_proof_digest_before": "before",
+        "semantic_proof_digest_after": "after",
+        "semantic_proof_digest_changed": True,
+        "polarity_contradiction_check": {
+            "contract_id": "polarity_contradiction_check.v1",
+            "status": "aligned",
+        },
+    }
 
 
 def _runtime_trace() -> dict[str, Any]:

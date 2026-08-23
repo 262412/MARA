@@ -167,6 +167,7 @@ def _semantic_digest_fields(
         "semantic_pack_digest_after": pack_after,
         "semantic_pack_digest_changed": changed,
         "semantic_pack_digest_applicable": applicable,
+        "proposition_binding_changed": changed,
         "raw_evidence_digest_before": raw_before,
         "raw_evidence_digest_after": raw_after,
         "raw_evidence_digest_changed": bool(
@@ -180,7 +181,10 @@ def _semantic_digest_fields(
         ),
         "recovery_transition": {
             "from": "verification",
-            "to": _semantic_recovery_kind(initial_bundle),
+            "to": _semantic_recovery_kind(
+                initial_bundle,
+                semantic_pack_changed=changed,
+            ),
             "status": "pack_changed" if changed else "no_pack_change",
         },
     }
@@ -196,32 +200,76 @@ def recovery_has_progress(fields: dict[str, Any]) -> bool:
     )
 
 
-def _semantic_recovery_kind(bundle: EvidenceBundle | None) -> str:
+def _semantic_recovery_kind(
+    bundle: EvidenceBundle | None,
+    *,
+    semantic_pack_changed: bool = False,
+) -> str:
+    if semantic_pack_changed:
+        return "evidence_retrieval"
     metadata = bundle.metadata if bundle is not None else {}
     authority = metadata.get("semantic_proposition_authority")
     authority = authority if isinstance(authority, dict) else {}
     verifier = metadata.get("semantic_proposition_verifier")
     verifier = verifier if isinstance(verifier, dict) else {}
-    reason = " ".join(
-        str(value or "") for value in (authority.get("reason"), verifier.get("reason"))
-    ).casefold()
+    current_reason = _current_semantic_rejection_reason(authority, verifier)
+    classified = _recovery_kind_for_reason(current_reason)
+    if classified:
+        return classified
     transitions = verifier.get("recovery_transitions") or []
-    if (
-        any(
-            isinstance(value, dict) and value.get("to") == "proposition_repair"
-            for value in transitions
-        )
-        or "question_proposition" in reason
+    for transition in reversed(transitions):
+        if not isinstance(transition, dict):
+            continue
+        kind = str(transition.get("to") or "")
+        if kind in {"proof_repair", "quote_rebind", "proposition_repair"}:
+            return kind
+    return "evidence_retrieval"
+
+
+def _current_semantic_rejection_reason(
+    authority: dict[str, Any],
+    verifier: dict[str, Any],
+) -> str:
+    rejected = verifier.get("rejected_transactions") or []
+    for transaction in reversed(rejected):
+        if not isinstance(transaction, dict):
+            continue
+        reason = str(transaction.get("runtime_rejection_reason") or "").strip()
+        if reason:
+            return reason.casefold()
+    for value in (
+        verifier.get("audit_reason"),
+        authority.get("reason"),
+        verifier.get("reason"),
     ):
-        return "proposition_repair"
-    if any(
-        isinstance(value, dict) and value.get("to") == "proof_repair"
-        for value in transitions
-    ) or any(value in reason for value in ("audit", "premise", "conclusion")):
-        return "proof_repair"
+        reason = str(value or "").strip()
+        if reason:
+            return reason.casefold()
+    return ""
+
+
+def _recovery_kind_for_reason(reason: str) -> str:
+    if not reason:
+        return ""
     if any(value in reason for value in ("quote", "span", "offset")):
         return "quote_rebind"
-    return "evidence_retrieval"
+    if "question_proposition" in reason:
+        return "proposition_repair"
+    if any(
+        value in reason
+        for value in (
+            "audit",
+            "premise",
+            "conclusion",
+            "contradiction",
+            "entailment",
+            "quantifier",
+            "scope",
+            "polarity",
+        )
+    ):
+        return "proof_repair"
+    return ""
 
 
 def retrieval_no_progress_decision(

@@ -291,6 +291,7 @@ def _qasper_authority_summary(
         "qasper_semantic_entailment_audit_call_count",
         "qasper_semantic_entailment_audit_failure_count",
         "qasper_semantic_entailment_audit_rejection_count",
+        "qasper_semantic_auditor_internal_inconsistency_count",
         "qasper_semantic_proposition_verifier_audit_rejection_count",
         "qasper_semantic_audit_verified_but_runtime_rejected_count",
         "qasper_required_slot_authority_empty_count",

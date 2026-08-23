@@ -354,3 +354,38 @@ def test_explicit_zero_raw_audit_rejections_is_not_final_row_rejection() -> None
 
     assert row["raw_audit_call_rejected"] is False
     assert row["final_row_audit_rejected"] is True
+
+
+def test_qasper_semantic_debug_projects_local_auditor_inconsistency() -> None:
+    prediction = _prediction()
+    verifier = prediction["engine_terminal_evidence_bundle"]["metadata"][
+        "semantic_proposition_verifier"
+    ]
+    verifier.update(
+        {
+            "auditor_internal_inconsistency": True,
+            "auditor_internal_inconsistency_count": 2,
+            "local_premise_consistency": {
+                "contract_id": "deterministic_local_premise_consistency.v1",
+                "status": "auditor_internal_inconsistency",
+                "inconsistent_premise_refs": ["P1", "P2"],
+            },
+            "local_premise_consistency_history": [
+                {"status": "auditor_internal_inconsistency"},
+                {"status": "consistent"},
+            ],
+        }
+    )
+
+    [row] = qasper_semantic_debug_rows([prediction])
+
+    assert row["auditor_internal_inconsistency"] is True
+    assert row["auditor_internal_inconsistency_count"] == 2
+    assert row["local_premise_consistency"]["inconsistent_premise_refs"] == [
+        "P1",
+        "P2",
+    ]
+    assert len(row["local_premise_consistency_history"]) == 2
+    assert "auditor_internal_inconsistency" in {
+        finding["code"] for finding in row["findings"]
+    }

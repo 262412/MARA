@@ -260,7 +260,7 @@ def _runtime_validation_reason(
 
 def _runtime_repair_kind(reason: str) -> str:
     normalized = reason.casefold()
-    if "question_proposition" in normalized or "typed_conclusion" in normalized:
+    if "question_proposition" in normalized:
         return "proposition_repair"
     if any(value in normalized for value in ("quote", "offset", "span")):
         return "quote_rebind"
@@ -322,9 +322,22 @@ def _merged_repair_diagnostics(
         *deepcopy(initial.get("rejected_transactions") or []),
         *deepcopy(repaired.get("rejected_transactions") or []),
     ]
+    merged["local_premise_consistency_history"] = [
+        *deepcopy(initial.get("local_premise_consistency_history") or []),
+        *deepcopy(repaired.get("local_premise_consistency_history") or []),
+    ]
+    merged["auditor_internal_inconsistency"] = bool(
+        initial.get("auditor_internal_inconsistency")
+        or repaired.get("auditor_internal_inconsistency")
+    )
+    if initial.get("auditor_internal_inconsistency"):
+        merged["local_premise_consistency"] = deepcopy(
+            initial.get("local_premise_consistency") or {}
+        )
     for key in (
         "audit_call_rejection_count",
         "audit_verified_but_runtime_rejected_count",
+        "auditor_internal_inconsistency_count",
         "proposition_repair_count",
         "proof_repair_count",
         "quote_rebind_count",

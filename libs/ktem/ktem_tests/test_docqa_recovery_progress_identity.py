@@ -188,6 +188,53 @@ def test_recovery_kind_reverifies_only_after_semantic_pack_digest_changes(
     assert recovery_has_progress(fields) is change_semantic_pack
 
 
+@pytest.mark.parametrize(
+    ("current_reason", "change_semantic_pack", "expected_kind"),
+    (
+        ("joint_entailment_rejected", False, "proof_repair"),
+        ("typed_conclusion_quantifier_rejected", False, "proof_repair"),
+        ("semantic_premise_quote_unbound", False, "quote_rebind"),
+        ("joint_entailment_rejected", True, "evidence_retrieval"),
+    ),
+)
+def test_current_rejection_outranks_historical_proposition_repair(
+    current_reason: str,
+    change_semantic_pack: bool,
+    expected_kind: str,
+) -> None:
+    initial = _bundle("stable-source", "stable-evidence")
+    recovered = _bundle("stable-source", "stable-evidence")
+    initial.metadata["semantic_proposition_verifier"] = {
+        "reason": "semantic_entailment_audit_rejected",
+        "audit_reason": current_reason,
+        "recovery_transitions": [
+            {
+                "from": "question_proposition",
+                "to": "proposition_repair",
+                "reason": "question_proposition_predicate_unspecified",
+            }
+        ],
+        "rejected_transactions": [{"runtime_rejection_reason": current_reason}],
+    }
+    if change_semantic_pack:
+        recovered.items[0]["text"] = EXACT_AUTHORITY
+
+    fields = recovery_trace_fields(
+        _request(),
+        VerifyDecision(
+            mode="strict",
+            status="unknown",
+            reason="authority missing",
+            typed_authority={"reason": "exact_boolean_authority_missing"},
+        ),
+        initial,
+        recovered,
+    )
+
+    assert fields["recovery_transition"]["to"] == expected_kind
+    assert fields["proposition_binding_changed"] is change_semantic_pack
+
+
 def test_retrieval_no_progress_stops_before_route_switch() -> None:
     calls: list[tuple[str, int]] = []
 

@@ -18,6 +18,7 @@ from benchmark.qasper_runtime_authority import (
     runtime_typed_proposition_authority,
 )
 from benchmark.task_answer_contracts import apply_task_answer_contract
+from benchmark.tests.qasper_semantic_test_fixtures import semantic_repair_diagnostics
 from benchmark.tests.qasper_semantic_test_fixtures import (
     semantic_verdict as _semantic_verdict,
 )
@@ -388,31 +389,7 @@ def test_semantic_repair_diagnostics_round_trip_through_benchmark_trace() -> Non
     prediction = _semantic_prediction()
     metadata = prediction["engine_terminal_evidence_bundle"]["metadata"]
     verifier = metadata["semantic_proposition_verifier"]
-    verifier.update(
-        {
-            "question_proposition_resolution": {
-                "contract_id": "question_proposition_resolution.v1",
-                "status": "repaired",
-            },
-            "audit_call_rejection_count": 2,
-            "audit_verified_but_runtime_rejected_count": 1,
-            "runtime_contract_rejection_count": 1,
-            "rejected_transactions": [
-                {
-                    "runtime_rejection_reason": "semantic_premise_scope_rejected",
-                    "typed_conclusion": {"conclusion_id": "rejected"},
-                    "semantic_proof_digest": "before",
-                }
-            ],
-            "semantic_proof_digest_before": "before",
-            "semantic_proof_digest_after": "after",
-            "semantic_proof_digest_changed": True,
-            "polarity_contradiction_check": {
-                "contract_id": "polarity_contradiction_check.v1",
-                "status": "aligned",
-            },
-        }
-    )
+    verifier.update(semantic_repair_diagnostics())
 
     apply_task_answer_contract(
         prediction,
@@ -425,6 +402,12 @@ def test_semantic_repair_diagnostics_round_trip_through_benchmark_trace() -> Non
         "repaired"
     )
     assert trace["runtime_semantic_entailment_audit_rejection_count"] == 2
+    assert trace["runtime_semantic_auditor_internal_inconsistency"] is True
+    assert trace["runtime_semantic_auditor_internal_inconsistency_count"] == 1
+    assert trace["runtime_semantic_local_premise_consistency"]["status"] == (
+        "auditor_internal_inconsistency"
+    )
+    assert len(trace["runtime_semantic_local_premise_consistency_history"]) == 1
     assert trace["runtime_semantic_audit_verified_but_runtime_rejected_count"] == 1
     assert trace["runtime_semantic_runtime_contract_rejection_count"] == 1
     assert (

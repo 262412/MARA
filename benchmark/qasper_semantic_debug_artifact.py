@@ -56,6 +56,18 @@ def qasper_semantic_debug_rows(
                 verifier.get("recovery_transitions") or []
             ),
             "rejected_transactions": rejected_transactions,
+            "auditor_internal_inconsistency": bool(
+                verifier.get("auditor_internal_inconsistency")
+            ),
+            "auditor_internal_inconsistency_count": int(
+                verifier.get("auditor_internal_inconsistency_count") or 0
+            ),
+            "local_premise_consistency": deepcopy(
+                verifier.get("local_premise_consistency") or {}
+            ),
+            "local_premise_consistency_history": deepcopy(
+                verifier.get("local_premise_consistency_history") or []
+            ),
             "recovery_events": recovery_events,
             "required_slot_states": _required_slot_states(query_plan),
             "final_typed_authority": _final_typed_authority(prediction),
@@ -331,6 +343,14 @@ def _findings(row: Mapping[str, Any]) -> list[dict[str, str]]:
             )
         )
     findings.extend(_audit_contract_findings(verifier))
+    if row.get("auditor_internal_inconsistency"):
+        findings.append(
+            _finding(
+                "auditor_internal_inconsistency",
+                "inconsistency",
+                "auditor rejected a fragment that is an exact normalized substring of its bound quote",
+            )
+        )
     findings.extend(_recovery_state_findings(row))
     if int(debug_trace.get("dropped_event_count") or 0) > 0:
         findings.append(

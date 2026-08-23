@@ -9,14 +9,44 @@ from .mara_semantic_proposition_packing import (
 )
 from .mara_semantic_proposition_stages import ParsedSemanticStage
 
+_PROOF_REPAIR_REASONS = frozenset(
+    {
+        "auditor_internal_inconsistency",
+        "premise_false_jointly_entails_true",
+        "premise_fragment_not_entailed",
+        "premise_scope_inconsistent",
+        "joint_entailment_rejected",
+        "premise_not_required",
+        "contradiction_detected",
+        "joint_entailment_conclusion_inconsistent",
+        "conclusion_entailment_without_joint_support",
+        "typed_conclusion_not_entailed",
+        "typed_conclusion_polarity_rejected",
+        "typed_conclusion_quantifier_rejected",
+        "typed_conclusion_scope_rejected",
+    }
+)
 
-def requires_proof_repair(audit: ParsedSemanticStage) -> bool:
-    from .mara_semantic_entailment_audit import semantic_entailment_cross_field_reason
+_PRUNABLE_PREMISE_REASONS = frozenset(
+    {
+        "premise_false_jointly_entails_true",
+        "premise_fragment_not_entailed",
+        "premise_scope_inconsistent",
+    }
+)
+
+
+def requires_proof_repair(
+    audit: ParsedSemanticStage,
+    *,
+    reason: str = "",
+) -> bool:
+    from .mara_semantic_entailment_audit import semantic_entailment_rejection_reason
 
     return bool(
         audit.value is not None
-        and semantic_entailment_cross_field_reason(audit.value)
-        == "premise_false_jointly_entails_true"
+        and (reason or semantic_entailment_rejection_reason(audit.value))
+        in _PROOF_REPAIR_REASONS
     )
 
 
@@ -24,7 +54,11 @@ def prune_invalid_premises(
     proposal: ParsedSemanticStage,
     audit: ParsedSemanticStage,
     slots: list[dict[str, str]],
+    *,
+    reason: str,
 ) -> ParsedSemanticStage | None:
+    if reason not in _PRUNABLE_PREMISE_REASONS:
+        return None
     value = deepcopy(proposal.value or {})
     premises = list(value.get("premises") or [])
     checks = list((audit.value or {}).get("premise_checks") or [])
@@ -54,6 +88,9 @@ def prune_invalid_premises(
 def proof_rebuild_prompt(
     proposal_prompt: str,
     audit: ParsedSemanticStage,
+    *,
+    reason: str,
+    local_consistency: dict[str, Any] | None = None,
 ) -> str | None:
     invalid_refs = [
         str(check.get("premise_ref") or "")
@@ -61,10 +98,25 @@ def proof_rebuild_prompt(
         if check.get("fragment_entailed") is not True
         or check.get("scope_consistent") is not True
     ]
+    locally_bound_refs = list(
+        (local_consistency or {}).get("inconsistent_premise_refs") or []
+    )
+    local_instruction = ""
+    if locally_bound_refs:
+        local_instruction = (
+            " Deterministic local checking found that refs "
+            f"{','.join(locally_bound_refs)} are exact normalized substrings of "
+            "their bound quotes. That establishes local quotation consistency "
+            "only, not scope or joint conclusion entailment; retain a canonical "
+            "span only if it remains necessary in the rebuilt proof."
+        )
     instruction = (
-        "\n\nPROOF REPAIR: the independent audit rejected premise refs "
-        f"{','.join(invalid_refs) or 'unknown'}. Rebuild the complete proof from "
-        "the canonical span selectors. Do not reuse a rejected fragment. Return "
+        "\n\nPROOF REPAIR: the independent audit rejected the proof with reason "
+        f"{reason}; affected premise refs are "
+        f"{','.join(invalid_refs) or 'not premise-specific'}."
+        f"{local_instruction} Rebuild the complete proof from the canonical span "
+        "selectors, correcting the exact scope, quantifier, polarity, and joint "
+        "entailment defect. Every retained premise must be necessary. Return "
         "insufficient_evidence if no atomic proof or genuine 2-4 premise "
         "conjunction covers every required slot."
     )

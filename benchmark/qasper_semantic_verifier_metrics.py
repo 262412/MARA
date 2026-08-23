@@ -61,6 +61,9 @@ def semantic_verifier_failure_metrics(trace: dict[str, Any]) -> dict[str, float]
             audit_status == "failed"
         ),
         "qasper_semantic_entailment_audit_rejection_count": float(raw_audit_rejections),
+        "qasper_semantic_auditor_internal_inconsistency_count": float(
+            trace.get("runtime_semantic_auditor_internal_inconsistency_count") or 0
+        ),
         "qasper_semantic_proposition_verifier_audit_rejection_count": float(
             verifier_status == "audit_rejected"
         ),
@@ -86,6 +89,7 @@ def _metric_count(
 
 QASPER_SEMANTIC_AUDIT_UNIQUE_METRIC_KEYS = (
     "qasper_semantic_entailment_audit_rejection_count",
+    "qasper_semantic_auditor_internal_inconsistency_count",
     "qasper_semantic_proposition_verifier_audit_rejection_count",
     "qasper_semantic_audit_verified_but_runtime_rejected_count",
 )

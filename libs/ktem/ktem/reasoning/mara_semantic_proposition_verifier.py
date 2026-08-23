@@ -8,6 +8,9 @@ from typing import Any
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.semantic_evidence_set_authority import PropositionVerifier
 
+from .mara_semantic_local_consistency import (
+    DETERMINISTIC_LOCAL_PREMISE_CONSISTENCY_CONTRACT,
+)
 from .mara_semantic_proposition_contract import insufficient_semantic_result
 from .mara_semantic_proposition_debug import (
     SemanticPropositionDebugRecorder,
@@ -369,6 +372,10 @@ def _semantic_cache_key(
         "release_mode": release_mode,
         "proposal_contract": "semantic_proposition_verdict.v3",
         "audit_contract": "semantic_entailment_audit.v2",
+        "local_premise_consistency_contract": (
+            DETERMINISTIC_LOCAL_PREMISE_CONSISTENCY_CONTRACT
+        ),
+        "proof_repair_policy": "full_rebuild_and_reaudit.v2",
         "polarity_check_contract": "polarity_contradiction_check.v1",
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))

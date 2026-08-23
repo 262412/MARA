@@ -171,12 +171,14 @@ def test_repaired_row_preserves_raw_audit_call_and_runtime_rejection_counts() ->
             "runtime_semantic_proposition_verifier_status": "parsed",
             "runtime_semantic_entailment_audit_status": "verified",
             "runtime_semantic_entailment_audit_rejection_count": 2,
+            "runtime_semantic_auditor_internal_inconsistency_count": 1,
             "runtime_semantic_audit_verified_but_runtime_rejected_count": 1,
             "runtime_semantic_proposition_authority_status": "verified",
         }
     )
 
     assert metrics["qasper_semantic_entailment_audit_rejection_count"] == 2.0
+    assert metrics["qasper_semantic_auditor_internal_inconsistency_count"] == 1.0
     assert metrics["qasper_semantic_proposition_verifier_audit_rejection_count"] == 0.0
     assert metrics["qasper_semantic_audit_verified_but_runtime_rejected_count"] == 1.0
 
@@ -231,6 +233,7 @@ def test_write_reports_surfaces_qasper_semantic_verifier_failures(tmp_path) -> N
             "qasper_semantic_entailment_audit_call_count": 0.0,
             "qasper_semantic_entailment_audit_failure_count": 0.0,
             "qasper_semantic_entailment_audit_rejection_count": 0.0,
+            "qasper_semantic_auditor_internal_inconsistency_count": 1.0,
             "qasper_required_slot_authority_missing_count": 1.0,
         },
         "predictions": [{"example_id": "qasper-1"}],
@@ -246,3 +249,4 @@ def test_write_reports_surfaces_qasper_semantic_verifier_failures(tmp_path) -> N
         "qasper_semantic_proposition_verifier_context_overflow_count | 1.0" in markdown
     )
     assert "qasper_required_slot_authority_missing_count | 1.0" in markdown
+    assert "qasper_semantic_auditor_internal_inconsistency_count | 1.0" in markdown

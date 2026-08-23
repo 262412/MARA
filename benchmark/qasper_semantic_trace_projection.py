@@ -127,6 +127,18 @@ def _semantic_verifier_contract_trace_fields(
         "runtime_semantic_rejected_transactions": deepcopy(
             trace.get("rejected_transactions") or []
         ),
+        "runtime_semantic_auditor_internal_inconsistency": bool(
+            trace.get("auditor_internal_inconsistency")
+        ),
+        "runtime_semantic_auditor_internal_inconsistency_count": (
+            _nonnegative_int(trace.get("auditor_internal_inconsistency_count"))
+        ),
+        "runtime_semantic_local_premise_consistency": deepcopy(
+            trace.get("local_premise_consistency") or {}
+        ),
+        "runtime_semantic_local_premise_consistency_history": deepcopy(
+            trace.get("local_premise_consistency_history") or []
+        ),
         "runtime_semantic_entailment_audit_rejection_count": _nonnegative_int(
             trace.get("audit_call_rejection_count")
         ),
