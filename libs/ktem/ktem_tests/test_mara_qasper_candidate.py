@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any
 
@@ -53,6 +54,20 @@ def _request() -> DocQARequest:
     )
 
 
+def _bind_required_slots(request: DocQARequest, *evidence_ids: str) -> DocQARequest:
+    bound_ids = tuple(evidence_ids)
+    request.query_plan = replace(
+        request.query_plan,
+        evidence_slots=tuple(
+            replace(slot, evidence_ids=bound_ids)
+            if slot.required_for_verification
+            else slot
+            for slot in request.query_plan.evidence_slots
+        ),
+    )
+    return request
+
+
 def test_qasper_candidate_generator_records_full_model_boundary() -> None:
     llm = _RecordingLLM('{"candidate":"yes"}')
     pipeline = SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
@@ -67,7 +82,14 @@ def test_qasper_candidate_generator_records_full_model_boundary() -> None:
         ],
     )
 
-    assert generate_qasper_typed_candidate(pipeline, _request(), bundle) == "yes"
+    assert (
+        generate_qasper_typed_candidate(
+            pipeline,
+            _bind_required_slots(_request(), "evidence:paper:e1"),
+            bundle,
+        )
+        == "yes"
+    )
 
     trace = bundle.metadata["qasper_candidate_generation"]
     assert trace["contract_id"] == "qasper_typed_candidate_generation.v1"
@@ -98,6 +120,7 @@ def test_qasper_candidate_generator_fits_large_evidence_to_model_budget() -> Non
     llm = _RecordingLLM('{"candidate":"yes"}')
     pipeline = SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
     request = _request()
+    _bind_required_slots(request, "evidence:paper:e0")
     request.max_context_length = 3000
     bundle = EvidenceBundle(
         route="text_rag",
@@ -119,3 +142,93 @@ def test_qasper_candidate_generator_fits_large_evidence_to_model_budget() -> Non
     assert trace["evidence_estimated_input_tokens"] <= trace["evidence_token_budget"]
     assert trace["evidence_dropped_count"] or trace["evidence_truncated_count"]
     assert len(prompt) <= trace["prompt_char_limit"]
+
+
+def test_qasper_candidate_prompt_binds_typed_proposition_and_required_evidence_refs() -> (
+    None
+):
+    llm = _RecordingLLM('{"candidate":"yes"}')
+    pipeline = SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
+    request = _request()
+    items = [
+        {
+            "evidence_id": "cross-lingual",
+            "source_id": "paper",
+            "section_id": "experiments",
+            "text": "We evaluated transfer in the cross-lingual setting.",
+        },
+        {
+            "evidence_id": "single-language",
+            "source_id": "paper",
+            "section_id": "experiments",
+            "text": "The experiment included single-language baselines for comparison.",
+        },
+    ]
+    request.prompt = (
+        "Did the authors compare cross-lingual and single-language evaluation?"
+    )
+    request.controller_question = request.prompt
+    request.retrieval_query = request.prompt
+    request.query_plan = build_query_plan(
+        request.prompt,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    request.query_plan = replace(
+        request.query_plan,
+        evidence_slots=tuple(
+            replace(
+                slot,
+                evidence_ids=(
+                    "evidence:paper:cross-lingual",
+                    "evidence:paper:single-language",
+                )
+                if slot.slot_id == "support:proposition"
+                else (
+                    ("evidence:paper:cross-lingual",)
+                    if slot.slot_id == "support:left_subject"
+                    else ("evidence:paper:single-language",)
+                ),
+            )
+            for slot in request.query_plan.evidence_slots
+        ),
+    )
+    bundle = EvidenceBundle(route="text_rag", items=items)
+
+    assert generate_qasper_typed_candidate(pipeline, request, bundle) == "yes"
+
+    prompt = llm.calls[0][0][1].content
+    assert "TYPED QUESTION PROPOSITION:" in prompt
+    assert '"actor":"current_paper"' in prompt
+    assert '"predicate":"compare"' in prompt
+    assert '"object_surface":"cross-lingual and single-language evaluation"' in prompt
+    assert '"quantifier":"none"' in prompt
+    assert "REQUIRED VERIFICATION SLOTS:" in prompt
+    assert "support:left_subject" in prompt
+    assert "binding_status=bound" in prompt
+    assert "evidence_ref=E1:S1" in prompt
+    assert "evidence_ref=E2:S1" in prompt
+    assert bundle.metadata["qasper_candidate_generation"]["typed_proposition"]
+
+
+def test_qasper_candidate_rejects_polarity_when_a_required_slot_is_unbound() -> None:
+    llm = _RecordingLLM('{"candidate":"yes"}')
+    pipeline = SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
+    request = _request()
+    bundle = EvidenceBundle(
+        route="text_rag",
+        items=[
+            {
+                "evidence_id": "e1",
+                "source_id": "paper",
+                "text": "The authors compared the two systems.",
+            }
+        ],
+    )
+
+    assert generate_qasper_typed_candidate(pipeline, request, bundle) == (
+        "unanswerable"
+    )
+    trace = bundle.metadata["qasper_candidate_generation"]
+    assert all(slot["binding_status"] == "missing" for slot in trace["required_slots"])
+    assert trace["failure_reason"] == "required_slot_binding_incomplete"

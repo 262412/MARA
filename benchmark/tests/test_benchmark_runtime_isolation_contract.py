@@ -103,6 +103,24 @@ def _canonical_venv_identity() -> tuple[bool, str, int, int]:
     )
 
 
+def test_exit_trap_passes_original_producer_status_to_cleanup(tmp_path):
+    observed = tmp_path / "cleanup-status.txt"
+    result = _bash(
+        f"""
+        set -euo pipefail
+        source {RUNTIME_HELPER}
+        cleanup() {{
+          printf '%s\n' "${{1:-missing}}" > {observed}
+        }}
+        mara_install_benchmark_runtime_cleanup
+        exit 17
+        """
+    )
+
+    assert result.returncode == 17
+    assert observed.read_text(encoding="utf-8").strip() == "17"
+
+
 def test_configure_assigns_exclusive_theflow_settings_and_python_runtime(tmp_path):
     runtime_root = tmp_path / "benchmark_runs"
     result = _bash(
@@ -149,7 +167,7 @@ def test_runtime_contract_rejects_checkout_theflow_and_shared_canonical_venv(tmp
         f"""
         set -euo pipefail
         export MARA_PROJECT_ROOT={PROJECT_ROOT}
-        export MARA_BENCHMARK_RUNTIME_ROOT={tmp_path / 'benchmark_runs'}
+        export MARA_BENCHMARK_RUNTIME_ROOT={tmp_path / "benchmark_runs"}
         export SLURM_JOB_ID=904
         source {RUNTIME_HELPER}
         mara_configure_benchmark_runtime shared-venv-suite
@@ -193,7 +211,7 @@ def test_runtime_contract_rejects_shared_storage_and_existing_job_runtime(tmp_pa
           exit 1
         fi
         original_storage="$MARA_BENCHMARK_STORAGE_PREFIX"
-        export MARA_BENCHMARK_STORAGE_PREFIX={tmp_path / 'shared-theflow'}
+        export MARA_BENCHMARK_STORAGE_PREFIX={tmp_path / "shared-theflow"}
         if mara_assert_isolated_kh_app_data; then
           printf 'unexpected shared storage success\n' >&2
           exit 1
@@ -238,7 +256,7 @@ def test_exit_trap_preserves_unreconciled_planned_runtime(tmp_path):
         set -euo pipefail
         export MARA_PROJECT_ROOT={PROJECT_ROOT}
         export MARA_BENCHMARK_RUNTIME_ROOT={runtime_root}
-        export MARA_EXECUTION_PLAN={tmp_path / 'plan.json'}
+        export MARA_EXECUTION_PLAN={tmp_path / "plan.json"}
         export SLURM_JOB_ID=909
         source {RUNTIME_HELPER}
         mara_install_benchmark_runtime_cleanup
@@ -315,7 +333,7 @@ def test_fresh_checkout_docqa_does_not_create_source_theflow(tmp_path):
         export SLURM_JOB_ID=906
         source {RUNTIME_HELPER}
         mara_configure_benchmark_runtime fresh-checkout-suite
-        {PROJECT_ROOT / '.venv/bin/python'} - <<'PY'
+        {PROJECT_ROOT / ".venv/bin/python"} - <<'PY'
 from slide_cli.docqa_runtime import create_docqa_runtime
 from theflow.storage import storage
 
@@ -402,9 +420,9 @@ def test_mixed_checkout_module_origin_fails_closed(tmp_path):
         f"""
         set -euo pipefail
         export MARA_PROJECT_ROOT={PROJECT_ROOT}
-        export MARA_BENCHMARK_RUNTIME_ROOT={tmp_path / 'benchmark_runs'}
+        export MARA_BENCHMARK_RUNTIME_ROOT={tmp_path / "benchmark_runs"}
         export MARA_BENCHMARK_UV={fake_uv}
-        export PYTHONPATH={foreign_root}:{PROJECT_ROOT / 'libs/ktem'}:{PROJECT_ROOT / 'libs/kotaemon'}:{PROJECT_ROOT}
+        export PYTHONPATH={foreign_root}:{PROJECT_ROOT / "libs/ktem"}:{PROJECT_ROOT / "libs/kotaemon"}:{PROJECT_ROOT}
         export SLURM_JOB_ID=9104
         source {RUNTIME_HELPER}
         mara_install_benchmark_runtime_cleanup

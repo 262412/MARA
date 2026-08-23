@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from ktem.docqa.terminal_semantic_commit import build_terminal_semantic_commit
 
+from benchmark.artifact_publication import publish_artifact_contract
 from scripts.slurm.validate_contract_smoke import QASPER_HARD_GATES, validate
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -105,6 +106,7 @@ def _write_run(
         "".join(f"{json.dumps(row)}\n" for row in predictions),
         encoding="utf-8",
     )
+    publish_artifact_contract(run_dir)
 
 
 def _attach_terminal_commit(prediction: dict[str, Any]) -> None:
@@ -404,6 +406,21 @@ def _debug_generator_trace(
         "raw_response": '{"candidate":"yes"}',
         "cleaned_response": '{"candidate":"yes"}',
         "typed_candidate": "yes",
+        "typed_proposition": {
+            "actor": "current_paper",
+            "predicate": "use",
+            "object_surface": "the method",
+            "quantifier": "none",
+        },
+        "question_proposition_resolution": {"status": "complete"},
+        "required_slots": [
+            {
+                "slot_id": "support:boolean_proposition",
+                "binding_status": "bound",
+                "evidence_ids": ["span:paper:s1"],
+                "evidence_refs": ["E1:S1"],
+            }
+        ],
         "finish_reason": "stop",
         "failure_reason": "",
         "transformation_stages": [
@@ -449,6 +466,9 @@ def _debug_verifier_trace(
         "candidate_label": "yes",
         "candidate_verification_status": "supported",
         "replacement_candidate_allowed": False,
+        "explicit_contradiction": False,
+        "candidate_verifier_disagreement": False,
+        "unknown": False,
         "proposal_model_call_count": 1,
         "audit_model_call_count": 1,
         "candidate_verification_audit": {
@@ -528,6 +548,33 @@ def test_qasper_debug_contract_smoke_audits_6x3_observability(tmp_path):
         value == 18
         for value in audit["observability_coverage"]["covered_counts"].values()
     )
+    matrix = audit["structural_state_matrix"]
+    assert matrix["contract_id"] == "qasper_candidate_bound_state_matrix.v1"
+    assert matrix["complete"] is True
+    assert matrix["replacement_candidate_allowed"] is False
+    assert len(matrix["cells"]) == 12
+    assert {
+        (
+            cell["verifier_judgment"],
+            cell["auditor_status"],
+            cell["annotation_ambiguous"],
+        )
+        for cell in matrix["cells"]
+    } == {
+        (judgment, auditor_status, ambiguous)
+        for judgment in ("supported", "contradicted", "unknown")
+        for auditor_status in ("passed", "failed")
+        for ambiguous in (False, True)
+    }
+    assert matrix["online_observation"]["prediction_count"] == 18
+    assert matrix["online_observation"]["verifier_judgments"] == {
+        "supported": 18,
+        "contradicted": 0,
+        "unknown": 0,
+    }
+    manifest = json.loads((run_dir / "artifact_manifest.json").read_text())
+    assert "contract_smoke_audit.json" in manifest["required_files"]
+    assert manifest["files"]["contract_smoke_audit.json"]["sha256"]
 
 
 def test_qasper_debug_contract_smoke_fails_closed_on_missing_raw_response(
@@ -553,3 +600,128 @@ def test_qasper_debug_contract_smoke_fails_closed_on_missing_raw_response(
         violation.startswith("generator_field_missing:raw_response")
         for violation in audit["behavior_violations"]
     )
+
+
+def test_qasper_debug_contract_accepts_candidate_bound_unknown_audit(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    for prediction in predictions:
+        verifier = prediction["evidence_metadata"]["semantic_proposition_verifier"]
+        verifier["candidate_verification_status"] = "unknown"
+        verifier["unknown"] = True
+        verifier["candidate_verification_audit"]["audited_judgment"] = "unknown"
+        prediction["predicted_answer"] = "unanswerable"
+        prediction["answer_for_scoring"] = "unanswerable"
+        prediction["terminal_semantic_commit"]["semantic_answer"] = "unanswerable"
+        prediction["terminal_semantic_commit"]["outcome"] = "safe_abstention"
+    _write_run(run_dir, predictions=predictions)
+
+    audit = validate(run_dir, suite_kind="qasper_debug")
+
+    assert audit["status"] == "passed"
+    assert audit["structural_state_matrix"]["online_observation"][
+        "verifier_judgments"
+    ] == {"supported": 0, "contradicted": 0, "unknown": 18}
+
+
+def test_qasper_debug_contract_rejects_invalid_relation_flags(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    predictions[0]["evidence_metadata"]["semantic_proposition_verifier"][
+        "explicit_contradiction"
+    ] = True
+    _write_run(run_dir, predictions=predictions)
+
+    with pytest.raises(ValueError, match="candidate_relation_flags_invalid"):
+        validate(run_dir, suite_kind="qasper_debug")
+
+
+def test_qasper_debug_contract_requires_online_candidate_bound_auditor(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    verifier = predictions[0]["evidence_metadata"]["semantic_proposition_verifier"]
+    verifier["audit_model_call_count"] = 0
+    verifier["candidate_verification_audit"]["mode"] = "deterministic_schema_audit"
+    verifier["debug_trace"]["events"][0]["transaction"]["audit"] = {
+        "status": "not_run",
+        "attempts": [],
+    }
+    _write_run(run_dir, predictions=predictions)
+
+    with pytest.raises(ValueError, match="online_auditor_not_observed"):
+        validate(run_dir, suite_kind="qasper_debug")
+
+
+def test_qasper_debug_contract_detects_candidate_single_label_collapse(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    for prediction in predictions:
+        if prediction["example_id"] not in {"example-4", "example-5", "example-6"}:
+            continue
+        prediction["gold_answers"] = ["no"]
+        prediction["example_metadata"]["qasper_answer_annotations"][0]["yes_no"] = False
+        prediction["qasper_annotation_diagnostics"]["canonical_answer_classes"] = [
+            ["no"]
+        ]
+    _write_run(run_dir, predictions=predictions)
+
+    with pytest.raises(ValueError, match="candidate_single_label_collapse"):
+        validate(run_dir, suite_kind="qasper_debug")
+
+    audit = json.loads((run_dir / "contract_smoke_audit.json").read_text())
+    observation = audit["structural_state_matrix"]["online_observation"]
+    assert observation["generator_candidates"] == {
+        "yes": 18,
+        "no": 0,
+        "unanswerable": 0,
+    }
+    assert observation["expected_annotation_labels"] == ["no", "yes"]
+    assert observation["single_label_collapse"] is True
+
+
+def test_qasper_debug_contract_requires_proposition_slot_binding_trace(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    generator = predictions[0]["evidence_metadata"]["qasper_candidate_generation"]
+    del generator["typed_proposition"]["object_surface"]
+    _write_run(run_dir, predictions=predictions)
+
+    with pytest.raises(ValueError, match="candidate_proposition_binding_invalid"):
+        validate(run_dir, suite_kind="qasper_debug")
+
+
+def test_qasper_debug_contract_rejects_answer_with_missing_required_slot(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    slot = predictions[0]["evidence_metadata"]["qasper_candidate_generation"][
+        "required_slots"
+    ][0]
+    slot.update(binding_status="missing", evidence_ids=[], evidence_refs=[])
+    _write_run(run_dir, predictions=predictions)
+
+    with pytest.raises(ValueError, match="candidate_required_slot_policy_mismatch"):
+        validate(run_dir, suite_kind="qasper_debug")

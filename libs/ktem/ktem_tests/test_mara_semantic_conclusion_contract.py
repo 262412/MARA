@@ -135,6 +135,21 @@ def test_qasper_characterization_keeps_already_complete_collect_proposition() ->
     assert resolution.proposition.object_surface == "the two datasets"
 
 
+def test_nested_clause_does_not_replace_the_main_question_predicate() -> None:
+    resolution = resolve_question_proposition(
+        "Did the authors evaluate whether the model improved accuracy?"
+    )
+
+    assert resolution.status == "complete"
+    assert resolution.proposition.actor == "current_paper"
+    assert resolution.proposition.predicate == "evaluate"
+    assert resolution.proposition.subject_surface == "the authors"
+    assert resolution.proposition.object_surface == (
+        "whether the model improved accuracy"
+    )
+    assert resolution.proposition.quantifier == "none"
+
+
 def test_qasper_characterization_polarity_is_checked_without_a_model() -> None:
     cases = (
         (

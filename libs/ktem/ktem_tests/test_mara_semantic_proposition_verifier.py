@@ -23,6 +23,7 @@ from ktem.reasoning.mara_semantic_proposition_verifier import (
     SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS,
     build_semantic_proposition_verifier,
 )
+from ktem.reasoning.mara_semantic_candidate_policy import candidate_bound_response
 
 QUESTION = "Did the authors compare cross-lingual and single-language evaluation?"
 
@@ -41,7 +42,9 @@ class _RecordingLLM:
         )
         return SimpleNamespace(
             text=(
-                _audit_response()
+                _candidate_bound_audit_response()
+                if "CANDIDATE-BOUND VERIFIER AUDIT:" in messages[1].content
+                else _audit_response()
                 if schema_name == "semantic_entailment_audit"
                 else self.response
             )
@@ -165,6 +168,23 @@ def _audit_response() -> str:
     )
 
 
+def _candidate_bound_audit_response() -> str:
+    return json.dumps(
+        {
+            "premise_checks": [],
+            "jointly_entails": True,
+            "each_premise_required": True,
+            "contradiction_free": True,
+            "conclusion_check": {
+                "conclusion_entailed": True,
+                "polarity_consistent": True,
+                "quantifier_consistent": True,
+                "scope_consistent": True,
+            },
+        }
+    )
+
+
 def test_runtime_verifier_binds_candidate_and_caches_candidate_signature() -> None:
     llm = _RecordingLLM(_model_response())
     verifier = build_semantic_proposition_verifier(
@@ -185,6 +205,13 @@ def test_runtime_verifier_binds_candidate_and_caches_candidate_signature() -> No
     assert first["verifier_input_candidate"] == "unanswerable"
     assert second["verifier_input_candidate"] == "yes"
     assert first["replacement_candidate_allowed"] is False
+    assert first["candidate_verification_audit"]["classification"] == (
+        "explicit_contradiction"
+    )
+    assert first["candidate_verification_audit"]["audited_candidate"] == (
+        "unanswerable"
+    )
+    assert first["candidate_verification_audit"]["audited_verdict"] == "yes"
     assert len(llm.calls) == 4
     assert [value["evidence_id"] for value in second["premises"]] == [
         identity_of(item).key for item in _items()
@@ -205,13 +232,72 @@ def test_runtime_verifier_binds_candidate_and_caches_candidate_signature() -> No
         messages[0].content
     )
     assert len(messages[1].content) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS
+    audit_messages, audit_kwargs = llm.calls[1]
+    assert "READ-ONLY CANDIDATE BINDING:" in audit_messages[1].content
+    assert "original_candidate=unanswerable" in audit_messages[1].content
+    assert "verifier_judgment=yes" in audit_messages[1].content
+    audit_properties = audit_kwargs["response_format"]["json_schema"]["schema"][
+        "properties"
+    ]
+    assert "replacement_candidate" not in audit_properties
+    assert "verdict" not in audit_properties
     assert kwargs["temperature"] == 0
     assert kwargs["top_p"] == 1
     assert kwargs["response_format"]["json_schema"]["strict"] is True
     assert bundle.metadata["semantic_proposition_verifier"]["cache_hit"] is True
     assert (
+        bundle.metadata["semantic_proposition_verifier"][
+            "replacement_candidate_allowed"
+        ]
+        is False
+    )
+    assert (
         bundle.metadata["semantic_proposition_verifier"]["actual_model_call_count"] == 4
     )
+
+
+def test_insufficient_verdict_is_a_candidate_bound_audit_not_a_skipped_audit() -> None:
+    llm = _RecordingLLM(_insufficient_response())
+    verifier = build_semantic_proposition_verifier(
+        SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
+    )
+    assert verifier is not None
+    bundle = EvidenceBundle(route="doc_text", items=_items())
+
+    result = verifier(_request(), QUESTION, "yes", bundle)
+
+    assert result is not None
+    assert result["verdict"] == "insufficient_evidence"
+    assert result["candidate_verification_status"] == "unknown"
+    audit = result["candidate_verification_audit"]
+    assert audit["mode"] == "candidate_bound_audit"
+    assert audit["audited_candidate"] == "yes"
+    assert audit["audited_verdict"] == "insufficient_evidence"
+    assert audit["classification"] == "unknown"
+    assert audit["replacement_candidate_allowed"] is False
+    trace = bundle.metadata["semantic_proposition_verifier"]
+    assert trace["audit_status"] == "candidate_bound"
+    assert trace["replacement_candidate_allowed"] is False
+    assert trace["candidate_verification_audit"]["status"] == "passed"
+    assert trace["candidate_verification_audit"]["classification"] == ("unknown")
+    assert trace["unknown"] is True
+    assert trace["explicit_contradiction"] is False
+    assert trace["candidate_verifier_disagreement"] is False
+    assert trace["audit_model_call_count"] == 1
+    assert trace["auditor_attempt_id"]
+    assert len(llm.calls) == 2
+
+
+def test_unknown_candidate_audit_cannot_supply_or_replace_a_candidate() -> None:
+    result = candidate_bound_response({"verdict": "unknown"}, "no")
+
+    assert result["verdict"] == "unknown"
+    assert result["verifier_input_candidate"] == "no"
+    assert result["candidate_verification_status"] == "unknown"
+    assert result["candidate_verification_audit"]["classification"] == "unknown"
+    assert result["candidate_verification_audit"]["audited_candidate"] == "no"
+    assert result["candidate_verification_audit"]["audited_verdict"] == "unknown"
+    assert result["replacement_candidate_allowed"] is False
 
 
 def test_runtime_verifier_honors_request_evidence_budget() -> None:
@@ -235,7 +321,7 @@ def test_runtime_verifier_honors_request_evidence_budget() -> None:
 
     verifier(request, QUESTION, "unanswerable", bundle)
 
-    assert len(llm.calls) == 1
+    assert len(llm.calls) == 2
     messages, kwargs = llm.calls[0]
     trace = bundle.metadata["semantic_proposition_verifier"]
     assert kwargs["max_tokens"] == SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS

@@ -193,10 +193,10 @@ def test_producer_completion_reconciliation_updates_ledger_and_is_idempotent(tmp
     assert values["exit_code"] == "0:0"
     assert values["artifact_complete"] == "true"
     assert values["runtime_contract_sha256"] == updated_job["runtime_contract_sha256"]
-    assert values["producer_completion_contract"] == "benchmark_producer_completion.v1"
+    assert values["producer_completion_contract"] == "benchmark_producer_completion.v2"
     assert (
         values["completion_reconciliation_contract"]
-        == "benchmark_terminal_reconciliation.v1"
+        == "benchmark_terminal_reconciliation.v2"
     )
 
 
@@ -253,11 +253,108 @@ def test_reconciliation_rejects_key_mismatch_without_false_completion(tmp_path):
 
     assert result["valid"] is False
     updated_job = json.loads(plan_path.read_text(encoding="utf-8"))["jobs"][0]
-    assert updated_job["state"] == "SUBMITTED"
+    assert updated_job["state"] == "FAILED"
     assert updated_job["producer_completion_state"] == "FAILED"
     assert updated_job["producer_artifact_complete"] is False
     assert updated_job["producer_artifact_digest"] == ""
     assert "key mismatch" in updated_job["producer_failure_reason"]
+
+
+def test_producer_completion_fails_plan_when_formal_audit_failed(tmp_path):
+    from benchmark.completion_reconciliation import reconcile_job_completion
+
+    plan_path, table_path, job = _plan(tmp_path)
+    artifact_dir = _artifact(job, Path(job["output_root"]))
+    audit_path = artifact_dir / "contract_smoke_audit.json"
+    audit_path.write_text(
+        json.dumps(
+            {
+                "contract": "contract_smoke_audit.v2",
+                "status": "failed",
+                "failed_gates": [],
+                "behavior_violations": ["candidate_verifier_audit_failed"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    publish_artifact_contract(artifact_dir)
+    runtime_contract = tmp_path / "runtime-contract.json"
+    _runtime_contract(runtime_contract)
+
+    result = reconcile_job_completion(
+        plan_path,
+        table_path,
+        job_key="producer-completion-test",
+        job_id="12345",
+        artifact_dir=artifact_dir,
+        runtime_contract_path=runtime_contract,
+        producer_exit_code=0,
+        producer_only=True,
+    )
+
+    assert result["valid"] is False
+    updated_job = json.loads(plan_path.read_text(encoding="utf-8"))["jobs"][0]
+    assert updated_job["state"] == "FAILED"
+    assert updated_job["producer_completion_state"] == "FAILED"
+    assert updated_job["formal_audit_status"] == "failed"
+    assert updated_job["formal_audit_path"] == str(audit_path.resolve())
+    assert "formal contract audit status=failed" in updated_job["failure_reason"]
+
+
+def test_producer_completion_requires_declared_formal_audit(tmp_path):
+    from benchmark.completion_reconciliation import reconcile_job_completion
+
+    plan_path, table_path, job = _plan(tmp_path)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["jobs"][0]["formal_audit_required"] = True
+    from benchmark.execution_plan import _write_plan_and_table
+
+    _write_plan_and_table(plan, plan_path, table_path)
+    artifact_dir = _artifact(job, Path(job["output_root"]))
+    runtime_contract = tmp_path / "runtime-contract.json"
+    _runtime_contract(runtime_contract)
+
+    result = reconcile_job_completion(
+        plan_path,
+        table_path,
+        job_key="producer-completion-test",
+        job_id="12345",
+        artifact_dir=artifact_dir,
+        runtime_contract_path=runtime_contract,
+        producer_exit_code=0,
+        producer_only=True,
+    )
+
+    assert result["valid"] is False
+    updated_job = json.loads(plan_path.read_text(encoding="utf-8"))["jobs"][0]
+    assert updated_job["formal_audit_required"] is True
+    assert updated_job["formal_audit_status"] == "not_present"
+    assert "required formal contract audit is missing" in updated_job["failure_reason"]
+
+
+def test_terminal_reconciliation_records_failure_without_runtime_contract(tmp_path):
+    from benchmark.completion_reconciliation import reconcile_job_completion
+
+    plan_path, table_path, job = _plan(tmp_path)
+    artifact_dir = _artifact(job, Path(job["output_root"]))
+
+    result = reconcile_job_completion(
+        plan_path,
+        table_path,
+        job_key="producer-completion-test",
+        job_id="12345",
+        artifact_dir=artifact_dir,
+        slurm_state="FAILED",
+        slurm_exit_code="1:0",
+    )
+
+    assert result["valid"] is False
+    updated_job = json.loads(plan_path.read_text(encoding="utf-8"))["jobs"][0]
+    assert updated_job["state"] == "FAILED"
+    assert updated_job["slurm_state"] == "FAILED"
+    assert updated_job["slurm_exit_code"] == "1:0"
+    assert "runtime contract path is required" in updated_job["failure_reason"]
 
 
 def test_reconciliation_fails_closed_when_runtime_contract_is_missing(tmp_path):
@@ -347,3 +444,8 @@ def test_producer_wrappers_reconcile_before_runtime_cleanup_and_export_table():
         runtime_helper
     )
     assert "MARA_EXECUTION_TABLE=${JOB_TABLE}" in submitter
+    finalizer = (
+        PROJECT_ROOT / "scripts/slurm/reconcile_benchmark_job.sbatch"
+    ).read_text(encoding="utf-8")
+    assert "reconcile-completion" in finalizer
+    assert "MARA_RECONCILE_TARGET_JOB_ID" in finalizer

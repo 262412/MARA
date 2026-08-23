@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
@@ -12,7 +13,9 @@ from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.execution_verification import verify_generated_answer
 from ktem.docqa.pipeline_stage_timings import PipelineStageTimings
+from ktem.docqa.query_plan_schema import EvidenceSlot
 from ktem.docqa.query_planning import build_query_plan
+from ktem.docqa.typed_proposition_authority_slots import boolean_slot_bindings
 from ktem.docqa.verification import verify_decision
 from ktem_tests.semantic_entailment_test_helpers import audited_verdict
 
@@ -242,3 +245,33 @@ def test_empty_candidate_fails_closed_without_asking_verifier_to_answer() -> Non
     assert bundle.metadata["typed_boolean_generation_recovery"] == (
         "empty_generation_rejected_without_verifier_call"
     )
+
+
+def test_single_proposition_slot_never_binds_an_unlisted_atom() -> None:
+    slot = EvidenceSlot(
+        slot_id="support:boolean_proposition",
+        role="support",
+        statement_kind="boolean_proposition",
+        evidence_ids=("span:paper:authority",),
+    )
+    request = SimpleNamespace(query_plan=SimpleNamespace(constraints={}))
+    atoms = [
+        {
+            "evidence_id": "span:paper:distractor",
+            "evidence_ref": "span:paper:distractor#quote:0:10",
+        },
+        {
+            "evidence_id": "span:paper:authority",
+            "evidence_ref": "span:paper:authority#quote:0:10",
+        },
+    ]
+
+    bindings, slot_refs, selected = boolean_slot_bindings(
+        request,
+        [slot],
+        atoms,
+    )
+
+    assert bindings == {"support:boolean_proposition": ("span:paper:authority",)}
+    assert slot_refs == {}
+    assert [atom["evidence_id"] for atom in selected or []] == ["span:paper:authority"]
