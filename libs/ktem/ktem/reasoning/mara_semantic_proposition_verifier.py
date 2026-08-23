@@ -8,6 +8,7 @@ from typing import Any
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.semantic_evidence_set_authority import PropositionVerifier
 
+from .mara_semantic_proposition_contract import insufficient_semantic_result
 from .mara_semantic_proposition_debug import (
     SemanticPropositionDebugRecorder,
     semantic_proposition_debug_enabled,
@@ -22,9 +23,9 @@ from .mara_semantic_proposition_packing import (
 )
 from .mara_semantic_proposition_transaction import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
-    insufficient_semantic_result,
     run_semantic_proposition_transaction,
 )
+from .mara_semantic_runtime_repair import repair_runtime_contract_rejection
 
 SEMANTIC_PROPOSITION_VERIFIER_RUNTIME_CONTRACT = (
     "semantic_proposition_verifier_runtime.v2"
@@ -135,6 +136,7 @@ class _SemanticPropositionVerifier:
                 len(prompt),
             )
         return self._model_response(
+            request,
             bundle,
             cache_key,
             question,
@@ -147,6 +149,7 @@ class _SemanticPropositionVerifier:
 
     def _model_response(
         self,
+        request: Any,
         bundle: EvidenceBundle,
         cache_key: str,
         question: str,
@@ -168,6 +171,22 @@ class _SemanticPropositionVerifier:
             seed=seed,
             release_mode=self.release_mode,
             semantic_pack_digest=packing.semantic_pack_digest,
+            capture_debug_trace=self.debug_recorder.enabled,
+        )
+        outcome = repair_runtime_contract_rejection(
+            outcome,
+            request=request,
+            question=question,
+            bundle=bundle,
+            proposal_llm=self.llm,
+            audit_llm=self.audit_llm,
+            prompt=prompt,
+            packing=packing,
+            slots=slots,
+            proposal_model=model,
+            audit_model=_model_name(self.audit_llm),
+            seed=seed,
+            release_mode=self.release_mode,
             capture_debug_trace=self.debug_recorder.enabled,
         )
         self.proposal_model_call_count += outcome.proposal_call_count
@@ -350,6 +369,7 @@ def _semantic_cache_key(
         "release_mode": release_mode,
         "proposal_contract": "semantic_proposition_verdict.v3",
         "audit_contract": "semantic_entailment_audit.v2",
+        "polarity_check_contract": "polarity_contradiction_check.v1",
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -392,6 +412,9 @@ def _record_trace(
         "cache_source": cache_source,
         "semantic_pack_digest": packing.semantic_pack_digest,
         "question_proposition": dict(packing.question_proposition),
+        "question_proposition_resolution": dict(
+            packing.question_proposition_resolution
+        ),
         "release_mode": bool(diagnostics.get("release_mode", False)),
         "actual_model_call_count": actual_model_call_count,
         "proposal_model_call_count": proposal_model_call_count,

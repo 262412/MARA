@@ -78,12 +78,16 @@ def _typed_derivation_conclusion(
     attestation: dict[str, Any],
 ) -> dict[str, Any]:
     fallback_object = (
-        " ".join(required) if required != ("complete_proposition",) else question.strip()
+        " ".join(required)
+        if required != ("complete_proposition",)
+        else question.strip()
     )
     actors = {value.actor for value in premises}
     scopes = {value.section_scope for value in premises}
     typed = attestation.get("typed_conclusion") or {}
-    object_value = str(typed.get("object_type") or fallback_object)
+    object_value = str(
+        typed.get("object_surface") or typed.get("object_type") or fallback_object
+    )
     return {
         "contract_id": str(typed.get("contract_id") or "typed_conclusion.v1"),
         "conclusion_id": str(typed.get("conclusion_id") or ""),

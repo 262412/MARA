@@ -300,7 +300,8 @@ def _conclusion_relation_matches(
     relation = str(conclusion.get("relation") or conclusion.get("predicate") or "")
     expected = str(primary_boolean_relation(question) or "")
     if rule_id == SEMANTIC_EVIDENCE_SET_RULE:
-        return relation == (expected or "entails")
+        typed_expected = build_question_proposition(question).predicate
+        return relation == typed_expected
     return relation == expected
 
 

@@ -372,9 +372,12 @@ def test_semantic_no_requires_an_explicit_negative_relation() -> None:
     )
 
     assert decision.status != "supported"
-    assert bundle.metadata["semantic_proposition_authority"]["reason"] == (
-        "semantic_negative_authority_not_explicit"
+    authority = bundle.metadata["semantic_proposition_authority"]
+    assert authority["reason"] == "polarity_contradiction_detected"
+    assert authority["polarity_contradiction_check"]["status"] == (
+        "contradiction_detected"
     )
+    assert authority["audit_verified_but_runtime_rejected"] is True
 
 
 def test_semantic_no_can_bind_an_explicit_negative_relation() -> None:

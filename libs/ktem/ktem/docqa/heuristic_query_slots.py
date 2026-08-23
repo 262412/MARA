@@ -42,20 +42,30 @@ def heuristic_slots(
     verification_domain: str = "",
 ) -> tuple[EvidenceSlot, ...]:
     multi_evidence = bool(capabilities.get("requires_multiple_evidence"))
-    if capabilities.get("requires_visual"):
-        return _visual_support_slots(question, metric)
-    if question_type == "multi_period_numeric":
-        return _period_operand_slots(
-            periods,
-            metric,
-            page_labels=_page_labels(capabilities),
-        )
     if answer_type == "numeric" and multi_evidence:
         return _paired_slots(
             question,
             metric,
             role="operand",
             required_for_execution=True,
+            page_labels=_page_labels(capabilities),
+        )
+    if question_type == "cross_page" and (
+        answer_type != "boolean" or capabilities.get("requires_visual")
+    ):
+        return _paired_slots(
+            question,
+            metric,
+            role="support",
+            page_labels=_page_labels(capabilities),
+            allow_duplicate_queries=True,
+        )
+    if capabilities.get("requires_visual"):
+        return _visual_support_slots(question, metric)
+    if question_type == "multi_period_numeric":
+        return _period_operand_slots(
+            periods,
+            metric,
             page_labels=_page_labels(capabilities),
         )
     if answer_type == "boolean":
@@ -71,14 +81,6 @@ def heuristic_slots(
             question,
             metric,
             page_labels=_page_labels(capabilities),
-        )
-    if question_type == "cross_page":
-        return _paired_slots(
-            question,
-            metric,
-            role="support",
-            page_labels=_page_labels(capabilities),
-            allow_duplicate_queries=True,
         )
     primary_support = _primary_support_slots(
         question,

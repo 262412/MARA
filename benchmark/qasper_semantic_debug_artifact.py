@@ -31,6 +31,8 @@ def qasper_semantic_debug_rows(
             metadata.get("query_plan") or metadata.get("bound_query_plan")
         )
         recovery_events = _recovery_events(prediction)
+        transaction_event = _latest_transaction_event(debug_trace)
+        rejected_transactions = _rejected_transactions(verifier, authority)
         row = {
             "contract_id": QASPER_SEMANTIC_DEBUG_CONTRACT,
             "example_id": prediction.get("example_id"),
@@ -44,9 +46,37 @@ def qasper_semantic_debug_rows(
             "terminal_outcome_reason": prediction.get("terminal_outcome_reason"),
             "semantic_verifier": deepcopy(verifier),
             "semantic_authority": deepcopy(authority),
+            "question_proposition_resolution": deepcopy(
+                verifier.get("question_proposition_resolution") or {}
+            ),
+            "proof_mode": str(verifier.get("proof_mode") or ""),
+            "semantic_pack_digest": str(verifier.get("semantic_pack_digest") or ""),
+            "cache_source": str(verifier.get("cache_source") or ""),
+            "recovery_transitions": deepcopy(
+                verifier.get("recovery_transitions") or []
+            ),
+            "rejected_transactions": rejected_transactions,
             "recovery_events": recovery_events,
             "required_slot_states": _required_slot_states(query_plan),
             "final_typed_authority": _final_typed_authority(prediction),
+            "audited_typed_conclusion": _audited_typed_conclusion(
+                verifier, transaction_event, rejected_transactions
+            ),
+            "audited_conclusion_audit": _audited_conclusion_audit(
+                verifier, transaction_event, rejected_transactions
+            ),
+            "polarity_contradiction_check": _audited_polarity_check(
+                verifier, authority, rejected_transactions
+            ),
+            "raw_audit_call_rejected": _raw_audit_call_rejected(
+                verifier, transaction_event
+            ),
+            "final_row_audit_rejected": _final_row_audit_rejected(
+                verifier, transaction_event
+            ),
+            "audit_verified_but_runtime_rejected": _audit_verified_but_runtime_rejected(
+                verifier, authority, transaction_event
+            ),
         }
         row["findings"] = _findings(row)
         rows.append(row)
@@ -104,6 +134,173 @@ def _final_typed_authority(prediction: Mapping[str, Any]) -> dict[str, Any]:
         return deepcopy(authority)
     verify = _mapping(prediction.get("engine_verify_decision"))
     return deepcopy(_mapping(verify.get("typed_authority")))
+
+
+def _latest_transaction_event(
+    debug_trace: Mapping[str, Any],
+) -> dict[str, Any]:
+    for event in reversed(debug_trace.get("events", []) or []):
+        if not isinstance(event, Mapping) or event.get("event") != "model_transaction":
+            continue
+        if _mapping(event.get("transaction")):
+            return dict(event)
+    return {}
+
+
+def _audited_typed_conclusion(
+    verifier: Mapping[str, Any],
+    transaction_event: Mapping[str, Any],
+    rejected_transactions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    transaction = _mapping(transaction_event.get("transaction"))
+    proposal = _latest_parsed_value(transaction, "proposal")
+    outcome = _mapping(transaction_event.get("outcome"))
+    return _first_mapping(
+        _latest_rejected_field(rejected_transactions, "typed_conclusion"),
+        proposal.get("typed_conclusion"),
+        outcome.get("typed_conclusion"),
+        verifier.get("typed_conclusion"),
+    )
+
+
+def _audited_conclusion_audit(
+    verifier: Mapping[str, Any],
+    transaction_event: Mapping[str, Any],
+    rejected_transactions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    transaction = _mapping(transaction_event.get("transaction"))
+    audit = _latest_parsed_value(transaction, "audit")
+    outcome = _mapping(transaction_event.get("outcome"))
+    return _first_mapping(
+        _latest_rejected_field(rejected_transactions, "conclusion_audit"),
+        audit.get("conclusion_audit"),
+        audit.get("conclusion_check"),
+        outcome.get("conclusion_audit"),
+        verifier.get("conclusion_audit"),
+    )
+
+
+def _audited_polarity_check(
+    verifier: Mapping[str, Any],
+    authority: Mapping[str, Any],
+    rejected_transactions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _first_mapping(
+        _latest_rejected_field(
+            rejected_transactions,
+            "polarity_contradiction_check",
+        ),
+        verifier.get("polarity_contradiction_check"),
+        authority.get("polarity_contradiction_check"),
+    )
+
+
+def _rejected_transactions(
+    verifier: Mapping[str, Any],
+    authority: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    values = [
+        deepcopy(dict(value))
+        for value in verifier.get("rejected_transactions", []) or []
+        if isinstance(value, Mapping)
+    ]
+    if authority.get("audit_verified_but_runtime_rejected"):
+        values.append(
+            {
+                "runtime_rejection_reason": authority.get("reason"),
+                "proof_mode": authority.get("proof_mode"),
+                "typed_conclusion": deepcopy(
+                    authority.get("audited_typed_conclusion")
+                    or authority.get("typed_conclusion")
+                    or {}
+                ),
+                "conclusion_audit": deepcopy(
+                    authority.get("audited_conclusion_audit")
+                    or authority.get("conclusion_audit")
+                    or {}
+                ),
+                "polarity_contradiction_check": deepcopy(
+                    authority.get("polarity_contradiction_check") or {}
+                ),
+                "semantic_pack_digest": authority.get("semantic_pack_digest"),
+            }
+        )
+    return values
+
+
+def _latest_rejected_field(
+    transactions: list[dict[str, Any]],
+    field: str,
+) -> dict[str, Any]:
+    for transaction in reversed(transactions):
+        value = _mapping(transaction.get(field))
+        if value:
+            return value
+    return {}
+
+
+def _latest_parsed_value(
+    transaction: Mapping[str, Any],
+    stage: str,
+) -> dict[str, Any]:
+    stage_value = _mapping(transaction.get(stage))
+    for attempt in reversed(stage_value.get("attempts", []) or []):
+        if not isinstance(attempt, Mapping):
+            continue
+        parsed_value = _mapping(attempt.get("parsed_value"))
+        if parsed_value:
+            return parsed_value
+    return {}
+
+
+def _first_mapping(*values: Any) -> dict[str, Any]:
+    for value in values:
+        mapped = _mapping(value)
+        if mapped:
+            return deepcopy(mapped)
+    return {}
+
+
+def _raw_audit_call_rejected(
+    verifier: Mapping[str, Any],
+    transaction_event: Mapping[str, Any],
+) -> bool:
+    if "audit_call_rejection_count" in verifier:
+        return int(verifier.get("audit_call_rejection_count") or 0) > 0
+    outcome = _mapping(transaction_event.get("outcome"))
+    return str(verifier.get("audit_status") or outcome.get("audit_status") or "") == (
+        "rejected"
+    )
+
+
+def _final_row_audit_rejected(
+    verifier: Mapping[str, Any],
+    transaction_event: Mapping[str, Any],
+) -> bool:
+    outcome = _mapping(transaction_event.get("outcome"))
+    return str(verifier.get("status") or outcome.get("status") or "") == (
+        "audit_rejected"
+    )
+
+
+def _audit_verified_but_runtime_rejected(
+    verifier: Mapping[str, Any],
+    authority: Mapping[str, Any],
+    transaction_event: Mapping[str, Any],
+) -> bool:
+    if int(verifier.get("audit_verified_but_runtime_rejected_count") or 0) > 0:
+        return True
+    if authority.get("audit_verified_but_runtime_rejected") is True:
+        return True
+    audit_status = str(
+        verifier.get("audit_status")
+        or _mapping(transaction_event.get("outcome")).get("audit_status")
+        or ""
+    )
+    return audit_status.startswith("verified") and (
+        _final_row_audit_rejected(verifier, transaction_event)
+        or authority.get("status") == "rejected"
+    )
 
 
 def _findings(row: Mapping[str, Any]) -> list[dict[str, str]]:

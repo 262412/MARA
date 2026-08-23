@@ -40,5 +40,8 @@ def record_verified_conclusion_audit(
             "conclusion_audit": dict(
                 value["entailment_audit"].get("conclusion_audit") or {}
             ),
+            "polarity_contradiction_check": dict(
+                value["entailment_audit"].get("polarity_contradiction_check") or {}
+            ),
         }
     )

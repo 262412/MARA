@@ -384,6 +384,56 @@ def test_semantic_evidence_set_authority_round_trips_through_benchmark_audit() -
     _assert_semantic_metrics(metrics, cited)
 
 
+def test_semantic_repair_diagnostics_round_trip_through_benchmark_trace() -> None:
+    prediction = _semantic_prediction()
+    metadata = prediction["engine_terminal_evidence_bundle"]["metadata"]
+    verifier = metadata["semantic_proposition_verifier"]
+    verifier.update(
+        {
+            "question_proposition_resolution": {
+                "contract_id": "question_proposition_resolution.v1",
+                "status": "repaired",
+            },
+            "audit_call_rejection_count": 2,
+            "audit_verified_but_runtime_rejected_count": 1,
+            "runtime_contract_rejection_count": 1,
+            "rejected_transactions": [
+                {
+                    "runtime_rejection_reason": "semantic_premise_scope_rejected",
+                    "typed_conclusion": {"conclusion_id": "rejected"},
+                    "semantic_proof_digest": "before",
+                }
+            ],
+            "semantic_proof_digest_before": "before",
+            "semantic_proof_digest_after": "after",
+            "semantic_proof_digest_changed": True,
+            "polarity_contradiction_check": {
+                "contract_id": "polarity_contradiction_check.v1",
+                "status": "aligned",
+            },
+        }
+    )
+
+    apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: (_ for _ in ()).throw(AssertionError("no LLM")),
+    )
+    trace = prediction["evidence_metadata"]["qasper_answerability"]
+
+    assert trace["runtime_semantic_question_proposition_resolution"]["status"] == (
+        "repaired"
+    )
+    assert trace["runtime_semantic_entailment_audit_rejection_count"] == 2
+    assert trace["runtime_semantic_audit_verified_but_runtime_rejected_count"] == 1
+    assert trace["runtime_semantic_runtime_contract_rejection_count"] == 1
+    assert (
+        trace["runtime_semantic_rejected_transactions"][0]["semantic_proof_digest"]
+        == "before"
+    )
+    assert trace["runtime_semantic_proof_digest_changed"] is True
+
+
 def _assert_semantic_typed_authority(typed: dict, boolean: dict) -> None:
     assert typed["complete"] is True
     assert typed["authority_kind"] == "semantic_evidence_set"

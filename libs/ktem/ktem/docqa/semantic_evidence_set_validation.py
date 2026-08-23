@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, TypeAlias
 
+from .boolean_authority_derivation import boolean_derivation_contract_status
 from .boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
@@ -14,8 +15,8 @@ from .boolean_evidence_scope import (
     _section_role,
     evidence_item_text,
 )
-from .boolean_proposition_polarity import evidence_polarity
 from .evidence_identity import identity_of
+from .polarity_contradiction_check import polarity_contradiction_check
 from .query_phrase_extraction import source_page_locator
 from .question_proposition import (
     build_question_proposition,
@@ -24,6 +25,7 @@ from .question_proposition import (
     validate_typed_conclusion,
 )
 from .semantic_entailment_audit import semantic_entailment_audit_validation_reason
+from .semantic_evidence_set_derivation import semantic_evidence_set_derivation
 from .semantic_evidence_set_scope import semantic_scope_basis
 
 ValidatedPremises: TypeAlias = tuple[
@@ -32,6 +34,61 @@ ValidatedPremises: TypeAlias = tuple[
     str,
     str,
 ]
+
+
+def semantic_evidence_set_runtime_validation_reason(
+    request: Any,
+    question: str,
+    response: Mapping[str, Any],
+    items: list[dict[str, Any]],
+    *,
+    release_mode: bool,
+) -> str:
+    """Run the final deterministic authority contract before cache commit."""
+
+    header, header_reason = validated_semantic_header(
+        response,
+        question,
+        release_mode=release_mode,
+    )
+    if header is None:
+        return header_reason
+    verdict, attestation = header
+    if verdict == "insufficient_evidence":
+        return ""
+    premises, slot_support, scope_basis, premise_reason = validated_semantic_premises(
+        request,
+        question,
+        verdict,
+        response.get("premises"),
+        items,
+        proof_mode=str(response.get("proof_mode") or ""),
+    )
+    if premises is None:
+        return premise_reason
+    attestation = {
+        **attestation,
+        "premise_count": len(premises),
+        "complete_proposition": True,
+        "scope_basis": scope_basis,
+        "required_slot_ids": sorted(
+            {slot_id for values in slot_support.values() for slot_id in values}
+        ),
+    }
+    derivation = semantic_evidence_set_derivation(
+        question,
+        verdict,
+        premises,
+        attestation,
+        slot_support=slot_support,
+    )
+    status = boolean_derivation_contract_status(
+        derivation.as_dict(),
+        [premise.as_dict() for premise in premises],
+        question=question,
+        canonical_polarity=verdict,
+    )
+    return "" if status == "bound" else status
 
 
 def validated_semantic_header(
@@ -49,7 +106,9 @@ def validated_semantic_header(
     )
     if question_reason:
         return None, question_reason
-    conclusion = typed_conclusion(proposition, verdict) if verdict in {"yes", "no"} else None
+    conclusion = (
+        typed_conclusion(proposition, verdict) if verdict in {"yes", "no"} else None
+    )
     if conclusion is not None:
         conclusion_reason = validate_typed_conclusion(
             response.get("typed_conclusion"), proposition, verdict
@@ -183,9 +242,7 @@ def validated_semantic_premises(
         )
         if authority is None:
             return None, {}, "", reason
-        supports, fragment, reason = _premise_binding(
-            record, required_slots, fragments
-        )
+        supports, fragment, reason = _premise_binding(record, required_slots, fragments)
         if reason:
             return None, {}, "", reason
         fragments.add(fragment)
@@ -245,12 +302,14 @@ def _premise_set_validation_reason(
         return "semantic_premise_cross_source"
     if _premises_overlap(premises):
         return "semantic_premise_overlap"
-    if verdict == "no" and evidence_polarity(
-        question,
-        " ".join(value.quote for value in premises),
-        desired_polarity="no",
-    ) != "no":
-        return "semantic_negative_authority_not_explicit"
+    if verdict == "no":
+        conclusion = typed_conclusion(build_question_proposition(question), "no")
+        polarity_check = polarity_contradiction_check(
+            conclusion,
+            [{"quote": value.quote} for value in premises],
+        )
+        if polarity_check["status"] != "aligned":
+            return "semantic_negative_authority_not_explicit"
     return ""
 
 
@@ -292,26 +351,29 @@ def _validated_semantic_premise(
     ref_start = canonical_start if canonical_start is not None else start
     ref_end = canonical_end if canonical_end is not None else end
     evidence_ref = f"{evidence_id}#quote:{ref_start}:{ref_end}"
-    return BooleanEvidenceAuthority(
-        evidence_id=evidence_id,
-        evidence_ref=evidence_ref,
-        span_id=evidence_ref,
-        quote=quote,
-        span_start=start,
-        span_end=end,
-        canonical_start=canonical_start,
-        canonical_end=canonical_end,
-        actor=actor,
-        section_scope=section_scope,
-        relation="semantic_premise",
-        object=str(record.get("proposition_fragment") or "").strip(),
-        quantifier="none",
-        polarity=verdict,
-        reason="semantic_evidence_set_premise",
-        qualifier="none",
-        source_id=source_id,
-        page_label=page_label,
-    ), ""
+    return (
+        BooleanEvidenceAuthority(
+            evidence_id=evidence_id,
+            evidence_ref=evidence_ref,
+            span_id=evidence_ref,
+            quote=quote,
+            span_start=start,
+            span_end=end,
+            canonical_start=canonical_start,
+            canonical_end=canonical_end,
+            actor=actor,
+            section_scope=section_scope,
+            relation="semantic_premise",
+            object=str(record.get("proposition_fragment") or "").strip(),
+            quantifier="none",
+            polarity=verdict,
+            reason="semantic_evidence_set_premise",
+            qualifier="none",
+            source_id=source_id,
+            page_label=page_label,
+        ),
+        "",
+    )
 
 
 def _bound_offsets(

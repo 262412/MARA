@@ -53,6 +53,58 @@ _VISUAL_TERMS = {
     "table",
     "visual",
 }
+_VISUAL_REFERENCE = (
+    r"(?:images?|fig(?:ures?)?\.?|charts?|diagrams?|plots?|slides?|visuals?|tables?)"
+)
+_VISUAL_READING_ACTION = (
+    r"(?:show(?:s|n|ing)?|display(?:s|ed|ing)?|depict(?:s|ed|ing)?|"
+    r"illustrat(?:e|es|ed|ing)|contain(?:s|ed|ing)?|include(?:s|d|ing)?|"
+    r"represent(?:s|ed|ing)?|(?:indicate(?:s|d)?|indicating)|reveal(?:s|ed|ing)?|"
+    r"visible|appear(?:s|ed|ing)?|look(?:s|ed|ing)?|read(?:s|ing)?)"
+)
+_VISUAL_DETAIL = (
+    r"(?:color|colour|shape|position|location|label|labels|marker|markers|"
+    r"region|regions|object|objects|pixel|pixels|axis|axes|bar|bars|line|"
+    r"lines|curve|curves|outlier|outliers|trend|trends)"
+)
+_VISUAL_CONTENT_RELATION = (
+    r"(?:highest|lowest|longest|shortest|largest|smallest|leftmost|rightmost|"
+    r"above|below|between|near|behind|foreground|background|positioned|"
+    r"aligned|located)"
+)
+_VISUAL_NON_CONTENT_FOLLOWER = (
+    r"(?:models?|encoders?|feature|features|representations?|"
+    r"experiments?|methods?|branches?|modules?|networks?|embeddings?|"
+    r"datasets?|domains?|data|inputs?|outputs?|classifications?|recognitions?)"
+)
+_VISUAL_CONTENT_QUERY_RE = re.compile(
+    rf"\b(?:what|which|where|who|how many|how much|is|are|was|were|"
+    rf"does|do|did|can|could)\b.*?(?:"
+    rf"\b{_VISUAL_REFERENCE}\b.*?\b{_VISUAL_READING_ACTION}\b|"
+    rf"\b{_VISUAL_READING_ACTION}\b.*?\b{_VISUAL_REFERENCE}\b|"
+    rf"\b(?:in|on|from|within|inside)\s+(?:the\s+)?"
+    rf"\b{_VISUAL_REFERENCE}\b|"
+    rf"\b{_VISUAL_DETAIL}\b.*?\b{_VISUAL_CONTENT_RELATION}\b.*?"
+    rf"\b{_VISUAL_REFERENCE}\b|"
+    rf"\b{_VISUAL_REFERENCE}\b.*?\b{_VISUAL_CONTENT_RELATION}\b.*?"
+    rf"\b{_VISUAL_DETAIL}\b)",
+    flags=re.IGNORECASE,
+)
+_VISUAL_INSPECTION_QUERY_RE = re.compile(
+    rf"\b(?:according\s+to|based\s+on)\s+(?:the\s+)?\b{_VISUAL_REFERENCE}\b|"
+    rf"\b(?:explain|summarize|analyse|analyze|interpret)\b\s+"
+    rf"(?:the\s+)?(?:[a-z0-9_-]+\s+){{0,3}}\b{_VISUAL_REFERENCE}\b|"
+    rf"\b(?:describe|identify|inspect|read|locate|count|list|name|"
+    rf"transcribe)\b\s+(?:the\s+)?\b{_VISUAL_REFERENCE}\b|"
+    rf"\b(?:describe|identify|inspect|read|locate|count|list|name|"
+    rf"transcribe)\b.*?\b(?:in|on|from|within|inside)\s+(?:the\s+)?"
+    rf"\b{_VISUAL_REFERENCE}\b",
+    flags=re.IGNORECASE,
+)
+_VISUAL_NON_CONTENT_REFERENCE_RE = re.compile(
+    rf"\b{_VISUAL_REFERENCE}\b\s+{_VISUAL_NON_CONTENT_FOLLOWER}\b",
+    flags=re.IGNORECASE,
+)
 _BOOLEAN_QUESTION_RE = re.compile(
     r"(?:^|^[^,;:]{1,40}[,;:]\s*)(?:is|are|was|were|do|does|did|has|have|had|can|could|"
     r"will|would|should|may|might)\b",
@@ -113,6 +165,7 @@ def question_type(
     *,
     causal_intent: bool,
     requires_multiple_evidence: bool,
+    requires_visual: bool = False,
 ) -> str:
     if answer_type == "boolean":
         return "cross_page" if requires_multiple_evidence else "simple_fact"
@@ -124,7 +177,7 @@ def question_type(
         return "numeric"
     if requires_multiple_evidence:
         return "cross_page"
-    if tokens & _VISUAL_TERMS:
+    if requires_visual:
         return "visual"
     if tokens & _LONG_FORM_TERMS:
         return "long_form"
@@ -195,7 +248,7 @@ def question_capabilities(
         or generic_comparison
     )
     return {
-        "requires_visual": bool(tokens & _VISUAL_TERMS),
+        "requires_visual": _requires_visual_content(question, tokens),
         "requires_multiple_evidence": requires_multiple,
         "requires_distinct_source_pages": requires_multiple
         and len(explicit_pages) >= 2,
@@ -206,3 +259,33 @@ def question_capabilities(
         "figure_label": figure_match.group(1) if figure_match else "",
         "table_label": table_match.group(1) if table_match else "",
     }
+
+
+def _requires_visual_content(question: str, tokens: set[str]) -> bool:
+    """Require visual evidence only for questions that inspect visual content."""
+
+    text = str(question or "").strip()
+    if not text or not (
+        tokens & _VISUAL_TERMS
+        or re.search(rf"\b{_VISUAL_REFERENCE}\b", text, re.IGNORECASE)
+    ):
+        return False
+    if _all_visual_references_are_non_content(text):
+        return False
+    visual_references = list(
+        re.finditer(rf"\b{_VISUAL_REFERENCE}\b", text, re.IGNORECASE)
+    )
+    if len(visual_references) >= 2 and tokens & _CROSS_PAGE_TERMS:
+        return True
+    return bool(
+        _VISUAL_CONTENT_QUERY_RE.search(text)
+        or _VISUAL_INSPECTION_QUERY_RE.search(text)
+    )
+
+
+def _all_visual_references_are_non_content(text: str) -> bool:
+    references = list(re.finditer(rf"\b{_VISUAL_REFERENCE}\b", text, re.IGNORECASE))
+    return bool(references) and all(
+        _VISUAL_NON_CONTENT_REFERENCE_RE.match(text, match.start())
+        for match in references
+    )

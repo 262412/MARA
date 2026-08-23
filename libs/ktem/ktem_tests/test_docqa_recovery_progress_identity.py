@@ -145,6 +145,7 @@ def test_first_semantic_pack_is_a_real_recovery_change() -> None:
 @pytest.mark.parametrize(
     ("recovery_kind", "change_semantic_pack"),
     (
+        ("proposition_repair", False),
         ("proof_repair", False),
         ("quote_rebind", False),
         ("evidence_retrieval", True),
@@ -159,7 +160,9 @@ def test_recovery_kind_reverifies_only_after_semantic_pack_digest_changes(
     initial.metadata["semantic_proposition_verifier"] = {
         "reason": recovery_kind,
         "recovery_transitions": (
-            [{"to": "proof_repair"}] if recovery_kind == "proof_repair" else []
+            [{"to": recovery_kind}]
+            if recovery_kind in {"proof_repair", "proposition_repair"}
+            else []
         ),
     }
     if change_semantic_pack:

@@ -3,13 +3,53 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any, Mapping
 
 from .qasper_relation_frame import question_relation_frame
 
 QUESTION_PROPOSITION_CONTRACT = "question_proposition.v1"
+QUESTION_PROPOSITION_RESOLUTION_CONTRACT = "question_proposition_resolution.v1"
 TYPED_CONCLUSION_CONTRACT = "typed_conclusion.v1"
+
+_EMPTY_OBJECT_SURFACES = {
+    "",
+    "at",
+    "by",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "to",
+    "with",
+}
+_FRONT_AUXILIARY = re.compile(
+    r"^\s*(?:do|does|did|can|could|may|might|must|should|would|will|"
+    r"has|have|had|is|are|was|were)\s+",
+    re.IGNORECASE,
+)
+_REPAIR_RELATIONS: tuple[tuple[str, str], ...] = (
+    ("be_subject_to", r"\bsubject(?:ed)?\s+to\b"),
+    ("be_collection_of", r"\b(?:a\s+)?collection\s+of\b"),
+    ("focus_on", r"\bfocus(?:es|ed|ing)?\s+on\b"),
+    (
+        "cause",
+        r"\b(?:result(?:s|ed|ing)?\s+in|lead(?:s|ing)?\s+to|caus(?:e|es|ed|ing))\b",
+    ),
+    ("inspect", r"\binspect(?:s|ed|ing)?\b"),
+    ("associate", r"\bassociat(?:e|es|ed|ing)\b"),
+    ("annotate", r"\bannotat(?:e|es|ed|ing)\b"),
+    ("add", r"\badd(?:s|ed|ing)?\b"),
+    ("have", r"\b(?:have|has|had)\b"),
+    ("help", r"\bhelp(?:s|ed|ing)?\b"),
+    ("collect", r"\bcollect(?:s|ed|ing)?\b"),
+    ("compare", r"\bcompar(?:e|es|ed|ing)\b"),
+    ("evaluate", r"\b(?:evaluat(?:e|es|ed|ing)|assess(?:es|ed|ing)?)\b"),
+    ("use", r"\b(?:use|uses|used|using)\b"),
+    ("train", r"\btrain(?:s|ed|ing)?\b"),
+    ("improve", r"\bimprov(?:e|es|ed|ing|ement)\b"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +115,67 @@ class TypedConclusion:
         return payload
 
 
+@dataclass(frozen=True, slots=True)
+class QuestionPropositionResolution:
+    """Pre-audit resolution of one question into a complete proposition."""
+
+    initial: QuestionProposition
+    proposition: QuestionProposition
+    status: str
+    reason: str
+    repair_kind: str
+    contract_id: str = QUESTION_PROPOSITION_RESOLUTION_CONTRACT
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "contract_id": self.contract_id,
+            "status": self.status,
+            "reason": self.reason,
+            "repair_kind": self.repair_kind,
+            "initial": self.initial.as_dict(),
+            "proposition": self.proposition.as_dict(),
+        }
+
+
 def build_question_proposition(question: str) -> QuestionProposition:
+    return resolve_question_proposition(question).proposition
+
+
+def resolve_question_proposition(question: str) -> QuestionPropositionResolution:
+    initial = _initial_question_proposition(question)
+    reason = question_proposition_completeness_reason(initial)
+    if not reason:
+        return QuestionPropositionResolution(
+            initial=initial,
+            proposition=initial,
+            status="complete",
+            reason="",
+            repair_kind="none",
+        )
+    repaired = _repair_main_clause(initial)
+    repaired_reason = question_proposition_completeness_reason(repaired)
+    return QuestionPropositionResolution(
+        initial=initial,
+        proposition=repaired,
+        status="repaired" if not repaired_reason else "incomplete",
+        reason=reason if not repaired_reason else repaired_reason,
+        repair_kind="deterministic_main_clause" if not repaired_reason else "none",
+    )
+
+
+def question_proposition_completeness_reason(
+    proposition: QuestionProposition,
+) -> str:
+    if proposition.predicate in {"", "unspecified"}:
+        return "question_proposition_predicate_unspecified"
+    if not proposition.subject_surface.strip():
+        return "question_proposition_subject_missing"
+    if proposition.object_surface.strip().casefold() in _EMPTY_OBJECT_SURFACES:
+        return "question_proposition_object_missing"
+    return ""
+
+
+def _initial_question_proposition(question: str) -> QuestionProposition:
     surface = " ".join(str(question or "").split())
     frame = question_relation_frame(surface)
     subject_surface, object_surface = _surface_arguments(surface, frame.predicate)
@@ -94,12 +194,52 @@ def build_question_proposition(question: str) -> QuestionProposition:
         qualifier=frame.qualifier,
         quantifier=frame.quantifier,
         modality=_question_modality(surface),
-        negated=bool(
-            re.search(r"\b(?:no|not|never|without)\b|n't\b", surface, re.I)
-        ),
+        negated=bool(re.search(r"\b(?:no|not|never|without)\b|n't\b", surface, re.I)),
         time_scope=_time_scope(surface),
         relation_kind=frame.relation_kind,
     )
+
+
+def _repair_main_clause(initial: QuestionProposition) -> QuestionProposition:
+    clause = initial.surface.strip().rstrip("?")
+    clause = _FRONT_AUXILIARY.sub("", clause, count=1).strip()
+    matches = [
+        (match.start(), match.end(), predicate)
+        for predicate, pattern in _REPAIR_RELATIONS
+        if (match := re.search(pattern, clause, flags=re.IGNORECASE)) is not None
+    ]
+    if not matches:
+        return initial
+    start, end, predicate = min(matches, key=lambda value: (value[0], value[1]))
+    subject = clause[:start].strip(" ,")
+    object_surface = clause[end:].strip(" ,")
+    if not object_surface and start > 0:
+        subject, object_surface = _passive_arguments(subject)
+    if not subject or not object_surface:
+        return initial
+    actor = initial.actor
+    if actor not in {"current_paper", "prior_work"}:
+        actor = subject if _named_subject(subject) else "unknown"
+    return replace(
+        initial,
+        actor=actor,
+        predicate=predicate,
+        subject_surface=subject,
+        object_surface=object_surface,
+        object_role="cause" if predicate == "cause" else "object",
+        relation_kind="cause" if predicate == "cause" else "attribute",
+    )
+
+
+def _passive_arguments(value: str) -> tuple[str, str]:
+    match = re.match(
+        r"(?P<subject>(?:the|a|an|this|that|these|those)\s+\S+)\s+" r"(?P<object>.+)",
+        value,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return value, ""
+    return match.group("subject").strip(), match.group("object").strip()
 
 
 def typed_conclusion(
@@ -183,8 +323,7 @@ def _question_modality(question: str) -> str:
 
 def _named_subject(value: str) -> bool:
     tokens = {
-        token.casefold()
-        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", value)
+        token.casefold() for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", value)
     }
     return bool(
         tokens

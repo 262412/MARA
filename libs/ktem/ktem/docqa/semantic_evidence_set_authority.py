@@ -68,7 +68,13 @@ def semantic_evidence_set_claim_authority(
     )
     if header is None:
         _append_debug_stage(debug_trace, "header", "rejected", header_reason)
-        _record_trace(bundle, "rejected", header_reason, debug_trace=debug_trace)
+        _record_trace(
+            bundle,
+            "rejected",
+            header_reason,
+            debug_trace=debug_trace,
+            **_rejected_transaction_fields(response),
+        )
         return None
     _append_debug_stage(debug_trace, "header", "accepted", "")
     verdict, attestation = header
@@ -118,7 +124,13 @@ def _authority_from_verified_response(
     )
     if premises is None:
         _append_debug_stage(debug_trace, "premises", "rejected", premise_reason)
-        _record_trace(bundle, "rejected", premise_reason, debug_trace=debug_trace)
+        _record_trace(
+            bundle,
+            "rejected",
+            premise_reason,
+            debug_trace=debug_trace,
+            **_rejected_transaction_fields(response),
+        )
         return None
     _append_debug_stage(debug_trace, "premises", "accepted", "")
     attestation = _enriched_attestation(
@@ -143,9 +155,39 @@ def _authority_from_verified_response(
     )
     if status != "bound":
         _append_debug_stage(debug_trace, "derivation", "rejected", status)
-        _record_trace(bundle, "rejected", status, debug_trace=debug_trace)
+        _record_trace(
+            bundle,
+            "rejected",
+            status,
+            debug_trace=debug_trace,
+            **_rejected_transaction_fields(response),
+        )
         return None
+    return _commit_verified_authority(
+        prompt,
+        answer,
+        bundle,
+        response,
+        verdict,
+        premises,
+        derivation,
+        debug_trace,
+    )
+
+
+def _commit_verified_authority(
+    prompt: str,
+    answer: str,
+    bundle: EvidenceBundle,
+    response: Mapping[str, Any],
+    verdict: str,
+    premises: tuple[Any, ...],
+    derivation: Any,
+    debug_trace: dict[str, Any] | None,
+) -> BooleanClaimAuthority:
     _append_debug_stage(debug_trace, "derivation", "bound", "")
+    audit = response.get("entailment_audit")
+    audit = audit if isinstance(audit, Mapping) else {}
     _record_trace(
         bundle,
         "verified",
@@ -154,7 +196,15 @@ def _authority_from_verified_response(
         premise_count=len(premises),
         derivation_id=derivation.derivation_id,
         proof_mode=str(response.get("proof_mode") or ""),
+        question_proposition=dict(response.get("question_proposition") or {}),
         typed_conclusion=dict(response.get("typed_conclusion") or {}),
+        conclusion_audit=dict(audit.get("conclusion_audit") or {}),
+        polarity_contradiction_check=dict(
+            audit.get("polarity_contradiction_check") or {}
+        ),
+        auditor_relationship=str(
+            (response.get("verifier") or {}).get("auditor_relationship") or ""
+        ),
         semantic_pack_digest=str(
             (response.get("verifier") or {}).get("semantic_pack_digest") or ""
         ),
@@ -191,6 +241,28 @@ def _enriched_attestation(
         "auditor_relationship": str(verifier.get("auditor_relationship") or ""),
         "required_slot_ids": sorted(
             {slot_id for values in slot_support.values() for slot_id in values}
+        ),
+    }
+
+
+def _rejected_transaction_fields(response: Mapping[str, Any]) -> dict[str, Any]:
+    audit = response.get("entailment_audit")
+    audit = audit if isinstance(audit, Mapping) else {}
+    typed_conclusion = dict(response.get("typed_conclusion") or {})
+    conclusion_audit = dict(audit.get("conclusion_audit") or {})
+    polarity_check = dict(audit.get("polarity_contradiction_check") or {})
+    return {
+        "proof_mode": str(response.get("proof_mode") or ""),
+        "typed_conclusion": typed_conclusion,
+        "conclusion_audit": conclusion_audit,
+        "polarity_contradiction_check": polarity_check,
+        "audited_typed_conclusion": typed_conclusion,
+        "audited_conclusion_audit": conclusion_audit,
+        "audit_verified_but_runtime_rejected": bool(
+            audit.get("status") == "verified" and typed_conclusion
+        ),
+        "semantic_pack_digest": str(
+            (response.get("verifier") or {}).get("semantic_pack_digest") or ""
         ),
     }
 

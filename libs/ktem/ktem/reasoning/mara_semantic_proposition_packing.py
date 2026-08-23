@@ -13,6 +13,7 @@ from ktem.docqa.query_phrase_extraction import source_page_locator
 from ktem.docqa.question_proposition import (
     QuestionProposition,
     build_question_proposition,
+    resolve_question_proposition,
 )
 from ktem.docqa.retrieval_semantic_identity import semantic_retrieval_identity
 
@@ -54,6 +55,7 @@ class SemanticPropositionEvidencePacking:
     truncated_count: int
     semantic_pack_digest: str
     question_proposition: dict[str, Any]
+    question_proposition_resolution: dict[str, Any]
 
     @property
     def packed_chars(self) -> int:
@@ -109,7 +111,8 @@ def pack_semantic_proposition_evidence(
         slots=slots,
         item_char_limit=item_char_limit,
     )
-    proposition = build_question_proposition(question)
+    resolution = resolve_question_proposition(question)
+    proposition = resolution.proposition
     return SemanticPropositionEvidencePacking(
         records=packed,
         item_char_limit=item_char_limit,
@@ -124,6 +127,7 @@ def pack_semantic_proposition_evidence(
             item_char_limit=item_char_limit,
         ),
         question_proposition=proposition.as_dict(),
+        question_proposition_resolution=resolution.as_dict(),
     )
 
 

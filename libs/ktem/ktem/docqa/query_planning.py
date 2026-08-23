@@ -124,6 +124,7 @@ def _build_heuristic_query_plan(
         periods,
         causal_intent=causal_intent,
         requires_multiple_evidence=bool(capabilities["requires_multiple_evidence"]),
+        requires_visual=bool(capabilities["requires_visual"]),
     )
     slots, finance_domain, segment_comparison = _heuristic_evidence_slots(
         text,

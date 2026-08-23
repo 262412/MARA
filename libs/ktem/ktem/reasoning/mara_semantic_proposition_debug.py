@@ -196,6 +196,9 @@ class SemanticPropositionDebugRecorder:
             "question_proposition": deepcopy(
                 getattr(packing, "question_proposition", {}) or {}
             ),
+            "question_proposition_resolution": deepcopy(
+                getattr(packing, "question_proposition_resolution", {}) or {}
+            ),
             "route_evidence_signature": [
                 value["evidence_id"] for value in packing.records
             ],

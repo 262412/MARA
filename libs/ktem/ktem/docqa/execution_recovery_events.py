@@ -206,6 +206,14 @@ def _semantic_recovery_kind(bundle: EvidenceBundle | None) -> str:
         str(value or "") for value in (authority.get("reason"), verifier.get("reason"))
     ).casefold()
     transitions = verifier.get("recovery_transitions") or []
+    if (
+        any(
+            isinstance(value, dict) and value.get("to") == "proposition_repair"
+            for value in transitions
+        )
+        or "question_proposition" in reason
+    ):
+        return "proposition_repair"
     if any(
         isinstance(value, dict) and value.get("to") == "proof_repair"
         for value in transitions

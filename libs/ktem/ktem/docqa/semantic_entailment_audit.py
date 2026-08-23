@@ -13,6 +13,10 @@ from .conclusion_audit import (
     conclusion_audit_attestation,
     conclusion_audit_validation_reason,
 )
+from .polarity_contradiction_check import (
+    polarity_contradiction_check,
+    polarity_contradiction_check_validation_reason,
+)
 from .question_proposition import (
     QuestionProposition,
     TypedConclusion,
@@ -112,6 +116,10 @@ def semantic_entailment_audit_attestation(
         "jointly_entails": True,
         "each_premise_required": True,
         "contradiction_free": True,
+        "polarity_contradiction_check": polarity_contradiction_check(
+            conclusion,
+            premises,
+        ),
         "auditor": {
             "contract_id": GROUNDED_SEMANTIC_AUDITOR_CONTRACT,
             "model": str(model or ""),
@@ -193,6 +201,13 @@ def semantic_entailment_audit_validation_reason(
     )
     if conclusion_audit_reason:
         return conclusion_audit_reason
+    contradiction_reason = polarity_contradiction_check_validation_reason(
+        audit.get("polarity_contradiction_check"),
+        conclusion,
+        premises,
+    )
+    if contradiction_reason:
+        return contradiction_reason
     return _premise_audit_validation_reason(audit, premises)
 
 

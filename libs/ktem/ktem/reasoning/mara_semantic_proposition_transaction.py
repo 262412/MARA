@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Any
 
-from ktem.docqa.boolean_authority_schema import (
-    GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
-    SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
-)
 from ktem.docqa.question_proposition import (
-    QuestionProposition,
-    build_question_proposition,
+    question_proposition_completeness_reason,
     typed_conclusion,
 )
 from ktem.docqa.semantic_entailment_audit import semantic_entailment_audit_attestation
@@ -18,6 +13,7 @@ from .mara_semantic_conclusion_binding import (
     conclusion_audit_binding_reason,
     record_verified_conclusion_audit,
 )
+from .mara_semantic_deterministic_repair import repair_deterministic_rejection
 from .mara_semantic_entailment_audit import (
     SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
     semantic_entailment_audit_prompt,
@@ -28,6 +24,14 @@ from .mara_semantic_proof_repair import (
     proof_rebuild_prompt,
     prune_invalid_premises,
     requires_proof_repair,
+)
+from .mara_semantic_proposition_contract import (
+    SemanticPropositionTransactionContext,
+    SemanticPropositionTransactionResult,
+    incomplete_proposition_result,
+    insufficient_semantic_result,
+    rejected_semantic_transaction,
+    resolve_proposition_precondition,
 )
 from .mara_semantic_proposition_debug import (
     semantic_auditor_relationship,
@@ -43,34 +47,7 @@ from .mara_semantic_proposition_stages import (
     proposal_stage,
 )
 
-
-@dataclass(frozen=True)
-class SemanticPropositionTransactionResult:
-    value: dict[str, Any] | None
-    status: str
-    reason: str
-    diagnostics: dict[str, Any]
-    proposal_call_count: int
-    audit_call_count: int
-    debug_trace: dict[str, Any] | None = None
-
-
-@dataclass(frozen=True)
-class _TransactionContext:
-    proposal_llm: Any
-    audit_llm: Any
-    proposal_prompt: str
-    question: str
-    packed: list[dict[str, Any]]
-    slots: list[dict[str, str]]
-    proposition: QuestionProposition
-    proposal_model: str
-    audit_model: str
-    seed: int
-    release_mode: bool
-    semantic_pack_digest: str
-    capture_debug_trace: bool
-    auditor_relationship: str
+_TransactionContext = SemanticPropositionTransactionContext
 
 
 def run_semantic_proposition_transaction(
@@ -110,6 +87,18 @@ def run_semantic_proposition_transaction(
             diagnostics,
             proposal_calls=0,
         )
+    resolution = resolve_proposition_precondition(question, diagnostics)
+    if question_proposition_completeness_reason(resolution.proposition):
+        return incomplete_proposition_result(
+            resolution,
+            diagnostics,
+            proposal_model=proposal_model,
+            seed=seed,
+            question=question,
+            release_mode=release_mode,
+            relationship=relationship,
+            semantic_pack_digest=semantic_pack_digest,
+        )
     context = _TransactionContext(
         proposal_llm=proposal_llm,
         audit_llm=audit_llm,
@@ -117,7 +106,8 @@ def run_semantic_proposition_transaction(
         question=question,
         packed=packed,
         slots=slots,
-        proposition=build_question_proposition(question),
+        proposition=resolution.proposition,
+        proposition_resolution=resolution.as_dict(),
         proposal_model=proposal_model,
         audit_model=audit_model,
         seed=seed,
@@ -136,28 +126,6 @@ def run_semantic_proposition_transaction(
     )
     diagnostics.update(proposal_diagnostics(proposal))
     return _complete_proposal(context, proposal, diagnostics)
-
-
-def insufficient_semantic_result(
-    model: str, seed: int, question: str = ""
-) -> dict[str, Any]:
-    result = {
-        "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
-        "verdict": "insufficient_evidence",
-        "support_mode": "evidence_set",
-        "proof_mode": "none",
-        "jointly_complete": False,
-        "each_premise_required": False,
-        "premises": [],
-        "verifier": {
-            "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
-            "model": model,
-            "seed": seed,
-        },
-    }
-    if question:
-        result["question_proposition"] = build_question_proposition(question).as_dict()
-    return result
 
 
 def _complete_proposal(
@@ -231,6 +199,20 @@ def _audit_transaction(
     )
     diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
     result = _audit_result(context, proposal, audit, diagnostics)
+    if (
+        allow_proof_repair
+        and diagnostics.get("audit_reason") == "polarity_contradiction_detected"
+    ):
+        return repair_deterministic_rejection(
+            context,
+            proposal,
+            audit,
+            diagnostics,
+            result,
+            reason="polarity_contradiction_detected",
+            audit_transaction=_audit_transaction,
+            repair_debug=_repair_debug,
+        )
     if not allow_proof_repair or not requires_proof_repair(audit):
         return result
     return _repair_transaction(context, proposal, audit, diagnostics, result)
@@ -252,6 +234,7 @@ def _audit_result(
     )
     if failure is not None:
         return failure
+    assert audit.value is not None
     value = proposal.value or {}
     value["entailment_audit"] = semantic_entailment_audit_attestation(
         context.question,
@@ -329,6 +312,9 @@ def _audit_failure_result(
     rejection_reason = semantic_entailment_rejection_reason(audit.value)
     if not rejection_reason:
         return None
+    diagnostics["audit_call_rejection_count"] = (
+        int(diagnostics.get("audit_call_rejection_count") or 0) + 1
+    )
     diagnostics.update({"audit_status": "rejected", "audit_reason": rejection_reason})
     return _audit_rejection_result(
         context,
@@ -348,10 +334,21 @@ def _audit_rejection_result(
     debug_trace: dict[str, Any] | None,
     reason: str,
 ) -> SemanticPropositionTransactionResult:
+    diagnostics.setdefault("rejected_transactions", []).append(
+        rejected_semantic_transaction(
+            proposal.value or {},
+            reason=str(diagnostics.get("audit_reason") or reason),
+            semantic_pack_digest=str(diagnostics.get("semantic_pack_digest") or ""),
+            raw_audit_result=audit.value or {},
+        )
+    )
     value = insufficient_semantic_result(
         context.proposal_model, context.seed, context.question
     )
     _bind_runtime_fields(value, context)
+    value["rejected_transaction"] = dict(
+        (diagnostics.get("rejected_transactions") or [{}])[-1]
+    )
     return _result(
         value,
         "audit_rejected",
@@ -543,6 +540,7 @@ def _audit_prompt_failure(
 
 def _bind_runtime_fields(value: dict[str, Any], context: _TransactionContext) -> None:
     value["question_proposition"] = context.proposition.as_dict()
+    value["question_proposition_resolution"] = dict(context.proposition_resolution)
     value["verifier"].update(
         {
             "release_mode": context.release_mode,

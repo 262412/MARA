@@ -103,7 +103,7 @@ def _proposal() -> str:
                     "proposition_fragment": (
                         "single-language baselines were included for comparison"
                     ),
-                    "supports_slot_ids": [slot_ids[0], slot_ids[-1]],
+                    "supports_slot_ids": [slot_ids[-1]],
                 },
             ],
         }

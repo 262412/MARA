@@ -20,6 +20,7 @@ from .finance_contract_violation_summary import (
 )
 from .metrics import is_abstention_answer, numeric_tolerance_score
 from .qasper_contract_invariants import qasper_contract_metric_values
+from .qasper_semantic_verifier_metrics import unique_semantic_audit_summary
 from .source_join_metrics import source_join_metrics
 from .terminal_outcome_contract import terminal_outcome_summary_fields
 
@@ -105,6 +106,7 @@ def contract_invariant_summary(
     metrics = [_prediction_contract_metrics(prediction) for prediction in predictions]
     summary = summarize_contract_invariants(metrics)
     summary.update(unique_finance_violation_summary(predictions, metrics))
+    summary.update(unique_semantic_audit_summary(predictions, metrics))
     summary.update(terminal_outcome_summary_fields(predictions))
     return summary
 

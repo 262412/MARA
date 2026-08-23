@@ -194,3 +194,163 @@ def test_qasper_semantic_debug_flags_audit_and_recovery_state_inconsistency() ->
     assert "verified_audit_conclusion_contract_missing" in codes
     assert "proof_repair_without_full_reaudit" in codes
     assert "reverify_without_semantic_pack_change" in codes
+
+
+def test_qasper_semantic_debug_persists_audited_conclusion_for_rejected_transaction() -> (
+    None
+):
+    prediction = _prediction()
+    verifier = prediction["engine_terminal_evidence_bundle"]["metadata"][
+        "semantic_proposition_verifier"
+    ]
+    verifier["status"] = "audit_rejected"
+    verifier["audit_status"] = "rejected"
+    verifier["debug_trace"]["events"] = [
+        {
+            "event": "model_transaction",
+            "outcome": {
+                "status": "audit_rejected",
+                "audit_status": "rejected",
+            },
+            "transaction": {
+                "proposal": {
+                    "attempts": [
+                        {
+                            "parsed_value": {
+                                "typed_conclusion": {
+                                    "contract_id": "typed_conclusion.v1",
+                                    "conclusion_id": "conclusion-1",
+                                    "proposition_id": "proposition-1",
+                                    "polarity": "yes",
+                                }
+                            }
+                        }
+                    ]
+                },
+                "audit": {
+                    "attempts": [
+                        {
+                            "parsed_value": {
+                                "conclusion_check": {
+                                    "conclusion_entailed": False,
+                                    "polarity_consistent": True,
+                                    "quantifier_consistent": True,
+                                    "scope_consistent": True,
+                                }
+                            }
+                        }
+                    ]
+                },
+            },
+        }
+    ]
+
+    [row] = qasper_semantic_debug_rows([prediction])
+
+    assert row["audited_typed_conclusion"] == {
+        "contract_id": "typed_conclusion.v1",
+        "conclusion_id": "conclusion-1",
+        "proposition_id": "proposition-1",
+        "polarity": "yes",
+    }
+    assert row["audited_conclusion_audit"] == {
+        "conclusion_entailed": False,
+        "polarity_consistent": True,
+        "quantifier_consistent": True,
+        "scope_consistent": True,
+    }
+    assert row["raw_audit_call_rejected"] is True
+    assert row["final_row_audit_rejected"] is True
+
+
+def test_qasper_semantic_debug_marks_verified_audit_runtime_rejection() -> None:
+    prediction = _prediction()
+    prediction["engine_terminal_evidence_bundle"]["metadata"][
+        "semantic_proposition_authority"
+    ]["status"] = "rejected"
+
+    [row] = qasper_semantic_debug_rows([prediction])
+
+    assert row["audit_verified_but_runtime_rejected"] is True
+
+
+def test_qasper_semantic_debug_prefers_persisted_rejected_transaction() -> None:
+    prediction = _prediction()
+    verifier = prediction["engine_terminal_evidence_bundle"]["metadata"][
+        "semantic_proposition_verifier"
+    ]
+    verifier.update(
+        {
+            "status": "parsed",
+            "audit_status": "verified",
+            "audit_call_rejection_count": 2,
+            "audit_verified_but_runtime_rejected_count": 1,
+            "question_proposition_resolution": {
+                "contract_id": "question_proposition_resolution.v1",
+                "status": "repaired",
+            },
+            "proof_mode": "atomic_semantic",
+            "semantic_pack_digest": "pack-1",
+            "cache_source": "model_transaction",
+            "recovery_transitions": [
+                {
+                    "from": "runtime_authority_contract",
+                    "to": "proof_repair",
+                    "outcome": "verified",
+                }
+            ],
+            "rejected_transactions": [
+                {
+                    "runtime_rejection_reason": "semantic_premise_scope_rejected",
+                    "proof_mode": "atomic_semantic",
+                    "typed_conclusion": {
+                        "contract_id": "typed_conclusion.v1",
+                        "conclusion_id": "rejected-conclusion",
+                        "polarity": "yes",
+                    },
+                    "conclusion_audit": {
+                        "contract_id": "conclusion_audit.v1",
+                        "conclusion_id": "rejected-conclusion",
+                        "conclusion_entailed": True,
+                    },
+                    "polarity_contradiction_check": {
+                        "contract_id": "polarity_contradiction_check.v1",
+                        "status": "no_explicit_contradiction",
+                    },
+                    "semantic_pack_digest": "pack-1",
+                    "semantic_proof_digest": "proof-before",
+                }
+            ],
+        }
+    )
+
+    [row] = qasper_semantic_debug_rows([prediction])
+
+    assert row["raw_audit_call_rejected"] is True
+    assert row["final_row_audit_rejected"] is False
+    assert row["audit_verified_but_runtime_rejected"] is True
+    assert row["audited_typed_conclusion"]["conclusion_id"] == ("rejected-conclusion")
+    assert row["polarity_contradiction_check"]["contract_id"] == (
+        "polarity_contradiction_check.v1"
+    )
+    assert row["question_proposition_resolution"]["status"] == "repaired"
+    assert row["rejected_transactions"][0]["semantic_proof_digest"] == ("proof-before")
+
+
+def test_explicit_zero_raw_audit_rejections_is_not_final_row_rejection() -> None:
+    prediction = _prediction()
+    verifier = prediction["engine_terminal_evidence_bundle"]["metadata"][
+        "semantic_proposition_verifier"
+    ]
+    verifier.update(
+        {
+            "status": "audit_rejected",
+            "audit_status": "rejected",
+            "audit_call_rejection_count": 0,
+        }
+    )
+
+    row = qasper_semantic_debug_rows([prediction])[0]
+
+    assert row["raw_audit_call_rejected"] is False
+    assert row["final_row_audit_rejected"] is True
