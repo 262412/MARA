@@ -30,11 +30,11 @@ def test_debug_trace_preserves_audit_verified_then_authority_rejected_stages() -
     def verifier(*_args: Any) -> dict[str, Any]:
         bundle = _args[-1]
         bundle.metadata["semantic_proposition_verifier"] = {
-            "contract_id": "semantic_proposition_verifier_runtime.v2",
+            "contract_id": "semantic_proposition_verifier_runtime.v3",
             "status": "parsed",
             "audit_status": "verified",
             "debug_trace": {
-                "contract_id": "semantic_proposition_debug_trace.v2",
+                "contract_id": "semantic_proposition_debug_trace.v3",
                 "events": [{"event_index": 1, "event": "model_transaction"}],
             },
         }

@@ -52,6 +52,17 @@ def semantic_entailment_proposal_digest(
                 "supports_slot_ids": sorted(
                     str(slot_id) for slot_id in value.get("supports_slot_ids") or []
                 ),
+                "binds_proposition_slots": sorted(
+                    str(slot_id)
+                    for slot_id in value.get("binds_proposition_slots") or []
+                ),
+                "proposition_slot_bindings": {
+                    str(slot): str(binding)
+                    for slot, binding in sorted(
+                        dict(value.get("proposition_slot_bindings") or {}).items()
+                    )
+                },
+                "evidence_relation": str(value.get("evidence_relation") or ""),
             }
             for value in premises
         ],
@@ -100,19 +111,7 @@ def semantic_entailment_audit_attestation(
         "question_proposition": question_payload,
         "typed_conclusion": conclusion_payload,
         "premise_count": len(premises),
-        "premise_checks": [
-            {
-                "premise_index": index,
-                "evidence_id": str(premise.get("evidence_id") or ""),
-                "quote_digest": _text_digest(str(premise.get("quote") or "")),
-                "fragment_digest": _text_digest(
-                    str(premise.get("proposition_fragment") or "")
-                ),
-                "fragment_entailed": True,
-                "scope_consistent": True,
-            }
-            for index, premise in enumerate(premises, start=1)
-        ],
+        "premise_checks": _audited_premise_checks(premises),
         "jointly_entails": True,
         "each_premise_required": True,
         "contradiction_free": True,
@@ -134,6 +133,35 @@ def semantic_entailment_audit_attestation(
             seed=seed,
         ),
     }
+
+
+def _audited_premise_checks(
+    premises: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "premise_index": index,
+            "evidence_id": str(premise.get("evidence_id") or ""),
+            "quote_digest": _text_digest(str(premise.get("quote") or "")),
+            "fragment_digest": _text_digest(
+                str(premise.get("proposition_fragment") or "")
+            ),
+            "fragment_entailed": True,
+            "scope_consistent": True,
+            "proposition_bindings_valid": True,
+            "evidence_relation_valid": True,
+            "proposition_binding_digest": _mapping_digest(
+                {
+                    str(slot): str(binding)
+                    for slot, binding in dict(
+                        premise.get("proposition_slot_bindings") or {}
+                    ).items()
+                }
+            ),
+            "evidence_relation": str(premise.get("evidence_relation") or ""),
+        }
+        for index, premise in enumerate(premises, start=1)
+    ]
 
 
 def semantic_entailment_audit_validation_reason(
@@ -279,6 +307,19 @@ def _premise_audit_validation_reason(
             != _text_digest(str(premise.get("proposition_fragment") or ""))
             or check.get("fragment_entailed") is not True
             or check.get("scope_consistent") is not True
+            or check.get("proposition_bindings_valid") is not True
+            or check.get("evidence_relation_valid") is not True
+            or check.get("proposition_binding_digest")
+            != _mapping_digest(
+                {
+                    str(slot): str(binding)
+                    for slot, binding in dict(
+                        premise.get("proposition_slot_bindings") or {}
+                    ).items()
+                }
+            )
+            or check.get("evidence_relation")
+            != str(premise.get("evidence_relation") or "")
         ):
             return "semantic_entailment_premise_audit_invalid"
     return ""
@@ -302,6 +343,8 @@ def _verified_audit_result(
             not isinstance(check, Mapping)
             or check.get("fragment_entailed") is not True
             or check.get("scope_consistent") is not True
+            or check.get("proposition_bindings_valid") is not True
+            or check.get("evidence_relation_valid") is not True
             for check in checks
         )
         or value.get("jointly_entails") is not True
@@ -312,6 +355,9 @@ def _verified_audit_result(
             conclusion.get(field) is not True
             for field in (
                 "conclusion_entailed",
+                "actor_consistent",
+                "predicate_consistent",
+                "object_consistent",
                 "polarity_consistent",
                 "quantifier_consistent",
                 "scope_consistent",
@@ -329,3 +375,8 @@ def _as_int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return -1
+
+
+def _mapping_digest(value: Mapping[str, Any]) -> str:
+    canonical = json.dumps(dict(value), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

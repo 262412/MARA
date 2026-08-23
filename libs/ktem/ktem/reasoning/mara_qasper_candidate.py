@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from copy import deepcopy
@@ -12,6 +11,12 @@ from ktem.docqa.query_planning import request_planning_question
 from kotaemon.base import HumanMessage, SystemMessage
 
 from .mara_answer_type_contract import request_answer_type
+from .mara_qasper_candidate_identity import candidate_digest as _digest
+from .mara_qasper_candidate_identity import candidate_model_name as _model_name
+from .mara_qasper_candidate_identity import (
+    candidate_transaction_identity as _transaction_identity,
+)
+from .mara_qasper_candidate_identity import effective_candidate_seed
 from .mara_semantic_proposition_debug import (
     provider_failure,
     response_completion_tokens,
@@ -24,7 +29,7 @@ from .mara_semantic_proposition_packing import (
     required_semantic_proposition_slots,
 )
 
-QASPER_CANDIDATE_GENERATION_CONTRACT = "qasper_typed_candidate_generation.v1"
+QASPER_CANDIDATE_GENERATION_CONTRACT = "qasper_typed_candidate_generation.v2"
 QASPER_CANDIDATE_RESPONSE_CONTRACT = "qasper_typed_candidate.v1"
 QASPER_CANDIDATES = {"yes", "no", "unanswerable"}
 QASPER_CANDIDATE_MAX_RESPONSE_CHARS = 16_000
@@ -37,8 +42,11 @@ _SYSTEM_PROMPT = (
     "You are the sole answer-candidate generator for a QASPER Boolean question. "
     "Use only the typed question proposition and labeled retrieved evidence. "
     "Return exactly one structured "
-    "candidate: yes, no, or unanswerable. Use yes/no only when the complete "
-    "question proposition is established; otherwise use unanswerable. Do not "
+    "candidate: yes, no, or unanswerable. Prefer proposition- and slot-aligned "
+    "evidence when deciding the candidate: use yes for proposition support, no "
+    "for an explicit contradiction, and unanswerable only when neither is present. "
+    "Candidate parsing is format-only; "
+    "verification uncertainty is handled later by the verifier. Do not "
     "include explanation, citations, or an alternative answer."
 )
 
@@ -65,7 +73,10 @@ def generate_qasper_typed_candidate(
         question,
         bundle,
     )
-    seed = _effective_seed(request)
+    seed = effective_candidate_seed(
+        request,
+        default_seed=QASPER_CANDIDATE_DEFAULT_SEED,
+    )
     route = str(bundle.route or "")
     identity = _transaction_identity(request, route, seed)
     messages = [
@@ -91,7 +102,42 @@ def generate_qasper_typed_candidate(
             "benchmark_route_id": identity.get("benchmark_route_id", ""),
         }
     )
-    trace: dict[str, Any] = {
+    trace = _candidate_generation_trace(
+        llm=llm,
+        identity=identity,
+        route=route,
+        seed=seed,
+        serialized_messages=serialized_messages,
+        input_digest=input_digest,
+        evidence=evidence,
+        evidence_diagnostics=evidence_diagnostics,
+    )
+    bundle.metadata["qasper_candidate_generation"] = trace
+    if llm is None:
+        trace.update(status="failed", failure_reason="generator_llm_unavailable")
+        return ""
+    return _generate_candidate_response(
+        llm,
+        messages,
+        trace,
+        identity,
+        input_digest,
+        seed,
+    )
+
+
+def _candidate_generation_trace(
+    *,
+    llm: Any,
+    identity: dict[str, str],
+    route: str,
+    seed: int,
+    serialized_messages: list[dict[str, Any]],
+    input_digest: str,
+    evidence: list[dict[str, Any]],
+    evidence_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    return {
         "contract_id": QASPER_CANDIDATE_GENERATION_CONTRACT,
         **identity,
         "status": "started",
@@ -114,24 +160,17 @@ def generate_qasper_typed_candidate(
         "raw_response": "",
         "raw_response_truncated": False,
         "cleaned_response": "",
+        "raw_candidate": "",
+        "raw_candidate_failure_reason": "",
+        "raw_candidate_digest": "",
         "typed_candidate": "",
+        "typed_candidate_digest": "",
+        "raw_candidate_identity_preserved": False,
         "output_digest": "",
         "finish_reason": "",
         "completion_tokens": -1,
         "transformation_stages": [],
     }
-    bundle.metadata["qasper_candidate_generation"] = trace
-    if llm is None:
-        trace.update(status="failed", failure_reason="generator_llm_unavailable")
-        return ""
-    return _generate_candidate_response(
-        llm,
-        messages,
-        trace,
-        identity,
-        input_digest,
-        seed,
-    )
 
 
 def _generate_candidate_response(
@@ -179,76 +218,114 @@ def _record_candidate_response(
     identity: dict[str, str],
     input_digest: str,
 ) -> str:
+    state = _candidate_response_state(response)
+    trace.update(**_candidate_response_trace_fields(state))
+    trace["attempts"] = [_candidate_attempt(state, identity, input_digest)]
+    return str(state["typed_candidate"])
+
+
+def _candidate_response_state(response: Any) -> dict[str, Any]:
     raw = response_text(response)
     bounded_raw = raw[:QASPER_CANDIDATE_MAX_RESPONSE_CHARS]
     cleaned = bounded_raw.strip()
+    raw_candidate, raw_failure = parse_qasper_candidate(bounded_raw)
     candidate, failure = parse_qasper_candidate(cleaned)
-    if candidate in {"yes", "no"} and _required_slot_binding_incomplete(trace):
-        candidate = "unanswerable"
-        failure = "required_slot_binding_incomplete"
+    raw_candidate_identity_preserved = bool(
+        raw_candidate and candidate and raw_candidate == candidate
+    )
     finish_reason = response_finish_reason(response)
     provider_output_digest = _digest(raw)
     raw_response_digest = _digest(bounded_raw)
-    output_digest = _digest(
+    state = {
+        "raw_response": bounded_raw,
+        "raw_response_digest": raw_response_digest,
+        "provider_output_digest": provider_output_digest,
+        "raw_response_truncated": len(raw) > QASPER_CANDIDATE_MAX_RESPONSE_CHARS,
+        "cleaned_response": cleaned,
+        "raw_candidate": raw_candidate,
+        "raw_candidate_failure_reason": raw_failure,
+        "raw_candidate_digest": _digest(raw_candidate),
+        "typed_candidate": candidate,
+        "typed_candidate_digest": _digest(candidate),
+        "raw_candidate_identity_preserved": raw_candidate_identity_preserved,
+        "status": "parsed" if candidate else "failed",
+        "failure_reason": failure,
+        "finish_reason": finish_reason,
+        "completion_tokens": response_completion_tokens(response),
+    }
+    state["output_digest"] = _digest(
         {
             "raw_response_digest": raw_response_digest,
             "provider_output_digest": provider_output_digest,
             "cleaned_response_digest": _digest(cleaned),
+            "raw_candidate": raw_candidate,
+            "raw_candidate_digest": _digest(raw_candidate),
             "typed_candidate": candidate,
+            "typed_candidate_digest": _digest(candidate),
+            "raw_candidate_identity_preserved": raw_candidate_identity_preserved,
             "status": "parsed" if candidate else "failed",
             "failure_reason": failure,
             "finish_reason": finish_reason,
         }
     )
-    trace.update(
-        status="parsed" if candidate else "failed",
-        failure_reason=failure,
-        raw_response=bounded_raw,
-        raw_response_digest=raw_response_digest,
-        provider_output_digest=provider_output_digest,
-        raw_response_truncated=len(raw) > QASPER_CANDIDATE_MAX_RESPONSE_CHARS,
-        cleaned_response=cleaned,
-        typed_candidate=candidate,
-        output_digest=output_digest,
-        finish_reason=finish_reason,
-        completion_tokens=response_completion_tokens(response),
-        transformation_stages=[
+    return state
+
+
+def _candidate_response_trace_fields(state: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **state,
+        "transformation_stages": [
             {
                 "stage": "raw_response",
-                "value": bounded_raw,
-                "digest": raw_response_digest,
+                "value": state["raw_response"],
+                "digest": state["raw_response_digest"],
                 "failure_reason": "",
             },
             {
                 "stage": "cleaning",
-                "value": cleaned,
-                "digest": _digest(cleaned),
-                "changed": bounded_raw != cleaned,
-                "failure_reason": "" if cleaned else "empty_cleaned_response",
+                "value": state["cleaned_response"],
+                "digest": _digest(state["cleaned_response"]),
+                "changed": state["raw_response"] != state["cleaned_response"],
+                "failure_reason": (
+                    "" if state["cleaned_response"] else "empty_cleaned_response"
+                ),
             },
             {
                 "stage": "typed_candidate",
-                "value": candidate,
-                "digest": _digest(candidate),
-                "failure_reason": failure,
+                "value": state["typed_candidate"],
+                "digest": state["typed_candidate_digest"],
+                "failure_reason": state["failure_reason"],
+                "source_stage": "cleaning",
+                "identity_preserved": state["raw_candidate_identity_preserved"],
             },
         ],
+    }
+
+
+def _candidate_attempt(
+    state: dict[str, Any],
+    identity: dict[str, str],
+    input_digest: str,
+) -> dict[str, Any]:
+    keys = (
+        "status",
+        "failure_reason",
+        "raw_response",
+        "cleaned_response",
+        "raw_candidate",
+        "raw_candidate_digest",
+        "typed_candidate",
+        "typed_candidate_digest",
+        "raw_candidate_identity_preserved",
+        "finish_reason",
+        "completion_tokens",
+        "output_digest",
     )
-    trace["attempts"] = [
-        {
-            "attempt_id": identity["attempt_id"],
-            "status": trace["status"],
-            "failure_reason": failure,
-            "raw_response": bounded_raw,
-            "cleaned_response": cleaned,
-            "typed_candidate": candidate,
-            "finish_reason": finish_reason,
-            "completion_tokens": trace["completion_tokens"],
-            "input_digest": input_digest,
-            "output_digest": output_digest,
-        }
-    ]
-    return candidate
+    return {
+        "attempt_id": identity["attempt_id"],
+        **{key: state[key] for key in keys},
+        "input_digest": input_digest,
+    }
 
 
 def qasper_candidate_response_format() -> dict[str, Any]:
@@ -384,8 +461,9 @@ def _candidate_prompt(
         f"{slot_text or '- none'}\n\n"
         f"CANONICAL RETRIEVED EVIDENCE:\n{evidence_text}\n\n"
         "Use only the evidence IDs and evidence references shown above. "
-        "If every required slot is not supported by explicit evidence, return "
-        '"candidate":"unanswerable". Return exactly one JSON object matching '
+        "The slot binding status is a retrieval-stage observation, not permission "
+        "to rewrite a parsed candidate. Base the candidate on the proposition-aligned "
+        "evidence shown above and return exactly one JSON object matching "
         "the required schema."
     )
 
@@ -450,15 +528,6 @@ def _bound_candidate_slots(
     return output
 
 
-def _required_slot_binding_incomplete(trace: dict[str, Any]) -> bool:
-    slots = trace.get("required_slots") or []
-    return any(
-        str(slot.get("binding_status") or "missing") != "bound"
-        for slot in slots
-        if isinstance(slot, dict)
-    )
-
-
 def _candidate_evidence_ref(record: dict[str, Any]) -> str:
     selectors = record.get("selectors") or []
     if selectors and isinstance(selectors[0], dict):
@@ -478,63 +547,3 @@ def _serialized_messages(messages: list[Any]) -> list[dict[str, Any]]:
         }
         for index, message in enumerate(messages)
     ]
-
-
-def _transaction_identity(request: Any, route: str, seed: int) -> dict[str, str]:
-    context = dict(getattr(request, "trace_context", {}) or {})
-    group_id = str(context.get("trace_group_id") or "")
-    benchmark_route_id = str(
-        context.get("benchmark_route_id")
-        or getattr(request, "benchmark_route_id", "")
-        or ""
-    )
-    if not group_id:
-        group_id = _digest(
-            {
-                "contract_id": "benchmark_transaction_identity.v1",
-                "dataset": str(getattr(request, "dataset_family", "") or ""),
-                "question": request_planning_question(request),
-            }
-        )
-    transaction_id = _digest(
-        {
-            "trace_group_id": group_id,
-            "benchmark_route_id": benchmark_route_id,
-            "route": route,
-            "stage": "candidate_generation",
-            "seed": seed,
-        }
-    )
-    return {
-        "trace_group_id": group_id,
-        "benchmark_route_id": benchmark_route_id,
-        "internal_route": route,
-        "transaction_id": transaction_id,
-        "attempt_id": f"{transaction_id}:candidate_generation:1",
-    }
-
-
-def _effective_seed(request: Any) -> int:
-    value = getattr(request, "generation_seed", None)
-    return QASPER_CANDIDATE_DEFAULT_SEED if value is None else int(value)
-
-
-def _model_name(llm: Any | None) -> str:
-    if llm is None:
-        return ""
-    for key in ("model_name", "model", "model_id"):
-        value = str(getattr(llm, key, "") or "").strip()
-        if value:
-            return value
-    return f"{type(llm).__module__}.{type(llm).__name__}"
-
-
-def _digest(value: Any) -> str:
-    canonical = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

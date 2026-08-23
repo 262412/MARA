@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-SEMANTIC_PROPOSITION_DEBUG_CONTRACT = "semantic_proposition_debug_trace.v2"
+SEMANTIC_PROPOSITION_DEBUG_CONTRACT = "semantic_proposition_debug_trace.v3"
 SEMANTIC_PROPOSITION_DEBUG_ENV = "MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE"
 SEMANTIC_PROPOSITION_DEBUG_MAX_EVENTS = 16
 SEMANTIC_PROPOSITION_DEBUG_RESPONSE_CHARS = 16_000

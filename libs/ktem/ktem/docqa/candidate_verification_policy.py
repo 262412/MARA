@@ -13,7 +13,7 @@ from .verification_logic import (
     _decision_for_claim_results,
 )
 
-CANDIDATE_VERIFICATION_CONTRACT = "candidate_proposition_verification.v1"
+CANDIDATE_VERIFICATION_CONTRACT = "candidate_proposition_verification.v2"
 
 
 def candidate_claim_results(

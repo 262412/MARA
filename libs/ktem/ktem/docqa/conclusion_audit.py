@@ -7,10 +7,13 @@ from typing import Any, Mapping
 
 from .question_proposition import TypedConclusion
 
-CONCLUSION_AUDIT_CONTRACT = "conclusion_audit.v1"
+CONCLUSION_AUDIT_CONTRACT = "conclusion_audit.v2"
 _CONCLUSION_AUDIT_FIELDS = {
     "conclusion_id",
     "conclusion_entailed",
+    "actor_consistent",
+    "predicate_consistent",
+    "object_consistent",
     "polarity_consistent",
     "quantifier_consistent",
     "scope_consistent",
@@ -27,6 +30,9 @@ class ConclusionAudit:
 
     conclusion_id: str
     conclusion_entailed: bool
+    actor_consistent: bool
+    predicate_consistent: bool
+    object_consistent: bool
     polarity_consistent: bool
     quantifier_consistent: bool
     scope_consistent: bool
@@ -50,6 +56,9 @@ def conclusion_audit_attestation(
     return ConclusionAudit(
         conclusion_id=conclusion.conclusion_id,
         conclusion_entailed=audit_result.get("conclusion_entailed") is True,
+        actor_consistent=audit_result.get("actor_consistent") is True,
+        predicate_consistent=audit_result.get("predicate_consistent") is True,
+        object_consistent=audit_result.get("object_consistent") is True,
         polarity_consistent=audit_result.get("polarity_consistent") is True,
         quantifier_consistent=audit_result.get("quantifier_consistent") is True,
         scope_consistent=audit_result.get("scope_consistent") is True,
@@ -94,6 +103,9 @@ def conclusion_audit_validation_reason(
         value.get(field) is not True
         for field in (
             "conclusion_entailed",
+            "actor_consistent",
+            "predicate_consistent",
+            "object_consistent",
             "polarity_consistent",
             "quantifier_consistent",
             "scope_consistent",

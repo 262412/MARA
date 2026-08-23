@@ -86,6 +86,7 @@ def _inspection_proposal() -> str:
     return json.dumps(
         {
             "verdict": "yes",
+            "evidence_relation": "proposition_support",
             "support_mode": "evidence_set",
             "proof_mode": "composite_conjunction",
             "jointly_complete": True,
@@ -98,6 +99,7 @@ def _inspection_proposal() -> str:
                         "decoding step to analyze the model"
                     ),
                     "supports_slot_ids": ["support:boolean_proposition"],
+                    "binds_proposition_slots": ["actor", "predicate"],
                 },
                 {
                     "span_selector": "E2:S1",
@@ -106,6 +108,7 @@ def _inspection_proposal() -> str:
                         "contexts when predicting named entities"
                     ),
                     "supports_slot_ids": ["support:boolean_proposition"],
+                    "binds_proposition_slots": ["object", "quantifier"],
                 },
             ],
         }
@@ -160,9 +163,7 @@ def test_text_semantic_conjunction_can_prove_an_inspection_question() -> None:
     ]
 
 
-def test_literal_premise_false_negative_records_inconsistency_and_repairs_proof() -> (
-    None
-):
+def test_literal_premise_false_negative_stops_without_a_second_answer() -> (None):
     llm = _SequenceLLM(
         [
             _response(_literal_composite_proposal()),
@@ -176,27 +177,28 @@ def test_literal_premise_false_negative_records_inconsistency_and_repairs_proof(
 
     result = verifier(_request(), QUESTION, "unanswerable", bundle)
 
-    assert result is not None and result["verdict"] == "yes"
+    assert result is not None and result["verdict"] == "insufficient_evidence"
+    assert result["candidate_verification_audit"]["status"] == "failed"
     trace = bundle.metadata["semantic_proposition_verifier"]
     assert trace["auditor_internal_inconsistency_count"] == 1
     consistency = trace["local_premise_consistency"]
     assert consistency["inconsistent_premise_refs"] == ["P1", "P2"]
-    assert trace["proof_repair_count"] == trace["proof_reaudit_count"] == 1
-    assert trace["full_reaudit"] is True
+    assert trace.get("proof_repair_count", 0) == 0
+    assert trace.get("proof_reaudit_count", 0) == 0
     transition = trace["recovery_transitions"][-1]
-    assert transition == {
-        "from": "semantic_audit",
-        "to": "proof_repair",
-        "reason": "auditor_internal_inconsistency",
-        "outcome": "rebuilt",
-    }
+    assert transition["from"] == "semantic_audit"
+    assert transition["to"] == "stop_without_reverify"
+    assert transition["reason"] == "auditor_internal_inconsistency"
+    assert transition["outcome"] == "recovery_no_progress"
+    assert transition["proposition_binding_digest_changed"] is False
+    assert len(llm.calls) == 2
     [rejected] = trace["rejected_transactions"]
     assert rejected["local_premise_consistency"]["status"] == (
         "auditor_internal_inconsistency"
     )
 
 
-def test_joint_entailment_rejection_rebuilds_then_fully_reaudits() -> None:
+def test_joint_entailment_rejection_stops_without_binding_change() -> None:
     llm = _SequenceLLM(
         [
             _response(_proposal()),
@@ -210,14 +212,17 @@ def test_joint_entailment_rejection_rebuilds_then_fully_reaudits() -> None:
 
     result = verifier(_request(), QUESTION, "unanswerable", bundle)
 
-    assert result is not None and result["verdict"] == "yes"
+    assert result is not None and result["verdict"] == "insufficient_evidence"
+    assert result["candidate_verification_audit"]["status"] == "failed"
     trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["proof_repair_count"] == trace["proof_reaudit_count"] == 1
-    assert trace["full_reaudit"] is True
+    assert trace.get("proof_repair_count", 0) == 0
+    assert trace.get("proof_reaudit_count", 0) == 0
     transition = trace["recovery_transitions"][-1]
-    assert transition["to"] == "proof_repair"
+    assert transition["to"] == "stop_without_reverify"
     assert transition["reason"] == "joint_entailment_rejected"
-    assert transition["outcome"] == "rebuilt"
+    assert transition["outcome"] == "recovery_no_progress"
+    assert transition["proposition_binding_digest_changed"] is False
+    assert len(llm.calls) == 2
 
 
 def test_all_semantic_audit_rejection_classes_are_proof_repairable() -> None:

@@ -145,7 +145,11 @@ def _complete_second_round(
     recovered_bundle = _with_retrieval_rounds(recovered_bundle, 2)
     typed_recovery_no_progress = _qasper_typed_recovery_required(
         request
-    ) and not _typed_retrieval_recovery_has_progress(initial_bundle, recovered_bundle)
+    ) and not _typed_retrieval_recovery_has_progress(
+        initial_bundle,
+        recovered_bundle,
+        request=request,
+    )
     request.route_last_evidence_bundle = recovered_bundle
     retrieve_decision = _evaluate(
         request,
@@ -157,14 +161,14 @@ def _complete_second_round(
     if typed_recovery_no_progress:
         recovered_bundle.metadata["retrieval_stop_reason"] = "recovery_no_progress"
     if _qasper_typed_recovery_required(request):
-        recovered_bundle.metadata["typed_retrieval_recovery_trace"] = (
-            _typed_retrieval_recovery_trace(
-                request,
-                initial_bundle,
-                recovered_bundle,
-                second_round_requests,
-                retrieve_decision,
-            )
+        recovered_bundle.metadata[
+            "typed_retrieval_recovery_trace"
+        ] = _typed_retrieval_recovery_trace(
+            request,
+            initial_bundle,
+            recovered_bundle,
+            second_round_requests,
+            retrieve_decision,
         )
     return recovered_bundle, retrieve_decision
 
@@ -186,9 +190,9 @@ def retrieve_for_verifier_recovery(
         return None
     if not optional_stage_allowed(request):
         bundle.metadata.update(route_budget_metadata(request))
-        bundle.metadata["verifier_recovery_skipped_reason"] = (
-            "insufficient_remaining_time"
-        )
+        bundle.metadata[
+            "verifier_recovery_skipped_reason"
+        ] = "insufficient_remaining_time"
         return None
 
     query = _recovery_query(request, verifier_recovery_query(request))

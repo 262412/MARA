@@ -3,15 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from .boolean_evidence_scope import boolean_retrieval_query
-from .boolean_proposition_evidence import (
-    boolean_proposition_object_identity,
-    proposition_qualifier,
-)
-from .boolean_relations import primary_boolean_relation
 from .evidence import EvidenceBundle
 from .evidence_identity import identity_of
 from .qasper_relation_frame import question_relation_frame
 from .query_planning import ensure_request_query_plan, request_planning_question
+from .question_proposition import build_question_proposition
 from .recovery_progress import (
     semantic_progress_evidence_ids,
     semantic_progress_slot_states,
@@ -33,26 +29,15 @@ def verifier_recovery_query(request: Any) -> str:
 
 def verifier_recovery_frame(request: Any) -> dict[str, str]:
     question = request_planning_question(request)
-    plan = ensure_request_query_plan(request)
-    if _answer_relation_required(plan):
-        frame = question_relation_frame(question)
-        return {
-            "actor": frame.actor,
-            "predicate": frame.predicate,
-            "object": frame.expected_object_type,
-            "object_role": frame.expected_object_role,
-            "qualifier": frame.qualifier,
-            "quantifier": frame.quantifier,
-            "scope": frame.scope,
-        }
+    proposition = build_question_proposition(question)
     return {
-        "actor": "current_paper",
-        "predicate": primary_boolean_relation(question),
-        "object": boolean_proposition_object_identity(question),
-        "object_role": "proposition_object",
-        "qualifier": proposition_qualifier(question),
-        "quantifier": "none",
-        "scope": "document",
+        "actor": proposition.actor,
+        "predicate": proposition.predicate,
+        "object": proposition.object_surface,
+        "object_role": proposition.object_role,
+        "qualifier": proposition.qualifier,
+        "quantifier": proposition.quantifier,
+        "scope": proposition.scope,
     }
 
 
@@ -222,7 +207,11 @@ def typed_retrieval_recovery_trace(
     )
     stop_reason = str(recovered_bundle.metadata.get("retrieval_stop_reason") or "")
     recovery_outcome = "retrieval_evidence_improved"
-    if not typed_retrieval_recovery_has_progress(initial_bundle, recovered_bundle):
+    if not typed_retrieval_recovery_has_progress(
+        initial_bundle,
+        recovered_bundle,
+        request=request,
+    ):
         stop_reason = "recovery_no_progress"
         recovery_outcome = "no_progress"
     elif stop_reason:
@@ -273,12 +262,15 @@ def typed_retrieval_recovery_trace(
 def typed_retrieval_recovery_has_progress(
     initial_bundle: EvidenceBundle,
     recovered_bundle: EvidenceBundle,
+    *,
+    request: Any | None = None,
 ) -> bool:
     return semantic_recovery_has_progress(
         initial_bundle,
         recovered_bundle,
         _typed_slot_states(initial_bundle),
         _typed_slot_states(recovered_bundle),
+        request=request,
     )
 
 

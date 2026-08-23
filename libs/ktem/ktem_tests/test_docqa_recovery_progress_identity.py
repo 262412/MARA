@@ -118,8 +118,25 @@ def test_verifier_recovery_progress_ignores_runtime_uuid_churn() -> None:
     assert fields["new_evidence_ids"]
     assert fields["new_semantic_evidence_ids"] == []
     assert fields["semantic_slot_state_changed"] is False
+    assert fields["evidence_digest_changed"] is False
+    assert fields["normalized_slot_state_digest_changed"] is False
+    assert fields["canonical_proposition_binding_digest_changed"] is False
     assert fields["proposition_binding_changed"] is False
     assert recovery_has_progress(fields) is False
+
+
+def test_authority_and_candidate_changes_alone_are_not_recovery_progress() -> None:
+    assert (
+        recovery_has_progress(
+            {
+                "authority_changed": True,
+                "candidate_changed": True,
+                "evidence_ids_before": ["runtime-a"],
+                "evidence_ids_after": ["runtime-b"],
+            }
+        )
+        is False
+    )
 
 
 def test_first_semantic_pack_is_a_real_recovery_change() -> None:

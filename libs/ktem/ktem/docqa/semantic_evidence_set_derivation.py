@@ -127,6 +127,11 @@ def _premise_contributions(
             "argument_tokens": [],
             "proposition_fragment": premise.object,
             "supports_slot_ids": list(slot_support[premise.evidence_ref]),
+            "binds_proposition_slots": [
+                slot for slot, _value in premise.proposition_slot_bindings
+            ],
+            "proposition_slot_bindings": dict(premise.proposition_slot_bindings),
+            "evidence_relation": premise.evidence_relation,
         }
         for index, premise in enumerate(premises, start=1)
     )

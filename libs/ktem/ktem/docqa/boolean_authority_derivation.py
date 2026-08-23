@@ -4,19 +4,26 @@ import hashlib
 import json
 from typing import Any
 
+from .boolean_authority_derivation_support import (
+    _overlapping_premises,
+    _records,
+    _same_source,
+    _strings,
+)
 from .boolean_authority_schema import (
     ARGUMENT_CONJUNCTION_RULE,
     BOOLEAN_AUTHORITY_DERIVATION_CONTRACT,
     ENTITY_TYPE_JOIN_RULE,
-    GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_EVIDENCE_SET_RULE,
-    SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
 from .boolean_conjunction import boolean_conjunction_spec
 from .boolean_proposition_compatibility import boolean_argument_token_coverage
 from .boolean_relations import primary_boolean_relation
-from .question_proposition import build_question_proposition, typed_conclusion
-from .semantic_entailment_audit import semantic_entailment_audit_validation_reason
+from .boolean_semantic_derivation_validation import (
+    _semantic_evidence_set_status,
+    _semantic_header_complete,
+)
+from .question_proposition import build_question_proposition
 
 COMPOSITE_BOOLEAN_RULES = frozenset(
     {
@@ -305,105 +312,6 @@ def _conclusion_relation_matches(
     return relation == expected
 
 
-def _semantic_header_complete(derivation: dict[str, Any]) -> bool:
-    attestation = derivation.get("verifier_attestation")
-    return bool(
-        derivation.get("support_mode") == "evidence_set"
-        and isinstance(attestation, dict)
-        and attestation.get("contract_id") == GROUNDED_SEMANTIC_VERIFIER_CONTRACT
-        and attestation.get("verdict_contract_id")
-        == SEMANTIC_PROPOSITION_VERDICT_CONTRACT
-        and str(attestation.get("model") or "")
-        and attestation.get("verdict") in {"yes", "no"}
-        and bool(attestation.get("complete_proposition"))
-        and attestation.get("scope_basis")
-        in {
-            "explicit_current_actor",
-            "explicit_prior_work_actor",
-            "named_question_subject",
-        }
-        and attestation.get("jointly_complete") is True
-        and attestation.get("each_premise_required") is True
-        and attestation.get("proof_mode")
-        in {"atomic_semantic", "composite_conjunction"}
-        and isinstance(attestation.get("entailment_audit"), dict)
-    )
-
-
-def _semantic_evidence_set_status(
-    derivation: dict[str, Any],
-    contributions: list[dict[str, Any]],
-    *,
-    atom_by_ref: dict[str, dict[str, Any]],
-    conclusion: dict[str, Any],
-    question: str,
-) -> str:
-    attestation = derivation.get("verifier_attestation")
-    attestation = attestation if isinstance(attestation, dict) else {}
-    premise_refs = _strings(derivation.get("premise_refs"))
-    if int(attestation.get("premise_count") or 0) != len(premise_refs) or str(
-        attestation.get("verdict") or ""
-    ) != str(conclusion.get("polarity") or ""):
-        return "semantic_attestation_mismatch"
-    contribution_by_ref = {
-        str(value.get("evidence_ref") or ""): value for value in contributions
-    }
-    supported_slots: set[str] = set()
-    proposition_fragments: set[str] = set()
-    audit_premises: list[dict[str, Any]] = []
-    for index, reference in enumerate(premise_refs, start=1):
-        contribution = contribution_by_ref[reference]
-        atom = atom_by_ref[reference]
-        role = f"semantic_premise:{index}"
-        slot_ids = set(_strings(contribution.get("supports_slot_ids")))
-        fragment = str(contribution.get("proposition_fragment") or "").strip()
-        if (
-            contribution.get("role") != role
-            or int(contribution.get("order") or 0) != index
-            or str(atom.get("relation") or atom.get("predicate") or "")
-            != "semantic_premise"
-            or not fragment
-            or str(atom.get("object") or "") != fragment
-            or str(atom.get("polarity") or "") != str(conclusion.get("polarity") or "")
-            or str(atom.get("reason") or "") != "semantic_evidence_set_premise"
-            or not slot_ids
-        ):
-            return "semantic_premise_projection_mismatch"
-        normalized_fragment = " ".join(fragment.casefold().split())
-        if normalized_fragment in proposition_fragments:
-            return "semantic_premise_fragment_duplicate"
-        proposition_fragments.add(normalized_fragment)
-        supported_slots.update(slot_ids)
-        audit_premises.append(
-            {
-                "evidence_id": str(atom.get("evidence_id") or ""),
-                "quote": str(atom.get("quote") or ""),
-                "proposition_fragment": fragment,
-                "supports_slot_ids": sorted(slot_ids),
-            }
-        )
-    audit_reason = semantic_entailment_audit_validation_reason(
-        question,
-        str(conclusion.get("polarity") or ""),
-        audit_premises,
-        attestation.get("entailment_audit"),
-        proof_mode=str(attestation.get("proof_mode") or ""),
-        proposition=build_question_proposition(question),
-        conclusion=typed_conclusion(
-            build_question_proposition(question),
-            str(conclusion.get("polarity") or ""),
-        ),
-        release_mode=bool(attestation.get("release_mode")),
-    )
-    if audit_reason:
-        return audit_reason
-    return (
-        "bound"
-        if supported_slots == set(_strings(attestation.get("required_slot_ids")))
-        else "semantic_slot_coverage_mismatch"
-    )
-
-
 def _argument_conjunction_status(
     required: list[str],
     contributions: list[dict[str, Any]],
@@ -499,42 +407,3 @@ def _conclusion_complete(
         and str(conclusion.get("quantifier") or "")
         and scope not in {"", "unknown", "future_work"}
     )
-
-
-def _same_source(atoms: list[dict[str, Any]]) -> bool:
-    source_ids = {str(atom.get("source_id") or "") for atom in atoms}
-    return bool(len(source_ids) == 1 and "" not in source_ids)
-
-
-def _overlapping_premises(atoms: list[dict[str, Any]]) -> bool:
-    for index, left in enumerate(atoms):
-        for right in atoms[index + 1 :]:
-            if str(left.get("evidence_id") or "") != str(
-                right.get("evidence_id") or ""
-            ):
-                continue
-            left_start, left_end = left.get("span_start"), left.get("span_end")
-            right_start, right_end = right.get("span_start"), right.get("span_end")
-            if (
-                not isinstance(left_start, int)
-                or not isinstance(left_end, int)
-                or not isinstance(right_start, int)
-                or not isinstance(right_end, int)
-            ):
-                return True
-            if max(left_start, right_start) < min(left_end, right_end):
-                return True
-    return False
-
-
-def _records(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, (list, tuple)):
-        return []
-    return [item for item in value if isinstance(item, dict)]
-
-
-def _strings(value: Any, *, unique: bool = True) -> list[str]:
-    if not isinstance(value, (list, tuple, set)):
-        return []
-    values = [str(item).strip() for item in value if str(item).strip()]
-    return list(dict.fromkeys(values)) if unique else values

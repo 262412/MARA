@@ -15,14 +15,19 @@ from ktem.docqa.question_proposition import (
     build_question_proposition,
     resolve_question_proposition,
 )
+from ktem.docqa.retrieval_semantic_identity import semantic_retrieval_identity
+
 from .mara_semantic_proposition_packing_support import (
     evidence_alignment_score,
     evidence_refs,
     matching_slot_ids,
-    slot_values,
-    stable_source_id,
 )
-from ktem.docqa.retrieval_semantic_identity import semantic_retrieval_identity
+from .mara_semantic_proposition_packing_support import optional_int as _optional_int
+from .mara_semantic_proposition_packing_support import (
+    slot_description as _slot_description,
+)
+from .mara_semantic_proposition_packing_support import slot_value as _slot_value
+from .mara_semantic_proposition_packing_support import slot_values, stable_source_id
 
 SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS = 4096
 SEMANTIC_PROPOSITION_VERIFIER_INPUT_TOKEN_BUDGET = 3072
@@ -31,7 +36,7 @@ SEMANTIC_PROPOSITION_VERIFIER_ITEM_CHARS = 2000
 SEMANTIC_PROPOSITION_VERIFIER_MIN_ITEM_CHARS = 512
 SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS = 16000
 SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS = 640
-SEMANTIC_PROPOSITION_PACK_CONTRACT = "semantic_proposition_pack.v1"
+SEMANTIC_PROPOSITION_PACK_CONTRACT = "semantic_proposition_pack.v2"
 
 SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT = (
     "You are a conservative document-grounded candidate verifier. Verify the "
@@ -44,7 +49,12 @@ SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT = (
     "Otherwise return insufficient_evidence. For every premise, select one "
     "canonical span_selector, prefer a proposition fragment that is an exact "
     "normalized substring of that span, state nothing broader than the selected "
-    "text, and bind it to the verification slots it supports. For questions "
+    "text, bind it to the verification slots it supports, and identify which of "
+    "actor, predicate, object, and quantifier it establishes. All four proposition "
+    "slots must be covered by the same selected evidence set. A yes verdict requires "
+    "evidence_relation=proposition_support; a no verdict requires an explicit "
+    "contradiction and evidence_relation=explicit_contradiction. Keyword overlap "
+    "alone is never a proposition binding. For questions "
     "about inspecting, analyzing, or evaluating a system, a genuine conjunction "
     "may combine one premise that establishes the authors performed the analysis "
     "with another that establishes the exact behavior or relationship observed; "
@@ -55,7 +65,8 @@ SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT = (
     "For questions about the authors or current study, at least one premise must "
     "explicitly anchor their action. For questions about a named subject, the "
     "premise set must explicitly anchor that subject. Conflicting evidence is "
-    "insufficient."
+    "insufficient. For insufficient_evidence, identify non-empty reviewed spans, "
+    "the unresolved proposition slots, and separate support and contradiction gaps."
 )
 
 
@@ -84,7 +95,7 @@ def pack_semantic_proposition_evidence(
 ) -> SemanticPropositionEvidencePacking:
     preferred = _preferred_evidence_ids(request)
     ranked_positions = _ranked_evidence_positions(bundle)
-    records: list[tuple[int, float, int, dict[str, Any]]] = []
+    records: list[tuple[float, int, int, dict[str, Any]]] = []
     seen: set[str] = set()
     for index, item in enumerate(bundle.items):
         try:
@@ -99,11 +110,11 @@ def pack_semantic_proposition_evidence(
         source_id, page_label = source_page_locator(item)
         stable_id = stable_source_id(item) or source_id or identity.source_id
         required_slot_ids = matching_slot_ids(slots, evidence_id)
-        alignment_score = evidence_alignment_score(request, item)
+        alignment_score = evidence_alignment_score(request, question, item)
         records.append(
             (
-                0 if evidence_id in preferred or required_slot_ids else 1,
                 -alignment_score,
+                0 if evidence_id in preferred or required_slot_ids else 1,
                 ranked_positions.get(evidence_id, len(ranked_positions) + index),
                 {
                     "evidence_id": evidence_id,
@@ -115,22 +126,12 @@ def pack_semantic_proposition_evidence(
                     "canonical_start": _optional_int(item.get("canonical_start")),
                     "evidence_refs": list(evidence_refs(item)),
                     "required_slot_ids": list(required_slot_ids),
+                    "proposition_alignment_score": alignment_score,
                     "text": text,
                 },
             )
         )
-    selected = [
-        value
-        for _priority, _alignment, _rank, value in sorted(
-            records,
-            key=lambda row: (
-                row[0],
-                row[1],
-                row[2],
-                row[3]["evidence_id"],
-            ),
-        )
-    ][:SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS]
+    selected = _selected_evidence_records(records)
     item_char_limit = _evidence_item_char_limit(request)
     packed, estimated_input_tokens, truncated_count = _fit_evidence_records(
         selected,
@@ -156,6 +157,21 @@ def pack_semantic_proposition_evidence(
         question_proposition=proposition.as_dict(),
         question_proposition_resolution=resolution.as_dict(),
     )
+
+
+def _selected_evidence_records(
+    records: list[tuple[float, int, int, dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    ranked = sorted(
+        records,
+        key=lambda row: (row[0], row[1], row[2], row[3]["evidence_id"]),
+    )
+    return [
+        value
+        for _alignment, _slot_priority, _rank, value in ranked[
+            :SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS
+        ]
+    ]
 
 
 def required_semantic_proposition_slots(request: Any) -> list[dict[str, Any]]:
@@ -234,11 +250,16 @@ def semantic_proposition_verifier_prompt(
         "Do not answer the question independently and do not propose a replacement "
         "candidate. The verdict is only the evidence polarity used to determine "
         "whether the stated candidate is supported, contradicted, or unknown. "
+        "For every yes/no premise, binds_proposition_slots must declare only the "
+        "actor/predicate/object/quantifier fields actually established by its quote; "
+        "their union must cover all four fields within this one evidence set. "
         "Return exactly one JSON object. For yes or no, choose proof_mode "
         "atomic_semantic with exactly one premise or composite_conjunction with "
         "two to four genuinely conjunctive premises. jointly_complete and "
         "each_premise_required must be true. For insufficient_evidence, use "
-        "proof_mode none, false for both flags, and an empty premises array."
+        "proof_mode none, false for both flags, an empty premises array, and a "
+        "non-empty unknown_assessment that states why neither support nor explicit "
+        "contradiction is established."
     )
     if len(prompt) > SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS:
         raise ValueError("Semantic proposition verifier prompt exceeded its bound.")
@@ -454,7 +475,7 @@ def semantic_proposition_pack_digest(
             "max_prompt_chars": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
             "selector_max_chars": SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
             "system_prompt": SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT,
-            "proposal_schema": "semantic_proposition_verdict.v3",
+            "proposal_schema": "semantic_proposition_verdict.v4",
         },
         "evidence": [
             {
@@ -467,6 +488,9 @@ def semantic_proposition_pack_digest(
                 "text_start": value.get("text_start"),
                 "evidence_refs": value.get("evidence_refs", []),
                 "required_slot_ids": value.get("required_slot_ids", []),
+                "proposition_alignment_score": value.get(
+                    "proposition_alignment_score", 0.0
+                ),
                 "selectors": value["selectors"],
             }
             for value in packed
@@ -565,23 +589,3 @@ def _ranked_evidence_positions(bundle: EvidenceBundle) -> dict[str, int]:
         if isinstance(value, dict)
         and (evidence_id := str(value.get("canonical_id") or "").strip())
     }
-
-
-def _slot_value(slot: Any, key: str) -> str:
-    value = slot.get(key) if isinstance(slot, dict) else getattr(slot, key, "")
-    return str(value or "").strip()
-
-
-def _slot_description(slot: Any) -> str:
-    fields = [
-        (key, _slot_value(slot, key))
-        for key in ("role", "entity", "metric", "period", "statement_kind", "query")
-    ]
-    return "; ".join(f"{key}={value}" for key, value in fields if value)
-
-
-def _optional_int(value: Any) -> int | None:
-    try:
-        return int(value) if value is not None and str(value).strip() else None
-    except (TypeError, ValueError):
-        return None

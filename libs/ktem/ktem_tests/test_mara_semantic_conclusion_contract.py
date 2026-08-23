@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 from ktem.docqa.conclusion_audit import (
@@ -16,6 +17,7 @@ from ktem.docqa.question_proposition import (
     resolve_question_proposition,
     typed_conclusion,
 )
+from ktem.docqa.typed_retrieval_recovery import verifier_recovery_frame
 
 QUESTION = "Did the authors compare cross-lingual and single-language evaluation?"
 
@@ -27,6 +29,9 @@ def _audit(relationship: str) -> tuple[TypedConclusion, dict[str, Any]]:
         conclusion,
         {
             "conclusion_entailed": True,
+            "actor_consistent": True,
+            "predicate_consistent": True,
+            "object_consistent": True,
             "polarity_consistent": True,
             "quantifier_consistent": True,
             "scope_consistent": True,
@@ -48,6 +53,9 @@ def test_typed_question_proposition_and_conclusion_audit_bind_by_digest() -> Non
     typed_audit = ConclusionAudit(
         conclusion_id=audit["conclusion_id"],
         conclusion_entailed=audit["conclusion_entailed"],
+        actor_consistent=audit["actor_consistent"],
+        predicate_consistent=audit["predicate_consistent"],
+        object_consistent=audit["object_consistent"],
         polarity_consistent=audit["polarity_consistent"],
         quantifier_consistent=audit["quantifier_consistent"],
         scope_consistent=audit["scope_consistent"],
@@ -135,6 +143,18 @@ def test_qasper_characterization_keeps_already_complete_collect_proposition() ->
     assert resolution.proposition.object_surface == "the two datasets"
 
 
+def test_actor_noun_is_not_misclassified_as_the_question_predicate() -> None:
+    resolution = resolve_question_proposition(
+        "Does the experiment focus on a specific domain?"
+    )
+
+    assert resolution.status == "repaired"
+    assert resolution.proposition.actor == "the experiment"
+    assert resolution.proposition.predicate == "focus_on"
+    assert resolution.proposition.subject_surface == "the experiment"
+    assert resolution.proposition.object_surface == "a specific domain"
+
+
 def test_nested_clause_does_not_replace_the_main_question_predicate() -> None:
     resolution = resolve_question_proposition(
         "Did the authors evaluate whether the model improved accuracy?"
@@ -202,3 +222,27 @@ def test_qasper_characterization_polarity_is_checked_without_a_model() -> None:
         check = polarity_contradiction_check(conclusion, [{"quote": quote}])
         assert check["status"] == expected_status
         assert check["independent_from_models"] is True
+
+
+def test_recovery_frame_reuses_the_lossless_canonical_question_proposition() -> None:
+    question = (
+        "Do they add one latent variable for each language pair in their "
+        "Bayesian model?"
+    )
+    proposition = build_question_proposition(question)
+
+    frame = verifier_recovery_frame(
+        SimpleNamespace(retrieval_query=question, prompt=question)
+    )
+
+    assert frame == {
+        "actor": proposition.actor,
+        "predicate": proposition.predicate,
+        "object": proposition.object_surface,
+        "object_role": proposition.object_role,
+        "qualifier": proposition.qualifier,
+        "quantifier": proposition.quantifier,
+        "scope": proposition.scope,
+    }
+    assert frame["predicate"] == "add"
+    assert frame["quantifier"] == "each"

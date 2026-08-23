@@ -9,17 +9,25 @@ from ktem.docqa.boolean_authority_schema import SEMANTIC_ENTAILMENT_AUDIT_CONTRA
 
 from kotaemon.base import HumanMessage, SystemMessage
 
+from .mara_candidate_unknown_audit import (
+    UNKNOWN_AUDIT_MAX_TOKENS,
+    UNKNOWN_AUDIT_SYSTEM_PROMPT,
+    candidate_unknown_audit_response_format,
+    parse_candidate_unknown_audit,
+)
 from .mara_semantic_entailment_audit import (
     SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
     SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT,
     parse_semantic_entailment_audit,
     semantic_entailment_audit_response_format,
 )
-from .mara_semantic_proposition_debug import SemanticPropositionStageAttempt
-from .mara_semantic_proposition_debug import provider_failure
-from .mara_semantic_proposition_debug import response_completion_tokens
-from .mara_semantic_proposition_debug import response_finish_reason
-from .mara_semantic_proposition_debug import response_text
+from .mara_semantic_proposition_debug import (
+    SemanticPropositionStageAttempt,
+    provider_failure,
+    response_completion_tokens,
+    response_finish_reason,
+    response_text,
+)
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT,
 )
@@ -104,6 +112,31 @@ def audit_stage(
     return _parsed_stage(call, parse)
 
 
+def candidate_unknown_audit_stage(
+    llm: Any,
+    prompt: str,
+    *,
+    candidate: str,
+    seed: int,
+) -> ParsedSemanticStage:
+    def call(correction: str = "") -> tuple[Any | None, str, str]:
+        return _call_candidate_unknown_audit(
+            llm,
+            prompt,
+            candidate=candidate,
+            seed=seed,
+            correction_reason=correction,
+        )
+
+    def parse(response: Any) -> Any:
+        return parse_candidate_unknown_audit(
+            response_text(response),
+            candidate=candidate,
+        )
+
+    return _parsed_stage(call, parse)
+
+
 def proposal_diagnostics(stage: ParsedSemanticStage) -> dict[str, Any]:
     return {
         "proposal_retry_count": stage.retry_count,
@@ -181,7 +214,9 @@ def _parsed_stage(
     return _parsed_result(response, parsed, initial_failure, 1, attempts)
 
 
-def _stage_attempt(response: Any, parsed: Any, correction: str) -> SemanticPropositionStageAttempt:
+def _stage_attempt(
+    response: Any, parsed: Any, correction: str
+) -> SemanticPropositionStageAttempt:
     return SemanticPropositionStageAttempt(
         response,
         deepcopy(parsed.value),
@@ -271,6 +306,35 @@ def _call_audit(
         )
     except Exception as exc:
         LOGGER.exception("Semantic entailment audit model call failed")
+        return None, *provider_failure(exc)
+
+
+def _call_candidate_unknown_audit(
+    llm: Any,
+    prompt: str,
+    *,
+    candidate: str,
+    seed: int,
+    correction_reason: str,
+) -> tuple[Any | None, str, str]:
+    try:
+        return (
+            llm(
+                [
+                    SystemMessage(content=UNKNOWN_AUDIT_SYSTEM_PROMPT),
+                    HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
+                ],
+                max_tokens=UNKNOWN_AUDIT_MAX_TOKENS,
+                response_format=candidate_unknown_audit_response_format(candidate),
+                temperature=0,
+                top_p=1,
+                seed=seed,
+            ),
+            "",
+            "",
+        )
+    except Exception as exc:
+        LOGGER.exception("Candidate-bound unknown audit model call failed")
         return None, *provider_failure(exc)
 
 

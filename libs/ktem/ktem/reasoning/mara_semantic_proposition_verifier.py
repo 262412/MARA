@@ -3,18 +3,18 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from ktem.docqa.boolean_candidate_authority import structured_boolean_candidate_label
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.semantic_evidence_set_authority import PropositionVerifier
-from ktem.docqa.boolean_candidate_authority import structured_boolean_candidate_label
 
-from .mara_semantic_local_consistency import (
-    DETERMINISTIC_LOCAL_PREMISE_CONSISTENCY_CONTRACT,
-)
-from .mara_semantic_proposition_contract import insufficient_semantic_result
 from .mara_semantic_candidate_policy import (
     CANDIDATE_VERIFICATION_CONTRACT,
     candidate_bound_response,
 )
+from .mara_semantic_local_consistency import (
+    DETERMINISTIC_LOCAL_PREMISE_CONSISTENCY_CONTRACT,
+)
+from .mara_semantic_proposition_contract import insufficient_semantic_result
 from .mara_semantic_proposition_debug import (
     SemanticPropositionDebugRecorder,
     semantic_proposition_debug_enabled,
@@ -27,17 +27,17 @@ from .mara_semantic_proposition_packing import (
     required_semantic_proposition_slots,
     semantic_proposition_verifier_prompt,
 )
-from .mara_semantic_proposition_transaction import (
-    SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
-    run_semantic_proposition_transaction,
-)
-from .mara_semantic_runtime_repair import repair_runtime_contract_rejection
 from .mara_semantic_proposition_trace import (
     SEMANTIC_PROPOSITION_VERIFIER_SEED,
     digest,
     record_trace,
     semantic_transaction_identity,
 )
+from .mara_semantic_proposition_transaction import (
+    SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
+    run_semantic_proposition_transaction,
+)
+from .mara_semantic_runtime_repair import reject_runtime_contract_without_reverify
 
 __all__ = [
     "SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS",
@@ -228,15 +228,15 @@ def _candidate_context(
     seed = _verifier_seed(request)
     model = _model_name(verifier.llm)
     audit_model = _model_name(verifier.audit_llm)
-    bundle.metadata["semantic_candidate_transaction_identity"] = (
-        semantic_transaction_identity(
-            request,
-            bundle,
-            question=question,
-            candidate=candidate,
-            semantic_pack_digest=packing.semantic_pack_digest,
-            seed=seed,
-        )
+    bundle.metadata[
+        "semantic_candidate_transaction_identity"
+    ] = semantic_transaction_identity(
+        request,
+        bundle,
+        question=question,
+        candidate=candidate,
+        semantic_pack_digest=packing.semantic_pack_digest,
+        seed=seed,
     )
     return {
         "candidate": candidate,
@@ -403,22 +403,14 @@ def _run_model_transaction(
         transaction_id=transaction_id,
         attempt_namespace="initial",
     )
-    return repair_runtime_contract_rejection(
+    return reject_runtime_contract_without_reverify(
         outcome,
         request=request,
         question=question,
         bundle=bundle,
-        proposal_llm=verifier.llm,
-        audit_llm=verifier.audit_llm,
-        prompt=prompt,
         packing=packing,
         slots=slots,
-        proposal_model=model,
-        audit_model=_model_name(verifier.audit_llm),
-        seed=seed,
         release_mode=verifier.release_mode,
-        capture_debug_trace=verifier.debug_recorder.enabled,
-        transaction_id=transaction_id,
     )
 
 
@@ -544,12 +536,13 @@ def _semantic_cache_key(
         "audit_model": audit_model,
         "seed": seed,
         "release_mode": release_mode,
-        "proposal_contract": "semantic_proposition_verdict.v3",
-        "audit_contract": "semantic_entailment_audit.v2",
+        "proposal_contract": "semantic_proposition_verdict.v4",
+        "audit_contract": "semantic_entailment_audit.v3",
         "local_premise_consistency_contract": (
             DETERMINISTIC_LOCAL_PREMISE_CONSISTENCY_CONTRACT
         ),
-        "proof_repair_policy": "full_rebuild_and_reaudit.v2",
+        "proof_repair_policy": "state_change_only_reaudit.v3",
+        "runtime_repair_policy": "stop_without_semantic_state_change.v1",
         "polarity_check_contract": "polarity_contradiction_check.v1",
     }
     return digest(payload)

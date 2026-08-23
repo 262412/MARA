@@ -6,12 +6,16 @@ from typing import Any
 from .boolean_authoritative_conflict import authoritative_conflict_complete
 from .controller import RetrieveDecision, evaluate_retrieval_quality
 from .evidence import EvidenceBundle
+from .execution_authority_policy import required_typed_authority_missing
 from .execution_models import RetrieveFn, RewriteFn, RouteExecutionResult, VerifyFn
 from .execution_planning import build_execution_workflow_plan
 from .execution_recovery_events import authority_state as _authority_state
 from .execution_recovery_events import bundle_evidence_ids as _bundle_evidence_ids
 from .execution_recovery_events import (
     copy_reverification_outcome as _copy_reverification_outcome,
+)
+from .execution_recovery_events import (
+    mark_recovery_no_progress as _mark_recovery_no_progress,
 )
 from .execution_recovery_events import (
     mark_resolved_initial_conflict as _mark_resolved_initial_conflict,
@@ -29,7 +33,6 @@ from .execution_recovery_events import (
 )
 from .execution_recovery_events import same_route_verifier_recovery_trace
 from .execution_recovery_events import typed_slot_states as _typed_slot_states
-from .execution_authority_policy import required_typed_authority_missing
 from .execution_results import guarded_result, verified_result
 from .execution_route_switch_recovery import (
     switch_after_failed_retrieval,
@@ -147,6 +150,7 @@ def recover_after_failed_verification(
             return rebound
         if policy == "controller_auto":
             recovery_trace[-1].pop("stop_reason", None)
+            recovery_trace[-1]["recovery_action"] = "rebind_existing_evidence"
             switched = _controller_verifier_recovery(
                 request,
                 rebound,
@@ -160,9 +164,10 @@ def recover_after_failed_verification(
             )
             if switched is not None:
                 return switched
-            recovery_trace[-1]["stop_reason"] = "authority_recovery_exhausted"
+            _mark_recovery_no_progress(recovery_trace[-1])
             return rebound
         recovery_trace[-1].pop("stop_reason", None)
+        recovery_trace[-1]["recovery_action"] = "rebind_existing_evidence"
         return _same_route_verifier_recovery(
             request,
             rebound,
@@ -221,6 +226,7 @@ def _rebind_existing_verifier_recovery(
         **shared,
     }
     if not _recovery_has_progress(shared):
+        _mark_recovery_no_progress(rebind)
         return replace(
             initial_result,
             controller_trace=[*initial_result.controller_trace, rebind],
@@ -296,13 +302,8 @@ def _controller_verifier_recovery(
     event["recovery_frame"] = verifier_recovery_frame(request)
     event["recovery_action"] = "targeted_route_switch"
     if not _recovery_has_progress(shared):
-        event.update(
-            {
-                "authority_changed": False,
-                "recovery_action": "stop_without_reverify",
-                "stop_reason": "recovery_no_progress",
-            }
-        )
+        _mark_recovery_no_progress(event)
+        event["authority_changed"] = False
         return replace(
             initial_result,
             controller_trace=[*initial_result.controller_trace, event],
@@ -360,6 +361,14 @@ def _same_route_verifier_recovery(
         retry_reason=required_authority_recovery_reason(request),
     )
     if recovered is None:
+        if initial_result.controller_trace:
+            last_event = initial_result.controller_trace[-1]
+            if (
+                last_event.get("stage") == "evidence_rebind"
+                and last_event.get("verifier_recovery_attempt") == 1
+                and not _recovery_has_progress(last_event)
+            ):
+                _mark_recovery_no_progress(last_event)
         return initial_result
     bundle, retrieve_decision, focused_query = recovered
     recovery_trace, terminal_event = same_route_verifier_recovery_trace(
@@ -373,20 +382,13 @@ def _same_route_verifier_recovery(
         candidate_answer=candidate_answer,
     )
     if not _recovery_has_progress(terminal_event):
-        stop_fields = {
-            "authority_changed": False,
-            "recovery_action": "stop_without_reverify",
-            "stop_reason": "recovery_no_progress",
-        }
-        terminal_event.update(stop_fields)
+        _mark_recovery_no_progress(terminal_event)
+        terminal_event["authority_changed"] = False
         recovery_trace = [
             event for event in recovery_trace if event.get("stage") != "reverify"
         ]
-        recovery_trace[-1].update(
-            {
-                **stop_fields,
-            }
-        )
+        _mark_recovery_no_progress(recovery_trace[-1])
+        recovery_trace[-1]["authority_changed"] = False
         return replace(
             initial_result,
             controller_trace=[

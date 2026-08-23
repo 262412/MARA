@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
-from .mara_semantic_proposition_packing import (
-    SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
-)
+from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
+
 from .mara_semantic_proposition_stages import ParsedSemanticStage
 
 _PROOF_REPAIR_REASONS = frozenset(
@@ -74,7 +75,17 @@ def prune_invalid_premises(
         for premise in kept
         for slot_id in premise.get("supports_slot_ids") or []
     }
-    if not kept or covered_slots != required_slots or len(kept) > 4:
+    covered_proposition_slots = {
+        str(slot)
+        for premise in kept
+        for slot in premise.get("binds_proposition_slots") or []
+    }
+    if (
+        not kept
+        or covered_slots != required_slots
+        or covered_proposition_slots != set(PROPOSITION_EVIDENCE_SLOTS)
+        or len(kept) > 4
+    ):
         return None
     value["premises"] = kept
     value["proof_mode"] = (
@@ -85,46 +96,32 @@ def prune_invalid_premises(
     return replace(proposal, value=value)
 
 
-def proof_rebuild_prompt(
-    proposal_prompt: str,
-    audit: ParsedSemanticStage,
-    *,
-    reason: str,
-    local_consistency: dict[str, Any] | None = None,
-) -> str | None:
-    invalid_refs = [
-        str(check.get("premise_ref") or "")
-        for check in (audit.value or {}).get("premise_checks") or []
-        if check.get("fragment_entailed") is not True
-        or check.get("scope_consistent") is not True
-    ]
-    locally_bound_refs = list(
-        (local_consistency or {}).get("inconsistent_premise_refs") or []
-    )
-    local_instruction = ""
-    if locally_bound_refs:
-        local_instruction = (
-            " Deterministic local checking found that refs "
-            f"{','.join(locally_bound_refs)} are exact normalized substrings of "
-            "their bound quotes. That establishes local quotation consistency "
-            "only, not scope or joint conclusion entailment; retain a canonical "
-            "span only if it remains necessary in the rebuilt proof."
-        )
-    instruction = (
-        "\n\nPROOF REPAIR: the independent audit rejected the proof with reason "
-        f"{reason}; affected premise refs are "
-        f"{','.join(invalid_refs) or 'not premise-specific'}."
-        f"{local_instruction} Rebuild the complete proof from the canonical span "
-        "selectors, correcting the exact scope, quantifier, polarity, and joint "
-        "entailment defect. Every retained premise must be necessary. Return "
-        "insufficient_evidence if no atomic proof or genuine 2-4 premise "
-        "conjunction covers every required slot."
-    )
-    if len(proposal_prompt) + len(instruction) > (
-        SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS
-    ):
-        return None
-    return proposal_prompt + instruction
+def semantic_proposal_binding_digest(value: dict[str, Any] | None) -> str:
+    payload = value or {}
+    canonical = {
+        "verdict": str(payload.get("verdict") or ""),
+        "evidence_relation": str(payload.get("evidence_relation") or ""),
+        "proof_mode": str(payload.get("proof_mode") or ""),
+        "premises": [
+            {
+                "span_selector": str(premise.get("span_selector") or ""),
+                "supports_slot_ids": sorted(
+                    str(slot) for slot in premise.get("supports_slot_ids") or []
+                ),
+                "binds_proposition_slots": sorted(
+                    str(slot) for slot in premise.get("binds_proposition_slots") or []
+                ),
+                "proposition_slot_bindings": dict(
+                    premise.get("proposition_slot_bindings") or {}
+                ),
+                "evidence_relation": str(premise.get("evidence_relation") or ""),
+            }
+            for premise in payload.get("premises") or []
+            if isinstance(premise, dict)
+        ],
+    }
+    serialized = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def merge_proof_repair_debug(

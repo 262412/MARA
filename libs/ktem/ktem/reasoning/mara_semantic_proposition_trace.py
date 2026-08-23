@@ -9,15 +9,15 @@ from ktem.docqa.evidence_schema import EvidenceBundle
 from .mara_semantic_candidate_policy import candidate_bound_audit
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
-    SemanticPropositionEvidencePacking,
     SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS,
+    SemanticPropositionEvidencePacking,
 )
 from .mara_semantic_proposition_transaction import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
 )
 
 SEMANTIC_PROPOSITION_VERIFIER_RUNTIME_CONTRACT = (
-    "semantic_proposition_verifier_runtime.v2"
+    "semantic_proposition_verifier_runtime.v3"
 )
 SEMANTIC_PROPOSITION_VERIFIER_SEED = 20260724
 
@@ -124,15 +124,16 @@ def record_trace(
         cache_source=cache_source,
         diagnostics=diagnostics,
     )
+    _bind_candidate_raw_identity(bundle, trace)
     trace["candidate_verification_audit"] = _candidate_audit(
         trace, status, verdict, reason
     )
     relation = str(trace.get("candidate_verification_status") or "unknown")
     trace.update(
         {
-            "explicit_contradiction": relation == "contradicted",
+            "explicit_contradiction": verdict == "no",
             "candidate_verifier_disagreement": relation == "contradicted",
-            "unknown": relation == "unknown",
+            "unknown": verdict == "insufficient_evidence",
         }
     )
     trace["output_digest"] = digest(
@@ -223,7 +224,13 @@ def _candidate_audit(
     audit_status = str(trace.get("audit_status") or "")
     candidate = str(trace.get("candidate_label") or "")
     judgment = str(trace.get("candidate_verification_status") or "unknown")
-    audit = candidate_bound_audit(candidate, verdict, candidate_status=judgment)
+    recorded = trace.get("candidate_verification_audit")
+    recorded = recorded if isinstance(recorded, dict) else {}
+    audit = (
+        dict(recorded)
+        if recorded
+        else candidate_bound_audit(candidate, verdict, candidate_status=judgment)
+    )
     if status not in {"parsed", "proposition_incomplete", "skipped", "cache_hit"}:
         audit["status"] = "failed"
     if audit_status in {"failed", "rejected"}:
@@ -232,3 +239,27 @@ def _candidate_audit(
         audit.get("classification") or trace.get("audit_reason") or reason
     )
     return audit
+
+
+def _bind_candidate_raw_identity(
+    bundle: EvidenceBundle,
+    trace: dict[str, Any],
+) -> None:
+    generation = bundle.metadata.get("qasper_candidate_generation")
+    generation = generation if isinstance(generation, dict) else {}
+    raw_digest = str(generation.get("raw_candidate_digest") or "")
+    typed_digest = str(generation.get("typed_candidate_digest") or "")
+    verifier_candidate = str(trace.get("candidate_label") or "").strip().casefold()
+    verifier_digest = digest(verifier_candidate) if verifier_candidate else ""
+    trace.update(
+        {
+            "raw_candidate_digest": raw_digest,
+            "typed_candidate_digest": typed_digest,
+            "verifier_input_candidate_digest": verifier_digest,
+            "candidate_raw_identity_preserved": bool(
+                generation.get("raw_candidate_identity_preserved") is True
+                and typed_digest
+                and typed_digest == verifier_digest
+            ),
+        }
+    )

@@ -9,16 +9,15 @@ from ktem.docqa.question_proposition import (
 )
 from ktem.docqa.semantic_entailment_audit import semantic_entailment_audit_attestation
 
-from .mara_semantic_conclusion_binding import (
-    conclusion_audit_binding_reason,
-    record_verified_conclusion_audit,
-)
 from .mara_semantic_candidate_policy import (
     candidate_bound_insufficient_result,
     candidate_bound_semantic_audit_prompt,
     candidate_from_prompt,
 )
-from .mara_semantic_deterministic_repair import repair_deterministic_rejection
+from .mara_semantic_conclusion_binding import (
+    conclusion_audit_binding_reason,
+    record_verified_conclusion_audit,
+)
 from .mara_semantic_entailment_audit import (
     SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
     semantic_entailment_rejection_reason,
@@ -26,9 +25,9 @@ from .mara_semantic_entailment_audit import (
 from .mara_semantic_local_consistency import record_local_premise_consistency
 from .mara_semantic_proof_repair import (
     merge_proof_repair_debug,
-    proof_rebuild_prompt,
     prune_invalid_premises,
     requires_proof_repair,
+    semantic_proposal_binding_digest,
 )
 from .mara_semantic_proposition_contract import (
     SemanticPropositionTransactionContext,
@@ -47,6 +46,10 @@ from .mara_semantic_proposition_stages import (
     invalid_response_reason,
     proposal_diagnostics,
     proposal_stage,
+)
+from .mara_semantic_recovery_state import (
+    changed_binding_reaudit_transition,
+    unchanged_recovery_transition,
 )
 from .mara_semantic_transaction_support import (
     audit_prompt_failure,
@@ -217,15 +220,13 @@ def _audit_transaction(
         allow_proof_repair
         and diagnostics.get("audit_reason") == "polarity_contradiction_detected"
     ):
-        return repair_deterministic_rejection(
+        return _stop_without_reverify(
             context,
             proposal,
-            audit,
             diagnostics,
             result,
             reason="polarity_contradiction_detected",
-            audit_transaction=_audit_transaction,
-            repair_debug=_repair_debug,
+            source="runtime_contract",
         )
     repair_reason = str(diagnostics.get("audit_reason") or "")
     if not allow_proof_repair or not requires_proof_repair(
@@ -240,7 +241,6 @@ def _audit_transaction(
         diagnostics,
         result,
         reason=repair_reason,
-        local_consistency=local_consistency,
     )
 
 
@@ -406,7 +406,6 @@ def _repair_transaction(
     initial_result: SemanticPropositionTransactionResult,
     *,
     reason: str,
-    local_consistency: dict[str, Any],
 ) -> SemanticPropositionTransactionResult:
     repaired = prune_invalid_premises(
         proposal,
@@ -414,31 +413,37 @@ def _repair_transaction(
         context.slots,
         reason=reason,
     )
-    repair_kind = "pruned" if repaired is not None else "rebuilt"
-    transition = {
-        "from": "semantic_audit",
-        "to": "proof_repair",
-        "reason": reason,
-        "outcome": "pruned" if repaired is not None else "rebuild_required",
-    }
+    if repaired is None:
+        return _stop_without_reverify(
+            context,
+            proposal,
+            diagnostics,
+            initial_result,
+            reason=reason,
+            source="semantic_audit",
+        )
+    before_digest = semantic_proposal_binding_digest(proposal.value)
+    after_digest = semantic_proposal_binding_digest(repaired.value)
+    if before_digest == after_digest:
+        return _stop_without_reverify(
+            context,
+            proposal,
+            diagnostics,
+            initial_result,
+            reason=reason,
+            source="semantic_audit",
+        )
+    transition = changed_binding_reaudit_transition(
+        context.packed,
+        context.slots,
+        reason=reason,
+        binding_before=before_digest,
+        binding_after=after_digest,
+    )
     diagnostics.setdefault("recovery_transitions", []).append(transition)
     diagnostics["proof_repair_count"] = (
         int(diagnostics.get("proof_repair_count") or 0) + 1
     )
-    if repaired is None:
-        repaired, terminal = _rebuild_proposal(
-            context,
-            proposal,
-            audit,
-            diagnostics,
-            initial_result,
-            transition,
-            reason=reason,
-            local_consistency=local_consistency,
-        )
-        if terminal is not None:
-            return terminal
-    assert repaired is not None
     repaired_result = _audit_transaction(
         replace(
             context,
@@ -467,83 +472,40 @@ def _repair_transaction(
         initial_result,
         repaired_result,
         transition,
-        repair_kind,
+        "pruned",
     )
 
 
-def _rebuild_proposal(
+def _stop_without_reverify(
     context: _TransactionContext,
     proposal: ParsedSemanticStage,
-    audit: ParsedSemanticStage,
     diagnostics: dict[str, Any],
     initial_result: SemanticPropositionTransactionResult,
-    transition: dict[str, Any],
     *,
     reason: str,
-    local_consistency: dict[str, Any],
-) -> tuple[ParsedSemanticStage | None, SemanticPropositionTransactionResult | None]:
-    prompt = proof_rebuild_prompt(
-        context.proposal_prompt,
-        audit,
+    source: str,
+) -> SemanticPropositionTransactionResult:
+    digest_value = semantic_proposal_binding_digest(proposal.value)
+    transition = unchanged_recovery_transition(
+        context.packed,
+        context.slots,
+        source=source,
         reason=reason,
-        local_consistency=local_consistency,
+        semantic_pack_digest=context.semantic_pack_digest,
+        proposition_binding_digest=digest_value,
     )
-    if prompt is None:
-        transition["outcome"] = "rebuild_prompt_bound_exceeded"
-        return None, replace(
-            initial_result,
-            debug_trace=_repair_debug(
-                initial_result, None, transition, None, "rebuilt"
-            ),
-        )
-    repaired = proposal_stage(
-        context.proposal_llm,
-        prompt,
-        packed=context.packed,
-        slots=context.slots,
-        model=context.proposal_model,
-        seed=context.seed + 10,
+    diagnostics.setdefault("recovery_transitions", []).append(transition)
+    diagnostics["recovery_no_progress_count"] = (
+        int(diagnostics.get("recovery_no_progress_count") or 0) + 1
     )
-    diagnostics["proof_rebuild_count"] = (
-        int(diagnostics.get("proof_rebuild_count") or 0) + 1
-    )
-    diagnostics["proof_rebuild_proposal_call_count"] = repaired.call_count
-    if repaired.value is None:
-        transition["outcome"] = "rebuild_failed"
-        repaired_debug = transaction_debug(
-            replace(context, attempt_namespace="proof_rebuild"), repaired, None
-        )
-        return None, replace(
-            initial_result,
-            proposal_call_count=proposal.call_count + repaired.call_count,
-            debug_trace=_repair_debug(
-                initial_result, repaired_debug, transition, None, "rebuilt"
-            ),
-        )
-    if repaired.value.get("verdict") != "insufficient_evidence":
-        transition["outcome"] = "rebuilt"
-        return repaired, None
-    transition["outcome"] = "rebuilt_as_insufficient"
-    bind_semantic_runtime_fields(
-        repaired.value,
-        replace(context, seed=context.seed + 10),
-    )
-    repaired_debug = transaction_debug(
-        replace(context, attempt_namespace="proof_rebuild"), repaired, None
-    )
-    return None, transaction_result(
-        repaired.value,
-        "parsed",
-        "proof_rebuild_insufficient_evidence",
-        diagnostics,
-        proposal_calls=proposal.call_count + repaired.call_count,
-        audit_calls=audit.call_count,
+    return replace(
+        initial_result,
         debug_trace=_repair_debug(
             initial_result,
-            repaired_debug,
+            None,
             transition,
-            repaired.value,
-            "rebuilt",
+            None,
+            "stopped",
         ),
     )
 

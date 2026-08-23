@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.question_proposition import proposition_evidence_bindings
+
 from .mara_semantic_proposition_contract import (
     SemanticPropositionTransactionContext,
     SemanticPropositionTransactionResult,
@@ -34,6 +36,18 @@ def bind_semantic_runtime_fields(
 ) -> None:
     value["question_proposition"] = context.proposition.as_dict()
     value["question_proposition_resolution"] = dict(context.proposition_resolution)
+    canonical_bindings = proposition_evidence_bindings(context.proposition)
+    evidence_relation = str(value.get("evidence_relation") or "")
+    for premise in value.get("premises") or []:
+        if not isinstance(premise, dict):
+            continue
+        bound_slots = premise.get("binds_proposition_slots") or []
+        premise["proposition_slot_bindings"] = {
+            slot: canonical_bindings[slot]
+            for slot in bound_slots
+            if slot in canonical_bindings
+        }
+        premise["evidence_relation"] = evidence_relation
     value["verifier"].update(
         {
             "release_mode": context.release_mode,

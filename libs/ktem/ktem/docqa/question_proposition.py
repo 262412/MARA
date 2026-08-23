@@ -11,6 +11,8 @@ from .qasper_relation_frame import question_relation_frame
 QUESTION_PROPOSITION_CONTRACT = "question_proposition.v1"
 QUESTION_PROPOSITION_RESOLUTION_CONTRACT = "question_proposition_resolution.v1"
 TYPED_CONCLUSION_CONTRACT = "typed_conclusion.v1"
+CANDIDATE_TYPED_CONCLUSION_CONTRACT = "candidate_typed_conclusion.v1"
+PROPOSITION_EVIDENCE_SLOTS = ("actor", "predicate", "object", "quantifier")
 
 _EMPTY_OBJECT_SURFACES = {
     "",
@@ -48,7 +50,7 @@ _REPAIR_RELATIONS: tuple[tuple[str, str], ...] = (
     (
         "evaluate",
         r"\b(?:evaluat(?:e|es|ed|ing)|assess(?:es|ed|ing)?|"
-        r"experiment(?:ed|ing)?(?:\s+with)?)\b",
+        r"experiment(?:ed|ing)|experiment\s+with)\b",
     ),
     ("use", r"\b(?:use|uses|used|using)\b"),
     ("train", r"\btrain(?:s|ed|ing)?\b"),
@@ -271,6 +273,52 @@ def typed_conclusion(
     )
 
 
+def candidate_typed_conclusion(
+    proposition: QuestionProposition,
+    candidate: str,
+) -> dict[str, Any]:
+    """Bind the original Boolean candidate to the canonical proposition."""
+
+    normalized = str(candidate or "").strip().casefold()
+    if normalized in {"yes", "no"}:
+        return typed_conclusion(proposition, normalized).as_dict()
+    if normalized != "unanswerable":
+        return {}
+    payload = {
+        "contract_id": CANDIDATE_TYPED_CONCLUSION_CONTRACT,
+        "proposition_id": proposition.proposition_id,
+        "polarity": "unanswerable",
+        "actor": proposition.actor,
+        "predicate": proposition.predicate,
+        "object_role": proposition.object_role,
+        "object_type": proposition.object_type,
+        "subject_surface": proposition.subject_surface,
+        "object_surface": proposition.object_surface,
+        "scope": proposition.scope,
+        "qualifier": proposition.qualifier,
+        "quantifier": proposition.quantifier,
+        "modality": proposition.modality,
+        "negated": proposition.negated,
+        "time_scope": proposition.time_scope,
+        "surface": proposition.surface,
+    }
+    payload["conclusion_id"] = _payload_digest(payload)
+    return payload
+
+
+def proposition_evidence_bindings(
+    proposition: QuestionProposition,
+) -> dict[str, str]:
+    """Return the canonical evidence-bound fields for one proposition."""
+
+    return {
+        "actor": proposition.actor,
+        "predicate": proposition.predicate,
+        "object": proposition.object_surface,
+        "quantifier": proposition.quantifier,
+    }
+
+
 def validate_question_proposition(value: Any, question: str) -> str:
     expected = build_question_proposition(question).as_dict()
     if not isinstance(value, Mapping) or dict(value) != expected:
@@ -286,6 +334,17 @@ def validate_typed_conclusion(
     expected = typed_conclusion(proposition, polarity).as_dict()
     if not isinstance(value, Mapping) or dict(value) != expected:
         return "typed_conclusion_binding_invalid"
+    return ""
+
+
+def validate_candidate_typed_conclusion(
+    value: Any,
+    proposition: QuestionProposition,
+    candidate: str,
+) -> str:
+    expected = candidate_typed_conclusion(proposition, candidate)
+    if not expected or not isinstance(value, Mapping) or dict(value) != expected:
+        return "candidate_typed_conclusion_binding_invalid"
     return ""
 
 

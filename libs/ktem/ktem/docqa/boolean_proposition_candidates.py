@@ -13,7 +13,6 @@ from .boolean_proposition_evidence import (
 )
 from .boolean_proposition_tokens import _content_tokens
 from .boolean_quality_control_evidence import quality_control_evidence_kind
-from .boolean_retrieval_queries import boolean_retrieval_query
 from .boolean_structured_authority import structured_boolean_authority
 from .query_phrase_extraction import semantic_boolean_proposition_question
 
@@ -165,16 +164,10 @@ _REQUIREMENT_CONTEXT_RE = re.compile(
 
 
 def _semantic_proposition_question(question: str, metric: str) -> str:
-    """Use the compact metric when ``question`` is a retrieval expansion."""
+    """Keep the lossless question proposition; metrics are ranking context only."""
 
     question_text = str(question or "").strip()
     metric_text = str(metric or "").strip()
-    if (
-        metric_text
-        and question_text
-        and question_text != boolean_retrieval_query(question_text)
-    ):
-        return metric_text
     return question_text or metric_text
 
 

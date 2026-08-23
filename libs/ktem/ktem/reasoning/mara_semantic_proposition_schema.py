@@ -8,6 +8,7 @@ from ktem.docqa.boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
+from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
 
 
 @dataclass(frozen=True)
@@ -25,65 +26,113 @@ def semantic_proposition_response_format(
         "json_schema": {
             "name": "semantic_evidence_set_proposition",
             "strict": True,
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "verdict": {
-                        "type": "string",
-                        "enum": ["yes", "no", "insufficient_evidence"],
-                    },
-                    "support_mode": {"type": "string", "enum": ["evidence_set"]},
-                    "proof_mode": {
-                        "type": "string",
-                        "enum": [
-                            "none",
-                            "atomic_semantic",
-                            "composite_conjunction",
-                        ],
-                    },
-                    "jointly_complete": {"type": "boolean"},
-                    "each_premise_required": {"type": "boolean"},
-                    "premises": {
-                        "type": "array",
-                        "minItems": 0,
-                        "maxItems": 4,
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "span_selector": {
-                                    "type": "string",
-                                    "maxLength": 24,
-                                },
-                                "proposition_fragment": {
-                                    "type": "string",
-                                    "maxLength": 320,
-                                },
-                                "supports_slot_ids": {
-                                    "type": "array",
-                                    "minItems": 1,
-                                    "items": {"type": "string", "enum": slot_ids},
-                                },
-                            },
-                            "required": [
-                                "span_selector",
-                                "proposition_fragment",
-                                "supports_slot_ids",
-                            ],
-                            "additionalProperties": False,
-                        },
-                    },
-                },
-                "required": [
-                    "verdict",
-                    "support_mode",
-                    "proof_mode",
-                    "jointly_complete",
-                    "each_premise_required",
-                    "premises",
+            "schema": _semantic_proposition_schema(slot_ids),
+        },
+    }
+
+
+def _semantic_proposition_schema(slot_ids: list[str]) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "verdict": {
+                "type": "string",
+                "enum": ["yes", "no", "insufficient_evidence"],
+            },
+            "evidence_relation": {
+                "type": "string",
+                "enum": [
+                    "proposition_support",
+                    "explicit_contradiction",
+                    "undetermined",
                 ],
-                "additionalProperties": False,
+            },
+            "support_mode": {"type": "string", "enum": ["evidence_set"]},
+            "proof_mode": {
+                "type": "string",
+                "enum": ["none", "atomic_semantic", "composite_conjunction"],
+            },
+            "jointly_complete": {"type": "boolean"},
+            "each_premise_required": {"type": "boolean"},
+            "premises": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 4,
+                "items": _semantic_premise_schema(slot_ids),
+            },
+            "unknown_assessment": _unknown_assessment_schema(),
+        },
+        "required": [
+            "verdict",
+            "evidence_relation",
+            "support_mode",
+            "proof_mode",
+            "jointly_complete",
+            "each_premise_required",
+            "premises",
+        ],
+        "additionalProperties": False,
+    }
+
+
+def _semantic_premise_schema(slot_ids: list[str]) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "span_selector": {"type": "string", "maxLength": 24},
+            "proposition_fragment": {"type": "string", "maxLength": 320},
+            "supports_slot_ids": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "enum": slot_ids},
+            },
+            "binds_proposition_slots": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "string",
+                    "enum": list(PROPOSITION_EVIDENCE_SLOTS),
+                },
             },
         },
+        "required": [
+            "span_selector",
+            "proposition_fragment",
+            "supports_slot_ids",
+            "binds_proposition_slots",
+        ],
+        "additionalProperties": False,
+    }
+
+
+def _unknown_assessment_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "reviewed_span_selectors": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 12,
+                "items": {"type": "string", "maxLength": 24},
+            },
+            "unresolved_proposition_slots": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "string",
+                    "enum": list(PROPOSITION_EVIDENCE_SLOTS),
+                },
+            },
+            "support_gap": {"type": "string", "maxLength": 320},
+            "contradiction_gap": {"type": "string", "maxLength": 320},
+        },
+        "required": [
+            "reviewed_span_selectors",
+            "unresolved_proposition_slots",
+            "support_gap",
+            "contradiction_gap",
+        ],
+        "additionalProperties": False,
     }
 
 
@@ -131,41 +180,70 @@ def parse_semantic_proposition_response(
     premises, premise_reason = _parse_premises(raw_premises, selector_lookup, slot_ids)
     if premises is None:
         return SemanticPropositionParse(None, premise_reason)
-    return SemanticPropositionParse(
-        {
-            "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
-            "verdict": verdict,
-            "support_mode": "evidence_set",
-            "proof_mode": proof_mode,
-            "jointly_complete": payload["jointly_complete"],
-            "each_premise_required": payload["each_premise_required"],
-            "premises": premises,
-            "verifier": {
-                "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
-                "model": model,
-                "seed": seed,
-            },
-        }
-    )
+    unknown_assessment: dict[str, Any] | None = None
+    if verdict == "insufficient_evidence":
+        unknown_assessment, assessment_reason = _parse_unknown_assessment(
+            payload.get("unknown_assessment"), selector_lookup
+        )
+        if unknown_assessment is None:
+            return SemanticPropositionParse(None, assessment_reason)
+    elif "unknown_assessment" in payload:
+        return SemanticPropositionParse(None, "unexpected_unknown_assessment")
+    if verdict in {"yes", "no"} and {
+        slot
+        for premise in premises
+        for slot in premise.get("binds_proposition_slots", [])
+    } != set(PROPOSITION_EVIDENCE_SLOTS):
+        return SemanticPropositionParse(None, "proposition_slot_coverage_incomplete")
+    value = {
+        "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+        "verdict": verdict,
+        "evidence_relation": payload["evidence_relation"],
+        "support_mode": "evidence_set",
+        "proof_mode": proof_mode,
+        "jointly_complete": payload["jointly_complete"],
+        "each_premise_required": payload["each_premise_required"],
+        "premises": premises,
+        "verifier": {
+            "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+            "model": model,
+            "seed": seed,
+        },
+    }
+    if unknown_assessment is not None:
+        value["unknown_assessment"] = unknown_assessment
+    return SemanticPropositionParse(value)
 
 
 def _verdict_payload(
     payload: Any,
 ) -> tuple[str | None, str | None, list[Any] | None, str]:
-    if not isinstance(payload, dict) or set(payload) != {
+    if not isinstance(payload, dict):
+        return None, None, None, "top_level_schema_invalid"
+    required_fields = {
         "verdict",
+        "evidence_relation",
         "support_mode",
         "proof_mode",
         "jointly_complete",
         "each_premise_required",
         "premises",
-    }:
+    }
+    allowed_fields = required_fields | {"unknown_assessment"}
+    if not required_fields <= set(payload) or not set(payload) <= allowed_fields:
         return None, None, None, "top_level_schema_invalid"
     verdict = payload.get("verdict")
     if verdict not in {"yes", "no", "insufficient_evidence"}:
         return None, None, None, "verdict_invalid"
     if payload.get("support_mode") != "evidence_set":
         return None, None, None, "support_mode_invalid"
+    expected_relation = {
+        "yes": "proposition_support",
+        "no": "explicit_contradiction",
+        "insufficient_evidence": "undetermined",
+    }[str(verdict)]
+    if payload.get("evidence_relation") != expected_relation:
+        return None, None, None, "evidence_relation_invalid"
     proof_mode = payload.get("proof_mode")
     if proof_mode not in {
         "none",
@@ -212,12 +290,14 @@ def _parse_premises(
             "span_selector",
             "proposition_fragment",
             "supports_slot_ids",
+            "binds_proposition_slots",
         }:
             return None, "premise_schema_invalid"
         selector_id = str(raw.get("span_selector") or "")
         selector = selector_lookup.get(selector_id)
         fragment = raw.get("proposition_fragment")
         supports = raw.get("supports_slot_ids")
+        proposition_slots = raw.get("binds_proposition_slots")
         if selector is None or not isinstance(fragment, str):
             return None, "premise_value_invalid"
         if (
@@ -230,6 +310,15 @@ def _parse_premises(
             or len(set(supports)) != len(supports)
         ):
             return None, "premise_slot_binding_invalid"
+        if (
+            not isinstance(proposition_slots, list)
+            or not proposition_slots
+            or any(
+                value not in PROPOSITION_EVIDENCE_SLOTS for value in proposition_slots
+            )
+            or len(set(proposition_slots)) != len(proposition_slots)
+        ):
+            return None, "premise_proposition_binding_invalid"
         premises.append(
             {
                 "evidence_id": str(selector["evidence_id"]),
@@ -241,9 +330,66 @@ def _parse_premises(
                 "canonical_end": selector.get("canonical_end"),
                 "proposition_fragment": fragment,
                 "supports_slot_ids": list(supports),
+                "binds_proposition_slots": list(proposition_slots),
             }
         )
     premise_spans = {value["span_selector"] for value in premises}
     if len(premise_spans) != len(premises):
         return None, "premise_span_duplicate"
     return premises, ""
+
+
+def _parse_unknown_assessment(
+    value: Any,
+    selector_lookup: dict[str, dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str]:
+    if not isinstance(value, dict) or set(value) != {
+        "reviewed_span_selectors",
+        "unresolved_proposition_slots",
+        "support_gap",
+        "contradiction_gap",
+    }:
+        return None, "unknown_assessment_schema_invalid"
+    selectors = value.get("reviewed_span_selectors")
+    unresolved = value.get("unresolved_proposition_slots")
+    support_gap = str(value.get("support_gap") or "").strip()
+    contradiction_gap = str(value.get("contradiction_gap") or "").strip()
+    if (
+        not isinstance(selectors, list)
+        or not selectors
+        or len(selectors) > 12
+        or len(set(selectors)) != len(selectors)
+        or any(selector not in selector_lookup for selector in selectors)
+    ):
+        return None, "unknown_assessment_evidence_invalid"
+    if (
+        not isinstance(unresolved, list)
+        or not unresolved
+        or len(set(unresolved)) != len(unresolved)
+        or any(slot not in PROPOSITION_EVIDENCE_SLOTS for slot in unresolved)
+    ):
+        return None, "unknown_assessment_slot_invalid"
+    if (
+        not support_gap
+        or not contradiction_gap
+        or len(support_gap) > 320
+        or len(contradiction_gap) > 320
+    ):
+        return None, "unknown_assessment_gap_invalid"
+    reviewed = [
+        {
+            "span_selector": selector,
+            "evidence_id": str(selector_lookup[selector]["evidence_id"]),
+            "quote": str(selector_lookup[selector]["text"]),
+            "span_start": int(selector_lookup[selector]["span_start"]),
+            "span_end": int(selector_lookup[selector]["span_end"]),
+        }
+        for selector in selectors
+    ]
+    return {
+        "reviewed_span_selectors": list(selectors),
+        "reviewed_evidence": reviewed,
+        "unresolved_proposition_slots": list(unresolved),
+        "support_gap": support_gap,
+        "contradiction_gap": contradiction_gap,
+    }, ""

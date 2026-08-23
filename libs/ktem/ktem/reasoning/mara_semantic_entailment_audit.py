@@ -17,7 +17,10 @@ SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT = (
     "Judge each local fragment independently from the final conclusion: when a "
     "normalized fragment is literally contained in its quote, do not mark that "
     "local fragment false merely because scope or joint entailment later fails. "
-    "Then check that all fragments together entail the exact proposed yes/no "
+    "Also verify every declared actor/predicate/object/quantifier binding and the "
+    "declared proposition-support or explicit-contradiction relation; keyword "
+    "overlap alone is not a binding. Then check that all fragments together "
+    "entail the exact proposed yes/no "
     "typed conclusion, including its polarity, quantifier, and scope. For an "
     "atomic_semantic proof, one premise must establish the whole conclusion. For "
     "a composite_conjunction proof, every one of two to four premises must be a "
@@ -48,6 +51,13 @@ def semantic_entailment_audit_prompt(
                 "premise_ref": f"P{index}",
                 "quote": str(premise.get("quote") or ""),
                 "proposition_fragment": str(premise.get("proposition_fragment") or ""),
+                "binds_proposition_slots": list(
+                    premise.get("binds_proposition_slots") or []
+                ),
+                "proposition_slot_bindings": dict(
+                    premise.get("proposition_slot_bindings") or {}
+                ),
+                "evidence_relation": str(premise.get("evidence_relation") or ""),
             }
             for index, premise in enumerate(premises, start=1)
         ],
@@ -86,11 +96,15 @@ def semantic_entailment_audit_response_format(
                                 },
                                 "fragment_entailed": {"type": "boolean"},
                                 "scope_consistent": {"type": "boolean"},
+                                "proposition_bindings_valid": {"type": "boolean"},
+                                "evidence_relation_valid": {"type": "boolean"},
                             },
                             "required": [
                                 "premise_ref",
                                 "fragment_entailed",
                                 "scope_consistent",
+                                "proposition_bindings_valid",
+                                "evidence_relation_valid",
                             ],
                             "additionalProperties": False,
                         },
@@ -102,12 +116,18 @@ def semantic_entailment_audit_response_format(
                         "type": "object",
                         "properties": {
                             "conclusion_entailed": {"type": "boolean"},
+                            "actor_consistent": {"type": "boolean"},
+                            "predicate_consistent": {"type": "boolean"},
+                            "object_consistent": {"type": "boolean"},
                             "polarity_consistent": {"type": "boolean"},
                             "quantifier_consistent": {"type": "boolean"},
                             "scope_consistent": {"type": "boolean"},
                         },
                         "required": [
                             "conclusion_entailed",
+                            "actor_consistent",
+                            "predicate_consistent",
+                            "object_consistent",
                             "polarity_consistent",
                             "quantifier_consistent",
                             "scope_consistent",
@@ -160,6 +180,9 @@ def parse_semantic_entailment_audit(
         or set(conclusion_check)
         != {
             "conclusion_entailed",
+            "actor_consistent",
+            "predicate_consistent",
+            "object_consistent",
             "polarity_consistent",
             "quantifier_consistent",
             "scope_consistent",
@@ -176,6 +199,8 @@ def parse_semantic_entailment_audit(
             "premise_ref",
             "fragment_entailed",
             "scope_consistent",
+            "proposition_bindings_valid",
+            "evidence_relation_valid",
         }:
             return SemanticEntailmentAuditParse(None, "premise_check_schema_invalid")
         label = check.get("premise_ref")
@@ -184,6 +209,8 @@ def parse_semantic_entailment_audit(
             or label in by_label
             or not isinstance(check.get("fragment_entailed"), bool)
             or not isinstance(check.get("scope_consistent"), bool)
+            or not isinstance(check.get("proposition_bindings_valid"), bool)
+            or not isinstance(check.get("evidence_relation_valid"), bool)
         ):
             return SemanticEntailmentAuditParse(None, "premise_check_value_invalid")
         by_label[str(label)] = check
@@ -209,6 +236,10 @@ def semantic_entailment_rejection_reason(audit: dict[str, Any]) -> str:
             return "premise_fragment_not_entailed"
         if check.get("scope_consistent") is not True:
             return "premise_scope_inconsistent"
+        if check.get("proposition_bindings_valid") is not True:
+            return "premise_proposition_binding_rejected"
+        if check.get("evidence_relation_valid") is not True:
+            return "premise_evidence_relation_rejected"
     if audit.get("jointly_entails") is not True:
         return "joint_entailment_rejected"
     if audit.get("each_premise_required") is not True:
@@ -218,6 +249,12 @@ def semantic_entailment_rejection_reason(audit: dict[str, Any]) -> str:
     conclusion = audit.get("conclusion_check") or {}
     if conclusion.get("conclusion_entailed") is not True:
         return "typed_conclusion_not_entailed"
+    if conclusion.get("actor_consistent") is not True:
+        return "typed_conclusion_actor_rejected"
+    if conclusion.get("predicate_consistent") is not True:
+        return "typed_conclusion_predicate_rejected"
+    if conclusion.get("object_consistent") is not True:
+        return "typed_conclusion_object_rejected"
     if conclusion.get("polarity_consistent") is not True:
         return "typed_conclusion_polarity_rejected"
     if conclusion.get("quantifier_consistent") is not True:
@@ -232,6 +269,8 @@ def semantic_entailment_cross_field_reason(audit: dict[str, Any]) -> str:
     any_invalid = any(
         check.get("fragment_entailed") is not True
         or check.get("scope_consistent") is not True
+        or check.get("proposition_bindings_valid") is not True
+        or check.get("evidence_relation_valid") is not True
         for check in checks
     )
     if any_invalid and audit.get("jointly_entails") is True:

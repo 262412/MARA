@@ -106,7 +106,7 @@ def _yes_response(
         question,
     )
     value.update(
-        candidate_verification_contract="candidate_proposition_verification.v1",
+        candidate_verification_contract="candidate_proposition_verification.v2",
         verifier_input_candidate=candidate,
         candidate_verification_status=(
             "supported" if candidate == "yes" else "contradicted"
@@ -183,7 +183,7 @@ def test_qasper_supported_unanswerable_is_a_verified_abstention() -> None:
                 "seed": 7,
             },
             "candidate_verification_contract": (
-                "candidate_proposition_verification.v1"
+                "candidate_proposition_verification.v2"
             ),
             "verifier_input_candidate": candidate,
             "candidate_verification_status": "supported",

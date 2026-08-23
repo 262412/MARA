@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.boolean_proposition_candidates import (
+    boolean_proposition_candidate_score,
+)
 from ktem.docqa.query_evidence_binding_support import candidate_score_for_slot
 
 
@@ -12,6 +15,26 @@ def slot_values(slot: Any, key: str) -> tuple[str, ...]:
     return tuple(
         dict.fromkeys(str(value).strip() for value in values if str(value).strip())
     )
+
+
+def slot_value(slot: Any, key: str) -> str:
+    value = slot.get(key) if isinstance(slot, dict) else getattr(slot, key, "")
+    return str(value or "").strip()
+
+
+def slot_description(slot: Any) -> str:
+    fields = [
+        (key, slot_value(slot, key))
+        for key in ("role", "entity", "metric", "period", "statement_kind", "query")
+    ]
+    return "; ".join(f"{key}={value}" for key, value in fields if value)
+
+
+def optional_int(value: Any) -> int | None:
+    try:
+        return int(value) if value is not None and str(value).strip() else None
+    except (TypeError, ValueError):
+        return None
 
 
 def matching_slot_ids(slots: list[dict[str, Any]], evidence_id: str) -> tuple[str, ...]:
@@ -52,14 +75,18 @@ def stable_source_id(item: dict[str, Any]) -> str:
     return ""
 
 
-def evidence_alignment_score(request: Any, item: dict[str, Any]) -> float:
+def evidence_alignment_score(
+    request: Any,
+    question: str,
+    item: dict[str, Any],
+) -> float:
     plan = getattr(request, "query_plan", None)
     raw_slots = (
         plan.get("evidence_slots", [])
         if isinstance(plan, dict)
         else getattr(plan, "evidence_slots", ()) or ()
     )
-    return max(
+    slot_score = max(
         (
             float(candidate_score_for_slot(slot, item, requires_structure=False))
             for slot in raw_slots
@@ -69,3 +96,5 @@ def evidence_alignment_score(request: Any, item: dict[str, Any]) -> float:
         ),
         default=0.0,
     )
+    proposition_score = float(boolean_proposition_candidate_score(question, item))
+    return max(proposition_score, slot_score)

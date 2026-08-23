@@ -10,17 +10,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from benchmark.artifact_publication import publish_contract_smoke_audit  # noqa: E402
 from benchmark.contract_invariant_metrics import (  # noqa: E402
     contract_invariant_summary,
 )
-from benchmark.artifact_publication import publish_contract_smoke_audit  # noqa: E402
 from benchmark.jsonl import read_jsonl  # noqa: E402
 from benchmark.terminal_outcome_contract import (  # noqa: E402
     terminal_outcome_summary_fields,
 )
+from scripts.slurm.contract_smoke_behavior import (  # noqa: E402
+    finance_behavior_violations,
+)
 from scripts.slurm.qasper_debug_contract import (  # noqa: E402
     qasper_debug_audit_extensions,
     qasper_debug_behavior_violations,
+    qasper_debug_contract_metrics,
 )
 
 CONTRACT = "contract_smoke_audit.v2"
@@ -44,7 +48,7 @@ CORE_STAGES = {
     "verified_claim_support_evidence",
     "emitted_citation_evidence",
 }
-REQUIREMENTS = {
+REQUIREMENTS: dict[str, set[str]] = {
     "finance": {
         "same_parent_distinct_year_cells",
         "materialized_parent_operand",
@@ -145,6 +149,20 @@ QASPER_HARD_GATES = {
 }
 QASPER_DEBUG_HARD_GATES = {
     "terminal_outcome_contract_violation_count": ("eq", 0.0),
+    "answerable_false_abstention_count": ("eq", 0.0),
+    "qasper_candidate_verifier_auditor_label_set_mismatch_count": ("eq", 0.0),
+    "qasper_online_required_candidate_label_missing_count": ("eq", 0.0),
+    "qasper_online_required_verifier_judgment_missing_count": ("eq", 0.0),
+    "qasper_online_required_auditor_status_missing_count": ("eq", 0.0),
+    "qasper_online_required_annotation_ambiguity_missing_count": ("eq", 0.0),
+    "qasper_online_auditor_attempt_missing_count": ("eq", 0.0),
+    "qasper_candidate_raw_identity_mismatch_count": ("eq", 0.0),
+    "qasper_empty_candidate_audit_count": ("eq", 0.0),
+    "qasper_empty_typed_conclusion_count": ("eq", 0.0),
+    "qasper_semantic_entailment_audit_failure_count": ("eq", 0.0),
+    "qasper_semantic_entailment_audit_rejection_count": ("eq", 0.0),
+    "qasper_required_slot_unverified_count": ("eq", 0.0),
+    "qasper_reverify_without_semantic_state_change_count": ("eq", 0.0),
 }
 
 
@@ -375,6 +393,8 @@ def _complete_audit(
         predictions, suite_kind=suite_kind
     )
     metrics = contract_invariant_summary(predictions)
+    if suite_kind == "qasper_debug":
+        metrics.update(qasper_debug_contract_metrics(predictions))
     hard_gates = _hard_gate_results(metrics, suite_kind=suite_kind)
     failed_gates = [
         metric for metric, result in hard_gates.items() if not result["passed"]
@@ -496,7 +516,7 @@ def _behavior_violations(
     suite_kind: str,
 ) -> list[str]:
     if suite_kind == "finance":
-        return _finance_behavior_violations(predictions)
+        return finance_behavior_violations(predictions)
     if suite_kind == "qasper_debug":
         return qasper_debug_behavior_violations(predictions)
     violations: list[str] = []
@@ -524,48 +544,6 @@ def _behavior_violations(
         ):
             violations.append(
                 f"verifier_input_trace_missing:{prediction.get('example_id')}"
-            )
-    return violations
-
-
-def _finance_behavior_violations(
-    predictions: list[dict[str, Any]],
-) -> list[str]:
-    violations: list[str] = []
-    answerable = [
-        prediction
-        for prediction in predictions
-        if any(
-            str(answer or "").strip().lower()
-            not in {"", "unanswerable", "insufficient evidence"}
-            for answer in prediction.get("gold_answers") or []
-        )
-    ]
-    expected_abstentions = [
-        prediction for prediction in predictions if prediction not in answerable
-    ]
-    for prediction in answerable:
-        metadata = dict(prediction.get("evidence_metadata") or {})
-        trace = dict(metadata.get("finance_numeric_trace") or {})
-        verification = dict(trace.get("calculation_verification") or {})
-        execution = dict(trace.get("calculation_execution") or {})
-        if not verification.get("valid") or execution.get("status") != "ok":
-            violations.append(
-                f"answerable_typed_execution_failed:{prediction.get('example_id')}"
-            )
-        if str(prediction.get("answer_status") or "") != "answered":
-            violations.append(
-                f"answerable_typed_execution_not_accepted:{prediction.get('example_id')}"
-            )
-    for prediction in expected_abstentions:
-        if str(prediction.get("answer_status") or "") != "abstained":
-            violations.append(
-                f"expected_safe_abstention_not_observed:{prediction.get('example_id')}"
-            )
-        metadata = dict(prediction.get("evidence_metadata") or {})
-        if _records(metadata.get("emitted_citation_evidence")):
-            violations.append(
-                f"abstention_emitted_answer_citation:{prediction.get('example_id')}"
             )
     return violations
 

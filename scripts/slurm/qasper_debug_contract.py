@@ -2,8 +2,82 @@ from __future__ import annotations
 
 from typing import Any
 
-from benchmark.qasper_semantic_state_matrix import (
-    qasper_candidate_bound_state_matrix,
+from benchmark.qasper_semantic_state_matrix import qasper_candidate_bound_state_matrix
+from scripts.slurm.qasper_debug_contract_audit import (  # noqa: F401
+    _candidate_audit_complete,
+    _known_evidence_ids,
+    _nonempty_mapping_keys,
+    _normalized_audited_premises,
+    _premise_digest,
+    _semantic_audit_failure_flags,
+    _slot_ids,
+    _string_set,
+    _supported_row_required_slot_unverified,
+    _typed_conclusion_present,
+    _unknown_audit_premises_complete,
+)
+from scripts.slurm.qasper_debug_contract_identity import (  # noqa: F401
+    _digest,
+    _normalized_candidate,
+    _parse_candidate_response,
+    _raw_candidate_attempt_valid,
+    _raw_candidate_fields_present,
+    _raw_candidate_fields_valid,
+    _raw_candidate_identity_valid,
+    _raw_candidate_output_valid,
+    _raw_candidate_parts,
+    _raw_candidate_stages_valid,
+    _verifier_raw_identity_valid,
+)
+from scripts.slurm.qasper_debug_contract_recovery import (  # noqa: F401
+    _answerable_false_abstention,
+    _changed_digest,
+    _recovery_transition_invalid,
+    _reverify_events,
+    _reverify_state_changed,
+    _reverify_without_state_change_count,
+    _semantic_recovery_transitions,
+    _unchanged_digest,
+)
+from scripts.slurm.qasper_debug_contract_schema import (  # noqa: F401
+    _relation_flags_valid,
+    _schema_audit_attempt_violations,
+    _schema_debug_event_violations,
+    _schema_proposal_attempt_violations,
+    _schema_version_violations,
+)
+from scripts.slurm.qasper_debug_contract_support import (  # noqa: F401
+    _CANDIDATE_VERIFIER_AUDIT_CONTRACT,
+    _CONCLUSION_AUDIT_CONTRACT,
+    _GENERATOR_REQUIRED_FIELDS,
+    _QASPER_CANDIDATE_GENERATION_CONTRACT,
+    _QASPER_CANDIDATE_MAX_RESPONSE_CHARS,
+    _SEMANTIC_DEBUG_TRACE_CONTRACT,
+    _SEMANTIC_ENTAILMENT_AUDIT_CONTRACT,
+    _SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+    _SEMANTIC_VERIFIER_RUNTIME_CONTRACT,
+    _VERIFIER_REQUIRED_FIELDS,
+    _annotation_scores_complete,
+    _audit_attempt_artifact_observed,
+    _candidate_bound_auditor_attempt_observed,
+    _candidate_bound_auditor_observed,
+    _candidate_bound_auditor_passed,
+    _candidate_proposition_binding_complete,
+    _candidate_slot_binding_complete,
+    _candidate_transform_complete,
+    _empty_coverage_counts,
+    _failed_auditor_safe_abstention,
+    _input_output_digests_complete,
+    _live_models_observed,
+    _mapping,
+    _require,
+    _semantic_debug_audit_stage,
+    _semantic_debug_complete,
+    _semantic_stage_complete,
+    _transaction_identity_complete,
+    claim_aggregation_complete,
+    terminal_metadata,
+    terminal_semantic_answer,
 )
 
 
@@ -13,6 +87,7 @@ def qasper_debug_audit_extensions(
     return {
         "observability_coverage": qasper_debug_observability_coverage(predictions),
         "structural_state_matrix": qasper_candidate_bound_state_matrix(predictions),
+        "debug_gate_metrics": qasper_debug_contract_metrics(predictions),
     }
 
 
@@ -28,8 +103,100 @@ def qasper_debug_behavior_violations(
     for example_id, rows in by_example.items():
         violations.extend(_cross_route_violations(example_id, rows))
     online = qasper_candidate_bound_state_matrix(predictions)["online_observation"]
+    violations.extend(_online_label_violations(online))
+    return violations
+
+
+def qasper_debug_contract_metrics(
+    predictions: list[dict[str, Any]],
+) -> dict[str, float]:
+    """Return fail-closed metrics specific to the online QASPER debug task."""
+
+    matrix = qasper_candidate_bound_state_matrix(predictions)
+    online = matrix["online_observation"]
+    raw_identity_mismatches = 0
+    empty_audits = 0
+    empty_typed_conclusions = 0
+    entailment_failures = 0
+    entailment_rejections = 0
+    required_slot_unverified = 0
+    false_abstentions = 0
+    reverify_without_state_change = 0
+    auditor_attempt_missing = 0
+    for prediction in predictions:
+        metadata = terminal_metadata(prediction)
+        generator = _mapping(metadata.get("qasper_candidate_generation"))
+        verifier = _mapping(metadata.get("semantic_proposition_verifier"))
+        audit = _mapping(verifier.get("candidate_verification_audit"))
+        raw_identity_mismatches += int(
+            not _raw_candidate_identity_valid(generator, verifier)
+        )
+        empty_audits += int(not _candidate_audit_complete(verifier, audit))
+        empty_typed_conclusions += int(
+            audit.get("status") == "passed"
+            and not _typed_conclusion_present(verifier, audit)
+        )
+        audit_failure, audit_rejection = _semantic_audit_failure_flags(
+            verifier, audit, prediction
+        )
+        entailment_failures += int(audit_failure)
+        entailment_rejections += int(audit_rejection)
+        required_slot_unverified += int(
+            _supported_row_required_slot_unverified(verifier, audit, metadata)
+        )
+        false_abstentions += int(_answerable_false_abstention(prediction))
+        reverify_without_state_change += _reverify_without_state_change_count(
+            prediction
+        )
+        auditor_attempt_missing += int(
+            not _candidate_bound_auditor_attempt_observed(verifier)
+        )
+    return {
+        "answerable_false_abstention_count": float(false_abstentions),
+        "qasper_candidate_raw_identity_mismatch_count": float(raw_identity_mismatches),
+        "qasper_empty_candidate_audit_count": float(empty_audits),
+        "qasper_empty_typed_conclusion_count": float(empty_typed_conclusions),
+        "qasper_semantic_entailment_audit_failure_count": float(entailment_failures),
+        "qasper_semantic_entailment_audit_rejection_count": float(
+            entailment_rejections
+        ),
+        "qasper_required_slot_unverified_count": float(required_slot_unverified),
+        "qasper_reverify_without_semantic_state_change_count": float(
+            reverify_without_state_change
+        ),
+        "qasper_candidate_verifier_auditor_label_set_mismatch_count": float(
+            online["candidate_verifier_auditor_label_set_mismatch"]
+        ),
+        "qasper_online_required_candidate_label_missing_count": float(
+            bool(online["missing_required_candidate_labels"])
+        ),
+        "qasper_online_required_verifier_judgment_missing_count": float(
+            bool(online["missing_required_verifier_judgments"])
+        ),
+        "qasper_online_required_auditor_status_missing_count": float(
+            bool(online["missing_required_auditor_statuses"])
+        ),
+        "qasper_online_required_annotation_ambiguity_missing_count": float(
+            bool(online["missing_required_annotation_ambiguity_states"])
+        ),
+        "qasper_online_auditor_attempt_missing_count": float(auditor_attempt_missing),
+    }
+
+
+def _online_label_violations(online: dict[str, Any]) -> list[str]:
+    violations: list[str] = []
     if online["single_label_collapse"]:
         violations.append("candidate_single_label_collapse")
+    if online["candidate_verifier_auditor_label_set_mismatch"]:
+        violations.append("candidate_verifier_auditor_label_set_mismatch")
+    for label in online["missing_required_candidate_labels"]:
+        violations.append(f"online_required_candidate_label_missing:{label}")
+    for label in online["missing_required_verifier_judgments"]:
+        violations.append(f"online_required_verifier_judgment_missing:{label}")
+    for label in online["missing_required_auditor_statuses"]:
+        violations.append(f"online_required_auditor_status_missing:{label}")
+    for label in online["missing_required_annotation_ambiguity_states"]:
+        violations.append(f"online_annotation_ambiguity_missing:{label}")
     return violations
 
 
@@ -43,6 +210,9 @@ def qasper_debug_observability_coverage(
         verifier = _mapping(metadata.get("semantic_proposition_verifier"))
         fields["generator_trace"] += int(bool(generator))
         fields["raw_response"] += int("raw_response" in generator)
+        fields["raw_candidate_identity"] += int(
+            _raw_candidate_identity_valid(generator, verifier)
+        )
         fields["finish_reason"] += int(bool(generator.get("finish_reason")))
         fields["typed_candidate_transform"] += int(
             bool(generator.get("transformation_stages"))
@@ -66,55 +236,41 @@ def qasper_debug_observability_coverage(
         fields["input_output_digest"] += int(
             _input_output_digests_complete(generator, verifier)
         )
+        fields["auditor_attempt_observed"] += int(
+            _candidate_bound_auditor_attempt_observed(verifier)
+        )
         fields["candidate_verifier_audit"] += int(
-            _candidate_bound_auditor_observed(verifier)
+            _candidate_bound_auditor_passed(verifier)
+        )
+        fields["auditor_failed_safe_abstention"] += int(
+            _failed_auditor_safe_abstention(verifier, prediction)
         )
         fields["semantic_verifier_debug"] += int(_semantic_debug_complete(verifier))
         fields["live_model"] += int(_live_models_observed(generator, verifier))
     total = len(predictions)
+    auditor_outcome_coverage = (
+        fields["candidate_verifier_audit"] + fields["auditor_failed_safe_abstention"]
+    )
+    required_fields = {
+        key: value
+        for key, value in fields.items()
+        if key
+        not in {
+            "candidate_verifier_audit",
+            "auditor_failed_safe_abstention",
+        }
+    }
     return {
         "contract_id": "qasper_e2e_observability_coverage.v1",
         "prediction_count": total,
         "covered_counts": fields,
-        "complete": bool(total and all(value == total for value in fields.values())),
+        "auditor_outcome_coverage": auditor_outcome_coverage,
+        "complete": bool(
+            total
+            and all(value == total for value in required_fields.values())
+            and auditor_outcome_coverage == total
+        ),
     }
-
-
-def claim_aggregation_complete(prediction: dict[str, Any]) -> bool:
-    events = [
-        event
-        for event in prediction.get("controller_trace") or []
-        if isinstance(event, dict) and event.get("stage") == "claim_aggregation"
-    ]
-    return bool(
-        events
-        and all(
-            event.get("input_digest")
-            and event.get("output_digest")
-            and "input_text" in event
-            and "output_text" in event
-            for event in events
-        )
-    )
-
-
-def terminal_metadata(prediction: dict[str, Any]) -> dict[str, Any]:
-    bundle = _mapping(prediction.get("engine_terminal_evidence_bundle"))
-    metadata = _mapping(bundle.get("metadata"))
-    return metadata or _mapping(prediction.get("evidence_metadata"))
-
-
-def terminal_semantic_answer(prediction: dict[str, Any]) -> str:
-    commit = _mapping(prediction.get("terminal_semantic_commit"))
-    return (
-        str(
-            commit.get("semantic_answer")
-            or prediction.get("engine_terminal_answer")
-            or ""
-        )
-        .strip()
-        .casefold()
-    )
 
 
 def _prediction_violations(prediction: dict[str, Any]) -> list[str]:
@@ -156,11 +312,32 @@ def _prediction_violations(prediction: dict[str, Any]) -> list[str]:
         _annotation_scores_complete(prediction),
         f"annotation_score_coverage_missing:{prefix}",
     )
-    expected_terminal = candidate if relation == "supported" else "unanswerable"
+    audit = _mapping(verifier.get("candidate_verification_audit"))
+    if audit.get("status") == "failed":
+        _require(
+            violations,
+            _failed_auditor_safe_abstention(verifier, prediction),
+            f"failed_auditor_not_safely_abstained:{prefix}",
+        )
+    expected_terminal = (
+        candidate
+        if relation == "supported" and audit.get("status") == "passed"
+        else "unanswerable"
+    )
     _require(
         violations,
         terminal_semantic_answer(prediction) == expected_terminal,
         f"candidate_policy_terminal_mismatch:{prefix}",
+    )
+    _require(
+        violations,
+        _raw_candidate_identity_valid(generator, verifier),
+        f"raw_candidate_identity_mismatch:{prefix}",
+    )
+    _require(
+        violations,
+        _candidate_audit_complete(verifier, audit),
+        f"candidate_verifier_audit_empty:{prefix}",
     )
     return violations
 
@@ -173,7 +350,7 @@ def _generator_violations(
     violations: list[str] = []
     _require(
         violations,
-        generator.get("contract_id") == "qasper_typed_candidate_generation.v1",
+        generator.get("contract_id") == _QASPER_CANDIDATE_GENERATION_CONTRACT,
         f"generator_trace_missing:{prefix}",
     )
     _require(
@@ -208,15 +385,10 @@ def _generator_violations(
         _candidate_proposition_binding_complete(generator),
         f"candidate_proposition_binding_invalid:{prefix}",
     )
-    required_slots = generator.get("required_slots") or []
     _require(
         violations,
-        candidate == "unanswerable"
-        or all(
-            isinstance(slot, dict) and slot.get("binding_status") == "bound"
-            for slot in required_slots
-        ),
-        f"candidate_required_slot_policy_mismatch:{prefix}",
+        _raw_candidate_fields_present(generator),
+        f"raw_candidate_identity_fields_missing:{prefix}",
     )
     return violations
 
@@ -230,7 +402,7 @@ def _verifier_violations(
     violations: list[str] = []
     _require(
         violations,
-        verifier.get("contract_id") == "semantic_proposition_verifier_runtime.v2",
+        verifier.get("contract_id") == _SEMANTIC_VERIFIER_RUNTIME_CONTRACT,
         f"candidate_verifier_trace_missing:{prefix}",
     )
     _require(
@@ -256,8 +428,13 @@ def _verifier_violations(
     audit = _mapping(verifier.get("candidate_verification_audit"))
     _require(
         violations,
-        audit.get("status") == "passed",
-        f"candidate_verifier_audit_failed:{prefix}",
+        audit.get("status") in {"passed", "failed"},
+        f"candidate_verifier_audit_status_invalid:{prefix}",
+    )
+    _require(
+        violations,
+        audit.get("contract_id") == _CANDIDATE_VERIFIER_AUDIT_CONTRACT,
+        f"candidate_verifier_audit_contract_invalid:{prefix}",
     )
     _require(
         violations,
@@ -267,9 +444,10 @@ def _verifier_violations(
         f"candidate_verifier_audit_binding_invalid:{prefix}",
     )
     for field in _VERIFIER_REQUIRED_FIELDS:
+        value = verifier.get(field)
         _require(
             violations,
-            field in verifier and verifier.get(field) not in {None, ""},
+            field in verifier and value is not None and value != "",
             f"candidate_verifier_field_missing:{field}:{prefix}",
         )
     _require(
@@ -282,6 +460,7 @@ def _verifier_violations(
         _candidate_bound_auditor_observed(verifier),
         f"online_auditor_not_observed:{prefix}",
     )
+    violations.extend(_schema_version_violations(verifier, prefix))
     return violations
 
 
@@ -326,239 +505,3 @@ def _cross_route_violations(
         f"cross_route_verifier_transaction_not_unique:{example_id}",
     )
     return violations
-
-
-def _annotation_scores_complete(prediction: dict[str, Any]) -> bool:
-    annotations = prediction.get("qasper_annotation_scores")
-    annotations = annotations if isinstance(annotations, list) else []
-    expected = _mapping(prediction.get("example_metadata")).get(
-        "qasper_answer_annotations"
-    )
-    expected = expected if isinstance(expected, list) else []
-    diagnostics = _mapping(prediction.get("qasper_annotation_diagnostics"))
-    required_score_fields = {
-        "annotation_index",
-        "answer_f1",
-        "typed_accuracy",
-        "evidence_f1",
-        "ambiguity_marker",
-    }
-    scores_complete = bool(annotations) and all(
-        isinstance(score, dict)
-        and score.get("contract_id") == "qasper_annotation_score.v1"
-        and required_score_fields <= set(score)
-        for score in annotations
-    )
-    diagnostics_complete = bool(
-        diagnostics.get("contract_id") == "qasper_annotation_diagnostics.v1"
-        and diagnostics.get("annotation_count") == len(expected)
-        and isinstance(diagnostics.get("ambiguous"), bool)
-        and isinstance(diagnostics.get("ambiguity_reasons"), list)
-        and isinstance(diagnostics.get("canonical_answer_classes"), list)
-    )
-    return (
-        scores_complete and diagnostics_complete and len(annotations) == len(expected)
-    )
-
-
-def _candidate_transform_complete(generator: dict[str, Any]) -> bool:
-    stages = generator.get("transformation_stages")
-    stages = stages if isinstance(stages, list) else []
-    by_name = {
-        str(stage.get("stage") or ""): stage
-        for stage in stages
-        if isinstance(stage, dict)
-    }
-    required = ("raw_response", "cleaning", "typed_candidate")
-    if any(name not in by_name for name in required):
-        return False
-    common_fields = {"value", "digest", "failure_reason"}
-    return bool(
-        all(common_fields <= set(by_name[name]) for name in required)
-        and "changed" in by_name["cleaning"]
-    )
-
-
-def _candidate_proposition_binding_complete(generator: dict[str, Any]) -> bool:
-    proposition = _mapping(generator.get("typed_proposition"))
-    resolution = _mapping(generator.get("question_proposition_resolution"))
-    slots = generator.get("required_slots")
-    slots = slots if isinstance(slots, list) else []
-    proposition_fields = ("actor", "predicate", "object_surface", "quantifier")
-    return bool(
-        all(str(proposition.get(field) or "").strip() for field in proposition_fields)
-        and resolution.get("status") in {"complete", "repaired"}
-        and slots
-        and all(_candidate_slot_binding_complete(slot) for slot in slots)
-    )
-
-
-def _candidate_slot_binding_complete(slot: Any) -> bool:
-    if not isinstance(slot, dict) or not str(slot.get("slot_id") or "").strip():
-        return False
-    status = slot.get("binding_status")
-    evidence_ids = slot.get("evidence_ids")
-    evidence_refs = slot.get("evidence_refs")
-    if not isinstance(evidence_ids, list) or not isinstance(evidence_refs, list):
-        return False
-    if status == "bound":
-        return bool(evidence_ids and evidence_refs)
-    return status == "missing" and not evidence_ids and not evidence_refs
-
-
-def _semantic_debug_complete(verifier: dict[str, Any]) -> bool:
-    debug = _mapping(verifier.get("debug_trace"))
-    if debug.get("contract_id") != "semantic_proposition_debug_trace.v2":
-        return False
-    transactions = [
-        event
-        for event in debug.get("events") or []
-        if isinstance(event, dict) and event.get("event") == "model_transaction"
-    ]
-    if not transactions:
-        return False
-    transaction = _mapping(transactions[-1].get("transaction"))
-    proposal = _mapping(transaction.get("proposal"))
-    audit = _mapping(transaction.get("audit"))
-    if not _semantic_stage_complete(proposal, allow_not_run=False):
-        return False
-    return _semantic_stage_complete(audit, allow_not_run=False)
-
-
-def _semantic_stage_complete(stage: dict[str, Any], *, allow_not_run: bool) -> bool:
-    if allow_not_run and stage.get("status") == "not_run":
-        return True
-    attempts = stage.get("attempts")
-    attempts = attempts if isinstance(attempts, list) else []
-    required_fields = {
-        "attempt",
-        "raw_response",
-        "finish_reason",
-        "parse_failure_reason",
-        "provider_failure_reason",
-    }
-    return bool(
-        attempts
-        and all(
-            isinstance(attempt, dict)
-            and required_fields <= set(attempt)
-            and bool(attempt.get("raw_response"))
-            for attempt in attempts
-        )
-    )
-
-
-def _transaction_identity_complete(
-    generator: dict[str, Any],
-    verifier: dict[str, Any],
-) -> bool:
-    return bool(
-        generator.get("trace_group_id")
-        and generator.get("trace_group_id") == verifier.get("trace_group_id")
-        and generator.get("transaction_id")
-        and generator.get("attempt_id")
-        and verifier.get("transaction_id")
-        and verifier.get("attempt_id")
-    )
-
-
-def _input_output_digests_complete(
-    generator: dict[str, Any],
-    verifier: dict[str, Any],
-) -> bool:
-    return bool(
-        generator.get("input_digest")
-        and generator.get("output_digest")
-        and verifier.get("input_digest")
-        and verifier.get("output_digest")
-    )
-
-
-def _live_models_observed(
-    generator: dict[str, Any],
-    verifier: dict[str, Any],
-) -> bool:
-    generator_observed = not generator or bool(generator.get("model"))
-    return bool(
-        generator_observed
-        and verifier.get("model")
-        and int(verifier.get("proposal_model_call_count") or 0) > 0
-        and _candidate_bound_auditor_observed(verifier)
-    )
-
-
-def _candidate_bound_auditor_observed(verifier: dict[str, Any]) -> bool:
-    audit = _mapping(verifier.get("candidate_verification_audit"))
-    mode = str(audit.get("mode") or "")
-    return bool(
-        int(verifier.get("audit_model_call_count") or 0) > 0
-        and verifier.get("auditor_attempt_id")
-        and audit.get("status") == "passed"
-        and mode
-        and mode != "deterministic_schema_audit"
-        and audit.get("audited_candidate") == verifier.get("candidate_label")
-        and audit.get("audited_judgment")
-        == verifier.get("candidate_verification_status")
-        and audit.get("replacement_candidate_allowed") is False
-    )
-
-
-def _relation_flags_valid(verifier: dict[str, Any], relation: str) -> bool:
-    return bool(
-        verifier.get("explicit_contradiction") is (relation == "contradicted")
-        and verifier.get("candidate_verifier_disagreement")
-        is (relation == "contradicted")
-        and verifier.get("unknown") is (relation == "unknown")
-    )
-
-
-def _empty_coverage_counts() -> dict[str, int]:
-    return {
-        "generator_trace": 0,
-        "raw_response": 0,
-        "finish_reason": 0,
-        "typed_candidate_transform": 0,
-        "proposition_slot_binding": 0,
-        "claim_aggregation_before_after": 0,
-        "per_annotation_scores": 0,
-        "transaction_attempt_identity": 0,
-        "effective_seed": 0,
-        "input_output_digest": 0,
-        "candidate_verifier_audit": 0,
-        "semantic_verifier_debug": 0,
-        "live_model": 0,
-    }
-
-
-def _mapping(value: Any) -> dict[str, Any]:
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _require(violations: list[str], condition: bool, violation: str) -> None:
-    if not condition:
-        violations.append(violation)
-
-
-_GENERATOR_REQUIRED_FIELDS = (
-    "message_stack",
-    "raw_response",
-    "cleaned_response",
-    "finish_reason",
-    "transformation_stages",
-    "trace_group_id",
-    "transaction_id",
-    "attempt_id",
-    "effective_seed",
-    "input_digest",
-    "output_digest",
-)
-
-_VERIFIER_REQUIRED_FIELDS = (
-    "trace_group_id",
-    "transaction_id",
-    "attempt_id",
-    "auditor_attempt_id",
-    "effective_seed",
-    "input_digest",
-    "output_digest",
-)

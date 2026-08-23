@@ -44,9 +44,9 @@ def semantic_verdict(
     }
     response = audited_verdict(response, question)
     response["verifier"]["release_mode"] = True
-    bundle.metadata["semantic_proposition_verifier"]["audit_proposal_digest"] = (
-        response["entailment_audit"]["proposal_digest"]
-    )
+    bundle.metadata["semantic_proposition_verifier"][
+        "audit_proposal_digest"
+    ] = response["entailment_audit"]["proposal_digest"]
     return response
 
 
@@ -89,7 +89,7 @@ def semantic_repair_diagnostics() -> dict[str, Any]:
 
 def _runtime_trace() -> dict[str, Any]:
     return {
-        "contract_id": "semantic_proposition_verifier_runtime.v2",
+        "contract_id": "semantic_proposition_verifier_runtime.v3",
         "status": "parsed",
         "reason": "strict_schema_and_entailment_audit",
         "release_mode": True,

@@ -59,6 +59,9 @@ def _proposal(
     return json.dumps(
         {
             "verdict": verdict,
+            "evidence_relation": (
+                "proposition_support" if verdict == "yes" else "explicit_contradiction"
+            ),
             "support_mode": "evidence_set",
             "proof_mode": "atomic_semantic",
             "jointly_complete": True,
@@ -68,6 +71,12 @@ def _proposal(
                     "span_selector": selector,
                     "proposition_fragment": fragment,
                     "supports_slot_ids": slot_ids,
+                    "binds_proposition_slots": [
+                        "actor",
+                        "predicate",
+                        "object",
+                        "quantifier",
+                    ],
                 }
             ],
         }
@@ -82,6 +91,8 @@ def _atomic_audit() -> str:
                     "premise_ref": "P1",
                     "fragment_entailed": True,
                     "scope_consistent": True,
+                    "proposition_bindings_valid": True,
+                    "evidence_relation_valid": True,
                 }
             ],
             "jointly_entails": True,
@@ -89,6 +100,9 @@ def _atomic_audit() -> str:
             "contradiction_free": True,
             "conclusion_check": {
                 "conclusion_entailed": True,
+                "actor_consistent": True,
+                "predicate_consistent": True,
+                "object_consistent": True,
                 "polarity_consistent": True,
                 "quantifier_consistent": True,
                 "scope_consistent": True,
@@ -161,14 +175,15 @@ def test_unrepairable_proposition_stops_before_models_with_bound_insufficient() 
 
     assert result is not None and result["verdict"] == "insufficient_evidence"
     header, reason = validated_semantic_header(result, question, release_mode=True)
-    assert reason == ""
-    assert header is not None and header[0] == "insufficient_evidence"
+    assert reason == "candidate_typed_conclusion_binding_invalid"
+    assert header is None
+    assert result["candidate_verification_audit"]["status"] == "failed"
     assert result["question_proposition_resolution"]["status"] == "incomplete"
     assert result["verifier"]["auditor_relationship"] == "distinct_model"
     assert proposal_llm.calls == audit_llm.calls == []
 
 
-def test_independent_polarity_check_triggers_real_proof_repair() -> None:
+def test_independent_polarity_rejection_stops_without_reanswering() -> None:
     question = "Does the experiment focus on a specific domain?"
     request = _request(question)
     fragment = "the experiment does not focus on a specific domain"
@@ -192,28 +207,28 @@ def test_independent_polarity_check_triggers_real_proof_repair() -> None:
 
     result = verifier(request, question, "unanswerable", bundle)
 
-    assert result is not None and result["verdict"] == "no"
-    assert len(proposal_llm.calls) == len(audit_llm.calls) == 2
+    assert result is not None and result["verdict"] == "insufficient_evidence"
+    assert result["candidate_verification_audit"]["status"] == "failed"
+    assert len(proposal_llm.calls) == len(audit_llm.calls) == 1
     trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["audit_verified_but_runtime_rejected_count"] == 1
-    assert trace["runtime_contract_rejection_count"] == 1
-    assert trace["proof_repair_count"] == trace["proof_reaudit_count"] == 1
-    assert trace["full_reaudit"] is True
-    assert trace["recovery_transitions"][-1]["to"] == "proof_repair"
+    assert trace["audit_status"] == "rejected"
+    assert trace["audit_reason"] == "polarity_contradiction_detected"
+    assert trace.get("proof_repair_count", 0) == 0
+    assert trace.get("proof_reaudit_count", 0) == 0
+    transition = trace["recovery_transitions"][-1]
+    assert transition["to"] == "stop_without_reverify"
+    assert transition["stop_reason"] == "recovery_no_progress"
+    assert transition["semantic_pack_digest_changed"] is False
+    assert transition["proposition_binding_digest_changed"] is False
     rejected = trace["rejected_transactions"][0]
     assert rejected["typed_conclusion"]["polarity"] == "yes"
     assert rejected["polarity_contradiction_check"]["status"] == (
         "contradiction_detected"
     )
-    assert (
-        result["entailment_audit"]["polarity_contradiction_check"][
-            "independent_from_models"
-        ]
-        is True
-    )
+    assert rejected["polarity_contradiction_check"]["independent_from_models"] is True
 
 
-def test_runtime_scope_rejection_rebuilds_proof_instead_of_retrieving() -> None:
+def test_runtime_scope_rejection_stops_when_semantic_state_is_unchanged() -> None:
     question = "Does the model have attention?"
     request = _request(question)
     verifier, proposal_llm, audit_llm = _release_verifier(
@@ -235,8 +250,8 @@ def test_runtime_scope_rejection_rebuilds_proof_instead_of_retrieving() -> None:
 
     result = verifier(request, question, "unanswerable", bundle)
 
-    assert result is not None and result["verdict"] == "yes"
-    assert result["premises"][0]["span_selector"] == "E2:S1"
+    assert result is not None and result["verdict"] == "insufficient_evidence"
+    assert result["candidate_verification_audit"]["status"] == "failed"
     trace = bundle.metadata["semantic_proposition_verifier"]
     assert trace["runtime_contract_rejection_count"] == 1
     assert trace["audit_verified_but_runtime_rejected_count"] == 1
@@ -248,11 +263,13 @@ def test_runtime_scope_rejection_rebuilds_proof_instead_of_retrieving() -> None:
         for value in trace["recovery_transitions"]
         if value["from"] == "runtime_authority_contract"
     )
-    assert transition["to"] == "proof_repair"
-    assert transition["outcome"] == "verified"
-    assert trace["semantic_proof_digest_changed"] is True
+    assert transition["to"] == "stop_without_reverify"
+    assert transition["outcome"] == "recovery_no_progress"
+    assert transition["evidence_digest_changed"] is False
+    assert transition["slot_state_digest_changed"] is False
+    assert transition["proposition_binding_digest_changed"] is False
     assert trace["rejected_transactions"][0]["typed_conclusion"]["polarity"] == ("yes")
-    assert len(proposal_llm.calls) == len(audit_llm.calls) == 2
+    assert len(proposal_llm.calls) == len(audit_llm.calls) == 1
 
 
 def test_terminal_runtime_rejection_remains_a_bound_insufficient_response() -> None:
@@ -276,9 +293,15 @@ def test_terminal_runtime_rejection_remains_a_bound_insufficient_response() -> N
 
     assert result is not None and result["verdict"] == "insufficient_evidence"
     header, reason = validated_semantic_header(result, question, release_mode=True)
-    assert reason == ""
-    assert header is not None and header[0] == "insufficient_evidence"
+    assert reason == "candidate_typed_conclusion_binding_invalid"
+    assert header is None
+    assert result["candidate_verification_audit"]["status"] == "failed"
     assert result["verifier"]["auditor_relationship"] == "distinct_model"
     assert result["verifier"]["semantic_pack_digest"]
     assert result["rejected_transaction"]["typed_conclusion"]["polarity"] == "yes"
-    assert len(proposal_llm.calls) == len(audit_llm.calls) == 2
+    transition = bundle.metadata["semantic_proposition_verifier"][
+        "recovery_transitions"
+    ][-1]
+    assert transition["recovery_action"] == "stop_without_reverify"
+    assert transition["stop_reason"] == "recovery_no_progress"
+    assert len(proposal_llm.calls) == len(audit_llm.calls) == 1

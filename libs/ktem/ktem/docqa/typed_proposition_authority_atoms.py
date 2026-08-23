@@ -203,6 +203,14 @@ def _authority_candidate(
         "section_scope": candidate.get(
             "section_scope", candidate.get("scope", result.get("section_scope", ""))
         ),
+        "proposition_slot_bindings": candidate.get(
+            "proposition_slot_bindings",
+            result.get("proposition_slot_bindings", {}),
+        ),
+        "evidence_relation": candidate.get(
+            "evidence_relation",
+            result.get("evidence_relation", ""),
+        ),
         "reason": candidate.get("reason", result.get("reason", "")),
     }
 
@@ -242,6 +250,10 @@ def _boolean_atom_fields(
         "quantifier": str(result.get("quantifier") or ""),
         "scope": section_scope,
         "section_scope": section_scope,
+        "proposition_slot_bindings": dict(
+            result.get("proposition_slot_bindings") or {}
+        ),
+        "evidence_relation": str(result.get("evidence_relation") or ""),
     }
 
 

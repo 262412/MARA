@@ -19,11 +19,11 @@ BOOLEAN_AUTHORITY_STATES: tuple[BooleanAuthorityState, ...] = (
 BOOLEAN_AUTHORITY_DERIVATION_CONTRACT = "boolean_authority_derivation.v1"
 ARGUMENT_CONJUNCTION_RULE = "same_source_argument_conjunction.v1"
 ENTITY_TYPE_JOIN_RULE = "same_source_entity_type_join.v1"
-SEMANTIC_EVIDENCE_SET_RULE = "grounded_semantic_evidence_set_entailment.v3"
-SEMANTIC_PROPOSITION_VERDICT_CONTRACT = "semantic_proposition_verdict.v3"
-GROUNDED_SEMANTIC_VERIFIER_CONTRACT = "grounded_semantic_verifier.v2"
-SEMANTIC_ENTAILMENT_AUDIT_CONTRACT = "semantic_entailment_audit.v2"
-GROUNDED_SEMANTIC_AUDITOR_CONTRACT = "grounded_semantic_auditor.v2"
+SEMANTIC_EVIDENCE_SET_RULE = "grounded_semantic_evidence_set_entailment.v4"
+SEMANTIC_PROPOSITION_VERDICT_CONTRACT = "semantic_proposition_verdict.v4"
+GROUNDED_SEMANTIC_VERIFIER_CONTRACT = "grounded_semantic_verifier.v3"
+SEMANTIC_ENTAILMENT_AUDIT_CONTRACT = "semantic_entailment_audit.v3"
+GROUNDED_SEMANTIC_AUDITOR_CONTRACT = "grounded_semantic_auditor.v3"
 
 
 def candidate_authority_state(relevant: bool) -> BooleanAuthorityState:
@@ -50,6 +50,8 @@ class BooleanEvidenceAuthority:
     qualifier: str = "none"
     source_id: str = ""
     page_label: str = ""
+    proposition_slot_bindings: tuple[tuple[str, str], ...] = ()
+    evidence_relation: str = ""
 
     @property
     def predicate(self) -> str:
@@ -64,7 +66,7 @@ class BooleanEvidenceAuthority:
         return (self.object,) if self.object else ()
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "evidence_id": self.evidence_id,
             "evidence_ref": self.evidence_ref,
             "span_id": self.span_id,
@@ -87,6 +89,11 @@ class BooleanEvidenceAuthority:
             "source_id": self.source_id,
             "page_label": self.page_label,
         }
+        if self.proposition_slot_bindings:
+            payload["proposition_slot_bindings"] = dict(self.proposition_slot_bindings)
+        if self.evidence_relation:
+            payload["evidence_relation"] = self.evidence_relation
+        return payload
 
 
 @dataclass(frozen=True)

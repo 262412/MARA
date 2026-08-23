@@ -7,7 +7,7 @@ from typing import Any, Iterable, Mapping
 from .qasper_semantic_debug_findings import findings_for_row
 
 QASPER_SEMANTIC_DEBUG_CONTRACT = "qasper_semantic_pipeline_debug.v3"
-SEMANTIC_PROPOSITION_DEBUG_CONTRACT = "semantic_proposition_debug_trace.v2"
+SEMANTIC_PROPOSITION_DEBUG_CONTRACT = "semantic_proposition_debug_trace.v3"
 
 _RECOVERY_STAGES = {
     "evidence_rebind",
@@ -352,6 +352,15 @@ def _online_model_coverage(
     verifier: Mapping[str, Any],
 ) -> dict[str, Any]:
     audit = _mapping(verifier.get("candidate_verification_audit"))
+    auditor_attempt_observed = bool(
+        int(verifier.get("audit_model_call_count") or 0) > 0
+        and str(audit.get("mode") or "") not in {"", "deterministic_schema_audit"}
+        and audit.get("status") in {"passed", "failed"}
+        and audit.get("audited_candidate") == verifier.get("candidate_label")
+        and audit.get("audited_judgment")
+        == verifier.get("candidate_verification_status")
+        and audit.get("replacement_candidate_allowed") is False
+    )
     return {
         "contract_id": "qasper_online_model_coverage.v1",
         "generator_model": str(generator.get("model") or ""),
@@ -365,14 +374,10 @@ def _online_model_coverage(
             verifier.get("model")
             and int(verifier.get("proposal_model_call_count") or 0) > 0
         ),
-        "auditor_observed": bool(
-            int(verifier.get("audit_model_call_count") or 0) > 0
-            and str(audit.get("mode") or "") not in {"", "deterministic_schema_audit"}
-            and audit.get("status") == "passed"
-            and audit.get("audited_candidate") == verifier.get("candidate_label")
-            and audit.get("audited_judgment")
-            == verifier.get("candidate_verification_status")
-        ),
+        "auditor_observed": auditor_attempt_observed,
+        "auditor_attempt_observed": auditor_attempt_observed,
+        "auditor_status": str(audit.get("status") or ""),
+        "auditor_passed": audit.get("status") == "passed",
     }
 
 
@@ -423,6 +428,7 @@ def _audited_typed_conclusion(
         _latest_rejected_field(rejected_transactions, "typed_conclusion"),
         proposal.get("typed_conclusion"),
         outcome.get("typed_conclusion"),
+        verifier.get("audited_typed_conclusion"),
         verifier.get("typed_conclusion"),
     )
 

@@ -9,7 +9,6 @@ from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.query_planning import build_query_plan
 from ktem.docqa.question_proposition import build_question_proposition, typed_conclusion
 from ktem.reasoning.mara_semantic_proposition_verifier import (
-    SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
     build_semantic_proposition_verifier,
 )
 
@@ -88,6 +87,7 @@ def _proposal() -> str:
     return json.dumps(
         {
             "verdict": "yes",
+            "evidence_relation": "proposition_support",
             "support_mode": "evidence_set",
             "proof_mode": "composite_conjunction",
             "jointly_complete": True,
@@ -97,6 +97,7 @@ def _proposal() -> str:
                     "span_selector": "E1:S1",
                     "proposition_fragment": "cross-lingual evaluation was performed",
                     "supports_slot_ids": slot_ids[:2],
+                    "binds_proposition_slots": ["actor", "predicate"],
                 },
                 {
                     "span_selector": "E2:S1",
@@ -104,6 +105,7 @@ def _proposal() -> str:
                         "single-language baselines were included for comparison"
                     ),
                     "supports_slot_ids": [slot_ids[-1]],
+                    "binds_proposition_slots": ["object", "quantifier"],
                 },
             ],
         }
@@ -118,6 +120,12 @@ def _repairable_proposal() -> str:
         if slot.required_for_verification
     ]
     payload["premises"][0]["supports_slot_ids"] = slot_ids
+    payload["premises"][0]["binds_proposition_slots"] = [
+        "actor",
+        "predicate",
+        "object",
+        "quantifier",
+    ]
     return json.dumps(payload)
 
 
@@ -136,6 +144,12 @@ def _rebuilt_atomic_proposal() -> str:
                 "the complete comparison proposition is established"
             ),
             "supports_slot_ids": slot_ids,
+            "binds_proposition_slots": [
+                "actor",
+                "predicate",
+                "object",
+                "quantifier",
+            ],
         }
     ]
     return json.dumps(payload)
@@ -149,11 +163,15 @@ def _audit(*, second_fragment_entailed: bool = True) -> str:
                     "premise_ref": "P1",
                     "fragment_entailed": True,
                     "scope_consistent": True,
+                    "proposition_bindings_valid": True,
+                    "evidence_relation_valid": True,
                 },
                 {
                     "premise_ref": "P2",
                     "fragment_entailed": second_fragment_entailed,
                     "scope_consistent": True,
+                    "proposition_bindings_valid": second_fragment_entailed,
+                    "evidence_relation_valid": second_fragment_entailed,
                 },
             ],
             "jointly_entails": second_fragment_entailed,
@@ -161,6 +179,9 @@ def _audit(*, second_fragment_entailed: bool = True) -> str:
             "contradiction_free": True,
             "conclusion_check": {
                 "conclusion_entailed": second_fragment_entailed,
+                "actor_consistent": second_fragment_entailed,
+                "predicate_consistent": second_fragment_entailed,
+                "object_consistent": second_fragment_entailed,
                 "polarity_consistent": True,
                 "quantifier_consistent": True,
                 "scope_consistent": True,
@@ -182,11 +203,23 @@ def _insufficient_proposal() -> str:
     return json.dumps(
         {
             "verdict": "insufficient_evidence",
+            "evidence_relation": "undetermined",
             "support_mode": "evidence_set",
             "proof_mode": "none",
             "jointly_complete": False,
             "each_premise_required": False,
             "premises": [],
+            "unknown_assessment": {
+                "reviewed_span_selectors": ["E1:S1", "E2:S1"],
+                "unresolved_proposition_slots": [
+                    "actor",
+                    "predicate",
+                    "object",
+                    "quantifier",
+                ],
+                "support_gap": "No reviewed evidence set establishes every proposition slot.",
+                "contradiction_gap": "No reviewed evidence explicitly contradicts the proposition.",
+            },
         }
     )
 
@@ -215,6 +248,7 @@ def _atomic_proposal(*, selector: str = "E1:S1") -> str:
     return json.dumps(
         {
             "verdict": "yes",
+            "evidence_relation": "proposition_support",
             "support_mode": "evidence_set",
             "proof_mode": "atomic_semantic",
             "jointly_complete": True,
@@ -224,6 +258,12 @@ def _atomic_proposal(*, selector: str = "E1:S1") -> str:
                     "span_selector": selector,
                     "proposition_fragment": ("cross-lingual transfer was evaluated"),
                     "supports_slot_ids": ["support:boolean_proposition"],
+                    "binds_proposition_slots": [
+                        "actor",
+                        "predicate",
+                        "object",
+                        "quantifier",
+                    ],
                 }
             ],
         }
@@ -238,6 +278,8 @@ def _atomic_audit() -> str:
                     "premise_ref": "P1",
                     "fragment_entailed": True,
                     "scope_consistent": True,
+                    "proposition_bindings_valid": True,
+                    "evidence_relation_valid": True,
                 }
             ],
             "jointly_entails": True,
@@ -245,10 +287,31 @@ def _atomic_audit() -> str:
             "contradiction_free": True,
             "conclusion_check": {
                 "conclusion_entailed": True,
+                "actor_consistent": True,
+                "predicate_consistent": True,
+                "object_consistent": True,
                 "polarity_consistent": True,
                 "quantifier_consistent": True,
                 "scope_consistent": True,
             },
+        }
+    )
+
+
+def _unknown_audit(*, support_gap_valid: bool = True) -> str:
+    return json.dumps(
+        {
+            "audit_scope": "original_candidate_and_verifier_unknown_only",
+            "audited_candidate": "yes",
+            "audited_verdict": "insufficient_evidence",
+            "audited_judgment": "unknown",
+            "typed_conclusion_present": True,
+            "reviewed_evidence_present": True,
+            "support_gap_valid": support_gap_valid,
+            "contradiction_gap_valid": True,
+            "relationship_consistent": True,
+            "replacement_candidate_allowed": False,
+            "replacement_candidate": "",
         }
     )
 
@@ -270,13 +333,25 @@ def test_runtime_requires_an_independent_entailment_audit_before_commit() -> Non
     result = verifier(_request(), QUESTION, "unanswerable", bundle)
 
     assert result is not None
-    assert result["contract_id"] == "semantic_proposition_verdict.v3"
+    assert result["contract_id"] == "semantic_proposition_verdict.v4"
     assert result["verdict"] == "yes"
     audit = result["entailment_audit"]
-    assert audit["contract_id"] == "semantic_entailment_audit.v2"
-    assert audit["auditor"]["contract_id"] == "grounded_semantic_auditor.v2"
+    assert audit["contract_id"] == "semantic_entailment_audit.v3"
+    assert audit["auditor"]["contract_id"] == "grounded_semantic_auditor.v3"
     assert audit["status"] == "verified"
     assert audit["premise_count"] == 2
+    assert {
+        slot
+        for premise in result["premises"]
+        for slot in premise["proposition_slot_bindings"]
+    } == {"actor", "predicate", "object", "quantifier"}
+    assert {premise["evidence_relation"] for premise in result["premises"]} == {
+        "proposition_support"
+    }
+    assert all(
+        check["proposition_bindings_valid"] and check["evidence_relation_valid"]
+        for check in audit["premise_checks"]
+    )
     assert len(llm.calls) == 2
     trace = bundle.metadata["semantic_proposition_verifier"]
     assert trace["audit_status"] == "verified"
@@ -302,6 +377,61 @@ def test_runtime_publishes_typed_question_proposition_and_conclusion_audit() -> 
     conclusion_audit = result["entailment_audit"]["conclusion_audit"]
     assert conclusion_audit["conclusion_id"] == conclusion.conclusion_id
     assert conclusion_audit["auditor_relationship"] == "same_instance"
+
+
+def test_unknown_verdict_requires_candidate_typed_conclusion_and_gap_audit() -> None:
+    llm = _SequenceLLM(
+        [_response(_insufficient_proposal()), _response(_unknown_audit())]
+    )
+    verifier = _verifier(llm, debug=True)
+    bundle = EvidenceBundle(route="doc_text", items=_items())
+
+    result = verifier(_request(), QUESTION, "yes", bundle)
+
+    assert result is not None
+    assert result["verdict"] == "insufficient_evidence"
+    assert result["audited_typed_conclusion"]["polarity"] == "yes"
+    assert result["unknown_assessment"]["reviewed_evidence"]
+    audit = result["candidate_verification_audit"]
+    assert audit["status"] == "passed"
+    assert audit["mode"] == "candidate_bound_unknown_audit"
+    assert audit["replacement_candidate_allowed"] is False
+    assert len(llm.calls) == 2
+
+
+def test_unknown_verdict_rejects_empty_generic_entailment_audit() -> None:
+    empty_generic_audit = json.dumps(
+        {
+            "premise_checks": [],
+            "jointly_entails": True,
+            "each_premise_required": True,
+            "contradiction_free": True,
+            "conclusion_check": {
+                "conclusion_entailed": True,
+                "actor_consistent": True,
+                "predicate_consistent": True,
+                "object_consistent": True,
+                "polarity_consistent": True,
+                "quantifier_consistent": True,
+                "scope_consistent": True,
+            },
+        }
+    )
+    llm = _SequenceLLM(
+        [
+            _response(_insufficient_proposal()),
+            _response(empty_generic_audit),
+            _response(empty_generic_audit),
+        ]
+    )
+    verifier = _verifier(llm, debug=True)
+    bundle = EvidenceBundle(route="doc_text", items=_items())
+
+    assert verifier(_request(), QUESTION, "yes", bundle) is None
+
+    trace = bundle.metadata["semantic_proposition_verifier"]
+    assert trace["candidate_verification_audit"]["status"] == "failed"
+    assert trace["audit_reason"] == "invalid_candidate_bound_unknown_audit_json"
 
 
 def test_release_mode_same_instance_auditor_fails_closed_before_model_call() -> None:
@@ -344,12 +474,13 @@ def test_runtime_can_route_the_audit_to_a_dedicated_model() -> None:
     )
 
 
-def test_runtime_downgrades_a_self_attested_but_unaudited_extension() -> None:
+def test_runtime_rejects_a_self_attested_extension_without_reanswering() -> None:
     llm = _SequenceLLM(
         [
             _response(_proposal()),
             _response(_audit(second_fragment_entailed=False)),
             _response(_insufficient_proposal()),
+            _response(_unknown_audit()),
         ]
     )
     verifier = _verifier(llm)
@@ -361,12 +492,15 @@ def test_runtime_downgrades_a_self_attested_but_unaudited_extension() -> None:
     assert result["verdict"] == "insufficient_evidence"
     assert result["premises"] == []
     trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["status"] == "parsed"
+    assert trace["status"] == "audit_rejected"
     assert trace["audit_status"] == "rejected"
     assert trace["audit_reason"] == "premise_fragment_not_entailed"
-    assert trace["proof_repair_count"] == 1
-    assert trace["recovery_transitions"][-1]["to"] == "proof_repair"
-    assert trace["recovery_transitions"][-1]["outcome"] == ("rebuilt_as_insufficient")
+    assert trace.get("proof_repair_count", 0) == 0
+    transition = trace["recovery_transitions"][-1]
+    assert transition["to"] == "stop_without_reverify"
+    assert transition["outcome"] == "recovery_no_progress"
+    assert transition["proposition_binding_digest_changed"] is False
+    assert len(llm.calls) == 2
 
 
 def test_false_premise_with_joint_entailment_true_triggers_repair_and_full_review() -> (
@@ -393,6 +527,14 @@ def test_false_premise_with_joint_entailment_true_triggers_repair_and_full_revie
     assert trace["full_reaudit"] is True
     repair_debug = trace["debug_trace"]["events"][0]["transaction"]["proof_repair"]
     assert repair_debug["kind"] == "pruned"
+    transition = repair_debug["transition"]
+    assert transition["evidence_digest_changed"] is False
+    assert transition["slot_state_digest_changed"] is False
+    assert transition["proposition_binding_digest_changed"] is True
+    assert (
+        transition["proposition_binding_digest_before"]
+        != transition["proposition_binding_digest_after"]
+    )
     assert repair_debug["initial_audit"]["attempts"][0]["raw_response"] == (
         _audit_with_false_premise_but_joint_entailment()
     )
@@ -401,7 +543,7 @@ def test_false_premise_with_joint_entailment_true_triggers_repair_and_full_revie
     )
 
 
-def test_unprunable_contradictory_audit_rebuilds_proof_then_fully_reaudits() -> None:
+def test_unprunable_contradictory_audit_stops_without_reanswering() -> None:
     llm = _SequenceLLM(
         [
             _response(_proposal()),
@@ -416,180 +558,17 @@ def test_unprunable_contradictory_audit_rebuilds_proof_then_fully_reaudits() -> 
     result = verifier(_request(), QUESTION, "yes", bundle)
 
     assert result is not None
-    assert result["verdict"] == "yes"
-    assert result["proof_mode"] == "atomic_semantic"
-    assert len(llm.calls) == 4
+    assert result["verdict"] == "insufficient_evidence"
+    assert result["candidate_verification_audit"]["status"] == "failed"
+    assert len(llm.calls) == 2
     trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["proof_repair_count"] == 1
-    assert trace["proof_rebuild_count"] == 1
-    assert trace["proof_reaudit_count"] == 1
-    assert trace["full_reaudit"] is True
-    assert trace["recovery_transitions"][-1]["outcome"] == "rebuilt"
+    assert trace.get("proof_repair_count", 0) == 0
+    assert trace.get("proof_rebuild_count", 0) == 0
+    assert trace.get("proof_reaudit_count", 0) == 0
+    assert trace["recovery_transitions"][-1]["outcome"] == "recovery_no_progress"
     repair_debug = trace["debug_trace"]["events"][0]["transaction"]["proof_repair"]
-    assert repair_debug["kind"] == "rebuilt"
+    assert repair_debug["kind"] == "stopped"
     assert repair_debug["initial_audit"]["attempts"][0]["raw_response"] == (
         _audit_with_false_premise_but_joint_entailment()
     )
-    assert repair_debug["proof_reaudit"]["attempts"][0]["raw_response"] == (
-        _atomic_audit()
-    )
-
-
-def test_runtime_retries_one_malformed_proposal_then_audits_it() -> None:
-    llm = _SequenceLLM(
-        [
-            _response("{", completion_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS),
-            _response(_proposal()),
-            _response(_audit()),
-        ]
-    )
-    verifier = _verifier(llm)
-    bundle = EvidenceBundle(route="doc_text", items=_items())
-
-    result = verifier(_request(), QUESTION, "yes", bundle)
-
-    assert result is not None and result["verdict"] == "yes"
-    assert len(llm.calls) == 3
-    trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["proposal_retry_count"] == 1
-    assert trace["initial_parse_failure_reason"] == "json_decode_error"
-
-
-def test_runtime_classifies_exhausted_output_without_recording_response_text() -> None:
-    llm = _SequenceLLM(
-        [
-            _response(
-                "{",
-                completion_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
-                finish_reason="length",
-            ),
-            _response(
-                "{",
-                completion_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
-                finish_reason="length",
-            ),
-        ]
-    )
-    verifier = _verifier(llm)
-    bundle = EvidenceBundle(route="doc_text", items=_items())
-
-    assert verifier(_request(), QUESTION, "yes", bundle) is None
-
-    trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["reason"] == "provider_output_truncated"
-    assert trace["parse_failure_reason"] == "json_decode_error"
-    assert trace["response_finish_reason"] == "length"
-    assert trace["response_completion_tokens"] == (
-        SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS
-    )
-    assert trace["response_chars"] == 1
-    assert "response_text" not in trace
-    assert "debug_trace" not in trace
-
-
-def test_debug_trace_records_every_proposal_and_audit_output_without_changing_result() -> (
-    None
-):
-    llm = _SequenceLLM([_response(_proposal()), _response(_audit())])
-    verifier = _verifier(llm, debug=True)
-    bundle = EvidenceBundle(route="doc_text", items=_items())
-
-    result = verifier(_request(), QUESTION, "unanswerable", bundle)
-
-    assert result is not None and result["verdict"] == "yes"
-    debug = bundle.metadata["semantic_proposition_verifier"]["debug_trace"]
-    assert debug["contract_id"] == "semantic_proposition_debug_trace.v2"
-    [event] = debug["events"]
-    assert event["event"] == "model_transaction"
-    assert event["auditor_relationship"] == "same_instance"
-    assert event["transaction"]["proposal"]["attempts"][0]["raw_response"] == (
-        _proposal()
-    )
-    assert (
-        event["transaction"]["proposal"]["attempts"][0]["parsed_value"]["verdict"]
-        == "yes"
-    )
-    assert event["transaction"]["audit"]["attempts"][0]["raw_response"] == (_audit())
-    assert (
-        event["transaction"]["audit"]["attempts"][0]["parsed_value"]["jointly_entails"]
-        is True
-    )
-
-
-def test_debug_trace_preserves_cache_reuse_after_a_rejected_audit() -> None:
-    llm = _SequenceLLM(
-        [
-            _response(_proposal()),
-            _response(_audit(second_fragment_entailed=False)),
-            _response(_insufficient_proposal()),
-        ]
-    )
-    verifier = _verifier(llm, debug=True)
-    bundle = EvidenceBundle(route="doc_text", items=_items())
-
-    first = verifier(_request(), QUESTION, "yes", bundle)
-    second = verifier(_request(), QUESTION, "yes", bundle)
-
-    assert first == second
-    debug = bundle.metadata["semantic_proposition_verifier"]["debug_trace"]
-    assert [event["event"] for event in debug["events"]] == [
-        "model_transaction",
-        "cache_reuse",
-    ]
-    assert debug["events"][0]["outcome"]["audit_status"] == "rejected"
-    assert debug["events"][1]["source_event_index"] == 1
-    assert debug["events"][1]["cached_outcome"]["audit_status"] == "rejected"
-
-
-def test_debug_trace_can_be_enabled_by_the_slurm_environment(monkeypatch: Any) -> None:
-    monkeypatch.setenv("MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE", "1")
-    llm = _SequenceLLM([_response(_proposal()), _response(_audit())])
-    verifier = build_semantic_proposition_verifier(
-        SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
-    )
-    assert verifier is not None
-    bundle = EvidenceBundle(route="doc_text", items=_items())
-
-    verifier(_request(), QUESTION, "unanswerable", bundle)
-
-    assert (
-        bundle.metadata["semantic_proposition_verifier"]["debug_trace"]["contract_id"]
-        == "semantic_proposition_debug_trace.v2"
-    )
-
-
-def test_canonical_sentence_span_selector_preserves_exact_quote_and_offsets() -> None:
-    source_text = (
-        "Lead-in context. Transfer was evaluated across two languages. "
-        "Trailing context."
-    )
-    target_quote = "Transfer was evaluated across two languages."
-    local_start = source_text.index(target_quote)
-    canonical_start = 240
-    item = {
-        "evidence_id": "canonical-span-source",
-        "source_id": "paper",
-        "section_id": "experiments",
-        "canonical_start": canonical_start,
-        "text": source_text,
-    }
-    llm = _SequenceLLM(
-        [_response(_atomic_proposal(selector="E1:S2")), _response(_atomic_audit())]
-    )
-    verifier = _verifier(llm)
-    bundle = EvidenceBundle(route="doc_text", items=[item])
-
-    result = verifier(
-        _atomic_request(),
-        "Did the authors evaluate transfer across languages?",
-        "yes",
-        bundle,
-    )
-
-    assert result is not None
-    [premise] = result["premises"]
-    assert premise["quote"] == target_quote
-    assert premise["span_start"] == local_start
-    assert premise["span_end"] == local_start + len(target_quote)
-    assert premise["canonical_start"] == canonical_start + local_start
-    assert premise["canonical_end"] == canonical_start + local_start + len(target_quote)
+    assert repair_debug["proof_reaudit"] == {}

@@ -169,11 +169,14 @@ def _verified_conclusion_audit_missing(verifier: Mapping[str, Any]) -> bool:
         return False
     audit = _mapping(verifier.get("conclusion_audit"))
     return bool(
-        audit.get("contract_id") != "conclusion_audit.v1"
+        audit.get("contract_id") != "conclusion_audit.v2"
         or any(
             audit.get(field) is not True
             for field in (
                 "conclusion_entailed",
+                "actor_consistent",
+                "predicate_consistent",
+                "object_consistent",
                 "polarity_consistent",
                 "quantifier_consistent",
                 "scope_consistent",

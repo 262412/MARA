@@ -152,8 +152,12 @@ class SelectionAssessmentSnapshot:
         missing: dict[SemanticAssessmentKey, tuple[Any, dict[str, Any]]] = {}
         semantic_candidates = set(self._semantic_candidates)
         semantic_slots = set(self._slots)
+        canonical_question = str(plan.constraints.get("question") or "").strip()
         for slot in slots:
-            slot_key = (_frame_revision(slot), _normalized_text(slot.role))
+            slot_key = (
+                _frame_revision(slot, canonical_question),
+                _normalized_text(slot.role),
+            )
             semantic_slots.add(slot_key)
             for item in items:
                 key = semantic_assessment_key(plan, slot, item)
@@ -177,7 +181,7 @@ class SelectionAssessmentSnapshot:
         assessments = dict(self._assessments)
         for key, (slot, item) in missing.items():
             score, authority_level = boolean_proposition_selection_assessment(
-                str(slot.query or slot.metric or ""),
+                canonical_question or str(slot.query or slot.metric or ""),
                 item,
                 metric=str(slot.metric or ""),
             )
@@ -200,20 +204,21 @@ def semantic_assessment_key(
     slot: Any,
     item: dict[str, Any],
 ) -> SemanticAssessmentKey:
-    del plan  # The classifier reads the typed slot frame, not request metadata.
+    canonical_question = str(plan.constraints.get("question") or "").strip()
     return SemanticAssessmentKey(
-        frame=_frame_revision(slot),
+        frame=_frame_revision(slot, canonical_question),
         slot_role=_normalized_text(slot.role),
         evidence_identity=_semantic_evidence_identity(item),
         content_revision=_fingerprint(_classification_evidence_payload(item)),
     )
 
 
-def _frame_revision(slot: Any) -> str:
+def _frame_revision(slot: Any, canonical_question: str = "") -> str:
     return _fingerprint(
         {
             "query": _normalized_text(slot.query),
             "metric": _normalized_text(slot.metric),
+            "canonical_question": _normalized_text(canonical_question),
             "statement_kind": _normalized_text(slot.statement_kind),
         }
     )

@@ -82,6 +82,7 @@ def insufficient_semantic_result(
     result = {
         "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
         "verdict": "insufficient_evidence",
+        "evidence_relation": "undetermined",
         "support_mode": "evidence_set",
         "proof_mode": "none",
         "jointly_complete": False,

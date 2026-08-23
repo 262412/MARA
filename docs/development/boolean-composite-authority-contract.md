@@ -95,7 +95,7 @@ treated only the empirical sentence as complete authority is not used.
 
 ### Grounded semantic evidence-set entailment
 
-`grounded_semantic_evidence_set_entailment.v3` handles propositions whose
+`grounded_semantic_evidence_set_entailment.v4` handles propositions whose
 premise relationship is semantic rather than a registered lexical join. It
 separates two proof modes instead of treating every semantic proof as a
 conjunction:
@@ -109,12 +109,16 @@ A conservative proposition proposer selects canonical runtime-provided spans
 from one source and returns:
 
 - one `yes`, `no`, or `insufficient_evidence` verdict under
-  `semantic_proposition_verdict.v3`;
+  `semantic_proposition_verdict.v4`;
+- one polarity-aware evidence relation: `proposition_support` for `yes`,
+  `explicit_contradiction` for `no`, or `undetermined` for verifier unknown;
 - `support_mode=evidence_set`;
 - the explicit proof mode;
 - an all-premises-required attestation;
 - a distinct proposition fragment for every quote;
 - the exact QueryPlan verification slots supported by every premise; and
+- the actor, predicate, object, and quantifier fields bound by every premise,
+  with all four fields covered by one digest-bound auditable evidence set; and
 - a model, seed, and verifier contract attestation.
 
 The runtime first creates a `question_proposition.v1` value containing the
@@ -123,22 +127,36 @@ qualifier, quantifier, modality, negation, and time fields. A proposed polarity
 creates a digest-bound `typed_conclusion.v1`. The first model response is only a
 proof proposal, never authority.
 
-Before typed commit, a separate `semantic_entailment_audit.v2` transaction
+The upstream QASPER candidate parser is format-only. Its `raw`, `cleaned`, and
+`typed` stages must preserve the same `yes`, `no`, or `unanswerable` label and
+record identity digests for that lineage. Missing QueryPlan slots, incomplete
+evidence binding, or a verifier disagreement cannot rewrite a raw `yes` or `no`
+to `unanswerable`; those conditions produce verifier `unknown`. The candidate
+policy records `replacement_candidate_allowed=false`, so neither the verifier
+nor either auditor may answer the question again or substitute another label.
+
+Before typed commit, a separate `semantic_entailment_audit.v3` transaction
 receives the typed question, typed conclusion, proof mode, exact quotes, and
-proposition fragments. It checks every premise independently and checks the
-complete conclusion's polarity, quantifier, and scope. The resulting
-`conclusion_audit.v1` is bound to the exact conclusion digest. Release-mode
+proposition fragments. It checks every premise's explicit proposition-slot
+bindings and evidence polarity independently, then checks the complete
+conclusion's actor, predicate, object, polarity, quantifier, and scope. The
+resulting `conclusion_audit.v2` is bound to the exact conclusion digest. A
+separate candidate-bound unknown auditor must review non-empty evidence and
+explain why neither support nor explicit contradiction is established; an
+empty premise set or typed candidate conclusion cannot pass that audit.
+Release-mode
 QASPER execution fails before the proposer call if proposer and auditor are the
 same model instance; a separate instance of the same model or a distinct model
 still performs a separate request, parse, and attestation.
 
 The local parser performs deterministic cross-field checks in addition to the
 provider schema. In particular, `jointly_entails=true` cannot coexist with a
-false premise check. Such a response enters bounded `proof_repair`: the runtime
-may prune rejected premises only if the remaining proof still covers every
-required slot, otherwise it asks the proposer to rebuild from the canonical
-selectors. Either path discards the old audit and runs the complete independent
-audit again. A second contradictory audit is not repaired recursively.
+false premise check. Such a response enters bounded `proof_repair` only when a
+deterministic local prune leaves a complete proof and changes the proposition
+binding digest. The selected-evidence and slot-state digests remain unchanged,
+and the pruned binding receives one complete independent re-audit. If no
+complete changed binding can be produced, runtime stops immediately without a
+proposer rebuild, second answer, or recursive audit.
 
 An accepted audit records per-premise quote and fragment digests plus a digest
 of the complete proposed transaction. The audit is included in the verifier
@@ -196,12 +214,14 @@ persisted. The audit prompt is bounded separately and has a 512-token output
 cap.
 
 Recovery is recorded as one of `proof_repair`, `quote_rebind`, or
-`evidence_retrieval`. Controller recovery records both raw-evidence and
-semantic-pack digests before and after the transition. A fresh semantic model
-verification is allowed only when the semantic-pack digest changes; changes to
-runtime IDs, unselected text, or other non-prompt state cannot create a new
-verification attempt. Proof repair remains an internal audited transaction and
-always performs its required full re-audit.
+`evidence_retrieval`. Every recovery decision records independent before/after
+digests for canonical evidence, normalized required-slot state, and proposition
+binding. A fresh verification is allowed only when at least one of those three
+semantic states actually changes. Runtime IDs, reordered equivalent evidence,
+unchanged slot projections, and repeated proposition bindings cannot create a
+new attempt. Local premise pruning is the only internal proof repair and is
+re-audited only after a changed proposition binding; a downstream runtime
+contract rejection never calls the proposer again.
 
 ## Fail-closed invariants
 
@@ -231,8 +251,9 @@ A composite proposition is verified only when all of the following hold:
     to four all-required premises for `composite_conjunction`.
 15. The typed question, typed conclusion, conclusion audit, auditor
     relationship, and semantic-pack digest remain bound through commit.
-16. A repaired proof has a complete fresh audit; recovery cannot reverify an
-    unchanged semantic pack.
+16. A locally pruned proof has a complete fresh audit, and any recovery reverify
+    is backed by a changed evidence, required-slot-state, or proposition-binding
+    digest; otherwise recovery stops without another model call.
 
 If any invariant fails, the transaction is downgraded coherently to missing
 authority and the answer remains unknown or abstained. Missing evidence never

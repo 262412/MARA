@@ -14,6 +14,7 @@ from .boolean_candidate_authority import structured_boolean_candidate_label
 from .evidence_schema import EvidenceBundle
 from .semantic_evidence_set_derivation import semantic_evidence_set_derivation
 from .semantic_evidence_set_validation import (
+    semantic_proposition_binding_fields,
     validated_semantic_header,
     validated_semantic_premises,
 )
@@ -79,25 +80,7 @@ def semantic_evidence_set_claim_authority(
     _append_debug_stage(debug_trace, "header", "accepted", "")
     verdict, attestation = header
     if verdict == "insufficient_evidence":
-        _append_debug_stage(
-            debug_trace,
-            "premises",
-            "not_required",
-            "semantic_evidence_set_insufficient",
-        )
-        _record_trace(
-            bundle,
-            "insufficient",
-            "semantic_evidence_set_insufficient",
-            debug_trace=debug_trace,
-            verifier_input_candidate=str(
-                response.get("verifier_input_candidate") or ""
-            ),
-            candidate_verification_status=str(
-                response.get("candidate_verification_status") or "unknown"
-            ),
-            replacement_candidate_allowed=False,
-        )
+        _record_insufficient_authority(bundle, response, debug_trace)
         return None
     return _authority_from_verified_response(
         request,
@@ -108,6 +91,35 @@ def semantic_evidence_set_claim_authority(
         verdict,
         attestation,
         debug_trace,
+    )
+
+
+def _record_insufficient_authority(
+    bundle: EvidenceBundle,
+    response: Mapping[str, Any],
+    debug_trace: dict[str, Any] | None,
+) -> None:
+    _append_debug_stage(
+        debug_trace,
+        "premises",
+        "not_required",
+        "semantic_evidence_set_insufficient",
+    )
+    _record_trace(
+        bundle,
+        "insufficient",
+        "semantic_evidence_set_insufficient",
+        debug_trace=debug_trace,
+        verifier_input_candidate=str(response.get("verifier_input_candidate") or ""),
+        candidate_verification_status=str(
+            response.get("candidate_verification_status") or "unknown"
+        ),
+        candidate_verification_audit=dict(
+            response.get("candidate_verification_audit") or {}
+        ),
+        audited_typed_conclusion=dict(response.get("audited_typed_conclusion") or {}),
+        unknown_assessment=dict(response.get("unknown_assessment") or {}),
+        replacement_candidate_allowed=False,
     )
 
 
@@ -143,6 +155,8 @@ def _authority_from_verified_response(
     attestation = _enriched_attestation(
         attestation,
         response,
+        verdict=verdict,
+        premises=premises,
         premise_count=len(premises),
         scope_basis=scope_basis,
         slot_support=slot_support,
@@ -195,6 +209,7 @@ def _commit_verified_authority(
     _append_debug_stage(debug_trace, "derivation", "bound", "")
     audit = response.get("entailment_audit")
     audit = audit if isinstance(audit, Mapping) else {}
+    attestation = derivation.verifier_attestation or {}
     _record_trace(
         bundle,
         "verified",
@@ -214,6 +229,19 @@ def _commit_verified_authority(
         ),
         semantic_pack_digest=str(
             (response.get("verifier") or {}).get("semantic_pack_digest") or ""
+        ),
+        evidence_relation=str(attestation.get("evidence_relation") or ""),
+        proposition_slot_bindings=dict(
+            attestation.get("proposition_slot_bindings") or {}
+        ),
+        proposition_slot_evidence_refs=dict(
+            attestation.get("proposition_slot_evidence_refs") or {}
+        ),
+        proposition_binding_evidence_set_refs=list(
+            attestation.get("proposition_binding_evidence_set_refs") or []
+        ),
+        proposition_evidence_set_digest=str(
+            attestation.get("proposition_evidence_set_digest") or ""
         ),
         verifier_input_candidate=str(response.get("verifier_input_candidate") or ""),
         candidate_verification_status=str(
@@ -250,6 +278,8 @@ def _enriched_attestation(
     attestation: dict[str, Any],
     response: Mapping[str, Any],
     *,
+    verdict: str,
+    premises: tuple[Any, ...],
     premise_count: int,
     scope_basis: str,
     slot_support: dict[str, tuple[str, ...]],
@@ -268,6 +298,7 @@ def _enriched_attestation(
         "required_slot_ids": sorted(
             {slot_id for values in slot_support.values() for slot_id in values}
         ),
+        **semantic_proposition_binding_fields(verdict, premises),
     }
 
 
@@ -290,6 +321,10 @@ def _rejected_transaction_fields(response: Mapping[str, Any]) -> dict[str, Any]:
         "semantic_pack_digest": str(
             (response.get("verifier") or {}).get("semantic_pack_digest") or ""
         ),
+        "candidate_verification_audit": dict(
+            response.get("candidate_verification_audit") or {}
+        ),
+        "unknown_assessment": dict(response.get("unknown_assessment") or {}),
     }
 
 

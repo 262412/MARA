@@ -37,19 +37,19 @@ def _prediction() -> dict:
 def _semantic_metadata() -> dict:
     return {
         "semantic_proposition_verifier": {
-            "contract_id": "semantic_proposition_verifier_runtime.v2",
+            "contract_id": "semantic_proposition_verifier_runtime.v3",
             "status": "parsed",
             "reason": "strict_schema_and_entailment_audit",
             "audit_status": "verified",
             "conclusion_audit": {
-                "contract_id": "conclusion_audit.v1",
+                "contract_id": "conclusion_audit.v2",
                 "conclusion_entailed": True,
                 "polarity_consistent": True,
                 "quantifier_consistent": True,
                 "scope_consistent": True,
             },
             "debug_trace": {
-                "contract_id": "semantic_proposition_debug_trace.v2",
+                "contract_id": "semantic_proposition_debug_trace.v3",
                 "events": [
                     {
                         "event_index": 1,
@@ -62,7 +62,7 @@ def _semantic_metadata() -> dict:
             },
         },
         "semantic_proposition_authority": {
-            "contract_id": "semantic_proposition_verdict.v3",
+            "contract_id": "semantic_proposition_verdict.v4",
             "status": "rejected",
             "reason": "semantic_premise_fragment_invalid",
             "debug_trace": {
@@ -130,6 +130,7 @@ def test_qasper_semantic_debug_row_projects_the_full_consistency_chain() -> None
         "audit_verified_authority_rejected",
         "same_instance_proposal_and_audit",
         "recovery_stopped_without_state_change",
+        "verified_audit_conclusion_contract_missing",
     }
 
 
@@ -138,11 +139,12 @@ def test_qasper_semantic_debug_summary_counts_each_finding() -> None:
 
     assert qasper_semantic_debug_summary(rows) == {
         "qasper_semantic_debug_trace_count": 1,
-        "qasper_semantic_debug_finding_count": 3,
+        "qasper_semantic_debug_finding_count": 4,
         "qasper_semantic_debug_findings": {
             "audit_verified_authority_rejected": 1,
             "recovery_stopped_without_state_change": 1,
             "same_instance_proposal_and_audit": 1,
+            "verified_audit_conclusion_contract_missing": 1,
         },
     }
 
@@ -306,7 +308,7 @@ def test_qasper_semantic_debug_localizes_false_abstention_boundary(
     prediction = _prediction()
     metadata = prediction["engine_terminal_evidence_bundle"]["metadata"]
     metadata["qasper_candidate_generation"] = {
-        "contract_id": "qasper_typed_candidate_generation.v1",
+        "contract_id": "qasper_typed_candidate_generation.v2",
         "status": "parsed",
         "failure_reason": "",
         "typed_candidate": candidate,
@@ -360,7 +362,7 @@ def test_qasper_semantic_debug_prefers_persisted_rejected_transaction() -> None:
                         "polarity": "yes",
                     },
                     "conclusion_audit": {
-                        "contract_id": "conclusion_audit.v1",
+                        "contract_id": "conclusion_audit.v2",
                         "conclusion_id": "rejected-conclusion",
                         "conclusion_entailed": True,
                     },

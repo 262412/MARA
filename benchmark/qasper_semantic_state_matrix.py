@@ -7,6 +7,11 @@ STATE_MATRIX_CONTRACT = "qasper_candidate_bound_state_matrix.v1"
 _JUDGMENTS = ("supported", "contradicted", "unknown")
 _AUDITOR_STATUSES = ("passed", "failed")
 _AMBIGUITY_STATES = (False, True)
+_CANDIDATE_LABELS = ("yes", "no", "unanswerable")
+_REQUIRED_ONLINE_CANDIDATE_LABELS = ("no",)
+_REQUIRED_ONLINE_VERIFIER_JUDGMENTS = ("contradicted", "unknown")
+_REQUIRED_ONLINE_AUDITOR_STATUSES = ("failed", "passed")
+_REQUIRED_ONLINE_ANNOTATION_STATES = ("ambiguous", "unambiguous")
 
 
 def qasper_candidate_bound_state_matrix(
@@ -103,7 +108,51 @@ def _cell_invariants_hold(cell: Mapping[str, Any]) -> bool:
 
 
 def _online_observation(predictions: list[dict[str, Any]]) -> dict[str, Any]:
+    counters, expected_annotation_labels = _online_counters(predictions)
+    (
+        candidates,
+        verifier_candidates,
+        auditor_candidates,
+        judgments,
+        auditor_statuses,
+        ambiguity,
+    ) = counters
+    observed_candidates = _observed_label_set(candidates)
+    observed_verifier_candidates = _observed_label_set(verifier_candidates)
+    observed_auditor_candidates = _observed_label_set(auditor_candidates)
+    observed_judgments = _recognized_labels(judgments, _JUDGMENTS)
+    observed_auditor_statuses = _recognized_labels(auditor_statuses, _AUDITOR_STATUSES)
+    observed_ambiguity = _recognized_labels(ambiguity, ("ambiguous", "unambiguous"))
+    exact = bool(
+        observed_candidates
+        and observed_candidates == observed_verifier_candidates
+        and observed_candidates == observed_auditor_candidates
+    )
+    return _online_observation_payload(
+        predictions,
+        candidates=candidates,
+        verifier_candidates=verifier_candidates,
+        auditor_candidates=auditor_candidates,
+        judgments=judgments,
+        auditor_statuses=auditor_statuses,
+        ambiguity=ambiguity,
+        observed_candidates=observed_candidates,
+        observed_verifier_candidates=observed_verifier_candidates,
+        observed_auditor_candidates=observed_auditor_candidates,
+        observed_judgments=observed_judgments,
+        observed_auditor_statuses=observed_auditor_statuses,
+        observed_ambiguity=observed_ambiguity,
+        expected_annotation_labels=expected_annotation_labels,
+        candidate_verifier_auditor_exact=exact,
+    )
+
+
+def _online_counters(
+    predictions: list[dict[str, Any]],
+) -> tuple[tuple[Counter[str], ...], set[str]]:
     candidates: Counter[str] = Counter()
+    verifier_candidates: Counter[str] = Counter()
+    auditor_candidates: Counter[str] = Counter()
     judgments: Counter[str] = Counter()
     auditor_statuses: Counter[str] = Counter()
     ambiguity: Counter[str] = Counter()
@@ -113,34 +162,147 @@ def _online_observation(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         generator = _mapping(metadata.get("qasper_candidate_generation"))
         verifier = _mapping(metadata.get("semantic_proposition_verifier"))
         candidate = str(generator.get("typed_candidate") or "missing")
+        verifier_candidate = str(verifier.get("candidate_label") or "missing")
         judgment = str(verifier.get("candidate_verification_status") or "missing")
         audit = _mapping(verifier.get("candidate_verification_audit"))
+        audited_candidate = str(audit.get("audited_candidate") or "missing")
         auditor_status = str(audit.get("status") or "missing")
         diagnostics = _mapping(prediction.get("qasper_annotation_diagnostics"))
         candidates[candidate] += 1
+        verifier_candidates[verifier_candidate] += 1
+        auditor_candidates[audited_candidate] += 1
         judgments[judgment] += 1
         auditor_statuses[auditor_status] += 1
-        ambiguity[
-            "ambiguous" if diagnostics.get("ambiguous") is True else "unambiguous"
-        ] += 1
-        if diagnostics.get("ambiguous") is not True:
+        ambiguity_state = _ambiguity_label(diagnostics)
+        ambiguity[ambiguity_state] += 1
+        if ambiguity_state == "unambiguous":
             expected_annotation_labels.update(
                 _annotation_labels(prediction, diagnostics)
             )
-    candidate_labels = ("yes", "no", "unanswerable")
-    candidate_diversity = sum(bool(candidates[label]) for label in candidate_labels)
+    return (
+        (
+            candidates,
+            verifier_candidates,
+            auditor_candidates,
+            judgments,
+            auditor_statuses,
+            ambiguity,
+        ),
+        expected_annotation_labels,
+    )
+
+
+def _online_observation_payload(
+    predictions: list[dict[str, Any]],
+    *,
+    candidates: Counter[str],
+    verifier_candidates: Counter[str],
+    auditor_candidates: Counter[str],
+    judgments: Counter[str],
+    auditor_statuses: Counter[str],
+    ambiguity: Counter[str],
+    observed_candidates: set[str],
+    observed_verifier_candidates: set[str],
+    observed_auditor_candidates: set[str],
+    observed_judgments: set[str],
+    observed_auditor_statuses: set[str],
+    observed_ambiguity: set[str],
+    expected_annotation_labels: set[str],
+    candidate_verifier_auditor_exact: bool,
+) -> dict[str, Any]:
     return {
         "kind": "live_model_rows",
         "prediction_count": len(predictions),
         "generator_candidates": {
-            candidate: candidates[candidate] for candidate in candidate_labels
+            candidate: candidates[candidate] for candidate in _CANDIDATE_LABELS
         },
-        "expected_annotation_labels": sorted(expected_annotation_labels),
-        "candidate_label_diversity": candidate_diversity,
-        "expected_annotation_label_diversity": len(expected_annotation_labels),
-        "single_label_collapse": bool(
-            len(expected_annotation_labels) >= 2 and candidate_diversity < 2
+        **_online_label_fields(
+            observed_candidates,
+            observed_verifier_candidates,
+            observed_auditor_candidates,
+            observed_judgments,
+            observed_auditor_statuses,
+            observed_ambiguity,
+            expected_annotation_labels,
+            candidate_verifier_auditor_exact,
         ),
+        **_online_count_fields(
+            candidates,
+            verifier_candidates,
+            auditor_candidates,
+            judgments,
+            auditor_statuses,
+            ambiguity,
+        ),
+    }
+
+
+def _online_label_fields(
+    observed_candidates: set[str],
+    observed_verifier_candidates: set[str],
+    observed_auditor_candidates: set[str],
+    observed_judgments: set[str],
+    observed_auditor_statuses: set[str],
+    observed_ambiguity: set[str],
+    expected_annotation_labels: set[str],
+    candidate_verifier_auditor_exact: bool,
+) -> dict[str, Any]:
+    missing_annotation_labels = sorted(expected_annotation_labels - observed_candidates)
+    return {
+        "observed_candidate_labels": sorted(observed_candidates),
+        "observed_verifier_candidate_labels": sorted(observed_verifier_candidates),
+        "observed_auditor_candidate_labels": sorted(observed_auditor_candidates),
+        "candidate_verifier_auditor_label_sets": {
+            "candidate": sorted(observed_candidates),
+            "verifier": sorted(observed_verifier_candidates),
+            "auditor": sorted(observed_auditor_candidates),
+            "exact_match": candidate_verifier_auditor_exact,
+        },
+        "candidate_verifier_auditor_label_set_mismatch": not candidate_verifier_auditor_exact,
+        "missing_candidate_labels_from_verifier": sorted(
+            observed_candidates - observed_verifier_candidates
+        ),
+        "unexpected_verifier_candidate_labels": sorted(
+            observed_verifier_candidates - observed_candidates
+        ),
+        "missing_candidate_labels_from_auditor": sorted(
+            observed_candidates - observed_auditor_candidates
+        ),
+        "unexpected_auditor_candidate_labels": sorted(
+            observed_auditor_candidates - observed_candidates
+        ),
+        "expected_annotation_labels": sorted(expected_annotation_labels),
+        "candidate_label_diversity": len(observed_candidates),
+        "expected_annotation_label_diversity": len(expected_annotation_labels),
+        "missing_annotation_labels_from_candidates": missing_annotation_labels,
+        "single_label_collapse": bool(missing_annotation_labels),
+        "observed_verifier_judgment_labels": sorted(observed_judgments),
+        "observed_auditor_status_labels": sorted(observed_auditor_statuses),
+        "observed_annotation_ambiguity_states": sorted(observed_ambiguity),
+        "missing_required_candidate_labels": sorted(
+            set(_REQUIRED_ONLINE_CANDIDATE_LABELS) - observed_candidates
+        ),
+        "missing_required_verifier_judgments": sorted(
+            set(_REQUIRED_ONLINE_VERIFIER_JUDGMENTS) - observed_judgments
+        ),
+        "missing_required_auditor_statuses": sorted(
+            set(_REQUIRED_ONLINE_AUDITOR_STATUSES) - observed_auditor_statuses
+        ),
+        "missing_required_annotation_ambiguity_states": sorted(
+            set(_REQUIRED_ONLINE_ANNOTATION_STATES) - observed_ambiguity
+        ),
+    }
+
+
+def _online_count_fields(
+    candidates: Counter[str],
+    verifier_candidates: Counter[str],
+    auditor_candidates: Counter[str],
+    judgments: Counter[str],
+    auditor_statuses: Counter[str],
+    ambiguity: Counter[str],
+) -> dict[str, Any]:
+    return {
         "verifier_judgments": {
             judgment: judgments[judgment] for judgment in _JUDGMENTS
         },
@@ -159,9 +321,37 @@ def _online_observation(predictions: list[dict[str, Any]]) -> dict[str, Any]:
             if key not in _AUDITOR_STATUSES
         ),
         "unrecognized_generator_candidate_count": sum(
-            count for key, count in candidates.items() if key not in candidate_labels
+            count for key, count in candidates.items() if key not in _CANDIDATE_LABELS
+        ),
+        "unrecognized_verifier_candidate_count": sum(
+            count
+            for key, count in verifier_candidates.items()
+            if key not in _CANDIDATE_LABELS
+        ),
+        "unrecognized_auditor_candidate_count": sum(
+            count
+            for key, count in auditor_candidates.items()
+            if key not in _CANDIDATE_LABELS
         ),
     }
+
+
+def _ambiguity_label(diagnostics: Mapping[str, Any]) -> str:
+    if diagnostics.get("ambiguous") is True:
+        return "ambiguous"
+    if diagnostics.get("ambiguous") is False:
+        return "unambiguous"
+    return "missing"
+
+
+def _recognized_labels(counter: Counter[str], labels: tuple[str, ...]) -> set[str]:
+    return {label for label in labels if counter[label]}
+
+
+def _observed_label_set(counter: Counter[str]) -> set[str]:
+    """Keep invalid labels visible to the exact-set gate."""
+
+    return {label for label, count in counter.items() if count and label != "missing"}
 
 
 def _annotation_labels(
