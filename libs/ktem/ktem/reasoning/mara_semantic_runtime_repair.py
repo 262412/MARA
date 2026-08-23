@@ -40,6 +40,7 @@ def repair_runtime_contract_rejection(
     seed: int,
     release_mode: bool,
     capture_debug_trace: bool,
+    transaction_id: str = "",
 ) -> SemanticPropositionTransactionResult:
     reason = _runtime_validation_reason(
         outcome.value,
@@ -74,6 +75,8 @@ def repair_runtime_contract_rejection(
         release_mode=release_mode,
         semantic_pack_digest=packing.semantic_pack_digest,
         capture_debug_trace=capture_debug_trace,
+        transaction_id=transaction_id,
+        attempt_namespace="runtime_repair",
     )
     repaired_reason = _runtime_validation_reason(
         repaired.value,

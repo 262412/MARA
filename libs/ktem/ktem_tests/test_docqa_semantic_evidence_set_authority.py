@@ -555,7 +555,7 @@ def test_semantic_derivation_identity_binds_each_premise_slot_contribution() -> 
     )
 
 
-def test_poor_slot_projection_can_be_resolved_before_generation() -> None:
+def test_poor_slot_projection_cannot_be_resolved_without_a_candidate() -> None:
     request = _request()
     generated = False
     semantic_paraphrases = [
@@ -578,7 +578,10 @@ def test_poor_slot_projection_can_be_resolved_before_generation() -> None:
         proposition_verifier=_semantic_verdict,
     )
 
-    assert execution.answer == "yes"
-    assert execution.verify_decision.status == "supported"
+    assert execution.answer != "yes"
+    assert execution.verify_decision.status == "unknown"
+    assert (
+        execution.verify_decision.reason == "Structured Boolean candidate was invalid."
+    )
     assert execution.retrieve_decision.status != "good"
     assert generated is False

@@ -45,7 +45,11 @@ def repair_deterministic_rejection(
             proposal_call_count=proposal.call_count + repaired.call_count,
         )
     repaired_result = audit_transaction(
-        replace(context, seed=context.seed + 20),
+        replace(
+            context,
+            seed=context.seed + 20,
+            attempt_namespace="deterministic_repair",
+        ),
         repaired,
         diagnostics,
         allow_proof_repair=False,

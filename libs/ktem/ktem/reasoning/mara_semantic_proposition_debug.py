@@ -50,16 +50,38 @@ def semantic_transaction_debug(
     proposal_model: str,
     audit_model: str,
     auditor_relationship: str,
+    transaction_id: str = "",
+    attempt_namespace: str = "initial",
 ) -> dict[str, Any] | None:
     if not enabled:
         return None
+    proposal_debug = _stage_debug(
+        proposal,
+        transaction_id=transaction_id,
+        attempt_namespace=attempt_namespace,
+        stage_name="proposal",
+    )
+    audit_debug = (
+        _stage_debug(
+            audit,
+            transaction_id=transaction_id,
+            attempt_namespace=attempt_namespace,
+            stage_name="audit",
+        )
+        if audit is not None
+        else {"status": "not_run", "attempt_ids": []}
+    )
     return {
         "contract_id": SEMANTIC_PROPOSITION_DEBUG_CONTRACT,
         "proposal_model": proposal_model,
         "audit_model": audit_model,
         "auditor_relationship": auditor_relationship,
-        "proposal": _stage_debug(proposal),
-        "audit": _stage_debug(audit) if audit is not None else {"status": "not_run"},
+        "transaction_id": transaction_id,
+        "attempt_namespace": attempt_namespace,
+        "proposal": proposal_debug,
+        "audit": audit_debug,
+        "proposal_attempt_ids": list(proposal_debug.get("attempt_ids") or []),
+        "audit_attempt_ids": list(audit_debug.get("attempt_ids") or []),
     }
 
 
@@ -258,29 +280,39 @@ def provider_failure(exc: Exception) -> tuple[str, str]:
     return reason, message[:4000]
 
 
-def _stage_debug(stage: Any) -> dict[str, Any]:
+def _stage_debug(
+    stage: Any,
+    *,
+    transaction_id: str,
+    attempt_namespace: str,
+    stage_name: str,
+) -> dict[str, Any]:
+    transaction_id = transaction_id or "semantic-transaction"
+    attempts = [
+        {
+            "attempt": index,
+            "attempt_id": (
+                f"{transaction_id}:{attempt_namespace}:{stage_name}:{index}"
+            ),
+            "correction_reason": attempt.correction_reason,
+            "provider_failure_reason": attempt.provider_failure_reason,
+            "provider_failure_detail": attempt.provider_failure_detail,
+            "parse_failure_reason": attempt.parse_failure_reason,
+            "finish_reason": response_finish_reason(attempt.response),
+            "completion_tokens": response_completion_tokens(attempt.response),
+            "raw_response": _bounded_response_text(attempt.response),
+            "raw_response_truncated": _response_text_exceeds_bound(attempt.response),
+            "parsed_value": deepcopy(attempt.parsed_value),
+        }
+        for index, attempt in enumerate(stage.attempts, start=1)
+    ]
     return {
         "status": _stage_status(stage),
         "call_count": stage.call_count,
         "retry_count": stage.retry_count,
         "failure_reason": stage.provider_failure_reason or stage.failure_reason,
-        "attempts": [
-            {
-                "attempt": index,
-                "correction_reason": attempt.correction_reason,
-                "provider_failure_reason": attempt.provider_failure_reason,
-                "provider_failure_detail": attempt.provider_failure_detail,
-                "parse_failure_reason": attempt.parse_failure_reason,
-                "finish_reason": response_finish_reason(attempt.response),
-                "completion_tokens": response_completion_tokens(attempt.response),
-                "raw_response": _bounded_response_text(attempt.response),
-                "raw_response_truncated": _response_text_exceeds_bound(
-                    attempt.response
-                ),
-                "parsed_value": deepcopy(attempt.parsed_value),
-            }
-            for index, attempt in enumerate(stage.attempts, start=1)
-        ],
+        "attempt_ids": [attempt["attempt_id"] for attempt in attempts],
+        "attempts": attempts,
     }
 
 

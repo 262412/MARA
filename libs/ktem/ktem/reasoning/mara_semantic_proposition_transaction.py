@@ -68,6 +68,8 @@ def run_semantic_proposition_transaction(
     release_mode: bool = False,
     semantic_pack_digest: str = "",
     capture_debug_trace: bool = False,
+    transaction_id: str = "",
+    attempt_namespace: str = "initial",
 ) -> SemanticPropositionTransactionResult:
     relationship = semantic_auditor_relationship(
         proposal_llm,
@@ -119,6 +121,8 @@ def run_semantic_proposition_transaction(
         semantic_pack_digest=semantic_pack_digest,
         capture_debug_trace=capture_debug_trace,
         auditor_relationship=relationship,
+        transaction_id=transaction_id,
+        attempt_namespace=attempt_namespace,
     )
     proposal = proposal_stage(
         proposal_llm,
@@ -441,7 +445,11 @@ def _repair_transaction(
             return terminal
     assert repaired is not None
     repaired_result = _audit_transaction(
-        replace(context, seed=context.seed + 10),
+        replace(
+            context,
+            seed=context.seed + 10,
+            attempt_namespace="proof_reaudit",
+        ),
         repaired,
         diagnostics,
         allow_proof_repair=False,
@@ -507,7 +515,9 @@ def _rebuild_proposal(
     diagnostics["proof_rebuild_proposal_call_count"] = repaired.call_count
     if repaired.value is None:
         transition["outcome"] = "rebuild_failed"
-        repaired_debug = transaction_debug(context, repaired, None)
+        repaired_debug = transaction_debug(
+            replace(context, attempt_namespace="proof_rebuild"), repaired, None
+        )
         return None, replace(
             initial_result,
             proposal_call_count=proposal.call_count + repaired.call_count,
@@ -523,7 +533,9 @@ def _rebuild_proposal(
         repaired.value,
         replace(context, seed=context.seed + 10),
     )
-    repaired_debug = transaction_debug(context, repaired, None)
+    repaired_debug = transaction_debug(
+        replace(context, attempt_namespace="proof_rebuild"), repaired, None
+    )
     return None, transaction_result(
         repaired.value,
         "parsed",

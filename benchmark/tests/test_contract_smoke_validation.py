@@ -6,9 +6,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
 from ktem.docqa.terminal_semantic_commit import build_terminal_semantic_commit
 
-from scripts.slurm.validate_contract_smoke import QASPER_HARD_GATES
+from scripts.slurm.validate_contract_smoke import QASPER_HARD_GATES, validate
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_contract_smoke.py"
@@ -233,6 +234,12 @@ def test_contract_smoke_validator_rejects_compact_or_incomplete_artifact(tmp_pat
 
     assert result.returncode != 0
     assert "artifact_detail must be full" in result.stderr
+    audit = json.loads((run_dir / "contract_smoke_audit.json").read_text())
+    assert audit["status"] == "failed"
+    assert (
+        "artifact_detail must be full for contract smoke"
+        in audit["precondition_violations"]
+    )
 
 
 def test_contract_smoke_validator_rejects_missing_required_case(tmp_path):
@@ -308,3 +315,241 @@ def test_qasper_contract_smoke_declares_runtime_authority_hard_gates():
         "qasper_terminal_state_missing_count",
         "qasper_invalid_typed_label_count",
     } <= set(QASPER_HARD_GATES)
+
+
+def _qasper_debug_prediction(example_id: str, route: str) -> dict[str, Any]:
+    prediction = _prediction([])
+    group_id = f"group:{example_id}"
+    metadata = prediction["evidence_metadata"]
+    metadata.update(
+        {
+            "qasper_candidate_generation": _debug_generator_trace(
+                example_id, route, group_id
+            ),
+            "semantic_proposition_verifier": _debug_verifier_trace(
+                example_id, route, group_id
+            ),
+        }
+    )
+    prediction.update(
+        {
+            "example_id": example_id,
+            "route": route,
+            "answer_type": "boolean",
+            "gold_answers": ["yes"],
+            "predicted_answer": "yes",
+            "answer_for_scoring": "yes",
+            "controller_trace": [
+                {
+                    "stage": "claim_aggregation",
+                    "input_text": "yes",
+                    "output_text": "yes",
+                    "input_digest": "claim-input",
+                    "output_digest": "claim-output",
+                }
+            ],
+            "example_metadata": {
+                "qasper_answer_annotations": [
+                    {
+                        "annotation_id": f"annotation:{example_id}",
+                        "yes_no": True,
+                    }
+                ]
+            },
+            "qasper_annotation_scores": [
+                {
+                    "contract_id": "qasper_annotation_score.v1",
+                    "annotation_index": 1,
+                    "annotation_id": f"annotation:{example_id}",
+                    "answer_f1": 1.0,
+                    "typed_accuracy": 1.0,
+                    "evidence_f1": 1.0,
+                    "ambiguity_marker": "",
+                }
+            ],
+            "qasper_annotation_diagnostics": {
+                "contract_id": "qasper_annotation_diagnostics.v1",
+                "annotation_count": 1,
+                "ambiguous": False,
+                "ambiguity_reasons": [],
+                "canonical_answer_classes": [["yes"]],
+            },
+            "terminal_outcome": "answered",
+            "terminal_outcome_reason": "",
+            "terminal_outcome_contract_violation": False,
+            "terminal_semantic_commit": {
+                "contract_id": "terminal_semantic_commit.v3",
+                "semantic_answer": "yes",
+                "outcome": "answered",
+            },
+        }
+    )
+    return prediction
+
+
+def _debug_generator_trace(
+    example_id: str,
+    route: str,
+    group_id: str,
+) -> dict[str, Any]:
+    transaction_id = f"generator:{example_id}:{route}"
+    return {
+        "contract_id": "qasper_typed_candidate_generation.v1",
+        "status": "parsed",
+        "model": "Qwen/Qwen3-8B",
+        "message_stack": [
+            {"index": 0, "role": "system", "content": "verify"},
+            {"index": 1, "role": "user", "content": "question"},
+        ],
+        "raw_response": '{"candidate":"yes"}',
+        "cleaned_response": '{"candidate":"yes"}',
+        "typed_candidate": "yes",
+        "finish_reason": "stop",
+        "failure_reason": "",
+        "transformation_stages": [
+            {
+                "stage": "raw_response",
+                "value": '{"candidate":"yes"}',
+                "digest": "raw-digest",
+                "failure_reason": "",
+            },
+            {
+                "stage": "cleaning",
+                "value": '{"candidate":"yes"}',
+                "digest": "clean-digest",
+                "changed": False,
+                "failure_reason": "",
+            },
+            {
+                "stage": "typed_candidate",
+                "value": "yes",
+                "digest": "typed-digest",
+                "failure_reason": "",
+            },
+        ],
+        "trace_group_id": group_id,
+        "transaction_id": transaction_id,
+        "attempt_id": f"{transaction_id}:1",
+        "effective_seed": 20260724,
+        "input_digest": f"generator-input:{route}",
+        "output_digest": f"generator-output:{route}",
+    }
+
+
+def _debug_verifier_trace(
+    example_id: str,
+    route: str,
+    group_id: str,
+) -> dict[str, Any]:
+    transaction_id = f"verifier:{example_id}:{route}"
+    return {
+        "contract_id": "semantic_proposition_verifier_runtime.v2",
+        "status": "parsed",
+        "model": "Qwen/Qwen3-8B",
+        "candidate_label": "yes",
+        "candidate_verification_status": "supported",
+        "replacement_candidate_allowed": False,
+        "proposal_model_call_count": 1,
+        "audit_model_call_count": 1,
+        "candidate_verification_audit": {
+            "contract_id": "candidate_verifier_audit.v1",
+            "status": "passed",
+            "mode": "semantic_entailment_audit",
+            "audited_candidate": "yes",
+            "audited_judgment": "supported",
+            "replacement_candidate_allowed": False,
+        },
+        "debug_trace": _debug_semantic_trace(),
+        "trace_group_id": group_id,
+        "transaction_id": transaction_id,
+        "attempt_id": f"{transaction_id}:proposal:1",
+        "auditor_attempt_id": f"{transaction_id}:auditor:1",
+        "effective_seed": 20260724,
+        "input_digest": f"verifier-input:{route}",
+        "output_digest": f"verifier-output:{route}",
+    }
+
+
+def _debug_semantic_trace() -> dict[str, Any]:
+    return {
+        "contract_id": "semantic_proposition_debug_trace.v2",
+        "event_count": 1,
+        "dropped_event_count": 0,
+        "events": [
+            {
+                "event": "model_transaction",
+                "transaction": {
+                    "proposal": {
+                        "status": "parsed",
+                        "attempts": [
+                            {
+                                "attempt": 1,
+                                "raw_response": '{"verdict":"yes"}',
+                                "finish_reason": "stop",
+                                "parse_failure_reason": "",
+                                "provider_failure_reason": "",
+                            }
+                        ],
+                    },
+                    "audit": {
+                        "status": "parsed",
+                        "attempts": [
+                            {
+                                "attempt": 1,
+                                "raw_response": '{"status":"verified"}',
+                                "finish_reason": "stop",
+                                "parse_failure_reason": "",
+                                "provider_failure_reason": "",
+                            }
+                        ],
+                    },
+                },
+            }
+        ],
+    }
+
+
+def test_qasper_debug_contract_smoke_audits_6x3_observability(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    _write_run(run_dir, predictions=predictions)
+
+    audit = validate(run_dir, suite_kind="qasper_debug")
+
+    assert audit["contract"] == "contract_smoke_audit.v2"
+    assert audit["prediction_count"] == 18
+    assert audit["status"] == "passed"
+    assert audit["observability_coverage"]["complete"] is True
+    assert all(
+        value == 18
+        for value in audit["observability_coverage"]["covered_counts"].values()
+    )
+
+
+def test_qasper_debug_contract_smoke_fails_closed_on_missing_raw_response(
+    tmp_path,
+):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    del predictions[0]["evidence_metadata"]["qasper_candidate_generation"][
+        "raw_response"
+    ]
+    _write_run(run_dir, predictions=predictions)
+
+    with pytest.raises(ValueError, match="generator_field_missing:raw_response"):
+        validate(run_dir, suite_kind="qasper_debug")
+
+    audit = json.loads((run_dir / "contract_smoke_audit.json").read_text())
+    assert audit["status"] == "failed"
+    assert any(
+        violation.startswith("generator_field_missing:raw_response")
+        for violation in audit["behavior_violations"]
+    )

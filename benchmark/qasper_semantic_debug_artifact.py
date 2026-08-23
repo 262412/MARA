@@ -4,7 +4,9 @@ from collections import Counter
 from copy import deepcopy
 from typing import Any, Iterable, Mapping
 
-QASPER_SEMANTIC_DEBUG_CONTRACT = "qasper_semantic_pipeline_debug.v2"
+from .qasper_semantic_debug_findings import findings_for_row
+
+QASPER_SEMANTIC_DEBUG_CONTRACT = "qasper_semantic_pipeline_debug.v3"
 SEMANTIC_PROPOSITION_DEBUG_CONTRACT = "semantic_proposition_debug_trace.v2"
 
 _RECOVERY_STAGES = {
@@ -21,78 +23,133 @@ def qasper_semantic_debug_rows(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for prediction in predictions:
-        metadata = _terminal_metadata(prediction)
-        verifier = _mapping(metadata.get("semantic_proposition_verifier"))
-        debug_trace = _mapping(verifier.get("debug_trace"))
-        if debug_trace.get("contract_id") != SEMANTIC_PROPOSITION_DEBUG_CONTRACT:
-            continue
-        authority = _mapping(metadata.get("semantic_proposition_authority"))
-        query_plan = _mapping(
-            metadata.get("query_plan") or metadata.get("bound_query_plan")
-        )
-        recovery_events = _recovery_events(prediction)
-        transaction_event = _latest_transaction_event(debug_trace)
-        rejected_transactions = _rejected_transactions(verifier, authority)
-        row = {
-            "contract_id": QASPER_SEMANTIC_DEBUG_CONTRACT,
-            "example_id": prediction.get("example_id"),
-            "route": prediction.get("route"),
-            "question": prediction.get("question"),
-            "gold_answers": deepcopy(prediction.get("gold_answers") or []),
-            "predicted_answer": prediction.get("predicted_answer"),
-            "answer_status": prediction.get("answer_status"),
-            "failure_taxonomy": prediction.get("failure_taxonomy"),
-            "terminal_outcome": prediction.get("terminal_outcome"),
-            "terminal_outcome_reason": prediction.get("terminal_outcome_reason"),
-            "semantic_verifier": deepcopy(verifier),
-            "semantic_authority": deepcopy(authority),
-            "question_proposition_resolution": deepcopy(
-                verifier.get("question_proposition_resolution") or {}
-            ),
-            "proof_mode": str(verifier.get("proof_mode") or ""),
-            "semantic_pack_digest": str(verifier.get("semantic_pack_digest") or ""),
-            "cache_source": str(verifier.get("cache_source") or ""),
-            "recovery_transitions": deepcopy(
-                verifier.get("recovery_transitions") or []
-            ),
-            "rejected_transactions": rejected_transactions,
-            "auditor_internal_inconsistency": bool(
-                verifier.get("auditor_internal_inconsistency")
-            ),
-            "auditor_internal_inconsistency_count": int(
-                verifier.get("auditor_internal_inconsistency_count") or 0
-            ),
-            "local_premise_consistency": deepcopy(
-                verifier.get("local_premise_consistency") or {}
-            ),
-            "local_premise_consistency_history": deepcopy(
-                verifier.get("local_premise_consistency_history") or []
-            ),
-            "recovery_events": recovery_events,
-            "required_slot_states": _required_slot_states(query_plan),
-            "final_typed_authority": _final_typed_authority(prediction),
-            "audited_typed_conclusion": _audited_typed_conclusion(
-                verifier, transaction_event, rejected_transactions
-            ),
-            "audited_conclusion_audit": _audited_conclusion_audit(
-                verifier, transaction_event, rejected_transactions
-            ),
-            "polarity_contradiction_check": _audited_polarity_check(
-                verifier, authority, rejected_transactions
-            ),
-            "raw_audit_call_rejected": _raw_audit_call_rejected(
-                verifier, transaction_event
-            ),
-            "final_row_audit_rejected": _final_row_audit_rejected(
-                verifier, transaction_event
-            ),
-            "audit_verified_but_runtime_rejected": _audit_verified_but_runtime_rejected(
-                verifier, authority, transaction_event
-            ),
-        }
-        row["findings"] = _findings(row)
-        rows.append(row)
+        row = _debug_row(prediction)
+        if row is not None:
+            rows.append(row)
     return rows
+
+
+def _debug_row(prediction: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = _terminal_metadata(prediction)
+    verifier = _mapping(metadata.get("semantic_proposition_verifier"))
+    debug_trace = _mapping(verifier.get("debug_trace"))
+    if debug_trace.get("contract_id") != SEMANTIC_PROPOSITION_DEBUG_CONTRACT:
+        return None
+    authority = _mapping(metadata.get("semantic_proposition_authority"))
+    generator = _mapping(metadata.get("qasper_candidate_generation"))
+    query_plan = _mapping(
+        metadata.get("query_plan") or metadata.get("bound_query_plan")
+    )
+    transaction_event = _latest_transaction_event(debug_trace)
+    rejected_transactions = _rejected_transactions(verifier, authority)
+    row = _base_row(
+        prediction,
+        verifier,
+        authority,
+        query_plan,
+        _recovery_events(prediction),
+        transaction_event,
+        rejected_transactions,
+    )
+    row.update(_v3_fields(prediction, generator, verifier, authority))
+    row["findings"] = findings_for_row(row)
+    return row
+
+
+def _base_row(
+    prediction: dict[str, Any],
+    verifier: Mapping[str, Any],
+    authority: Mapping[str, Any],
+    query_plan: Mapping[str, Any],
+    recovery_events: list[dict[str, Any]],
+    transaction_event: Mapping[str, Any],
+    rejected_transactions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "contract_id": QASPER_SEMANTIC_DEBUG_CONTRACT,
+        "example_id": prediction.get("example_id"),
+        "route": prediction.get("route"),
+        "question": prediction.get("question"),
+        "gold_answers": deepcopy(prediction.get("gold_answers") or []),
+        "predicted_answer": prediction.get("predicted_answer"),
+        "answer_status": prediction.get("answer_status"),
+        "failure_taxonomy": prediction.get("failure_taxonomy"),
+        "terminal_outcome": prediction.get("terminal_outcome"),
+        "terminal_outcome_reason": prediction.get("terminal_outcome_reason"),
+        "semantic_verifier": deepcopy(verifier),
+        "semantic_authority": deepcopy(authority),
+        "question_proposition_resolution": deepcopy(
+            verifier.get("question_proposition_resolution") or {}
+        ),
+        "proof_mode": str(verifier.get("proof_mode") or ""),
+        "semantic_pack_digest": str(verifier.get("semantic_pack_digest") or ""),
+        "cache_source": str(verifier.get("cache_source") or ""),
+        "recovery_transitions": deepcopy(verifier.get("recovery_transitions") or []),
+        "rejected_transactions": rejected_transactions,
+        "auditor_internal_inconsistency": bool(
+            verifier.get("auditor_internal_inconsistency")
+        ),
+        "auditor_internal_inconsistency_count": int(
+            verifier.get("auditor_internal_inconsistency_count") or 0
+        ),
+        "local_premise_consistency": deepcopy(
+            verifier.get("local_premise_consistency") or {}
+        ),
+        "local_premise_consistency_history": deepcopy(
+            verifier.get("local_premise_consistency_history") or []
+        ),
+        "recovery_events": recovery_events,
+        "required_slot_states": _required_slot_states(query_plan),
+        "final_typed_authority": _final_typed_authority(prediction),
+        "audited_typed_conclusion": _audited_typed_conclusion(
+            verifier, transaction_event, rejected_transactions
+        ),
+        "audited_conclusion_audit": _audited_conclusion_audit(
+            verifier, transaction_event, rejected_transactions
+        ),
+        "polarity_contradiction_check": _audited_polarity_check(
+            verifier, authority, rejected_transactions
+        ),
+        "raw_audit_call_rejected": _raw_audit_call_rejected(
+            verifier, transaction_event
+        ),
+        "final_row_audit_rejected": _final_row_audit_rejected(
+            verifier, transaction_event
+        ),
+        "audit_verified_but_runtime_rejected": _audit_verified_but_runtime_rejected(
+            verifier, authority, transaction_event
+        ),
+    }
+
+
+def _v3_fields(
+    prediction: dict[str, Any],
+    generator: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+    authority: Mapping[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "main_candidate_generator": deepcopy(generator),
+        "candidate_transformation_stages": deepcopy(
+            generator.get("transformation_stages") or []
+        ),
+        "claim_aggregation_events": _claim_aggregation_events(prediction),
+        "qasper_annotation_scores": deepcopy(
+            prediction.get("qasper_annotation_scores") or []
+        ),
+        "qasper_annotation_diagnostics": deepcopy(
+            prediction.get("qasper_annotation_diagnostics") or {}
+        ),
+        "transaction_identity": _transaction_identity(generator, verifier),
+    }
+    fields["candidate_authority_analysis"] = _candidate_authority_analysis(
+        prediction, generator, verifier, authority
+    )
+    fields["structural_coverage"] = _structural_coverage(
+        {**fields, "semantic_verifier": verifier}
+    )
+    fields["online_model_coverage"] = _online_model_coverage(generator, verifier)
+    return fields
 
 
 def qasper_semantic_debug_summary(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
@@ -122,6 +179,199 @@ def _recovery_events(prediction: Mapping[str, Any]) -> list[dict[str, Any]]:
         for event in prediction.get("controller_trace", []) or []
         if isinstance(event, dict) and event.get("stage") in _RECOVERY_STAGES
     ]
+
+
+def _claim_aggregation_events(
+    prediction: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        deepcopy(event)
+        for event in prediction.get("controller_trace", []) or []
+        if isinstance(event, dict) and event.get("stage") == "claim_aggregation"
+    ]
+
+
+def _transaction_identity(
+    generator: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "contract_id": "qasper_cross_route_transaction_trace.v1",
+        "trace_group_id": str(
+            generator.get("trace_group_id") or verifier.get("trace_group_id") or ""
+        ),
+        "generator_transaction_id": str(generator.get("transaction_id") or ""),
+        "generator_attempt_id": str(generator.get("attempt_id") or ""),
+        "verifier_transaction_id": str(verifier.get("transaction_id") or ""),
+        "verifier_attempt_id": str(verifier.get("attempt_id") or ""),
+        "auditor_attempt_id": str(verifier.get("auditor_attempt_id") or ""),
+        "generator_effective_seed": generator.get("effective_seed"),
+        "verifier_effective_seed": verifier.get("effective_seed", verifier.get("seed")),
+        "generator_input_digest": str(generator.get("input_digest") or ""),
+        "generator_output_digest": str(generator.get("output_digest") or ""),
+        "verifier_input_digest": str(verifier.get("input_digest") or ""),
+        "verifier_output_digest": str(verifier.get("output_digest") or ""),
+    }
+
+
+def _candidate_authority_analysis(
+    prediction: Mapping[str, Any],
+    generator: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+    authority: Mapping[str, Any],
+) -> dict[str, Any]:
+    candidate = str(generator.get("typed_candidate") or "")
+    verifier_candidate = str(verifier.get("candidate_label") or "")
+    verifier_status = str(verifier.get("candidate_verification_status") or "")
+    terminal_state = _mapping(prediction.get("engine_terminal_state"))
+    terminal_answer = str(
+        terminal_state.get("semantic_answer")
+        or prediction.get("engine_terminal_answer")
+        or prediction.get("predicted_answer")
+        or ""
+    )
+    gold = {
+        str(value or "").strip().casefold()
+        for value in prediction.get("gold_answers") or []
+        if str(value or "").strip()
+    }
+    answerable = bool(gold - {"unanswerable", "insufficient evidence"})
+    candidate_identity_preserved = bool(candidate and verifier_candidate == candidate)
+    terminal_is_abstention = terminal_answer.strip().casefold() == "unanswerable"
+    false_abstention_cause = _false_abstention_cause(
+        generator=generator,
+        candidate=candidate,
+        candidate_identity_preserved=candidate_identity_preserved,
+        verifier_status=verifier_status,
+        terminal_is_abstention=terminal_is_abstention,
+        answerable=answerable,
+    )
+    upstream_issue = false_abstention_cause in {
+        "upstream_candidate_contract_invalid",
+        "upstream_candidate_selected_unanswerable",
+        "candidate_contract_identity_mismatch",
+    }
+    downstream_issue = (
+        false_abstention_cause == "downstream_policy_rejected_supported_candidate"
+    )
+    return {
+        "contract_id": "qasper_candidate_authority_analysis.v1",
+        "generator_candidate": candidate,
+        "verifier_input_candidate": verifier_candidate,
+        "verifier_candidate_status": verifier_status,
+        "generator_verifier_conflict": bool(
+            candidate
+            and verifier_candidate == candidate
+            and verifier_status == "contradicted"
+        ),
+        "candidate_identity_preserved": candidate_identity_preserved,
+        "upstream_candidate_contract_status": str(generator.get("status") or ""),
+        "upstream_candidate_contract_failure_reason": str(
+            generator.get("failure_reason") or ""
+        ),
+        "upstream_candidate_contract_issue": upstream_issue,
+        "verifier_rejected_candidate": bool(
+            candidate_identity_preserved
+            and verifier_status in {"contradicted", "unknown"}
+        ),
+        "replacement_candidate_allowed": bool(
+            verifier.get("replacement_candidate_allowed", False)
+        ),
+        "semantic_authority_status": str(authority.get("status") or ""),
+        "downstream_policy_action": str(
+            _mapping(prediction.get("engine_terminal_guardrail_decision")).get("action")
+            or _mapping(prediction.get("guardrail_decision")).get("action")
+            or ""
+        ),
+        "terminal_answer": terminal_answer,
+        "downstream_acceptance_policy_issue": downstream_issue,
+        "false_abstention_cause": false_abstention_cause,
+    }
+
+
+def _false_abstention_cause(
+    *,
+    generator: Mapping[str, Any],
+    candidate: str,
+    candidate_identity_preserved: bool,
+    verifier_status: str,
+    terminal_is_abstention: bool,
+    answerable: bool,
+) -> str:
+    if not generator or not terminal_is_abstention or not answerable:
+        return ""
+    if str(generator.get("status") or "") != "parsed" or candidate not in {
+        "yes",
+        "no",
+        "unanswerable",
+    }:
+        return "upstream_candidate_contract_invalid"
+    if not candidate_identity_preserved:
+        return "candidate_contract_identity_mismatch"
+    if candidate == "unanswerable":
+        return "upstream_candidate_selected_unanswerable"
+    if verifier_status in {"contradicted", "unknown"}:
+        return f"verifier_{verifier_status}_candidate"
+    if verifier_status == "supported":
+        return "downstream_policy_rejected_supported_candidate"
+    return "candidate_verifier_status_invalid"
+
+
+def _structural_coverage(row: Mapping[str, Any]) -> dict[str, Any]:
+    generator = _mapping(row.get("main_candidate_generator"))
+    identity = _mapping(row.get("transaction_identity"))
+    aggregations = row.get("claim_aggregation_events") or []
+    return {
+        "contract_id": "qasper_e2e_structural_coverage.v1",
+        "message_stack": bool(generator.get("message_stack")),
+        "raw_response": "raw_response" in generator,
+        "finish_reason": bool(generator.get("finish_reason")),
+        "typed_candidate_transform": bool(row.get("candidate_transformation_stages")),
+        "claim_aggregation_before_after": bool(
+            aggregations
+            and all(
+                "input_text" in event and "output_text" in event
+                for event in aggregations
+                if isinstance(event, Mapping)
+            )
+        ),
+        "per_annotation_scores": bool(row.get("qasper_annotation_scores")),
+        "transaction_identity": bool(
+            identity.get("trace_group_id")
+            and identity.get("generator_transaction_id")
+            and identity.get("verifier_transaction_id")
+        ),
+        "candidate_verifier_audit": bool(
+            _mapping(row.get("semantic_verifier")).get("candidate_verification_audit")
+        ),
+    }
+
+
+def _online_model_coverage(
+    generator: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "contract_id": "qasper_online_model_coverage.v1",
+        "generator_model": str(generator.get("model") or ""),
+        "generator_observed": bool(
+            generator.get("model")
+            and generator.get("finish_reason")
+            and "raw_response" in generator
+        ),
+        "verifier_model": str(verifier.get("model") or ""),
+        "verifier_observed": bool(
+            verifier.get("model")
+            and int(verifier.get("proposal_model_call_count") or 0) > 0
+        ),
+        "auditor_observed": bool(
+            int(verifier.get("audit_model_call_count") or 0) > 0
+            or str(
+                _mapping(verifier.get("candidate_verification_audit")).get("mode") or ""
+            )
+            == "deterministic_schema_audit"
+        ),
+    }
 
 
 def _required_slot_states(query_plan: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -313,190 +563,6 @@ def _audit_verified_but_runtime_rejected(
         _final_row_audit_rejected(verifier, transaction_event)
         or authority.get("status") == "rejected"
     )
-
-
-def _findings(row: Mapping[str, Any]) -> list[dict[str, str]]:
-    findings: list[dict[str, str]] = []
-    verifier = _mapping(row.get("semantic_verifier"))
-    authority = _mapping(row.get("semantic_authority"))
-    debug_trace = _mapping(verifier.get("debug_trace"))
-    events = [
-        event for event in debug_trace.get("events", []) if isinstance(event, Mapping)
-    ]
-    if (
-        verifier.get("audit_status") == "verified"
-        and authority.get("status") == "rejected"
-    ):
-        findings.append(
-            _finding(
-                "audit_verified_authority_rejected",
-                "inconsistency",
-                str(authority.get("reason") or "authority_rejected"),
-            )
-        )
-    if any(_same_instance_audit_executed(event) for event in events):
-        findings.append(
-            _finding(
-                "same_instance_proposal_and_audit",
-                "independence_risk",
-                "proposal and entailment audit used the same model instance",
-            )
-        )
-    findings.extend(_audit_contract_findings(verifier))
-    if row.get("auditor_internal_inconsistency"):
-        findings.append(
-            _finding(
-                "auditor_internal_inconsistency",
-                "inconsistency",
-                "auditor rejected a fragment that is an exact normalized substring of its bound quote",
-            )
-        )
-    findings.extend(_recovery_state_findings(row))
-    if int(debug_trace.get("dropped_event_count") or 0) > 0:
-        findings.append(
-            _finding(
-                "semantic_debug_history_truncated",
-                "trace_integrity",
-                "semantic debug history exceeded its bounded event limit",
-            )
-        )
-    if _positive_verdict_against_negative_gold(row, events):
-        findings.append(
-            _finding(
-                "positive_verdict_against_negative_gold",
-                "benchmark_diagnostic",
-                "a positive semantic verdict was accepted for a negative benchmark answer",
-            )
-        )
-    if authority.get("status") == "verified" and not _required_slots_verified(row):
-        findings.append(
-            _finding(
-                "verified_authority_required_slot_mismatch",
-                "inconsistency",
-                "authority was verified while a required QueryPlan slot remained unverified",
-            )
-        )
-    return findings
-
-
-def _audit_contract_findings(verifier: Mapping[str, Any]) -> list[dict[str, str]]:
-    findings = []
-    if _verified_conclusion_audit_missing(verifier):
-        findings.append(
-            _finding(
-                "verified_audit_conclusion_contract_missing",
-                "inconsistency",
-                "a verified semantic audit has no complete typed conclusion audit",
-            )
-        )
-    if _proof_repair_without_full_reaudit(verifier):
-        findings.append(
-            _finding(
-                "proof_repair_without_full_reaudit",
-                "inconsistency",
-                "proof repair was recorded without a complete independent reaudit",
-            )
-        )
-    return findings
-
-
-def _recovery_state_findings(row: Mapping[str, Any]) -> list[dict[str, str]]:
-    findings = []
-    if any(
-        _reverify_without_pack_change(event) for event in row.get("recovery_events", [])
-    ):
-        findings.append(
-            _finding(
-                "reverify_without_semantic_pack_change",
-                "recovery_state",
-                "semantic reverification ran although the semantic pack was unchanged",
-            )
-        )
-    if any(
-        event.get("stop_reason") == "recovery_no_progress"
-        for event in row.get("recovery_events", [])
-    ):
-        findings.append(
-            _finding(
-                "recovery_stopped_without_state_change",
-                "recovery_state",
-                "recovery terminated because evidence, slots, and authority did not change",
-            )
-        )
-    return findings
-
-
-def _verified_conclusion_audit_missing(verifier: Mapping[str, Any]) -> bool:
-    if not str(verifier.get("audit_status") or "").startswith("verified"):
-        return False
-    audit = _mapping(verifier.get("conclusion_audit"))
-    return bool(
-        audit.get("contract_id") != "conclusion_audit.v1"
-        or any(
-            audit.get(field) is not True
-            for field in (
-                "conclusion_entailed",
-                "polarity_consistent",
-                "quantifier_consistent",
-                "scope_consistent",
-            )
-        )
-    )
-
-
-def _proof_repair_without_full_reaudit(verifier: Mapping[str, Any]) -> bool:
-    transitions = verifier.get("recovery_transitions") or []
-    repaired = any(
-        isinstance(value, Mapping) and value.get("to") == "proof_repair"
-        for value in transitions
-    )
-    return bool(repaired and verifier.get("full_reaudit") is not True)
-
-
-def _reverify_without_pack_change(event: Any) -> bool:
-    return bool(
-        isinstance(event, Mapping)
-        and event.get("stage") == "reverify"
-        and event.get("semantic_pack_digest_applicable") is True
-        and event.get("semantic_pack_digest_changed") is not True
-    )
-
-
-def _same_instance_audit_executed(event: Mapping[str, Any]) -> bool:
-    outcome = _mapping(event.get("outcome"))
-    return event.get("auditor_relationship") == "same_instance" and outcome.get(
-        "audit_status"
-    ) not in {None, "", "not_started", "not_required"}
-
-
-def _positive_verdict_against_negative_gold(
-    row: Mapping[str, Any], events: list[Mapping[str, Any]]
-) -> bool:
-    gold = {str(value).strip().casefold() for value in row.get("gold_answers", [])}
-    if "no" not in gold:
-        return False
-    return any(_accepted_positive_verdict(event) for event in events)
-
-
-def _accepted_positive_verdict(event: Mapping[str, Any]) -> bool:
-    outcome = _mapping(event.get("outcome"))
-    return (
-        outcome.get("verdict") == "yes"
-        and outcome.get("status") == "parsed"
-        and outcome.get("audit_status") == "verified"
-    )
-
-
-def _required_slots_verified(row: Mapping[str, Any]) -> bool:
-    states = row.get("required_slot_states", []) or []
-    return bool(states) and all(
-        isinstance(slot, Mapping) and slot.get("status") == "verified_support"
-        for slot in states
-    )
-
-
-def _finding(code: str, category: str, detail: str) -> dict[str, str]:
-    return {"code": code, "category": category, "detail": detail}
 
 
 def _mapping(value: Any) -> dict[str, Any]:

@@ -434,6 +434,7 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.generation_temperature = source.generation_temperature
     target.generation_top_p = source.generation_top_p
     target.generation_seed = source.generation_seed
+    target.trace_context = dict(getattr(source, "trace_context", {}) or {})
 
 
 def selected_ids(runtime: Any, user_id: Any, selected_inputs: dict[int, Any]):

@@ -10,7 +10,7 @@ from .boolean_authority_schema import (
     BooleanClaimAuthority,
     supported_boolean_claim,
 )
-from .boolean_claim_verification import canonical_boolean_answer_polarity
+from .boolean_candidate_authority import structured_boolean_candidate_label
 from .evidence_schema import EvidenceBundle
 from .semantic_evidence_set_derivation import semantic_evidence_set_derivation
 from .semantic_evidence_set_validation import (
@@ -90,6 +90,13 @@ def semantic_evidence_set_claim_authority(
             "insufficient",
             "semantic_evidence_set_insufficient",
             debug_trace=debug_trace,
+            verifier_input_candidate=str(
+                response.get("verifier_input_candidate") or ""
+            ),
+            candidate_verification_status=str(
+                response.get("candidate_verification_status") or "unknown"
+            ),
+            replacement_candidate_allowed=False,
         )
         return None
     return _authority_from_verified_response(
@@ -208,15 +215,34 @@ def _commit_verified_authority(
         semantic_pack_digest=str(
             (response.get("verifier") or {}).get("semantic_pack_digest") or ""
         ),
+        verifier_input_candidate=str(response.get("verifier_input_candidate") or ""),
+        candidate_verification_status=str(
+            response.get("candidate_verification_status") or "unknown"
+        ),
+        replacement_candidate_allowed=False,
     )
-    return supported_boolean_claim(
+    candidate = structured_boolean_candidate_label(answer)
+    assessment = supported_boolean_claim(
         prompt,
-        canonical_boolean_answer_polarity(answer),
+        candidate if candidate in {"yes", "no"} else "",
         verdict,
         premises,
         reason="semantic_evidence_set_proposition",
         authority_derivations=(derivation,),
         selected_derivation_id=derivation.derivation_id,
+    )
+    if str(response.get("candidate_verification_status") or "") != "contradicted":
+        return assessment
+    return BooleanClaimAuthority(
+        claim=f"{candidate}: {prompt}",
+        status="contradicted",
+        input_answer_polarity=candidate,
+        canonical_answer_polarity="",
+        semantic_correction_applied=False,
+        contradicting=assessment.supporting,
+        reason="semantic_candidate_contradicted",
+        authority_derivations=assessment.authority_derivations,
+        selected_derivation_id=assessment.selected_derivation_id,
     )
 
 

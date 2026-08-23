@@ -27,8 +27,10 @@ SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS = 640
 SEMANTIC_PROPOSITION_PACK_CONTRACT = "semantic_proposition_pack.v1"
 
 SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT = (
-    "You are a conservative document-grounded proposition verifier. Decide the "
-    "typed question proposition from the labeled retrieved evidence spans only. "
+    "You are a conservative document-grounded candidate verifier. Verify the "
+    "explicit structured candidate against the typed question proposition and "
+    "the labeled retrieved evidence spans only. You must not independently choose "
+    "or replace the answer candidate. "
     "Use atomic_semantic when one selected premise establishes the complete "
     "conclusion. Use composite_conjunction only when two to four genuinely "
     "conjunctive premises are jointly sufficient and every premise is necessary. "
@@ -173,6 +175,8 @@ def semantic_proposition_verifier_prompt(
     question: str,
     slots: list[dict[str, str]],
     packed: list[dict[str, Any]],
+    *,
+    candidate: str = "",
 ) -> str:
     proposition = build_question_proposition(question)
     slot_text = "\n".join(
@@ -195,10 +199,14 @@ def semantic_proposition_verifier_prompt(
     prompt = (
         "/no_think\n"
         f"QUESTION:\n{question.strip()}\n\n"
+        f"STRUCTURED CANDIDATE TO VERIFY:\n{candidate}\n\n"
         "TYPED QUESTION PROPOSITION:\n"
         f"{json.dumps(proposition.as_dict(), ensure_ascii=False, separators=(',', ':'))}\n\n"
         f"REQUIRED VERIFICATION SLOTS:\n{slot_text}\n\n"
         f"CANONICAL EVIDENCE SPANS:\n{evidence_text}\n\n"
+        "Do not answer the question independently and do not propose a replacement "
+        "candidate. The verdict is only the evidence polarity used to determine "
+        "whether the stated candidate is supported, contradicted, or unknown. "
         "Return exactly one JSON object. For yes or no, choose proof_mode "
         "atomic_semantic with exactly one premise or composite_conjunction with "
         "two to four genuinely conjunctive premises. jointly_complete and "

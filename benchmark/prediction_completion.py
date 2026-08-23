@@ -7,6 +7,7 @@ from .answer_finalizer import finalize_prediction_answer
 from .benchmark_prompts import build_benchmark_prompt
 from .benchmark_taxonomy import add_prediction_taxonomy
 from .diagnostics import prediction_diagnostics
+from .dataset_native_scores import qasper_annotation_diagnostics
 from .mara_oriented_scores import (
     add_mara_oriented_metrics,
     promote_external_primary_score,
@@ -206,6 +207,12 @@ def _score_and_diagnose(
     apply_benchmark_outcome_classification(prediction)
     add_prediction_taxonomy(prediction)
     add_mara_oriented_metrics(prediction, dataset_name=dataset_name)
+    annotation_scores, annotation_diagnostics = qasper_annotation_diagnostics(
+        prediction
+    )
+    if annotation_scores:
+        prediction["qasper_annotation_scores"] = annotation_scores
+        prediction["qasper_annotation_diagnostics"] = annotation_diagnostics
     prediction["stage_metrics"] = prediction_stage_metrics(prediction)
     prediction["stage_metric_status"] = prediction_stage_metric_status(prediction)
     prediction["adapter_metrics"] = research_adapter_metrics(prediction)

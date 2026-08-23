@@ -17,8 +17,12 @@ from benchmark.jsonl import read_jsonl  # noqa: E402
 from benchmark.terminal_outcome_contract import (  # noqa: E402
     terminal_outcome_summary_fields,
 )
+from scripts.slurm.qasper_debug_contract import (  # noqa: E402
+    qasper_debug_behavior_violations,
+    qasper_debug_observability_coverage,
+)
 
-CONTRACT = "contract_smoke_audit.v1"
+CONTRACT = "contract_smoke_audit.v2"
 STAGES = (
     "canonical_candidate_evidence",
     "fused_evidence",
@@ -54,6 +58,7 @@ REQUIREMENTS = {
         "cross_page_required_slots",
         "runtime_authority_pass_through",
     },
+    "qasper_debug": set(),
 }
 HARD_GATES = {
     "identity_collision_count": ("eq", 0.0),
@@ -137,6 +142,9 @@ QASPER_HARD_GATES = {
     "citation_scope_violation_count": ("eq", 0.0),
     "citation_nonminimal_count": ("eq", 0.0),
 }
+QASPER_DEBUG_HARD_GATES = {
+    "terminal_outcome_contract_violation_count": ("eq", 0.0),
+}
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -197,7 +205,10 @@ def _stage_audit(
             else ranking_trace.get("backend_execution")
         ):
             status = "truthfully_not_executed"
-        elif stage == "execution_operand_evidence" and suite_kind == "qasper":
+        elif stage == "execution_operand_evidence" and suite_kind in {
+            "qasper",
+            "qasper_debug",
+        }:
             status = "not_applicable"
         elif stage == "execution_operand_evidence" and missing_execution:
             status = "blocked_missing_requirements"
@@ -241,11 +252,15 @@ def _hard_gate_results(
     suite_kind: str,
 ) -> dict[str, dict[str, Any]]:
     results: dict[str, dict[str, Any]] = {}
-    gates = {
-        **HARD_GATES,
-        **(FINANCE_HARD_GATES if suite_kind == "finance" else {}),
-        **(QASPER_HARD_GATES if suite_kind == "qasper" else {}),
-    }
+    gates = (
+        QASPER_DEBUG_HARD_GATES
+        if suite_kind == "qasper_debug"
+        else {
+            **HARD_GATES,
+            **(FINANCE_HARD_GATES if suite_kind == "finance" else {}),
+            **(QASPER_HARD_GATES if suite_kind == "qasper" else {}),
+        }
+    )
     for metric, (comparison, expected) in gates.items():
         value = metrics.get(metric)
         passed = value is not None and (
@@ -300,40 +315,60 @@ def _all_stage_audits(
 def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
     summary = _load_json(run_dir / "summary.json")
     predictions = _load_predictions(run_dir / "predictions.jsonl")
-    if summary.get("artifact_detail") != "full":
-        raise ValueError("artifact_detail must be full for contract smoke")
-    if not 2 <= len(predictions) <= 5:
-        raise ValueError(
-            "contract smoke must contain between 2 and 5 predictions; "
-            f"found {len(predictions)}"
-        )
-
+    expected_count = (18, 18) if suite_kind == "qasper_debug" else (2, 5)
     observed_requirements = _requirements(predictions)
-    missing_requirements = REQUIREMENTS[suite_kind] - observed_requirements
-    if missing_requirements:
-        raise ValueError(
-            "missing contract smoke requirements: "
-            + ", ".join(sorted(missing_requirements))
+    precondition_violations = _precondition_violations(
+        summary,
+        predictions,
+        suite_kind=suite_kind,
+        expected_count=expected_count,
+        observed_requirements=observed_requirements,
+    )
+    if precondition_violations:
+        audit = _precondition_failure_audit(
+            summary,
+            predictions,
+            suite_kind=suite_kind,
+            expected_count=expected_count,
+            observed_requirements=observed_requirements,
+            violations=precondition_violations,
         )
+        _write_audit(run_dir, audit)
+        raise ValueError("; ".join(precondition_violations))
+    audit = _complete_audit(
+        summary,
+        predictions,
+        suite_kind=suite_kind,
+        expected_count=expected_count,
+        observed_requirements=observed_requirements,
+    )
+    _write_audit(run_dir, audit)
+    if audit["status"] != "passed":
+        raise ValueError("contract smoke failed: " + _failure_details(audit))
+    return audit
+
+
+def _complete_audit(
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    expected_count: tuple[int, int],
+    observed_requirements: set[str],
+) -> dict[str, Any]:
     behavior_violations = _behavior_violations(
         predictions,
         suite_kind=suite_kind,
     )
-
     stage_audits, stage_violations = _all_stage_audits(
         predictions, suite_kind=suite_kind
     )
-
     metrics = contract_invariant_summary(predictions)
     hard_gates = _hard_gate_results(metrics, suite_kind=suite_kind)
     failed_gates = [
         metric for metric, result in hard_gates.items() if not result["passed"]
     ]
-    contract_gate_failures = [
-        name
-        for name, gate in dict(metrics.get("contract_gates") or {}).items()
-        if isinstance(gate, dict) and gate.get("status") == "failed"
-    ]
+    contract_gate_failures = _contract_gate_failures(metrics, suite_kind=suite_kind)
     status = (
         "passed"
         if not stage_violations
@@ -347,6 +382,7 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
         "suite_kind": suite_kind,
         "artifact_detail": summary.get("artifact_detail"),
         "prediction_count": len(predictions),
+        "expected_prediction_count": list(expected_count),
         "observed_requirements": sorted(observed_requirements),
         "stage_audits": stage_audits,
         "stage_violations": stage_violations,
@@ -356,24 +392,90 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
         "contract_gates": metrics.get("contract_gates"),
         "contract_gate_failures": contract_gate_failures,
         "terminal_outcome_summary": terminal_outcome_summary_fields(predictions),
+        "observability_coverage": (
+            qasper_debug_observability_coverage(predictions)
+            if suite_kind == "qasper_debug"
+            else {}
+        ),
         "status": status,
     }
-    (run_dir / "contract_smoke_audit.json").write_text(
-        json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    if status != "passed":
-        details = []
-        if stage_violations:
-            details.append(f"stage_violations={len(stage_violations)}")
-        if behavior_violations:
-            details.append("behavior_violations=" + ",".join(behavior_violations))
-        if failed_gates:
-            details.append("failed_gates=" + ",".join(failed_gates))
-        if contract_gate_failures:
-            details.append("contract_gate_failures=" + ",".join(contract_gate_failures))
-        raise ValueError("contract smoke failed: " + " ".join(details))
     return audit
+
+
+def _precondition_violations(
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    expected_count: tuple[int, int],
+    observed_requirements: set[str],
+) -> list[str]:
+    violations: list[str] = []
+    if summary.get("artifact_detail") != "full":
+        violations.append("artifact_detail must be full for contract smoke")
+    if not expected_count[0] <= len(predictions) <= expected_count[1]:
+        violations.append(
+            "contract smoke must contain between "
+            f"{expected_count[0]} and {expected_count[1]} predictions; "
+            f"found {len(predictions)}"
+        )
+    missing_requirements = REQUIREMENTS[suite_kind] - observed_requirements
+    if missing_requirements:
+        violations.append(
+            "missing contract smoke requirements: "
+            + ", ".join(sorted(missing_requirements))
+        )
+    return violations
+
+
+def _precondition_failure_audit(
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    expected_count: tuple[int, int],
+    observed_requirements: set[str],
+    violations: list[str],
+) -> dict[str, Any]:
+    return {
+        "contract": CONTRACT,
+        "suite_kind": suite_kind,
+        "artifact_detail": summary.get("artifact_detail"),
+        "prediction_count": len(predictions),
+        "expected_prediction_count": list(expected_count),
+        "observed_requirements": sorted(observed_requirements),
+        "precondition_violations": violations,
+        "status": "failed",
+    }
+
+
+def _contract_gate_failures(
+    metrics: dict[str, Any],
+    *,
+    suite_kind: str,
+) -> list[str]:
+    if suite_kind == "qasper_debug":
+        return []
+    return [
+        name
+        for name, gate in dict(metrics.get("contract_gates") or {}).items()
+        if isinstance(gate, dict) and gate.get("status") == "failed"
+    ]
+
+
+def _failure_details(audit: dict[str, Any]) -> str:
+    details: list[str] = []
+    if audit["stage_violations"]:
+        details.append(f"stage_violations={len(audit['stage_violations'])}")
+    if audit["behavior_violations"]:
+        details.append("behavior_violations=" + ",".join(audit["behavior_violations"]))
+    if audit["failed_gates"]:
+        details.append("failed_gates=" + ",".join(audit["failed_gates"]))
+    if audit["contract_gate_failures"]:
+        details.append(
+            "contract_gate_failures=" + ",".join(audit["contract_gate_failures"])
+        )
+    return " ".join(details)
 
 
 def _behavior_violations(
@@ -383,6 +485,8 @@ def _behavior_violations(
 ) -> list[str]:
     if suite_kind == "finance":
         return _finance_behavior_violations(predictions)
+    if suite_kind == "qasper_debug":
+        return qasper_debug_behavior_violations(predictions)
     violations: list[str] = []
     if not any(
         _observed_qasper_runtime_pass_through(prediction) for prediction in predictions
@@ -410,6 +514,13 @@ def _behavior_violations(
                 f"verifier_input_trace_missing:{prediction.get('example_id')}"
             )
     return violations
+
+
+def _write_audit(run_dir: Path, audit: dict[str, Any]) -> None:
+    (run_dir / "contract_smoke_audit.json").write_text(
+        json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def _finance_behavior_violations(

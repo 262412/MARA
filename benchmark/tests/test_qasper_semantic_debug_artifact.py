@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from benchmark.qasper_semantic_debug_artifact import (
     qasper_semantic_debug_rows,
     qasper_semantic_debug_summary,
@@ -105,7 +107,7 @@ def _recovery_trace() -> list[dict]:
 def test_qasper_semantic_debug_row_projects_the_full_consistency_chain() -> None:
     [row] = qasper_semantic_debug_rows([_prediction()])
 
-    assert row["contract_id"] == "qasper_semantic_pipeline_debug.v2"
+    assert row["contract_id"] == "qasper_semantic_pipeline_debug.v3"
     assert row["example_id"] == "example-1"
     assert (
         row["semantic_verifier"]["debug_trace"]["events"][0]["auditor_relationship"]
@@ -272,6 +274,55 @@ def test_qasper_semantic_debug_marks_verified_audit_runtime_rejection() -> None:
     [row] = qasper_semantic_debug_rows([prediction])
 
     assert row["audit_verified_but_runtime_rejected"] is True
+
+
+@pytest.mark.parametrize(
+    ("candidate", "verifier_status", "cause", "upstream_issue", "downstream_issue"),
+    (
+        (
+            "unanswerable",
+            "supported",
+            "upstream_candidate_selected_unanswerable",
+            True,
+            False,
+        ),
+        ("yes", "unknown", "verifier_unknown_candidate", False, False),
+        (
+            "yes",
+            "supported",
+            "downstream_policy_rejected_supported_candidate",
+            False,
+            True,
+        ),
+    ),
+)
+def test_qasper_semantic_debug_localizes_false_abstention_boundary(
+    candidate: str,
+    verifier_status: str,
+    cause: str,
+    upstream_issue: bool,
+    downstream_issue: bool,
+) -> None:
+    prediction = _prediction()
+    metadata = prediction["engine_terminal_evidence_bundle"]["metadata"]
+    metadata["qasper_candidate_generation"] = {
+        "contract_id": "qasper_typed_candidate_generation.v1",
+        "status": "parsed",
+        "failure_reason": "",
+        "typed_candidate": candidate,
+    }
+    metadata["semantic_proposition_verifier"].update(
+        candidate_label=candidate,
+        candidate_verification_status=verifier_status,
+        replacement_candidate_allowed=False,
+    )
+
+    [row] = qasper_semantic_debug_rows([prediction])
+    analysis = row["candidate_authority_analysis"]
+
+    assert analysis["false_abstention_cause"] == cause
+    assert analysis["upstream_candidate_contract_issue"] is upstream_issue
+    assert analysis["downstream_acceptance_policy_issue"] is downstream_issue
 
 
 def test_qasper_semantic_debug_prefers_persisted_rejected_transaction() -> None:

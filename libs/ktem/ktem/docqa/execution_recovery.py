@@ -4,7 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from .boolean_authoritative_conflict import authoritative_conflict_complete
-from .controller import RetrieveDecision, VerifyDecision, evaluate_retrieval_quality
+from .controller import RetrieveDecision, evaluate_retrieval_quality
 from .evidence import EvidenceBundle
 from .execution_models import RetrieveFn, RewriteFn, RouteExecutionResult, VerifyFn
 from .execution_planning import build_execution_workflow_plan
@@ -29,6 +29,7 @@ from .execution_recovery_events import (
 )
 from .execution_recovery_events import same_route_verifier_recovery_trace
 from .execution_recovery_events import typed_slot_states as _typed_slot_states
+from .execution_authority_policy import required_typed_authority_missing
 from .execution_results import guarded_result, verified_result
 from .execution_route_switch_recovery import (
     switch_after_failed_retrieval,
@@ -36,11 +37,9 @@ from .execution_route_switch_recovery import (
 )
 from .execution_verifier_rebind import rebind_existing_boolean_evidence
 from .pipeline_stage_timings import PipelineStageTimings
-from .query_planning import ensure_request_query_plan
 from .retrieval_rounds import retrieve_for_verifier_recovery
 from .route_budget import optional_stage_allowed, route_budget_metadata
 from .route_selection import ControllerDecision
-from .typed_proposition_authority import TYPED_PROPOSITION_AUTHORITY_CONTRACT
 from .typed_retrieval_recovery import verifier_recovery_frame
 
 
@@ -521,74 +520,6 @@ def verifier_recovery_policy(
     if decision.policy == "auto" and not decision.route_switch_used:
         return "controller_auto"
     return "text_rag"
-
-
-def required_typed_authority_missing(
-    request: Any,
-    verify_decision: VerifyDecision,
-) -> bool:
-    if verify_decision.mode == "off" or verify_decision.status == "not_requested":
-        return False
-    plan = ensure_request_query_plan(request)
-    typed_required = plan.answer_type == "boolean" or any(
-        slot.required_for_verification
-        and str(slot.statement_kind or "").lower()
-        in {"answer_relation", "boolean_proposition"}
-        for slot in plan.evidence_slots
-    )
-    if not typed_required:
-        return False
-    typed = verify_decision.typed_authority
-    if typed.get("contract_id") == TYPED_PROPOSITION_AUTHORITY_CONTRACT:
-        state = str(typed.get("state") or "")
-        required = {
-            str(value).strip()
-            for value in typed.get("required_slot_ids") or []
-            if str(value).strip()
-        }
-        verified = {
-            str(value).strip()
-            for value in typed.get("verified_slot_ids") or []
-            if str(value).strip()
-        }
-        atoms = [
-            atom
-            for atom in typed.get("authority_atoms") or []
-            if isinstance(atom, dict)
-        ]
-        if state == "verified_conflict":
-            return not authoritative_conflict_complete(
-                verify_decision.authoritative_conflict
-            )
-        return not (
-            verify_decision.status == "supported"
-            and state == "verified_support"
-            and required
-            and required == verified
-            and atoms
-            and all(
-                str(atom.get("evidence_id") or "")
-                and str(atom.get("evidence_ref") or "")
-                and str(atom.get("quote") or "")
-                for atom in atoms
-            )
-        )
-    if verify_decision.status == "verified_conflict":
-        return not authoritative_conflict_complete(
-            verify_decision.authoritative_conflict
-        )
-    identity_complete = bool(
-        verify_decision.authoritative_evidence_id
-        and verify_decision.authoritative_evidence_ref
-        and verify_decision.authoritative_quote
-    )
-    if plan.answer_type == "boolean":
-        return not (
-            verify_decision.status == "supported"
-            and verify_decision.canonical_answer_polarity in {"yes", "no"}
-            and identity_complete
-        )
-    return not (verify_decision.status == "supported" and identity_complete)
 
 
 def _typed_retrieval_recovery_trace(bundle: EvidenceBundle) -> list[dict[str, Any]]:

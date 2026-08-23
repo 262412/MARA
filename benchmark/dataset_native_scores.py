@@ -8,6 +8,9 @@ from ktem.docqa.evidence_text import extract_final_answer_text
 
 from .dataset_profiles import profile_for_dataset
 from .metrics import normalize_text, round_metric, token_f1_score
+from .qasper_annotation_diagnostics import (
+    qasper_annotation_diagnostics as _qasper_annotation_diagnostics,
+)
 from .qasper_evidence import qasper_paragraph_f1
 from .ragtruth_native_scores import ragtruth_native_metrics
 
@@ -425,6 +428,12 @@ def qasper_evidence_f1_for_prediction(prediction: dict[str, Any]) -> float | Non
     """Recompute QASPER Evidence F1 under the current deterministic contract."""
 
     return _qasper_evidence_f1(prediction)
+
+
+def qasper_annotation_diagnostics(
+    prediction: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    return _qasper_annotation_diagnostics(prediction)
 
 
 def _qasper_gold_evidence_references(

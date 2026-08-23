@@ -14,7 +14,7 @@ from ktem_tests.semantic_entailment_test_helpers import audited_verdict
 def semantic_verdict(
     request: Any,
     question: str,
-    _answer: str,
+    answer: str,
     bundle: Any,
 ) -> dict[str, Any]:
     """Build one fully audited semantic-authority benchmark fixture."""
@@ -33,6 +33,9 @@ def semantic_verdict(
         "jointly_complete": True,
         "each_premise_required": True,
         "premises": premises,
+        "verifier_input_candidate": str(answer or "").strip().casefold(),
+        "candidate_verification_status": "supported",
+        "replacement_candidate_allowed": False,
         "verifier": {
             "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
             "model": "test-double",
@@ -123,6 +126,9 @@ def _runtime_trace() -> dict[str, Any]:
         "audit_response_finish_reason": "stop",
         "audit_response_completion_tokens": 94,
         "audit_response_chars": 346,
+        "candidate_label": "yes",
+        "candidate_verification_status": "supported",
+        "replacement_candidate_allowed": False,
     }
 
 

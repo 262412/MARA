@@ -91,6 +91,11 @@ class VerifyDecision:
     selected_derivation_id: str = ""
     authoritative_conflict: dict[str, Any] = field(default_factory=dict)
     typed_authority: dict[str, Any] = field(default_factory=dict)
+    candidate_contract_id: str = ""
+    candidate_label: str = ""
+    verifier_input_candidate: str = ""
+    verifier_candidate_status: str = ""
+    replacement_candidate_allowed: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)

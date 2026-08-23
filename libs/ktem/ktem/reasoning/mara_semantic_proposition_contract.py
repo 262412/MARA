@@ -43,6 +43,8 @@ class SemanticPropositionTransactionContext:
     semantic_pack_digest: str
     capture_debug_trace: bool
     auditor_relationship: str
+    transaction_id: str = ""
+    attempt_namespace: str = "initial"
 
 
 def resolve_proposition_precondition(

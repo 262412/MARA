@@ -65,6 +65,7 @@ class DocQARequest:
     generation_temperature: Optional[float] = None
     generation_top_p: Optional[float] = None
     generation_seed: Optional[int] = None
+    trace_context: dict[str, Any] = field(default_factory=dict)
     user_id: Any = None
     origin: str = "cli"
 

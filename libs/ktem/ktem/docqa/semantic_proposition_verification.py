@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from .boolean_candidate_authority import (
+    candidate_bound_boolean_claim_authority,
+    structured_boolean_candidate_label,
+)
+from .candidate_verification_policy import finish_candidate_decision
 from .boolean_verification_projection import project_boolean_assessment
 from .domain_verifiers import normalize_verification_domain
 from .evidence import EvidenceBundle
@@ -10,12 +15,9 @@ from .semantic_evidence_set_authority import (
     PropositionVerifier,
     semantic_evidence_set_claim_authority,
 )
-from .typed_proposition_authority import resolve_typed_proposition_authority_transaction
 from .verification_logic import (
     VerifiedClaim,
     VerifyDecision,
-    _boolean_verification,
-    _decision_for_claim_results,
 )
 
 
@@ -41,14 +43,15 @@ def verified_boolean_candidate_decision(
     if not boolean_authority_required(request) or not evidence_bundle.items:
         return None
     prompt = request_planning_question(request)
-    typed_boolean = _boolean_verification(
+    candidate = structured_boolean_candidate_label(answer)
+    if not candidate:
+        return _invalid_candidate_decision(mode, answer)
+    assessment = candidate_bound_boolean_claim_authority(
         prompt,
-        answer,
+        candidate,
         evidence_bundle.items,
-        allow_missing_polarity=True,
     )
-    if typed_boolean is None:
-        return None
+    typed_boolean = project_boolean_assessment(assessment)
     semantic = semantic_boolean_verification(
         request,
         prompt,
@@ -57,30 +60,32 @@ def verified_boolean_candidate_decision(
         typed_boolean,
         proposition_verifier,
     )
-    claims, results = semantic or typed_boolean
     domain = normalize_verification_domain(
         getattr(request, "verification_domain", None)
     )
-    decision = _decision_for_claim_results(
-        mode,
-        retrieve_decision.status,
-        claims,
-        results,
-        evidence_bundle.items,
+    return finish_candidate_decision(
+        request,
+        retrieve_decision,
+        evidence_bundle,
+        answer=answer,
+        mode=mode,
+        candidate=candidate,
         prompt=prompt,
         domain=domain,
+        typed_boolean=typed_boolean,
+        semantic=semantic,
     )
-    typed = resolve_typed_proposition_authority_transaction(
-        request,
-        decision,
-        evidence_bundle,
-        question=prompt,
-        answer=answer,
-        domain=domain,
+
+
+def _invalid_candidate_decision(mode: str, answer: str) -> VerifyDecision:
+    return VerifyDecision(
+        mode=mode,
+        status="unknown",
+        reason="Structured Boolean candidate was invalid.",
+        action="abstain",
+        claims=[str(answer or "")],
+        unknown_claims=[str(answer or "")],
     )
-    if typed is None or typed.status not in {"supported", "verified_conflict"}:
-        return None
-    return typed
 
 
 def semantic_boolean_verification(
@@ -91,8 +96,12 @@ def semantic_boolean_verification(
     deterministic: tuple[list[str], list[VerifiedClaim]],
     verifier: PropositionVerifier | None,
 ) -> tuple[list[str], list[VerifiedClaim]] | None:
-    if verifier is None or any(
-        result.status != "unknown" for result in deterministic[1]
+    domain = normalize_verification_domain(
+        getattr(request, "verification_domain", None)
+    )
+    qasper = domain == "qasper" or domain.startswith("qasper_")
+    if verifier is None or (
+        not qasper and any(result.status != "unknown" for result in deterministic[1])
     ):
         return None
     assessment = semantic_evidence_set_claim_authority(

@@ -61,36 +61,16 @@ def verify_generated_answer(
         if ragtruth_contract_request(request):
             bundle.metadata["task_contract_fallback"] = "ragtruth_empty_generation"
             answer = ragtruth_empty_answer
-        elif _typed_boolean_request(request, verify):
-            bundle.metadata["typed_boolean_generation_recovery"] = (
-                "empty_generation_requires_fresh_authority"
-            )
-            trace_prefix = [
-                *list(trace_prefix or []),
-                {
-                    "stage": "typed_boolean_generation_recovery",
-                    "candidate_before": extract_final_answer_text(answer).strip(),
-                    "candidate_after": "",
-                    "reason": "empty_generation_requires_fresh_authority",
-                    "action": "fresh_typed_verification",
-                },
-            ]
         else:
-            verify_decision = timings.measure(
-                "verification_seconds",
-                _empty_answer_verify_decision,
+            return _handle_empty_generated_answer(
                 request,
                 bundle,
-            )
-            return (
-                abstain_message,
-                verify_decision,
-                verification_guardrail(
-                    verify_decision,
-                    request,
-                    guardrail_factory=guardrail_factory,
-                ),
-                list(trace_prefix or []),
+                answer,
+                trace_prefix,
+                timings,
+                verify=verify,
+                guardrail_factory=guardrail_factory,
+                abstain_message=abstain_message,
             )
     return _verify_nonempty_answer(
         request,
@@ -159,7 +139,12 @@ def _verify_nonempty_answer(
     )
     if revision_trace:
         trace.append(revision_trace)
-    if verify_decision.action == "revise" and rewrite is not None:
+    candidate_bound = _qasper_typed_candidate_request(request)
+    if (
+        verify_decision.action == "revise"
+        and rewrite is not None
+        and not candidate_bound
+    ):
         answer, verify_decision = _rewrite_and_verify(
             request,
             decision,
@@ -171,7 +156,7 @@ def _verify_nonempty_answer(
             timings,
             trace,
         )
-    if verify_decision.action == "revise":
+    if verify_decision.action == "revise" and not candidate_bound:
         answer, verify_decision, revision_trace = timings.measure(
             "verification_seconds",
             revise_to_supported_claims,
@@ -184,6 +169,76 @@ def _verify_nonempty_answer(
         )
         if revision_trace:
             trace.append(revision_trace)
+    answer, guardrail = _finalize_nonempty_answer(
+        request,
+        bundle,
+        answer,
+        verify_decision,
+        timings,
+        guardrail_factory=guardrail_factory,
+        abstain_message=abstain_message,
+    )
+    return (
+        answer,
+        verify_decision,
+        guardrail,
+        trace,
+    )
+
+
+def _handle_empty_generated_answer(
+    request: Any,
+    bundle: EvidenceBundle,
+    answer: str,
+    trace_prefix: list[dict[str, Any]] | None,
+    timings: PipelineStageTimings,
+    *,
+    verify: VerifyFn,
+    guardrail_factory: GuardrailFactory,
+    abstain_message: str,
+) -> tuple[str, VerifyDecision, Any, list[dict[str, Any]]]:
+    verify_decision = timings.measure(
+        "verification_seconds",
+        _empty_answer_verify_decision,
+        request,
+        bundle,
+    )
+    trace = list(trace_prefix or [])
+    if _typed_boolean_request(request, verify):
+        bundle.metadata["typed_boolean_generation_recovery"] = (
+            "empty_generation_rejected_without_verifier_call"
+        )
+        trace.append(
+            {
+                "stage": "typed_boolean_generation_recovery",
+                "candidate_before": extract_final_answer_text(answer).strip(),
+                "candidate_after": "",
+                "reason": "empty_generation_rejected_without_verifier_call",
+                "action": "fail_closed_abstention",
+            }
+        )
+    return (
+        abstain_message,
+        verify_decision,
+        verification_guardrail(
+            verify_decision,
+            request,
+            guardrail_factory=guardrail_factory,
+        ),
+        trace,
+    )
+
+
+def _finalize_nonempty_answer(
+    request: Any,
+    bundle: EvidenceBundle,
+    answer: str,
+    verify_decision: VerifyDecision,
+    timings: PipelineStageTimings,
+    *,
+    guardrail_factory: GuardrailFactory,
+    abstain_message: str,
+) -> tuple[str, Any]:
     answer = _verified_boolean_answer(answer, verify_decision)
     guardrail = timings.measure(
         "finalization_seconds",
@@ -197,12 +252,7 @@ def _verify_nonempty_answer(
         answer = "unanswerable"
     elif guardrail.action == "abstain":
         answer = abstain_message
-    return (
-        answer,
-        verify_decision,
-        guardrail,
-        trace,
-    )
+    return answer, guardrail
 
 
 def _verify_with_answer_revision(
@@ -226,6 +276,8 @@ def _verify_with_answer_revision(
         bundle,
         answer,
     )
+    if _qasper_typed_candidate_request(request):
+        return answer, verify_decision, visual_revision_trace
     answer, verify_decision, qasper_revision_trace = _revise_qasper_answer_relation(
         request,
         retrieve_decision,
@@ -362,6 +414,25 @@ def _verified_boolean_answer(answer: str, decision: VerifyDecision) -> str:
     if decision.status == "supported" and polarity in {"yes", "no"}:
         return polarity
     return answer
+
+
+def _qasper_typed_candidate_request(request: Any | None) -> bool:
+    if request is None:
+        return False
+    domain = str(getattr(request, "verification_domain", "") or "").casefold()
+    origin = str(getattr(request, "origin", "") or "").casefold()
+    plan = getattr(request, "query_plan", None)
+    answer_type = (
+        plan.get("answer_type")
+        if isinstance(plan, dict)
+        else getattr(plan, "answer_type", "")
+    )
+    answer_type = str(answer_type or getattr(request, "task_type", "")).casefold()
+    return (
+        origin == "benchmark"
+        and (domain == "qasper" or domain.startswith("qasper_"))
+        and answer_type == "boolean"
+    )
 
 
 def ragtruth_contract_request(request: Any | None) -> bool:

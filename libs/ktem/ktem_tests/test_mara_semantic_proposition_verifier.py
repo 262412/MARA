@@ -165,7 +165,7 @@ def _audit_response() -> str:
     )
 
 
-def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> None:
+def test_runtime_verifier_binds_candidate_and_caches_candidate_signature() -> None:
     llm = _RecordingLLM(_model_response())
     verifier = build_semantic_proposition_verifier(
         SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
@@ -176,24 +176,31 @@ def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> Non
 
     first = verifier(request, QUESTION, "unanswerable", bundle)
     second = verifier(request, QUESTION, "yes", bundle)
+    third = verifier(request, QUESTION, "yes", bundle)
 
-    assert first == second
     assert first is not None
-    assert len(llm.calls) == 2
-    assert [value["evidence_id"] for value in first["premises"]] == [
+    assert second == third
+    assert first["candidate_verification_status"] == "contradicted"
+    assert second["candidate_verification_status"] == "supported"
+    assert first["verifier_input_candidate"] == "unanswerable"
+    assert second["verifier_input_candidate"] == "yes"
+    assert first["replacement_candidate_allowed"] is False
+    assert len(llm.calls) == 4
+    assert [value["evidence_id"] for value in second["premises"]] == [
         identity_of(item).key for item in _items()
     ]
-    assert first["verifier"]["contract_id"] == "grounded_semantic_verifier.v2"
-    assert first["verifier"]["model"] == "semantic-test-model"
-    assert first["verifier"]["seed"] == 17
-    assert first["verifier"]["release_mode"] is False
-    assert first["verifier"]["auditor_relationship"] == "same_instance"
+    assert second["verifier"]["contract_id"] == "grounded_semantic_verifier.v2"
+    assert second["verifier"]["model"] == "semantic-test-model"
+    assert second["verifier"]["seed"] == 17
+    assert second["verifier"]["release_mode"] is False
+    assert second["verifier"]["auditor_relationship"] == "same_instance"
     assert (
-        first["verifier"]["semantic_pack_digest"]
+        second["verifier"]["semantic_pack_digest"]
         == bundle.metadata["semantic_proposition_verifier"]["semantic_pack_digest"]
     )
     messages, kwargs = llm.calls[0]
-    assert "unanswerable" not in messages[1].content
+    assert "STRUCTURED CANDIDATE TO VERIFY:\nunanswerable" in messages[1].content
+    assert "must not independently choose" in messages[0].content
     assert "at least one premise must explicitly anchor their action" in (
         messages[0].content
     )
@@ -203,7 +210,7 @@ def test_runtime_verifier_maps_labels_and_caches_one_evidence_signature() -> Non
     assert kwargs["response_format"]["json_schema"]["strict"] is True
     assert bundle.metadata["semantic_proposition_verifier"]["cache_hit"] is True
     assert (
-        bundle.metadata["semantic_proposition_verifier"]["actual_model_call_count"] == 2
+        bundle.metadata["semantic_proposition_verifier"]["actual_model_call_count"] == 4
     )
 
 
@@ -400,7 +407,7 @@ def test_runtime_verdict_commits_typed_authority_and_query_plan_bindings() -> No
         request,
         RetrieveDecision(status="good", reason="retrieved"),
         bundle,
-        "unanswerable",
+        "yes",
         proposition_verifier=verifier,
     )
 

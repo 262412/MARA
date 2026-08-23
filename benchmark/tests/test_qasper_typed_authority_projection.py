@@ -134,13 +134,13 @@ def _semantic_evidence() -> list[dict[str, str]]:
             "evidence_id": "cross-lingual",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "Transfer was evaluated across two languages.",
+            "text": "We evaluated transfer in the cross-lingual setting.",
         },
         {
             "evidence_id": "single-language",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "The experiment included monolingual baselines for comparison.",
+            "text": "The same experiment included single-language baselines for comparison.",
         },
     ]
 
@@ -172,7 +172,7 @@ def _semantic_prediction() -> dict:
     execution = execute_controller_turn(
         request,
         retrieve=lambda *_args: {"evidence": evidence},
-        generate=lambda *_args: "unanswerable",
+        generate=lambda *_args: "yes",
         proposition_verifier=_semantic_verdict,
     )
     prediction = {

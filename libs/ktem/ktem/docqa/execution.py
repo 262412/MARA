@@ -63,6 +63,7 @@ from .execution_results import static_result as _static_result
 from .execution_results import verified_result as _verified_result
 from .execution_retrieval import retrieve_and_evaluate as _retrieve_and_evaluate
 from .pipeline_stage_timings import PipelineStageTimings
+from .query_plan_schema import slot_binding_state
 from .route_budget import RouteDeadlineExhausted, run_blocking_route_stage
 from .route_capabilities import (
     route_switch_candidate_evaluation as _route_switch_candidate_evaluation,
@@ -244,6 +245,7 @@ def _execute_retrieval_turn(
             decision,
             retrieve_decision,
             bundle,
+            generate,
             rewrite,
             workflow_plan,
             route_switch_trace,
@@ -290,6 +292,7 @@ def _poor_retrieval_result(
     decision: ControllerDecision,
     retrieve_decision: RetrieveDecision,
     bundle: EvidenceBundle,
+    generate: GenerateFn,
     rewrite: RewriteFn | None,
     workflow_plan: dict[str, Any],
     route_switch_trace: list[dict[str, Any]],
@@ -297,12 +300,32 @@ def _poor_retrieval_result(
     verify: VerifyFn,
 ) -> RouteExecutionResult:
     if _typed_boolean_candidate_evidence_available(request, bundle, verify):
+        bundle.metadata["candidate_generation_admission"] = {
+            "contract_id": "qasper_candidate_generation_admission.v1",
+            "status": "admitted",
+            "reason": "retrieval_slots_filled_verification_slot_pending",
+        }
+        answer = timings.measure(
+            "generation_seconds",
+            run_blocking_route_stage,
+            request,
+            "generation",
+            generate,
+            request,
+            decision,
+            bundle,
+            configured_timeout_seconds=getattr(
+                request,
+                "generation_timeout_seconds",
+                None,
+            ),
+        )
         return _verified_result(
             request,
             decision,
             retrieve_decision,
             bundle,
-            "",
+            answer,
             rewrite,
             workflow_plan,
             route_switch_trace,
@@ -332,10 +355,42 @@ def _typed_boolean_candidate_evidence_available(
         if isinstance(plan, dict)
         else getattr(plan, "answer_type", None)
     )
-    return bool(
+    domain = str(getattr(request, "verification_domain", "") or "").casefold()
+    if not (
         bundle.items
-        and str(answer_type or getattr(request, "task_type", "")).lower() == "boolean"
+        and str(answer_type or getattr(request, "task_type", "")).casefold()
+        == "boolean"
+        and (domain == "qasper" or domain.startswith("qasper_"))
         and getattr(verify, "_semantic_proposition_preflight", False)
+    ):
+        return False
+    metadata_plan = next(
+        (
+            bundle.metadata.get(key)
+            for key in ("bound_query_plan", "query_plan")
+            if isinstance(bundle.metadata.get(key), dict)
+        ),
+        None,
+    )
+    slots = metadata_plan.get("evidence_slots") if metadata_plan else None
+    if not isinstance(slots, list):
+        return False
+    retrieval_slots = [
+        slot
+        for slot in slots
+        if isinstance(slot, dict) and bool(slot.get("required_for_retrieval"))
+    ]
+    pending_verification_slots = [
+        slot
+        for slot in slots
+        if isinstance(slot, dict)
+        and bool(slot.get("required_for_verification"))
+        and not bool(slot.get("required_for_retrieval"))
+        and slot_binding_state(slot) != "filled"
+    ]
+    return bool(
+        pending_verification_slots
+        and all(slot_binding_state(slot) == "filled" for slot in retrieval_slots)
     )
 
 

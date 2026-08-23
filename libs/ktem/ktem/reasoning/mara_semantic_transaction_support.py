@@ -55,6 +55,8 @@ def transaction_debug(
         proposal_model=context.proposal_model,
         audit_model=context.audit_model,
         auditor_relationship=context.auditor_relationship,
+        transaction_id=context.transaction_id,
+        attempt_namespace=context.attempt_namespace,
     )
 
 
