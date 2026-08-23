@@ -6,8 +6,6 @@ import logging
 from copy import deepcopy
 from typing import Any
 
-from ktem.docqa.boolean_evidence_scope import evidence_item_text
-from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.query_planning import request_planning_question
 
@@ -20,12 +18,15 @@ from .mara_semantic_proposition_debug import (
     response_finish_reason,
     response_text,
 )
+from .mara_semantic_proposition_packing import (
+    SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+    pack_semantic_proposition_evidence,
+    required_semantic_proposition_slots,
+)
 
 QASPER_CANDIDATE_GENERATION_CONTRACT = "qasper_typed_candidate_generation.v1"
 QASPER_CANDIDATE_RESPONSE_CONTRACT = "qasper_typed_candidate.v1"
 QASPER_CANDIDATES = {"yes", "no", "unanswerable"}
-QASPER_CANDIDATE_MAX_EVIDENCE_ITEMS = 12
-QASPER_CANDIDATE_MAX_EVIDENCE_CHARS = 24_000
 QASPER_CANDIDATE_MAX_RESPONSE_CHARS = 16_000
 QASPER_CANDIDATE_MAX_TOKENS = 48
 QASPER_CANDIDATE_DEFAULT_SEED = 20260724
@@ -58,7 +59,11 @@ def generate_qasper_typed_candidate(
 ) -> str:
     llm = _answering_llm(pipeline)
     question = request_planning_question(request)
-    evidence = _packed_evidence(bundle)
+    evidence, evidence_diagnostics = _candidate_evidence(
+        request,
+        question,
+        bundle,
+    )
     seed = _effective_seed(request)
     route = str(bundle.route or "")
     identity = _transaction_identity(request, route, seed)
@@ -87,9 +92,13 @@ def generate_qasper_typed_candidate(
         "effective_seed": seed,
         "message_stack": serialized_messages,
         "message_stack_digest": _digest(serialized_messages),
+        "message_stack_chars": sum(
+            len(str(message.get("content") or "")) for message in serialized_messages
+        ),
         "input_digest": input_digest,
         "evidence_count": len(evidence),
         "evidence_digest": _digest(evidence),
+        **evidence_diagnostics,
         "attempts": [],
         "raw_response": "",
         "raw_response_truncated": False,
@@ -254,32 +263,34 @@ def _answering_llm(pipeline: Any) -> Any | None:
     return llm if callable(llm) else None
 
 
-def _packed_evidence(bundle: EvidenceBundle) -> list[dict[str, str]]:
-    records: list[dict[str, str]] = []
-    used_chars = 0
-    for item in bundle.items:
-        text = evidence_item_text(item).strip()
-        if not text:
-            continue
-        remaining = QASPER_CANDIDATE_MAX_EVIDENCE_CHARS - used_chars
-        if remaining <= 0:
-            break
-        bounded = text[:remaining]
-        try:
-            evidence_id = identity_of(item).key
-        except ValueError:
-            evidence_id = str(item.get("evidence_id") or "")
-        records.append(
-            {
-                "label": f"E{len(records) + 1}",
-                "evidence_id": evidence_id,
-                "text": bounded,
-            }
-        )
-        used_chars += len(bounded)
-        if len(records) >= QASPER_CANDIDATE_MAX_EVIDENCE_ITEMS:
-            break
-    return records
+def _candidate_evidence(
+    request: Any,
+    question: str,
+    bundle: EvidenceBundle,
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    packing = pack_semantic_proposition_evidence(
+        request,
+        question,
+        required_semantic_proposition_slots(request),
+        bundle,
+    )
+    records = [
+        {
+            "label": str(record["label"]),
+            "evidence_id": str(record["evidence_id"]),
+            "text": str(record["text"]),
+        }
+        for record in packing.records
+    ]
+    return records, {
+        "evidence_input_count": len(bundle.items),
+        "evidence_dropped_count": packing.dropped_count,
+        "evidence_truncated_count": packing.truncated_count,
+        "evidence_estimated_input_tokens": packing.estimated_input_tokens,
+        "evidence_token_budget": packing.input_token_budget,
+        "evidence_pack_digest": packing.semantic_pack_digest,
+        "prompt_char_limit": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+    }
 
 
 def _candidate_prompt(question: str, evidence: list[dict[str, str]]) -> str:

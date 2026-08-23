@@ -92,3 +92,30 @@ def test_qasper_candidate_parser_rejects_prose_and_extra_fields() -> None:
         "",
         "candidate_schema_invalid",
     )
+
+
+def test_qasper_candidate_generator_fits_large_evidence_to_model_budget() -> None:
+    llm = _RecordingLLM('{"candidate":"yes"}')
+    pipeline = SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
+    request = _request()
+    request.max_context_length = 3000
+    bundle = EvidenceBundle(
+        route="text_rag",
+        items=[
+            {
+                "evidence_id": f"e{index}",
+                "source_id": "paper",
+                "text": (f"Evidence item {index} establishes the comparison. " * 100),
+            }
+            for index in range(12)
+        ],
+    )
+
+    assert generate_qasper_typed_candidate(pipeline, request, bundle) == "yes"
+
+    trace = bundle.metadata["qasper_candidate_generation"]
+    prompt = llm.calls[0][0][1].content
+    assert trace["evidence_input_count"] == 12
+    assert trace["evidence_estimated_input_tokens"] <= trace["evidence_token_budget"]
+    assert trace["evidence_dropped_count"] or trace["evidence_truncated_count"]
+    assert len(prompt) <= trace["prompt_char_limit"]
