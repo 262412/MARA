@@ -48,6 +48,7 @@ def _parse_args() -> argparse.Namespace:
     record.add_argument("--job-id", required=True)
     record.add_argument("--wave-index", type=int, required=True)
     record.add_argument("--dependency", default="")
+    record.add_argument("--formal-audit-required", action="store_true")
 
     repair = subparsers.add_parser("record-dependency-repair")
     repair.add_argument("--plan", type=Path, required=True)
@@ -100,6 +101,7 @@ def main() -> int:
             job_id=args.job_id,
             wave_index=args.wave_index,
             dependency=args.dependency,
+            formal_audit_required=args.formal_audit_required,
         )
         return 0
 

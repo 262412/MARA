@@ -6,6 +6,7 @@ from typing import Any
 
 from ktem.docqa.evidence_schema import EvidenceBundle
 
+from .mara_semantic_candidate_policy import candidate_bound_audit
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
     SemanticPropositionEvidencePacking,
@@ -123,16 +124,29 @@ def record_trace(
         cache_source=cache_source,
         diagnostics=diagnostics,
     )
+    trace["candidate_verification_audit"] = _candidate_audit(
+        trace, status, verdict, reason
+    )
+    relation = str(trace.get("candidate_verification_status") or "unknown")
+    trace.update(
+        {
+            "explicit_contradiction": relation == "contradicted",
+            "candidate_verifier_disagreement": relation == "contradicted",
+            "unknown": relation == "unknown",
+        }
+    )
     trace["output_digest"] = digest(
         {
             "status": status,
             "reason": reason,
             "verdict": verdict,
-            "candidate_verification_status": trace.get("candidate_verification_status"),
+            "candidate_verification_status": relation,
+            "candidate_verification_audit": trace["candidate_verification_audit"],
+            "replacement_candidate_allowed": False,
+            "explicit_contradiction": trace["explicit_contradiction"],
+            "candidate_verifier_disagreement": trace["candidate_verifier_disagreement"],
+            "unknown": trace["unknown"],
         }
-    )
-    trace["candidate_verification_audit"] = _candidate_audit(
-        trace, status, verdict, reason
     )
     if debug_trace is not None:
         trace["debug_trace"] = debug_trace
@@ -196,6 +210,7 @@ def _base_trace(
         },
         **diagnostics,
         **identity,
+        "replacement_candidate_allowed": False,
     }
 
 
@@ -206,24 +221,14 @@ def _candidate_audit(
     reason: str,
 ) -> dict[str, Any]:
     audit_status = str(trace.get("audit_status") or "")
-    return {
-        "contract_id": "candidate_verifier_audit.v1",
-        "status": (
-            "passed"
-            if status in {"parsed", "proposition_incomplete", "skipped"}
-            and audit_status
-            in {"not_required", "parsed", "verified", "verified_after_repair"}
-            else "failed"
-        ),
-        "mode": (
-            "deterministic_schema_audit"
-            if verdict == "insufficient_evidence"
-            else "semantic_entailment_audit"
-        ),
-        "audited_candidate": str(trace.get("candidate_label") or ""),
-        "audited_judgment": str(
-            trace.get("candidate_verification_status") or "unknown"
-        ),
-        "replacement_candidate_allowed": False,
-        "reason": str(trace.get("audit_reason") or reason),
-    }
+    candidate = str(trace.get("candidate_label") or "")
+    judgment = str(trace.get("candidate_verification_status") or "unknown")
+    audit = candidate_bound_audit(candidate, verdict, candidate_status=judgment)
+    if status not in {"parsed", "proposition_incomplete", "skipped", "cache_hit"}:
+        audit["status"] = "failed"
+    if audit_status in {"failed", "rejected"}:
+        audit["status"] = "failed"
+    audit["reason"] = str(
+        audit.get("classification") or trace.get("audit_reason") or reason
+    )
+    return audit

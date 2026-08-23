@@ -19,6 +19,7 @@ _PRIMARY_ARTIFACTS = (
     "semantic_debug_traces.jsonl",
     "report.md",
     "route_metrics.csv",
+    "contract_smoke_audit.json",
 )
 
 
@@ -119,6 +120,15 @@ def publish_artifact_contract(run_dir: str | Path) -> dict[str, Any]:
     }
     atomic_write_json(run_dir / ARTIFACT_COMPLETE_NAME, marker)
     return marker
+
+
+def publish_contract_smoke_audit(
+    run_dir: str | Path,
+    audit: dict[str, Any],
+) -> None:
+    run_dir = Path(run_dir).resolve()
+    atomic_write_json(run_dir / "contract_smoke_audit.json", audit)
+    publish_artifact_contract(run_dir)
 
 
 def verify_artifact_contract(run_dir: str | Path) -> dict[str, Any]:

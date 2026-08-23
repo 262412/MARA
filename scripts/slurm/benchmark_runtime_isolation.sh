@@ -479,7 +479,7 @@ mara_install_benchmark_runtime_cleanup() {
     _mara_benchmark_exit_status=$?
     _mara_benchmark_cleanup_status=0
     if declare -F cleanup >/dev/null 2>&1; then
-      cleanup || true
+      cleanup "$_mara_benchmark_exit_status" || true
     fi
     if [[ "${MARA_BENCHMARK_RUNTIME_CLEANED:-0}" != "1" && -n "${MARA_BENCHMARK_RUNTIME_DIR:-}" ]]; then
       if [[ -n "${MARA_EXECUTION_PLAN:-}" && "${MARA_BENCHMARK_COMPLETION_RECONCILED:-0}" != "1" ]]; then

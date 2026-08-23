@@ -15,6 +15,13 @@ from ktem.docqa.question_proposition import (
     build_question_proposition,
     resolve_question_proposition,
 )
+from .mara_semantic_proposition_packing_support import (
+    evidence_alignment_score,
+    evidence_refs,
+    matching_slot_ids,
+    slot_values,
+    stable_source_id,
+)
 from ktem.docqa.retrieval_semantic_identity import semantic_retrieval_identity
 
 SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS = 4096
@@ -77,7 +84,7 @@ def pack_semantic_proposition_evidence(
 ) -> SemanticPropositionEvidencePacking:
     preferred = _preferred_evidence_ids(request)
     ranked_positions = _ranked_evidence_positions(bundle)
-    records: list[tuple[int, int, int, dict[str, Any]]] = []
+    records: list[tuple[int, float, int, dict[str, Any]]] = []
     seen: set[str] = set()
     for index, item in enumerate(bundle.items):
         try:
@@ -90,27 +97,40 @@ def pack_semantic_proposition_evidence(
             continue
         seen.add(evidence_id)
         source_id, page_label = source_page_locator(item)
-        stable_source_id = _stable_source_id(item) or source_id or identity.source_id
+        stable_id = stable_source_id(item) or source_id or identity.source_id
+        required_slot_ids = matching_slot_ids(slots, evidence_id)
+        alignment_score = evidence_alignment_score(request, item)
         records.append(
             (
-                0 if evidence_id in preferred else 1,
+                0 if evidence_id in preferred or required_slot_ids else 1,
+                -alignment_score,
                 ranked_positions.get(evidence_id, len(ranked_positions) + index),
-                index,
                 {
                     "evidence_id": evidence_id,
                     "semantic_identity": semantic_retrieval_identity(item)
                     or evidence_id,
-                    "source_id": stable_source_id,
+                    "source_id": stable_id,
                     "page_label": page_label,
                     "section_id": str(item.get("section_id") or "").strip(),
                     "canonical_start": _optional_int(item.get("canonical_start")),
+                    "evidence_refs": list(evidence_refs(item)),
+                    "required_slot_ids": list(required_slot_ids),
                     "text": text,
                 },
             )
         )
-    selected = [value for _priority, _rank, _index, value in sorted(records)][
-        :SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS
-    ]
+    selected = [
+        value
+        for _priority, _alignment, _rank, value in sorted(
+            records,
+            key=lambda row: (
+                row[0],
+                row[1],
+                row[2],
+                row[3]["evidence_id"],
+            ),
+        )
+    ][:SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS]
     item_char_limit = _evidence_item_char_limit(request)
     packed, estimated_input_tokens, truncated_count = _fit_evidence_records(
         selected,
@@ -138,14 +158,14 @@ def pack_semantic_proposition_evidence(
     )
 
 
-def required_semantic_proposition_slots(request: Any) -> list[dict[str, str]]:
+def required_semantic_proposition_slots(request: Any) -> list[dict[str, Any]]:
     plan = getattr(request, "query_plan", None)
     raw_slots = (
         plan.get("evidence_slots", [])
         if isinstance(plan, dict)
         else getattr(plan, "evidence_slots", ()) or ()
     )
-    slots: list[dict[str, str]] = []
+    slots: list[dict[str, Any]] = []
     for slot in raw_slots:
         required = (
             slot.get("required_for_verification", False)
@@ -154,7 +174,14 @@ def required_semantic_proposition_slots(request: Any) -> list[dict[str, str]]:
         )
         slot_id = _slot_value(slot, "slot_id")
         if required and slot_id:
-            slots.append({"slot_id": slot_id, "description": _slot_description(slot)})
+            slots.append(
+                {
+                    "slot_id": slot_id,
+                    "description": _slot_description(slot),
+                    "evidence_ids": list(slot_values(slot, "evidence_ids")),
+                    "evidence_refs": list(slot_values(slot, "evidence_refs")),
+                }
+            )
     return slots
 
 
@@ -438,6 +465,8 @@ def semantic_proposition_pack_digest(
                 "section_id": value.get("section_id"),
                 "canonical_start": value.get("canonical_start"),
                 "text_start": value.get("text_start"),
+                "evidence_refs": value.get("evidence_refs", []),
+                "required_slot_ids": value.get("required_slot_ids", []),
                 "selectors": value["selectors"],
             }
             for value in packed
@@ -556,19 +585,3 @@ def _optional_int(value: Any) -> int | None:
         return int(value) if value is not None and str(value).strip() else None
     except (TypeError, ValueError):
         return None
-
-
-def _stable_source_id(item: dict[str, Any]) -> str:
-    metadata = item.get("metadata")
-    metadata = metadata if isinstance(metadata, dict) else {}
-    for key in (
-        "evaluation_source_id",
-        "canonical_document_id",
-        "canonical_dataset_id",
-        "document_id",
-    ):
-        for container in (item, metadata):
-            value = str(container.get(key) or "").strip()
-            if value:
-                return value
-    return ""

@@ -18,8 +18,8 @@ from .completion_evidence import resolve_job_id as _resolve_job_id
 from .completion_evidence import resolve_slurm_status as _resolve_slurm_status
 from .execution_plan import _write_plan_and_table
 
-PRODUCER_COMPLETION_SCHEMA_VERSION = "benchmark_producer_completion.v1"
-TERMINAL_RECONCILIATION_SCHEMA_VERSION = "benchmark_terminal_reconciliation.v1"
+PRODUCER_COMPLETION_SCHEMA_VERSION = "benchmark_producer_completion.v2"
+TERMINAL_RECONCILIATION_SCHEMA_VERSION = "benchmark_terminal_reconciliation.v2"
 _TERMINAL_STATES = {
     "BOOT_FAIL",
     "CANCELLED",
@@ -97,14 +97,19 @@ def _reconcile_job_completion(
         artifact_dir=artifact_dir,
         job_id=resolved_job_id,
     )
-    contract = _persist_runtime_contract(
-        plan_path,
-        job_key=job_key,
-        job_id=resolved_job_id,
-        source_sha=str(plan.get("source_sha") or ""),
-        runtime_contract_path=runtime_contract_path,
-        existing_runtime_contract_path=job.get("runtime_contract_path"),
-    )
+    try:
+        contract = _persist_runtime_contract(
+            plan_path,
+            job_key=job_key,
+            job_id=resolved_job_id,
+            source_sha=str(plan.get("source_sha") or ""),
+            runtime_contract_path=runtime_contract_path,
+            existing_runtime_contract_path=job.get("runtime_contract_path"),
+        )
+    except ValueError as exc:
+        if producer_only:
+            raise
+        contract = {"path": "", "sha256": "", "failure_reason": str(exc)}
 
     if producer_only:
         return _record_producer_completion(
@@ -165,6 +170,9 @@ def _record_terminal_completion(
             job,
             artifact_dir=str(artifact["artifact_dir"]),
             artifact_digest=str(artifact["artifact_digest"]),
+            formal_audit_status=str(artifact["formal_audit_status"]),
+            formal_audit_path=str(artifact["formal_audit_path"]),
+            formal_audit_sha256=str(artifact["formal_audit_sha256"]),
             runtime_contract_path=str(contract["path"]),
             runtime_contract_sha256=str(contract["sha256"]),
         )
@@ -232,9 +240,15 @@ def _record_producer_completion(
         ),
         "producer_artifact_dir": str(artifact["artifact_dir"]),
         "producer_failure_reason": "; ".join(dict.fromkeys(failure_reasons)),
+        "formal_audit_status": str(artifact["formal_audit_status"]),
+        "formal_audit_path": str(artifact["formal_audit_path"]),
+        "formal_audit_sha256": str(artifact["formal_audit_sha256"]),
         "runtime_contract_path": str(contract["path"]),
         "runtime_contract_sha256": str(contract["sha256"]),
     }
+    if not valid:
+        incoming["state"] = "FAILED"
+        incoming["failure_reason"] = incoming["producer_failure_reason"]
     _validate_producer_replay(job, incoming)
     job.update(incoming)
     job["producer_completion_contract"] = PRODUCER_COMPLETION_SCHEMA_VERSION
@@ -254,6 +268,9 @@ def producer_completion_failure_reasons(
     *,
     artifact_dir: str,
     artifact_digest: str,
+    formal_audit_status: str,
+    formal_audit_path: str,
+    formal_audit_sha256: str,
     runtime_contract_path: str,
     runtime_contract_sha256: str,
 ) -> list[str]:
@@ -276,9 +293,17 @@ def producer_completion_failure_reasons(
     expected = {
         "producer_artifact_digest": artifact_digest,
         "producer_artifact_dir": artifact_dir,
+        "formal_audit_status": formal_audit_status,
         "runtime_contract_path": runtime_contract_path,
         "runtime_contract_sha256": runtime_contract_sha256,
     }
+    if formal_audit_status != "not_present":
+        expected.update(
+            {
+                "formal_audit_path": formal_audit_path,
+                "formal_audit_sha256": formal_audit_sha256,
+            }
+        )
     for field, observed in expected.items():
         recorded = str(job.get(field) or "")
         if not recorded or recorded != observed:
@@ -329,6 +354,9 @@ def _incoming_fields(
             str(artifact["artifact_digest"]) if artifact_complete else ""
         ),
         "artifact_dir": str(artifact["artifact_dir"]),
+        "formal_audit_status": str(artifact["formal_audit_status"]),
+        "formal_audit_path": str(artifact["formal_audit_path"]),
+        "formal_audit_sha256": str(artifact["formal_audit_sha256"]),
         "runtime_contract_path": str(contract["path"]),
         "runtime_contract_sha256": str(contract["sha256"]),
         "failure_reason": "; ".join(dict.fromkeys(failure_reasons)),
@@ -376,6 +404,9 @@ def _validate_replay(job: dict[str, Any], incoming: dict[str, Any]) -> None:
             "artifact_complete",
             "artifact_digest",
             "artifact_dir",
+            "formal_audit_status",
+            "formal_audit_path",
+            "formal_audit_sha256",
             "runtime_contract_sha256",
         ):
             recorded = job.get(field)
@@ -396,6 +427,9 @@ def _validate_producer_replay(job: dict[str, Any], incoming: dict[str, Any]) -> 
         "producer_artifact_digest",
         "producer_artifact_dir",
         "producer_failure_reason",
+        "formal_audit_status",
+        "formal_audit_path",
+        "formal_audit_sha256",
         "runtime_contract_path",
         "runtime_contract_sha256",
     ):

@@ -94,7 +94,13 @@ def _single_or_composite_slot_bindings(
 
     if not side_slots and len(proposition_slots) == 1:
         slot = proposition_slots[0]
-        proposition_selection = proof_ids or (next(iter(atom_by_id)),)
+        candidate_ids = _slot_atom_ids(slot, atom_by_id)
+        if proof_ids:
+            proposition_selection = proof_ids
+        else:
+            if not candidate_ids:
+                return None, None, None
+            proposition_selection = (candidate_ids[0],)
         bindings[str(slot.slot_id)] = proposition_selection
         selected_ids.extend(proposition_selection)
 

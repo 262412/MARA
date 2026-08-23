@@ -18,6 +18,7 @@ from .artifact_publication import (
 from .jsonl import iter_jsonl
 
 RUNTIME_CONTRACT_SCHEMA_VERSION = "benchmark_runtime_contract.v1"
+FORMAL_AUDIT_NAME = "contract_smoke_audit.json"
 REQUIRED_JOB_ARTIFACTS = (
     "summary.json",
     "predictions.jsonl",
@@ -145,11 +146,20 @@ def inspect_artifact(
         digest = str(marker.get("artifact_manifest_sha256") or "")
         if not digest:
             raise ValueError("artifact completion marker has no manifest digest")
+        formal_audit = _inspect_formal_audit(candidate)
+        if (
+            job.get("formal_audit_required") is True
+            and formal_audit["formal_audit_status"] == "not_present"
+        ):
+            formal_audit["failure_reasons"].append(
+                "required formal contract audit is missing"
+            )
         return {
             "artifact_complete": True,
             "artifact_digest": digest,
             "artifact_dir": str(candidate),
-            "failure_reasons": [],
+            "failure_reasons": formal_audit.pop("failure_reasons"),
+            **formal_audit,
         }
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         failure_reasons.append(str(exc))
@@ -213,6 +223,47 @@ def _artifact_result(
         "artifact_digest": "",
         "artifact_dir": str(candidate) if candidate else "",
         "failure_reasons": list(dict.fromkeys(failure_reasons)),
+        "formal_audit_status": "not_present",
+        "formal_audit_path": "",
+        "formal_audit_sha256": "",
+    }
+
+
+def _inspect_formal_audit(candidate: Path) -> dict[str, Any]:
+    path = candidate / FORMAL_AUDIT_NAME
+    if not path.is_file():
+        return {
+            "formal_audit_status": "not_present",
+            "formal_audit_path": "",
+            "formal_audit_sha256": "",
+            "failure_reasons": [],
+        }
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "formal_audit_status": "invalid",
+            "formal_audit_path": str(path.resolve()),
+            "formal_audit_sha256": file_sha256(path) if path.is_file() else "",
+            "failure_reasons": [f"formal contract audit is unreadable: {exc}"],
+        }
+    status = str(value.get("status") or "").strip() if isinstance(value, dict) else ""
+    if status not in {"passed", "failed"}:
+        return {
+            "formal_audit_status": "invalid",
+            "formal_audit_path": str(path.resolve()),
+            "formal_audit_sha256": file_sha256(path),
+            "failure_reasons": [
+                f"formal contract audit status is invalid: {status or '<missing>'}"
+            ],
+        }
+    return {
+        "formal_audit_status": status,
+        "formal_audit_path": str(path.resolve()),
+        "formal_audit_sha256": file_sha256(path),
+        "failure_reasons": (
+            [] if status == "passed" else ["formal contract audit status=failed"]
+        ),
     }
 
 

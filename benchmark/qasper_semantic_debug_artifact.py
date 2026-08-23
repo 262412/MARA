@@ -351,6 +351,7 @@ def _online_model_coverage(
     generator: Mapping[str, Any],
     verifier: Mapping[str, Any],
 ) -> dict[str, Any]:
+    audit = _mapping(verifier.get("candidate_verification_audit"))
     return {
         "contract_id": "qasper_online_model_coverage.v1",
         "generator_model": str(generator.get("model") or ""),
@@ -366,10 +367,11 @@ def _online_model_coverage(
         ),
         "auditor_observed": bool(
             int(verifier.get("audit_model_call_count") or 0) > 0
-            or str(
-                _mapping(verifier.get("candidate_verification_audit")).get("mode") or ""
-            )
-            == "deterministic_schema_audit"
+            and str(audit.get("mode") or "") not in {"", "deterministic_schema_audit"}
+            and audit.get("status") == "passed"
+            and audit.get("audited_candidate") == verifier.get("candidate_label")
+            and audit.get("audited_judgment")
+            == verifier.get("candidate_verification_status")
         ),
     }
 

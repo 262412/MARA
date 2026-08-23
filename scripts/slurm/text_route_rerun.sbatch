@@ -109,7 +109,8 @@ start_service() {
 }
 
 cleanup() {
-  local producer_status=$?
+  local trapped_status=$?
+  local producer_status="${1:-$trapped_status}"
   local pid
   for pid in "${SERVICE_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then

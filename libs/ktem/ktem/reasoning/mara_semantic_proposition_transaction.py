@@ -13,10 +13,14 @@ from .mara_semantic_conclusion_binding import (
     conclusion_audit_binding_reason,
     record_verified_conclusion_audit,
 )
+from .mara_semantic_candidate_policy import (
+    candidate_bound_insufficient_result,
+    candidate_bound_semantic_audit_prompt,
+    candidate_from_prompt,
+)
 from .mara_semantic_deterministic_repair import repair_deterministic_rejection
 from .mara_semantic_entailment_audit import (
     SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-    semantic_entailment_audit_prompt,
     semantic_entailment_rejection_reason,
 )
 from .mara_semantic_local_consistency import record_local_premise_consistency
@@ -132,15 +136,18 @@ def run_semantic_proposition_transaction(
         model=proposal_model,
         seed=seed,
     )
-    diagnostics.update(proposal_diagnostics(proposal))
-    return _complete_proposal(context, proposal, diagnostics)
+    candidate = candidate_from_prompt(prompt)
+    return _complete_proposal(context, proposal, diagnostics, candidate=candidate)
 
 
 def _complete_proposal(
     context: _TransactionContext,
     proposal: ParsedSemanticStage,
     diagnostics: dict[str, Any],
+    *,
+    candidate: str,
 ) -> SemanticPropositionTransactionResult:
+    diagnostics.update(proposal_diagnostics(proposal))
     debug_trace = transaction_debug(context, proposal, None)
     if proposal.provider_failure_reason:
         return transaction_result(
@@ -166,15 +173,8 @@ def _complete_proposal(
             debug_trace=debug_trace,
         )
     if proposal.value["verdict"] == "insufficient_evidence":
-        bind_semantic_runtime_fields(proposal.value, context)
-        diagnostics.update({"audit_status": "not_required", "audit_reason": ""})
-        return transaction_result(
-            proposal.value,
-            "parsed",
-            "strict_schema_parsed",
-            diagnostics,
-            proposal_calls=proposal.call_count,
-            debug_trace=debug_trace,
+        return candidate_bound_insufficient_result(
+            context, proposal, diagnostics, candidate=candidate
         )
     return _audit_transaction(context, proposal, diagnostics)
 
@@ -191,12 +191,7 @@ def _audit_transaction(
     conclusion = typed_conclusion(context.proposition, str(value.get("verdict") or ""))
     value["typed_conclusion"] = conclusion.as_dict()
     try:
-        prompt = semantic_entailment_audit_prompt(
-            context.proposition,
-            conclusion,
-            str(value.get("proof_mode") or ""),
-            value.get("premises") or [],
-        )
+        prompt = candidate_bound_semantic_audit_prompt(context, conclusion, value)
     except ValueError:
         return audit_prompt_failure(context, proposal, diagnostics)
     audit = audit_stage(

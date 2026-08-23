@@ -263,6 +263,10 @@ def _job_record(
         "slurm_state": "",
         "slurm_exit_code": "",
         "failure_reason": "",
+        "formal_audit_required": False,
+        "formal_audit_status": "not_present",
+        "formal_audit_path": "",
+        "formal_audit_sha256": "",
         "producer_completion_state": "",
         "producer_exit_code": "",
         "producer_artifact_complete": False,
@@ -332,6 +336,7 @@ def record_submission(
     job_id: str,
     wave_index: int,
     dependency: str,
+    formal_audit_required: bool = False,
 ) -> None:
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     for job in plan.get("jobs", []):
@@ -342,6 +347,7 @@ def record_submission(
                     "wave_index": wave_index,
                     "dependency": dependency,
                     "state": "SUBMITTED",
+                    "formal_audit_required": formal_audit_required,
                 }
             )
             break

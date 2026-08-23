@@ -150,6 +150,19 @@ def test_nested_clause_does_not_replace_the_main_question_predicate() -> None:
     assert resolution.proposition.quantifier == "none"
 
 
+def test_experiment_with_alias_resolves_to_complete_evaluate_proposition() -> None:
+    resolution = resolve_question_proposition(
+        "Did the authors experiment with the toolkits?"
+    )
+
+    assert resolution.status == "repaired"
+    assert resolution.proposition.actor == "current_paper"
+    assert resolution.proposition.predicate == "evaluate"
+    assert resolution.proposition.subject_surface == "the authors"
+    assert resolution.proposition.object_surface == "the toolkits"
+    assert resolution.proposition.quantifier == "none"
+
+
 def test_qasper_characterization_polarity_is_checked_without_a_model() -> None:
     cases = (
         (

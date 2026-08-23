@@ -35,7 +35,8 @@ LOGGER = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are the sole answer-candidate generator for a QASPER Boolean question. "
-    "Use only the labeled retrieved evidence. Return exactly one structured "
+    "Use only the typed question proposition and labeled retrieved evidence. "
+    "Return exactly one structured "
     "candidate: yes, no, or unanswerable. Use yes/no only when the complete "
     "question proposition is established; otherwise use unanswerable. Do not "
     "include explanation, citations, or an alternative answer."
@@ -69,7 +70,17 @@ def generate_qasper_typed_candidate(
     identity = _transaction_identity(request, route, seed)
     messages = [
         SystemMessage(content=_SYSTEM_PROMPT),
-        HumanMessage(content=_candidate_prompt(question, evidence)),
+        HumanMessage(
+            content=_candidate_prompt(
+                question,
+                evidence,
+                proposition=evidence_diagnostics.get("typed_proposition"),
+                proposition_resolution=evidence_diagnostics.get(
+                    "question_proposition_resolution"
+                ),
+                required_slots=evidence_diagnostics.get("required_slots", []),
+            )
+        ),
     ]
     serialized_messages = _serialized_messages(messages)
     input_digest = _digest(
@@ -172,12 +183,29 @@ def _record_candidate_response(
     bounded_raw = raw[:QASPER_CANDIDATE_MAX_RESPONSE_CHARS]
     cleaned = bounded_raw.strip()
     candidate, failure = parse_qasper_candidate(cleaned)
+    if candidate in {"yes", "no"} and _required_slot_binding_incomplete(trace):
+        candidate = "unanswerable"
+        failure = "required_slot_binding_incomplete"
     finish_reason = response_finish_reason(response)
-    output_digest = _digest(raw)
+    provider_output_digest = _digest(raw)
+    raw_response_digest = _digest(bounded_raw)
+    output_digest = _digest(
+        {
+            "raw_response_digest": raw_response_digest,
+            "provider_output_digest": provider_output_digest,
+            "cleaned_response_digest": _digest(cleaned),
+            "typed_candidate": candidate,
+            "status": "parsed" if candidate else "failed",
+            "failure_reason": failure,
+            "finish_reason": finish_reason,
+        }
+    )
     trace.update(
         status="parsed" if candidate else "failed",
         failure_reason=failure,
         raw_response=bounded_raw,
+        raw_response_digest=raw_response_digest,
+        provider_output_digest=provider_output_digest,
         raw_response_truncated=len(raw) > QASPER_CANDIDATE_MAX_RESPONSE_CHARS,
         cleaned_response=cleaned,
         typed_candidate=candidate,
@@ -188,7 +216,7 @@ def _record_candidate_response(
             {
                 "stage": "raw_response",
                 "value": bounded_raw,
-                "digest": output_digest,
+                "digest": raw_response_digest,
                 "failure_reason": "",
             },
             {
@@ -267,11 +295,12 @@ def _candidate_evidence(
     request: Any,
     question: str,
     bundle: EvidenceBundle,
-) -> tuple[list[dict[str, str]], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    slots = required_semantic_proposition_slots(request)
     packing = pack_semantic_proposition_evidence(
         request,
         question,
-        required_semantic_proposition_slots(request),
+        slots,
         bundle,
     )
     records = [
@@ -279,6 +308,17 @@ def _candidate_evidence(
             "label": str(record["label"]),
             "evidence_id": str(record["evidence_id"]),
             "text": str(record["text"]),
+            "evidence_refs": [
+                str(value).strip()
+                for value in record.get("evidence_refs", [])
+                if str(value).strip()
+            ],
+            "required_slot_ids": [
+                str(value).strip()
+                for value in record.get("required_slot_ids", [])
+                if str(value).strip()
+            ],
+            "selectors": list(record.get("selectors", [])),
         }
         for record in packing.records
     ]
@@ -290,20 +330,143 @@ def _candidate_evidence(
         "evidence_token_budget": packing.input_token_budget,
         "evidence_pack_digest": packing.semantic_pack_digest,
         "prompt_char_limit": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+        "typed_proposition": packing.question_proposition,
+        "question_proposition_resolution": packing.question_proposition_resolution,
+        "required_slots": _bound_candidate_slots(slots, records),
     }
 
 
-def _candidate_prompt(question: str, evidence: list[dict[str, str]]) -> str:
+def _candidate_prompt(
+    question: str,
+    evidence: list[dict[str, Any]],
+    *,
+    proposition: dict[str, Any] | None = None,
+    proposition_resolution: dict[str, Any] | None = None,
+    required_slots: list[dict[str, Any]] | None = None,
+) -> str:
+    proposition_text = json.dumps(
+        proposition or {},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    resolution_status = str((proposition_resolution or {}).get("status") or "")
+    slot_text = "\n".join(
+        "- "
+        + str(slot.get("slot_id") or "")
+        + ": "
+        + str(slot.get("description") or "complete proposition support")
+        + "; binding_status="
+        + str(slot.get("binding_status") or "missing")
+        + "; evidence_ids="
+        + json.dumps(slot.get("evidence_ids", []), ensure_ascii=False)
+        + "; evidence_refs="
+        + json.dumps(slot.get("evidence_refs", []), ensure_ascii=False)
+        for slot in required_slots or []
+    )
     evidence_text = "\n\n".join(
-        f"[{record['label']}] evidence_id={record['evidence_id']}\n{record['text']}"
+        "\n".join(
+            [
+                f"[{record['label']}] evidence_id={record['evidence_id']} "
+                f"evidence_ref={_candidate_evidence_ref(record)}",
+                str(record["text"]),
+            ]
+        )
         for record in evidence
     )
     return (
         "/no_think\n"
         f"QUESTION:\n{question.strip()}\n\n"
+        "TYPED QUESTION PROPOSITION:\n"
+        f"{proposition_text}\n"
+        f"QUESTION PROPOSITION RESOLUTION STATUS: {resolution_status or 'unknown'}\n\n"
+        "REQUIRED VERIFICATION SLOTS:\n"
+        f"{slot_text or '- none'}\n\n"
         f"CANONICAL RETRIEVED EVIDENCE:\n{evidence_text}\n\n"
-        "Return exactly one JSON object matching the required schema."
+        "Use only the evidence IDs and evidence references shown above. "
+        "If every required slot is not supported by explicit evidence, return "
+        '"candidate":"unanswerable". Return exactly one JSON object matching '
+        "the required schema."
     )
+
+
+def _bound_candidate_slots(
+    slots: list[dict[str, Any]],
+    evidence: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    available = {str(record.get("evidence_id") or "") for record in evidence}
+    output: list[dict[str, Any]] = []
+    for slot in slots:
+        slot_id = str(slot.get("slot_id") or "")
+        direct_ids = [
+            str(value).strip()
+            for value in slot.get("evidence_ids", [])
+            if str(value).strip() in available
+        ]
+        derived_ids = [
+            str(record["evidence_id"])
+            for record in evidence
+            if slot_id in record.get("required_slot_ids", [])
+        ]
+        evidence_ids = list(dict.fromkeys([*direct_ids, *derived_ids]))
+        bound_records = [
+            record
+            for record in evidence
+            if slot_id in record.get("required_slot_ids", [])
+            or str(record.get("evidence_id") or "") in evidence_ids
+        ]
+        bound_refs = {
+            _candidate_evidence_ref(record)
+            for record in bound_records
+            if _candidate_evidence_ref(record)
+        }
+        evidence_refs = list(
+            dict.fromkeys(
+                [
+                    *(
+                        str(value).strip()
+                        for value in slot.get("evidence_refs", [])
+                        if str(value).strip() in bound_refs
+                    ),
+                    *(
+                        _candidate_evidence_ref(record)
+                        for record in bound_records
+                        if _candidate_evidence_ref(record)
+                    ),
+                ]
+            )
+        )
+        output.append(
+            {
+                "slot_id": slot_id,
+                "description": str(slot.get("description") or ""),
+                "evidence_ids": evidence_ids,
+                "evidence_refs": evidence_refs,
+                "binding_status": (
+                    "bound" if evidence_ids and evidence_refs else "missing"
+                ),
+            }
+        )
+    return output
+
+
+def _required_slot_binding_incomplete(trace: dict[str, Any]) -> bool:
+    slots = trace.get("required_slots") or []
+    return any(
+        str(slot.get("binding_status") or "missing") != "bound"
+        for slot in slots
+        if isinstance(slot, dict)
+    )
+
+
+def _candidate_evidence_ref(record: dict[str, Any]) -> str:
+    selectors = record.get("selectors") or []
+    if selectors and isinstance(selectors[0], dict):
+        selector_id = str(selectors[0].get("selector_id") or "").strip()
+        if selector_id:
+            return selector_id
+    refs = record.get("evidence_refs") or []
+    return str(refs[0]).strip() if refs else ""
 
 
 def _serialized_messages(messages: list[Any]) -> list[dict[str, Any]]:

@@ -45,7 +45,11 @@ _REPAIR_RELATIONS: tuple[tuple[str, str], ...] = (
     ("help", r"\bhelp(?:s|ed|ing)?\b"),
     ("collect", r"\bcollect(?:s|ed|ing)?\b"),
     ("compare", r"\bcompar(?:e|es|ed|ing)\b"),
-    ("evaluate", r"\b(?:evaluat(?:e|es|ed|ing)|assess(?:es|ed|ing)?)\b"),
+    (
+        "evaluate",
+        r"\b(?:evaluat(?:e|es|ed|ing)|assess(?:es|ed|ing)?|"
+        r"experiment(?:ed|ing)?(?:\s+with)?)\b",
+    ),
     ("use", r"\b(?:use|uses|used|using)\b"),
     ("train", r"\btrain(?:s|ed|ing)?\b"),
     ("improve", r"\bimprov(?:e|es|ed|ing|ement)\b"),
@@ -295,11 +299,23 @@ def _surface_arguments(question: str, predicate: str) -> tuple[str, str]:
     predicate_words = str(predicate or "").replace("_", " ").split()
     if not predicate_words:
         return surface, ""
-    match = re.search(
-        r"\b" + r"\s+".join(re.escape(value) for value in predicate_words) + r"\w*\b",
+    predicate_pattern = (
+        r"\b" + r"\s+".join(re.escape(value) for value in predicate_words) + r"\w*\b"
+    )
+    fronted_match = re.match(
+        r"^\s*(?:what|which)\s+(?P<object>.+?)\s+"
+        r"(?:do|does|did|can|could|may|might|must|should|would|will|"
+        r"has|have|had|is|are|was|were)\s+"
+        r"(?P<subject>.+?)\s+" + predicate_pattern + r"\s*$",
         surface,
         flags=re.IGNORECASE,
     )
+    if fronted_match is not None:
+        subject = fronted_match.group("subject").strip()
+        object_surface = fronted_match.group("object").strip(" ,")
+        if subject and object_surface:
+            return subject, object_surface
+    match = re.search(predicate_pattern, surface, flags=re.IGNORECASE)
     if match is None:
         return surface, ""
     subject = surface[: match.start()]

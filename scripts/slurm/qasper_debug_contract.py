@@ -2,6 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from benchmark.qasper_semantic_state_matrix import (
+    qasper_candidate_bound_state_matrix,
+)
+
+
+def qasper_debug_audit_extensions(
+    predictions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "observability_coverage": qasper_debug_observability_coverage(predictions),
+        "structural_state_matrix": qasper_candidate_bound_state_matrix(predictions),
+    }
+
 
 def qasper_debug_behavior_violations(
     predictions: list[dict[str, Any]],
@@ -14,6 +27,9 @@ def qasper_debug_behavior_violations(
         violations.extend(_prediction_violations(prediction))
     for example_id, rows in by_example.items():
         violations.extend(_cross_route_violations(example_id, rows))
+    online = qasper_candidate_bound_state_matrix(predictions)["online_observation"]
+    if online["single_label_collapse"]:
+        violations.append("candidate_single_label_collapse")
     return violations
 
 
@@ -30,6 +46,9 @@ def qasper_debug_observability_coverage(
         fields["finish_reason"] += int(bool(generator.get("finish_reason")))
         fields["typed_candidate_transform"] += int(
             bool(generator.get("transformation_stages"))
+        )
+        fields["proposition_slot_binding"] += int(
+            _candidate_proposition_binding_complete(generator)
         )
         fields["claim_aggregation_before_after"] += int(
             claim_aggregation_complete(prediction)
@@ -48,8 +67,7 @@ def qasper_debug_observability_coverage(
             _input_output_digests_complete(generator, verifier)
         )
         fields["candidate_verifier_audit"] += int(
-            _mapping(verifier.get("candidate_verification_audit")).get("status")
-            == "passed"
+            _candidate_bound_auditor_observed(verifier)
         )
         fields["semantic_verifier_debug"] += int(_semantic_debug_complete(verifier))
         fields["live_model"] += int(_live_models_observed(generator, verifier))
@@ -185,6 +203,21 @@ def _generator_violations(
         _candidate_transform_complete(generator),
         f"candidate_transform_incomplete:{prefix}",
     )
+    _require(
+        violations,
+        _candidate_proposition_binding_complete(generator),
+        f"candidate_proposition_binding_invalid:{prefix}",
+    )
+    required_slots = generator.get("required_slots") or []
+    _require(
+        violations,
+        candidate == "unanswerable"
+        or all(
+            isinstance(slot, dict) and slot.get("binding_status") == "bound"
+            for slot in required_slots
+        ),
+        f"candidate_required_slot_policy_mismatch:{prefix}",
+    )
     return violations
 
 
@@ -215,6 +248,11 @@ def _verifier_violations(
         verifier.get("replacement_candidate_allowed") is False,
         f"replacement_candidate_policy_invalid:{prefix}",
     )
+    _require(
+        violations,
+        _relation_flags_valid(verifier, relation),
+        f"candidate_relation_flags_invalid:{prefix}",
+    )
     audit = _mapping(verifier.get("candidate_verification_audit"))
     _require(
         violations,
@@ -238,6 +276,11 @@ def _verifier_violations(
         violations,
         _live_models_observed({}, verifier),
         f"online_verifier_not_observed:{prefix}",
+    )
+    _require(
+        violations,
+        _candidate_bound_auditor_observed(verifier),
+        f"online_auditor_not_observed:{prefix}",
     )
     return violations
 
@@ -336,6 +379,33 @@ def _candidate_transform_complete(generator: dict[str, Any]) -> bool:
     )
 
 
+def _candidate_proposition_binding_complete(generator: dict[str, Any]) -> bool:
+    proposition = _mapping(generator.get("typed_proposition"))
+    resolution = _mapping(generator.get("question_proposition_resolution"))
+    slots = generator.get("required_slots")
+    slots = slots if isinstance(slots, list) else []
+    proposition_fields = ("actor", "predicate", "object_surface", "quantifier")
+    return bool(
+        all(str(proposition.get(field) or "").strip() for field in proposition_fields)
+        and resolution.get("status") in {"complete", "repaired"}
+        and slots
+        and all(_candidate_slot_binding_complete(slot) for slot in slots)
+    )
+
+
+def _candidate_slot_binding_complete(slot: Any) -> bool:
+    if not isinstance(slot, dict) or not str(slot.get("slot_id") or "").strip():
+        return False
+    status = slot.get("binding_status")
+    evidence_ids = slot.get("evidence_ids")
+    evidence_refs = slot.get("evidence_refs")
+    if not isinstance(evidence_ids, list) or not isinstance(evidence_refs, list):
+        return False
+    if status == "bound":
+        return bool(evidence_ids and evidence_refs)
+    return status == "missing" and not evidence_ids and not evidence_refs
+
+
 def _semantic_debug_complete(verifier: dict[str, Any]) -> bool:
     debug = _mapping(verifier.get("debug_trace"))
     if debug.get("contract_id") != "semantic_proposition_debug_trace.v2":
@@ -352,7 +422,7 @@ def _semantic_debug_complete(verifier: dict[str, Any]) -> bool:
     audit = _mapping(transaction.get("audit"))
     if not _semantic_stage_complete(proposal, allow_not_run=False):
         return False
-    return _semantic_stage_complete(audit, allow_not_run=True)
+    return _semantic_stage_complete(audit, allow_not_run=False)
 
 
 def _semantic_stage_complete(stage: dict[str, Any], *, allow_not_run: bool) -> bool:
@@ -413,6 +483,32 @@ def _live_models_observed(
         generator_observed
         and verifier.get("model")
         and int(verifier.get("proposal_model_call_count") or 0) > 0
+        and _candidate_bound_auditor_observed(verifier)
+    )
+
+
+def _candidate_bound_auditor_observed(verifier: dict[str, Any]) -> bool:
+    audit = _mapping(verifier.get("candidate_verification_audit"))
+    mode = str(audit.get("mode") or "")
+    return bool(
+        int(verifier.get("audit_model_call_count") or 0) > 0
+        and verifier.get("auditor_attempt_id")
+        and audit.get("status") == "passed"
+        and mode
+        and mode != "deterministic_schema_audit"
+        and audit.get("audited_candidate") == verifier.get("candidate_label")
+        and audit.get("audited_judgment")
+        == verifier.get("candidate_verification_status")
+        and audit.get("replacement_candidate_allowed") is False
+    )
+
+
+def _relation_flags_valid(verifier: dict[str, Any], relation: str) -> bool:
+    return bool(
+        verifier.get("explicit_contradiction") is (relation == "contradicted")
+        and verifier.get("candidate_verifier_disagreement")
+        is (relation == "contradicted")
+        and verifier.get("unknown") is (relation == "unknown")
     )
 
 
@@ -422,6 +518,7 @@ def _empty_coverage_counts() -> dict[str, int]:
         "raw_response": 0,
         "finish_reason": 0,
         "typed_candidate_transform": 0,
+        "proposition_slot_binding": 0,
         "claim_aggregation_before_after": 0,
         "per_annotation_scores": 0,
         "transaction_attempt_identity": 0,

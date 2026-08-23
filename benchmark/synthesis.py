@@ -188,9 +188,9 @@ def _collect_job(
         "prediction_count": 0,
     }
     if require_slurm_clean and (slurm_state != "COMPLETED" or slurm_exit_code != "0:0"):
-        result[
-            "failure_reason"
-        ] = f"slurm state={slurm_state} exit_code={slurm_exit_code}"
+        result["failure_reason"] = (
+            f"slurm state={slurm_state} exit_code={slurm_exit_code}"
+        )
         return result
     root = Path(job["output_root"])
     artifact_dir = resolve_artifact_dir(
@@ -219,6 +219,7 @@ def _collect_job(
                 job,
                 artifact_dir=resolved_artifact_dir,
                 artifact_digest=artifact_digest,
+                **_formal_audit_evidence(job),
                 runtime_contract_path=str(job.get("runtime_contract_path") or ""),
                 runtime_contract_sha256=str(job.get("runtime_contract_sha256") or ""),
             )
@@ -245,6 +246,14 @@ def _collect_job(
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         result["failure_reason"] = str(exc)
     return result
+
+
+def _formal_audit_evidence(job: dict[str, Any]) -> dict[str, str]:
+    return {
+        "formal_audit_status": str(job.get("formal_audit_status") or "not_present"),
+        "formal_audit_path": str(job.get("formal_audit_path") or ""),
+        "formal_audit_sha256": str(job.get("formal_audit_sha256") or ""),
+    }
 
 
 def _inspect_job_predictions(

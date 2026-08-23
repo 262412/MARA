@@ -13,13 +13,14 @@ if str(PROJECT_ROOT) not in sys.path:
 from benchmark.contract_invariant_metrics import (  # noqa: E402
     contract_invariant_summary,
 )
+from benchmark.artifact_publication import publish_contract_smoke_audit  # noqa: E402
 from benchmark.jsonl import read_jsonl  # noqa: E402
 from benchmark.terminal_outcome_contract import (  # noqa: E402
     terminal_outcome_summary_fields,
 )
 from scripts.slurm.qasper_debug_contract import (  # noqa: E402
+    qasper_debug_audit_extensions,
     qasper_debug_behavior_violations,
-    qasper_debug_observability_coverage,
 )
 
 CONTRACT = "contract_smoke_audit.v2"
@@ -333,7 +334,7 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
             observed_requirements=observed_requirements,
             violations=precondition_violations,
         )
-        _write_audit(run_dir, audit)
+        publish_contract_smoke_audit(run_dir, audit)
         raise ValueError("; ".join(precondition_violations))
     audit = _complete_audit(
         summary,
@@ -342,7 +343,7 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
         expected_count=expected_count,
         observed_requirements=observed_requirements,
     )
-    _write_audit(run_dir, audit)
+    publish_contract_smoke_audit(run_dir, audit)
     if audit["status"] != "passed":
         raise ValueError("contract smoke failed: " + _failure_details(audit))
     return audit
@@ -360,6 +361,16 @@ def _complete_audit(
         predictions,
         suite_kind=suite_kind,
     )
+    debug_extensions = (
+        qasper_debug_audit_extensions(predictions)
+        if suite_kind == "qasper_debug"
+        else {"observability_coverage": {}, "structural_state_matrix": {}}
+    )
+    if (
+        suite_kind == "qasper_debug"
+        and debug_extensions["structural_state_matrix"].get("complete") is not True
+    ):
+        behavior_violations.append("structural_state_matrix_incomplete")
     stage_audits, stage_violations = _all_stage_audits(
         predictions, suite_kind=suite_kind
     )
@@ -392,11 +403,7 @@ def _complete_audit(
         "contract_gates": metrics.get("contract_gates"),
         "contract_gate_failures": contract_gate_failures,
         "terminal_outcome_summary": terminal_outcome_summary_fields(predictions),
-        "observability_coverage": (
-            qasper_debug_observability_coverage(predictions)
-            if suite_kind == "qasper_debug"
-            else {}
-        ),
+        **debug_extensions,
         "status": status,
     }
     return audit
@@ -445,6 +452,11 @@ def _precondition_failure_audit(
         "expected_prediction_count": list(expected_count),
         "observed_requirements": sorted(observed_requirements),
         "precondition_violations": violations,
+        **(
+            qasper_debug_audit_extensions(predictions)
+            if suite_kind == "qasper_debug"
+            else {"observability_coverage": {}, "structural_state_matrix": {}}
+        ),
         "status": "failed",
     }
 
@@ -514,13 +526,6 @@ def _behavior_violations(
                 f"verifier_input_trace_missing:{prediction.get('example_id')}"
             )
     return violations
-
-
-def _write_audit(run_dir: Path, audit: dict[str, Any]) -> None:
-    (run_dir / "contract_smoke_audit.json").write_text(
-        json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
 
 
 def _finance_behavior_violations(
