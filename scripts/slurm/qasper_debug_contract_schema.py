@@ -12,6 +12,7 @@ from scripts.slurm.qasper_debug_contract_support import (
     _require,
 )
 
+
 def _schema_version_violations(
     verifier: dict[str, Any],
     prefix: str,
@@ -120,7 +121,8 @@ def _schema_proposal_attempt_violations(
         if parsed_value:
             _require(
                 violations,
-                parsed_value.get("contract_id") == _SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+                parsed_value.get("contract_id")
+                == _SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
                 f"semantic_proposition_verdict_schema_version_invalid:{prefix}",
             )
     return violations
@@ -154,12 +156,51 @@ def _schema_audit_attempt_violations(
 
 
 def _relation_flags_valid(verifier: dict[str, Any], relation: str) -> bool:
+    verdict = str(verifier.get("verdict") or "").strip().casefold()
     return bool(
-        verifier.get("explicit_contradiction") is (relation == "contradicted")
+        verdict in {"yes", "no", "insufficient_evidence"}
+        and verifier.get("explicit_contradiction") is (verdict == "no")
         and verifier.get("candidate_verifier_disagreement")
         is (relation == "contradicted")
         and verifier.get("unknown") is (relation == "unknown")
     )
+
+
+def _audit_relation_consistent(
+    verifier: dict[str, Any],
+    relation: str,
+) -> bool:
+    """Keep audit classification/verdict aligned without deriving flags from it."""
+
+    audit = _mapping(verifier.get("candidate_verification_audit"))
+    audited_relation = str(audit.get("audited_judgment") or "").strip().casefold()
+    if audited_relation != relation:
+        return False
+    candidate = str(verifier.get("candidate_label") or "").strip().casefold()
+    verdict = str(audit.get("audited_verdict") or "").strip().casefold()
+    classification = str(audit.get("classification") or "").strip().casefold()
+    expected = _expected_audit_outcome(candidate, relation)
+    return expected is not None and (verdict, classification) in expected
+
+
+def _expected_audit_outcome(
+    candidate: str,
+    relation: str,
+) -> set[tuple[str, str]] | None:
+    if candidate not in {"yes", "no", "unanswerable"}:
+        return None
+    if relation == "unknown":
+        return {("insufficient_evidence", "unknown")}
+    if relation == "supported":
+        if candidate == "unanswerable":
+            return {("insufficient_evidence", "unknown")}
+        return {(candidate, "supported")}
+    if relation == "contradicted":
+        verdicts = {"yes", "no"} - (
+            {candidate} if candidate != "unanswerable" else set()
+        )
+        return {(verdict, "explicit_contradiction") for verdict in verdicts}
+    return None
 
 
 def _empty_coverage_counts() -> dict[str, int]:

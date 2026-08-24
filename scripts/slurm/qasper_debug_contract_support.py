@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 _QASPER_CANDIDATE_GENERATION_CONTRACT = "qasper_typed_candidate_generation.v2"
 _SEMANTIC_VERIFIER_RUNTIME_CONTRACT = "semantic_proposition_verifier_runtime.v3"
 _SEMANTIC_DEBUG_TRACE_CONTRACT = "semantic_proposition_debug_trace.v3"
@@ -48,6 +47,7 @@ def terminal_semantic_answer(prediction: dict[str, Any]) -> str:
         .strip()
         .casefold()
     )
+
 
 def _annotation_scores_complete(prediction: dict[str, Any]) -> bool:
     annotations = prediction.get("qasper_annotation_scores")
@@ -203,11 +203,15 @@ def _live_models_observed(
     verifier: dict[str, Any],
 ) -> bool:
     generator_observed = not generator or bool(generator.get("model"))
+    return bool(generator_observed and _verifier_observed(verifier))
+
+
+def _verifier_observed(verifier: dict[str, Any]) -> bool:
+    """Observe the verifier proposal independently from candidate auditing."""
+
     return bool(
-        generator_observed
-        and verifier.get("model")
+        verifier.get("model")
         and int(verifier.get("proposal_model_call_count") or 0) > 0
-        and _candidate_bound_auditor_attempt_observed(verifier)
     )
 
 
@@ -244,9 +248,9 @@ def _candidate_bound_auditor_attempt_observed(verifier: dict[str, Any]) -> bool:
 
 def _candidate_bound_auditor_passed(verifier: dict[str, Any]) -> bool:
     audit = _mapping(verifier.get("candidate_verification_audit"))
-    return audit.get("status") == "passed" and _candidate_bound_auditor_attempt_observed(
-        verifier
-    )
+    return audit.get(
+        "status"
+    ) == "passed" and _candidate_bound_auditor_attempt_observed(verifier)
 
 
 def _semantic_debug_audit_stage(verifier: dict[str, Any]) -> dict[str, Any]:
@@ -287,9 +291,7 @@ def _failed_auditor_safe_abstention(
         return False
     commit = _mapping(prediction.get("terminal_semantic_commit"))
     outcome = str(
-        commit.get("outcome")
-        or prediction.get("terminal_outcome")
-        or ""
+        commit.get("outcome") or prediction.get("terminal_outcome") or ""
     ).strip()
     if outcome != "safe_abstention":
         return False
@@ -300,6 +302,7 @@ def _failed_auditor_safe_abstention(
         "verified_support",
         "verified_conflict",
     }
+
 
 def _empty_coverage_counts() -> dict[str, int]:
     return {
@@ -314,12 +317,14 @@ def _empty_coverage_counts() -> dict[str, int]:
         "transaction_attempt_identity": 0,
         "effective_seed": 0,
         "input_output_digest": 0,
+        "verifier_observed": 0,
         "auditor_attempt_observed": 0,
         "candidate_verifier_audit": 0,
         "auditor_failed_safe_abstention": 0,
         "semantic_verifier_debug": 0,
         "live_model": 0,
     }
+
 
 def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}

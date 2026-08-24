@@ -133,7 +133,7 @@ def record_trace(
         {
             "explicit_contradiction": verdict == "no",
             "candidate_verifier_disagreement": relation == "contradicted",
-            "unknown": verdict == "insufficient_evidence",
+            "unknown": relation == "unknown",
         }
     )
     trace["output_digest"] = digest(

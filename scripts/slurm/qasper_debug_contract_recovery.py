@@ -18,6 +18,7 @@ def _answerable_false_abstention(prediction: dict[str, Any]) -> bool:
     )
     return bool(answerable and terminal_semantic_answer(prediction) == "unanswerable")
 
+
 def _reverify_without_state_change_count(prediction: dict[str, Any]) -> int:
     violations = sum(
         int(event.get("stage") == "reverify" and not _reverify_state_changed(event))
@@ -44,7 +45,8 @@ def _semantic_recovery_transitions(
     metadata = terminal_metadata(prediction)
     verifier = _mapping(metadata.get("semantic_proposition_verifier"))
     transitions = [
-        item for item in verifier.get("recovery_transitions") or []
+        item
+        for item in verifier.get("recovery_transitions") or []
         if isinstance(item, dict)
     ]
     debug = _mapping(verifier.get("debug_trace"))
@@ -69,17 +71,17 @@ def _recovery_transition_invalid(transition: dict[str, Any]) -> bool:
     if action == "stop_without_reverify":
         return not (
             transition.get("stop_reason") == "recovery_no_progress"
-            and _unchanged_digest(transition, "evidence")
-            and _unchanged_digest(transition, "slot_state")
-            and _unchanged_digest(transition, "proposition_binding")
+            and _semantic_state_unchanged(transition)
         )
-    if action != "reaudit_changed_proposition_binding":
+    if action not in {
+        "reaudit_changed_proposition_binding",
+        "fresh_reverification",
+        "reaudit_after_state_change",
+    }:
         return False
-    return not (
-        _unchanged_digest(transition, "evidence")
-        and _unchanged_digest(transition, "slot_state")
-        and _changed_digest(transition, "proposition_binding")
-    )
+    if action == "reaudit_changed_proposition_binding":
+        return _semantic_domain_change(transition, "binding") is not True
+    return not _reverify_state_changed(transition)
 
 
 def _unchanged_digest(transition: dict[str, Any], name: str) -> bool:
@@ -105,40 +107,97 @@ def _changed_digest(transition: dict[str, Any], name: str) -> bool:
 
 
 def _reverify_state_changed(event: dict[str, Any]) -> bool:
-    for field in (
-        "semantic_pack_digest_changed",
-        "raw_evidence_digest_changed",
-        "evidence_digest_changed",
-        "semantic_slot_state_changed",
-        "slot_state_changed",
-        "slot_state_digest_changed",
-        "proposition_binding_changed",
-        "proposition_binding_digest_changed",
-        "evidence_changed",
-        "proposition_changed",
-        "semantic_state_changed",
-        "semantic_state_digest_changed",
-    ):
-        if event.get(field) is True:
-            return True
-    for before_field, after_field in (
-        ("semantic_pack_digest_before", "semantic_pack_digest_after"),
-        ("raw_evidence_digest_before", "raw_evidence_digest_after"),
-        ("evidence_digest_before", "evidence_digest_after"),
-        ("semantic_state_digest_before", "semantic_state_digest_after"),
-        ("slot_state_digest_before", "slot_state_digest_after"),
-        (
-            "proposition_binding_digest_before",
-            "proposition_binding_digest_after",
+    return any(
+        _semantic_domain_change(event, domain) is True
+        for domain in ("pack", "slot", "binding")
+    )
+
+
+def _semantic_state_unchanged(transition: dict[str, Any]) -> bool:
+    """Require known semantic state stability before stopping recovery."""
+    return all(
+        _semantic_domain_change(transition, domain) is False
+        for domain in ("pack", "slot", "binding")
+    )
+
+
+def _semantic_domain_change(
+    event: dict[str, Any],
+    domain: str,
+) -> bool | None:
+    fields, digest_pairs = _semantic_domain_fields(domain)
+    observed = False
+    changed = False
+    for field in fields:
+        if field not in event:
+            continue
+        observed = True
+        if not isinstance(event.get(field), bool):
+            return None
+        changed = changed or event[field]
+    for before_field, after_field in digest_pairs:
+        before_present = before_field in event
+        after_present = after_field in event
+        if before_present != after_present:
+            return None
+        if not before_present:
+            continue
+        observed = True
+        before = event.get(before_field)
+        after = event.get(after_field)
+        if not before or not after:
+            return None
+        changed = changed or before != after
+    return changed if observed else None
+
+
+def _semantic_domain_fields(
+    domain: str,
+) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]]:
+    return {
+        "pack": (
+            (
+                "effective_semantic_pack_digest_changed",
+                "semantic_pack_digest_changed",
+            ),
+            (
+                (
+                    "effective_semantic_pack_digest_before",
+                    "effective_semantic_pack_digest_after",
+                ),
+                ("semantic_pack_digest_before", "semantic_pack_digest_after"),
+            ),
         ),
-        ("proposition_digest_before", "proposition_digest_after"),
-        ("authority_state_before", "authority_state_after"),
-        ("authority_atoms_before", "authority_atoms_after"),
-    ):
-        if before_field in event or after_field in event:
-            return (
-                before_field in event
-                and after_field in event
-                and event.get(before_field) != event.get(after_field)
-            )
-    return False
+        "slot": (
+            (
+                "semantic_slot_state_changed",
+                "slot_state_changed",
+                "slot_state_digest_changed",
+                "normalized_slot_state_digest_changed",
+            ),
+            (
+                ("slot_state_digest_before", "slot_state_digest_after"),
+                (
+                    "normalized_slot_state_digest_before",
+                    "normalized_slot_state_digest_after",
+                ),
+            ),
+        ),
+        "binding": (
+            (
+                "proposition_binding_changed",
+                "proposition_binding_digest_changed",
+                "canonical_proposition_binding_digest_changed",
+            ),
+            (
+                (
+                    "proposition_binding_digest_before",
+                    "proposition_binding_digest_after",
+                ),
+                (
+                    "canonical_proposition_binding_digest_before",
+                    "canonical_proposition_binding_digest_after",
+                ),
+            ),
+        ),
+    }[domain]

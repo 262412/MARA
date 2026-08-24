@@ -7,6 +7,9 @@ from ktem.docqa.candidate_verification_policy import CANDIDATE_VERIFICATION_CONT
 
 from .mara_candidate_unknown_audit import (
     UNKNOWN_AUDIT_MAX_TOKENS,
+    UNKNOWN_AUDIT_PROMPT_BOUND_EXCEEDED,
+    UNKNOWN_AUDIT_REVIEWED_EVIDENCE_MISSING,
+    UNKNOWN_AUDIT_TYPED_CONCLUSION_MISSING,
     candidate_unknown_audit_attestation,
     candidate_unknown_audit_prompt,
     candidate_unknown_audit_rejection_reason,
@@ -72,10 +75,20 @@ def candidate_bound_response(
     bounded = deepcopy(response)
     candidate = str(candidate or "").strip().casefold()
     verdict = str(bounded.get("verdict") or "").strip().casefold()
-    status = _candidate_status(candidate, verdict)
+    declared_status = str(bounded.get("candidate_judgment") or "").strip().casefold()
+    status = (
+        declared_status
+        if declared_status in {"supported", "contradicted", "unknown"}
+        else _candidate_status(candidate, verdict)
+    )
+    # The model-facing contract is candidate-relative. Keep the legacy
+    # proposition polarity only as a deterministic downstream projection.
+    bounded["candidate_judgment"] = status
+    if verdict != "insufficient_evidence":
+        bounded.pop("unknown_assessment", None)
     existing_audit = bounded.get("candidate_verification_audit")
     existing_audit = existing_audit if isinstance(existing_audit, dict) else {}
-    if _candidate_audit_matches(existing_audit, candidate, verdict):
+    if _candidate_audit_matches(existing_audit, candidate, verdict, status):
         candidate_audit = deepcopy(existing_audit)
     else:
         candidate_audit = candidate_bound_audit(
@@ -100,7 +113,7 @@ def candidate_bound_response(
         candidate_verification_audit=candidate_audit,
         explicit_contradiction=verdict == "no",
         candidate_verifier_disagreement=status == "contradicted",
-        unknown=verdict == "insufficient_evidence",
+        unknown=status == "unknown",
     )
     return bounded
 
@@ -113,49 +126,47 @@ def candidate_bound_insufficient_result(
     candidate: str,
 ) -> Any:
     bind_semantic_runtime_fields(proposal.value or {}, context)
-    value = proposal.value or {}
-    assessment = value.get("unknown_assessment")
-    assessment = assessment if isinstance(assessment, dict) else {}
+    assessment, verifier_judgment = _candidate_unknown_inputs(proposal)
     try:
         audit_prompt, audited_conclusion = candidate_unknown_audit_prompt(
             context.proposition,
             candidate,
             assessment,
+            verifier_judgment=verifier_judgment,
         )
-    except ValueError:
+    except ValueError as exc:
+        reason = str(exc)
+        if reason in {
+            UNKNOWN_AUDIT_TYPED_CONCLUSION_MISSING,
+            UNKNOWN_AUDIT_REVIEWED_EVIDENCE_MISSING,
+        }:
+            return _candidate_unknown_precondition_failure(
+                context,
+                proposal,
+                diagnostics,
+                reason,
+            )
+        reason = (
+            reason
+            if reason == UNKNOWN_AUDIT_PROMPT_BOUND_EXCEEDED
+            else "candidate_unknown_audit_prompt_invalid"
+        )
         diagnostics.update(
             {
                 "audit_status": "failed",
-                "audit_reason": "candidate_unknown_audit_prompt_bound_exceeded",
+                "audit_reason": reason,
             }
         )
         return transaction_result(
             None,
             "failed",
-            "candidate_unknown_audit_prompt_bound_exceeded",
+            reason,
             diagnostics,
             proposal_calls=proposal.call_count,
             debug_trace=transaction_debug(context, proposal, None),
         )
-    if not audited_conclusion:
-        return _candidate_unknown_precondition_failure(
-            context,
-            proposal,
-            diagnostics,
-            "candidate_unknown_typed_conclusion_missing",
-        )
-    if not assessment.get("reviewed_evidence"):
-        return _candidate_unknown_precondition_failure(
-            context,
-            proposal,
-            diagnostics,
-            "candidate_unknown_reviewed_evidence_missing",
-        )
-    audit = candidate_unknown_audit_stage(
-        context.audit_llm,
-        audit_prompt,
-        candidate=candidate,
-        seed=context.seed + 1,
+    audit = _run_candidate_unknown_audit(
+        context, audit_prompt, candidate, verifier_judgment
     )
     diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
     diagnostics["audit_contract_id"] = "candidate_verifier_audit.v2"
@@ -183,6 +194,31 @@ def candidate_bound_insufficient_result(
         assessment=assessment,
         debug_trace=debug_trace,
     )
+
+
+def _run_candidate_unknown_audit(
+    context: Any,
+    audit_prompt: str,
+    candidate: str,
+    verifier_judgment: str,
+) -> ParsedSemanticStage:
+    return candidate_unknown_audit_stage(
+        context.audit_llm,
+        audit_prompt,
+        candidate=candidate,
+        verifier_judgment=verifier_judgment,
+        seed=context.seed + 1,
+    )
+
+
+def _candidate_unknown_inputs(
+    proposal: ParsedSemanticStage,
+) -> tuple[dict[str, Any], str]:
+    value = proposal.value or {}
+    assessment = value.get("unknown_assessment")
+    normalized_assessment = assessment if isinstance(assessment, dict) else {}
+    judgment = str(value.get("candidate_judgment") or "unknown").strip().casefold()
+    return normalized_assessment, judgment
 
 
 def _candidate_unknown_success(
@@ -336,11 +372,13 @@ def _candidate_audit_matches(
     audit: dict[str, Any],
     candidate: str,
     verdict: str,
+    judgment: str,
 ) -> bool:
     return bool(
         audit
         and audit.get("audited_candidate") == candidate
         and audit.get("audited_verdict") == verdict
+        and audit.get("audited_judgment") == judgment
         and audit.get("replacement_candidate_allowed") is False
         and audit.get("status") in {"passed", "failed"}
     )

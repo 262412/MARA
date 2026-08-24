@@ -4,8 +4,8 @@ import json
 
 import pytest
 from ktem.reasoning.mara_semantic_proposition_schema import (
-    parse_semantic_proposition_result,
     parse_semantic_proposition_response,
+    parse_semantic_proposition_result,
     semantic_proposition_response_format,
 )
 from ktem_tests.test_mara_semantic_proposition_verifier import _model_response
@@ -86,6 +86,7 @@ def test_composite_conjunction_has_a_bounded_all_required_premise_contract(
 ) -> None:
     response = {
         "verdict": "yes",
+        "evidence_relation": "proposition_support",
         "support_mode": "evidence_set",
         "proof_mode": "composite_conjunction",
         "jointly_complete": True,
@@ -95,6 +96,12 @@ def test_composite_conjunction_has_a_bounded_all_required_premise_contract(
                 "span_selector": f"E{index}:S1",
                 "proposition_fragment": f"premise {index} is stated",
                 "supports_slot_ids": ["support:proposition"],
+                "binds_proposition_slots": [
+                    "actor",
+                    "predicate",
+                    "object",
+                    "quantifier",
+                ],
             }
             for index in range(1, premise_count + 1)
         ],
@@ -123,6 +130,7 @@ def test_composite_conjunction_has_a_bounded_all_required_premise_contract(
 def test_atomic_semantic_accepts_one_complete_premise_without_conjunction() -> None:
     response = {
         "verdict": "yes",
+        "evidence_relation": "proposition_support",
         "support_mode": "evidence_set",
         "proof_mode": "atomic_semantic",
         "jointly_complete": True,
@@ -132,6 +140,12 @@ def test_atomic_semantic_accepts_one_complete_premise_without_conjunction() -> N
                 "span_selector": "E1:S1",
                 "proposition_fragment": "the complete proposition is established",
                 "supports_slot_ids": ["support:proposition"],
+                "binds_proposition_slots": [
+                    "actor",
+                    "predicate",
+                    "object",
+                    "quantifier",
+                ],
             }
         ],
     }
@@ -151,6 +165,7 @@ def test_atomic_semantic_accepts_one_complete_premise_without_conjunction() -> N
 def test_premise_selector_must_bind_to_a_canonical_span() -> None:
     response = {
         "verdict": "yes",
+        "evidence_relation": "proposition_support",
         "support_mode": "evidence_set",
         "proof_mode": "atomic_semantic",
         "jointly_complete": True,
@@ -160,6 +175,12 @@ def test_premise_selector_must_bind_to_a_canonical_span() -> None:
                 "span_selector": "E1:S9",
                 "proposition_fragment": "the complete proposition is established",
                 "supports_slot_ids": ["support:proposition"],
+                "binds_proposition_slots": [
+                    "actor",
+                    "predicate",
+                    "object",
+                    "quantifier",
+                ],
             }
         ],
     }

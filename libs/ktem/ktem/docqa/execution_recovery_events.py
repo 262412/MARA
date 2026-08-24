@@ -14,6 +14,7 @@ from .recovery_progress import (
     semantic_progress_evidence_ids,
     semantic_progress_slot_states,
     semantic_raw_evidence_digest,
+    semantic_recovery_pack_digest,
 )
 from .route_budget import route_budget_metadata
 from .route_selection import ControllerDecision
@@ -165,12 +166,18 @@ def _semantic_digest_fields(
     initial_bundle: EvidenceBundle | None,
     recovered_bundle: EvidenceBundle | None,
 ) -> dict[str, Any]:
-    pack_before = canonical_proposition_binding_digest(request, initial_bundle)
-    pack_after = canonical_proposition_binding_digest(request, recovered_bundle)
+    pack_before = semantic_recovery_pack_digest(request, initial_bundle)
+    pack_after = semantic_recovery_pack_digest(request, recovered_bundle)
     pack_applicable = bool(pack_before or pack_after)
     pack_changed = bool(pack_applicable and pack_before != pack_after)
-    proposition_before = pack_before
-    proposition_after = pack_after
+    proposition_before = canonical_proposition_binding_digest(
+        request,
+        initial_bundle,
+    )
+    proposition_after = canonical_proposition_binding_digest(
+        request,
+        recovered_bundle,
+    )
     proposition_binding_applicable = bool(proposition_before or proposition_after)
     proposition_binding_changed = bool(
         proposition_binding_applicable and proposition_before != proposition_after
@@ -226,8 +233,6 @@ def recovery_has_progress(fields: dict[str, Any]) -> bool:
     return any(
         fields.get(applicable_key) is True and fields.get(changed_key) is True
         for applicable_key, changed_key in (
-            ("evidence_digest_applicable", "evidence_digest_changed"),
-            ("raw_evidence_digest_applicable", "raw_evidence_digest_changed"),
             (
                 "normalized_slot_state_digest_applicable",
                 "normalized_slot_state_digest_changed",

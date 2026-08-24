@@ -4,14 +4,15 @@ import hashlib
 import json
 from typing import Any
 
-from scripts.slurm.qasper_debug_contract_identity import (
-    _normalized_candidate,
-)
+from scripts.slurm.qasper_debug_contract_identity import _normalized_candidate
 from scripts.slurm.qasper_debug_contract_support import (
     _CANDIDATE_VERIFIER_AUDIT_CONTRACT,
     _failed_auditor_safe_abstention,
     _mapping,
 )
+
+_PROPOSITION_BINDING_SLOTS = {"actor", "predicate", "object", "quantifier"}
+
 
 def _candidate_audit_complete(
     verifier: dict[str, Any],
@@ -214,6 +215,14 @@ def _supported_row_required_slot_unverified(
         or audit.get("status") != "passed"
     ):
         return False
+    return _required_slot_state_unverified(verifier, audit, metadata)
+
+
+def _required_slot_state_unverified(
+    verifier: dict[str, Any],
+    audit: dict[str, Any],
+    metadata: dict[str, Any],
+) -> bool:
     generation = _mapping(metadata.get("qasper_candidate_generation"))
     required: set[str] = set()
     verified: set[str] = set()
@@ -231,21 +240,59 @@ def _supported_row_required_slot_unverified(
             slot_id = str(slot.get("slot_id") or "").strip()
             if slot_id:
                 required.add(slot_id)
-    authority = _mapping(metadata.get("semantic_proposition_authority"))
+    semantic_authority = _mapping(metadata.get("semantic_proposition_authority"))
+    authority = _mapping(metadata.get("typed_authority"))
     authority.update(_mapping(verifier.get("typed_authority")))
     required.update(_string_set(authority.get("required_slot_ids")))
-    required.update(_string_set(authority.get("required_proposition_slots")))
     verified.update(_string_set(authority.get("verified_slot_ids")))
     verified.update(_string_set(authority.get("verified_support_slot_ids")))
-    verified.update(
-        _nonempty_mapping_keys(authority.get("proposition_slot_bindings"))
-    )
-    verified.update(
-        _nonempty_mapping_keys(authority.get("proposition_slot_evidence_refs"))
-    )
+    required.update(_string_set(semantic_authority.get("required_slot_ids")))
+    verified.update(_string_set(semantic_authority.get("verified_support_slot_ids")))
+    if _proposition_binding_state_unverified(verifier, semantic_authority):
+        return True
     if not required:
         return True
     return not required <= verified
+
+
+def _proposition_binding_state_unverified(
+    verifier: dict[str, Any],
+    authority: dict[str, Any],
+) -> bool:
+    bindings = _mapping(authority.get("proposition_slot_bindings"))
+    raw_slot_refs = _mapping(authority.get("proposition_slot_evidence_refs"))
+    evidence_set = _string_set(authority.get("proposition_binding_evidence_set_refs"))
+    slot_refs = {
+        slot: _string_set(raw_slot_refs.get(slot))
+        for slot in _PROPOSITION_BINDING_SLOTS
+    }
+    verdict = str(verifier.get("verdict") or "").strip().casefold()
+    expected_relation = {
+        "yes": "proposition_support",
+        "no": "explicit_contradiction",
+    }.get(verdict)
+    if (
+        authority.get("status") != "verified"
+        or set(bindings) != _PROPOSITION_BINDING_SLOTS
+        or any(not str(bindings[slot] or "").strip() for slot in bindings)
+        or set(raw_slot_refs) != _PROPOSITION_BINDING_SLOTS
+        or any(not refs for refs in slot_refs.values())
+        or not evidence_set
+        or any(not refs <= evidence_set for refs in slot_refs.values())
+        or set().union(*slot_refs.values()) != evidence_set
+        or expected_relation is None
+        or authority.get("evidence_relation") != expected_relation
+    ):
+        return True
+    payload = {
+        "evidence_relation": expected_relation,
+        "proposition_slot_bindings": bindings,
+        "proposition_slot_evidence_refs": {
+            slot: sorted(slot_refs[slot]) for slot in sorted(slot_refs)
+        },
+        "proposition_binding_evidence_set_refs": sorted(evidence_set),
+    }
+    return authority.get("proposition_evidence_set_digest") != _premise_digest(payload)
 
 
 def _slot_ids(value: Any) -> set[str]:

@@ -12,12 +12,72 @@ _REQUIRED_ONLINE_CANDIDATE_LABELS = ("no",)
 _REQUIRED_ONLINE_VERIFIER_JUDGMENTS = ("contradicted", "unknown")
 _REQUIRED_ONLINE_AUDITOR_STATUSES = ("failed", "passed")
 _REQUIRED_ONLINE_ANNOTATION_STATES = ("ambiguous", "unambiguous")
+_QUALITY_LANE = "quality"
+_CONTRACT_PROBE_LANE = "contract_probe"
+
+
+def split_qasper_debug_predictions(
+    predictions: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Separate real quality rows from explicitly marked contract probes."""
+
+    quality: list[dict[str, Any]] = []
+    probes: list[dict[str, Any]] = []
+    for prediction in predictions:
+        if _prediction_lane(prediction) == _CONTRACT_PROBE_LANE:
+            probes.append(prediction)
+        else:
+            quality.append(prediction)
+    return quality, probes
+
+
+def _prediction_lane(prediction: Mapping[str, Any]) -> str:
+    for source in (
+        prediction,
+        _mapping(prediction.get("example_metadata")),
+        _mapping(prediction.get("evidence_metadata")),
+    ):
+        for field in (
+            "qasper_debug_lane",
+            "contract_probe_lane",
+            "contract_smoke_lane",
+            "debug_lane",
+        ):
+            value = str(source.get(field) or "").strip().casefold()
+            if value in {"contract_probe", "probe", "synthetic", "negative"}:
+                return _CONTRACT_PROBE_LANE
+            if value in {"quality", "real", "quality_audit"}:
+                return _QUALITY_LANE
+        for field in ("contract_probe", "synthetic_contract_probe"):
+            if source.get(field) is True:
+                return _CONTRACT_PROBE_LANE
+    return _QUALITY_LANE
 
 
 def qasper_candidate_bound_state_matrix(
     predictions: list[dict[str, Any]],
+    contract_probe_predictions: list[dict[str, Any]] | None = None,
+    *,
+    quality_predictions: list[dict[str, Any]] | None = None,
+    probe_predictions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Project the immutable-candidate contract separately from live coverage."""
+
+    if contract_probe_predictions is None:
+        contract_probe_predictions = probe_predictions
+    if quality_predictions is None and contract_probe_predictions is None:
+        (
+            quality_predictions,
+            contract_probe_predictions,
+        ) = split_qasper_debug_predictions(predictions)
+    elif quality_predictions is None:
+        quality_predictions = list(predictions)
+    elif contract_probe_predictions is None:
+        contract_probe_predictions = []
+    assert quality_predictions is not None
+    assert contract_probe_predictions is not None
+    combined = [*quality_predictions, *contract_probe_predictions]
+    has_probe_rows = bool(contract_probe_predictions)
 
     cells = [
         _matrix_cell(judgment, auditor_status, ambiguous)
@@ -37,7 +97,25 @@ def qasper_candidate_bound_state_matrix(
         },
         "cells": cells,
         "complete": _matrix_complete(cells),
-        "online_observation": _online_observation(predictions),
+        "online_observation": _online_observation(
+            combined,
+            lane="legacy" if has_probe_rows else _QUALITY_LANE,
+        ),
+        "legacy_online_observation": _online_observation(combined),
+        "quality_observation": _online_observation(
+            quality_predictions,
+            lane=_QUALITY_LANE,
+        ),
+        "contract_probe_observation": _online_observation(
+            contract_probe_predictions,
+            lane=_CONTRACT_PROBE_LANE,
+        ),
+        "lane_split": {
+            "quality_prediction_count": len(quality_predictions),
+            "contract_probe_prediction_count": len(contract_probe_predictions),
+            "combined_prediction_count": len(combined),
+            "contract_probe_rows_present": has_probe_rows,
+        },
     }
 
 
@@ -107,7 +185,11 @@ def _cell_invariants_hold(cell: Mapping[str, Any]) -> bool:
     )
 
 
-def _online_observation(predictions: list[dict[str, Any]]) -> dict[str, Any]:
+def _online_observation(
+    predictions: list[dict[str, Any]],
+    *,
+    lane: str = "legacy",
+) -> dict[str, Any]:
     counters, expected_annotation_labels = _online_counters(predictions)
     (
         candidates,
@@ -144,6 +226,7 @@ def _online_observation(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         observed_ambiguity=observed_ambiguity,
         expected_annotation_labels=expected_annotation_labels,
         candidate_verifier_auditor_exact=exact,
+        lane=lane,
     )
 
 
@@ -209,13 +292,24 @@ def _online_observation_payload(
     observed_ambiguity: set[str],
     expected_annotation_labels: set[str],
     candidate_verifier_auditor_exact: bool,
+    lane: str,
 ) -> dict[str, Any]:
+    observed_state_cells = _observed_state_cells(predictions)
+    expected_state_cells = _expected_state_cells()
     return {
         "kind": "live_model_rows",
         "prediction_count": len(predictions),
         "generator_candidates": {
             candidate: candidates[candidate] for candidate in _CANDIDATE_LABELS
         },
+        **_online_count_fields(
+            candidates,
+            verifier_candidates,
+            auditor_candidates,
+            judgments,
+            auditor_statuses,
+            ambiguity,
+        ),
         **_online_label_fields(
             observed_candidates,
             observed_verifier_candidates,
@@ -225,16 +319,55 @@ def _online_observation_payload(
             observed_ambiguity,
             expected_annotation_labels,
             candidate_verifier_auditor_exact,
+            lane,
         ),
-        **_online_count_fields(
-            candidates,
-            verifier_candidates,
-            auditor_candidates,
-            judgments,
-            auditor_statuses,
-            ambiguity,
+        "observed_state_cells": [
+            _state_cell_id(*cell) for cell in sorted(observed_state_cells)
+        ],
+        "observed_state_cell_count": len(observed_state_cells),
+        "missing_state_cells": [
+            _state_cell_id(*cell)
+            for cell in sorted(expected_state_cells - observed_state_cells)
+        ],
+        "state_matrix_complete": bool(
+            predictions and observed_state_cells == expected_state_cells
         ),
     }
+
+
+def _expected_state_cells() -> set[tuple[str, str, bool]]:
+    return {
+        (judgment, auditor_status, ambiguous)
+        for judgment in _JUDGMENTS
+        for auditor_status in _AUDITOR_STATUSES
+        for ambiguous in _AMBIGUITY_STATES
+    }
+
+
+def _observed_state_cells(
+    predictions: list[dict[str, Any]],
+) -> set[tuple[str, str, bool]]:
+    observed: set[tuple[str, str, bool]] = set()
+    for prediction in predictions:
+        metadata = _terminal_metadata(prediction)
+        verifier = _mapping(metadata.get("semantic_proposition_verifier"))
+        judgment = str(verifier.get("candidate_verification_status") or "")
+        audit = _mapping(verifier.get("candidate_verification_audit"))
+        auditor_status = str(audit.get("status") or "")
+        ambiguity = _ambiguity_label(
+            _mapping(prediction.get("qasper_annotation_diagnostics"))
+        )
+        if (
+            judgment in _JUDGMENTS
+            and auditor_status in _AUDITOR_STATUSES
+            and ambiguity in {"ambiguous", "unambiguous"}
+        ):
+            observed.add((judgment, auditor_status, ambiguity == "ambiguous"))
+    return observed
+
+
+def _state_cell_id(judgment: str, auditor_status: str, ambiguous: bool) -> str:
+    return f"{judgment}:{auditor_status}:{'ambiguous' if ambiguous else 'unambiguous'}"
 
 
 def _online_label_fields(
@@ -246,9 +379,38 @@ def _online_label_fields(
     observed_ambiguity: set[str],
     expected_annotation_labels: set[str],
     candidate_verifier_auditor_exact: bool,
+    lane: str,
 ) -> dict[str, Any]:
     missing_annotation_labels = sorted(expected_annotation_labels - observed_candidates)
+    if lane == _QUALITY_LANE:
+        required_candidate_labels = {"yes", "no"}
+        required_verifier_judgments: set[str] = set()
+        required_auditor_statuses: set[str] = set()
+        required_ambiguity_states: set[str] = set()
+    elif lane == _CONTRACT_PROBE_LANE:
+        required_candidate_labels = set(_REQUIRED_ONLINE_CANDIDATE_LABELS)
+        required_verifier_judgments = set(_REQUIRED_ONLINE_VERIFIER_JUDGMENTS)
+        required_auditor_statuses = set(_REQUIRED_ONLINE_AUDITOR_STATUSES)
+        required_ambiguity_states = set(_REQUIRED_ONLINE_ANNOTATION_STATES)
+    else:
+        required_candidate_labels = set(_REQUIRED_ONLINE_CANDIDATE_LABELS)
+        required_verifier_judgments = set(_REQUIRED_ONLINE_VERIFIER_JUDGMENTS)
+        required_auditor_statuses = set(_REQUIRED_ONLINE_AUDITOR_STATUSES)
+        required_ambiguity_states = set(_REQUIRED_ONLINE_ANNOTATION_STATES)
+    missing_required_candidate_labels = sorted(
+        required_candidate_labels - observed_candidates
+    )
+    missing_required_verifier_judgments = sorted(
+        required_verifier_judgments - observed_judgments
+    )
+    missing_required_auditor_statuses = sorted(
+        required_auditor_statuses - observed_auditor_statuses
+    )
+    missing_required_ambiguity_states = sorted(
+        required_ambiguity_states - observed_ambiguity
+    )
     return {
+        "lane": lane,
         "observed_candidate_labels": sorted(observed_candidates),
         "observed_verifier_candidate_labels": sorted(observed_verifier_candidates),
         "observed_auditor_candidate_labels": sorted(observed_auditor_candidates),
@@ -275,22 +437,16 @@ def _online_label_fields(
         "candidate_label_diversity": len(observed_candidates),
         "expected_annotation_label_diversity": len(expected_annotation_labels),
         "missing_annotation_labels_from_candidates": missing_annotation_labels,
-        "single_label_collapse": bool(missing_annotation_labels),
+        "single_label_collapse": bool(
+            missing_annotation_labels or missing_required_candidate_labels
+        ),
         "observed_verifier_judgment_labels": sorted(observed_judgments),
         "observed_auditor_status_labels": sorted(observed_auditor_statuses),
         "observed_annotation_ambiguity_states": sorted(observed_ambiguity),
-        "missing_required_candidate_labels": sorted(
-            set(_REQUIRED_ONLINE_CANDIDATE_LABELS) - observed_candidates
-        ),
-        "missing_required_verifier_judgments": sorted(
-            set(_REQUIRED_ONLINE_VERIFIER_JUDGMENTS) - observed_judgments
-        ),
-        "missing_required_auditor_statuses": sorted(
-            set(_REQUIRED_ONLINE_AUDITOR_STATUSES) - observed_auditor_statuses
-        ),
-        "missing_required_annotation_ambiguity_states": sorted(
-            set(_REQUIRED_ONLINE_ANNOTATION_STATES) - observed_ambiguity
-        ),
+        "missing_required_candidate_labels": missing_required_candidate_labels,
+        "missing_required_verifier_judgments": missing_required_verifier_judgments,
+        "missing_required_auditor_statuses": missing_required_auditor_statuses,
+        "missing_required_annotation_ambiguity_states": missing_required_ambiguity_states,
     }
 
 

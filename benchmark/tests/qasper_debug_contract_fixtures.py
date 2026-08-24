@@ -5,6 +5,7 @@ from typing import Any
 
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _prediction
 
+
 def _qasper_debug_prediction(example_id: str, route: str) -> dict[str, Any]:
     prediction = _prediction([])
     group_id = f"group:{example_id}"
@@ -28,6 +29,10 @@ def _qasper_debug_prediction(example_id: str, route: str) -> dict[str, Any]:
             ),
         }
     )
+    if relation == "supported" and audit_status == "passed":
+        metadata["semantic_proposition_authority"] = _debug_semantic_authority(
+            candidate
+        )
     prediction.update(
         {
             "example_id": example_id,
@@ -45,32 +50,9 @@ def _qasper_debug_prediction(example_id: str, route: str) -> dict[str, Any]:
                     "output_digest": "claim-output",
                 }
             ],
-            "example_metadata": {
-                "qasper_answer_annotations": [
-                    {
-                        "annotation_id": f"annotation:{example_id}",
-                        "yes_no": candidate == "yes",
-                    }
-                ]
-            },
-            "qasper_annotation_scores": [
-                {
-                    "contract_id": "qasper_annotation_score.v1",
-                    "annotation_index": 1,
-                    "annotation_id": f"annotation:{example_id}",
-                    "answer_f1": 1.0 if terminal_answer == "yes" else 0.0,
-                    "typed_accuracy": 1.0,
-                    "evidence_f1": 1.0,
-                    "ambiguity_marker": "ambiguous" if ambiguous else "",
-                }
-            ],
-            "qasper_annotation_diagnostics": {
-                "contract_id": "qasper_annotation_diagnostics.v1",
-                "annotation_count": 1,
-                "ambiguous": ambiguous,
-                "ambiguity_reasons": ["fixture_ambiguous"] if ambiguous else [],
-                "canonical_answer_classes": [[candidate if not ambiguous else "yes"]],
-            },
+            **_debug_annotation_fields(
+                example_id, candidate, terminal_answer, ambiguous
+            ),
             "terminal_outcome": terminal_outcome,
             "terminal_outcome_reason": "",
             "terminal_outcome_contract_violation": False,
@@ -82,6 +64,40 @@ def _qasper_debug_prediction(example_id: str, route: str) -> dict[str, Any]:
         }
     )
     return prediction
+
+
+def _debug_annotation_fields(
+    example_id: str,
+    candidate: str,
+    terminal_answer: str,
+    ambiguous: bool,
+) -> dict[str, Any]:
+    annotation_id = f"annotation:{example_id}"
+    return {
+        "example_metadata": {
+            "qasper_answer_annotations": [
+                {"annotation_id": annotation_id, "yes_no": candidate == "yes"}
+            ]
+        },
+        "qasper_annotation_scores": [
+            {
+                "contract_id": "qasper_annotation_score.v1",
+                "annotation_index": 1,
+                "annotation_id": annotation_id,
+                "answer_f1": 1.0 if terminal_answer == "yes" else 0.0,
+                "typed_accuracy": 1.0,
+                "evidence_f1": 1.0,
+                "ambiguity_marker": "ambiguous" if ambiguous else "",
+            }
+        ],
+        "qasper_annotation_diagnostics": {
+            "contract_id": "qasper_annotation_diagnostics.v1",
+            "annotation_count": 1,
+            "ambiguous": ambiguous,
+            "ambiguity_reasons": ["fixture_ambiguous"] if ambiguous else [],
+            "canonical_answer_classes": [[candidate if not ambiguous else "yes"]],
+        },
+    }
 
 
 def _debug_case_fields(example_index: int) -> dict[str, Any]:
@@ -252,6 +268,7 @@ def _debug_verifier_trace(
     audit_status: str,
 ) -> dict[str, Any]:
     transaction_id = f"verifier:{example_id}:{route}"
+    verdict = _debug_verifier_verdict(candidate, relation)
     typed_conclusion = {
         "contract_id": "typed_conclusion.v1",
         "conclusion_id": f"conclusion:{example_id}",
@@ -268,8 +285,9 @@ def _debug_verifier_trace(
         "model": "Qwen/Qwen3-8B",
         "candidate_label": candidate,
         "candidate_verification_status": relation,
+        "verdict": verdict,
         "replacement_candidate_allowed": False,
-        "explicit_contradiction": relation == "contradicted",
+        "explicit_contradiction": verdict == "no",
         "candidate_verifier_disagreement": relation == "contradicted",
         "unknown": relation == "unknown",
         "proposal_model_call_count": 1,
@@ -316,6 +334,46 @@ def _debug_verifier_trace(
     }
 
 
+def _debug_verifier_verdict(candidate: str, relation: str) -> str:
+    if relation == "unknown":
+        return "insufficient_evidence"
+    if candidate == "unanswerable":
+        return "yes"
+    if relation == "supported":
+        return candidate
+    return "no" if candidate == "yes" else "yes"
+
+
+def _debug_semantic_authority(candidate: str) -> dict[str, Any]:
+    evidence_refs = ["span:paper:s1#quote:0:30"]
+    evidence_relation = (
+        "explicit_contradiction" if candidate == "no" else "proposition_support"
+    )
+    payload = {
+        "evidence_relation": evidence_relation,
+        "proposition_slot_bindings": {
+            "actor": "current_paper",
+            "predicate": "use",
+            "object": "the method",
+            "quantifier": "none",
+        },
+        "proposition_slot_evidence_refs": {
+            slot: evidence_refs
+            for slot in ("actor", "predicate", "object", "quantifier")
+        },
+        "proposition_binding_evidence_set_refs": evidence_refs,
+    }
+    return {
+        "contract_id": "semantic_proposition_verdict.v4",
+        "status": "verified",
+        "reason": "semantic_evidence_set_bound",
+        "required_slot_ids": ["support:boolean_proposition"],
+        "verified_support_slot_ids": ["support:boolean_proposition"],
+        **payload,
+        "proposition_evidence_set_digest": _fixture_digest(payload),
+    }
+
+
 def _debug_candidate_audit(
     candidate: str,
     relation: str,
@@ -331,7 +389,21 @@ def _debug_candidate_audit(
         "reason": "fixture_audit",
         "replacement_candidate_allowed": False,
     }
-    if relation == "unknown":
+    if relation == "supported":
+        audit.update(
+            {
+                "classification": "supported",
+                "audited_verdict": candidate,
+            }
+        )
+    elif relation == "contradicted":
+        audit.update(
+            {
+                "classification": "explicit_contradiction",
+                "audited_verdict": "no" if candidate == "yes" else "yes",
+            }
+        )
+    else:
         premises = _debug_audited_premises()
         audit.update(
             {

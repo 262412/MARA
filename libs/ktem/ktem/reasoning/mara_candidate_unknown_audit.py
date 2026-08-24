@@ -10,9 +10,16 @@ from ktem.docqa.question_proposition import (
     candidate_typed_conclusion,
 )
 
+# The compact assessment carries each exact selector quote once. Keep the
+# original fail-closed request bound so prompt growth cannot silently consume
+# the verifier's 4K-token context budget.
 UNKNOWN_AUDIT_MAX_PROMPT_CHARS = 8_000
 UNKNOWN_AUDIT_MAX_TOKENS = 512
 UNKNOWN_AUDIT_SCOPE = "original_candidate_and_verifier_unknown_only"
+UNKNOWN_AUDIT_GAP_MAX_CHARS = 192
+UNKNOWN_AUDIT_TYPED_CONCLUSION_MISSING = "candidate_unknown_typed_conclusion_missing"
+UNKNOWN_AUDIT_REVIEWED_EVIDENCE_MISSING = "candidate_unknown_reviewed_evidence_missing"
+UNKNOWN_AUDIT_PROMPT_BOUND_EXCEEDED = "candidate_unknown_audit_prompt_bound_exceeded"
 
 UNKNOWN_AUDIT_SYSTEM_PROMPT = (
     "You are the independent candidate-bound auditor for a verifier uncertainty "
@@ -36,19 +43,28 @@ def candidate_unknown_audit_prompt(
     proposition: QuestionProposition,
     candidate: str,
     unknown_assessment: dict[str, Any],
+    *,
+    verifier_judgment: str = "",
 ) -> tuple[str, dict[str, Any]]:
     conclusion = candidate_typed_conclusion(proposition, candidate)
     audited_premises = _unknown_audit_premises(unknown_assessment)
+    if not conclusion:
+        raise ValueError(UNKNOWN_AUDIT_TYPED_CONCLUSION_MISSING)
+    if not audited_premises:
+        raise ValueError(UNKNOWN_AUDIT_REVIEWED_EVIDENCE_MISSING)
     payload = {
         "audit_scope": UNKNOWN_AUDIT_SCOPE,
         "original_candidate": str(candidate or "").strip().casefold(),
         "verifier_verdict": "insufficient_evidence",
-        "verifier_judgment": _candidate_status(candidate),
+        "verifier_judgment": _candidate_status(candidate, verifier_judgment),
         "replacement_candidate_allowed": False,
         "question_proposition": proposition.as_dict(),
         "audited_typed_conclusion": conclusion,
         "audited_premises": audited_premises,
-        "unknown_assessment": unknown_assessment,
+        # The reviewed evidence is carried once, in audited_premises. Keeping
+        # the full parser projection here used to duplicate every quote and
+        # routinely prevented the real auditor call from being attempted.
+        "unknown_assessment": _compact_unknown_assessment(unknown_assessment),
     }
     prompt = "/no_think\nAUDIT THIS VERIFIER UNCERTAINTY:\n" + json.dumps(
         payload,
@@ -56,14 +72,16 @@ def candidate_unknown_audit_prompt(
         separators=(",", ":"),
     )
     if len(prompt) > UNKNOWN_AUDIT_MAX_PROMPT_CHARS:
-        raise ValueError("Candidate-bound unknown audit prompt exceeded its bound.")
+        raise ValueError(UNKNOWN_AUDIT_PROMPT_BOUND_EXCEEDED)
     return prompt, conclusion
 
 
 def candidate_unknown_audit_response_format(
     candidate: str,
+    *,
+    verifier_judgment: str = "",
 ) -> dict[str, Any]:
-    judgment = _candidate_status(candidate)
+    judgment = _candidate_status(candidate, verifier_judgment)
     return {
         "type": "json_schema",
         "json_schema": {
@@ -116,6 +134,7 @@ def parse_candidate_unknown_audit(
     response_text: str,
     *,
     candidate: str,
+    verifier_judgment: str = "",
 ) -> CandidateUnknownAuditParse:
     try:
         payload = json.loads(response_text)
@@ -141,11 +160,14 @@ def parse_candidate_unknown_audit(
         payload.get("audit_scope") != UNKNOWN_AUDIT_SCOPE
         or payload.get("audited_candidate") != normalized
         or payload.get("audited_verdict") != "insufficient_evidence"
-        or payload.get("audited_judgment") != _candidate_status(normalized)
+        or payload.get("audited_judgment")
+        != _candidate_status(normalized, verifier_judgment)
         or payload.get("replacement_candidate_allowed") is not False
         or payload.get("replacement_candidate") != ""
     ):
-        return CandidateUnknownAuditParse(None, "candidate_unknown_audit_binding_invalid")
+        return CandidateUnknownAuditParse(
+            None, "candidate_unknown_audit_binding_invalid"
+        )
     boolean_fields = required - {
         "audit_scope",
         "audited_candidate",
@@ -178,6 +200,10 @@ def candidate_unknown_audit_attestation(
     unknown_assessment: dict[str, Any],
 ) -> dict[str, Any]:
     audited_premises = _unknown_audit_premises(unknown_assessment)
+    if not typed_conclusion_value or not audited_premises:
+        raise ValueError(
+            "Candidate-bound unknown audit cannot attest empty conclusion/evidence."
+        )
     return {
         "contract_id": "candidate_verifier_audit.v2",
         "status": "passed",
@@ -197,35 +223,70 @@ def candidate_unknown_audit_attestation(
             unknown_assessment.get("unresolved_proposition_slots") or []
         ),
         "support_gap": str(unknown_assessment.get("support_gap") or ""),
-        "contradiction_gap": str(
-            unknown_assessment.get("contradiction_gap") or ""
-        ),
+        "contradiction_gap": str(unknown_assessment.get("contradiction_gap") or ""),
         "replacement_candidate_allowed": False,
         "reason": "unknown_gap_audited",
     }
 
 
-def _candidate_status(candidate: str) -> str:
-    return "supported" if str(candidate or "").strip().casefold() == "unanswerable" else "unknown"
+def _candidate_status(candidate: str, verifier_judgment: str = "") -> str:
+    supplied = str(verifier_judgment or "").strip().casefold()
+    if supplied in {"supported", "unknown"}:
+        return supplied
+    return (
+        "supported"
+        if str(candidate or "").strip().casefold() == "unanswerable"
+        else "unknown"
+    )
 
 
 def _unknown_audit_premises(
     unknown_assessment: dict[str, Any],
 ) -> list[dict[str, Any]]:
     reviewed = unknown_assessment.get("reviewed_evidence") or []
-    return [
-        {
-            "span_selector": str(item.get("span_selector") or ""),
-            "evidence_id": str(item.get("evidence_id") or ""),
-            "quote": str(item.get("quote") or ""),
-            "span_start": item.get("span_start"),
-            "span_end": item.get("span_end"),
-        }
-        for item in reviewed
-        if isinstance(item, dict)
-        and str(item.get("evidence_id") or "")
-        and str(item.get("quote") or "")
-    ]
+    premises: list[dict[str, Any]] = []
+    for item in reviewed:
+        if not isinstance(item, dict):
+            continue
+        selector = str(item.get("span_selector") or "").strip()
+        evidence_id = str(item.get("evidence_id") or "").strip()
+        quote = str(item.get("quote") or "")
+        start = _optional_int(item.get("span_start"))
+        end = _optional_int(item.get("span_end"))
+        if not selector or not evidence_id or not quote or start is None or end is None:
+            continue
+        if start < 0 or end <= start or end - start != len(quote):
+            continue
+        premises.append(
+            {
+                "span_selector": selector,
+                "evidence_id": evidence_id,
+                "quote": quote,
+                "span_start": start,
+                "span_end": end,
+            }
+        )
+    return premises
+
+
+def _compact_unknown_assessment(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "unresolved_proposition_slots": [
+            str(slot).strip()
+            for slot in value.get("unresolved_proposition_slots") or []
+            if str(slot).strip()
+        ],
+        "support_gap": _compact_gap(value.get("support_gap")),
+        "contradiction_gap": _compact_gap(value.get("contradiction_gap")),
+    }
+
+
+def _compact_gap(value: Any) -> str:
+    return " ".join(str(value or "").split())[:UNKNOWN_AUDIT_GAP_MAX_CHARS]
+
+
+def _optional_int(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _payload_digest(value: Any) -> str:

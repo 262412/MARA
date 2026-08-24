@@ -62,6 +62,7 @@ def proposal_stage(
     slots: list[dict[str, str]],
     model: str,
     seed: int,
+    candidate: str = "",
 ) -> ParsedSemanticStage:
     def call(correction: str = "") -> tuple[Any | None, str, str]:
         return _call_proposal(
@@ -80,6 +81,7 @@ def proposal_stage(
             slot_ids={value["slot_id"] for value in slots},
             model=model,
             seed=seed,
+            candidate=candidate,
         )
 
     return _parsed_stage(call, parse)
@@ -117,6 +119,7 @@ def candidate_unknown_audit_stage(
     prompt: str,
     *,
     candidate: str,
+    verifier_judgment: str = "",
     seed: int,
 ) -> ParsedSemanticStage:
     def call(correction: str = "") -> tuple[Any | None, str, str]:
@@ -124,6 +127,7 @@ def candidate_unknown_audit_stage(
             llm,
             prompt,
             candidate=candidate,
+            verifier_judgment=verifier_judgment,
             seed=seed,
             correction_reason=correction,
         )
@@ -132,6 +136,7 @@ def candidate_unknown_audit_stage(
         return parse_candidate_unknown_audit(
             response_text(response),
             candidate=candidate,
+            verifier_judgment=verifier_judgment,
         )
 
     return _parsed_stage(call, parse)
@@ -314,6 +319,7 @@ def _call_candidate_unknown_audit(
     prompt: str,
     *,
     candidate: str,
+    verifier_judgment: str,
     seed: int,
     correction_reason: str,
 ) -> tuple[Any | None, str, str]:
@@ -325,7 +331,10 @@ def _call_candidate_unknown_audit(
                     HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
                 ],
                 max_tokens=UNKNOWN_AUDIT_MAX_TOKENS,
-                response_format=candidate_unknown_audit_response_format(candidate),
+                response_format=candidate_unknown_audit_response_format(
+                    candidate,
+                    verifier_judgment=verifier_judgment,
+                ),
                 temperature=0,
                 top_p=1,
                 seed=seed,

@@ -35,9 +35,9 @@ def _semantic_proposition_schema(slot_ids: list[str]) -> dict[str, Any]:
     return {
         "type": "object",
         "properties": {
-            "verdict": {
+            "candidate_judgment": {
                 "type": "string",
-                "enum": ["yes", "no", "insufficient_evidence"],
+                "enum": ["supported", "contradicted", "unknown"],
             },
             "evidence_relation": {
                 "type": "string",
@@ -63,7 +63,7 @@ def _semantic_proposition_schema(slot_ids: list[str]) -> dict[str, Any]:
             "unknown_assessment": _unknown_assessment_schema(),
         },
         "required": [
-            "verdict",
+            "candidate_judgment",
             "evidence_relation",
             "support_mode",
             "proof_mode",
@@ -143,6 +143,7 @@ def parse_semantic_proposition_result(
     slot_ids: set[str],
     model: str,
     seed: int,
+    candidate: str = "",
 ) -> dict[str, Any] | None:
     return parse_semantic_proposition_response(
         response_text,
@@ -150,6 +151,7 @@ def parse_semantic_proposition_result(
         slot_ids=slot_ids,
         model=model,
         seed=seed,
+        candidate=candidate,
     ).value
 
 
@@ -160,12 +162,19 @@ def parse_semantic_proposition_response(
     slot_ids: set[str],
     model: str,
     seed: int,
+    candidate: str = "",
 ) -> SemanticPropositionParse:
     try:
         payload = json.loads(response_text)
     except (TypeError, json.JSONDecodeError):
         return SemanticPropositionParse(None, "json_decode_error")
-    verdict, proof_mode, raw_premises, payload_reason = _verdict_payload(payload)
+    (
+        candidate_judgment,
+        verdict,
+        proof_mode,
+        raw_premises,
+        payload_reason,
+    ) = _verdict_payload(payload, candidate=candidate)
     if payload_reason:
         return SemanticPropositionParse(None, payload_reason)
     assert verdict is not None and proof_mode is not None and raw_premises is not None
@@ -197,6 +206,7 @@ def parse_semantic_proposition_response(
         return SemanticPropositionParse(None, "proposition_slot_coverage_incomplete")
     value = {
         "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+        "candidate_judgment": candidate_judgment,
         "verdict": verdict,
         "evidence_relation": payload["evidence_relation"],
         "support_mode": "evidence_set",
@@ -215,13 +225,57 @@ def parse_semantic_proposition_response(
     return SemanticPropositionParse(value)
 
 
-def _verdict_payload(
+def _verdict_payload_for_candidate(
     payload: Any,
-) -> tuple[str | None, str | None, list[Any] | None, str]:
+    *,
+    candidate: str,
+) -> tuple[str | None, str | None, str | None, list[Any] | None, str]:
     if not isinstance(payload, dict):
-        return None, None, None, "top_level_schema_invalid"
+        return None, None, None, None, "top_level_schema_invalid"
+    candidate_judgment, direct, reason = _candidate_judgment_payload(
+        payload,
+        candidate=candidate,
+    )
+    if reason:
+        return None, None, None, None, reason
+    if payload.get("support_mode") != "evidence_set":
+        return None, None, None, None, "support_mode_invalid"
+    assert candidate_judgment is not None
+    verdict, reason = _candidate_relative_verdict(
+        payload,
+        candidate=candidate,
+        candidate_judgment=candidate_judgment,
+        direct=direct,
+    )
+    if reason:
+        return None, None, None, None, reason
+    assert verdict is not None
+    proof_mode, raw_premises, reason = _proof_payload(payload, verdict=verdict)
+    if reason:
+        return None, None, None, None, reason
+    assert proof_mode is not None and raw_premises is not None
+    if not _candidate_judgment_projection_valid(
+        candidate,
+        candidate_judgment,
+        verdict,
+    ):
+        return (
+            None,
+            None,
+            None,
+            None,
+            "candidate_judgment_unknown_inconsistent",
+        )
+    return candidate_judgment, verdict, proof_mode, raw_premises, ""
+
+
+def _candidate_judgment_payload(
+    payload: dict[str, Any],
+    *,
+    candidate: str,
+) -> tuple[str | None, bool, str]:
     required_fields = {
-        "verdict",
+        "candidate_judgment",
         "evidence_relation",
         "support_mode",
         "proof_mode",
@@ -229,35 +283,98 @@ def _verdict_payload(
         "each_premise_required",
         "premises",
     }
+    legacy_required_fields = required_fields - {"candidate_judgment"} | {"verdict"}
     allowed_fields = required_fields | {"unknown_assessment"}
-    if not required_fields <= set(payload) or not set(payload) <= allowed_fields:
-        return None, None, None, "top_level_schema_invalid"
-    verdict = payload.get("verdict")
-    if verdict not in {"yes", "no", "insufficient_evidence"}:
-        return None, None, None, "verdict_invalid"
-    if payload.get("support_mode") != "evidence_set":
-        return None, None, None, "support_mode_invalid"
+    legacy_allowed_fields = legacy_required_fields | {"unknown_assessment"}
+    direct = "candidate_judgment" in payload
+    if direct:
+        if "verdict" in payload:
+            return None, direct, "candidate_judgment_verdict_mixed"
+        if not required_fields <= set(payload) or not set(payload) <= allowed_fields:
+            return None, direct, "top_level_schema_invalid"
+        candidate_judgment = payload.get("candidate_judgment")
+        if candidate_judgment not in {"supported", "contradicted", "unknown"}:
+            return None, direct, "candidate_judgment_invalid"
+    else:
+        # Keep parsing pre-v5 fixtures and older providers while the provider
+        # schema itself exposes only the candidate-relative judgment. Legacy
+        # payloads are still normalized deterministically below.
+        if (
+            not legacy_required_fields <= set(payload)
+            or not set(payload) <= legacy_allowed_fields
+        ):
+            return None, direct, "top_level_schema_invalid"
+        verdict = payload.get("verdict")
+        if verdict not in {"yes", "no", "insufficient_evidence"}:
+            return None, direct, "verdict_invalid"
+        candidate_judgment = _candidate_judgment_for_verdict(
+            candidate,
+            str(verdict),
+        )
+    return str(candidate_judgment), direct, ""
+
+
+def _candidate_relative_verdict(
+    payload: dict[str, Any],
+    *,
+    candidate: str,
+    candidate_judgment: str,
+    direct: bool,
+) -> tuple[str | None, str]:
+    evidence_relation = payload.get("evidence_relation")
+    if evidence_relation not in {
+        "proposition_support",
+        "explicit_contradiction",
+        "undetermined",
+    }:
+        return None, "evidence_relation_invalid"
     expected_relation = {
-        "yes": "proposition_support",
-        "no": "explicit_contradiction",
-        "insufficient_evidence": "undetermined",
-    }[str(verdict)]
-    if payload.get("evidence_relation") != expected_relation:
-        return None, None, None, "evidence_relation_invalid"
+        "proposition_support": "yes",
+        "explicit_contradiction": "no",
+        "undetermined": "insufficient_evidence",
+    }[str(evidence_relation)]
+    normalized_candidate = str(candidate or "").strip().casefold()
+    if direct and normalized_candidate:
+        if normalized_candidate == "unanswerable":
+            if candidate_judgment != "contradicted":
+                verdict = "insufficient_evidence"
+            elif evidence_relation == "undetermined":
+                return None, "candidate_judgment_relation_mismatch"
+            else:
+                verdict = expected_relation
+        elif candidate_judgment == "unknown":
+            verdict = "insufficient_evidence"
+        else:
+            verdict = _verdict_for_candidate_judgment(
+                normalized_candidate,
+                candidate_judgment,
+            )
+        if expected_relation != verdict:
+            return None, "candidate_judgment_relation_mismatch"
+    else:
+        verdict = expected_relation
+    return str(verdict), ""
+
+
+def _proof_payload(
+    payload: dict[str, Any],
+    *,
+    verdict: str,
+) -> tuple[str | None, list[Any] | None, str]:
     proof_mode = payload.get("proof_mode")
     if proof_mode not in {
         "none",
         "atomic_semantic",
         "composite_conjunction",
     }:
-        return None, None, None, "proof_mode_invalid"
+        return None, None, "proof_mode_invalid"
     if not isinstance(payload.get("jointly_complete"), bool) or not isinstance(
         payload.get("each_premise_required"), bool
     ):
-        return None, None, None, "entailment_flags_invalid"
+        return None, None, "entailment_flags_invalid"
     raw_premises = payload.get("premises")
     if not isinstance(raw_premises, list) or len(raw_premises) > 4:
-        return None, None, None, "premise_collection_invalid"
+        return None, None, "premise_collection_invalid"
     expected_count = {
         "atomic_semantic": (1, 1),
         "composite_conjunction": (2, 4),
@@ -268,15 +385,61 @@ def _verdict_payload(
         or payload["jointly_complete"] is not True
         or payload["each_premise_required"] is not True
     ):
-        return None, None, None, "verdict_payload_inconsistent"
+        return None, None, "verdict_payload_inconsistent"
     if verdict == "insufficient_evidence" and (
         raw_premises
         or proof_mode != "none"
         or payload["jointly_complete"] is not False
         or payload["each_premise_required"] is not False
     ):
-        return None, None, None, "verdict_payload_inconsistent"
-    return str(verdict), str(proof_mode), raw_premises, ""
+        return None, None, "verdict_payload_inconsistent"
+    return str(proof_mode), raw_premises, ""
+
+
+def _candidate_judgment_projection_valid(
+    candidate: str,
+    candidate_judgment: str,
+    verdict: str,
+) -> bool:
+    candidate = str(candidate or "").strip().casefold()
+    if not candidate:
+        return True
+    if verdict == "insufficient_evidence":
+        expected = (
+            {"supported", "unknown"} if candidate == "unanswerable" else {"unknown"}
+        )
+        return candidate_judgment in expected
+    return candidate_judgment != "unknown"
+
+
+def _verdict_payload(
+    payload: Any,
+    *,
+    candidate: str = "",
+) -> tuple[str | None, str | None, str | None, list[Any] | None, str]:
+    return _verdict_payload_for_candidate(payload, candidate=candidate)
+
+
+def _candidate_judgment_for_verdict(candidate: str, verdict: str) -> str:
+    candidate = str(candidate or "").strip().casefold()
+    verdict = str(verdict or "").strip().casefold()
+    if verdict == "insufficient_evidence":
+        return "supported" if candidate == "unanswerable" else "unknown"
+    if candidate == "unanswerable":
+        return "contradicted"
+    if candidate == verdict:
+        return "supported"
+    return "contradicted"
+
+
+def _verdict_for_candidate_judgment(candidate: str, judgment: str) -> str:
+    candidate = str(candidate or "").strip().casefold()
+    judgment = str(judgment or "").strip().casefold()
+    if judgment == "unknown" or candidate == "unanswerable":
+        return "insufficient_evidence"
+    if judgment == "supported":
+        return candidate
+    return "no" if candidate == "yes" else "yes"
 
 
 def _parse_premises(

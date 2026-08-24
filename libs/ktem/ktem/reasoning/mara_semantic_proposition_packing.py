@@ -17,12 +17,14 @@ from ktem.docqa.question_proposition import (
 )
 from ktem.docqa.retrieval_semantic_identity import semantic_retrieval_identity
 
+from .mara_qasper_candidate_evidence import evidence_polarity_priority
 from .mara_semantic_proposition_packing_support import (
     evidence_alignment_score,
     evidence_refs,
     matching_slot_ids,
 )
 from .mara_semantic_proposition_packing_support import optional_int as _optional_int
+from .mara_semantic_proposition_packing_support import ranked_evidence_positions
 from .mara_semantic_proposition_packing_support import (
     slot_description as _slot_description,
 )
@@ -39,21 +41,24 @@ SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS = 640
 SEMANTIC_PROPOSITION_PACK_CONTRACT = "semantic_proposition_pack.v2"
 
 SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT = (
-    "You are a conservative document-grounded candidate verifier. Verify the "
-    "explicit structured candidate against the typed question proposition and "
-    "the labeled retrieved evidence spans only. You must not independently choose "
-    "or replace the answer candidate. "
+    "You are a conservative document-grounded verifier. Judge the original "
+    "structured candidate against the typed question proposition and the labeled "
+    "retrieved evidence spans only. You must not independently choose, rewrite, "
+    "or replace the answer candidate. Return candidate_judgment as supported, "
+    "contradicted, or unknown; it is a relationship to the supplied candidate, "
+    "not a new yes/no answer. "
     "Use atomic_semantic when one selected premise establishes the complete "
     "conclusion. Use composite_conjunction only when two to four genuinely "
     "conjunctive premises are jointly sufficient and every premise is necessary. "
-    "Otherwise return insufficient_evidence. For every premise, select one "
+    "Otherwise return candidate_judgment=unknown. For every premise, select one "
     "canonical span_selector, prefer a proposition fragment that is an exact "
     "normalized substring of that span, state nothing broader than the selected "
     "text, bind it to the verification slots it supports, and identify which of "
     "actor, predicate, object, and quantifier it establishes. All four proposition "
-    "slots must be covered by the same selected evidence set. A yes verdict requires "
-    "evidence_relation=proposition_support; a no verdict requires an explicit "
-    "contradiction and evidence_relation=explicit_contradiction. Keyword overlap "
+    "slots must be covered by the same selected evidence set. Use "
+    "evidence_relation=proposition_support only for proposition support, "
+    "evidence_relation=explicit_contradiction only for an explicit contradiction, "
+    "and evidence_relation=undetermined otherwise. Keyword overlap "
     "alone is never a proposition binding. For questions "
     "about inspecting, analyzing, or evaluating a system, a genuine conjunction "
     "may combine one premise that establishes the authors performed the analysis "
@@ -65,7 +70,7 @@ SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT = (
     "For questions about the authors or current study, at least one premise must "
     "explicitly anchor their action. For questions about a named subject, the "
     "premise set must explicitly anchor that subject. Conflicting evidence is "
-    "insufficient. For insufficient_evidence, identify non-empty reviewed spans, "
+    "insufficient. For candidate_judgment=unknown, identify non-empty reviewed spans, "
     "the unresolved proposition slots, and separate support and contradiction gaps."
 )
 
@@ -94,8 +99,8 @@ def pack_semantic_proposition_evidence(
     bundle: EvidenceBundle,
 ) -> SemanticPropositionEvidencePacking:
     preferred = _preferred_evidence_ids(request)
-    ranked_positions = _ranked_evidence_positions(bundle)
-    records: list[tuple[float, int, int, dict[str, Any]]] = []
+    ranked_positions = ranked_evidence_positions(bundle)
+    records: list[tuple[int, int, float, int, dict[str, Any]]] = []
     seen: set[str] = set()
     for index, item in enumerate(bundle.items):
         try:
@@ -111,10 +116,12 @@ def pack_semantic_proposition_evidence(
         stable_id = stable_source_id(item) or source_id or identity.source_id
         required_slot_ids = matching_slot_ids(slots, evidence_id)
         alignment_score = evidence_alignment_score(request, question, item)
+        polarity_priority = evidence_polarity_priority(question, text)
         records.append(
             (
-                -alignment_score,
+                polarity_priority,
                 0 if evidence_id in preferred or required_slot_ids else 1,
+                -alignment_score,
                 ranked_positions.get(evidence_id, len(ranked_positions) + index),
                 {
                     "evidence_id": evidence_id,
@@ -160,15 +167,15 @@ def pack_semantic_proposition_evidence(
 
 
 def _selected_evidence_records(
-    records: list[tuple[float, int, int, dict[str, Any]]],
+    records: list[tuple[int, int, float, int, dict[str, Any]]],
 ) -> list[dict[str, Any]]:
     ranked = sorted(
         records,
-        key=lambda row: (row[0], row[1], row[2], row[3]["evidence_id"]),
+        key=lambda row: (row[0], row[1], row[2], row[3], row[4]["evidence_id"]),
     )
     return [
         value
-        for _alignment, _slot_priority, _rank, value in ranked[
+        for _polarity_priority, _slot_priority, _alignment, _rank, value in ranked[
             :SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS
         ]
     ]
@@ -248,15 +255,19 @@ def semantic_proposition_verifier_prompt(
         f"REQUIRED VERIFICATION SLOTS:\n{slot_text}\n\n"
         f"CANONICAL EVIDENCE SPANS:\n{evidence_text}\n\n"
         "Do not answer the question independently and do not propose a replacement "
-        "candidate. The verdict is only the evidence polarity used to determine "
-        "whether the stated candidate is supported, contradicted, or unknown. "
-        "For every yes/no premise, binds_proposition_slots must declare only the "
+        "candidate. Return candidate_judgment=supported, contradicted, or unknown "
+        "for the exact original candidate above. evidence_relation is only the "
+        "polarity of the typed proposition and is converted to the legacy verifier "
+        "verdict deterministically after parsing. Never emit a yes/no answer field. "
+        "For every supported/contradicted premise, binds_proposition_slots must "
+        "declare only the "
         "actor/predicate/object/quantifier fields actually established by its quote; "
         "their union must cover all four fields within this one evidence set. "
-        "Return exactly one JSON object. For yes or no, choose proof_mode "
+        "Return exactly one JSON object. For candidate_judgment=supported or "
+        "candidate_judgment=contradicted, choose proof_mode "
         "atomic_semantic with exactly one premise or composite_conjunction with "
         "two to four genuinely conjunctive premises. jointly_complete and "
-        "each_premise_required must be true. For insufficient_evidence, use "
+        "each_premise_required must be true. For candidate_judgment=unknown, use "
         "proof_mode none, false for both flags, an empty premises array, and a "
         "non-empty unknown_assessment that states why neither support nor explicit "
         "contradiction is established."
@@ -578,14 +589,4 @@ def _preferred_evidence_ids(request: Any) -> set[str]:
             else getattr(slot, "evidence_ids", ()) or ()
         )
         if str(evidence_id).strip()
-    }
-
-
-def _ranked_evidence_positions(bundle: EvidenceBundle) -> dict[str, int]:
-    values = bundle.metadata.get("candidate_ranked_evidence") or []
-    return {
-        evidence_id: index
-        for index, value in enumerate(values)
-        if isinstance(value, dict)
-        and (evidence_id := str(value.get("canonical_id") or "").strip())
     }

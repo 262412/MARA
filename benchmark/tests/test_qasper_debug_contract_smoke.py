@@ -10,10 +10,8 @@ from benchmark.tests.qasper_debug_contract_fixtures import (
     _debug_unknown_assessment,
     _qasper_debug_prediction,
 )
-from scripts.slurm.validate_contract_smoke import (
-    QASPER_DEBUG_HARD_GATES,
-    validate,
-)
+from scripts.slurm.validate_contract_smoke import QASPER_DEBUG_HARD_GATES, validate
+
 
 def test_qasper_debug_contract_declares_special_hard_gates():
     assert {
@@ -24,6 +22,8 @@ def test_qasper_debug_contract_declares_special_hard_gates():
         "qasper_online_required_auditor_status_missing_count",
         "qasper_online_required_annotation_ambiguity_missing_count",
         "qasper_online_auditor_attempt_missing_count",
+        "qasper_online_verifier_missing_count",
+        "qasper_contract_probe_state_matrix_complete",
         "qasper_candidate_raw_identity_mismatch_count",
         "qasper_empty_candidate_audit_count",
         "qasper_empty_typed_conclusion_count",
@@ -32,6 +32,7 @@ def test_qasper_debug_contract_declares_special_hard_gates():
         "qasper_required_slot_unverified_count",
         "qasper_reverify_without_semantic_state_change_count",
     } <= set(QASPER_DEBUG_HARD_GATES)
+
 
 def test_qasper_debug_contract_smoke_audits_6x3_observability(tmp_path):
     run_dir = tmp_path / "run"
@@ -196,9 +197,12 @@ def test_qasper_debug_accepts_recovery_stop_without_reverify(tmp_path):
 
     audit = validate(run_dir, suite_kind="qasper_debug")
 
-    assert audit["debug_gate_metrics"][
-        "qasper_reverify_without_semantic_state_change_count"
-    ] == 0.0
+    assert (
+        audit["debug_gate_metrics"][
+            "qasper_reverify_without_semantic_state_change_count"
+        ]
+        == 0.0
+    )
 
 
 def test_qasper_debug_rejects_reaudit_without_changed_binding(tmp_path):
@@ -326,6 +330,6 @@ def test_qasper_debug_contract_does_not_rewrite_candidate_for_generator_slot_gap
     audit = validate(run_dir, suite_kind="qasper_debug")
 
     assert audit["status"] == "passed"
-    assert audit["hard_gates"]["qasper_required_slot_unverified_count"][
-        "passed"
-    ] is True
+    assert (
+        audit["hard_gates"]["qasper_required_slot_unverified_count"]["passed"] is True
+    )

@@ -5,6 +5,7 @@ from typing import Any
 from ktem.docqa.boolean_proposition_candidates import (
     boolean_proposition_candidate_score,
 )
+from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.query_evidence_binding_support import candidate_score_for_slot
 
 
@@ -98,3 +99,13 @@ def evidence_alignment_score(
     )
     proposition_score = float(boolean_proposition_candidate_score(question, item))
     return max(proposition_score, slot_score)
+
+
+def ranked_evidence_positions(bundle: EvidenceBundle) -> dict[str, int]:
+    values = bundle.metadata.get("candidate_ranked_evidence") or []
+    return {
+        evidence_id: index
+        for index, value in enumerate(values)
+        if isinstance(value, dict)
+        and (evidence_id := str(value.get("canonical_id") or "").strip())
+    }

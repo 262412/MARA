@@ -157,14 +157,14 @@ def semantic_recovery_has_progress(
     *,
     request: Any | None = None,
 ) -> bool:
-    evidence_before = semantic_raw_evidence_digest(initial_bundle)
-    evidence_after = semantic_raw_evidence_digest(recovered_bundle)
+    pack_before = semantic_recovery_pack_digest(request, initial_bundle)
+    pack_after = semantic_recovery_pack_digest(request, recovered_bundle)
     slot_before = normalized_slot_state_digest(initial_bundle, before_slots)
     slot_after = normalized_slot_state_digest(recovered_bundle, after_slots)
     binding_before = canonical_proposition_binding_digest(request, initial_bundle)
     binding_after = canonical_proposition_binding_digest(request, recovered_bundle)
     return (
-        bool(evidence_before and evidence_after and evidence_before != evidence_after)
+        bool(pack_before and pack_after and pack_before != pack_after)
         or bool(slot_before and slot_after and slot_before != slot_after)
         or bool(binding_before and binding_after and binding_before != binding_after)
     )

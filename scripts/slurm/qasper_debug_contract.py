@@ -9,6 +9,7 @@ from scripts.slurm.qasper_debug_contract_audit import (  # noqa: F401
     _nonempty_mapping_keys,
     _normalized_audited_premises,
     _premise_digest,
+    _required_slot_state_unverified,
     _semantic_audit_failure_flags,
     _slot_ids,
     _string_set,
@@ -29,6 +30,13 @@ from scripts.slurm.qasper_debug_contract_identity import (  # noqa: F401
     _raw_candidate_stages_valid,
     _verifier_raw_identity_valid,
 )
+from scripts.slurm.qasper_debug_contract_lanes import (  # noqa: F401
+    _lane_predictions,
+    _lane_split_requested,
+    qasper_debug_audit_extensions,
+    qasper_debug_contract_metrics,
+    qasper_debug_observability_coverage,
+)
 from scripts.slurm.qasper_debug_contract_recovery import (  # noqa: F401
     _answerable_false_abstention,
     _changed_digest,
@@ -40,6 +48,7 @@ from scripts.slurm.qasper_debug_contract_recovery import (  # noqa: F401
     _unchanged_digest,
 )
 from scripts.slurm.qasper_debug_contract_schema import (  # noqa: F401
+    _audit_relation_consistent,
     _relation_flags_valid,
     _schema_audit_attempt_violations,
     _schema_debug_event_violations,
@@ -75,112 +84,57 @@ from scripts.slurm.qasper_debug_contract_support import (  # noqa: F401
     _semantic_debug_complete,
     _semantic_stage_complete,
     _transaction_identity_complete,
+    _verifier_observed,
     claim_aggregation_complete,
     terminal_metadata,
     terminal_semantic_answer,
 )
 
 
-def qasper_debug_audit_extensions(
-    predictions: list[dict[str, Any]],
-) -> dict[str, Any]:
-    return {
-        "observability_coverage": qasper_debug_observability_coverage(predictions),
-        "structural_state_matrix": qasper_candidate_bound_state_matrix(predictions),
-        "debug_gate_metrics": qasper_debug_contract_metrics(predictions),
-    }
-
-
 def qasper_debug_behavior_violations(
     predictions: list[dict[str, Any]],
+    contract_probe_predictions: list[dict[str, Any]] | None = None,
+    *,
+    quality_predictions: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     violations: list[str] = []
-    by_example: dict[str, list[dict[str, Any]]] = {}
-    for prediction in predictions:
-        example_id = str(prediction.get("example_id") or "")
-        by_example.setdefault(example_id, []).append(prediction)
-        violations.extend(_prediction_violations(prediction))
-    for example_id, rows in by_example.items():
-        violations.extend(_cross_route_violations(example_id, rows))
-    online = qasper_candidate_bound_state_matrix(predictions)["online_observation"]
-    violations.extend(_online_label_violations(online))
+    quality, probes = _lane_predictions(
+        predictions,
+        quality_predictions=quality_predictions,
+        contract_probe_predictions=contract_probe_predictions,
+    )
+    split = _lane_split_requested(
+        predictions,
+        quality_predictions=quality_predictions,
+        contract_probe_predictions=contract_probe_predictions,
+    )
+    for lane_predictions, lane in ((quality, "quality"), (probes, "contract_probe")):
+        by_example: dict[str, list[dict[str, Any]]] = {}
+        for prediction in lane_predictions:
+            example_id = str(prediction.get("example_id") or "")
+            by_example.setdefault(example_id, []).append(prediction)
+            violations.extend(
+                _prediction_violations(
+                    prediction,
+                    require_auditor=True,
+                )
+            )
+        for example_id, rows in by_example.items():
+            violations.extend(_cross_route_violations(example_id, rows))
+    matrix = qasper_candidate_bound_state_matrix(
+        predictions,
+        contract_probe_predictions,
+        quality_predictions=quality_predictions,
+    )
+    if split:
+        violations.extend(_online_label_violations(matrix["quality_observation"]))
+        if probes:
+            violations.extend(
+                _online_label_violations(matrix["contract_probe_observation"])
+            )
+    else:
+        violations.extend(_online_label_violations(matrix["online_observation"]))
     return violations
-
-
-def qasper_debug_contract_metrics(
-    predictions: list[dict[str, Any]],
-) -> dict[str, float]:
-    """Return fail-closed metrics specific to the online QASPER debug task."""
-
-    matrix = qasper_candidate_bound_state_matrix(predictions)
-    online = matrix["online_observation"]
-    raw_identity_mismatches = 0
-    empty_audits = 0
-    empty_typed_conclusions = 0
-    entailment_failures = 0
-    entailment_rejections = 0
-    required_slot_unverified = 0
-    false_abstentions = 0
-    reverify_without_state_change = 0
-    auditor_attempt_missing = 0
-    for prediction in predictions:
-        metadata = terminal_metadata(prediction)
-        generator = _mapping(metadata.get("qasper_candidate_generation"))
-        verifier = _mapping(metadata.get("semantic_proposition_verifier"))
-        audit = _mapping(verifier.get("candidate_verification_audit"))
-        raw_identity_mismatches += int(
-            not _raw_candidate_identity_valid(generator, verifier)
-        )
-        empty_audits += int(not _candidate_audit_complete(verifier, audit))
-        empty_typed_conclusions += int(
-            audit.get("status") == "passed"
-            and not _typed_conclusion_present(verifier, audit)
-        )
-        audit_failure, audit_rejection = _semantic_audit_failure_flags(
-            verifier, audit, prediction
-        )
-        entailment_failures += int(audit_failure)
-        entailment_rejections += int(audit_rejection)
-        required_slot_unverified += int(
-            _supported_row_required_slot_unverified(verifier, audit, metadata)
-        )
-        false_abstentions += int(_answerable_false_abstention(prediction))
-        reverify_without_state_change += _reverify_without_state_change_count(
-            prediction
-        )
-        auditor_attempt_missing += int(
-            not _candidate_bound_auditor_attempt_observed(verifier)
-        )
-    return {
-        "answerable_false_abstention_count": float(false_abstentions),
-        "qasper_candidate_raw_identity_mismatch_count": float(raw_identity_mismatches),
-        "qasper_empty_candidate_audit_count": float(empty_audits),
-        "qasper_empty_typed_conclusion_count": float(empty_typed_conclusions),
-        "qasper_semantic_entailment_audit_failure_count": float(entailment_failures),
-        "qasper_semantic_entailment_audit_rejection_count": float(
-            entailment_rejections
-        ),
-        "qasper_required_slot_unverified_count": float(required_slot_unverified),
-        "qasper_reverify_without_semantic_state_change_count": float(
-            reverify_without_state_change
-        ),
-        "qasper_candidate_verifier_auditor_label_set_mismatch_count": float(
-            online["candidate_verifier_auditor_label_set_mismatch"]
-        ),
-        "qasper_online_required_candidate_label_missing_count": float(
-            bool(online["missing_required_candidate_labels"])
-        ),
-        "qasper_online_required_verifier_judgment_missing_count": float(
-            bool(online["missing_required_verifier_judgments"])
-        ),
-        "qasper_online_required_auditor_status_missing_count": float(
-            bool(online["missing_required_auditor_statuses"])
-        ),
-        "qasper_online_required_annotation_ambiguity_missing_count": float(
-            bool(online["missing_required_annotation_ambiguity_states"])
-        ),
-        "qasper_online_auditor_attempt_missing_count": float(auditor_attempt_missing),
-    }
 
 
 def _online_label_violations(online: dict[str, Any]) -> list[str]:
@@ -200,80 +154,11 @@ def _online_label_violations(online: dict[str, Any]) -> list[str]:
     return violations
 
 
-def qasper_debug_observability_coverage(
-    predictions: list[dict[str, Any]],
-) -> dict[str, Any]:
-    fields = _empty_coverage_counts()
-    for prediction in predictions:
-        metadata = terminal_metadata(prediction)
-        generator = _mapping(metadata.get("qasper_candidate_generation"))
-        verifier = _mapping(metadata.get("semantic_proposition_verifier"))
-        fields["generator_trace"] += int(bool(generator))
-        fields["raw_response"] += int("raw_response" in generator)
-        fields["raw_candidate_identity"] += int(
-            _raw_candidate_identity_valid(generator, verifier)
-        )
-        fields["finish_reason"] += int(bool(generator.get("finish_reason")))
-        fields["typed_candidate_transform"] += int(
-            bool(generator.get("transformation_stages"))
-        )
-        fields["proposition_slot_binding"] += int(
-            _candidate_proposition_binding_complete(generator)
-        )
-        fields["claim_aggregation_before_after"] += int(
-            claim_aggregation_complete(prediction)
-        )
-        fields["per_annotation_scores"] += int(
-            bool(prediction.get("qasper_annotation_scores"))
-        )
-        fields["transaction_attempt_identity"] += int(
-            _transaction_identity_complete(generator, verifier)
-        )
-        fields["effective_seed"] += int(
-            generator.get("effective_seed") is not None
-            and generator.get("effective_seed") == verifier.get("effective_seed")
-        )
-        fields["input_output_digest"] += int(
-            _input_output_digests_complete(generator, verifier)
-        )
-        fields["auditor_attempt_observed"] += int(
-            _candidate_bound_auditor_attempt_observed(verifier)
-        )
-        fields["candidate_verifier_audit"] += int(
-            _candidate_bound_auditor_passed(verifier)
-        )
-        fields["auditor_failed_safe_abstention"] += int(
-            _failed_auditor_safe_abstention(verifier, prediction)
-        )
-        fields["semantic_verifier_debug"] += int(_semantic_debug_complete(verifier))
-        fields["live_model"] += int(_live_models_observed(generator, verifier))
-    total = len(predictions)
-    auditor_outcome_coverage = (
-        fields["candidate_verifier_audit"] + fields["auditor_failed_safe_abstention"]
-    )
-    required_fields = {
-        key: value
-        for key, value in fields.items()
-        if key
-        not in {
-            "candidate_verifier_audit",
-            "auditor_failed_safe_abstention",
-        }
-    }
-    return {
-        "contract_id": "qasper_e2e_observability_coverage.v1",
-        "prediction_count": total,
-        "covered_counts": fields,
-        "auditor_outcome_coverage": auditor_outcome_coverage,
-        "complete": bool(
-            total
-            and all(value == total for value in required_fields.values())
-            and auditor_outcome_coverage == total
-        ),
-    }
-
-
-def _prediction_violations(prediction: dict[str, Any]) -> list[str]:
+def _prediction_violations(
+    prediction: dict[str, Any],
+    *,
+    require_auditor: bool = True,
+) -> list[str]:
     metadata = terminal_metadata(prediction)
     generator = _mapping(metadata.get("qasper_candidate_generation"))
     verifier = _mapping(metadata.get("semantic_proposition_verifier"))
@@ -281,7 +166,15 @@ def _prediction_violations(prediction: dict[str, Any]) -> list[str]:
     relation = str(verifier.get("candidate_verification_status") or "")
     prefix = f"{prediction.get('example_id')}:{prediction.get('route')}"
     violations = _generator_violations(generator, candidate, prefix)
-    violations.extend(_verifier_violations(verifier, candidate, relation, prefix))
+    violations.extend(
+        _verifier_violations(
+            verifier,
+            candidate,
+            relation,
+            prefix,
+            require_auditor=require_auditor,
+        )
+    )
     _require(
         violations,
         generator.get("trace_group_id") == verifier.get("trace_group_id"),
@@ -398,6 +291,8 @@ def _verifier_violations(
     candidate: str,
     relation: str,
     prefix: str,
+    *,
+    require_auditor: bool = True,
 ) -> list[str]:
     violations: list[str] = []
     _require(
@@ -443,6 +338,11 @@ def _verifier_violations(
         and audit.get("replacement_candidate_allowed") is False,
         f"candidate_verifier_audit_binding_invalid:{prefix}",
     )
+    _require(
+        violations,
+        _audit_relation_consistent(verifier, relation),
+        f"candidate_verifier_audit_relation_invalid:{prefix}",
+    )
     for field in _VERIFIER_REQUIRED_FIELDS:
         value = verifier.get(field)
         _require(
@@ -455,11 +355,12 @@ def _verifier_violations(
         _live_models_observed({}, verifier),
         f"online_verifier_not_observed:{prefix}",
     )
-    _require(
-        violations,
-        _candidate_bound_auditor_observed(verifier),
-        f"online_auditor_not_observed:{prefix}",
-    )
+    if require_auditor:
+        _require(
+            violations,
+            _candidate_bound_auditor_observed(verifier),
+            f"online_auditor_not_observed:{prefix}",
+        )
     violations.extend(_schema_version_violations(verifier, prefix))
     return violations
 
