@@ -19,6 +19,8 @@ _PRIMARY_ARTIFACTS = (
     "semantic_debug_traces.jsonl",
     "report.md",
     "route_metrics.csv",
+    "contract_probe_predictions.jsonl",
+    "contract_probe_audit.json",
     "contract_smoke_audit.json",
 )
 

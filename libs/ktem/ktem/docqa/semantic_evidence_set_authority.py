@@ -155,6 +155,7 @@ def _authority_from_verified_response(
     attestation = _enriched_attestation(
         attestation,
         response,
+        question=prompt,
         verdict=verdict,
         premises=premises,
         premise_count=len(premises),
@@ -215,39 +216,13 @@ def _commit_verified_authority(
         "verified",
         "semantic_evidence_set_bound",
         debug_trace=debug_trace,
-        premise_count=len(premises),
-        derivation_id=derivation.derivation_id,
-        proof_mode=str(response.get("proof_mode") or ""),
-        question_proposition=dict(response.get("question_proposition") or {}),
-        typed_conclusion=dict(response.get("typed_conclusion") or {}),
-        conclusion_audit=dict(audit.get("conclusion_audit") or {}),
-        polarity_contradiction_check=dict(
-            audit.get("polarity_contradiction_check") or {}
+        **_verified_authority_trace_fields(
+            response,
+            premises=premises,
+            derivation=derivation,
+            audit=audit,
+            attestation=attestation,
         ),
-        auditor_relationship=str(
-            (response.get("verifier") or {}).get("auditor_relationship") or ""
-        ),
-        semantic_pack_digest=str(
-            (response.get("verifier") or {}).get("semantic_pack_digest") or ""
-        ),
-        evidence_relation=str(attestation.get("evidence_relation") or ""),
-        proposition_slot_bindings=dict(
-            attestation.get("proposition_slot_bindings") or {}
-        ),
-        proposition_slot_evidence_refs=dict(
-            attestation.get("proposition_slot_evidence_refs") or {}
-        ),
-        proposition_binding_evidence_set_refs=list(
-            attestation.get("proposition_binding_evidence_set_refs") or []
-        ),
-        proposition_evidence_set_digest=str(
-            attestation.get("proposition_evidence_set_digest") or ""
-        ),
-        verifier_input_candidate=str(response.get("verifier_input_candidate") or ""),
-        candidate_verification_status=str(
-            response.get("candidate_verification_status") or "unknown"
-        ),
-        replacement_candidate_allowed=False,
     )
     candidate = structured_boolean_candidate_label(answer)
     assessment = supported_boolean_claim(
@@ -274,10 +249,64 @@ def _commit_verified_authority(
     )
 
 
+def _verified_authority_trace_fields(
+    response: Mapping[str, Any],
+    *,
+    premises: tuple[Any, ...],
+    derivation: Any,
+    audit: Mapping[str, Any],
+    attestation: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "premise_count": len(premises),
+        "derivation_id": derivation.derivation_id,
+        "proof_mode": str(response.get("proof_mode") or ""),
+        "question_proposition": dict(response.get("question_proposition") or {}),
+        "typed_conclusion": dict(response.get("typed_conclusion") or {}),
+        "conclusion_audit": dict(audit.get("conclusion_audit") or {}),
+        "polarity_contradiction_check": dict(
+            audit.get("polarity_contradiction_check") or {}
+        ),
+        "auditor_relationship": str(
+            (response.get("verifier") or {}).get("auditor_relationship") or ""
+        ),
+        "semantic_pack_digest": str(
+            (response.get("verifier") or {}).get("semantic_pack_digest") or ""
+        ),
+        "evidence_relation": str(attestation.get("evidence_relation") or ""),
+        "required_slot_ids": list(attestation.get("required_slot_ids") or []),
+        "verified_slot_ids": list(attestation.get("required_slot_ids") or []),
+        "required_proposition_slots": list(
+            attestation.get("required_proposition_slots") or []
+        ),
+        "not_applicable_proposition_slots": list(
+            attestation.get("not_applicable_proposition_slots") or []
+        ),
+        "proposition_slot_bindings": dict(
+            attestation.get("proposition_slot_bindings") or {}
+        ),
+        "proposition_slot_evidence_refs": dict(
+            attestation.get("proposition_slot_evidence_refs") or {}
+        ),
+        "proposition_binding_evidence_set_refs": list(
+            attestation.get("proposition_binding_evidence_set_refs") or []
+        ),
+        "proposition_evidence_set_digest": str(
+            attestation.get("proposition_evidence_set_digest") or ""
+        ),
+        "verifier_input_candidate": str(response.get("verifier_input_candidate") or ""),
+        "candidate_verification_status": str(
+            response.get("candidate_verification_status") or "unknown"
+        ),
+        "replacement_candidate_allowed": False,
+    }
+
+
 def _enriched_attestation(
     attestation: dict[str, Any],
     response: Mapping[str, Any],
     *,
+    question: str,
     verdict: str,
     premises: tuple[Any, ...],
     premise_count: int,
@@ -298,7 +327,11 @@ def _enriched_attestation(
         "required_slot_ids": sorted(
             {slot_id for values in slot_support.values() for slot_id in values}
         ),
-        **semantic_proposition_binding_fields(verdict, premises),
+        **semantic_proposition_binding_fields(
+            question,
+            verdict,
+            premises,
+        ),
     }
 
 

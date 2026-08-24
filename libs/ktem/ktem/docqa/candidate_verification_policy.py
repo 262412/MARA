@@ -83,11 +83,15 @@ def finish_candidate_decision(
     )
     if relation in {"contradicted", "unknown"}:
         decision = replace(decision, action="abstain")
-    if candidate == "unanswerable" and relation == "supported":
+    if candidate == "unanswerable" and _audited_unknown_candidate(
+        verifier_trace,
+        candidate=candidate,
+        relation=relation,
+    ):
         return replace(
             decision,
             status="supported",
-            reason="Candidate verifier supported the unanswerable candidate.",
+            reason="Candidate-bound auditor verified the unknown evidence gap.",
             action="generate",
             unsupported_claims=[],
             unknown_claims=[],
@@ -110,6 +114,26 @@ def finish_candidate_decision(
         relation=relation,
         verifier_trace=verifier_trace,
         qasper=qasper,
+    )
+
+
+def _audited_unknown_candidate(
+    verifier_trace: dict[str, Any],
+    *,
+    candidate: str,
+    relation: str,
+) -> bool:
+    audit = verifier_trace.get("candidate_verification_audit")
+    return bool(
+        relation == "unknown"
+        and isinstance(audit, dict)
+        and audit.get("contract_id") == "candidate_verifier_audit.v2"
+        and audit.get("status") == "passed"
+        and audit.get("mode") == "candidate_bound_unknown_audit"
+        and audit.get("audited_candidate") == candidate
+        and audit.get("audited_verdict") == "insufficient_evidence"
+        and audit.get("audited_judgment") == "unknown"
+        and audit.get("replacement_candidate_allowed") is False
     )
 
 

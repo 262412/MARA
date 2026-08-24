@@ -18,6 +18,7 @@ from ktem.reasoning.mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_INPUT_TOKEN_BUDGET,
     SEMANTIC_PROPOSITION_VERIFIER_ITEM_CHARS,
 )
+from ktem.reasoning.mara_semantic_proposition_stages import _corrected_prompt
 from ktem.reasoning.mara_semantic_proposition_verifier import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
@@ -121,7 +122,9 @@ def _model_response() -> str:
             "premises": [
                 {
                     "span_selector": "E1:S1",
-                    "proposition_fragment": "cross-language evaluation was performed",
+                    "proposition_fragment": (
+                        "Transfer was evaluated across two languages."
+                    ),
                     "supports_slot_ids": [
                         "support:proposition",
                         "support:left_subject",
@@ -131,13 +134,13 @@ def _model_response() -> str:
                 {
                     "span_selector": "E2:S1",
                     "proposition_fragment": (
-                        "single-language baselines were included for comparison"
+                        "The experiment included monolingual baselines for comparison."
                     ),
                     "supports_slot_ids": [
                         "support:proposition",
                         "support:right_subject",
                     ],
-                    "binds_proposition_slots": ["object", "quantifier"],
+                    "binds_proposition_slots": ["object"],
                 },
             ],
         }
@@ -160,7 +163,6 @@ def _insufficient_response() -> str:
                     "actor",
                     "predicate",
                     "object",
-                    "quantifier",
                 ],
                 "support_gap": "The reviewed evidence does not bind every slot.",
                 "contradiction_gap": "No reviewed span explicitly contradicts it.",
@@ -170,17 +172,30 @@ def _insufficient_response() -> str:
 
 
 def _audit_response() -> str:
+    premise_specs = [
+        (["actor", "predicate"], {"actor": "Transfer", "predicate": "evaluated"}),
+        (["object"], {"object": "monolingual baselines"}),
+    ]
     return json.dumps(
         {
             "premise_checks": [
                 {
-                    "premise_ref": label,
+                    "premise_ref": f"P{index}",
                     "fragment_entailed": True,
                     "scope_consistent": True,
                     "proposition_bindings_valid": True,
                     "evidence_relation_valid": True,
+                    "declared_proposition_slots": slots,
+                    "proposition_slot_checks": [
+                        {
+                            "slot": slot,
+                            "binding_valid": True,
+                            "evidence_text": evidence[slot],
+                        }
+                        for slot in slots
+                    ],
                 }
-                for label in ("P1", "P2")
+                for index, (slots, evidence) in enumerate(premise_specs, start=1)
             ],
             "jointly_entails": True,
             "each_premise_required": True,
@@ -204,9 +219,7 @@ def _unknown_audit_response(candidate: str = "yes") -> str:
             "audit_scope": "original_candidate_and_verifier_unknown_only",
             "audited_candidate": candidate,
             "audited_verdict": "insufficient_evidence",
-            "audited_judgment": (
-                "supported" if candidate == "unanswerable" else "unknown"
-            ),
+            "audited_judgment": ("unknown"),
             "typed_conclusion_present": True,
             "reviewed_evidence_present": True,
             "support_gap_valid": True,
@@ -460,6 +473,18 @@ def test_runtime_verifier_fails_closed_on_invalid_json() -> None:
     )
 
 
+def test_proposal_correction_prompt_is_specific_to_conflicting_unknown_assessment() -> None:
+    corrected = _corrected_prompt(
+        "Return one semantic proposition object.",
+        "unexpected_unknown_assessment",
+    )
+
+    assert "unexpected_unknown_assessment" in corrected
+    assert "omit unknown_assessment" in corrected
+    assert "supported or contradicted" in corrected
+    assert "unknown requires" in corrected
+
+
 def test_runtime_verifier_preserves_full_canonical_chunk_window() -> None:
     tail_marker = "TAIL PREMISE MUST REMAIN VISIBLE"
     text = "x" * (SEMANTIC_PROPOSITION_VERIFIER_ITEM_CHARS - len(tail_marker))
@@ -502,22 +527,7 @@ def test_runtime_verifier_accepts_distinct_spans_from_one_canonical_item() -> No
 
 
 def test_runtime_verdict_commits_typed_authority_and_query_plan_bindings() -> None:
-    items = [
-        {
-            "evidence_id": "cross-lingual",
-            "source_id": "paper",
-            "section_id": "experiments",
-            "text": "We evaluated transfer in the cross-lingual setting.",
-        },
-        {
-            "evidence_id": "single-language",
-            "source_id": "paper",
-            "section_id": "experiments",
-            "text": (
-                "The same experiment included single-language baselines for comparison."
-            ),
-        },
-    ]
+    items = _items()
     response = json.loads(_model_response())
     llm = _RecordingLLM(json.dumps(response))
     verifier = build_semantic_proposition_verifier(

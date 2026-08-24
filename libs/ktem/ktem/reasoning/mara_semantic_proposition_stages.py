@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -63,6 +64,7 @@ def proposal_stage(
     model: str,
     seed: int,
     candidate: str = "",
+    applicable_proposition_slots: Collection[str] | None = None,
 ) -> ParsedSemanticStage:
     def call(correction: str = "") -> tuple[Any | None, str, str]:
         return _call_proposal(
@@ -72,6 +74,7 @@ def proposal_stage(
             slots=slots,
             seed=seed,
             correction_reason=correction,
+            applicable_proposition_slots=applicable_proposition_slots,
         )
 
     def parse(response: Any) -> Any:
@@ -82,6 +85,7 @@ def proposal_stage(
             model=model,
             seed=seed,
             candidate=candidate,
+            applicable_proposition_slots=applicable_proposition_slots,
         )
 
     return _parsed_stage(call, parse)
@@ -93,6 +97,8 @@ def audit_stage(
     premise_count: int,
     *,
     seed: int,
+    premise_slot_expectations: dict[str, Collection[str]] | None = None,
+    premise_slot_evidence: dict[str, dict[str, str]] | None = None,
 ) -> ParsedSemanticStage:
     labels = [f"P{index}" for index in range(1, premise_count + 1)]
 
@@ -103,12 +109,16 @@ def audit_stage(
             premise_labels=labels,
             seed=seed,
             correction_reason=correction,
+            premise_slot_expectations=premise_slot_expectations,
+            premise_slot_evidence=premise_slot_evidence,
         )
 
     def parse(response: Any) -> Any:
         return parse_semantic_entailment_audit(
             response_text(response),
             premise_labels=labels,
+            premise_slot_expectations=premise_slot_expectations,
+            premise_slot_evidence=premise_slot_evidence,
         )
 
     return _parsed_stage(call, parse)
@@ -259,6 +269,7 @@ def _call_proposal(
     slots: list[dict[str, str]],
     seed: int,
     correction_reason: str,
+    applicable_proposition_slots: Collection[str] | None,
 ) -> tuple[Any | None, str, str]:
     try:
         return (
@@ -269,7 +280,9 @@ def _call_proposal(
                 ],
                 max_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
                 response_format=semantic_proposition_response_format(
-                    [], [value["slot_id"] for value in slots]
+                    [],
+                    [value["slot_id"] for value in slots],
+                    applicable_proposition_slots=applicable_proposition_slots,
                 ),
                 temperature=0,
                 top_p=1,
@@ -290,6 +303,8 @@ def _call_audit(
     premise_labels: list[str],
     seed: int,
     correction_reason: str,
+    premise_slot_expectations: dict[str, Collection[str]] | None,
+    premise_slot_evidence: dict[str, dict[str, str]] | None,
 ) -> tuple[Any | None, str, str]:
     try:
         return (
@@ -300,7 +315,8 @@ def _call_audit(
                 ],
                 max_tokens=SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
                 response_format=semantic_entailment_audit_response_format(
-                    premise_labels
+                    premise_labels,
+                    premise_slot_expectations=premise_slot_expectations,
                 ),
                 temperature=0,
                 top_p=1,
@@ -350,8 +366,61 @@ def _call_candidate_unknown_audit(
 def _corrected_prompt(prompt: str, failure_reason: str) -> str:
     if not failure_reason:
         return prompt
+    correction = {
+        "unexpected_unknown_assessment": (
+            "For candidate_judgment=supported or contradicted, omit "
+            "unknown_assessment entirely. unknown requires a non-empty "
+            "unknown_assessment, proof_mode=none, both entailment flags false, "
+            "and premises=[]."
+        ),
+        "unknown_assessment_schema_invalid": (
+            "unknown requires a complete non-empty unknown_assessment object; "
+            "reviewed spans and unresolved proposition slots must be non-empty, "
+            "and unknown must use proof_mode=none with premises=[]."
+        ),
+        "verdict_payload_inconsistent": (
+            "supported or contradicted requires proof_mode atomic_semantic with "
+            "one premise or composite_conjunction with two to four premises, "
+            "both entailment flags true, and no unknown_assessment; unknown "
+            "requires proof_mode=none, false flags, and no premises."
+        ),
+        "proposition_slot_coverage_incomplete": (
+            "Declare only the proposition slots established by each quote, but "
+            "ensure the union across the evidence set covers every applicable "
+            "proposition slot."
+        ),
+        "semantic_entailment_premise_quote_not_proof": (
+            "Use an assertive sentence from the exact canonical evidence span, "
+            "not a heading, fragment, label, or model/architecture declaration."
+        ),
+        "semantic_entailment_premise_fragment_not_in_quote": (
+            "Keep proposition_fragment as a normalized contiguous statement "
+            "that occurs inside its exact quoted evidence span."
+        ),
+        "semantic_entailment_proposition_binding_unbound": (
+            "Every declared actor, predicate, object, and quantifier binding must "
+            "be explicitly supported by that premise's exact quote and match the "
+            "typed proposition; omit unsupported bindings."
+        ),
+        "premise_check_slots_invalid": (
+            "Return declared_proposition_slots exactly equal to the proposal's "
+            "applicable bindings, with one proposition_slot_checks entry per "
+            "declared actor, predicate, object, or quantifier slot."
+        ),
+        "premise_check_slots_inconsistent": (
+            "Set proposition_bindings_valid to the conjunction of every declared "
+            "proposition_slot_checks binding_valid value."
+        ),
+        "premise_check_slot_evidence_invalid": (
+            "Copy each slot check evidence_text as a non-empty exact substring "
+            "of that same premise quote."
+        ),
+    }.get(
+        failure_reason,
+        "Return one complete object that follows every schema and cross-field "
+        "requirement.",
+    )
     return (
         f"{prompt}\n\nYour previous response was rejected by the local parser "
-        f"({failure_reason}). Return one complete object that follows every "
-        "schema and cross-field requirement."
+        f"({failure_reason}). {correction}"
     )

@@ -10,7 +10,7 @@ from .boolean_authority_schema import (
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
 from .question_proposition import (
-    PROPOSITION_EVIDENCE_SLOTS,
+    applicable_proposition_evidence_slots,
     build_question_proposition,
     typed_conclusion,
     validate_candidate_typed_conclusion,
@@ -39,6 +39,8 @@ def validated_semantic_header(
         typed_conclusion(proposition, verdict) if verdict in {"yes", "no"} else None
     )
     if conclusion is not None:
+        if "unknown_assessment" in response:
+            return None, "unexpected_unknown_assessment"
         conclusion_reason = validate_typed_conclusion(
             response.get("typed_conclusion"), proposition, verdict
         )
@@ -136,7 +138,7 @@ def _candidate_unknown_audit_validation_reason(
     candidate = str(response.get("verifier_input_candidate") or "").casefold()
     if candidate not in {"yes", "no", "unanswerable"}:
         return "candidate_unknown_input_invalid"
-    judgment = "supported" if candidate == "unanswerable" else "unknown"
+    judgment = "unknown"
     if (
         response.get("candidate_verification_status") != judgment
         or response.get("replacement_candidate_allowed") is not False
@@ -164,7 +166,10 @@ def _candidate_unknown_audit_validation_reason(
         not isinstance(unresolved, list)
         or not unresolved
         or len(set(unresolved)) != len(unresolved)
-        or any(slot not in PROPOSITION_EVIDENCE_SLOTS for slot in unresolved)
+        or any(
+            slot not in set(applicable_proposition_evidence_slots(proposition))
+            for slot in unresolved
+        )
     ):
         return "candidate_unknown_unresolved_slots_invalid"
     if not support_gap or not contradiction_gap:
@@ -181,15 +186,13 @@ def _candidate_unknown_audit_validation_reason(
         or audit.get("audited_verdict") != "insufficient_evidence"
         or audit.get("audited_judgment") != judgment
         or audit.get("classification") != "unknown"
-        or audit.get("audit_scope")
-        != "original_candidate_and_verifier_unknown_only"
+        or audit.get("audit_scope") != "original_candidate_and_verifier_unknown_only"
         or dict(audit.get("audited_typed_conclusion") or {})
         != dict(audited_conclusion or {})
         or list(audit.get("audited_premises") or []) != audited_premises
         or audit.get("audited_premise_digest") != audited_premise_digest
         or list(audit.get("reviewed_evidence_ids") or []) != expected_reviewed_ids
-        or list(audit.get("unresolved_proposition_slots") or [])
-        != list(unresolved)
+        or list(audit.get("unresolved_proposition_slots") or []) != list(unresolved)
         or audit.get("support_gap") != support_gap
         or audit.get("contradiction_gap") != contradiction_gap
         or audit.get("replacement_candidate_allowed") is not False

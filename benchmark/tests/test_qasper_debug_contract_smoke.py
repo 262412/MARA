@@ -8,9 +8,27 @@ from benchmark.tests.contract_smoke_fixtures import _write_run
 from benchmark.tests.qasper_debug_contract_fixtures import (
     _debug_candidate_audit,
     _debug_unknown_assessment,
+    _qasper_contract_probe_predictions,
     _qasper_debug_prediction,
 )
 from scripts.slurm.validate_contract_smoke import QASPER_DEBUG_HARD_GATES, validate
+from scripts.slurm.validate_qasper_contract_probe import validate_contract_probe
+
+
+def _write_qasper_run(run_dir, *, predictions):
+    _write_run(run_dir, predictions=predictions)
+    probe_path = run_dir / "contract_probe_predictions.jsonl"
+    probe_path.write_text(
+        "".join(
+            f"{json.dumps(row, ensure_ascii=False)}\n"
+            for row in _qasper_contract_probe_predictions()
+        ),
+        encoding="utf-8",
+    )
+    validate_contract_probe(
+        probe_path,
+        output_path=run_dir / "contract_probe_audit.json",
+    )
 
 
 def test_qasper_debug_contract_declares_special_hard_gates():
@@ -23,7 +41,8 @@ def test_qasper_debug_contract_declares_special_hard_gates():
         "qasper_online_required_annotation_ambiguity_missing_count",
         "qasper_online_auditor_attempt_missing_count",
         "qasper_online_verifier_missing_count",
-        "qasper_contract_probe_state_matrix_complete",
+        "qasper_contract_probe_structural_state_matrix_complete",
+        "qasper_contract_probe_required_online_states_complete",
         "qasper_candidate_raw_identity_mismatch_count",
         "qasper_empty_candidate_audit_count",
         "qasper_empty_typed_conclusion_count",
@@ -31,6 +50,8 @@ def test_qasper_debug_contract_declares_special_hard_gates():
         "qasper_semantic_entailment_audit_rejection_count",
         "qasper_required_slot_unverified_count",
         "qasper_reverify_without_semantic_state_change_count",
+        "qasper_unexpected_unknown_assessment_count",
+        "qasper_contract_probe_unexpected_false_abstention_count",
     } <= set(QASPER_DEBUG_HARD_GATES)
 
 
@@ -41,7 +62,7 @@ def test_qasper_debug_contract_smoke_audits_6x3_observability(tmp_path):
         for example_index in range(1, 7)
         for route in ("controller_auto", "crag_guarded", "hybrid_rag")
     ]
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     audit = validate(run_dir, suite_kind="qasper_debug")
 
@@ -85,6 +106,49 @@ def test_qasper_debug_contract_smoke_audits_6x3_observability(tmp_path):
     manifest = json.loads((run_dir / "artifact_manifest.json").read_text())
     assert "contract_smoke_audit.json" in manifest["required_files"]
     assert manifest["files"]["contract_smoke_audit.json"]["sha256"]
+    assert "contract_probe_predictions.jsonl" in manifest["required_files"]
+    assert manifest["files"]["contract_probe_predictions.jsonl"]["line_count"] == len(
+        _qasper_contract_probe_predictions()
+    )
+    assert "contract_probe_audit.json" in manifest["required_files"]
+
+
+def test_qasper_debug_contract_smoke_requires_live_probe_artifact(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    _write_run(run_dir, predictions=predictions)
+
+    with pytest.raises(
+        ValueError,
+        match="qasper_contract_probe_required_online_states_complete",
+    ):
+        validate(run_dir, suite_kind="qasper_debug")
+
+    audit = json.loads((run_dir / "contract_smoke_audit.json").read_text())
+    assert audit["contract_probe_artifact"]["status"] == "missing"
+    assert audit["contract_probe_artifact"]["prediction_count"] == 0
+
+
+def test_qasper_debug_contract_smoke_rejects_stale_provider_probe_audit(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    _write_qasper_run(run_dir, predictions=predictions)
+    with (run_dir / "contract_probe_predictions.jsonl").open("a") as handle:
+        handle.write("{}\n")
+
+    with pytest.raises(
+        ValueError,
+        match="provider_contract_probe_audit_digest_mismatch",
+    ):
+        validate(run_dir, suite_kind="qasper_debug")
 
 
 def test_qasper_debug_contract_smoke_fails_closed_on_missing_raw_response(
@@ -99,7 +163,7 @@ def test_qasper_debug_contract_smoke_fails_closed_on_missing_raw_response(
     del predictions[0]["evidence_metadata"]["qasper_candidate_generation"][
         "raw_response"
     ]
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     with pytest.raises(ValueError, match="generator_field_missing:raw_response"):
         validate(run_dir, suite_kind="qasper_debug")
@@ -141,7 +205,7 @@ def test_qasper_debug_contract_accepts_candidate_bound_unknown_audit(tmp_path):
         prediction["answer_for_scoring"] = "unanswerable"
         prediction["terminal_semantic_commit"]["semantic_answer"] = "unanswerable"
         prediction["terminal_semantic_commit"]["outcome"] = "safe_abstention"
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     audit = validate(run_dir, suite_kind="qasper_debug")
 
@@ -163,7 +227,7 @@ def test_qasper_debug_rejects_empty_unknown_audit_premises(tmp_path):
         if verifier["candidate_verification_status"] == "unknown":
             verifier["candidate_verification_audit"]["audited_premises"] = []
             break
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     with pytest.raises(ValueError, match="candidate_verifier_audit_empty"):
         validate(run_dir, suite_kind="qasper_debug")
@@ -193,7 +257,7 @@ def test_qasper_debug_accepts_recovery_stop_without_reverify(tmp_path):
             "proposition_binding_digest_changed": False,
         }
     ]
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     audit = validate(run_dir, suite_kind="qasper_debug")
 
@@ -221,7 +285,7 @@ def test_qasper_debug_rejects_reaudit_without_changed_binding(tmp_path):
             "proposition_binding_digest_changed": False,
         }
     ]
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     with pytest.raises(
         ValueError,
@@ -240,7 +304,7 @@ def test_qasper_debug_contract_rejects_invalid_relation_flags(tmp_path):
     predictions[0]["evidence_metadata"]["semantic_proposition_verifier"][
         "explicit_contradiction"
     ] = True
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     with pytest.raises(ValueError, match="candidate_relation_flags_invalid"):
         validate(run_dir, suite_kind="qasper_debug")
@@ -260,7 +324,7 @@ def test_qasper_debug_contract_requires_online_candidate_bound_auditor(tmp_path)
         "status": "not_run",
         "attempts": [],
     }
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     with pytest.raises(ValueError, match="online_auditor_not_observed"):
         validate(run_dir, suite_kind="qasper_debug")
@@ -281,7 +345,7 @@ def test_qasper_debug_contract_detects_candidate_single_label_collapse(tmp_path)
         prediction["qasper_annotation_diagnostics"]["canonical_answer_classes"] = [
             ["unanswerable"]
         ]
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     with pytest.raises(ValueError, match="candidate_single_label_collapse"):
         validate(run_dir, suite_kind="qasper_debug")
@@ -306,7 +370,7 @@ def test_qasper_debug_contract_requires_proposition_slot_binding_trace(tmp_path)
     ]
     generator = predictions[0]["evidence_metadata"]["qasper_candidate_generation"]
     del generator["typed_proposition"]["object_surface"]
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     with pytest.raises(ValueError, match="candidate_proposition_binding_invalid"):
         validate(run_dir, suite_kind="qasper_debug")
@@ -325,7 +389,7 @@ def test_qasper_debug_contract_does_not_rewrite_candidate_for_generator_slot_gap
         "required_slots"
     ][0]
     slot.update(binding_status="missing", evidence_ids=[], evidence_refs=[])
-    _write_run(run_dir, predictions=predictions)
+    _write_qasper_run(run_dir, predictions=predictions)
 
     audit = validate(run_dir, suite_kind="qasper_debug")
 

@@ -84,8 +84,6 @@ def candidate_bound_response(
     # The model-facing contract is candidate-relative. Keep the legacy
     # proposition polarity only as a deterministic downstream projection.
     bounded["candidate_judgment"] = status
-    if verdict != "insufficient_evidence":
-        bounded.pop("unknown_assessment", None)
     existing_audit = bounded.get("candidate_verification_audit")
     existing_audit = existing_audit if isinstance(existing_audit, dict) else {}
     if _candidate_audit_matches(existing_audit, candidate, verdict, status):
@@ -347,7 +345,7 @@ def candidate_from_prompt(prompt: str) -> str:
 def _candidate_status(candidate: str, verdict: str) -> str:
     if candidate == "unanswerable":
         if verdict == "insufficient_evidence":
-            return "supported"
+            return "unknown"
         if verdict in {"yes", "no"}:
             return "contradicted"
         return "unknown"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Collection
 from copy import deepcopy
 from dataclasses import replace
 from typing import Any
@@ -57,6 +58,7 @@ def prune_invalid_premises(
     slots: list[dict[str, str]],
     *,
     reason: str,
+    applicable_proposition_slots: Collection[str] | None = None,
 ) -> ParsedSemanticStage | None:
     if reason not in _PRUNABLE_PREMISE_REASONS:
         return None
@@ -80,10 +82,18 @@ def prune_invalid_premises(
         for premise in kept
         for slot in premise.get("binds_proposition_slots") or []
     }
+    applicable_slots = {
+        str(slot)
+        for slot in (
+            applicable_proposition_slots
+            if applicable_proposition_slots is not None
+            else PROPOSITION_EVIDENCE_SLOTS
+        )
+    }
     if (
         not kept
         or covered_slots != required_slots
-        or covered_proposition_slots != set(PROPOSITION_EVIDENCE_SLOTS)
+        or covered_proposition_slots != applicable_slots
         or len(kept) > 4
     ):
         return None
@@ -102,6 +112,9 @@ def semantic_proposal_binding_digest(value: dict[str, Any] | None) -> str:
         "verdict": str(payload.get("verdict") or ""),
         "evidence_relation": str(payload.get("evidence_relation") or ""),
         "proof_mode": str(payload.get("proof_mode") or ""),
+        "not_applicable_proposition_slots": sorted(
+            str(slot) for slot in payload.get("not_applicable_proposition_slots") or []
+        ),
         "premises": [
             {
                 "span_selector": str(premise.get("span_selector") or ""),

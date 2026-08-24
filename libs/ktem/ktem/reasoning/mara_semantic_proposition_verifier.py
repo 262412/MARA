@@ -11,6 +11,7 @@ from .mara_semantic_candidate_policy import (
     CANDIDATE_VERIFICATION_CONTRACT,
     candidate_bound_response,
 )
+from .mara_semantic_contract_probe import controlled_contract_probe_proposal
 from .mara_semantic_local_consistency import (
     DETERMINISTIC_LOCAL_PREMISE_CONSISTENCY_CONTRACT,
 )
@@ -268,11 +269,17 @@ def _candidate_prompt_or_none(
     candidate: str,
 ) -> str | None:
     try:
-        return semantic_proposition_verifier_prompt(
+        prompt = semantic_proposition_verifier_prompt(
             question,
             slots,
             packed,
             candidate=candidate,
+        )
+        return controlled_contract_probe_proposal(
+            prompt,
+            bundle=bundle,
+            packing=packing,
+            slots=slots,
         )
     except ValueError:
         verifier.cache[cache_key] = None

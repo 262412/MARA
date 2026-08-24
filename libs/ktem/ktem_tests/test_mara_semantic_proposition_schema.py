@@ -194,3 +194,209 @@ def test_premise_selector_must_bind_to_a_canonical_span() -> None:
 
     assert parsed.value is None
     assert parsed.failure_reason == "premise_value_invalid"
+
+
+@pytest.mark.parametrize(
+    ("candidate_judgment", "evidence_relation"),
+    (
+        ("supported", "proposition_support"),
+        ("contradicted", "explicit_contradiction"),
+    ),
+)
+def test_supported_or_contradicted_contract_rejects_unknown_assessment(
+    candidate_judgment: str,
+    evidence_relation: str,
+) -> None:
+    response = {
+        "candidate_judgment": candidate_judgment,
+        "evidence_relation": evidence_relation,
+        "support_mode": "evidence_set",
+        "proof_mode": "atomic_semantic",
+        "jointly_complete": True,
+        "each_premise_required": True,
+        "premises": [
+            {
+                "span_selector": "E1:S1",
+                "proposition_fragment": "the complete proposition is established",
+                "supports_slot_ids": ["support:proposition"],
+                "binds_proposition_slots": [
+                    "actor",
+                    "predicate",
+                    "object",
+                    "quantifier",
+                ],
+            }
+        ],
+        "unknown_assessment": {
+            "reviewed_span_selectors": ["E1:S1"],
+            "unresolved_proposition_slots": ["predicate"],
+            "support_gap": "A support gap is not valid for this judgment.",
+            "contradiction_gap": "A contradiction gap is not valid for this judgment.",
+        },
+    }
+
+    parsed = parse_semantic_proposition_response(
+        json.dumps(response),
+        packed=_packed_premises(1),
+        slot_ids={"support:proposition"},
+        model="semantic-test-model",
+        seed=17,
+        candidate="yes",
+    )
+
+    assert parsed.value is None
+    assert parsed.failure_reason == "unexpected_unknown_assessment"
+
+
+def test_unknown_contract_requires_non_empty_assessment_and_no_premises() -> None:
+    response = {
+        "candidate_judgment": "unknown",
+        "evidence_relation": "undetermined",
+        "support_mode": "evidence_set",
+        "proof_mode": "none",
+        "jointly_complete": False,
+        "each_premise_required": False,
+        "premises": [],
+    }
+
+    parsed = parse_semantic_proposition_response(
+        json.dumps(response),
+        packed=_packed_premises(1),
+        slot_ids={"support:proposition"},
+        model="semantic-test-model",
+        seed=17,
+        candidate="yes",
+    )
+
+    assert parsed.value is None
+    assert parsed.failure_reason == "unknown_assessment_schema_invalid"
+
+    response["unknown_assessment"] = {
+        "reviewed_span_selectors": ["E1:S1"],
+        "unresolved_proposition_slots": ["predicate"],
+        "support_gap": "The reviewed span does not establish the predicate.",
+        "contradiction_gap": "The reviewed span does not explicitly contradict it.",
+    }
+    response["premises"] = [
+        {
+            "span_selector": "E1:S1",
+            "proposition_fragment": "a conflicting proof must not be retained",
+            "supports_slot_ids": ["support:proposition"],
+            "binds_proposition_slots": ["predicate"],
+        }
+    ]
+
+    parsed = parse_semantic_proposition_response(
+        json.dumps(response),
+        packed=_packed_premises(1),
+        slot_ids={"support:proposition"},
+        model="semantic-test-model",
+        seed=17,
+        candidate="yes",
+    )
+
+    assert parsed.value is None
+    assert parsed.failure_reason == "verdict_payload_inconsistent"
+
+
+def test_response_schema_has_physically_disjoint_judgment_contracts() -> None:
+    schema = semantic_proposition_response_format([], ["support:proposition"])[
+        "json_schema"
+    ]["schema"]
+
+    branches = schema.get("oneOf")
+    assert isinstance(branches, list)
+    assert len(branches) == 3
+
+    by_judgment = {
+        tuple(branch["properties"]["candidate_judgment"].get("enum", [])): branch
+        for branch in branches
+    }
+    assert set(by_judgment) == {
+        ("supported",),
+        ("contradicted",),
+        ("unknown",),
+    }
+    for judgment in ("supported", "contradicted"):
+        branch = by_judgment[(judgment,)]
+        assert "unknown_assessment" not in branch["properties"]
+        assert "unknown_assessment" not in branch["required"]
+        assert branch["properties"]["premises"]["minItems"] == 1
+    unknown = by_judgment[("unknown",)]
+    assert "unknown_assessment" in unknown["properties"]
+    assert "unknown_assessment" in unknown["required"]
+    assert unknown["properties"]["premises"]["maxItems"] == 0
+
+
+def test_modern_contract_records_quantifier_none_as_explicit_na() -> None:
+    response = {
+        "candidate_judgment": "supported",
+        "evidence_relation": "proposition_support",
+        "support_mode": "evidence_set",
+        "proof_mode": "atomic_semantic",
+        "jointly_complete": True,
+        "each_premise_required": True,
+        "not_applicable_proposition_slots": ["quantifier"],
+        "premises": [
+            {
+                "span_selector": "E1:S1",
+                "proposition_fragment": "the proposition is established",
+                "supports_slot_ids": ["support:proposition"],
+                "binds_proposition_slots": ["actor", "predicate", "object"],
+            }
+        ],
+    }
+    parsed = parse_semantic_proposition_response(
+        json.dumps(response),
+        packed=_packed_premises(1),
+        slot_ids={"support:proposition"},
+        model="semantic-test-model",
+        seed=17,
+        candidate="yes",
+        applicable_proposition_slots={"actor", "predicate", "object"},
+    )
+
+    assert parsed.value is not None
+    assert parsed.value["not_applicable_proposition_slots"] == ["quantifier"]
+    assert {
+        slot
+        for premise in parsed.value["premises"]
+        for slot in premise["binds_proposition_slots"]
+    } == {"actor", "predicate", "object"}
+
+
+def test_modern_contract_rejects_quantifier_evidence_when_quantifier_is_none() -> None:
+    response = {
+        "candidate_judgment": "supported",
+        "evidence_relation": "proposition_support",
+        "support_mode": "evidence_set",
+        "proof_mode": "atomic_semantic",
+        "jointly_complete": True,
+        "each_premise_required": True,
+        "not_applicable_proposition_slots": ["quantifier"],
+        "premises": [
+            {
+                "span_selector": "E1:S1",
+                "proposition_fragment": "the proposition is established",
+                "supports_slot_ids": ["support:proposition"],
+                "binds_proposition_slots": [
+                    "actor",
+                    "predicate",
+                    "object",
+                    "quantifier",
+                ],
+            }
+        ],
+    }
+    parsed = parse_semantic_proposition_response(
+        json.dumps(response),
+        packed=_packed_premises(1),
+        slot_ids={"support:proposition"},
+        model="semantic-test-model",
+        seed=17,
+        candidate="yes",
+        applicable_proposition_slots={"actor", "predicate", "object"},
+    )
+
+    assert parsed.value is None
+    assert parsed.failure_reason == "premise_proposition_binding_invalid"

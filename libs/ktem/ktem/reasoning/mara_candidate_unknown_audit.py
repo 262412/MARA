@@ -230,14 +230,11 @@ def candidate_unknown_audit_attestation(
 
 
 def _candidate_status(candidate: str, verifier_judgment: str = "") -> str:
+    del candidate
     supplied = str(verifier_judgment or "").strip().casefold()
-    if supplied in {"supported", "unknown"}:
+    if supplied == "unknown":
         return supplied
-    return (
-        "supported"
-        if str(candidate or "").strip().casefold() == "unanswerable"
-        else "unknown"
-    )
+    return "unknown"
 
 
 def _unknown_audit_premises(

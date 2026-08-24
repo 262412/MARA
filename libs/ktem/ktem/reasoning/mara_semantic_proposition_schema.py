@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any
 
@@ -8,7 +9,11 @@ from ktem.docqa.boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
-from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
+
+from .mara_semantic_proposition_schema_contract import (
+    proposition_slot_scope,
+    semantic_proposition_schema,
+)
 
 
 @dataclass(frozen=True)
@@ -20,119 +25,19 @@ class SemanticPropositionParse:
 def semantic_proposition_response_format(
     _span_selectors: list[str],
     slot_ids: list[str],
+    *,
+    applicable_proposition_slots: Collection[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "type": "json_schema",
         "json_schema": {
             "name": "semantic_evidence_set_proposition",
             "strict": True,
-            "schema": _semantic_proposition_schema(slot_ids),
+            "schema": semantic_proposition_schema(
+                slot_ids,
+                applicable_proposition_slots=applicable_proposition_slots,
+            ),
         },
-    }
-
-
-def _semantic_proposition_schema(slot_ids: list[str]) -> dict[str, Any]:
-    return {
-        "type": "object",
-        "properties": {
-            "candidate_judgment": {
-                "type": "string",
-                "enum": ["supported", "contradicted", "unknown"],
-            },
-            "evidence_relation": {
-                "type": "string",
-                "enum": [
-                    "proposition_support",
-                    "explicit_contradiction",
-                    "undetermined",
-                ],
-            },
-            "support_mode": {"type": "string", "enum": ["evidence_set"]},
-            "proof_mode": {
-                "type": "string",
-                "enum": ["none", "atomic_semantic", "composite_conjunction"],
-            },
-            "jointly_complete": {"type": "boolean"},
-            "each_premise_required": {"type": "boolean"},
-            "premises": {
-                "type": "array",
-                "minItems": 0,
-                "maxItems": 4,
-                "items": _semantic_premise_schema(slot_ids),
-            },
-            "unknown_assessment": _unknown_assessment_schema(),
-        },
-        "required": [
-            "candidate_judgment",
-            "evidence_relation",
-            "support_mode",
-            "proof_mode",
-            "jointly_complete",
-            "each_premise_required",
-            "premises",
-        ],
-        "additionalProperties": False,
-    }
-
-
-def _semantic_premise_schema(slot_ids: list[str]) -> dict[str, Any]:
-    return {
-        "type": "object",
-        "properties": {
-            "span_selector": {"type": "string", "maxLength": 24},
-            "proposition_fragment": {"type": "string", "maxLength": 320},
-            "supports_slot_ids": {
-                "type": "array",
-                "minItems": 1,
-                "items": {"type": "string", "enum": slot_ids},
-            },
-            "binds_proposition_slots": {
-                "type": "array",
-                "minItems": 1,
-                "items": {
-                    "type": "string",
-                    "enum": list(PROPOSITION_EVIDENCE_SLOTS),
-                },
-            },
-        },
-        "required": [
-            "span_selector",
-            "proposition_fragment",
-            "supports_slot_ids",
-            "binds_proposition_slots",
-        ],
-        "additionalProperties": False,
-    }
-
-
-def _unknown_assessment_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "properties": {
-            "reviewed_span_selectors": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 12,
-                "items": {"type": "string", "maxLength": 24},
-            },
-            "unresolved_proposition_slots": {
-                "type": "array",
-                "minItems": 1,
-                "items": {
-                    "type": "string",
-                    "enum": list(PROPOSITION_EVIDENCE_SLOTS),
-                },
-            },
-            "support_gap": {"type": "string", "maxLength": 320},
-            "contradiction_gap": {"type": "string", "maxLength": 320},
-        },
-        "required": [
-            "reviewed_span_selectors",
-            "unresolved_proposition_slots",
-            "support_gap",
-            "contradiction_gap",
-        ],
-        "additionalProperties": False,
     }
 
 
@@ -144,6 +49,7 @@ def parse_semantic_proposition_result(
     model: str,
     seed: int,
     candidate: str = "",
+    applicable_proposition_slots: Collection[str] | None = None,
 ) -> dict[str, Any] | None:
     return parse_semantic_proposition_response(
         response_text,
@@ -152,7 +58,47 @@ def parse_semantic_proposition_result(
         model=model,
         seed=seed,
         candidate=candidate,
+        applicable_proposition_slots=applicable_proposition_slots,
     ).value
+
+
+def _parse_proposition_evidence(
+    payload: dict[str, Any],
+    raw_premises: list[Any],
+    packed: list[dict[str, Any]],
+    slot_ids: set[str],
+    *,
+    verdict: str,
+    applicable_proposition_slots: set[str],
+) -> tuple[list[dict[str, Any]] | None, dict[str, Any] | None, str]:
+    selector_lookup = {
+        str(selector["selector_id"]): {
+            "evidence_id": value["evidence_id"],
+            **selector,
+        }
+        for value in packed
+        for selector in value.get("selectors", [])
+    }
+    premises, premise_reason = _parse_premises(
+        raw_premises,
+        selector_lookup,
+        slot_ids,
+        applicable_proposition_slots=applicable_proposition_slots,
+    )
+    if premises is None:
+        return None, None, premise_reason
+    unknown_assessment: dict[str, Any] | None = None
+    if verdict == "insufficient_evidence":
+        unknown_assessment, assessment_reason = _parse_unknown_assessment(
+            payload.get("unknown_assessment"),
+            selector_lookup,
+            applicable_proposition_slots=applicable_proposition_slots,
+        )
+        if unknown_assessment is None:
+            return None, None, assessment_reason
+    elif "unknown_assessment" in payload:
+        return None, None, "unexpected_unknown_assessment"
+    return premises, unknown_assessment, ""
 
 
 def parse_semantic_proposition_response(
@@ -163,11 +109,18 @@ def parse_semantic_proposition_response(
     model: str,
     seed: int,
     candidate: str = "",
+    applicable_proposition_slots: Collection[str] | None = None,
 ) -> SemanticPropositionParse:
     try:
         payload = json.loads(response_text)
     except (TypeError, json.JSONDecodeError):
         return SemanticPropositionParse(None, "json_decode_error")
+    applicable_slots, not_applicable_slots, slot_reason = proposition_slot_scope(
+        payload,
+        applicable_proposition_slots,
+    )
+    if slot_reason:
+        return SemanticPropositionParse(None, slot_reason)
     (
         candidate_judgment,
         verdict,
@@ -178,31 +131,26 @@ def parse_semantic_proposition_response(
     if payload_reason:
         return SemanticPropositionParse(None, payload_reason)
     assert verdict is not None and proof_mode is not None and raw_premises is not None
-    selector_lookup = {
-        str(selector["selector_id"]): {
-            "evidence_id": value["evidence_id"],
-            **selector,
+    premises, unknown_assessment, evidence_reason = _parse_proposition_evidence(
+        payload,
+        raw_premises,
+        packed,
+        slot_ids,
+        verdict=verdict,
+        applicable_proposition_slots=applicable_slots,
+    )
+    if evidence_reason:
+        return SemanticPropositionParse(None, evidence_reason)
+    assert premises is not None
+    if (
+        verdict in {"yes", "no"}
+        and {
+            slot
+            for premise in premises
+            for slot in premise.get("binds_proposition_slots", [])
         }
-        for value in packed
-        for selector in value.get("selectors", [])
-    }
-    premises, premise_reason = _parse_premises(raw_premises, selector_lookup, slot_ids)
-    if premises is None:
-        return SemanticPropositionParse(None, premise_reason)
-    unknown_assessment: dict[str, Any] | None = None
-    if verdict == "insufficient_evidence":
-        unknown_assessment, assessment_reason = _parse_unknown_assessment(
-            payload.get("unknown_assessment"), selector_lookup
-        )
-        if unknown_assessment is None:
-            return SemanticPropositionParse(None, assessment_reason)
-    elif "unknown_assessment" in payload:
-        return SemanticPropositionParse(None, "unexpected_unknown_assessment")
-    if verdict in {"yes", "no"} and {
-        slot
-        for premise in premises
-        for slot in premise.get("binds_proposition_slots", [])
-    } != set(PROPOSITION_EVIDENCE_SLOTS):
+        != applicable_slots
+    ):
         return SemanticPropositionParse(None, "proposition_slot_coverage_incomplete")
     value = {
         "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
@@ -214,6 +162,7 @@ def parse_semantic_proposition_response(
         "jointly_complete": payload["jointly_complete"],
         "each_premise_required": payload["each_premise_required"],
         "premises": premises,
+        "not_applicable_proposition_slots": sorted(not_applicable_slots),
         "verifier": {
             "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
             "model": model,
@@ -284,8 +233,14 @@ def _candidate_judgment_payload(
         "premises",
     }
     legacy_required_fields = required_fields - {"candidate_judgment"} | {"verdict"}
-    allowed_fields = required_fields | {"unknown_assessment"}
-    legacy_allowed_fields = legacy_required_fields | {"unknown_assessment"}
+    allowed_fields = required_fields | {
+        "unknown_assessment",
+        "not_applicable_proposition_slots",
+    }
+    legacy_allowed_fields = legacy_required_fields | {
+        "unknown_assessment",
+        "not_applicable_proposition_slots",
+    }
     direct = "candidate_judgment" in payload
     if direct:
         if "verdict" in payload:
@@ -335,15 +290,15 @@ def _candidate_relative_verdict(
     }[str(evidence_relation)]
     normalized_candidate = str(candidate or "").strip().casefold()
     if direct and normalized_candidate:
-        if normalized_candidate == "unanswerable":
-            if candidate_judgment != "contradicted":
-                verdict = "insufficient_evidence"
-            elif evidence_relation == "undetermined":
-                return None, "candidate_judgment_relation_mismatch"
-            else:
-                verdict = expected_relation
-        elif candidate_judgment == "unknown":
+        if candidate_judgment == "unknown":
             verdict = "insufficient_evidence"
+        elif normalized_candidate == "unanswerable":
+            if (
+                candidate_judgment != "contradicted"
+                or evidence_relation == "undetermined"
+            ):
+                return None, "candidate_judgment_relation_mismatch"
+            verdict = expected_relation
         else:
             verdict = _verdict_for_candidate_judgment(
                 normalized_candidate,
@@ -405,10 +360,7 @@ def _candidate_judgment_projection_valid(
     if not candidate:
         return True
     if verdict == "insufficient_evidence":
-        expected = (
-            {"supported", "unknown"} if candidate == "unanswerable" else {"unknown"}
-        )
-        return candidate_judgment in expected
+        return candidate_judgment == "unknown"
     return candidate_judgment != "unknown"
 
 
@@ -424,7 +376,7 @@ def _candidate_judgment_for_verdict(candidate: str, verdict: str) -> str:
     candidate = str(candidate or "").strip().casefold()
     verdict = str(verdict or "").strip().casefold()
     if verdict == "insufficient_evidence":
-        return "supported" if candidate == "unanswerable" else "unknown"
+        return "unknown"
     if candidate == "unanswerable":
         return "contradicted"
     if candidate == verdict:
@@ -446,6 +398,8 @@ def _parse_premises(
     raw_premises: list[Any],
     selector_lookup: dict[str, dict[str, Any]],
     slot_ids: set[str],
+    *,
+    applicable_proposition_slots: set[str],
 ) -> tuple[list[dict[str, Any]] | None, str]:
     premises: list[dict[str, Any]] = []
     for raw in raw_premises:
@@ -477,7 +431,7 @@ def _parse_premises(
             not isinstance(proposition_slots, list)
             or not proposition_slots
             or any(
-                value not in PROPOSITION_EVIDENCE_SLOTS for value in proposition_slots
+                value not in applicable_proposition_slots for value in proposition_slots
             )
             or len(set(proposition_slots)) != len(proposition_slots)
         ):
@@ -505,6 +459,8 @@ def _parse_premises(
 def _parse_unknown_assessment(
     value: Any,
     selector_lookup: dict[str, dict[str, Any]],
+    *,
+    applicable_proposition_slots: set[str],
 ) -> tuple[dict[str, Any] | None, str]:
     if not isinstance(value, dict) or set(value) != {
         "reviewed_span_selectors",
@@ -529,7 +485,7 @@ def _parse_unknown_assessment(
         not isinstance(unresolved, list)
         or not unresolved
         or len(set(unresolved)) != len(unresolved)
-        or any(slot not in PROPOSITION_EVIDENCE_SLOTS for slot in unresolved)
+        or any(slot not in applicable_proposition_slots for slot in unresolved)
     ):
         return None, "unknown_assessment_slot_invalid"
     if (

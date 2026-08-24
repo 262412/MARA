@@ -6,16 +6,24 @@ from typing import Any
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _prediction
 
 
-def _qasper_debug_prediction(example_id: str, route: str) -> dict[str, Any]:
+def _qasper_debug_prediction(
+    example_id: str,
+    route: str,
+    *,
+    state: tuple[str, str, bool] | None = None,
+    candidate: str | None = None,
+) -> dict[str, Any]:
     prediction = _prediction([])
     group_id = f"group:{example_id}"
     example_index = int(example_id.rsplit("-", 1)[-1])
-    case = _debug_case_fields(example_index)
-    candidate = case["candidate"]
-    relation = case["relation"]
-    audit_status = case["audit_status"]
-    terminal_answer = case["terminal_answer"]
-    terminal_outcome = case["terminal_outcome"]
+    case = _debug_case_fields(example_index) if state is None else _state_case(state)
+    if candidate is not None:
+        case = {**case, "candidate": candidate}
+    candidate = str(case["candidate"])
+    relation = str(case["relation"])
+    audit_status = str(case["audit_status"])
+    terminal_answer = str(case["terminal_answer"])
+    terminal_outcome = str(case["terminal_outcome"])
     gold = case["gold"]
     ambiguous = case["ambiguous"]
     metadata = prediction["evidence_metadata"]
@@ -29,9 +37,9 @@ def _qasper_debug_prediction(example_id: str, route: str) -> dict[str, Any]:
             ),
         }
     )
-    if relation == "supported" and audit_status == "passed":
+    if relation in {"supported", "contradicted"} and audit_status == "passed":
         metadata["semantic_proposition_authority"] = _debug_semantic_authority(
-            candidate
+            _debug_verifier_verdict(candidate, relation)
         )
     prediction.update(
         {
@@ -64,6 +72,27 @@ def _qasper_debug_prediction(example_id: str, route: str) -> dict[str, Any]:
         }
     )
     return prediction
+
+
+def _qasper_contract_probe_predictions() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    states = [
+        (judgment, auditor_status, ambiguous)
+        for judgment in ("supported", "contradicted", "unknown")
+        for auditor_status in ("passed", "failed")
+        for ambiguous in (False, True)
+    ]
+    for index, state in enumerate(states, start=1):
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag"):
+            row = _qasper_debug_prediction(
+                f"probe-{index}",
+                route,
+                state=state,
+                candidate="no" if index == 1 else "yes",
+            )
+            row["qasper_debug_lane"] = "contract_probe"
+            rows.append(row)
+    return rows
 
 
 def _debug_annotation_fields(
@@ -125,6 +154,27 @@ def _debug_case_fields(example_index: int) -> dict[str, Any]:
         "terminal_outcome": "safe_abstention",
         "gold": ["unanswerable"],
         "ambiguous": True,
+    }
+
+
+def _state_case(state: tuple[str, str, bool]) -> dict[str, Any]:
+    relation, audit_status, ambiguous = state
+    candidate = "no" if relation == "supported" and not ambiguous else "yes"
+    terminal_answer = (
+        candidate
+        if relation == "supported" and audit_status == "passed"
+        else "unanswerable"
+    )
+    return {
+        "candidate": candidate,
+        "relation": relation,
+        "audit_status": audit_status,
+        "terminal_answer": terminal_answer,
+        "terminal_outcome": "answered"
+        if terminal_answer != "unanswerable"
+        else "safe_abstention",
+        "gold": [terminal_answer],
+        "ambiguous": ambiguous,
     }
 
 
@@ -293,6 +343,7 @@ def _debug_verifier_trace(
         "proposal_model_call_count": 1,
         "audit_model_call_count": 1,
         "candidate_verification_audit": candidate_audit,
+        "question_proposition": {"quantifier": "none"},
         "typed_conclusion": typed_conclusion,
         "conclusion_audit": conclusion_audit,
         "proposal_contract": "semantic_proposition_verdict.v4",
@@ -344,10 +395,10 @@ def _debug_verifier_verdict(candidate: str, relation: str) -> str:
     return "no" if candidate == "yes" else "yes"
 
 
-def _debug_semantic_authority(candidate: str) -> dict[str, Any]:
+def _debug_semantic_authority(verdict: str) -> dict[str, Any]:
     evidence_refs = ["span:paper:s1#quote:0:30"]
     evidence_relation = (
-        "explicit_contradiction" if candidate == "no" else "proposition_support"
+        "explicit_contradiction" if verdict == "no" else "proposition_support"
     )
     payload = {
         "evidence_relation": evidence_relation,
@@ -355,13 +406,12 @@ def _debug_semantic_authority(candidate: str) -> dict[str, Any]:
             "actor": "current_paper",
             "predicate": "use",
             "object": "the method",
-            "quantifier": "none",
         },
         "proposition_slot_evidence_refs": {
-            slot: evidence_refs
-            for slot in ("actor", "predicate", "object", "quantifier")
+            slot: evidence_refs for slot in ("actor", "predicate", "object")
         },
         "proposition_binding_evidence_set_refs": evidence_refs,
+        "not_applicable_proposition_slots": ["quantifier"],
     }
     return {
         "contract_id": "semantic_proposition_verdict.v4",
@@ -369,6 +419,7 @@ def _debug_semantic_authority(candidate: str) -> dict[str, Any]:
         "reason": "semantic_evidence_set_bound",
         "required_slot_ids": ["support:boolean_proposition"],
         "verified_support_slot_ids": ["support:boolean_proposition"],
+        "required_proposition_slots": ["actor", "predicate", "object"],
         **payload,
         "proposition_evidence_set_digest": _fixture_digest(payload),
     }

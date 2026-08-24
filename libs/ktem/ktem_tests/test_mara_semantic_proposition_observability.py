@@ -11,7 +11,6 @@ from ktem.reasoning.mara_semantic_proposition_verifier import (
 
 from .test_mara_semantic_proposition_audit import (
     QUESTION,
-    _SequenceLLM,
     _atomic_audit,
     _atomic_proposal,
     _atomic_request,
@@ -21,6 +20,7 @@ from .test_mara_semantic_proposition_audit import (
     _proposal,
     _request,
     _response,
+    _SequenceLLM,
     _unknown_audit,
     _verifier,
 )
@@ -142,10 +142,10 @@ def test_debug_trace_can_be_enabled_by_the_slurm_environment(monkeypatch: Any) -
 
 def test_canonical_sentence_span_selector_preserves_exact_quote_and_offsets() -> None:
     source_text = (
-        "Lead-in context. Transfer was evaluated across two languages. "
+        "Lead-in context. We evaluated transfer across two languages. "
         "Trailing context."
     )
-    target_quote = "Transfer was evaluated across two languages."
+    target_quote = "We evaluated transfer across two languages."
     local_start = source_text.index(target_quote)
     canonical_start = 240
     item = {

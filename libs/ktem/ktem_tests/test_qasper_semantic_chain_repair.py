@@ -79,6 +79,7 @@ def test_record_ids_and_first_selector_do_not_bind_a_candidate_slot() -> None:
     records = [
         {
             "evidence_id": "e1",
+            "text": "first exact",
             "required_slot_ids": ["support:proposition"],
             "selectors": [
                 {
@@ -119,6 +120,7 @@ def test_explicit_all_four_slot_span_set_is_the_only_candidate_binding() -> None
     records = [
         {
             "evidence_id": "e1",
+            "text": "first exact",
             "required_slot_ids": ["support:proposition"],
             "selectors": [
                 {
@@ -174,6 +176,7 @@ def test_malformed_selector_offsets_cannot_become_candidate_binding() -> None:
     records = [
         {
             "evidence_id": "e1",
+            "text": "first exact",
             "required_slot_ids": ["support:proposition"],
             "selectors": [
                 {
@@ -218,6 +221,10 @@ def test_candidate_prompt_exposes_all_selector_polarities_without_authority() ->
     record = {
         "label": "E1",
         "evidence_id": "e1",
+        "text": (
+            "The authors did not collect the two datasets. "
+            "The authors collected the two datasets."
+        ),
         "selectors": [
             {
                 "selector_id": "E1:S1",
@@ -268,7 +275,6 @@ def test_direct_candidate_judgment_derives_legacy_polarity_deterministically() -
         ("yes", "unknown", "undetermined", "insufficient_evidence"),
         ("no", "supported", "explicit_contradiction", "no"),
         ("no", "contradicted", "proposition_support", "yes"),
-        ("unanswerable", "supported", "undetermined", "insufficient_evidence"),
         ("unanswerable", "unknown", "undetermined", "insufficient_evidence"),
         ("unanswerable", "contradicted", "proposition_support", "yes"),
     )
@@ -287,7 +293,6 @@ def test_direct_candidate_judgment_derives_legacy_polarity_deterministically() -
                             "actor",
                             "predicate",
                             "object",
-                            "quantifier",
                         ],
                         "support_gap": "The reviewed span does not establish support.",
                         "contradiction_gap": "The reviewed span does not contradict it.",
@@ -306,6 +311,18 @@ def test_direct_candidate_judgment_derives_legacy_polarity_deterministically() -
         assert parsed.value is not None
         assert parsed.value["candidate_judgment"] == judgment
         assert parsed.value["verdict"] == verdict
+
+    unsupported_abstention = _direct_verifier_payload("supported", "undetermined")
+    parsed = parse_semantic_proposition_response(
+        json.dumps(unsupported_abstention),
+        packed=_packed_complete_span(),
+        slot_ids={"support:proposition"},
+        model="semantic-test-model",
+        seed=17,
+        candidate="unanswerable",
+    )
+    assert parsed.value is None
+    assert parsed.failure_reason == "candidate_judgment_relation_mismatch"
 
     mixed = _direct_verifier_payload("supported", "proposition_support")
     mixed["verdict"] = "yes"
@@ -505,6 +522,7 @@ def test_packing_prioritizes_explicit_negative_evidence() -> None:
 def test_selector_polarity_signal_is_explicitly_unknown_for_missing_polarity() -> None:
     options = _candidate_selector_options(
         {
+            "text": "The paper discusses datasets.",
             "selectors": [
                 {
                     "selector_id": "E1:S3",
@@ -512,7 +530,7 @@ def test_selector_polarity_signal_is_explicitly_unknown_for_missing_polarity() -
                     "span_start": 0,
                     "span_end": 29,
                 }
-            ]
+            ],
         },
         question="Did the authors collect the two datasets?",
     )
@@ -523,6 +541,7 @@ def test_selector_polarity_signal_is_explicitly_unknown_for_missing_polarity() -
 def test_selector_polarity_does_not_promote_predicate_only_negative_match() -> None:
     options = _candidate_selector_options(
         {
+            "text": "The administrators did not compare the two invoices.",
             "selectors": [
                 {
                     "selector_id": "E1:S3",
@@ -530,7 +549,7 @@ def test_selector_polarity_does_not_promote_predicate_only_negative_match() -> N
                     "span_start": 0,
                     "span_end": 52,
                 }
-            ]
+            ],
         },
         question="Did the authors compare the two systems?",
     )

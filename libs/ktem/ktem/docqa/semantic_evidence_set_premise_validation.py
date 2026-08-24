@@ -16,8 +16,9 @@ from .evidence_identity import identity_of
 from .polarity_contradiction_check import polarity_contradiction_check
 from .query_phrase_extraction import source_page_locator
 from .question_proposition import (
-    PROPOSITION_EVIDENCE_SLOTS,
+    applicable_proposition_evidence_slots,
     build_question_proposition,
+    not_applicable_proposition_evidence_slots,
     proposition_evidence_bindings,
     typed_conclusion,
 )
@@ -52,6 +53,9 @@ def validated_semantic_premises(
     lookup = _canonical_item_lookup(items)
     proposition = build_question_proposition(question)
     canonical_bindings = proposition_evidence_bindings(proposition)
+    applicable_proposition_slots = set(
+        applicable_proposition_evidence_slots(proposition)
+    )
     evidence_relation = _evidence_relation(verdict)
     premises: list[BooleanEvidenceAuthority] = []
     slot_support: dict[str, tuple[str, ...]] = {}
@@ -62,6 +66,7 @@ def validated_semantic_premises(
             required_slots,
             fragments,
             canonical_bindings=canonical_bindings,
+            applicable_proposition_slots=applicable_proposition_slots,
             evidence_relation=evidence_relation,
         )
         if reason:
@@ -93,7 +98,7 @@ def validated_semantic_premises(
         for premise in premises
         for slot, _value in premise.proposition_slot_bindings
     }
-    if covered_proposition_slots != set(PROPOSITION_EVIDENCE_SLOTS):
+    if covered_proposition_slots != applicable_proposition_slots:
         return None, {}, "", "semantic_proposition_slot_coverage_incomplete"
     return tuple(premises), slot_support, scope_basis, ""
 
@@ -111,6 +116,7 @@ def _premise_binding(
     existing_fragments: set[str],
     *,
     canonical_bindings: dict[str, str],
+    applicable_proposition_slots: set[str],
     evidence_relation: str,
 ) -> tuple[tuple[str, ...], str, tuple[tuple[str, str], ...], str]:
     raw_supports = record.get("supports_slot_ids")
@@ -131,7 +137,9 @@ def _premise_binding(
         not isinstance(raw_proposition_slots, list)
         or not raw_proposition_slots
         or len(set(raw_proposition_slots)) != len(raw_proposition_slots)
-        or any(slot not in PROPOSITION_EVIDENCE_SLOTS for slot in raw_proposition_slots)
+        or any(
+            slot not in applicable_proposition_slots for slot in raw_proposition_slots
+        )
         or not isinstance(raw_bindings, Mapping)
     ):
         return (), "", (), "semantic_premise_proposition_binding_invalid"
@@ -245,16 +253,20 @@ def _validated_semantic_premise(
 
 
 def semantic_proposition_binding_fields(
+    question: str,
     verdict: str,
     premises: tuple[BooleanEvidenceAuthority, ...],
 ) -> dict[str, Any]:
+    proposition = build_question_proposition(question)
+    applicable_slots = applicable_proposition_evidence_slots(proposition)
+    not_applicable_slots = not_applicable_proposition_evidence_slots(proposition)
     slot_refs = {
         slot: sorted(
             premise.evidence_ref
             for premise in premises
             if slot in dict(premise.proposition_slot_bindings)
         )
-        for slot in PROPOSITION_EVIDENCE_SLOTS
+        for slot in applicable_slots
     }
     bindings = {
         slot: next(
@@ -265,7 +277,7 @@ def semantic_proposition_binding_fields(
             ),
             "",
         )
-        for slot in PROPOSITION_EVIDENCE_SLOTS
+        for slot in applicable_slots
     }
     evidence_refs = sorted(premise.evidence_ref for premise in premises)
     payload = {
@@ -273,11 +285,12 @@ def semantic_proposition_binding_fields(
         "proposition_slot_bindings": bindings,
         "proposition_slot_evidence_refs": slot_refs,
         "proposition_binding_evidence_set_refs": evidence_refs,
+        "not_applicable_proposition_slots": list(not_applicable_slots),
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return {
         **payload,
-        "required_proposition_slots": list(PROPOSITION_EVIDENCE_SLOTS),
+        "required_proposition_slots": list(applicable_slots),
         "proposition_evidence_set_digest": hashlib.sha256(
             canonical.encode("utf-8")
         ).hexdigest(),

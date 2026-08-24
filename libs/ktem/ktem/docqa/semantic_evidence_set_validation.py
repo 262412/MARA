@@ -58,7 +58,7 @@ def semantic_evidence_set_runtime_validation_reason(
         "required_slot_ids": sorted(
             {slot_id for values in slot_support.values() for slot_id in values}
         ),
-        **semantic_proposition_binding_fields(verdict, premises),
+        **semantic_proposition_binding_fields(question, verdict, premises),
     }
     derivation = semantic_evidence_set_derivation(
         question,

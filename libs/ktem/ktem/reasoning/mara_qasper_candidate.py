@@ -11,14 +11,8 @@ from ktem.docqa.query_planning import request_planning_question
 from kotaemon.base import HumanMessage, SystemMessage
 
 from .mara_answer_type_contract import request_answer_type
-from .mara_qasper_candidate_evidence import (
-    candidate_selector_ids as _candidate_selector_ids,
-)
-from .mara_qasper_candidate_evidence import (
+from .mara_qasper_candidate_evidence import (  # noqa: F401
     candidate_selector_options as _candidate_selector_options,
-)
-from .mara_qasper_candidate_evidence import (
-    exact_candidate_slot_binding as _exact_candidate_slot_binding,
 )
 from .mara_qasper_candidate_identity import candidate_digest as _digest
 from .mara_qasper_candidate_identity import candidate_model_name as _model_name
@@ -26,16 +20,15 @@ from .mara_qasper_candidate_identity import (
     candidate_transaction_identity as _transaction_identity,
 )
 from .mara_qasper_candidate_identity import effective_candidate_seed
+from .mara_qasper_candidate_prompt import (
+    _bound_candidate_slots as _prompt_bound_candidate_slots,
+)
+from .mara_qasper_candidate_prompt import _candidate_evidence, _candidate_prompt
 from .mara_semantic_proposition_debug import (
     provider_failure,
     response_completion_tokens,
     response_finish_reason,
     response_text,
-)
-from .mara_semantic_proposition_packing import (
-    SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
-    pack_semantic_proposition_evidence,
-    required_semantic_proposition_slots,
 )
 
 QASPER_CANDIDATE_GENERATION_CONTRACT = "qasper_typed_candidate_generation.v2"
@@ -47,6 +40,9 @@ QASPER_CANDIDATE_DEFAULT_SEED = 20260724
 
 LOGGER = logging.getLogger(__name__)
 
+# Preserve the existing private test/debug seam after moving prompt construction.
+_bound_candidate_slots = _prompt_bound_candidate_slots
+
 _SYSTEM_PROMPT = (
     "You are the sole answer-candidate generator for a QASPER Boolean question. "
     "Use only the typed question proposition and labeled retrieved evidence. "
@@ -57,6 +53,13 @@ _SYSTEM_PROMPT = (
     "Candidate parsing is format-only; "
     "verification uncertainty is handled later by the verifier. Do not "
     "include explanation, citations, or an alternative answer."
+)
+
+_CONTRACT_PROBE_SYSTEM_PROMPT = (
+    "You are exercising the QASPER candidate transport contract. Preserve the "
+    "supplied original candidate exactly. Do not answer the question or change "
+    "the candidate after reading the audit context. Return only the required "
+    "structured candidate object."
 )
 
 
@@ -87,21 +90,14 @@ def generate_qasper_typed_candidate(
         default_seed=QASPER_CANDIDATE_DEFAULT_SEED,
     )
     route = str(bundle.route or "")
+    controlled_candidate = _contract_probe_original_candidate(request, route)
     identity = _transaction_identity(request, route, seed)
-    messages = [
-        SystemMessage(content=_SYSTEM_PROMPT),
-        HumanMessage(
-            content=_candidate_prompt(
-                question,
-                evidence,
-                proposition=evidence_diagnostics.get("typed_proposition"),
-                proposition_resolution=evidence_diagnostics.get(
-                    "question_proposition_resolution"
-                ),
-                required_slots=evidence_diagnostics.get("required_slots", []),
-            )
-        ),
-    ]
+    messages = _candidate_messages(
+        question,
+        evidence,
+        evidence_diagnostics,
+        controlled_candidate=controlled_candidate,
+    )
     serialized_messages = _serialized_messages(messages)
     input_digest = _digest(
         {
@@ -120,6 +116,7 @@ def generate_qasper_typed_candidate(
         input_digest=input_digest,
         evidence=evidence,
         evidence_diagnostics=evidence_diagnostics,
+        controlled_candidate=controlled_candidate,
     )
     bundle.metadata["qasper_candidate_generation"] = trace
     if llm is None:
@@ -145,6 +142,7 @@ def _candidate_generation_trace(
     input_digest: str,
     evidence: list[dict[str, Any]],
     evidence_diagnostics: dict[str, Any],
+    controlled_candidate: str,
 ) -> dict[str, Any]:
     return {
         "contract_id": QASPER_CANDIDATE_GENERATION_CONTRACT,
@@ -164,6 +162,10 @@ def _candidate_generation_trace(
         "input_digest": input_digest,
         "evidence_count": len(evidence),
         "evidence_digest": _digest(evidence),
+        "candidate_input_mode": (
+            "controlled_contract_probe" if controlled_candidate else "generated"
+        ),
+        "controlled_original_candidate": controlled_candidate,
         **evidence_diagnostics,
         "attempts": [],
         "raw_response": "",
@@ -180,6 +182,60 @@ def _candidate_generation_trace(
         "completion_tokens": -1,
         "transformation_stages": [],
     }
+
+
+def _candidate_messages(
+    question: str,
+    evidence: list[dict[str, Any]],
+    evidence_diagnostics: dict[str, Any],
+    *,
+    controlled_candidate: str,
+) -> list[Any]:
+    audit_context = _candidate_prompt(
+        question,
+        evidence,
+        proposition=evidence_diagnostics.get("typed_proposition"),
+        proposition_resolution=evidence_diagnostics.get(
+            "question_proposition_resolution"
+        ),
+        required_slots=evidence_diagnostics.get("required_slots", []),
+    )
+    if not controlled_candidate:
+        return [
+            SystemMessage(content=_SYSTEM_PROMPT),
+            HumanMessage(content=audit_context),
+        ]
+    return [
+        SystemMessage(content=_CONTRACT_PROBE_SYSTEM_PROMPT),
+        HumanMessage(
+            content=(
+                "/no_think\nCONTROLLED ORIGINAL CANDIDATE UNDER AUDIT:\n"
+                f"{controlled_candidate}\n\nAUDIT CONTEXT (DO NOT RE-ANSWER):\n"
+                f"{audit_context}"
+            )
+        ),
+    ]
+
+
+def _contract_probe_original_candidate(request: Any, route: str) -> str:
+    trace_context = getattr(request, "trace_context", None)
+    trace_context = trace_context if isinstance(trace_context, dict) else {}
+    if "contract_probe_original_candidate" not in trace_context:
+        return ""
+    candidate = (
+        str(trace_context.get("contract_probe_original_candidate") or "")
+        .strip()
+        .casefold()
+    )
+    eligible = bool(
+        route == "contract_probe"
+        and str(getattr(request, "origin", "") or "").casefold() == "benchmark"
+        and str(getattr(request, "verification_domain", "") or "").casefold()
+        == "qasper"
+    )
+    if not eligible or candidate not in QASPER_CANDIDATES:
+        raise ValueError("invalid controlled QASPER contract-probe candidate")
+    return candidate
 
 
 def _generate_candidate_response(
@@ -375,215 +431,6 @@ def _answering_llm(pipeline: Any) -> Any | None:
     answering_pipeline = getattr(pipeline, "answering_pipeline", None)
     llm = getattr(answering_pipeline, "llm", None)
     return llm if callable(llm) else None
-
-
-def _candidate_evidence(
-    request: Any,
-    question: str,
-    bundle: EvidenceBundle,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    slots = required_semantic_proposition_slots(request)
-    packing = pack_semantic_proposition_evidence(
-        request,
-        question,
-        slots,
-        bundle,
-    )
-    records = [
-        {
-            "label": str(record["label"]),
-            "evidence_id": str(record["evidence_id"]),
-            "text": str(record["text"]),
-            "evidence_refs": [
-                str(value).strip()
-                for value in record.get("evidence_refs", [])
-                if str(value).strip()
-            ],
-            "required_slot_ids": [
-                str(value).strip()
-                for value in record.get("required_slot_ids", [])
-                if str(value).strip()
-            ],
-            "selectors": list(record.get("selectors", [])),
-        }
-        for record in packing.records
-    ]
-    records, bound_slots, candidate_dropped_count = _fit_candidate_prompt_evidence(
-        question,
-        records,
-        slots=slots,
-        proposition=packing.question_proposition,
-        proposition_resolution=packing.question_proposition_resolution,
-    )
-    return records, {
-        "evidence_input_count": len(bundle.items),
-        "evidence_dropped_count": packing.dropped_count + candidate_dropped_count,
-        "candidate_prompt_dropped_evidence_count": candidate_dropped_count,
-        "evidence_truncated_count": packing.truncated_count,
-        "evidence_estimated_input_tokens": packing.estimated_input_tokens,
-        "evidence_token_budget": packing.input_token_budget,
-        "evidence_pack_digest": packing.semantic_pack_digest,
-        "prompt_char_limit": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
-        "typed_proposition": packing.question_proposition,
-        "question_proposition_resolution": packing.question_proposition_resolution,
-        "required_slots": bound_slots,
-    }
-
-
-def _fit_candidate_prompt_evidence(
-    question: str,
-    records: list[dict[str, Any]],
-    *,
-    slots: list[dict[str, Any]],
-    proposition: dict[str, Any],
-    proposition_resolution: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
-    selected = list(records)
-    while selected:
-        bound_slots = _bound_candidate_slots(slots, selected)
-        prompt = _candidate_prompt(
-            question,
-            selected,
-            proposition=proposition,
-            proposition_resolution=proposition_resolution,
-            required_slots=bound_slots,
-        )
-        if len(prompt) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS:
-            return selected, bound_slots, len(records) - len(selected)
-        selected.pop()
-    return [], _bound_candidate_slots(slots, []), len(records)
-
-
-def _candidate_prompt(
-    question: str,
-    evidence: list[dict[str, Any]],
-    *,
-    proposition: dict[str, Any] | None = None,
-    proposition_resolution: dict[str, Any] | None = None,
-    required_slots: list[dict[str, Any]] | None = None,
-) -> str:
-    proposition_text = json.dumps(
-        proposition or {},
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    resolution_status = str((proposition_resolution or {}).get("status") or "")
-    slot_text = "\n".join(
-        "- "
-        + str(slot.get("slot_id") or "")
-        + ": "
-        + str(slot.get("description") or "complete proposition support")
-        + "; binding_status="
-        + str(slot.get("binding_status") or "missing")
-        + "; retrieved_evidence_ids="
-        + json.dumps(
-            slot.get("retrieved_evidence_ids", slot.get("evidence_ids", [])),
-            ensure_ascii=False,
-        )
-        + "; retrieved_evidence_refs="
-        + json.dumps(
-            slot.get("retrieved_evidence_refs", slot.get("evidence_refs", [])),
-            ensure_ascii=False,
-        )
-        for slot in required_slots or []
-    )
-    evidence_text = "\n\n".join(
-        "\n".join(
-            [
-                f"[{record['label']}] evidence_id={record['evidence_id']}",
-                "selector_options="
-                + json.dumps(
-                    _candidate_selector_options(record, question=question),
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ),
-            ]
-        )
-        for record in evidence
-    )
-    return (
-        "/no_think\n"
-        f"QUESTION:\n{question.strip()}\n\n"
-        "TYPED QUESTION PROPOSITION:\n"
-        f"{proposition_text}\n"
-        f"QUESTION PROPOSITION RESOLUTION STATUS: {resolution_status or 'unknown'}\n\n"
-        "REQUIRED VERIFICATION SLOTS:\n"
-        f"{slot_text or '- none'}\n\n"
-        f"CANONICAL RETRIEVED EVIDENCE:\n{evidence_text}\n\n"
-        "Use the exact selector options shown above when referring to evidence; "
-        "an evidence ID or a first selector is not a proposition binding. Selector "
-        "slot_hints, joint_slot_hint, and polarity_signal values are conservative "
-        "retrieval observations only and are not authority. A non-undetermined "
-        "polarity_signal is emitted only when one exact selector has hints for "
-        "actor, predicate, object, and quantifier. explicit_contradiction is the "
-        "only negative-answer hint; undetermined is not evidence for no. The slot "
-        "binding status is also a retrieval-stage observation, not permission to "
-        "rewrite a parsed candidate. Base the candidate on the proposition-aligned "
-        "evidence shown above and return exactly one JSON object matching the "
-        "required schema."
-    )
-
-
-def _bound_candidate_slots(
-    slots: list[dict[str, Any]],
-    evidence: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    available = {str(record.get("evidence_id") or "") for record in evidence}
-    output: list[dict[str, Any]] = []
-    for slot in slots:
-        slot_id = str(slot.get("slot_id") or "")
-        direct_ids = [
-            str(value).strip()
-            for value in slot.get("evidence_ids", [])
-            if str(value).strip() in available
-        ]
-        derived_ids = [
-            str(record["evidence_id"])
-            for record in evidence
-            if slot_id in record.get("required_slot_ids", [])
-        ]
-        retrieved_ids = list(dict.fromkeys([*direct_ids, *derived_ids]))
-        bound_records = [
-            record
-            for record in evidence
-            if slot_id in record.get("required_slot_ids", [])
-            or str(record.get("evidence_id") or "") in retrieved_ids
-        ]
-        retrieved_refs = list(
-            dict.fromkeys(
-                ref
-                for record in bound_records
-                for ref in _candidate_selector_ids(record)
-            )
-        )
-        exact_ids, exact_refs = _exact_candidate_slot_binding(
-            slot,
-            bound_records,
-        )
-        output.append(
-            {
-                "slot_id": slot_id,
-                "description": str(slot.get("description") or ""),
-                # Only explicit, span-level proposition binding may populate
-                # these authority-shaped fields. Retrieval IDs and selector
-                # options are retained separately so they cannot masquerade as
-                # a verified slot binding.
-                "evidence_ids": exact_ids,
-                "evidence_refs": exact_refs,
-                "retrieved_evidence_ids": retrieved_ids,
-                "retrieved_evidence_refs": retrieved_refs,
-                "binding_status": "bound" if exact_ids and exact_refs else "missing",
-                "binding_reason": (
-                    "exact_span_set"
-                    if exact_ids and exact_refs
-                    else "record_identity_only"
-                    if retrieved_ids or retrieved_refs
-                    else "no_retrieved_evidence"
-                ),
-            }
-        )
-    return output
 
 
 def _serialized_messages(messages: list[Any]) -> list[dict[str, Any]]:

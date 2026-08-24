@@ -211,7 +211,8 @@ def _supported_row_required_slot_unverified(
     metadata: dict[str, Any],
 ) -> bool:
     if (
-        verifier.get("candidate_verification_status") != "supported"
+        verifier.get("candidate_verification_status")
+        not in {"supported", "contradicted"}
         or audit.get("status") != "passed"
     ):
         return False
@@ -247,6 +248,7 @@ def _required_slot_state_unverified(
     verified.update(_string_set(authority.get("verified_slot_ids")))
     verified.update(_string_set(authority.get("verified_support_slot_ids")))
     required.update(_string_set(semantic_authority.get("required_slot_ids")))
+    verified.update(_string_set(semantic_authority.get("verified_slot_ids")))
     verified.update(_string_set(semantic_authority.get("verified_support_slot_ids")))
     if _proposition_binding_state_unverified(verifier, semantic_authority):
         return True
@@ -259,12 +261,20 @@ def _proposition_binding_state_unverified(
     verifier: dict[str, Any],
     authority: dict[str, Any],
 ) -> bool:
+    proposition = _mapping(verifier.get("question_proposition")) or _mapping(
+        authority.get("question_proposition")
+    )
+    quantifier = " ".join(str(proposition.get("quantifier") or "").casefold().split())
+    if not quantifier:
+        return True
+    not_applicable = {"quantifier"} if quantifier == "none" else set()
+    required_proposition_slots = _PROPOSITION_BINDING_SLOTS - not_applicable
     bindings = _mapping(authority.get("proposition_slot_bindings"))
     raw_slot_refs = _mapping(authority.get("proposition_slot_evidence_refs"))
     evidence_set = _string_set(authority.get("proposition_binding_evidence_set_refs"))
     slot_refs = {
         slot: _string_set(raw_slot_refs.get(slot))
-        for slot in _PROPOSITION_BINDING_SLOTS
+        for slot in required_proposition_slots
     }
     verdict = str(verifier.get("verdict") or "").strip().casefold()
     expected_relation = {
@@ -273,9 +283,13 @@ def _proposition_binding_state_unverified(
     }.get(verdict)
     if (
         authority.get("status") != "verified"
-        or set(bindings) != _PROPOSITION_BINDING_SLOTS
+        or _string_set(authority.get("required_proposition_slots"))
+        != required_proposition_slots
+        or _string_set(authority.get("not_applicable_proposition_slots"))
+        != not_applicable
+        or set(bindings) != required_proposition_slots
         or any(not str(bindings[slot] or "").strip() for slot in bindings)
-        or set(raw_slot_refs) != _PROPOSITION_BINDING_SLOTS
+        or set(raw_slot_refs) != required_proposition_slots
         or any(not refs for refs in slot_refs.values())
         or not evidence_set
         or any(not refs <= evidence_set for refs in slot_refs.values())
@@ -291,6 +305,7 @@ def _proposition_binding_state_unverified(
             slot: sorted(slot_refs[slot]) for slot in sorted(slot_refs)
         },
         "proposition_binding_evidence_set_refs": sorted(evidence_set),
+        "not_applicable_proposition_slots": sorted(not_applicable),
     }
     return authority.get("proposition_evidence_set_digest") != _premise_digest(payload)
 

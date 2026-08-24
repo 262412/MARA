@@ -1,0 +1,296 @@
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+from copy import deepcopy
+from pathlib import Path
+from typing import Any
+
+from scripts.slurm.qasper_debug_contract_probe_cases import (
+    _AUDITOR_STATUSES,
+    _CANDIDATES,
+    _JUDGMENTS,
+    _PROBE_CASES,
+    _QUESTION,
+    ProbeCase,
+)
+
+_MODEL_CONTRACT = "qasper_contract_probe_live_model.v2"
+
+
+def _terminal_snapshot(execution: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    terminal_commit = deepcopy(execution.engine_terminal_commit)
+    terminal_metadata = deepcopy(
+        execution.engine_terminal_evidence_bundle.get("metadata") or {}
+        if isinstance(execution.engine_terminal_evidence_bundle, dict)
+        else {}
+    )
+    return terminal_commit, terminal_metadata
+
+
+def _probe_annotation(
+    case: ProbeCase,
+    candidate: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    annotation = {
+        "annotation_id": f"contract-probe:{case.case_id}",
+        "yes_no": candidate.strip().casefold() == "yes",
+    }
+    example_metadata = {
+        "qasper_answer_annotations": [annotation],
+        "quality_lane_excluded": True,
+        "contract_probe_case": {
+            "case_id": case.case_id,
+            "expected_candidate": case.expected_candidate,
+            "expected_judgment": case.expected_judgment,
+            "expected_audit_status": case.expected_audit_status,
+            "expected_negative": case.expected_negative,
+            "controlled_fault": case.controlled_fault,
+            "proposal_judgment": case.proposal_judgment or case.expected_judgment,
+        },
+    }
+    annotation_scores = {
+        "annotation_id": annotation["annotation_id"],
+        "contract_id": "qasper_annotation_score.v1",
+        "annotation_index": 1,
+        "answer_f1": 0.0,
+        "typed_accuracy": 0.0,
+        "evidence_f1": 0.0,
+        "ambiguity_marker": "",
+    }
+    diagnostics = {
+        "contract_id": "qasper_annotation_diagnostics.v1",
+        "annotation_count": 1,
+        "ambiguous": False,
+        "ambiguity_reasons": [],
+        # This probe annotation records candidate-label coverage, not a
+        # benchmark gold answer or the terminal abstention projection.
+        "canonical_answer_classes": [[candidate]],
+    }
+    return example_metadata, {
+        "annotation": annotation,
+        "score": annotation_scores,
+        "diagnostics": diagnostics,
+    }
+
+
+def _prediction_row(
+    case: ProbeCase,
+    generation_candidate: str,
+    verifier_candidate: str,
+    execution: Any,
+    live_calls: list[dict[str, Any]],
+) -> dict[str, Any]:
+    terminal_commit, terminal_metadata = _terminal_snapshot(execution)
+    example_metadata, annotation_data = _probe_annotation(case, verifier_candidate)
+    example_metadata["contract_probe_case"].update(
+        {
+            "generator_candidate": generation_candidate,
+            "controlled_candidate": case.controlled_candidate,
+        }
+    )
+    # Annotation/score fields make the row consumable by existing observability
+    # readers, but the row is explicitly excluded from quality denominators.
+    return {
+        "contract_id": _MODEL_CONTRACT,
+        "example_id": f"contract-probe-{case.case_id}",
+        "route": "contract_probe",
+        "qasper_debug_lane": "contract_probe",
+        "quality_lane_excluded": True,
+        "question": _QUESTION,
+        "answer_type": "boolean",
+        "predicted_answer": verifier_candidate,
+        "answer_for_scoring": verifier_candidate,
+        "gold_answers": [],
+        "raw_generated_answer": generation_candidate,
+        "engine_terminal_answer": execution.engine_terminal_answer,
+        "engine_terminal_state": deepcopy(execution.engine_terminal_state),
+        "engine_verify_decision": deepcopy(execution.engine_verify_decision),
+        "engine_terminal_guardrail_decision": deepcopy(
+            execution.engine_terminal_guardrail_decision
+        ),
+        "engine_terminal_evidence_bundle": deepcopy(
+            execution.engine_terminal_evidence_bundle
+        ),
+        "engine_terminal_projection_hash": execution.engine_terminal_projection_hash,
+        "engine_terminal_commit": terminal_commit,
+        "terminal_outcome": str(terminal_commit.get("outcome") or ""),
+        "terminal_outcome_reason": str(terminal_commit.get("reason") or ""),
+        "terminal_outcome_contract_violation": bool(
+            terminal_commit.get("contract_violation") is True
+        ),
+        "terminal_semantic_commit": terminal_commit,
+        "controller_decision": execution.controller_decision.as_dict(),
+        "controller_trace": deepcopy(execution.controller_trace),
+        "retrieve_decision": execution.retrieve_decision.as_dict(),
+        "verify_decision": execution.verify_decision.as_dict(),
+        "guardrail_decision": execution.guardrail_decision.as_dict(),
+        "evidence_bundle": execution.evidence_bundle.as_dict(),
+        "evidence_metadata": terminal_metadata,
+        "contract_probe_live_calls": live_calls,
+        "controlled_input": {
+            "mode": "controlled_original_candidate"
+            if case.controlled_candidate
+            else "none",
+            "generator_candidate": generation_candidate,
+            "original_candidate": verifier_candidate,
+            "evidence_switch": case.controlled_fault or "none",
+            "quality_failure": False,
+        },
+        "contract_probe_expectation": (
+            "auditor_fail" if case.controlled_fault else case.case_id
+        ),
+        "expected_negative_probe": case.expected_negative,
+        "example_metadata": example_metadata,
+        "qasper_annotation_scores": [annotation_data["score"]],
+        "qasper_annotation_diagnostics": annotation_data["diagnostics"],
+    }
+
+
+def _trace_from_row(row: dict[str, Any], key: str) -> dict[str, Any]:
+    value = (row.get("evidence_metadata") or {}).get(key)
+    if not isinstance(value, dict):
+        raise RuntimeError(f"{row.get('example_id')}: missing production trace {key}")
+    return value
+
+
+def _observed_state(row: dict[str, Any]) -> tuple[str, str, str]:
+    generation = _trace_from_row(row, "qasper_candidate_generation")
+    verifier = _trace_from_row(row, "semantic_proposition_verifier")
+    del generation
+    candidate = str(verifier.get("candidate_label") or "").casefold()
+    judgment = str(verifier.get("candidate_verification_status") or "").casefold()
+    audit = verifier.get("candidate_verification_audit")
+    audit = audit if isinstance(audit, dict) else {}
+    audit_status = str(audit.get("status") or "").casefold()
+    if audit_status not in _AUDITOR_STATUSES:
+        audit_status = (
+            "failed"
+            if verifier.get("audit_status") in {"failed", "rejected"}
+            else audit_status
+        )
+    return candidate, judgment, audit_status
+
+
+def _assert_live_case(case: ProbeCase, row: dict[str, Any]) -> tuple[str, str, str]:
+    observed = _observed_state(row)
+    expected = (
+        case.expected_candidate,
+        case.expected_judgment,
+        case.expected_audit_status,
+    )
+    if observed != expected:
+        raise RuntimeError(
+            f"{case.case_id}: provider observed {observed!r}, expected {expected!r}"
+        )
+    if observed[0] not in _CANDIDATES or observed[1] not in _JUDGMENTS:
+        raise RuntimeError(
+            f"{case.case_id}: invalid observed production state {observed!r}"
+        )
+    calls = row.get("contract_probe_live_calls")
+    if not isinstance(calls, list) or len(calls) < 3:
+        raise RuntimeError(
+            f"{case.case_id}: actual model/auditor call evidence is incomplete"
+        )
+    controlled = row.get("controlled_input")
+    if not isinstance(controlled, dict):
+        raise RuntimeError(f"{case.case_id}: controlled-input provenance is missing")
+    if controlled.get("original_candidate") != observed[0]:
+        raise RuntimeError(
+            f"{case.case_id}: verifier candidate is not the recorded controlled input"
+        )
+    if (
+        case.controlled_fault
+        and controlled.get("evidence_switch") != case.controlled_fault
+    ):
+        raise RuntimeError(f"{case.case_id}: controlled evidence switch is missing")
+    stages = {str(call.get("stage") or "") for call in calls if isinstance(call, dict)}
+    if (
+        "qasper_typed_candidate" not in stages
+        or "semantic_evidence_set_proposition" not in stages
+    ):
+        raise RuntimeError(
+            f"{case.case_id}: candidate/proposal provider calls are missing"
+        )
+    if not any(
+        stage in {"semantic_entailment_audit", "candidate_bound_unknown_audit"}
+        for stage in stages
+    ):
+        raise RuntimeError(f"{case.case_id}: independent auditor call is missing")
+    verifier = _trace_from_row(row, "semantic_proposition_verifier")
+    if int(verifier.get("audit_model_call_count") or 0) <= 0:
+        raise RuntimeError(
+            f"{case.case_id}: production verifier recorded no auditor attempt"
+        )
+    if case.controlled_fault:
+        if case.expected_audit_status != "failed":
+            raise RuntimeError(f"{case.case_id}: controlled fault must be negative")
+        commit = row.get("engine_terminal_commit") or {}
+        if row.get("engine_terminal_answer") != "unanswerable":
+            raise RuntimeError(
+                f"{case.case_id}: rejected audit did not abstain at terminal"
+            )
+        if str(commit.get("outcome") or "") not in {"safe_abstention", "abstain"}:
+            raise RuntimeError(
+                f"{case.case_id}: rejected audit has unsafe terminal outcome"
+            )
+    return observed
+
+
+def _assert_live_coverage(rows: list[dict[str, Any]]) -> None:
+    if len(rows) != len(_PROBE_CASES):
+        raise RuntimeError(
+            f"live contract probe requires {len(_PROBE_CASES)} rows, observed {len(rows)}"
+        )
+    by_case = {
+        str(
+            (row.get("example_metadata") or {})
+            .get("contract_probe_case", {})
+            .get("case_id")
+            or ""
+        ): row
+        for row in rows
+    }
+    observed_candidates: set[str] = set()
+    observed_judgments: set[str] = set()
+    observed_audits: set[str] = set()
+    for case in _PROBE_CASES:
+        row = by_case.get(case.case_id)
+        if row is None:
+            raise RuntimeError(f"live contract probe missing case {case.case_id}")
+        observed = _assert_live_case(case, row)
+        observed_candidates.add(observed[0])
+        observed_judgments.add(observed[1])
+        observed_audits.add(observed[2])
+    required = {
+        "candidate": {"no"},
+        "judgment": {"contradicted", "unknown"},
+        "audit": {"passed", "failed"},
+    }
+    if not required["candidate"] <= observed_candidates:
+        raise RuntimeError("live contract probe is missing candidate label no")
+    if not required["judgment"] <= observed_judgments:
+        raise RuntimeError(
+            "live contract probe is missing contradicted or unknown judgment"
+        )
+    if not required["audit"] <= observed_audits:
+        raise RuntimeError(
+            "live contract probe is missing passed or failed auditor outcome"
+        )
+
+
+def _write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        temporary = Path(handle.name)
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    os.replace(temporary, path)

@@ -46,6 +46,8 @@ BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
 HEALTH_JSON="${HEALTH_ROOT}/${NAME}-${RUN_ID}.json"
 TOOL_CALL_SMOKE_JSON="${HEALTH_ROOT}/${NAME}-${RUN_ID}-tool-calls.json"
 TOOL_CALL_SMOKE_LOG="${LOG_ROOT}/tool-call-smoke.log"
+CONTRACT_PROBE_PATH="${MARA_QASPER_CONTRACT_PROBE_PATH:-${OUT_ROOT}/contract_probe_predictions.jsonl}"
+CONTRACT_PROBE_AUDIT_PATH="${MARA_QASPER_CONTRACT_PROBE_AUDIT_PATH:-${OUT_ROOT}/contract_probe_audit.json}"
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/mnt/fastscratch/users/tbczhang/cache/uv}"
 export UV_NO_CACHE="${UV_NO_CACHE:-1}"
@@ -269,6 +271,22 @@ out.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 print(f"health_json={out}")
 PY
 
+if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
+  log "running live QASPER contract probes; output=${CONTRACT_PROBE_PATH}"
+  "$MARA_BENCHMARK_PYTHON" \
+    "${PROJECT_ROOT}/scripts/slurm/qasper_debug_contract_probe.py" \
+    --base-url "$TEXT_LLM_BASE_URL" \
+    --model "$SEMANTIC_EVALUATOR_MODEL" \
+    --output "$CONTRACT_PROBE_PATH" \
+    --timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"
+  test -s "$CONTRACT_PROBE_PATH"
+  "$MARA_BENCHMARK_PYTHON" \
+    "${PROJECT_ROOT}/scripts/slurm/validate_qasper_contract_probe.py" \
+    "$CONTRACT_PROBE_PATH" \
+    --output "$CONTRACT_PROBE_AUDIT_PATH"
+  test -s "$CONTRACT_PROBE_AUDIT_PATH"
+fi
+
 NUM_SHARDS="${MARA_TEXT_NUM_SHARDS:-${MARA_FINAL_NUM_SHARDS:-}}"
 SHARD_INDEX="${MARA_TEXT_SHARD_INDEX:-${MARA_FINAL_SHARD_INDEX:-}}"
 SHARD_ARGS=()
@@ -339,15 +357,33 @@ fi
   "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
   "$RUN_DIR/predictions.jsonl" \
   "${VALIDATION_ARGS[@]}"
+if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
+  if [[ "$CONTRACT_PROBE_PATH" != "$RUN_DIR/contract_probe_predictions.jsonl" ]]; then
+    cp "$CONTRACT_PROBE_PATH" "$RUN_DIR/contract_probe_predictions.jsonl"
+  fi
+  test -s "$RUN_DIR/contract_probe_predictions.jsonl"
+  if [[ "$CONTRACT_PROBE_AUDIT_PATH" != "$RUN_DIR/contract_probe_audit.json" ]]; then
+    cp "$CONTRACT_PROBE_AUDIT_PATH" "$RUN_DIR/contract_probe_audit.json"
+  fi
+  test -s "$RUN_DIR/contract_probe_audit.json"
+fi
 if [[ "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
   if [[ -z "$CONTRACT_SMOKE_SUITE_KIND" ]]; then
     log "MARA_CONTRACT_SMOKE_SUITE_KIND is required for contract smoke validation"
     exit 2
   fi
+  CONTRACT_PROBE_VALIDATION_ARGS=()
+  if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" ]]; then
+    CONTRACT_PROBE_VALIDATION_ARGS+=(
+      --contract-probe-predictions
+      "$RUN_DIR/contract_probe_predictions.jsonl"
+    )
+  fi
   "$MARA_BENCHMARK_PYTHON" \
     "${PROJECT_ROOT}/scripts/slurm/validate_contract_smoke.py" \
     "$RUN_DIR" \
-    --suite-kind "$CONTRACT_SMOKE_SUITE_KIND"
+    --suite-kind "$CONTRACT_SMOKE_SUITE_KIND" \
+    "${CONTRACT_PROBE_VALIDATION_ARGS[@]}"
 fi
 
 mara_reconcile_benchmark_completion 0

@@ -42,8 +42,7 @@ def _schema_version_violations(
     candidate_audit = _mapping(verifier.get("candidate_verification_audit"))
     audit_contract = (
         _CANDIDATE_VERIFIER_AUDIT_CONTRACT
-        if verifier.get("candidate_verification_status") == "unknown"
-        or candidate_audit.get("mode") == "candidate_bound_unknown_audit"
+        if candidate_audit.get("mode") == "candidate_bound_unknown_audit"
         else _SEMANTIC_ENTAILMENT_AUDIT_CONTRACT
     )
     for field in ("audit_contract_id", "semantic_entailment_audit_contract"):
@@ -193,7 +192,7 @@ def _expected_audit_outcome(
         return {("insufficient_evidence", "unknown")}
     if relation == "supported":
         if candidate == "unanswerable":
-            return {("insufficient_evidence", "unknown")}
+            return None
         return {(candidate, "supported")}
     if relation == "contradicted":
         verdicts = {"yes", "no"} - (

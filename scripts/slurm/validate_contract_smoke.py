@@ -26,6 +26,18 @@ from scripts.slurm.qasper_debug_contract import (  # noqa: E402
     qasper_debug_behavior_violations,
     qasper_debug_contract_metrics,
 )
+from scripts.slurm.validate_contract_smoke_gates import (  # noqa: E402
+    FINANCE_HARD_GATES,
+    HARD_GATES,
+    QASPER_DEBUG_HARD_GATES,
+    QASPER_HARD_GATES,
+)
+from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
+    contract_probe_preflight_audit as _contract_probe_preflight_audit,
+)
+from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
+    contract_probe_preflight_violations as _contract_probe_preflight_violations,
+)
 
 CONTRACT = "contract_smoke_audit.v2"
 STAGES = (
@@ -65,108 +77,6 @@ REQUIREMENTS: dict[str, set[str]] = {
     },
     "qasper_debug": set(),
 }
-HARD_GATES = {
-    "identity_collision_count": ("eq", 0.0),
-    "runtime_benchmark_roundtrip": ("eq", 1.0),
-    "atomic_field_roundtrip_rate": ("eq", 1.0),
-    "exact_atomic_identity_roundtrip": ("eq", 1.0),
-    "exact_numeric_field_roundtrip": ("eq", 1.0),
-    "normalized_label_roundtrip": ("eq", 1.0),
-    "raw_representation_preservation": ("eq", 1.0),
-    "reranker_lineage_violation_count": ("eq", 0.0),
-    "citation_provenance_violation_count": ("eq", 0.0),
-    "missing_execution_slot_answer_count": ("eq", 0.0),
-    "required_slot_false_fill_count": ("eq", 0.0),
-    "slot_semantic_false_fill_count": ("eq", 0.0),
-    "slot_unresolved_reference_count": ("eq", 0.0),
-    "plan_evidence_reference_resolution_rate": ("eq", 1.0),
-    "source_page_cross_join_count": ("eq", 0.0),
-    "calculation_render_mismatch_count": ("eq", 0.0),
-    "heuristic_veto_after_verified_execution_count": ("eq", 0.0),
-    "rounding_verification_failure_count": ("eq", 0.0),
-    "qasper_stale_verifier_state_count": ("eq", 0.0),
-    "gold_runtime_source_join_rate": ("eq", 1.0),
-    "gold_source_schema_valid": ("eq", 1.0),
-    "unresolved_gold_source_count": ("eq", 0.0),
-    "ambiguous_source_alias_count": ("eq", 0.0),
-    "gold_source_alias_resolution_rate": ("eq", 1.0),
-    "gold_page_alias_resolution_rate": ("eq", 1.0),
-    "gold_source_page_crosswalk_rate": ("eq", 1.0),
-    "required_candidate_nonempty_rate": ("eq", 1.0),
-    "required_selected_nonempty_rate": ("eq", 1.0),
-    "required_generation_context_nonempty_rate": ("eq", 1.0),
-    "citation_emission_coverage": ("eq", 1.0),
-    "accepted_answer_citation_emission": ("eq", 1.0),
-    "verified_claim_support_coverage": ("eq", 1.0),
-    "final_answer_citation_emission": ("eq", 1.0),
-    "terminal_outcome_contract_violation_count": ("eq", 0.0),
-}
-FINANCE_HARD_GATES = {
-    "execution_slot_atomicity_rate": ("eq", 1.0),
-    "execution_slot_materialization_rate": ("eq", 1.0),
-    "execution_slot_binding_rate": ("eq", 1.0),
-    "execution_operand_resolution_rate": ("eq", 1.0),
-    "execution_slot_atomicity_violation_count": ("eq", 0.0),
-    "parent_table_false_fill_count": ("eq", 0.0),
-    "header_as_value_violation_count": ("eq", 0.0),
-    "dimension_binding_rate": ("eq", 1.0),
-    "dimension_scope_rate": ("eq", 1.0),
-    "dimension_binding_violation_count": ("eq", 0.0),
-    "dimension_scope_violation_count": ("eq", 0.0),
-    "execution_operand_provenance_coverage": ("eq", 1.0),
-    "reranker_execution_query_coverage": ("eq", 1.0),
-    "reranker_unique_output_artifact_mismatch_count": ("eq", 0.0),
-}
-QASPER_HARD_GATES = {
-    "abstention_candidate_sent_as_semantic_answer_count": ("eq", 0.0),
-    "verifier_required_evidence_coverage": ("eq", 1.0),
-    "qasper_required_slot_empty_state_count": ("eq", 0.0),
-    "qasper_required_evidence_coverage_missing_count": ("eq", 0.0),
-    "qasper_required_slot_authority_empty_count": ("eq", 0.0),
-    "qasper_required_slot_authority_missing_count": ("eq", 0.0),
-    "qasper_complete_to_unanswerable_empty_authority_count": ("eq", 0.0),
-    "qasper_complete_to_unanswerable_identity_count": ("eq", 0.0),
-    "qasper_complete_to_unanswerable_ref_mismatch_count": ("eq", 0.0),
-    "qasper_semantic_veto_audit_violation_count": ("eq", 0.0),
-    "contract_semantic_rewrite_count": ("eq", 0.0),
-    "engine_scored_semantic_label_mismatch_count": ("eq", 0.0),
-    "qasper_invalid_typed_label_count": ("eq", 0.0),
-    "qasper_terminal_state_missing_count": ("eq", 0.0),
-    "qasper_post_engine_answerability_llm_call_count": ("eq", 0.0),
-    "qasper_runtime_authority_missing_count": ("eq", 0.0),
-    "qasper_runtime_semantic_verifier_failure_count": ("eq", 0.0),
-    "qasper_runtime_scope_failure_count": ("eq", 0.0),
-    "qasper_composite_authority_invalid_count": ("eq", 0.0),
-    "qasper_semantic_evidence_set_authority_invalid_count": ("eq", 0.0),
-    "qasper_semantic_proposition_verifier_failure_count": ("eq", 0.0),
-    "qasper_quote_validation_ref_mismatch_count": ("eq", 0.0),
-    "answerable_false_abstention_count": ("eq", 0.0),
-    "boolean_scope_violation_count": ("eq", 0.0),
-    "wrong_polarity_count": ("eq", 0.0),
-    "citation_claim_support_violation_count": ("eq", 0.0),
-    "citation_scope_violation_count": ("eq", 0.0),
-    "citation_nonminimal_count": ("eq", 0.0),
-}
-QASPER_DEBUG_HARD_GATES = {
-    "terminal_outcome_contract_violation_count": ("eq", 0.0),
-    "answerable_false_abstention_count": ("eq", 0.0),
-    "qasper_quality_answerable_denominator_missing_count": ("eq", 0.0),
-    "qasper_candidate_verifier_auditor_label_set_mismatch_count": ("eq", 0.0),
-    "qasper_online_required_candidate_label_missing_count": ("eq", 0.0),
-    "qasper_online_required_verifier_judgment_missing_count": ("eq", 0.0),
-    "qasper_online_required_auditor_status_missing_count": ("eq", 0.0),
-    "qasper_online_required_annotation_ambiguity_missing_count": ("eq", 0.0),
-    "qasper_online_auditor_attempt_missing_count": ("eq", 0.0),
-    "qasper_online_verifier_missing_count": ("eq", 0.0),
-    "qasper_contract_probe_state_matrix_complete": ("eq", 1.0),
-    "qasper_candidate_raw_identity_mismatch_count": ("eq", 0.0),
-    "qasper_empty_candidate_audit_count": ("eq", 0.0),
-    "qasper_empty_typed_conclusion_count": ("eq", 0.0),
-    "qasper_semantic_entailment_audit_failure_count": ("eq", 0.0),
-    "qasper_semantic_entailment_audit_rejection_count": ("eq", 0.0),
-    "qasper_required_slot_unverified_count": ("eq", 0.0),
-    "qasper_reverify_without_semantic_state_change_count": ("eq", 0.0),
-}
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -178,6 +88,20 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _load_predictions(path: Path) -> list[dict[str, Any]]:
     return [value for value in read_jsonl(path) if isinstance(value, dict)]
+
+
+def _load_contract_probe_predictions(
+    run_dir: Path,
+    *,
+    suite_kind: str,
+    contract_probe_path: Path | None,
+) -> list[dict[str, Any]]:
+    if suite_kind != "qasper_debug":
+        return []
+    path = contract_probe_path or run_dir / "contract_probe_predictions.jsonl"
+    if not path.is_file():
+        return []
+    return _load_predictions(path)
 
 
 def _records(value: Any) -> list[dict[str, Any]]:
@@ -334,9 +258,19 @@ def _all_stage_audits(
     return audits, violations
 
 
-def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
+def validate(
+    run_dir: Path,
+    *,
+    suite_kind: str,
+    contract_probe_path: Path | None = None,
+) -> dict[str, Any]:
     summary = _load_json(run_dir / "summary.json")
     predictions = _load_predictions(run_dir / "predictions.jsonl")
+    contract_probe_predictions = _load_contract_probe_predictions(
+        run_dir,
+        suite_kind=suite_kind,
+        contract_probe_path=contract_probe_path,
+    )
     expected_count = (18, 18) if suite_kind == "qasper_debug" else (2, 5)
     observed_requirements = _requirements(predictions)
     precondition_violations = _precondition_violations(
@@ -354,15 +288,18 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
             expected_count=expected_count,
             observed_requirements=observed_requirements,
             violations=precondition_violations,
+            contract_probe_predictions=contract_probe_predictions,
         )
         publish_contract_smoke_audit(run_dir, audit)
         raise ValueError("; ".join(precondition_violations))
     audit = _complete_audit(
+        run_dir,
         summary,
         predictions,
         suite_kind=suite_kind,
         expected_count=expected_count,
         observed_requirements=observed_requirements,
+        contract_probe_predictions=contract_probe_predictions,
     )
     publish_contract_smoke_audit(run_dir, audit)
     if audit["status"] != "passed":
@@ -371,33 +308,44 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
 
 
 def _complete_audit(
+    run_dir: Path,
     summary: dict[str, Any],
     predictions: list[dict[str, Any]],
     *,
     suite_kind: str,
     expected_count: tuple[int, int],
     observed_requirements: set[str],
+    contract_probe_predictions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     behavior_violations = _behavior_violations(
         predictions,
         suite_kind=suite_kind,
+        contract_probe_predictions=contract_probe_predictions,
     )
-    debug_extensions = (
-        qasper_debug_audit_extensions(predictions)
-        if suite_kind == "qasper_debug"
-        else {"observability_coverage": {}, "structural_state_matrix": {}}
+    behavior_violations.extend(
+        _contract_probe_preflight_violations(
+            run_dir,
+            suite_kind=suite_kind,
+            prediction_count=len(contract_probe_predictions),
+        )
     )
-    if (
-        suite_kind == "qasper_debug"
-        and debug_extensions["structural_state_matrix"].get("complete") is not True
-    ):
-        behavior_violations.append("structural_state_matrix_incomplete")
+    debug_extensions, debug_violations = _debug_extensions(
+        predictions,
+        suite_kind=suite_kind,
+        contract_probe_predictions=contract_probe_predictions,
+    )
+    behavior_violations.extend(debug_violations)
     stage_audits, stage_violations = _all_stage_audits(
         predictions, suite_kind=suite_kind
     )
     metrics = contract_invariant_summary(predictions)
     if suite_kind == "qasper_debug":
-        metrics.update(qasper_debug_contract_metrics(predictions))
+        metrics.update(
+            qasper_debug_contract_metrics(
+                predictions,
+                contract_probe_predictions=contract_probe_predictions,
+            )
+        )
     hard_gates = _hard_gate_results(metrics, suite_kind=suite_kind)
     failed_gates = [
         metric for metric, result in hard_gates.items() if not result["passed"]
@@ -426,10 +374,32 @@ def _complete_audit(
         "contract_gates": metrics.get("contract_gates"),
         "contract_gate_failures": contract_gate_failures,
         "terminal_outcome_summary": terminal_outcome_summary_fields(predictions),
+        "provider_contract_probe_audit": _contract_probe_preflight_audit(
+            run_dir,
+            suite_kind=suite_kind,
+        ),
         **debug_extensions,
         "status": status,
     }
     return audit
+
+
+def _debug_extensions(
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    contract_probe_predictions: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[str]]:
+    if suite_kind != "qasper_debug":
+        return {"observability_coverage": {}, "structural_state_matrix": {}}, []
+    extensions = qasper_debug_audit_extensions(
+        predictions,
+        contract_probe_predictions=contract_probe_predictions,
+    )
+    violations = []
+    if extensions["structural_state_matrix"].get("complete") is not True:
+        violations.append("structural_state_matrix_incomplete")
+    return extensions, violations
 
 
 def _precondition_violations(
@@ -466,6 +436,7 @@ def _precondition_failure_audit(
     expected_count: tuple[int, int],
     observed_requirements: set[str],
     violations: list[str],
+    contract_probe_predictions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         "contract": CONTRACT,
@@ -476,7 +447,10 @@ def _precondition_failure_audit(
         "observed_requirements": sorted(observed_requirements),
         "precondition_violations": violations,
         **(
-            qasper_debug_audit_extensions(predictions)
+            qasper_debug_audit_extensions(
+                predictions,
+                contract_probe_predictions=contract_probe_predictions,
+            )
             if suite_kind == "qasper_debug"
             else {"observability_coverage": {}, "structural_state_matrix": {}}
         ),
@@ -517,11 +491,15 @@ def _behavior_violations(
     predictions: list[dict[str, Any]],
     *,
     suite_kind: str,
+    contract_probe_predictions: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     if suite_kind == "finance":
         return finance_behavior_violations(predictions)
     if suite_kind == "qasper_debug":
-        return qasper_debug_behavior_violations(predictions)
+        return qasper_debug_behavior_violations(
+            predictions,
+            contract_probe_predictions=contract_probe_predictions,
+        )
     violations: list[str] = []
     if not any(
         _observed_qasper_runtime_pass_through(prediction) for prediction in predictions
@@ -561,9 +539,25 @@ def main() -> None:
         choices=tuple(sorted(REQUIREMENTS)),
         required=True,
     )
+    parser.add_argument(
+        "--contract-probe-predictions",
+        type=Path,
+        help=(
+            "Separate live QASPER contract-probe JSONL artifact. "
+            "Required for qasper_debug validation."
+        ),
+    )
     args = parser.parse_args()
     try:
-        audit = validate(args.run_dir.resolve(), suite_kind=args.suite_kind)
+        audit = validate(
+            args.run_dir.resolve(),
+            suite_kind=args.suite_kind,
+            contract_probe_path=(
+                args.contract_probe_predictions.resolve()
+                if args.contract_probe_predictions
+                else None
+            ),
+        )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise SystemExit(str(exc)) from exc
     print(f"contract_smoke_status={audit['status']}")

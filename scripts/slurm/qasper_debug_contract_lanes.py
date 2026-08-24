@@ -14,6 +14,9 @@ from scripts.slurm.qasper_debug_contract_audit import (
     _typed_conclusion_present,
 )
 from scripts.slurm.qasper_debug_contract_identity import _raw_candidate_identity_valid
+from scripts.slurm.qasper_debug_contract_metric_payload import (
+    metric_payload as _metric_payload,
+)
 from scripts.slurm.qasper_debug_contract_observability import (
     qasper_debug_observability_coverage,
 )
@@ -40,7 +43,6 @@ def qasper_debug_audit_extensions(
         quality_predictions=quality_predictions,
         contract_probe_predictions=contract_probe_predictions,
     )
-    coverage_predictions = [*quality, *probes] if probes else quality
     lane_audits = {
         "quality_audit": _lane_audit(
             quality,
@@ -55,9 +57,16 @@ def qasper_debug_audit_extensions(
     }
     return {
         "observability_coverage": qasper_debug_observability_coverage(
-            coverage_predictions,
+            quality,
             require_auditor=True,
         ),
+        "combined_observability_coverage": qasper_debug_observability_coverage(
+            [*quality, *probes],
+            require_auditor=True,
+        ),
+        "contract_probe_observability_coverage": lane_audits["contract_probe_audit"][
+            "observability_coverage"
+        ],
         "structural_state_matrix": qasper_candidate_bound_state_matrix(
             predictions,
             contract_probe_predictions,
@@ -74,6 +83,7 @@ def qasper_debug_audit_extensions(
         "contract_probe_artifact": _contract_probe_artifact(
             probes,
             explicit=contract_probe_predictions is not None,
+            audit=lane_audits["contract_probe_audit"],
         ),
     }
 
@@ -82,22 +92,24 @@ def _contract_probe_artifact(
     probes: list[dict[str, Any]],
     *,
     explicit: bool,
+    audit: dict[str, Any],
 ) -> dict[str, Any]:
-    source = (
-        "explicit_argument"
-        if explicit
-        else "embedded_lane_marker"
-        if probes
-        else "deterministic_structural_projection"
-    )
+    if probes:
+        source = (
+            "explicit_live_prediction_rows" if explicit else "embedded_live_lane_rows"
+        )
+        status = str(audit.get("status") or "failed")
+    else:
+        source = "missing_live_prediction_rows"
+        status = "missing"
     return {
         "embedded_in": "contract_smoke_audit.json",
         "source": source,
         "prediction_count": len(probes),
-        "non_vacuous": True,
-        "covered_state_cell_count": 12,
-        "separate_live_prediction_artifact_required": False,
-        "status": "executed",
+        "non_vacuous": bool(probes),
+        "covered_state_cell_count": int(audit.get("covered_state_cell_count") or 0),
+        "separate_live_prediction_artifact_required": True,
+        "status": status,
     }
 
 
@@ -135,26 +147,23 @@ def _lane_audit(
             and not observation["missing_required_candidate_labels"]
         )
     else:
-        complete = _structural_probe_complete(matrix)
+        complete = _live_probe_complete(
+            predictions,
+            coverage=coverage,
+            observation=observation,
+            metrics=metrics,
+        )
     return {
         "lane": lane,
         "required": lane == "contract_probe",
-        "execution": (
-            "deterministic_structural_projection"
-            if lane == "contract_probe"
-            else "live_quality_rows"
-        ),
+        "execution": "live_model_rows"
+        if lane == "contract_probe"
+        else "live_quality_rows",
         "prediction_count": len(predictions),
         "live_prediction_count": len(predictions),
-        "non_vacuous": bool(
-            matrix["cells"] if lane == "contract_probe" else predictions
-        ),
+        "non_vacuous": bool(predictions),
         "status": "passed" if complete else "missing" if not predictions else "failed",
-        "covered_state_cell_count": (
-            len(matrix["cells"])
-            if lane == "contract_probe"
-            else observation["observed_state_cell_count"]
-        ),
+        "covered_state_cell_count": observation["observed_state_cell_count"],
         "live_state_matrix_complete": (
             observation.get("state_matrix_complete", False)
             if lane == "contract_probe"
@@ -166,15 +175,22 @@ def _lane_audit(
     }
 
 
-def _structural_probe_complete(matrix: dict[str, Any]) -> bool:
+def _live_probe_complete(
+    predictions: list[dict[str, Any]],
+    *,
+    coverage: dict[str, Any],
+    observation: dict[str, Any],
+    metrics: dict[str, float],
+) -> bool:
     return bool(
-        matrix["complete"]
-        and len(matrix["cells"]) == 12
-        and all(
-            cell.get("replacement_candidate_allowed") is False
-            and cell.get("original_candidate") == cell.get("candidate_after_audit")
-            for cell in matrix["cells"]
-        )
+        predictions
+        and coverage["complete"]
+        and not observation.get("missing_required_candidate_labels")
+        and not observation.get("missing_required_verifier_judgments")
+        and not observation.get("missing_required_auditor_statuses")
+        and metrics["qasper_online_auditor_attempt_missing_count"] == 0.0
+        and metrics["qasper_online_verifier_missing_count"] == 0.0
+        and metrics["qasper_unexpected_unknown_assessment_count"] == 0.0
     )
 
 
@@ -263,7 +279,16 @@ def qasper_debug_contract_metrics(
         contract_probe_predictions,
         quality_predictions=quality_predictions,
     )
+    quality_observation = matrix["quality_observation"]
+    probe_observation = matrix["contract_probe_observation"]
     counts = _metric_counts([*quality, *probes], quality)
+    quality_counts = _metric_counts(quality, quality)
+    probe_counts = _metric_counts(probes, [])
+    probe_counts["unexpected_false_abstentions"] = sum(
+        int(_answerable_false_abstention(prediction))
+        for prediction in probes
+        if not _expected_negative_probe(prediction)
+    )
     quality_label, probe_label = _metric_label_observations(
         matrix,
         lane=lane,
@@ -271,9 +296,17 @@ def qasper_debug_contract_metrics(
         probes_present=bool(probes),
     )
     flags = _metric_label_flags(quality_label, probe_label)
+    quality_flags = _metric_label_flags(
+        quality_observation, _empty_online_observation()
+    )
+    probe_flags = _metric_label_flags(_empty_online_observation(), probe_observation)
     return _metric_payload(
         counts,
         flags,
+        quality_flags=quality_flags,
+        probe_flags=probe_flags,
+        quality_counts=quality_counts,
+        probe_counts=probe_counts,
         quality_count=len(quality),
         probe_count=len(probes),
         probe_observation=matrix["contract_probe_observation"],
@@ -299,6 +332,7 @@ def _metric_counts(
         "verifier_missing": 0,
         "answerable_rows": 0,
         "required_slot_overlap": 0,
+        "unexpected_unknown_assessment": 0,
     }
     for prediction in all_predictions:
         metadata = terminal_metadata(prediction)
@@ -330,6 +364,9 @@ def _metric_counts(
             not _candidate_bound_auditor_attempt_observed(verifier)
         )
         counts["verifier_missing"] += int(not _verifier_observed(verifier))
+        counts["unexpected_unknown_assessment"] += _unexpected_unknown_assessment_count(
+            verifier
+        )
     _add_quality_metric_counts(counts, quality)
     return counts
 
@@ -404,80 +441,6 @@ def _metric_label_flags(
     }
 
 
-def _metric_payload(
-    counts: dict[str, int],
-    flags: dict[str, bool],
-    *,
-    quality_count: int,
-    probe_count: int,
-    probe_observation: dict[str, Any],
-    structural_matrix_complete: bool,
-) -> dict[str, float]:
-    required_slot_unverified = (
-        counts["supported_slot_unverified"]
-        + counts["answerable_slot_unverified"]
-        - counts["required_slot_overlap"]
-    )
-    return {
-        "answerable_false_abstention_count": float(counts["false_abstentions"]),
-        "qasper_quality_prediction_count": float(quality_count),
-        "qasper_contract_probe_prediction_count": float(probe_count),
-        "qasper_quality_answerable_row_count": float(counts["answerable_rows"]),
-        "qasper_quality_answerable_required_slot_unverified_count": float(
-            counts["answerable_slot_unverified"]
-        ),
-        "qasper_quality_answerable_denominator_missing_count": float(
-            counts["answerable_rows"] == 0
-        ),
-        "qasper_contract_probe_observed_state_cell_count": float(
-            probe_observation.get("observed_state_cell_count", 0)
-        ),
-        "qasper_contract_probe_state_matrix_complete": float(
-            structural_matrix_complete
-        ),
-        "qasper_contract_probe_live_state_matrix_complete": float(
-            bool(probe_observation.get("state_matrix_complete", False))
-        ),
-        "qasper_supported_row_required_slot_unverified_count": float(
-            counts["supported_slot_unverified"]
-        ),
-        "qasper_candidate_raw_identity_mismatch_count": float(
-            counts["raw_identity_mismatches"]
-        ),
-        "qasper_empty_candidate_audit_count": float(counts["empty_audits"]),
-        "qasper_empty_typed_conclusion_count": float(counts["empty_typed_conclusions"]),
-        "qasper_semantic_entailment_audit_failure_count": float(
-            counts["entailment_failures"]
-        ),
-        "qasper_semantic_entailment_audit_rejection_count": float(
-            counts["entailment_rejections"]
-        ),
-        "qasper_required_slot_unverified_count": float(required_slot_unverified),
-        "qasper_reverify_without_semantic_state_change_count": float(
-            counts["reverify_without_state_change"]
-        ),
-        "qasper_candidate_verifier_auditor_label_set_mismatch_count": float(
-            flags["label_mismatch"]
-        ),
-        "qasper_online_required_candidate_label_missing_count": float(
-            flags["missing_candidate_labels"]
-        ),
-        "qasper_online_required_verifier_judgment_missing_count": float(
-            flags["missing_verifier_judgments"]
-        ),
-        "qasper_online_required_auditor_status_missing_count": float(
-            flags["missing_auditor_statuses"]
-        ),
-        "qasper_online_required_annotation_ambiguity_missing_count": float(
-            flags["missing_ambiguity_states"]
-        ),
-        "qasper_online_auditor_attempt_missing_count": float(
-            counts["auditor_attempt_missing"]
-        ),
-        "qasper_online_verifier_missing_count": float(counts["verifier_missing"]),
-    }
-
-
 def _empty_online_observation() -> dict[str, Any]:
     return {
         "candidate_verifier_auditor_label_set_mismatch": False,
@@ -486,6 +449,40 @@ def _empty_online_observation() -> dict[str, Any]:
         "missing_required_auditor_statuses": [],
         "missing_required_annotation_ambiguity_states": [],
     }
+
+
+def _unexpected_unknown_assessment_count(verifier: dict[str, Any]) -> int:
+    debug = _mapping(verifier.get("debug_trace"))
+    count = 0
+    for event in debug.get("events") or []:
+        if not isinstance(event, dict) or event.get("event") != "model_transaction":
+            continue
+        transaction = _mapping(event.get("transaction"))
+        proposal = _mapping(transaction.get("proposal"))
+        for attempt in proposal.get("attempts") or []:
+            if not isinstance(attempt, dict):
+                continue
+            if str(attempt.get("parse_failure_reason") or "") == (
+                "unexpected_unknown_assessment"
+            ):
+                count += 1
+    return count
+
+
+def _expected_negative_probe(prediction: dict[str, Any]) -> bool:
+    for source in (
+        prediction,
+        _mapping(prediction.get("example_metadata")),
+        _mapping(prediction.get("evidence_metadata")),
+    ):
+        if source.get("expected_negative_probe") is True:
+            return True
+        if str(source.get("contract_probe_expectation") or "").strip().casefold() in {
+            "auditor_fail",
+            "expected_auditor_fail",
+        }:
+            return True
+    return False
 
 
 def _answerable_prediction(prediction: dict[str, Any]) -> bool:

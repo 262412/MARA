@@ -11,6 +11,9 @@ _CANDIDATE_LABELS = ("yes", "no", "unanswerable")
 _REQUIRED_ONLINE_CANDIDATE_LABELS = ("no",)
 _REQUIRED_ONLINE_VERIFIER_JUDGMENTS = ("contradicted", "unknown")
 _REQUIRED_ONLINE_AUDITOR_STATUSES = ("failed", "passed")
+# Ambiguity is a quality-lane annotation concern.  The live contract probe
+# owns candidate/verifier/auditor state coverage; the immutable 12-cell matrix
+# below remains structural evidence and is not projected from probe rows.
 _REQUIRED_ONLINE_ANNOTATION_STATES = ("ambiguous", "unambiguous")
 _QUALITY_LANE = "quality"
 _CONTRACT_PROBE_LANE = "contract_probe"
@@ -85,6 +88,7 @@ def qasper_candidate_bound_state_matrix(
         for auditor_status in _AUDITOR_STATUSES
         for ambiguous in _AMBIGUITY_STATES
     ]
+    online_predictions = quality_predictions if has_probe_rows else combined
     return {
         "contract_id": STATE_MATRIX_CONTRACT,
         "matrix_kind": "structural_contract_projection",
@@ -98,8 +102,12 @@ def qasper_candidate_bound_state_matrix(
         "cells": cells,
         "complete": _matrix_complete(cells),
         "online_observation": _online_observation(
+            online_predictions,
+            lane=_QUALITY_LANE,
+        ),
+        "combined_online_observation": _online_observation(
             combined,
-            lane="legacy" if has_probe_rows else _QUALITY_LANE,
+            lane="legacy",
         ),
         "legacy_online_observation": _online_observation(combined),
         "quality_observation": _online_observation(
@@ -391,7 +399,7 @@ def _online_label_fields(
         required_candidate_labels = set(_REQUIRED_ONLINE_CANDIDATE_LABELS)
         required_verifier_judgments = set(_REQUIRED_ONLINE_VERIFIER_JUDGMENTS)
         required_auditor_statuses = set(_REQUIRED_ONLINE_AUDITOR_STATUSES)
-        required_ambiguity_states = set(_REQUIRED_ONLINE_ANNOTATION_STATES)
+        required_ambiguity_states = set()
     else:
         required_candidate_labels = set(_REQUIRED_ONLINE_CANDIDATE_LABELS)
         required_verifier_judgments = set(_REQUIRED_ONLINE_VERIFIER_JUDGMENTS)

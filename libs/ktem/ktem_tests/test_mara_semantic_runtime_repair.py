@@ -7,6 +7,11 @@ from typing import Any
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.query_planning import build_query_plan
+from ktem.docqa.question_proposition import (
+    PROPOSITION_EVIDENCE_SLOTS,
+    applicable_proposition_evidence_slots,
+    build_question_proposition,
+)
 from ktem.docqa.semantic_evidence_set_validation import validated_semantic_header
 from ktem.reasoning.mara_semantic_proposition_verifier import (
     build_semantic_proposition_verifier,
@@ -51,6 +56,9 @@ def _proposal(
     *,
     verdict: str = "yes",
 ) -> str:
+    applicable_slots = applicable_proposition_evidence_slots(
+        build_question_proposition(request.prompt)
+    )
     slot_ids = [
         slot.slot_id
         for slot in request.query_plan.evidence_slots
@@ -71,19 +79,22 @@ def _proposal(
                     "span_selector": selector,
                     "proposition_fragment": fragment,
                     "supports_slot_ids": slot_ids,
-                    "binds_proposition_slots": [
-                        "actor",
-                        "predicate",
-                        "object",
-                        "quantifier",
-                    ],
+                    "binds_proposition_slots": list(applicable_slots),
                 }
+            ],
+            "not_applicable_proposition_slots": [
+                slot
+                for slot in PROPOSITION_EVIDENCE_SLOTS
+                if slot not in applicable_slots
             ],
         }
     )
 
 
-def _atomic_audit() -> str:
+def _atomic_audit(request: DocQARequest, evidence_text: str) -> str:
+    applicable_slots = applicable_proposition_evidence_slots(
+        build_question_proposition(request.prompt)
+    )
     return json.dumps(
         {
             "premise_checks": [
@@ -93,6 +104,15 @@ def _atomic_audit() -> str:
                     "scope_consistent": True,
                     "proposition_bindings_valid": True,
                     "evidence_relation_valid": True,
+                    "declared_proposition_slots": list(applicable_slots),
+                    "proposition_slot_checks": [
+                        {
+                            "slot": slot,
+                            "binding_valid": True,
+                            "evidence_text": evidence_text,
+                        }
+                        for slot in applicable_slots
+                    ],
                 }
             ],
             "jointly_entails": True,
@@ -141,13 +161,20 @@ def _item(evidence_id: str, section_id: str, text: str) -> dict[str, str]:
 def test_proposition_repair_completes_question_before_conclusion_audit() -> None:
     question = "Does the model have attention?"
     request = _request(question)
+    evidence_text = "The authors state that the model has an attention mechanism."
     verifier, proposal_llm, audit_llm = _release_verifier(
-        [_proposal(request, "E1:S1", "our model uses an attention mechanism")],
-        [_atomic_audit()],
+        [
+            _proposal(
+                request,
+                "E1:S1",
+                "the authors state that the model has an attention mechanism",
+            )
+        ],
+        [_atomic_audit(request, evidence_text)],
     )
     bundle = EvidenceBundle(
         route="doc_text",
-        items=[_item("attention", "methods", "Our model uses an attention mechanism.")],
+        items=[_item("attention", "methods", evidence_text)],
     )
 
     result = verifier(request, question, "yes", bundle)
@@ -187,12 +214,16 @@ def test_independent_polarity_rejection_stops_without_reanswering() -> None:
     question = "Does the experiment focus on a specific domain?"
     request = _request(question)
     fragment = "the experiment does not focus on a specific domain"
+    evidence_text = "The experiment does not focus on a specific domain."
     verifier, proposal_llm, audit_llm = _release_verifier(
         [
             _proposal(request, "E1:S1", fragment),
             _proposal(request, "E1:S1", fragment, verdict="no"),
         ],
-        [_atomic_audit(), _atomic_audit()],
+        [
+            _atomic_audit(request, evidence_text),
+            _atomic_audit(request, evidence_text),
+        ],
     )
     bundle = EvidenceBundle(
         route="doc_text",
@@ -200,7 +231,7 @@ def test_independent_polarity_rejection_stops_without_reanswering() -> None:
             _item(
                 "domain-scope",
                 "experiments",
-                "The experiment does not focus on a specific domain.",
+                evidence_text,
             )
         ],
     )
@@ -231,20 +262,31 @@ def test_independent_polarity_rejection_stops_without_reanswering() -> None:
 def test_runtime_scope_rejection_stops_when_semantic_state_is_unchanged() -> None:
     question = "Does the model have attention?"
     request = _request(question)
+    prior_text = "Prior work uses attention in its baseline system."
+    current_text = "The authors use attention in the current system."
     verifier, proposal_llm, audit_llm = _release_verifier(
         [
-            _proposal(request, "E1:S1", "the baseline model uses attention"),
-            _proposal(request, "E2:S1", "our model uses attention"),
+            _proposal(
+                request,
+                "E1:S1",
+                "prior work uses attention in its baseline system",
+            ),
+            _proposal(
+                request,
+                "E2:S1",
+                "the authors use attention in the current system",
+            ),
         ],
-        [_atomic_audit(), _atomic_audit()],
+        [
+            _atomic_audit(request, prior_text),
+            _atomic_audit(request, current_text),
+        ],
     )
     bundle = EvidenceBundle(
         route="doc_text",
         items=[
-            _item(
-                "prior-attention", "related_work", "The baseline model uses attention."
-            ),
-            _item("current-attention", "methods", "Our model uses attention."),
+            _item("prior-attention", "related_work", prior_text),
+            _item("current-attention", "methods", current_text),
         ],
     )
 
@@ -275,18 +317,22 @@ def test_runtime_scope_rejection_stops_when_semantic_state_is_unchanged() -> Non
 def test_terminal_runtime_rejection_remains_a_bound_insufficient_response() -> None:
     question = "Does the model have attention?"
     request = _request(question)
-    rejected = _proposal(request, "E1:S1", "the baseline model uses attention")
+    evidence_text = "Prior work uses attention in its baseline system."
+    rejected = _proposal(
+        request,
+        "E1:S1",
+        "prior work uses attention in its baseline system",
+    )
     verifier, proposal_llm, audit_llm = _release_verifier(
         [rejected, rejected],
-        [_atomic_audit(), _atomic_audit()],
+        [
+            _atomic_audit(request, evidence_text),
+            _atomic_audit(request, evidence_text),
+        ],
     )
     bundle = EvidenceBundle(
         route="doc_text",
-        items=[
-            _item(
-                "prior-attention", "related_work", "The baseline model uses attention."
-            )
-        ],
+        items=[_item("prior-attention", "related_work", evidence_text)],
     )
 
     result = verifier(request, question, "unanswerable", bundle)

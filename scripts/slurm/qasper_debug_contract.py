@@ -119,15 +119,17 @@ def qasper_debug_behavior_violations(
                     require_auditor=True,
                 )
             )
-        for example_id, rows in by_example.items():
-            violations.extend(_cross_route_violations(example_id, rows))
+        if lane == "quality":
+            for example_id, rows in by_example.items():
+                violations.extend(_cross_route_violations(example_id, rows))
     matrix = qasper_candidate_bound_state_matrix(
         predictions,
         contract_probe_predictions,
         quality_predictions=quality_predictions,
     )
     if split:
-        violations.extend(_online_label_violations(matrix["quality_observation"]))
+        if quality:
+            violations.extend(_online_label_violations(matrix["quality_observation"]))
         if probes:
             violations.extend(
                 _online_label_violations(matrix["contract_probe_observation"])

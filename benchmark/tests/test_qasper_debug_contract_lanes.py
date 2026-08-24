@@ -76,18 +76,120 @@ def test_contract_probe_lane_is_non_vacuous_without_live_probe_rows() -> None:
 
     probe = audit["contract_probe_audit"]
     assert probe["prediction_count"] == 0
-    assert probe["execution"] == "deterministic_structural_projection"
-    assert probe["non_vacuous"] is True
-    assert probe["covered_state_cell_count"] == 12
-    assert probe["status"] == "passed"
-    assert audit["contract_probe_artifact"]["status"] == "executed"
+    assert probe["execution"] == "live_model_rows"
+    assert probe["non_vacuous"] is False
+    assert probe["covered_state_cell_count"] == 0
+    assert probe["status"] == "missing"
+    assert audit["contract_probe_artifact"]["status"] == "missing"
+    assert audit["contract_probe_artifact"]["source"] == "missing_live_prediction_rows"
     assert (
         audit["debug_gate_metrics"]["qasper_contract_probe_state_matrix_complete"]
-        == 1.0
+        == 0.0
+    )
+    assert (
+        audit["debug_gate_metrics"][
+            "qasper_contract_probe_required_online_states_complete"
+        ]
+        == 0.0
     )
     assert (
         audit["debug_gate_metrics"]["qasper_contract_probe_live_state_matrix_complete"]
         == 0.0
+    )
+
+
+def test_quality_lane_requires_live_negative_and_failed_audit_states() -> None:
+    rows = _rows()[:3]
+    for row in rows:
+        row["qasper_debug_lane"] = "quality"
+
+    audit = qasper_debug_audit_extensions(rows)
+
+    quality = audit["quality_audit"]
+    assert quality["status"] == "failed"
+    observation = quality["structural_state_matrix"]["quality_observation"]
+    assert observation["missing_required_candidate_labels"] == ["no"]
+    assert observation["missing_required_verifier_judgments"] == []
+    assert observation["missing_required_auditor_statuses"] == []
+
+
+def test_contract_probe_requires_live_negative_and_failed_audit_states() -> None:
+    probes = _rows()[:3]
+    for row in probes:
+        row["qasper_debug_lane"] = "contract_probe"
+
+    audit = qasper_debug_audit_extensions([], contract_probe_predictions=probes)
+
+    probe = audit["contract_probe_audit"]
+    assert probe["status"] == "failed"
+    observation = probe["structural_state_matrix"]["contract_probe_observation"]
+    assert observation["missing_required_candidate_labels"] == ["no"]
+    assert observation["missing_required_verifier_judgments"] == [
+        "contradicted",
+        "unknown",
+    ]
+    assert observation["missing_required_auditor_statuses"] == ["failed"]
+    assert (
+        audit["debug_gate_metrics"][
+            "qasper_contract_probe_online_required_auditor_status_missing_count"
+        ]
+        == 1.0
+    )
+
+
+def test_contract_probe_requires_actual_auditor_attempts() -> None:
+    probes = _rows()[:3]
+    for row in probes:
+        row["qasper_debug_lane"] = "contract_probe"
+    verifier = probes[0]["evidence_metadata"]["semantic_proposition_verifier"]
+    verifier["audit_model_call_count"] = 0
+    verifier["candidate_verification_audit"]["mode"] = "deterministic_schema_audit"
+    verifier["debug_trace"]["events"][0]["transaction"]["audit"] = {
+        "status": "not_run",
+        "attempts": [],
+    }
+
+    audit = qasper_debug_audit_extensions([], contract_probe_predictions=probes)
+
+    assert audit["contract_probe_audit"]["status"] == "failed"
+    assert (
+        audit["debug_gate_metrics"][
+            "qasper_contract_probe_online_auditor_attempt_missing_count"
+        ]
+        == 1.0
+    )
+
+
+def test_contract_probe_passes_required_live_states_without_twelve_cell_cartesian() -> (
+    None
+):
+    probes = _rows()
+    for row in probes:
+        row["qasper_debug_lane"] = "contract_probe"
+
+    audit = qasper_debug_audit_extensions([], contract_probe_predictions=probes)
+
+    probe = audit["contract_probe_audit"]
+    assert probe["status"] == "passed"
+    assert probe["live_state_matrix_complete"] is False
+    metrics = audit["debug_gate_metrics"]
+    assert metrics["qasper_contract_probe_required_online_states_complete"] == 1.0
+    assert metrics["qasper_contract_probe_structural_state_matrix_complete"] == 1.0
+
+
+def test_provider_probe_rejects_any_conflicting_unknown_assessment_attempt() -> None:
+    probes = _rows()
+    for row in probes:
+        row["qasper_debug_lane"] = "contract_probe"
+    verifier = probes[0]["evidence_metadata"]["semantic_proposition_verifier"]
+    proposal = verifier["debug_trace"]["events"][0]["transaction"]["proposal"]
+    proposal["attempts"][0]["parse_failure_reason"] = "unexpected_unknown_assessment"
+
+    audit = qasper_debug_audit_extensions([], contract_probe_predictions=probes)
+
+    assert audit["contract_probe_audit"]["status"] == "failed"
+    assert (
+        audit["debug_gate_metrics"]["qasper_unexpected_unknown_assessment_count"] == 1.0
     )
 
 
@@ -212,14 +314,7 @@ def test_relation_flags_distinguish_polarity_from_candidate_disagreement() -> No
         ("no", "supported", "no", True, False, False),
         ("no", "contradicted", "yes", False, True, False),
         ("yes", "unknown", "insufficient_evidence", False, False, True),
-        (
-            "unanswerable",
-            "supported",
-            "insufficient_evidence",
-            False,
-            False,
-            False,
-        ),
+        ("unanswerable", "unknown", "insufficient_evidence", False, False, True),
     )
     for candidate, relation, verdict, explicit, disagreement, unknown in cases:
         verifier: dict[str, Any] = {
@@ -261,7 +356,6 @@ def test_audit_relation_is_exactly_candidate_bound() -> None:
         ("no", "contradicted", "yes", "explicit_contradiction"),
         ("yes", "unknown", "insufficient_evidence", "unknown"),
         ("unanswerable", "unknown", "insufficient_evidence", "unknown"),
-        ("unanswerable", "supported", "insufficient_evidence", "unknown"),
     )
     for candidate, relation, verdict, classification in cases:
         verifier: dict[str, Any] = {
@@ -278,7 +372,7 @@ def test_audit_relation_is_exactly_candidate_bound() -> None:
     assert _audit_relation_consistent(verifier, relation) is False
 
 
-def test_required_slot_gate_requires_one_exact_four_slot_evidence_set() -> None:
+def test_required_slot_gate_requires_one_exact_applicable_slot_evidence_set() -> None:
     evidence_refs = ["span:paper:s1#quote:0:30"]
     binding_payload = {
         "evidence_relation": "proposition_support",
@@ -286,19 +380,19 @@ def test_required_slot_gate_requires_one_exact_four_slot_evidence_set() -> None:
             "actor": "current_paper",
             "predicate": "use",
             "object": "the method",
-            "quantifier": "none",
         },
         "proposition_slot_evidence_refs": {
-            slot: evidence_refs
-            for slot in ("actor", "predicate", "object", "quantifier")
+            slot: evidence_refs for slot in ("actor", "predicate", "object")
         },
         "proposition_binding_evidence_set_refs": evidence_refs,
+        "not_applicable_proposition_slots": ["quantifier"],
     }
     authority: dict[str, Any] = {
         **binding_payload,
         "status": "verified",
         "required_slot_ids": ["support:boolean_proposition"],
         "verified_support_slot_ids": ["support:boolean_proposition"],
+        "required_proposition_slots": ["actor", "predicate", "object"],
         "proposition_evidence_set_digest": hashlib.sha256(
             json.dumps(
                 binding_payload,
@@ -311,6 +405,7 @@ def test_required_slot_gate_requires_one_exact_four_slot_evidence_set() -> None:
         "candidate_label": "yes",
         "candidate_verification_status": "supported",
         "verdict": "yes",
+        "question_proposition": {"quantifier": "none"},
     }
     audit = {"status": "passed"}
     metadata = {"semantic_proposition_authority": authority}
@@ -320,6 +415,6 @@ def test_required_slot_gate_requires_one_exact_four_slot_evidence_set() -> None:
     authority["proposition_slot_evidence_refs"] = {
         key: value
         for key, value in authority["proposition_slot_evidence_refs"].items()
-        if key != "quantifier"
+        if key != "object"
     }
     assert _required_slot_state_unverified(verifier, audit, metadata) is True

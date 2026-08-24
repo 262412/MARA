@@ -4,7 +4,7 @@ from typing import Any
 
 from ktem.docqa.boolean_authority_schema import GROUNDED_SEMANTIC_VERIFIER_CONTRACT
 from ktem.docqa.question_proposition import (
-    PROPOSITION_EVIDENCE_SLOTS,
+    applicable_proposition_evidence_slots,
     build_question_proposition,
     proposition_evidence_bindings,
     typed_conclusion,
@@ -24,6 +24,7 @@ def audited_verdict(
     response["proof_mode"] = proof_mode
     proposition = build_question_proposition(question)
     canonical_bindings = proposition_evidence_bindings(proposition)
+    applicable_slots = applicable_proposition_evidence_slots(proposition)
     conclusion = typed_conclusion(proposition, response["verdict"])
     evidence_relation = (
         "proposition_support"
@@ -33,7 +34,12 @@ def audited_verdict(
     response["evidence_relation"] = evidence_relation
     response["question_proposition"] = proposition.as_dict()
     response["typed_conclusion"] = conclusion.as_dict()
-    _bind_test_premises(response["premises"], canonical_bindings, evidence_relation)
+    _bind_test_premises(
+        response["premises"],
+        canonical_bindings,
+        evidence_relation,
+        applicable_slots=applicable_slots,
+    )
     verifier = response.setdefault("verifier", {})
     verifier.update(
         {
@@ -53,7 +59,7 @@ def audited_verdict(
         proposition=proposition,
         conclusion=conclusion,
         auditor_relationship="distinct_model",
-        audit_result=_test_audit_result(len(response["premises"])),
+        audit_result=_test_audit_result(response["premises"]),
     )
     return response
 
@@ -62,6 +68,8 @@ def _bind_test_premises(
     premises: list[dict[str, Any]],
     canonical_bindings: dict[str, str],
     evidence_relation: str,
+    *,
+    applicable_slots: tuple[str, ...],
 ) -> None:
     offsets: dict[str, int] = {}
     for index, premise in enumerate(premises, start=1):
@@ -71,7 +79,11 @@ def _bind_test_premises(
         premise.setdefault("span_selector", f"test:{evidence_id}:S{index}")
         premise.setdefault("span_start", start)
         premise.setdefault("span_end", start + len(quote))
-        proposition_slots = _test_proposition_slots(index, len(premises))
+        proposition_slots = _test_proposition_slots(
+            index,
+            len(premises),
+            applicable_slots,
+        )
         premise.setdefault("binds_proposition_slots", proposition_slots)
         premise["proposition_slot_bindings"] = {
             slot: canonical_bindings[slot]
@@ -81,17 +93,21 @@ def _bind_test_premises(
         offsets[evidence_id] = start + len(quote) + 1
 
 
-def _test_proposition_slots(index: int, premise_count: int) -> list[str]:
+def _test_proposition_slots(
+    index: int,
+    premise_count: int,
+    applicable_slots: tuple[str, ...],
+) -> list[str]:
     if premise_count == 1:
-        return list(PROPOSITION_EVIDENCE_SLOTS)
+        return list(applicable_slots)
     if index == 1:
-        return ["actor", "predicate"]
+        return [slot for slot in ("actor", "predicate") if slot in applicable_slots]
     if index == 2:
-        return ["object", "quantifier"]
-    return ["object"]
+        return [slot for slot in ("object", "quantifier") if slot in applicable_slots]
+    return [slot for slot in ("object",) if slot in applicable_slots]
 
 
-def _test_audit_result(premise_count: int) -> dict[str, Any]:
+def _test_audit_result(premises: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "premise_checks": [
             {
@@ -100,8 +116,17 @@ def _test_audit_result(premise_count: int) -> dict[str, Any]:
                 "scope_consistent": True,
                 "proposition_bindings_valid": True,
                 "evidence_relation_valid": True,
+                "declared_proposition_slots": list(premise["binds_proposition_slots"]),
+                "proposition_slot_checks": [
+                    {
+                        "slot": slot,
+                        "binding_valid": True,
+                        "evidence_text": str(premise["quote"]),
+                    }
+                    for slot in premise["binds_proposition_slots"]
+                ],
             }
-            for index in range(1, premise_count + 1)
+            for index, premise in enumerate(premises, start=1)
         ],
         "jointly_entails": True,
         "each_premise_required": True,

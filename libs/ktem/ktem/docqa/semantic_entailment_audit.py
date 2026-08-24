@@ -25,6 +25,10 @@ from .question_proposition import (
     validate_question_proposition,
     validate_typed_conclusion,
 )
+from .semantic_premise_proof_validation import (
+    local_proposition_slot_checks,
+    semantic_premise_proof_span_reason,
+)
 
 
 def semantic_entailment_proposal_digest(
@@ -111,7 +115,11 @@ def semantic_entailment_audit_attestation(
         "question_proposition": question_payload,
         "typed_conclusion": conclusion_payload,
         "premise_count": len(premises),
-        "premise_checks": _audited_premise_checks(premises),
+        "premise_checks": _audited_premise_checks(
+            premises,
+            audit_result=audit_result,
+            proposition=proposition,
+        ),
         "jointly_entails": True,
         "each_premise_required": True,
         "contradiction_free": True,
@@ -137,31 +145,82 @@ def semantic_entailment_audit_attestation(
 
 def _audited_premise_checks(
     premises: Sequence[Mapping[str, Any]],
+    *,
+    audit_result: Mapping[str, Any],
+    proposition: QuestionProposition,
 ) -> list[dict[str, Any]]:
+    model_checks = audit_result.get("premise_checks") or []
+    local_reason = semantic_premise_proof_span_reason(premises, proposition)
     return [
-        {
-            "premise_index": index,
-            "evidence_id": str(premise.get("evidence_id") or ""),
-            "quote_digest": _text_digest(str(premise.get("quote") or "")),
-            "fragment_digest": _text_digest(
-                str(premise.get("proposition_fragment") or "")
+        _audited_premise_check(
+            premise_index=index,
+            premise=premise,
+            model_check=(
+                model_checks[index - 1]
+                if index <= len(model_checks)
+                and isinstance(model_checks[index - 1], Mapping)
+                else {}
             ),
-            "fragment_entailed": True,
-            "scope_consistent": True,
-            "proposition_bindings_valid": True,
-            "evidence_relation_valid": True,
-            "proposition_binding_digest": _mapping_digest(
-                {
-                    str(slot): str(binding)
-                    for slot, binding in dict(
-                        premise.get("proposition_slot_bindings") or {}
-                    ).items()
-                }
-            ),
-            "evidence_relation": str(premise.get("evidence_relation") or ""),
-        }
+            proposition=proposition,
+            local_reason=local_reason,
+        )
         for index, premise in enumerate(premises, start=1)
     ]
+
+
+def _audited_premise_check(
+    *,
+    premise_index: int,
+    premise: Mapping[str, Any],
+    model_check: Mapping[str, Any],
+    proposition: QuestionProposition,
+    local_reason: str,
+) -> dict[str, Any]:
+    declared_slots = [
+        str(slot) for slot in premise.get("binds_proposition_slots") or []
+    ]
+    local_slots = local_proposition_slot_checks(premise, proposition)
+    model_slots = {
+        str(slot_check.get("slot")): slot_check
+        for slot_check in model_check.get("proposition_slot_checks") or []
+        if isinstance(slot_check, Mapping)
+    }
+    slot_checks = []
+    for slot in declared_slots:
+        model_slot = model_slots.get(slot, {})
+        slot_check = {
+            "slot": slot,
+            "binding_valid": local_slots.get(slot, False)
+            and model_slot.get("binding_valid") is True,
+            "evidence_text": str(model_slot.get("evidence_text") or ""),
+        }
+        slot_checks.append(slot_check)
+    binding_valid = bool(slot_checks) and all(
+        value["binding_valid"] for value in slot_checks
+    )
+    if local_reason and not declared_slots:
+        binding_valid = False
+    return {
+        "premise_index": premise_index,
+        "evidence_id": str(premise.get("evidence_id") or ""),
+        "quote_digest": _text_digest(str(premise.get("quote") or "")),
+        "fragment_digest": _text_digest(str(premise.get("proposition_fragment") or "")),
+        "fragment_entailed": model_check.get("fragment_entailed") is True,
+        "scope_consistent": model_check.get("scope_consistent") is True,
+        "proposition_bindings_valid": binding_valid,
+        "evidence_relation_valid": model_check.get("evidence_relation_valid") is True,
+        "declared_proposition_slots": declared_slots,
+        "proposition_slot_checks": slot_checks,
+        "proposition_binding_digest": _mapping_digest(
+            {
+                str(slot): str(binding)
+                for slot, binding in dict(
+                    premise.get("proposition_slot_bindings") or {}
+                ).items()
+            }
+        ),
+        "evidence_relation": str(premise.get("evidence_relation") or ""),
+    }
 
 
 def semantic_entailment_audit_validation_reason(
@@ -184,6 +243,13 @@ def semantic_entailment_audit_validation_reason(
     )
     proposition = proposition or build_question_proposition(question)
     conclusion = conclusion or typed_conclusion(proposition, verdict)
+    premise_reason = semantic_premise_proof_span_reason(
+        premises,
+        proposition,
+        audit_result=audit,
+    )
+    if premise_reason:
+        return premise_reason
     if _audit_binding_invalid(
         audit,
         question=question,
@@ -322,6 +388,31 @@ def _premise_audit_validation_reason(
             != str(premise.get("evidence_relation") or "")
         ):
             return "semantic_entailment_premise_audit_invalid"
+        declared_slots = [
+            str(slot) for slot in premise.get("binds_proposition_slots") or []
+        ]
+        raw_declared = check.get("declared_proposition_slots")
+        raw_slot_checks = check.get("proposition_slot_checks")
+        if (
+            raw_declared != declared_slots
+            or not isinstance(raw_slot_checks, list)
+            or [
+                str(slot_check.get("slot"))
+                for slot_check in raw_slot_checks
+                if isinstance(slot_check, Mapping)
+            ]
+            != declared_slots
+            or any(
+                not isinstance(slot_check, Mapping)
+                or set(slot_check) != {"slot", "binding_valid", "evidence_text"}
+                or slot_check.get("binding_valid") is not True
+                or not isinstance(slot_check.get("evidence_text"), str)
+                or not slot_check.get("evidence_text", "").strip()
+                or slot_check["evidence_text"] not in str(premise.get("quote") or "")
+                for slot_check in raw_slot_checks
+            )
+        ):
+            return "semantic_entailment_premise_audit_invalid"
     return ""
 
 
@@ -345,6 +436,18 @@ def _verified_audit_result(
             or check.get("scope_consistent") is not True
             or check.get("proposition_bindings_valid") is not True
             or check.get("evidence_relation_valid") is not True
+            or not isinstance(check.get("declared_proposition_slots"), list)
+            or not check.get("declared_proposition_slots")
+            or not isinstance(check.get("proposition_slot_checks"), list)
+            or len(check.get("proposition_slot_checks") or [])
+            != len(check.get("declared_proposition_slots") or [])
+            or any(
+                not isinstance(slot_check, Mapping)
+                or set(slot_check) != {"slot", "binding_valid", "evidence_text"}
+                or slot_check.get("binding_valid") is not True
+                or not str(slot_check.get("evidence_text") or "").strip()
+                for slot_check in check.get("proposition_slot_checks") or []
+            )
             for check in checks
         )
         or value.get("jointly_entails") is not True

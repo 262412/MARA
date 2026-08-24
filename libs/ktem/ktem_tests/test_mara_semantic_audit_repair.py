@@ -108,7 +108,7 @@ def _inspection_proposal() -> str:
                         "contexts when predicting named entities"
                     ),
                     "supports_slot_ids": ["support:boolean_proposition"],
-                    "binds_proposition_slots": ["object", "quantifier"],
+                    "binds_proposition_slots": ["object"],
                 },
             ],
         }
@@ -141,7 +141,21 @@ def _inspection_items() -> list[dict[str, Any]]:
 def test_text_semantic_conjunction_can_prove_an_inspection_question() -> None:
     request = _inspection_request()
     proposal_llm = _SequenceLLM([_response(_inspection_proposal())])
-    audit_llm = _SequenceLLM([_response(_audit())])
+    audit_llm = _SequenceLLM(
+        [
+            _response(
+                _audit(
+                    premise_specs=[
+                        (
+                            ["actor", "predicate"],
+                            {"actor": "We", "predicate": "visualize"},
+                        ),
+                        (["object"], {"object": "visual contexts"}),
+                    ]
+                )
+            )
+        ]
+    )
     audit_llm.model_name = "dedicated-audit-model"
     verifier = build_semantic_proposition_verifier(
         SimpleNamespace(

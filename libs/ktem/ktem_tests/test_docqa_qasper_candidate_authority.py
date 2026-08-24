@@ -15,8 +15,16 @@ from ktem.docqa.execution_verification import verify_generated_answer
 from ktem.docqa.pipeline_stage_timings import PipelineStageTimings
 from ktem.docqa.query_plan_schema import EvidenceSlot
 from ktem.docqa.query_planning import build_query_plan
+from ktem.docqa.question_proposition import (
+    applicable_proposition_evidence_slots,
+    build_question_proposition,
+    candidate_typed_conclusion,
+)
 from ktem.docqa.typed_proposition_authority_slots import boolean_slot_bindings
 from ktem.docqa.verification import verify_decision
+from ktem.reasoning.mara_candidate_unknown_audit import (
+    candidate_unknown_audit_attestation,
+)
 from ktem_tests.semantic_entailment_test_helpers import audited_verdict
 
 QUESTION = "Did the authors compare cross-lingual and single-language evaluation?"
@@ -120,6 +128,72 @@ def _yes_response(
     return value
 
 
+def _unknown_response(
+    _request: Any,
+    question: str,
+    candidate: str,
+    bundle: EvidenceBundle,
+) -> dict[str, Any]:
+    proposition = build_question_proposition(question)
+    item = bundle.items[0]
+    quote = str(item["text"])
+    assessment = {
+        "reviewed_span_selectors": ["E1:S1"],
+        "reviewed_evidence": [
+            {
+                "span_selector": "E1:S1",
+                "evidence_id": identity_of(item).key,
+                "quote": quote,
+                "span_start": 0,
+                "span_end": len(quote),
+            }
+        ],
+        "unresolved_proposition_slots": list(
+            applicable_proposition_evidence_slots(proposition)
+        ),
+        "support_gap": "The reviewed span does not establish the proposition.",
+        "contradiction_gap": "The reviewed span does not contradict it.",
+    }
+    audited_conclusion = candidate_typed_conclusion(proposition, candidate)
+    audit = candidate_unknown_audit_attestation(
+        {
+            "audited_candidate": candidate,
+            "audited_judgment": "unknown",
+        },
+        typed_conclusion_value=audited_conclusion,
+        unknown_assessment=assessment,
+    )
+    bundle.metadata["semantic_proposition_verifier"] = {
+        "candidate_label": candidate,
+        "candidate_verification_status": "unknown",
+        "candidate_verification_audit": audit,
+    }
+    return {
+        "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
+        "verdict": "insufficient_evidence",
+        "evidence_relation": "undetermined",
+        "support_mode": "evidence_set",
+        "proof_mode": "none",
+        "jointly_complete": False,
+        "each_premise_required": False,
+        "premises": [],
+        "question_proposition": proposition.as_dict(),
+        "audited_typed_conclusion": audited_conclusion,
+        "unknown_assessment": assessment,
+        "candidate_verification_audit": audit,
+        "verifier": {
+            "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+            "model": "candidate-verifier-test",
+            "seed": 7,
+            "release_mode": False,
+        },
+        "candidate_verification_contract": "candidate_proposition_verification.v2",
+        "verifier_input_candidate": candidate,
+        "candidate_verification_status": "unknown",
+        "replacement_candidate_allowed": False,
+    }
+
+
 def test_qasper_verifier_cannot_replace_a_contradicted_candidate() -> None:
     bundle = EvidenceBundle(route="doc_text", items=_items())
     decision = verify_decision(
@@ -158,49 +232,18 @@ def test_qasper_verifier_commits_only_the_supported_input_candidate() -> None:
     assert decision.typed_authority["state"] == "verified_support"
 
 
-def test_qasper_supported_unanswerable_is_a_verified_abstention() -> None:
-    def verifier(
-        _request: Any,
-        _question: str,
-        candidate: str,
-        bundle: EvidenceBundle,
-    ) -> dict[str, Any]:
-        bundle.metadata["semantic_proposition_verifier"] = {
-            "candidate_label": candidate,
-            "candidate_verification_status": "supported",
-        }
-        return {
-            "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
-            "verdict": "insufficient_evidence",
-            "support_mode": "evidence_set",
-            "proof_mode": "none",
-            "jointly_complete": False,
-            "each_premise_required": False,
-            "premises": [],
-            "verifier": {
-                "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
-                "model": "candidate-verifier-test",
-                "seed": 7,
-            },
-            "candidate_verification_contract": (
-                "candidate_proposition_verification.v2"
-            ),
-            "verifier_input_candidate": candidate,
-            "candidate_verification_status": "supported",
-            "replacement_candidate_allowed": False,
-        }
-
+def test_qasper_audited_unknown_is_a_verified_abstention() -> None:
     decision = verify_decision(
         _request(),
         RetrieveDecision(status="good", reason="retrieved"),
         EvidenceBundle(route="doc_text", items=_items()),
         "unanswerable",
-        proposition_verifier=verifier,
+        proposition_verifier=_unknown_response,
     )
 
     assert decision.status == "supported"
     assert decision.candidate_label == "unanswerable"
-    assert decision.verifier_candidate_status == "supported"
+    assert decision.verifier_candidate_status == "unknown"
     assert decision.typed_authority["state"] == "verified_abstention"
     assert decision.canonical_answer_polarity == ""
 

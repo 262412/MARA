@@ -11,6 +11,7 @@ from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.query_phrase_extraction import source_page_locator
 from ktem.docqa.question_proposition import (
+    PROPOSITION_EVIDENCE_SLOTS,
     QuestionProposition,
     build_question_proposition,
     resolve_question_proposition,
@@ -30,6 +31,9 @@ from .mara_semantic_proposition_packing_support import (
 )
 from .mara_semantic_proposition_packing_support import slot_value as _slot_value
 from .mara_semantic_proposition_packing_support import slot_values, stable_source_id
+from .mara_semantic_proposition_span_selectors import (
+    canonical_span_selectors as _canonical_span_selectors,
+)
 
 SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS = 4096
 SEMANTIC_PROPOSITION_VERIFIER_INPUT_TOKEN_BUDGET = 3072
@@ -229,6 +233,16 @@ def semantic_proposition_verifier_prompt(
     candidate: str = "",
 ) -> str:
     proposition = build_question_proposition(question)
+    applicable_proposition_slots = [
+        slot
+        for slot in PROPOSITION_EVIDENCE_SLOTS
+        if not (slot == "quantifier" and proposition.quantifier == "none")
+    ]
+    not_applicable_proposition_slots = [
+        slot
+        for slot in PROPOSITION_EVIDENCE_SLOTS
+        if slot not in applicable_proposition_slots
+    ]
     slot_text = "\n".join(
         f"- {value['slot_id']}: {value['description'] or 'complete proposition support'}"
         for value in slots
@@ -262,7 +276,11 @@ def semantic_proposition_verifier_prompt(
         "For every supported/contradicted premise, binds_proposition_slots must "
         "declare only the "
         "actor/predicate/object/quantifier fields actually established by its quote; "
-        "their union must cover all four fields within this one evidence set. "
+        "their union must cover every applicable field within this one evidence set. "
+        "Include not_applicable_proposition_slots explicitly for proposition-level "
+        f"N/A fields ({json.dumps(not_applicable_proposition_slots)}); never bind "
+        "an N/A field as evidence, and ensure evidence bindings cover every "
+        f"applicable field ({json.dumps(applicable_proposition_slots)}). "
         "Return exactly one JSON object. For candidate_judgment=supported or "
         "candidate_judgment=contradicted, choose proof_mode "
         "atomic_semantic with exactly one premise or composite_conjunction with "
@@ -421,6 +439,7 @@ def _label_evidence_records(
                     str(record["text"]),
                     int(record.get("text_start") or 0),
                     _optional_int(record.get("canonical_start")),
+                    selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
                 ),
             }
         )
@@ -509,68 +528,6 @@ def semantic_proposition_pack_digest(
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def _canonical_span_selectors(
-    evidence_label: str,
-    text: str,
-    text_start: int,
-    canonical_start: int | None,
-) -> list[dict[str, Any]]:
-    spans: list[tuple[int, int]] = []
-    cursor = 0
-    for match in re.finditer(r".+?(?:[.!?](?=\s|$)|\n+|$)", text, re.DOTALL):
-        start, end = _trimmed_span(text, match.start(), match.end())
-        if start < end:
-            spans.extend(_bounded_spans(text, start, end))
-        cursor = match.end()
-    if cursor < len(text):
-        start, end = _trimmed_span(text, cursor, len(text))
-        spans.extend(_bounded_spans(text, start, end))
-    return [
-        {
-            "selector_id": f"{evidence_label}:S{index}",
-            "text": text[start:end],
-            "span_start": text_start + start,
-            "span_end": text_start + end,
-            "canonical_start": (
-                canonical_start + text_start + start
-                if canonical_start is not None
-                else None
-            ),
-            "canonical_end": (
-                canonical_start + text_start + end
-                if canonical_start is not None
-                else None
-            ),
-        }
-        for index, (start, end) in enumerate(spans, start=1)
-    ]
-
-
-def _trimmed_span(text: str, start: int, end: int) -> tuple[int, int]:
-    while start < end and text[start].isspace():
-        start += 1
-    while end > start and text[end - 1].isspace():
-        end -= 1
-    return start, end
-
-
-def _bounded_spans(text: str, start: int, end: int) -> list[tuple[int, int]]:
-    output: list[tuple[int, int]] = []
-    while end - start > SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS:
-        limit = start + SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS
-        boundary = text.rfind(" ", start, limit + 1)
-        split = boundary if boundary > start else limit
-        chunk_start, chunk_end = _trimmed_span(text, start, split)
-        if chunk_start < chunk_end:
-            output.append((chunk_start, chunk_end))
-        start = split + (1 if split < end and text[split].isspace() else 0)
-        start, _ = _trimmed_span(text, start, end)
-    start, end = _trimmed_span(text, start, end)
-    if start < end:
-        output.append((start, end))
-    return output
 
 
 def _preferred_evidence_ids(request: Any) -> set[str]:

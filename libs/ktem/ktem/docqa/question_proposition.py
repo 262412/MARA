@@ -143,6 +143,25 @@ class QuestionPropositionResolution:
         }
 
 
+def applicable_proposition_evidence_slots(
+    proposition: QuestionProposition,
+) -> tuple[str, ...]:
+    """Return slots that require evidence for this concrete proposition."""
+
+    return tuple(
+        slot
+        for slot in PROPOSITION_EVIDENCE_SLOTS
+        if not (slot == "quantifier" and proposition.quantifier == "none")
+    )
+
+
+def not_applicable_proposition_evidence_slots(
+    proposition: QuestionProposition,
+) -> tuple[str, ...]:
+    applicable = set(applicable_proposition_evidence_slots(proposition))
+    return tuple(slot for slot in PROPOSITION_EVIDENCE_SLOTS if slot not in applicable)
+
+
 def build_question_proposition(question: str) -> QuestionProposition:
     return resolve_question_proposition(question).proposition
 

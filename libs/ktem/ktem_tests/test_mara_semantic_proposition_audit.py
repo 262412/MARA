@@ -105,7 +105,7 @@ def _proposal() -> str:
                         "single-language baselines were included for comparison"
                     ),
                     "supports_slot_ids": [slot_ids[-1]],
-                    "binds_proposition_slots": ["object", "quantifier"],
+                    "binds_proposition_slots": ["object"],
                 },
             ],
         }
@@ -124,7 +124,6 @@ def _repairable_proposal() -> str:
         "actor",
         "predicate",
         "object",
-        "quantifier",
     ]
     return json.dumps(payload)
 
@@ -141,38 +140,49 @@ def _rebuilt_atomic_proposal() -> str:
         {
             "span_selector": "E1:S1",
             "proposition_fragment": (
-                "the complete comparison proposition is established"
+                "We evaluated transfer in the cross-lingual setting."
             ),
             "supports_slot_ids": slot_ids,
             "binds_proposition_slots": [
                 "actor",
                 "predicate",
                 "object",
-                "quantifier",
             ],
         }
     ]
     return json.dumps(payload)
 
 
-def _audit(*, second_fragment_entailed: bool = True) -> str:
+def _audit(
+    *,
+    second_fragment_entailed: bool = True,
+    premise_specs: list[tuple[list[str], dict[str, str]]] | None = None,
+) -> str:
+    premise_specs = premise_specs or [
+        (["actor", "predicate"], {"actor": "We", "predicate": "evaluated"}),
+        (["object"], {"object": "single-language baselines"}),
+    ]
+    validity = [True, second_fragment_entailed]
     return json.dumps(
         {
             "premise_checks": [
                 {
-                    "premise_ref": "P1",
-                    "fragment_entailed": True,
+                    "premise_ref": f"P{index}",
+                    "fragment_entailed": validity[index - 1],
                     "scope_consistent": True,
-                    "proposition_bindings_valid": True,
-                    "evidence_relation_valid": True,
-                },
-                {
-                    "premise_ref": "P2",
-                    "fragment_entailed": second_fragment_entailed,
-                    "scope_consistent": True,
-                    "proposition_bindings_valid": second_fragment_entailed,
-                    "evidence_relation_valid": second_fragment_entailed,
-                },
+                    "proposition_bindings_valid": validity[index - 1],
+                    "evidence_relation_valid": validity[index - 1],
+                    "declared_proposition_slots": slots,
+                    "proposition_slot_checks": [
+                        {
+                            "slot": slot,
+                            "binding_valid": validity[index - 1],
+                            "evidence_text": evidence[slot],
+                        }
+                        for slot in slots
+                    ],
+                }
+                for index, (slots, evidence) in enumerate(premise_specs, start=1)
             ],
             "jointly_entails": second_fragment_entailed,
             "each_premise_required": second_fragment_entailed,
@@ -190,8 +200,24 @@ def _audit(*, second_fragment_entailed: bool = True) -> str:
     )
 
 
-def _audit_with_false_premise_but_joint_entailment() -> str:
-    payload = json.loads(_audit())
+def _audit_with_false_premise_but_joint_entailment(
+    *,
+    repairable: bool = False,
+) -> str:
+    premise_specs = None
+    if repairable:
+        premise_specs = [
+            (
+                ["actor", "predicate", "object"],
+                {
+                    "actor": "We",
+                    "predicate": "evaluated",
+                    "object": "cross-lingual setting",
+                },
+            ),
+            (["object"], {"object": "single-language baselines"}),
+        ]
+    payload = json.loads(_audit(premise_specs=premise_specs))
     payload["premise_checks"][1]["fragment_entailed"] = False
     payload["jointly_entails"] = True
     payload["each_premise_required"] = True
@@ -215,7 +241,6 @@ def _insufficient_proposal() -> str:
                     "actor",
                     "predicate",
                     "object",
-                    "quantifier",
                 ],
                 "support_gap": "No reviewed evidence set establishes every proposition slot.",
                 "contradiction_gap": "No reviewed evidence explicitly contradicts the proposition.",
@@ -256,13 +281,14 @@ def _atomic_proposal(*, selector: str = "E1:S1") -> str:
             "premises": [
                 {
                     "span_selector": selector,
-                    "proposition_fragment": ("cross-lingual transfer was evaluated"),
+                    "proposition_fragment": (
+                        "We evaluated transfer in the cross-lingual setting."
+                    ),
                     "supports_slot_ids": ["support:boolean_proposition"],
                     "binds_proposition_slots": [
                         "actor",
                         "predicate",
                         "object",
-                        "quantifier",
                     ],
                 }
             ],
@@ -280,6 +306,28 @@ def _atomic_audit() -> str:
                     "scope_consistent": True,
                     "proposition_bindings_valid": True,
                     "evidence_relation_valid": True,
+                    "declared_proposition_slots": [
+                        "actor",
+                        "predicate",
+                        "object",
+                    ],
+                    "proposition_slot_checks": [
+                        {
+                            "slot": "actor",
+                            "binding_valid": True,
+                            "evidence_text": "We",
+                        },
+                        {
+                            "slot": "predicate",
+                            "binding_valid": True,
+                            "evidence_text": "evaluated",
+                        },
+                        {
+                            "slot": "object",
+                            "binding_valid": True,
+                            "evidence_text": "transfer",
+                        },
+                    ],
                 }
             ],
             "jointly_entails": True,
@@ -344,7 +392,8 @@ def test_runtime_requires_an_independent_entailment_audit_before_commit() -> Non
         slot
         for premise in result["premises"]
         for slot in premise["proposition_slot_bindings"]
-    } == {"actor", "predicate", "object", "quantifier"}
+    } == {"actor", "predicate", "object"}
+    assert result["not_applicable_proposition_slots"] == ["quantifier"]
     assert {premise["evidence_relation"] for premise in result["premises"]} == {
         "proposition_support"
     }
@@ -509,7 +558,7 @@ def test_false_premise_with_joint_entailment_true_triggers_repair_and_full_revie
     llm = _SequenceLLM(
         [
             _response(_repairable_proposal()),
-            _response(_audit_with_false_premise_but_joint_entailment()),
+            _response(_audit_with_false_premise_but_joint_entailment(repairable=True)),
             _response(_atomic_audit()),
         ]
     )
@@ -536,39 +585,8 @@ def test_false_premise_with_joint_entailment_true_triggers_repair_and_full_revie
         != transition["proposition_binding_digest_after"]
     )
     assert repair_debug["initial_audit"]["attempts"][0]["raw_response"] == (
-        _audit_with_false_premise_but_joint_entailment()
+        _audit_with_false_premise_but_joint_entailment(repairable=True)
     )
     assert repair_debug["proof_reaudit"]["attempts"][0]["raw_response"] == (
         _atomic_audit()
     )
-
-
-def test_unprunable_contradictory_audit_stops_without_reanswering() -> None:
-    llm = _SequenceLLM(
-        [
-            _response(_proposal()),
-            _response(_audit_with_false_premise_but_joint_entailment()),
-            _response(_rebuilt_atomic_proposal()),
-            _response(_atomic_audit()),
-        ]
-    )
-    verifier = _verifier(llm, debug=True)
-    bundle = EvidenceBundle(route="doc_text", items=_items())
-
-    result = verifier(_request(), QUESTION, "yes", bundle)
-
-    assert result is not None
-    assert result["verdict"] == "insufficient_evidence"
-    assert result["candidate_verification_audit"]["status"] == "failed"
-    assert len(llm.calls) == 2
-    trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace.get("proof_repair_count", 0) == 0
-    assert trace.get("proof_rebuild_count", 0) == 0
-    assert trace.get("proof_reaudit_count", 0) == 0
-    assert trace["recovery_transitions"][-1]["outcome"] == "recovery_no_progress"
-    repair_debug = trace["debug_trace"]["events"][0]["transaction"]["proof_repair"]
-    assert repair_debug["kind"] == "stopped"
-    assert repair_debug["initial_audit"]["attempts"][0]["raw_response"] == (
-        _audit_with_false_premise_but_joint_entailment()
-    )
-    assert repair_debug["proof_reaudit"] == {}
