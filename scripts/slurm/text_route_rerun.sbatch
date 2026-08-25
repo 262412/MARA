@@ -273,15 +273,15 @@ PY
 
 if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
   log "running live QASPER contract probes; output=${CONTRACT_PROBE_PATH}"
-  "$MARA_BENCHMARK_PYTHON" \
-    "${PROJECT_ROOT}/scripts/slurm/qasper_debug_contract_probe.py" \
+  "$MARA_BENCHMARK_PYTHON" -m \
+    scripts.slurm.qasper_debug_contract_probe \
     --base-url "$TEXT_LLM_BASE_URL" \
     --model "$SEMANTIC_EVALUATOR_MODEL" \
     --output "$CONTRACT_PROBE_PATH" \
     --timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"
   test -s "$CONTRACT_PROBE_PATH"
-  "$MARA_BENCHMARK_PYTHON" \
-    "${PROJECT_ROOT}/scripts/slurm/validate_qasper_contract_probe.py" \
+  "$MARA_BENCHMARK_PYTHON" -m \
+    scripts.slurm.validate_qasper_contract_probe \
     "$CONTRACT_PROBE_PATH" \
     --output "$CONTRACT_PROBE_AUDIT_PATH"
   test -s "$CONTRACT_PROBE_AUDIT_PATH"
