@@ -387,10 +387,13 @@ def _audit_conclusion(
     conclusion_properties = (
         conclusion_properties if isinstance(conclusion_properties, dict) else {}
     )
-    conclusion_required = (
+    raw_conclusion_required = (
         conclusion_schema.get("required") if isinstance(conclusion_schema, dict) else []
     )
-    conclusion_values = {
+    conclusion_required = (
+        raw_conclusion_required if isinstance(raw_conclusion_required, list) else []
+    )
+    conclusion_values: dict[str, object] = {
         field: passed for field in conclusion_properties if field != "premise_ref"
     }
     return _schema_shape(

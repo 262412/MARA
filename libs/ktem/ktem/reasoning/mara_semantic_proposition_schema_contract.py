@@ -26,7 +26,6 @@ def semantic_proposition_schema(
     required = [
         "candidate_judgment",
         "support_mode",
-        "proof_mode",
         "jointly_complete",
         "each_premise_required",
         "premises",
@@ -107,10 +106,6 @@ def _proposition_properties(
             "enum": ["supported", "contradicted", "unknown"],
         },
         "support_mode": {"type": "string", "enum": ["evidence_set"]},
-        "proof_mode": {
-            "type": "string",
-            "enum": ["none", "atomic_semantic", "composite_conjunction"],
-        },
         "jointly_complete": {"type": "boolean"},
         "each_premise_required": {"type": "boolean"},
         "premises": {
@@ -168,10 +163,6 @@ def _judgment_branch(
                 )
             ),
         }
-    properties["proof_mode"] = {
-        "type": "string",
-        "enum": ["none"] if unknown else ["atomic_semantic", "composite_conjunction"],
-    }
     flag = not unknown
     properties["jointly_complete"] = {"type": "boolean", "enum": [flag]}
     properties["each_premise_required"] = {"type": "boolean", "enum": [flag]}
@@ -184,7 +175,6 @@ def _judgment_branch(
     required = [
         "candidate_judgment",
         "support_mode",
-        "proof_mode",
         "jointly_complete",
         "each_premise_required",
         "premises",

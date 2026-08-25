@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from jsonschema import validate
 from ktem.reasoning.mara_semantic_proposition_schema import (
     parse_semantic_proposition_response,
     parse_semantic_proposition_result,
@@ -122,6 +123,7 @@ def test_composite_conjunction_has_a_bounded_all_required_premise_contract(
         assert parsed.value is None
         assert parsed.failure_reason in {
             "composite_conjunction_contract_invalid",
+            "proof_mode_premise_count_mismatch",
             "verdict_payload_inconsistent",
             "premise_collection_invalid",
         }
@@ -321,10 +323,14 @@ def test_response_schema_has_physically_disjoint_judgment_contracts() -> None:
         branch = by_judgment[(judgment,)]
         assert "unknown_assessment" not in branch["properties"]
         assert "unknown_assessment" not in branch["required"]
+        assert "proof_mode" not in branch["properties"]
+        assert "proof_mode" not in branch["required"]
         assert branch["properties"]["premises"]["minItems"] == 1
     unknown = by_judgment[("unknown",)]
     assert "unknown_assessment" in unknown["properties"]
     assert "unknown_assessment" in unknown["required"]
+    assert "proof_mode" not in unknown["properties"]
+    assert "proof_mode" not in unknown["required"]
     assert unknown["properties"]["premises"]["maxItems"] == 0
 
 
@@ -376,6 +382,10 @@ def test_candidate_bound_schema_projects_yes_no_relation_locally() -> None:
     assert "evidence_relation" not in yes_schema["required"]
     assert "evidence_relation" not in no_schema["properties"]
     assert "evidence_relation" not in no_schema["required"]
+    assert "proof_mode" not in yes_schema["properties"]
+    assert "proof_mode" not in yes_schema["required"]
+    assert "proof_mode" not in no_schema["properties"]
+    assert "proof_mode" not in no_schema["required"]
 
     cases = (
         ("yes", "supported", "proposition_support", "yes"),
@@ -387,7 +397,6 @@ def test_candidate_bound_schema_projects_yes_no_relation_locally() -> None:
         response = {
             "candidate_judgment": judgment,
             "support_mode": "evidence_set",
-            "proof_mode": "atomic_semantic",
             "jointly_complete": True,
             "each_premise_required": True,
             "premises": [
@@ -415,6 +424,68 @@ def test_candidate_bound_schema_projects_yes_no_relation_locally() -> None:
         assert parsed.value is not None
         assert parsed.value["evidence_relation"] == relation
         assert parsed.value["verdict"] == verdict
+        assert parsed.value["proof_mode"] == "atomic_semantic"
+
+
+@pytest.mark.parametrize(
+    ("candidate_judgment", "premise_count", "expected_proof_mode"),
+    (
+        ("supported", 1, "atomic_semantic"),
+        ("contradicted", 2, "composite_conjunction"),
+        ("unknown", 0, "none"),
+    ),
+)
+def test_candidate_schema_payload_is_parser_identical_with_local_proof_mode(
+    candidate_judgment: str,
+    premise_count: int,
+    expected_proof_mode: str,
+) -> None:
+    payload: dict[str, object] = {
+        "candidate_judgment": candidate_judgment,
+        "support_mode": "evidence_set",
+        "jointly_complete": candidate_judgment != "unknown",
+        "each_premise_required": candidate_judgment != "unknown",
+        "premises": [
+            {
+                "span_selector": f"E{index}:S1",
+                "proposition_fragment": f"premise {index} is stated",
+                "supports_slot_ids": ["support:proposition"],
+                "binds_proposition_slots": [
+                    "actor",
+                    "predicate",
+                    "object",
+                    "quantifier",
+                ],
+            }
+            for index in range(1, premise_count + 1)
+        ],
+    }
+    if candidate_judgment == "unknown":
+        payload["unknown_assessment"] = {
+            "reviewed_span_selectors": ["E1:S1"],
+            "unresolved_proposition_slots": ["predicate"],
+            "support_gap": "The predicate is not established.",
+            "contradiction_gap": "The predicate is not explicitly contradicted.",
+        }
+    schema = semantic_proposition_response_format(
+        [],
+        ["support:proposition"],
+        candidate="yes",
+    )["json_schema"]["schema"]
+
+    validate(instance=payload, schema=schema)
+    parsed = parse_semantic_proposition_response(
+        json.dumps(payload),
+        packed=_packed_premises(max(1, premise_count)),
+        slot_ids={"support:proposition"},
+        model="semantic-test-model",
+        seed=17,
+        candidate="yes",
+    )
+
+    assert parsed.failure_reason == ""
+    assert parsed.value is not None
+    assert parsed.value["proof_mode"] == expected_proof_mode
 
 
 def test_unanswerable_candidate_rejects_supported_without_direction() -> None:

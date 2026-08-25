@@ -8,8 +8,6 @@ from typing import Any
 
 import pytest
 
-from scripts.slurm import qasper_debug_contract_probe as probe
-from scripts.slurm.validate_qasper_contract_probe import validate_contract_probe
 from benchmark.tests.qasper_contract_probe_provider_support import (  # noqa: F401
     _audit_entails_proposal,
     _audit_payload,
@@ -23,6 +21,8 @@ from benchmark.tests.qasper_contract_probe_provider_support import (  # noqa: F4
     _schema_required,
     _schema_shape,
 )
+from scripts.slurm import qasper_debug_contract_probe as probe
+from scripts.slurm.validate_qasper_contract_probe import validate_contract_probe
 
 
 class _Response:
@@ -283,21 +283,15 @@ def _factory(*, case_id: str, **_: object) -> _Provider:
 
 
 def _semantic_proposal_schema(candidate: str = "yes") -> dict[str, object]:
-    from inspect import signature
-
     from ktem.reasoning.mara_semantic_proposition_schema import (
         semantic_proposition_response_format,
     )
 
-    kwargs: dict[str, object] = {
-        "applicable_proposition_slots": ["actor", "predicate", "object"]
-    }
-    if "candidate" in signature(semantic_proposition_response_format).parameters:
-        kwargs["candidate"] = candidate
     return semantic_proposition_response_format(
         [],
         ["support:boolean_proposition"],
-        **kwargs,
+        candidate=candidate,
+        applicable_proposition_slots=["actor", "predicate", "object"],
     )["json_schema"]
 
 
@@ -387,7 +381,95 @@ def _assert_real_auditor_failure(rows: list[dict[str, Any]]) -> None:
         "parsed_value"
     ]
     assert parsed_proposal["candidate_judgment"] == "supported"
-    assert fail_event["transaction"]["audit"]["attempts"]
+    audit_attempts = fail_event["transaction"]["audit"]["attempts"]
+    assert audit_attempts
+    verifier = auditor_fail["evidence_metadata"]["semantic_proposition_verifier"]
+    assert verifier["audit_model_call_count"] >= 1
+    assert verifier["candidate_verification_audit"]["status"] == "failed"
+    assert auditor_fail["engine_terminal_answer"] == "unanswerable"
+    assert auditor_fail["engine_terminal_commit"]["outcome"] == "safe_abstention"
+
+
+def test_controlled_proposal_passes_exact_candidate_schema_and_parser() -> None:
+    from ktem.reasoning.mara_semantic_contract_probe import (
+        controlled_contract_probe_proposal,
+    )
+    from ktem.reasoning.mara_semantic_proposition_packing import (
+        pack_semantic_proposition_evidence,
+        required_semantic_proposition_slots,
+    )
+
+    from scripts.slurm.qasper_debug_contract_probe_cases import (
+        _PROBE_CASES,
+        _QUESTION,
+        _build_request_and_bundle,
+    )
+
+    case = next(case for case in _PROBE_CASES if case.case_id == "auditor_fail")
+    request, bundle = _build_request_and_bundle(case, 5)
+    slots = required_semantic_proposition_slots(request)
+    packing = pack_semantic_proposition_evidence(request, _QUESTION, slots, bundle)
+
+    controlled = controlled_contract_probe_proposal(
+        "base prompt",
+        bundle=bundle,
+        packing=packing,
+        slots=slots,
+        candidate="yes",
+    )
+    payload = _json_after_marker(
+        controlled,
+        "CONTRACT PROBE CONTROLLED VERIFIER OUTPUT (NEGATIVE AUDITOR TEST):",
+        "controlled proposal",
+    )
+
+    assert "evidence_relation" not in payload
+    assert "proof_mode" not in payload
+    identity = bundle.metadata["contract_probe_controlled_proposal"][
+        "payload_identity_gate"
+    ]
+    assert identity["status"] == "passed"
+    assert identity["candidate"] == "yes"
+    assert identity["schema_status"] == "accepted"
+    assert identity["parser_status"] == "accepted"
+    assert identity["payload_digest"]
+    assert identity["candidate_schema_digest"]
+
+
+def test_controlled_proposal_identity_gate_rejects_schema_mismatch() -> None:
+    from ktem.reasoning.mara_semantic_contract_probe import (
+        ControlledContractProbeIdentityError,
+        controlled_contract_probe_proposal,
+    )
+    from ktem.reasoning.mara_semantic_proposition_packing import (
+        pack_semantic_proposition_evidence,
+        required_semantic_proposition_slots,
+    )
+
+    from scripts.slurm.qasper_debug_contract_probe_cases import (
+        _PROBE_CASES,
+        _QUESTION,
+        _build_request_and_bundle,
+    )
+
+    case = next(case for case in _PROBE_CASES if case.case_id == "auditor_fail")
+    request, bundle = _build_request_and_bundle(case, 5)
+    control = bundle.metadata["contract_probe_controlled_proposal"]
+    control["candidate_judgment"] = "unknown"
+    slots = required_semantic_proposition_slots(request)
+    packing = pack_semantic_proposition_evidence(request, _QUESTION, slots, bundle)
+
+    with pytest.raises(
+        ControlledContractProbeIdentityError,
+        match="controlled_payload_schema_rejected",
+    ):
+        controlled_contract_probe_proposal(
+            "base prompt",
+            bundle=bundle,
+            packing=packing,
+            slots=slots,
+            candidate="yes",
+        )
 
 
 def test_live_probe_uses_production_parser_and_auditor() -> None:
@@ -408,10 +490,13 @@ def test_provider_state_mismatch_fails_closed() -> None:
     class WrongProvider(_Provider):
         def __call__(self, messages: object, **kwargs: object) -> _Response:
             value = super().__call__(messages, **kwargs)
-            if (
-                kwargs["response_format"]["json_schema"]["name"]
-                == "qasper_typed_candidate"
-            ):
+            response_format = kwargs.get("response_format")
+            response_format = (
+                response_format if isinstance(response_format, dict) else {}
+            )
+            schema = response_format.get("json_schema")
+            schema = schema if isinstance(schema, dict) else {}
+            if schema.get("name") == "qasper_typed_candidate":
                 return _Response({"candidate": "yes"})
             return value
 

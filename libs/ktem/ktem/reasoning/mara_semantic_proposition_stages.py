@@ -271,7 +271,7 @@ def _audit_semantic_identity(
 ) -> str | None:
     payload = _response_payload(response)
     if payload is None:
-        unavailable = {"response_semantics_unavailable": True}
+        unavailable: dict[str, Any] = {"response_semantics_unavailable": True}
         if input_identity:
             unavailable["input"] = deepcopy(input_identity)
         return json.dumps(unavailable, sort_keys=True, separators=(",", ":"))
@@ -504,19 +504,23 @@ def _corrected_prompt(prompt: str, failure_reason: str) -> str:
         "unexpected_unknown_assessment": (
             "For candidate_judgment=supported or contradicted, omit "
             "unknown_assessment entirely. unknown requires a non-empty "
-            "unknown_assessment, proof_mode=none, both entailment flags false, "
-            "and premises=[]."
+            "unknown_assessment, both entailment flags false, and premises=[]. "
+            "Do not emit proof_mode; runtime derives it from premise count."
         ),
         "unknown_assessment_schema_invalid": (
             "unknown requires a complete non-empty unknown_assessment object; "
             "reviewed spans and unresolved proposition slots must be non-empty, "
-            "and unknown must use proof_mode=none with premises=[]."
+            "and unknown must use premises=[]. Do not emit proof_mode."
         ),
         "verdict_payload_inconsistent": (
-            "supported or contradicted requires proof_mode atomic_semantic with "
-            "one premise or composite_conjunction with two to four premises, "
-            "both entailment flags true, and no unknown_assessment; unknown "
-            "requires proof_mode=none, false flags, and no premises."
+            "supported or contradicted requires one to four premises, both "
+            "entailment flags true, and no unknown_assessment; unknown requires "
+            "false flags and no premises. Do not emit proof_mode; runtime derives "
+            "it from premise count."
+        ),
+        "proof_mode_premise_count_mismatch": (
+            "Do not emit proof_mode. Keep the same candidate judgment and premise "
+            "semantics; runtime derives proof mode from premise count."
         ),
         "proposition_slot_coverage_incomplete": (
             "Declare only the proposition slots established by each quote, but "

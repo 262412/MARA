@@ -11,7 +11,10 @@ from .mara_semantic_candidate_policy import (
     CANDIDATE_VERIFICATION_CONTRACT,
     candidate_bound_response,
 )
-from .mara_semantic_contract_probe import controlled_contract_probe_proposal
+from .mara_semantic_contract_probe import (
+    ControlledContractProbeIdentityError,
+    controlled_contract_probe_proposal,
+)
 from .mara_semantic_local_consistency import (
     DETERMINISTIC_LOCAL_PREMISE_CONSISTENCY_CONTRACT,
 )
@@ -28,12 +31,9 @@ from .mara_semantic_proposition_packing import (
     required_semantic_proposition_slots,
     semantic_proposition_verifier_prompt,
 )
-from .mara_semantic_proposition_trace import (
-    SEMANTIC_PROPOSITION_VERIFIER_SEED,
-    digest,
-    record_trace,
-    semantic_transaction_identity,
-)
+from .mara_semantic_proposition_trace import SEMANTIC_PROPOSITION_VERIFIER_SEED, digest
+from .mara_semantic_proposition_trace import record_verifier_trace as _trace
+from .mara_semantic_proposition_trace import semantic_transaction_identity
 from .mara_semantic_proposition_transaction import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
     run_semantic_proposition_transaction,
@@ -204,7 +204,13 @@ class _SemanticPropositionVerifier:
             verdict=str((cached or {}).get("verdict") or ""),
             candidate_label=candidate,
             candidate_verification_status=str(
-                (cached or {}).get("candidate_verification_status") or "unknown"
+                (cached or {}).get("candidate_verification_status")
+                or (
+                    "pre_audit_failed"
+                    if cached is None
+                    and diagnostics.get("audit_status") == "not_started"
+                    else "unknown"
+                )
             ),
             cache_hit=True,
             cache_source="route_local_semantic_pack",
@@ -280,31 +286,75 @@ def _candidate_prompt_or_none(
             bundle=bundle,
             packing=packing,
             slots=slots,
+            candidate=candidate,
         )
-    except ValueError:
-        verifier.cache[cache_key] = None
-        verifier.failure_reasons[cache_key] = "prompt_bound_exceeded"
-        verifier.debug_recorder.record_pre_model(
-            "prompt_rejected",
-            cache_key,
+    except ControlledContractProbeIdentityError:
+        _prompt_failure(
+            verifier,
+            bundle,
             question,
             packing,
             slots,
-            reason="prompt_bound_exceeded",
-        )
-        _trace(
-            verifier,
-            bundle,
-            "failed",
-            "prompt_bound_exceeded",
-            packing,
-            slots,
+            cache_key,
             model,
             seed,
-            candidate_label=candidate,
-            candidate_verification_status="unknown",
+            candidate,
+            reason="controlled_payload_schema_parser_identity_failed",
         )
         return None
+    except ValueError:
+        _prompt_failure(
+            verifier,
+            bundle,
+            question,
+            packing,
+            slots,
+            cache_key,
+            model,
+            seed,
+            candidate,
+            reason="prompt_bound_exceeded",
+        )
+        return None
+
+
+def _prompt_failure(
+    verifier: Any,
+    bundle: EvidenceBundle,
+    question: str,
+    packing: SemanticPropositionEvidencePacking,
+    slots: list[dict[str, str]],
+    cache_key: str,
+    model: str,
+    seed: int,
+    candidate: str,
+    *,
+    reason: str,
+) -> None:
+    verifier.cache[cache_key] = None
+    verifier.failure_reasons[cache_key] = reason
+    verifier.debug_recorder.record_pre_model(
+        "prompt_rejected",
+        cache_key,
+        question,
+        packing,
+        slots,
+        reason=reason,
+    )
+    _trace(
+        verifier,
+        bundle,
+        "failed",
+        reason,
+        packing,
+        slots,
+        model,
+        seed,
+        candidate_label=candidate,
+        candidate_verification_status="pre_audit_failed",
+        audit_status="not_started",
+    )
+    return None
 
 
 def _skipped_response(
@@ -458,6 +508,15 @@ def _store_model_response(
         diagnostics=diagnostics,
         transaction=outcome.debug_trace,
     )
+    candidate_verification_status = str(
+        (parsed or {}).get("candidate_verification_status")
+        or (
+            "pre_audit_failed"
+            if outcome.audit_call_count == 0
+            and diagnostics.get("audit_status") == "not_started"
+            else "unknown"
+        )
+    )
     _trace(
         verifier,
         bundle,
@@ -470,49 +529,10 @@ def _store_model_response(
         prompt_chars=len(prompt),
         verdict=str((parsed or {}).get("verdict") or ""),
         candidate_label=candidate,
-        candidate_verification_status=str(
-            (parsed or {}).get("candidate_verification_status") or "unknown"
-        ),
+        candidate_verification_status=candidate_verification_status,
         **diagnostics,
     )
     return deepcopy(parsed)
-
-
-def _trace(
-    verifier: Any,
-    bundle: EvidenceBundle,
-    status: str,
-    reason: str,
-    packing: SemanticPropositionEvidencePacking,
-    slots: list[dict[str, str]],
-    model: str,
-    seed: int,
-    *,
-    prompt_chars: int = 0,
-    verdict: str = "",
-    cache_hit: bool = False,
-    cache_source: str = "model_transaction",
-    **diagnostics: Any,
-) -> None:
-    record_trace(
-        bundle,
-        status=status,
-        reason=reason,
-        packing=packing,
-        slots=slots,
-        model=model,
-        seed=seed,
-        actual_model_call_count=verifier.actual_model_call_count,
-        proposal_model_call_count=verifier.proposal_model_call_count,
-        audit_model_call_count=verifier.audit_model_call_count,
-        prompt_chars=prompt_chars,
-        verdict=verdict,
-        cache_hit=cache_hit,
-        cache_source=cache_source,
-        debug_trace=verifier.debug_recorder.snapshot(),
-        release_mode=verifier.release_mode,
-        **diagnostics,
-    )
 
 
 def _answering_llm(pipeline: Any) -> Any | None:

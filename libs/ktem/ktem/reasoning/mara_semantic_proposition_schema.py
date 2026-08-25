@@ -132,6 +132,7 @@ def parse_semantic_proposition_response(
     ) = _verdict_payload(payload, candidate=candidate)
     if payload_reason:
         return SemanticPropositionParse(None, payload_reason)
+    assert candidate_judgment is not None
     assert verdict is not None and proof_mode is not None and raw_premises is not None
     premises, unknown_assessment, evidence_reason = _parse_proposition_evidence(
         payload,
@@ -233,7 +234,6 @@ def _candidate_judgment_payload(
     required_fields = {
         "candidate_judgment",
         "support_mode",
-        "proof_mode",
         "jointly_complete",
         "each_premise_required",
         "premises",
@@ -241,11 +241,13 @@ def _candidate_judgment_payload(
     legacy_required_fields = required_fields - {"candidate_judgment"} | {"verdict"}
     allowed_fields = required_fields | {
         "evidence_relation",
+        "proof_mode",
         "unknown_assessment",
         "not_applicable_proposition_slots",
     }
     legacy_allowed_fields = legacy_required_fields | {
         "evidence_relation",
+        "proof_mode",
         "unknown_assessment",
         "not_applicable_proposition_slots",
     }
@@ -341,13 +343,6 @@ def _proof_payload(
     *,
     verdict: str,
 ) -> tuple[str | None, list[Any] | None, str]:
-    proof_mode = payload.get("proof_mode")
-    if proof_mode not in {
-        "none",
-        "atomic_semantic",
-        "composite_conjunction",
-    }:
-        return None, None, "proof_mode_invalid"
     if not isinstance(payload.get("jointly_complete"), bool) or not isinstance(
         payload.get("each_premise_required"), bool
     ):
@@ -355,25 +350,36 @@ def _proof_payload(
     raw_premises = payload.get("premises")
     if not isinstance(raw_premises, list) or len(raw_premises) > 4:
         return None, None, "premise_collection_invalid"
-    expected_count = {
-        "atomic_semantic": (1, 1),
-        "composite_conjunction": (2, 4),
-    }.get(str(proof_mode))
-    if verdict in {"yes", "no"} and (
-        expected_count is None
-        or not expected_count[0] <= len(raw_premises) <= expected_count[1]
-        or payload["jointly_complete"] is not True
-        or payload["each_premise_required"] is not True
-    ):
-        return None, None, "verdict_payload_inconsistent"
-    if verdict == "insufficient_evidence" and (
-        raw_premises
-        or proof_mode != "none"
-        or payload["jointly_complete"] is not False
-        or payload["each_premise_required"] is not False
-    ):
-        return None, None, "verdict_payload_inconsistent"
-    return str(proof_mode), raw_premises, ""
+    premise_count = len(raw_premises)
+    if verdict in {"yes", "no"}:
+        if (
+            premise_count < 1
+            or payload["jointly_complete"] is not True
+            or payload["each_premise_required"] is not True
+        ):
+            return None, None, "verdict_payload_inconsistent"
+        proof_mode = (
+            "atomic_semantic" if premise_count == 1 else "composite_conjunction"
+        )
+    else:
+        if (
+            premise_count != 0
+            or payload["jointly_complete"] is not False
+            or payload["each_premise_required"] is not False
+        ):
+            return None, None, "verdict_payload_inconsistent"
+        proof_mode = "none"
+    supplied_proof_mode = payload.get("proof_mode")
+    if supplied_proof_mode is not None:
+        if supplied_proof_mode not in {
+            "none",
+            "atomic_semantic",
+            "composite_conjunction",
+        }:
+            return None, None, "proof_mode_invalid"
+        if supplied_proof_mode != proof_mode:
+            return None, None, "proof_mode_premise_count_mismatch"
+    return proof_mode, raw_premises, ""
 
 
 def _candidate_judgment_projection_valid(
@@ -392,16 +398,20 @@ def _candidate_judgment_projection_valid(
 def _candidate_projection(candidate: str, judgment: str) -> tuple[str, str]:
     if judgment == "unknown":
         return "undetermined", "insufficient_evidence"
-    relation = {
-        "yes": {
-            "supported": "proposition_support",
-            "contradicted": "explicit_contradiction",
-        },
-        "no": {
-            "supported": "explicit_contradiction",
-            "contradicted": "proposition_support",
-        },
-    }.get(candidate, {}).get(judgment)
+    relation = (
+        {
+            "yes": {
+                "supported": "proposition_support",
+                "contradicted": "explicit_contradiction",
+            },
+            "no": {
+                "supported": "explicit_contradiction",
+                "contradicted": "proposition_support",
+            },
+        }
+        .get(candidate, {})
+        .get(judgment)
+    )
     if relation is None:
         return "undetermined", "insufficient_evidence"
     return relation, _verdict_for_evidence_relation(relation)

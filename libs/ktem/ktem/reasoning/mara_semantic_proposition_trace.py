@@ -22,6 +22,43 @@ SEMANTIC_PROPOSITION_VERIFIER_RUNTIME_CONTRACT = (
 SEMANTIC_PROPOSITION_VERIFIER_SEED = 20260724
 
 
+def record_verifier_trace(
+    verifier: Any,
+    bundle: EvidenceBundle,
+    status: str,
+    reason: str,
+    packing: SemanticPropositionEvidencePacking,
+    slots: list[dict[str, str]],
+    model: str,
+    seed: int,
+    *,
+    prompt_chars: int = 0,
+    verdict: str = "",
+    cache_hit: bool = False,
+    cache_source: str = "model_transaction",
+    **diagnostics: Any,
+) -> None:
+    record_trace(
+        bundle,
+        status=status,
+        reason=reason,
+        packing=packing,
+        slots=slots,
+        model=model,
+        seed=seed,
+        actual_model_call_count=verifier.actual_model_call_count,
+        proposal_model_call_count=verifier.proposal_model_call_count,
+        audit_model_call_count=verifier.audit_model_call_count,
+        prompt_chars=prompt_chars,
+        verdict=verdict,
+        cache_hit=cache_hit,
+        cache_source=cache_source,
+        debug_trace=verifier.debug_recorder.snapshot(),
+        release_mode=verifier.release_mode,
+        **diagnostics,
+    )
+
+
 def semantic_transaction_identity(
     request: Any,
     bundle: EvidenceBundle,
@@ -224,6 +261,18 @@ def _candidate_audit(
     audit_status = str(trace.get("audit_status") or "")
     candidate = str(trace.get("candidate_label") or "")
     judgment = str(trace.get("candidate_verification_status") or "unknown")
+    if judgment == "pre_audit_failed" and audit_status == "not_started":
+        return {
+            "contract_id": "candidate_verifier_audit.v2",
+            "status": "not_started",
+            "mode": "not_started",
+            "audited_candidate": candidate,
+            "audited_verdict": "",
+            "audited_judgment": "pre_audit_failed",
+            "classification": "pre_audit_failed",
+            "replacement_candidate_allowed": False,
+            "reason": reason,
+        }
     recorded = trace.get("candidate_verification_audit")
     recorded = recorded if isinstance(recorded, dict) else {}
     audit = (
