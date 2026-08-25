@@ -58,6 +58,7 @@ from .mara_semantic_recovery_state import changed_binding_reaudit_transition
 from .mara_semantic_transaction_support import (
     audit_prompt_failure,
     bind_semantic_runtime_fields,
+    semantic_audit_input_identity,
     transaction_debug,
     transaction_result,
 )
@@ -277,6 +278,7 @@ def _audit_transaction(
             for index, premise in enumerate(value.get("premises") or [], start=1)
             if isinstance(premise, dict)
         },
+        semantic_identity=semantic_audit_input_identity(context, value, conclusion),
     )
     diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
     local_consistency = record_local_premise_consistency(
@@ -415,6 +417,18 @@ def _audit_failure_result(
             debug_trace=debug_trace,
         )
     if audit.value is None:
+        if audit.failure_reason == "audit_retry_semantic_identity_changed":
+            reason = audit.failure_reason
+            diagnostics["audit_reason"] = reason
+            return transaction_result(
+                None,
+                "failed",
+                reason,
+                diagnostics,
+                proposal_calls=proposal.call_count,
+                audit_calls=audit.call_count,
+                debug_trace=debug_trace,
+            )
         reason = invalid_response_reason(
             audit.response,
             max_tokens=SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,

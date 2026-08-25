@@ -12,6 +12,9 @@ SEMANTIC_ENTAILMENT_AUDIT_MAX_PROMPT_CHARS = 8000
 
 SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT = (
     "You are the independent audit stage for a document-grounded proof proposal. "
+    "The input explicitly binds original_candidate, candidate_judgment, and "
+    "typed_conclusion.polarity; audit that supplied relationship without "
+    "renaming the candidate judgment as a verifier verdict. "
     "The proposal may be wrong even when every quote is genuine. Check that each "
     "quote entails its stated proposition fragment without adding an action, "
     "object, actor, scope, modality, comparison, quantifier, polarity, or time. "
@@ -46,8 +49,13 @@ def semantic_entailment_audit_prompt(
     conclusion: TypedConclusion,
     proof_mode: str,
     premises: list[dict[str, Any]],
+    *,
+    original_candidate: str = "",
+    candidate_judgment: str = "",
 ) -> str:
     payload = {
+        "original_candidate": str(original_candidate or "").strip().casefold(),
+        "candidate_judgment": str(candidate_judgment or "").strip().casefold(),
         "question_proposition": proposition.as_dict(),
         "typed_conclusion": conclusion.as_dict(),
         "proof_mode": proof_mode,

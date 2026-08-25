@@ -15,6 +15,11 @@ PROBE_MODULES = (
 )
 
 
+def test_live_probe_receives_the_job_owned_formal_audit_path() -> None:
+    slurm_script = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+    assert '--audit-output "$CONTRACT_PROBE_AUDIT_PATH"' in slurm_script
+
+
 def _job_owned_python(tmp_path: Path) -> Path:
     if os.name == "nt":
         pytest.skip("Slurm job-owned Python entrypoints require POSIX symlinks")
@@ -30,7 +35,7 @@ def test_qasper_probe_module_entrypoint_matches_job_runtime(
     module: str,
 ) -> None:
     slurm_script = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
-    expected_invocation = '"$MARA_BENCHMARK_PYTHON" -m \\\n' f"    {module}"
+    expected_invocation = f'"$MARA_BENCHMARK_PYTHON" -m \\\n    {module}'
     assert expected_invocation in slurm_script
 
     environment = os.environ.copy()

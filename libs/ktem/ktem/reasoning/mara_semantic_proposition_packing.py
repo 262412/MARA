@@ -59,10 +59,13 @@ SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT = (
     "normalized substring of that span, state nothing broader than the selected "
     "text, bind it to the verification slots it supports, and identify which of "
     "actor, predicate, object, and quantifier it establishes. All four proposition "
-    "slots must be covered by the same selected evidence set. Use "
-    "evidence_relation=proposition_support only for proposition support, "
-    "evidence_relation=explicit_contradiction only for an explicit contradiction, "
-    "and evidence_relation=undetermined otherwise. Keyword overlap "
+    "slots must be covered by the same selected evidence set. For original "
+    "candidates yes or no, do not emit evidence_relation: it is a deterministic "
+    "local projection from the original candidate and candidate_judgment; runtime "
+    "injects the result onto each normalized premise after parsing. For the "
+    "unanswerable candidate, follow its candidate-specific schema: unknown has "
+    "no direction field, while contradicted must emit the direction required by "
+    "that schema. Keyword overlap "
     "alone is never a proposition binding. For questions "
     "about inspecting, analyzing, or evaluating a system, a genuine conjunction "
     "may combine one premise that establishes the authors performed the analysis "
@@ -260,6 +263,17 @@ def semantic_proposition_verifier_prompt(
         )
         for value in packed
     )
+    normalized_candidate = str(candidate or "").strip().casefold()
+    direction_instruction = (
+        "For the unanswerable candidate, use candidate_judgment=unknown when "
+        "neither polarity is established. If candidate_judgment=contradicted, "
+        "include evidence_relation only to identify whether the evidence "
+        "supports or explicitly contradicts the typed proposition; runtime "
+        "still validates that direction and projects the legacy polarity."
+        if normalized_candidate == "unanswerable"
+        else "For yes/no candidates, emit only candidate_judgment; runtime "
+        "projects evidence_relation and the legacy polarity deterministically."
+    )
     prompt = (
         "/no_think\n"
         f"QUESTION:\n{question.strip()}\n\n"
@@ -270,9 +284,8 @@ def semantic_proposition_verifier_prompt(
         f"CANONICAL EVIDENCE SPANS:\n{evidence_text}\n\n"
         "Do not answer the question independently and do not propose a replacement "
         "candidate. Return candidate_judgment=supported, contradicted, or unknown "
-        "for the exact original candidate above. evidence_relation is only the "
-        "polarity of the typed proposition and is converted to the legacy verifier "
-        "verdict deterministically after parsing. Never emit a yes/no answer field. "
+        f"for the exact original candidate above. {direction_instruction} "
+        "Never emit a yes/no answer field. "
         "For every supported/contradicted premise, binds_proposition_slots must "
         "declare only the "
         "actor/predicate/object/quantifier fields actually established by its quote; "

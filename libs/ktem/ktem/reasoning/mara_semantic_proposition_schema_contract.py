@@ -9,9 +9,12 @@ from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
 def semantic_proposition_schema(
     slot_ids: list[str],
     *,
+    candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
 ) -> dict[str, Any]:
+    normalized_candidate = str(candidate or "").strip().casefold()
     include_not_applicable = applicable_proposition_slots is not None
+    include_evidence_relation = normalized_candidate not in {"yes", "no"}
     requested_slots = (
         {str(slot) for slot in applicable_proposition_slots}
         if applicable_proposition_slots is not None
@@ -22,7 +25,6 @@ def semantic_proposition_schema(
     )
     required = [
         "candidate_judgment",
-        "evidence_relation",
         "support_mode",
         "proof_mode",
         "jointly_complete",
@@ -37,30 +39,17 @@ def semantic_proposition_schema(
             slot_ids,
             include_not_applicable,
             proposition_slots,
+            include_evidence_relation=include_evidence_relation,
         ),
         "required": required,
         "additionalProperties": False,
         "oneOf": [
-            _judgment_branch(
+            *_judgment_branches(
                 slot_ids,
-                "supported",
-                False,
-                include_not_applicable,
-                proposition_slots,
-            ),
-            _judgment_branch(
-                slot_ids,
-                "contradicted",
-                False,
-                include_not_applicable,
-                proposition_slots,
-            ),
-            _judgment_branch(
-                slot_ids,
-                "unknown",
-                True,
-                include_not_applicable,
-                proposition_slots,
+                candidate=normalized_candidate,
+                include_not_applicable=include_not_applicable,
+                proposition_slots=proposition_slots,
+                include_evidence_relation=include_evidence_relation,
             ),
         ],
     }
@@ -109,15 +98,13 @@ def _proposition_properties(
     slot_ids: list[str],
     include_not_applicable: bool,
     proposition_slots: tuple[str, ...],
+    *,
+    include_evidence_relation: bool,
 ) -> dict[str, Any]:
     properties = {
         "candidate_judgment": {
             "type": "string",
             "enum": ["supported", "contradicted", "unknown"],
-        },
-        "evidence_relation": {
-            "type": "string",
-            "enum": ["proposition_support", "explicit_contradiction", "undetermined"],
         },
         "support_mode": {"type": "string", "enum": ["evidence_set"]},
         "proof_mode": {
@@ -134,6 +121,15 @@ def _proposition_properties(
         },
         "unknown_assessment": _unknown_assessment_schema(proposition_slots),
     }
+    if include_evidence_relation:
+        properties["evidence_relation"] = {
+            "type": "string",
+            "enum": [
+                "proposition_support",
+                "explicit_contradiction",
+                "undetermined",
+            ],
+        }
     if include_not_applicable:
         properties["not_applicable_proposition_slots"] = {
             "type": "array",
@@ -149,22 +145,29 @@ def _judgment_branch(
     unknown: bool,
     include_not_applicable: bool,
     proposition_slots: tuple[str, ...],
+    *,
+    include_evidence_relation: bool,
+    evidence_relations: Collection[str] | None = None,
 ) -> dict[str, Any]:
     properties = _proposition_properties(
         slot_ids,
         include_not_applicable,
         proposition_slots,
+        include_evidence_relation=include_evidence_relation,
     )
     properties["candidate_judgment"] = {"type": "string", "enum": [judgment]}
-    properties["evidence_relation"] = {
-        "type": "string",
-        "enum": ["undetermined"]
-        if unknown
-        else [
-            "proposition_support",
-            "explicit_contradiction",
-        ],
-    }
+    if include_evidence_relation:
+        properties["evidence_relation"] = {
+            "type": "string",
+            "enum": (
+                ["undetermined"]
+                if unknown
+                else list(
+                    evidence_relations
+                    or ("proposition_support", "explicit_contradiction")
+                )
+            ),
+        }
     properties["proof_mode"] = {
         "type": "string",
         "enum": ["none"] if unknown else ["atomic_semantic", "composite_conjunction"],
@@ -180,13 +183,14 @@ def _judgment_branch(
     }
     required = [
         "candidate_judgment",
-        "evidence_relation",
         "support_mode",
         "proof_mode",
         "jointly_complete",
         "each_premise_required",
         "premises",
     ]
+    if include_evidence_relation:
+        required.append("evidence_relation")
     if include_not_applicable:
         required.append("not_applicable_proposition_slots")
     if unknown:
@@ -199,6 +203,50 @@ def _judgment_branch(
         "required": required,
         "additionalProperties": False,
     }
+
+
+def _judgment_branches(
+    slot_ids: list[str],
+    *,
+    candidate: str,
+    include_not_applicable: bool,
+    proposition_slots: tuple[str, ...],
+    include_evidence_relation: bool,
+) -> list[dict[str, Any]]:
+    if candidate == "unanswerable":
+        return [
+            _judgment_branch(
+                slot_ids,
+                "contradicted",
+                False,
+                include_not_applicable,
+                proposition_slots,
+                include_evidence_relation=True,
+                evidence_relations=(
+                    "proposition_support",
+                    "explicit_contradiction",
+                ),
+            ),
+            _judgment_branch(
+                slot_ids,
+                "unknown",
+                True,
+                include_not_applicable,
+                proposition_slots,
+                include_evidence_relation=False,
+            ),
+        ]
+    return [
+        _judgment_branch(
+            slot_ids,
+            judgment,
+            judgment == "unknown",
+            include_not_applicable,
+            proposition_slots,
+            include_evidence_relation=include_evidence_relation,
+        )
+        for judgment in ("supported", "contradicted", "unknown")
+    ]
 
 
 def _premise_schema(

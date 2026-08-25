@@ -90,21 +90,77 @@ def run_live_probes(
     *,
     timeout_seconds: float = 60.0,
     model_factory: Callable[..., Any] | None = None,
+    output_path: Path | None = None,
+    audit_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     factory = model_factory or _default_model_factory
-    rows = [
-        _run_case(
-            case,
-            index,
-            base_url=base_url,
-            model=model,
-            timeout_seconds=timeout_seconds,
-            model_factory=factory,
-        )
-        for index, case in enumerate(_PROBE_CASES)
-    ]
+    rows: list[dict[str, Any]] = []
+    try:
+        for index, case in enumerate(_PROBE_CASES):
+            rows.append(
+                _run_case(
+                    case,
+                    index,
+                    base_url=base_url,
+                    model=model,
+                    timeout_seconds=timeout_seconds,
+                    model_factory=factory,
+                )
+            )
+    except Exception as exc:
+        if output_path is not None:
+            _write_rows(output_path, rows)
+            if audit_path is not None:
+                _persist_failure_audit(output_path, audit_path, exc)
+        raise
+    # Publish every real row before evaluating coverage or any other hard
+    # gate.  A failed coverage assertion must leave the exact provider rows
+    # available to the formal validator and downstream audit tooling.
+    if output_path is not None:
+        _write_rows(output_path, rows)
+        if audit_path is not None:
+            _persist_pending_audit(output_path, audit_path)
     _assert_live_coverage(rows)
     return rows
+
+
+def _persist_failure_audit(
+    predictions_path: Path,
+    audit_path: Path,
+    exc: BaseException,
+) -> None:
+    from scripts.slurm.validate_qasper_contract_probe import (
+        persist_failed_contract_probe_audit,
+    )
+
+    persist_failed_contract_probe_audit(
+        predictions_path,
+        output_path=audit_path,
+        failure_evidence={
+            "probe_exception": {
+                "exception_type": type(exc).__name__,
+                "exception_message": str(exc),
+            }
+        },
+    )
+
+
+def _persist_pending_audit(predictions_path: Path, audit_path: Path) -> None:
+    from scripts.slurm.validate_qasper_contract_probe import (
+        persist_failed_contract_probe_audit,
+    )
+
+    persist_failed_contract_probe_audit(
+        predictions_path,
+        output_path=audit_path,
+        evaluate_gates=False,
+        failure_evidence={
+            "probe_execution": {
+                "phase": "pre_hard_gate",
+                "hard_gate_complete": False,
+            }
+        },
+    )
 
 
 def main() -> int:
@@ -112,14 +168,39 @@ def main() -> int:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--audit-output",
+        type=Path,
+        help=(
+            "Optional formal audit path; defaults to contract_probe_audit.json "
+            "beside --output."
+        ),
+    )
     parser.add_argument("--timeout-seconds", type=float, default=60.0)
     args = parser.parse_args()
-    rows = run_live_probes(
-        args.base_url,
-        args.model,
-        timeout_seconds=args.timeout_seconds,
+    output_path = args.output.resolve()
+    audit_path = (
+        args.audit_output.resolve()
+        if args.audit_output is not None
+        else output_path.with_name("contract_probe_audit.json")
     )
-    _write_rows(args.output, rows)
+    try:
+        run_live_probes(
+            args.base_url,
+            args.model,
+            timeout_seconds=args.timeout_seconds,
+            output_path=output_path,
+            audit_path=audit_path,
+        )
+    except Exception as exc:
+        try:
+            _persist_failure_audit(output_path, audit_path, exc)
+        except Exception as audit_exc:
+            raise exc from audit_exc
+        raise
+    from scripts.slurm.validate_qasper_contract_probe import validate_contract_probe
+
+    validate_contract_probe(output_path, output_path=audit_path)
     return 0
 
 

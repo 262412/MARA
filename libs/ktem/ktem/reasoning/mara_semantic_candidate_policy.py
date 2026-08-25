@@ -275,12 +275,16 @@ def candidate_bound_audit_prompt(candidate: str, verdict: str) -> str:
     )
 
 
-def bind_candidate_audit_prompt(prompt: str, candidate: str, verdict: str) -> str:
+def bind_candidate_audit_prompt(
+    prompt: str,
+    candidate: str,
+    candidate_judgment: str,
+) -> str:
     bound = (
         f"{prompt}\n\nREAD-ONLY CANDIDATE BINDING:\n"
         f"original_candidate={str(candidate or '').strip().casefold()}\n"
-        f"verifier_judgment={str(verdict or '').strip().casefold()}\n"
-        "Audit only the supplied original candidate and verifier judgment. "
+        f"candidate_judgment={str(candidate_judgment or '').strip().casefold()}\n"
+        "Audit only the supplied original candidate and candidate judgment. "
         "Do not answer the question, emit a replacement candidate or verdict, "
         "reverse either value, or use proof repair to change the original "
         "candidate."
@@ -300,12 +304,10 @@ def candidate_bound_semantic_audit_prompt(
         conclusion,
         str(value.get("proof_mode") or ""),
         value.get("premises") or [],
+        original_candidate=candidate_from_prompt(context.proposal_prompt),
+        candidate_judgment=str(value.get("candidate_judgment") or ""),
     )
-    return bind_candidate_audit_prompt(
-        prompt,
-        candidate_from_prompt(context.proposal_prompt),
-        str(value.get("verdict") or ""),
-    )
+    return prompt
 
 
 def candidate_bound_audit_rejection_reason(audit: ParsedSemanticStage) -> str:

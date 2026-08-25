@@ -11,6 +11,11 @@ from scripts.slurm.qasper_debug_contract import (
     qasper_debug_audit_extensions,
     qasper_debug_behavior_violations,
 )
+from scripts.slurm.qasper_debug_contract_probe_artifact import (
+    _MODEL_CONTRACT,
+    _assert_live_coverage,
+    _observed_state_evidence,
+)
 
 CONTRACT = "qasper_provider_contract_probe_audit.v1"
 _HARD_GATES = {
@@ -26,19 +31,80 @@ _HARD_GATES = {
     "qasper_required_slot_unverified_count": 0.0,
     "qasper_reverify_without_semantic_state_change_count": 0.0,
 }
+_LIVE_COVERAGE_GATE = "qasper_contract_probe_live_coverage_assertion_complete"
+_EXECUTION_GATE = "qasper_contract_probe_execution_complete"
 
 
-def validate_contract_probe(
+def _is_live_probe_artifact(predictions: list[dict[str, Any]]) -> bool:
+    return any(row.get("contract_id") == _MODEL_CONTRACT for row in predictions)
+
+
+def _exception_evidence(exc: BaseException) -> dict[str, str]:
+    return {
+        "exception_type": type(exc).__name__,
+        "exception_message": str(exc),
+    }
+
+
+def _failed_exception_audit(
     predictions_path: Path,
-    *,
     output_path: Path,
+    predictions: list[dict[str, Any]],
+    *,
+    source_sha256: str | None,
+    failure_evidence: dict[str, Any] | None,
+    exc: BaseException,
 ) -> dict[str, Any]:
-    predictions = [row for row in read_jsonl(predictions_path) if isinstance(row, dict)]
-    extensions = qasper_debug_audit_extensions(
-        [],
-        contract_probe_predictions=predictions,
-    )
-    metrics = dict(extensions.get("debug_gate_metrics") or {})
+    evidence = dict(failure_evidence or {})
+    evidence["exception"] = _exception_evidence(exc)
+    observed_state = _observed_state_evidence(predictions)
+    return {
+        "contract": CONTRACT,
+        "status": "failed",
+        "source": str(predictions_path.resolve()),
+        "source_sha256": source_sha256,
+        "prediction_count": len(predictions),
+        "replacement_candidate_allowed": False,
+        "behavior_violations": [],
+        "hard_gates": {
+            _EXECUTION_GATE: {
+                "value": 0.0,
+                "expected": 1.0,
+                "passed": False,
+            }
+        },
+        "failed_gates": [_EXECUTION_GATE],
+        "contract_probe_audit": {
+            "lane": "contract_probe",
+            "status": "failed",
+            "prediction_count": len(predictions),
+        },
+        "structural_state_matrix": {},
+        "debug_gate_metrics": {},
+        "failure_evidence": {
+            "observed_state": observed_state,
+            **evidence,
+        },
+        "audit_output": str(output_path.resolve()),
+    }
+
+
+def _coverage_failure(
+    predictions: list[dict[str, Any]],
+) -> dict[str, str] | None:
+    if not _is_live_probe_artifact(predictions):
+        return None
+    try:
+        _assert_live_coverage(predictions)
+    except RuntimeError as exc:
+        return _exception_evidence(exc)
+    return None
+
+
+def _hard_gates(
+    metrics: dict[str, Any],
+    predictions: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], dict[str, str] | None]:
     hard_gates = {
         name: {
             "value": metrics.get(name),
@@ -48,6 +114,27 @@ def validate_contract_probe(
         }
         for name, expected in _HARD_GATES.items()
     }
+    coverage_failure = _coverage_failure(predictions)
+    if _is_live_probe_artifact(predictions):
+        hard_gates[_LIVE_COVERAGE_GATE] = {
+            "value": 0.0 if coverage_failure else 1.0,
+            "expected": 1.0,
+            "passed": coverage_failure is None,
+        }
+    return hard_gates, coverage_failure
+
+
+def _evaluate_probe(
+    predictions: list[dict[str, Any]],
+    *,
+    failure_evidence: dict[str, Any] | None,
+) -> dict[str, Any]:
+    extensions = qasper_debug_audit_extensions(
+        [],
+        contract_probe_predictions=predictions,
+    )
+    metrics = dict(extensions.get("debug_gate_metrics") or {})
+    hard_gates, coverage_failure = _hard_gates(metrics, predictions)
     failed_gates = [
         name for name, result in hard_gates.items() if result["passed"] is not True
     ]
@@ -56,6 +143,17 @@ def validate_contract_probe(
         contract_probe_predictions=predictions,
     )
     lane_audit = dict(extensions.get("contract_probe_audit") or {})
+    combined_failure_evidence = dict(failure_evidence or {})
+    if coverage_failure is not None:
+        combined_failure_evidence["coverage_exception"] = coverage_failure
+    if combined_failure_evidence:
+        hard_gates[_EXECUTION_GATE] = {
+            "value": 0.0,
+            "expected": 1.0,
+            "passed": False,
+        }
+        failed_gates.append(_EXECUTION_GATE)
+        lane_audit["status"] = "failed"
     status = (
         "passed"
         if predictions
@@ -64,25 +162,141 @@ def validate_contract_probe(
         and not failed_gates
         else "failed"
     )
-    audit = {
-        "contract": CONTRACT,
+    return {
         "status": status,
-        "source": str(predictions_path.resolve()),
-        "source_sha256": file_sha256(predictions_path),
-        "prediction_count": len(predictions),
-        "replacement_candidate_allowed": False,
         "behavior_violations": violations,
         "hard_gates": hard_gates,
         "failed_gates": failed_gates,
         "contract_probe_audit": lane_audit,
         "structural_state_matrix": extensions.get("structural_state_matrix") or {},
         "debug_gate_metrics": metrics,
+        "failure_evidence": {
+            "observed_state": _observed_state_evidence(predictions),
+            **combined_failure_evidence,
+        },
     }
+
+
+def _audit_payload(
+    predictions_path: Path,
+    output_path: Path,
+    predictions: list[dict[str, Any]],
+    *,
+    source_sha256: str,
+    failure_evidence: dict[str, Any] | None,
+) -> dict[str, Any]:
+    evaluated = _evaluate_probe(
+        predictions,
+        failure_evidence=failure_evidence,
+    )
+    return {
+        "contract": CONTRACT,
+        "status": evaluated["status"],
+        "source": str(predictions_path.resolve()),
+        "source_sha256": source_sha256,
+        "prediction_count": len(predictions),
+        "replacement_candidate_allowed": False,
+        **{key: value for key, value in evaluated.items() if key != "status"},
+        "audit_output": str(output_path.resolve()),
+    }
+
+
+def persist_failed_contract_probe_audit(
+    predictions_path: Path,
+    *,
+    output_path: Path,
+    failure_evidence: dict[str, Any],
+    evaluate_gates: bool = True,
+) -> dict[str, Any]:
+    """Atomically publish fail-closed evidence without raising a hard gate."""
+
+    predictions: list[dict[str, Any]] = []
+    source_sha256: str | None = None
+    try:
+        predictions = [
+            row for row in read_jsonl(predictions_path) if isinstance(row, dict)
+        ]
+        source_sha256 = file_sha256(predictions_path)
+        if evaluate_gates:
+            audit = _audit_payload(
+                predictions_path,
+                output_path,
+                predictions,
+                source_sha256=source_sha256,
+                failure_evidence=failure_evidence,
+            )
+        else:
+            audit = _failed_exception_audit(
+                predictions_path,
+                output_path,
+                predictions,
+                source_sha256=source_sha256,
+                failure_evidence=failure_evidence,
+                exc=RuntimeError("contract probe hard gate not completed"),
+            )
+    except (
+        AttributeError,
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        audit = _failed_exception_audit(
+            predictions_path,
+            output_path,
+            predictions,
+            source_sha256=source_sha256,
+            failure_evidence=failure_evidence,
+            exc=exc,
+        )
+    if audit["status"] != "failed":
+        raise ValueError("fail-closed contract probe audit unexpectedly passed")
     atomic_write_json(output_path, audit)
-    if status != "passed":
-        details = [*violations, *failed_gates]
-        raise ValueError("provider contract probe failed: " + ",".join(details))
     return audit
+
+
+def validate_contract_probe(
+    predictions_path: Path,
+    *,
+    output_path: Path,
+    failure_evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    predictions: list[dict[str, Any]] = []
+    source_sha256: str | None = None
+    audit_written = False
+    try:
+        predictions = [
+            row for row in read_jsonl(predictions_path) if isinstance(row, dict)
+        ]
+        source_sha256 = file_sha256(predictions_path)
+        audit = _audit_payload(
+            predictions_path,
+            output_path,
+            predictions,
+            source_sha256=source_sha256,
+            failure_evidence=failure_evidence,
+        )
+        atomic_write_json(output_path, audit)
+        audit_written = True
+        if audit["status"] != "passed":
+            details = [*audit["behavior_violations"], *audit["failed_gates"]]
+            raise ValueError("provider contract probe failed: " + ",".join(details))
+        return audit
+    except Exception as exc:  # noqa: BLE001 - failed audit is fail-closed evidence
+        if not audit_written:
+            atomic_write_json(
+                output_path,
+                _failed_exception_audit(
+                    predictions_path,
+                    output_path,
+                    predictions,
+                    source_sha256=source_sha256,
+                    failure_evidence=failure_evidence,
+                    exc=exc,
+                ),
+            )
+        raise
 
 
 def main() -> None:

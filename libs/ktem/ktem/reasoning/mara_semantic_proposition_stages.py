@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Collection
 from copy import deepcopy
@@ -74,6 +75,7 @@ def proposal_stage(
             slots=slots,
             seed=seed,
             correction_reason=correction,
+            candidate=candidate,
             applicable_proposition_slots=applicable_proposition_slots,
         )
 
@@ -99,6 +101,7 @@ def audit_stage(
     seed: int,
     premise_slot_expectations: dict[str, Collection[str]] | None = None,
     premise_slot_evidence: dict[str, dict[str, str]] | None = None,
+    semantic_identity: dict[str, Any] | None = None,
 ) -> ParsedSemanticStage:
     labels = [f"P{index}" for index in range(1, premise_count + 1)]
 
@@ -121,7 +124,15 @@ def audit_stage(
             premise_slot_evidence=premise_slot_evidence,
         )
 
-    return _parsed_stage(call, parse)
+    return _parsed_stage(
+        call,
+        parse,
+        semantic_identity=lambda response, _parsed: _audit_semantic_identity(
+            response,
+            input_identity=semantic_identity,
+        ),
+        identity_failure_reason="audit_retry_semantic_identity_changed",
+    )
 
 
 def candidate_unknown_audit_stage(
@@ -204,6 +215,9 @@ def invalid_response_reason(
 def _parsed_stage(
     call: Callable[[str], tuple[Any | None, str, str]],
     parse: Callable[[Any], Any],
+    *,
+    semantic_identity: Callable[[Any, Any], Any] | None = None,
+    identity_failure_reason: str = "semantic_retry_identity_changed",
 ) -> ParsedSemanticStage:
     response, failure, detail = call("")
     if response is None:
@@ -212,6 +226,9 @@ def _parsed_stage(
     parsed = parse(response)
     attempts = [_stage_attempt(response, parsed, "")]
     initial_failure = str(parsed.failure_reason or "")
+    initial_identity = (
+        semantic_identity(response, parsed) if semantic_identity is not None else None
+    )
     if parsed.value is not None or not SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES:
         return _parsed_result(response, parsed, initial_failure, 0, attempts)
     response, failure, detail = call(parsed.failure_reason)
@@ -226,7 +243,122 @@ def _parsed_stage(
         )
     parsed = parse(response)
     attempts.append(_stage_attempt(response, parsed, initial_failure))
+    retry_identity = (
+        semantic_identity(response, parsed) if semantic_identity is not None else None
+    )
+    if (
+        initial_identity is not None
+        and retry_identity is not None
+        and retry_identity != initial_identity
+    ):
+        return ParsedSemanticStage(
+            response,
+            None,
+            identity_failure_reason,
+            initial_failure,
+            1,
+            "",
+            2,
+            tuple(attempts),
+        )
     return _parsed_result(response, parsed, initial_failure, 1, attempts)
+
+
+def _audit_semantic_identity(
+    response: Any,
+    *,
+    input_identity: dict[str, Any] | None = None,
+) -> str | None:
+    payload = _response_payload(response)
+    if payload is None:
+        unavailable = {"response_semantics_unavailable": True}
+        if input_identity:
+            unavailable["input"] = deepcopy(input_identity)
+        return json.dumps(unavailable, sort_keys=True, separators=(",", ":"))
+    identity = {
+        "original_candidate": str(payload.get("original_candidate") or ""),
+        "candidate_judgment": str(payload.get("candidate_judgment") or ""),
+        "evidence_relation": str(payload.get("evidence_relation") or ""),
+        "verdict": str(payload.get("verdict") or ""),
+        "replacement_candidate_allowed": payload.get("replacement_candidate_allowed"),
+        "replacement_candidate": str(payload.get("replacement_candidate") or ""),
+        "typed_conclusion_polarity": str(
+            (payload.get("typed_conclusion") or {}).get("polarity") or ""
+        ),
+        "premise_checks": _normalized_premise_checks(payload.get("premise_checks")),
+        "jointly_entails": payload.get("jointly_entails"),
+        "each_premise_required": payload.get("each_premise_required"),
+        "contradiction_free": payload.get("contradiction_free"),
+        "conclusion_check": _normalized_conclusion_check(
+            payload.get("conclusion_check")
+        ),
+    }
+    if input_identity:
+        identity["input"] = deepcopy(input_identity)
+    return json.dumps(identity, sort_keys=True, separators=(",", ":"))
+
+
+def _normalized_premise_checks(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            continue
+        slots = raw.get("declared_proposition_slots")
+        slot_checks = raw.get("proposition_slot_checks")
+        normalized.append(
+            {
+                "premise_ref": str(raw.get("premise_ref") or ""),
+                "fragment_entailed": raw.get("fragment_entailed"),
+                "scope_consistent": raw.get("scope_consistent"),
+                "proposition_bindings_valid": raw.get("proposition_bindings_valid"),
+                "evidence_relation_valid": raw.get("evidence_relation_valid"),
+                "declared_proposition_slots": sorted(str(slot) for slot in slots)
+                if isinstance(slots, list)
+                else [],
+                "proposition_slot_checks": sorted(
+                    [
+                        {
+                            "slot": str(check.get("slot") or ""),
+                            "binding_valid": check.get("binding_valid"),
+                        }
+                        for check in slot_checks
+                        if isinstance(check, dict)
+                    ],
+                    key=lambda check: check["slot"],
+                )
+                if isinstance(slot_checks, list)
+                else [],
+            }
+        )
+    return sorted(normalized, key=lambda check: check["premise_ref"])
+
+
+def _normalized_conclusion_check(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        key: value.get(key)
+        for key in (
+            "conclusion_entailed",
+            "actor_consistent",
+            "predicate_consistent",
+            "object_consistent",
+            "polarity_consistent",
+            "quantifier_consistent",
+            "scope_consistent",
+        )
+        if key in value
+    }
+
+
+def _response_payload(response: Any) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(response_text(response))
+    except (TypeError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _stage_attempt(
@@ -269,6 +401,7 @@ def _call_proposal(
     slots: list[dict[str, str]],
     seed: int,
     correction_reason: str,
+    candidate: str,
     applicable_proposition_slots: Collection[str] | None,
 ) -> tuple[Any | None, str, str]:
     try:
@@ -282,6 +415,7 @@ def _call_proposal(
                 response_format=semantic_proposition_response_format(
                     [],
                     [value["slot_id"] for value in slots],
+                    candidate=candidate,
                     applicable_proposition_slots=applicable_proposition_slots,
                 ),
                 temperature=0,

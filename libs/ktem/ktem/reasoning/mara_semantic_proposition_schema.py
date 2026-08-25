@@ -26,6 +26,7 @@ def semantic_proposition_response_format(
     _span_selectors: list[str],
     slot_ids: list[str],
     *,
+    candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
 ) -> dict[str, Any]:
     return {
@@ -35,6 +36,7 @@ def semantic_proposition_response_format(
             "strict": True,
             "schema": semantic_proposition_schema(
                 slot_ids,
+                candidate=candidate,
                 applicable_proposition_slots=applicable_proposition_slots,
             ),
         },
@@ -142,6 +144,11 @@ def parse_semantic_proposition_response(
     if evidence_reason:
         return SemanticPropositionParse(None, evidence_reason)
     assert premises is not None
+    evidence_relation = _projected_evidence_relation(
+        candidate,
+        candidate_judgment,
+        verdict,
+    )
     if (
         verdict in {"yes", "no"}
         and {
@@ -156,7 +163,7 @@ def parse_semantic_proposition_response(
         "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
         "candidate_judgment": candidate_judgment,
         "verdict": verdict,
-        "evidence_relation": payload["evidence_relation"],
+        "evidence_relation": evidence_relation,
         "support_mode": "evidence_set",
         "proof_mode": proof_mode,
         "jointly_complete": payload["jointly_complete"],
@@ -225,7 +232,6 @@ def _candidate_judgment_payload(
 ) -> tuple[str | None, bool, str]:
     required_fields = {
         "candidate_judgment",
-        "evidence_relation",
         "support_mode",
         "proof_mode",
         "jointly_complete",
@@ -234,10 +240,12 @@ def _candidate_judgment_payload(
     }
     legacy_required_fields = required_fields - {"candidate_judgment"} | {"verdict"}
     allowed_fields = required_fields | {
+        "evidence_relation",
         "unknown_assessment",
         "not_applicable_proposition_slots",
     }
     legacy_allowed_fields = legacy_required_fields | {
+        "evidence_relation",
         "unknown_assessment",
         "not_applicable_proposition_slots",
     }
@@ -276,39 +284,56 @@ def _candidate_relative_verdict(
     candidate_judgment: str,
     direct: bool,
 ) -> tuple[str | None, str]:
-    evidence_relation = payload.get("evidence_relation")
-    if evidence_relation not in {
+    supplied_relation = payload.get("evidence_relation")
+    valid_relations = {
         "proposition_support",
         "explicit_contradiction",
         "undetermined",
-    }:
+    }
+    if supplied_relation is not None and supplied_relation not in valid_relations:
         return None, "evidence_relation_invalid"
-    expected_relation = {
-        "proposition_support": "yes",
-        "explicit_contradiction": "no",
-        "undetermined": "insufficient_evidence",
-    }[str(evidence_relation)]
     normalized_candidate = str(candidate or "").strip().casefold()
-    if direct and normalized_candidate:
-        if candidate_judgment == "unknown":
-            verdict = "insufficient_evidence"
-        elif normalized_candidate == "unanswerable":
-            if (
-                candidate_judgment != "contradicted"
-                or evidence_relation == "undetermined"
-            ):
+    if direct and normalized_candidate in {"yes", "no", "unanswerable"}:
+        if normalized_candidate == "unanswerable":
+            if candidate_judgment == "unknown":
+                expected_relation = "undetermined"
+                verdict = "insufficient_evidence"
+            elif candidate_judgment == "contradicted":
+                if supplied_relation not in {
+                    "proposition_support",
+                    "explicit_contradiction",
+                }:
+                    return None, "candidate_judgment_unanswerable_direction_missing"
+                expected_relation = str(supplied_relation)
+                verdict = _verdict_for_evidence_relation(expected_relation)
+            else:
                 return None, "candidate_judgment_relation_mismatch"
-            verdict = expected_relation
         else:
-            verdict = _verdict_for_candidate_judgment(
+            expected_relation, verdict = _candidate_projection(
                 normalized_candidate,
                 candidate_judgment,
             )
-        if expected_relation != verdict:
+        if supplied_relation is not None and supplied_relation != expected_relation:
             return None, "candidate_judgment_relation_mismatch"
-    else:
-        verdict = expected_relation
-    return str(verdict), ""
+        return verdict, ""
+
+    if supplied_relation is None:
+        return None, "evidence_relation_invalid"
+    verdict = _verdict_for_evidence_relation(str(supplied_relation))
+    if not direct and normalized_candidate in {"yes", "no"}:
+        expected_relation, _ = _candidate_projection(
+            normalized_candidate,
+            candidate_judgment,
+        )
+        if supplied_relation != expected_relation:
+            return None, "candidate_judgment_relation_mismatch"
+    if (
+        direct
+        and candidate_judgment == "unknown"
+        and supplied_relation != "undetermined"
+    ):
+        return None, "candidate_judgment_relation_mismatch"
+    return verdict, ""
 
 
 def _proof_payload(
@@ -362,6 +387,48 @@ def _candidate_judgment_projection_valid(
     if verdict == "insufficient_evidence":
         return candidate_judgment == "unknown"
     return candidate_judgment != "unknown"
+
+
+def _candidate_projection(candidate: str, judgment: str) -> tuple[str, str]:
+    if judgment == "unknown":
+        return "undetermined", "insufficient_evidence"
+    relation = {
+        "yes": {
+            "supported": "proposition_support",
+            "contradicted": "explicit_contradiction",
+        },
+        "no": {
+            "supported": "explicit_contradiction",
+            "contradicted": "proposition_support",
+        },
+    }.get(candidate, {}).get(judgment)
+    if relation is None:
+        return "undetermined", "insufficient_evidence"
+    return relation, _verdict_for_evidence_relation(relation)
+
+
+def _verdict_for_evidence_relation(relation: str) -> str:
+    return {
+        "proposition_support": "yes",
+        "explicit_contradiction": "no",
+        "undetermined": "insufficient_evidence",
+    }[relation]
+
+
+def _projected_evidence_relation(
+    candidate: str,
+    candidate_judgment: str,
+    verdict: str,
+) -> str:
+    normalized_candidate = str(candidate or "").strip().casefold()
+    if candidate_judgment == "unknown" or verdict == "insufficient_evidence":
+        return "undetermined"
+    if normalized_candidate == "unanswerable":
+        return "proposition_support" if verdict == "yes" else "explicit_contradiction"
+    if normalized_candidate in {"yes", "no"}:
+        relation, _ = _candidate_projection(normalized_candidate, candidate_judgment)
+        return relation
+    return "proposition_support" if verdict == "yes" else "explicit_contradiction"
 
 
 def _verdict_payload(

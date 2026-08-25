@@ -3,12 +3,26 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from scripts.slurm import qasper_debug_contract_probe as probe
 from scripts.slurm.validate_qasper_contract_probe import validate_contract_probe
+from benchmark.tests.qasper_contract_probe_provider_support import (  # noqa: F401
+    _audit_entails_proposal,
+    _audit_payload,
+    _evidence_signal,
+    _normalize_text,
+    _proposal_payload,
+    _schema_body,
+    _schema_branch,
+    _schema_enum,
+    _schema_properties,
+    _schema_required,
+    _schema_shape,
+)
 
 
 class _Response:
@@ -18,180 +32,273 @@ class _Response:
 
 
 class _Provider:
-    """A schema-driven provider double; production parsers still own all state."""
+    """A message/schema-driven provider double.
 
-    def __init__(self, case: probe.ProbeCase, *, reject_fault: bool = True) -> None:
-        self.case = case
+    The probe cases describe the input fixture, but they must not be a second
+    implementation of the candidate/verifier state machine.  Every response
+    below is derived from the messages passed to this callable and then
+    projected onto the response schema supplied by production.
+    """
+
+    def __init__(self, *, reject_fault: bool = True) -> None:
         self.reject_fault = reject_fault
-        # The production question proposition has these three applicable
-        # bindings; the fake is a separate auditor instance and therefore
-        # cannot read proposal-instance state.
-        self._slots: list[str] = ["actor", "predicate", "object"]
-        self._fragment = ""
+        self._candidate: str = ""
 
     def __call__(self, messages: object, **kwargs: object) -> _Response:
-        response_format = kwargs["response_format"]
-        schema = response_format["json_schema"]  # type: ignore[index]
-        name = schema["name"]  # type: ignore[index]
+        response_format = kwargs.get("response_format")
+        if not isinstance(response_format, dict):
+            raise RuntimeError("provider response schema missing")
+        schema = response_format.get("json_schema")
+        if not isinstance(schema, dict):
+            raise RuntimeError("provider response schema invalid")
+        name = schema.get("name")
         if name == "qasper_typed_candidate":
-            return _Response(
-                {
-                    "candidate": self.case.controlled_candidate
-                    or self.case.expected_candidate
-                }
-            )
+            return self._candidate_response(messages, schema)
         if name == "semantic_evidence_set_proposition":
-            return self._proposal(schema)  # type: ignore[arg-type]
+            return self._proposal(messages, schema)
         if name == "candidate_bound_unknown_audit":
-            return self._unknown_audit(schema)  # type: ignore[arg-type]
+            return self._unknown_audit(messages, schema)
         if name == "semantic_entailment_audit":
-            return self._entailment_audit(schema)  # type: ignore[arg-type]
+            return self._entailment_audit(messages, schema)
         raise AssertionError(f"unexpected production schema {name!r}")
 
-    def _proposal(self, schema: dict[str, object]) -> _Response:
-        proposal_judgment = self.case.proposal_judgment or self.case.expected_judgment
-        schema_body = schema["schema"]  # type: ignore[index]
-        branches = schema_body["oneOf"]  # type: ignore[index]
-        branch = next(
-            branch
-            for branch in branches
-            if branch["properties"]["candidate_judgment"]["enum"] == [proposal_judgment]
-        )
-        premise_schema = branch["properties"]["premises"]["items"]
-        evidence_slot_ids = premise_schema["properties"]["supports_slot_ids"]["items"][
-            "enum"
-        ]
-        proposition_slots = premise_schema["properties"]["binds_proposition_slots"][
-            "items"
-        ]["enum"]
-        self._slots = list(proposition_slots)
-        selector_match = re.search(r"E\d+:S\d+", str(self._last_message))
-        selector = selector_match.group(0) if selector_match else "E1:S1"
-        self._fragment = (
-            "The authors released code for a different baseline"
-            if self.case.case_id == "auditor_fail"
-            else self.case.evidence
-        )
-        if proposal_judgment == "unknown":
-            relation = "undetermined"
-        elif self.case.expected_candidate == "yes":
-            relation = (
-                "proposition_support"
-                if proposal_judgment == "supported"
-                else "explicit_contradiction"
-            )
+    def _candidate_response(
+        self, messages: object, schema: dict[str, object]
+    ) -> _Response:
+        text = _message_text(messages)
+        marker = "CONTROLLED ORIGINAL CANDIDATE UNDER AUDIT:"
+        if marker in text:
+            candidate = _line_after_marker(text, marker, "controlled candidate")
         else:
-            relation = (
-                "explicit_contradiction"
-                if proposal_judgment == "supported"
-                else "proposition_support"
+            observation = _json_after_marker(
+                text,
+                "CANDIDATE EVIDENCE-SET OBSERVATION:",
+                "candidate evidence observation",
             )
-        payload: dict[str, object] = {
-            "candidate_judgment": proposal_judgment,
-            "evidence_relation": relation,
-            "support_mode": "evidence_set",
-            "proof_mode": (
-                "none" if proposal_judgment == "unknown" else "atomic_semantic"
+            spans = observation.get("evidence_set_spans")
+            if not isinstance(spans, list) or not spans:
+                raise RuntimeError("provider candidate evidence span missing")
+            signal = str(observation.get("polarity_signal") or "").casefold()
+            candidate = {
+                "support": "yes",
+                "explicit_contradiction": "no",
+                "undetermined": "unanswerable",
+            }.get(signal, "")
+            if not candidate:
+                raise RuntimeError("provider candidate evidence signal invalid")
+        self._remember_candidate(candidate)
+        properties = _schema_properties(schema)
+        candidate_schema = properties.get("candidate")
+        candidates = _schema_enum(candidate_schema)
+        if candidates and candidate not in candidates:
+            raise RuntimeError("provider candidate is outside response schema")
+        return _Response({"candidate": candidate})
+
+    def _proposal(self, messages: object, schema: dict[str, object]) -> _Response:
+        text = _message_text(messages)
+        candidate = _structured_candidate(text)
+        self._remember_candidate(candidate)
+        selector, evidence_text = _evidence_span(text)
+        question = _question_from_message(text)
+        signal = _evidence_signal(question, evidence_text)
+        derived_judgment = _candidate_judgment(candidate, signal)
+        controlled = _json_after_optional_marker(
+            text,
+            "CONTRACT PROBE CONTROLLED VERIFIER OUTPUT (NEGATIVE AUDITOR TEST):",
+        )
+        if controlled is not None:
+            if not isinstance(controlled, dict):
+                raise RuntimeError("controlled verifier proposal is not an object")
+            proposal_judgment = str(controlled.get("candidate_judgment") or "")
+            if proposal_judgment not in {"supported", "contradicted", "unknown"}:
+                raise RuntimeError("controlled verifier proposal candidate mismatch")
+            premises = controlled.get("premises")
+            if not isinstance(premises, list) or not premises:
+                raise RuntimeError("controlled verifier proposal premise missing")
+            if str((premises[0] or {}).get("span_selector") or "") != selector:
+                raise RuntimeError("controlled verifier proposal span mismatch")
+            source = controlled
+        else:
+            source = {}
+            proposal_judgment = derived_judgment
+        return _Response(
+            _proposal_payload(
+                schema,
+                proposal_judgment=proposal_judgment,
+                candidate=candidate,
+                selector=selector,
+                evidence_text=evidence_text,
+                signal=signal,
+                source=source,
+            )
+        )
+
+    def _entailment_audit(
+        self, messages: object, schema: dict[str, object]
+    ) -> _Response:
+        text = _message_text(messages)
+        proposal = _json_after_marker(
+            text,
+            "AUDIT THIS PROOF PROPOSAL:",
+            "semantic audit proposal",
+        )
+        passed = _audit_entails_proposal(proposal)
+        if not self.reject_fault:
+            passed = True
+        return _Response(_audit_payload(schema, proposal, passed=passed))
+
+    def _unknown_audit(self, messages: object, schema: dict[str, object]) -> _Response:
+        text = _message_text(messages)
+        payload = _json_after_marker(
+            text,
+            "AUDIT THIS VERIFIER UNCERTAINTY:",
+            "candidate unknown audit",
+        )
+        candidate = str(payload.get("original_candidate") or "").strip().casefold()
+        if not candidate:
+            raise RuntimeError("candidate unknown audit candidate missing")
+        properties = _schema_properties(schema)
+        candidate_schema = properties.get("audited_candidate")
+        candidates = _schema_enum(candidate_schema)
+        if candidates and candidate not in candidates:
+            raise RuntimeError("candidate unknown audit candidate mismatch")
+        reviewed = payload.get("audited_premises")
+        passed = bool(candidate and isinstance(reviewed, list) and reviewed)
+        values: dict[str, object] = {
+            "audit_scope": payload.get(
+                "audit_scope", "original_candidate_and_verifier_unknown_only"
             ),
-            "jointly_complete": proposal_judgment != "unknown",
-            "each_premise_required": proposal_judgment != "unknown",
-            "premises": [],
-            "not_applicable_proposition_slots": [
-                slot
-                for slot in ("actor", "predicate", "object", "quantifier")
-                if slot not in proposition_slots
-            ],
+            "audited_candidate": candidate,
+            "audited_verdict": "insufficient_evidence",
+            "audited_judgment": str(
+                payload.get("verifier_judgment") or "unknown"
+            ).casefold(),
+            "typed_conclusion_present": passed,
+            "reviewed_evidence_present": passed,
+            "support_gap_valid": passed,
+            "contradiction_gap_valid": passed,
+            "relationship_consistent": passed,
+            "replacement_candidate_allowed": False,
+            "replacement_candidate": "",
         }
-        if proposal_judgment == "unknown":
-            payload["unknown_assessment"] = {
-                "reviewed_span_selectors": [selector],
-                "unresolved_proposition_slots": list(proposition_slots),
-                "support_gap": "The evidence does not establish the proposition.",
-                "contradiction_gap": "The evidence does not explicitly contradict it.",
-            }
-        else:
-            payload["premises"] = [
-                {
-                    "span_selector": selector,
-                    "proposition_fragment": self._fragment,
-                    "supports_slot_ids": list(evidence_slot_ids),
-                    "binds_proposition_slots": list(proposition_slots),
-                }
-            ]
-        return _Response(payload)
-
-    def _entailment_audit(self, schema: dict[str, object]) -> _Response:
-        properties = schema["schema"]["properties"]  # type: ignore[index]
-        passed = self.case.expected_audit_status == "passed" or not self.reject_fault
-        checks: list[dict[str, object]] = []
-        checks.append(
-            {
-                "premise_ref": "P1",
-                "fragment_entailed": passed,
-                "scope_consistent": passed,
-                "proposition_bindings_valid": passed,
-                "evidence_relation_valid": passed,
-                "declared_proposition_slots": list(self._slots),
-                "proposition_slot_checks": [
-                    {"slot": slot, "binding_valid": passed, "evidence_text": "The"}
-                    for slot in self._slots
-                ],
-            }
-        )
-        conclusion = {
-            field: passed
-            for field in (
-                "conclusion_entailed",
-                "actor_consistent",
-                "predicate_consistent",
-                "object_consistent",
-                "polarity_consistent",
-                "quantifier_consistent",
-                "scope_consistent",
+        return _Response(
+            _schema_shape(
+                values,
+                _schema_properties(schema),
+                _schema_required(schema),
+                "candidate unknown audit",
             )
-        }
-        # Touch the schema so this double cannot silently drift to a made-up
-        # response shape if the production contract changes.
-        assert "premise_checks" in properties
-        return _Response(
-            {
-                "premise_checks": checks,
-                "jointly_entails": passed,
-                "each_premise_required": passed,
-                "contradiction_free": passed,
-                "conclusion_check": conclusion,
-            }
         )
 
-    def _unknown_audit(self, schema: dict[str, object]) -> _Response:
-        del schema
-        return _Response(
-            {
-                "audit_scope": "original_candidate_and_verifier_unknown_only",
-                "audited_candidate": self.case.expected_candidate,
-                "audited_verdict": "insufficient_evidence",
-                "audited_judgment": "unknown",
-                "typed_conclusion_present": True,
-                "reviewed_evidence_present": True,
-                "support_gap_valid": True,
-                "contradiction_gap_valid": True,
-                "relationship_consistent": True,
-                "replacement_candidate_allowed": False,
-                "replacement_candidate": "",
-            }
-        )
+    def _remember_candidate(self, candidate: str) -> None:
+        candidate = str(candidate or "").strip().casefold()
+        if candidate not in {"yes", "no", "unanswerable"}:
+            raise RuntimeError("provider message candidate invalid")
+        if self._candidate and self._candidate != candidate:
+            raise RuntimeError(
+                "provider observed candidate mismatch between message stacks"
+            )
+        self._candidate = candidate
 
-    @property
-    def _last_message(self) -> str:
-        # The production wrapper passes each request directly.  The selector is
-        # always E1:S1 for the one packed span; this property keeps the fake
-        # independent of private prompt construction.
-        return "E1:S1"
+
+def _message_text(messages: object) -> str:
+    if not isinstance(messages, (list, tuple)) or not messages:
+        raise RuntimeError("provider message stack missing")
+    contents: list[str] = []
+    for message in messages:
+        content = (
+            message.get("content")
+            if isinstance(message, dict)
+            else getattr(message, "content", None)
+        )
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("provider message content missing")
+        contents.append(content)
+    return "\n\n".join(contents)
+
+
+def _line_after_marker(text: str, marker: str, label: str) -> str:
+    match = re.search(
+        rf"{re.escape(marker)}\s*\n\s*([^\s\n]+)",
+        text,
+    )
+    if not match:
+        raise RuntimeError(f"provider {label} missing from message stack")
+    return match.group(1).strip().casefold()
+
+
+def _json_after_marker(text: str, marker: str, label: str) -> dict[str, Any]:
+    value = _json_after_optional_marker(text, marker)
+    if not isinstance(value, dict):
+        raise RuntimeError(f"provider {label} missing or invalid")
+    return value
+
+
+def _json_after_optional_marker(text: str, marker: str) -> object | None:
+    position = text.find(marker)
+    if position < 0:
+        return None
+    remainder = text[position + len(marker) :].lstrip()
+    try:
+        value, _ = json.JSONDecoder().raw_decode(remainder)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("provider controlled JSON is invalid") from exc
+    return value
+
+
+def _structured_candidate(text: str) -> str:
+    marker = "STRUCTURED CANDIDATE TO VERIFY:"
+    return _line_after_marker(text, marker, "STRUCTURED CANDIDATE TO VERIFY")
+
+
+def _evidence_span(text: str) -> tuple[str, str]:
+    match = re.search(r"(?m)^\[(E\d+:S\d+)\]\s+([^\n]+)", text)
+    if not match:
+        raise RuntimeError("provider canonical evidence span missing")
+    return match.group(1), match.group(2).strip()
+
+
+def _question_from_message(text: str) -> str:
+    match = re.search(r"(?m)^QUESTION:\s*\n([^\n]+)", text)
+    if not match:
+        raise RuntimeError("provider question missing from message stack")
+    return match.group(1).strip()
+
+
+def _candidate_judgment(candidate: str, signal: str) -> str:
+    if signal == "undetermined" or candidate == "unanswerable":
+        return "unknown"
+    proposition_polarity = {
+        "support": "yes",
+        "explicit_contradiction": "no",
+    }.get(signal)
+    if proposition_polarity is None:
+        raise RuntimeError("provider evidence polarity is invalid")
+    return "supported" if candidate == proposition_polarity else "contradicted"
 
 
 def _factory(*, case_id: str, **_: object) -> _Provider:
-    case = next(case for case in probe._PROBE_CASES if case.case_id == case_id)
-    return _Provider(case)
+    del case_id
+    return _Provider()
+
+
+def _semantic_proposal_schema(candidate: str = "yes") -> dict[str, object]:
+    from inspect import signature
+
+    from ktem.reasoning.mara_semantic_proposition_schema import (
+        semantic_proposition_response_format,
+    )
+
+    kwargs: dict[str, object] = {
+        "applicable_proposition_slots": ["actor", "predicate", "object"]
+    }
+    if "candidate" in signature(semantic_proposition_response_format).parameters:
+        kwargs["candidate"] = candidate
+    return semantic_proposition_response_format(
+        [],
+        ["support:boolean_proposition"],
+        **kwargs,
+    )["json_schema"]
 
 
 def _assert_live_state_coverage(rows: list[dict[str, Any]]) -> None:
@@ -301,24 +408,77 @@ def test_provider_state_mismatch_fails_closed() -> None:
     class WrongProvider(_Provider):
         def __call__(self, messages: object, **kwargs: object) -> _Response:
             value = super().__call__(messages, **kwargs)
-            if kwargs["response_format"]["json_schema"]["name"] == "qasper_typed_candidate" and self.case.case_id == "supported_no":  # type: ignore[index]
+            if (
+                kwargs["response_format"]["json_schema"]["name"]
+                == "qasper_typed_candidate"
+            ):
                 return _Response({"candidate": "yes"})
             return value
 
     def factory(*, case_id: str, **kwargs: object) -> WrongProvider:
-        case = next(case for case in probe._PROBE_CASES if case.case_id == case_id)
-        return WrongProvider(case)
+        del case_id, kwargs
+        return WrongProvider()
 
-    with pytest.raises(RuntimeError, match="provider observed"):
+    with pytest.raises(RuntimeError, match="provider observed|expected candidate"):
         probe.run_live_probes(
             "http://provider.invalid/v1", "model", model_factory=factory
         )
 
 
+def test_provider_rejects_missing_candidate_or_evidence_from_messages() -> None:
+    provider = _Provider()
+    schema = _semantic_proposal_schema()
+    missing_candidate = [
+        SimpleNamespace(
+            content=(
+                "QUESTION:\nDid the authors release the code for the evaluated system?\n\n"
+                "CANONICAL EVIDENCE SPANS:\n[E1:S1] The authors released the code."
+            )
+        )
+    ]
+    with pytest.raises(RuntimeError, match="STRUCTURED CANDIDATE TO VERIFY"):
+        provider(missing_candidate, response_format={"json_schema": schema})
+
+    missing_evidence = [
+        SimpleNamespace(
+            content=(
+                "QUESTION:\nDid the authors release the code for the evaluated system?\n\n"
+                "STRUCTURED CANDIDATE TO VERIFY:\nyes"
+            )
+        )
+    ]
+    with pytest.raises(RuntimeError, match="canonical evidence span"):
+        provider(missing_evidence, response_format={"json_schema": schema})
+
+
+def test_provider_rejects_candidate_mismatch_between_message_stacks() -> None:
+    provider = _Provider()
+    from ktem.reasoning.mara_qasper_candidate import qasper_candidate_response_format
+
+    provider(
+        [SimpleNamespace(content="CONTROLLED ORIGINAL CANDIDATE UNDER AUDIT:\nyes")],
+        response_format=qasper_candidate_response_format(),
+    )
+    messages = [
+        SimpleNamespace(
+            content=(
+                "QUESTION:\nDid the authors release the code for the evaluated system?\n\n"
+                "STRUCTURED CANDIDATE TO VERIFY:\nno\n\n"
+                "CANONICAL EVIDENCE SPANS:\n[E1:S1] The authors did not release the code "
+                "for the evaluated system."
+            )
+        )
+    ]
+    with pytest.raises(RuntimeError, match="candidate mismatch"):
+        provider(
+            messages, response_format={"json_schema": _semantic_proposal_schema("no")}
+        )
+
+
 def test_controlled_fault_requires_actual_auditor_rejection() -> None:
     def passing_fault_factory(*, case_id: str, **kwargs: object) -> _Provider:
-        case = next(case for case in probe._PROBE_CASES if case.case_id == case_id)
-        return _Provider(case, reject_fault=False)
+        del case_id, kwargs
+        return _Provider(reject_fault=False)
 
     with pytest.raises(RuntimeError, match="provider observed"):
         probe.run_live_probes(

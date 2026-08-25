@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from benchmark.artifact_publication import atomic_write_text
 from scripts.slurm.qasper_debug_contract_probe_cases import (
     _AUDITOR_STATUSES,
     _CANDIDATES,
@@ -149,7 +148,8 @@ def _prediction_row(
 
 
 def _trace_from_row(row: dict[str, Any], key: str) -> dict[str, Any]:
-    value = (row.get("evidence_metadata") or {}).get(key)
+    metadata = row.get("evidence_metadata")
+    value = metadata.get(key) if isinstance(metadata, dict) else None
     if not isinstance(value, dict):
         raise RuntimeError(f"{row.get('example_id')}: missing production trace {key}")
     return value
@@ -171,6 +171,62 @@ def _observed_state(row: dict[str, Any]) -> tuple[str, str, str]:
             else audit_status
         )
     return candidate, judgment, audit_status
+
+
+def _observed_state_evidence(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Project the live states needed to diagnose a failed probe audit.
+
+    This is an observation-only projection.  It does not create verifier or
+    terminal state and therefore cannot turn a partial or failed probe into a
+    passing row.
+    """
+
+    observed_rows: list[dict[str, Any]] = []
+    candidates: set[str] = set()
+    judgments: set[str] = set()
+    auditor_statuses: set[str] = set()
+    for row in rows:
+        case_id = _probe_case_id(row)
+        try:
+            candidate, judgment, auditor_status = _observed_state(row)
+        except (AttributeError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+            observed_rows.append(
+                {
+                    "example_id": str(row.get("example_id") or ""),
+                    "case_id": case_id,
+                    "state_error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            continue
+        candidates.add(candidate)
+        judgments.add(judgment)
+        auditor_statuses.add(auditor_status)
+        observed_rows.append(
+            {
+                "example_id": str(row.get("example_id") or ""),
+                "case_id": case_id,
+                "candidate": candidate,
+                "judgment": judgment,
+                "audit_status": auditor_status,
+            }
+        )
+    return {
+        "prediction_count": len(rows),
+        "rows": observed_rows,
+        "candidate_labels": sorted(candidates),
+        "verifier_judgments": sorted(judgments),
+        "auditor_statuses": sorted(auditor_statuses),
+    }
+
+
+def _probe_case_id(row: dict[str, Any]) -> str:
+    metadata = row.get("example_metadata")
+    if not isinstance(metadata, dict):
+        return ""
+    case = metadata.get("contract_probe_case")
+    if not isinstance(case, dict):
+        return ""
+    return str(case.get("case_id") or "")
 
 
 def _assert_live_case(case: ProbeCase, row: dict[str, Any]) -> tuple[str, str, str]:
@@ -281,16 +337,9 @@ def _assert_live_coverage(rows: list[dict[str, Any]]) -> None:
 
 
 def _write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        "w",
-        encoding="utf-8",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        delete=False,
-    ) as handle:
-        temporary = Path(handle.name)
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-    os.replace(temporary, path)
+    atomic_write_text(
+        path,
+        "".join(
+            json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows
+        ),
+    )

@@ -57,6 +57,43 @@ def bind_semantic_runtime_fields(
     )
 
 
+def semantic_audit_input_identity(
+    context: SemanticPropositionTransactionContext,
+    value: dict[str, Any],
+    conclusion: Any,
+) -> dict[str, Any]:
+    marker = "STRUCTURED CANDIDATE TO VERIFY:\n"
+    candidate = (
+        context.proposal_prompt.split(marker, 1)[1]
+        .split("\n\n", 1)[0]
+        .strip()
+        .casefold()
+        if marker in context.proposal_prompt
+        else ""
+    )
+    return {
+        "original_candidate": candidate,
+        "candidate_judgment": str(value.get("candidate_judgment") or ""),
+        "evidence_relation": str(value.get("evidence_relation") or ""),
+        "proof_mode": str(value.get("proof_mode") or ""),
+        "jointly_complete": value.get("jointly_complete"),
+        "each_premise_required": value.get("each_premise_required"),
+        "typed_conclusion": {"polarity": str(conclusion.polarity or "")},
+        "premise_selection": [
+            {
+                "span_selector": str(premise.get("span_selector") or ""),
+                "proposition_fragment": str(premise.get("proposition_fragment") or ""),
+                "supports_slot_ids": list(premise.get("supports_slot_ids") or []),
+                "binds_proposition_slots": list(
+                    premise.get("binds_proposition_slots") or []
+                ),
+            }
+            for premise in value.get("premises") or []
+            if isinstance(premise, dict)
+        ],
+    }
+
+
 def transaction_debug(
     context: SemanticPropositionTransactionContext,
     proposal: ParsedSemanticStage,

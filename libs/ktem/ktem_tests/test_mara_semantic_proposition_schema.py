@@ -328,6 +328,128 @@ def test_response_schema_has_physically_disjoint_judgment_contracts() -> None:
     assert unknown["properties"]["premises"]["maxItems"] == 0
 
 
+def test_unspecified_candidate_unknown_branch_requires_undetermined_relation() -> None:
+    schema = semantic_proposition_response_format([], ["support:proposition"])[
+        "json_schema"
+    ]["schema"]
+    unknown = next(
+        branch
+        for branch in schema["oneOf"]
+        if branch["properties"]["candidate_judgment"]["enum"] == ["unknown"]
+    )
+    assert unknown["properties"]["evidence_relation"]["enum"] == ["undetermined"]
+    assert "evidence_relation" in unknown["required"]
+
+    response = {
+        "candidate_judgment": "unknown",
+        "support_mode": "evidence_set",
+        "proof_mode": "none",
+        "jointly_complete": False,
+        "each_premise_required": False,
+        "premises": [],
+        "unknown_assessment": {
+            "reviewed_span_selectors": ["E1:S1"],
+            "unresolved_proposition_slots": ["predicate"],
+            "support_gap": "No support.",
+            "contradiction_gap": "No contradiction.",
+        },
+    }
+    parsed = parse_semantic_proposition_response(
+        json.dumps(response),
+        packed=_packed_premises(1),
+        slot_ids={"support:proposition"},
+        model="semantic-test-model",
+        seed=17,
+    )
+    assert parsed.value is None
+    assert parsed.failure_reason == "evidence_relation_invalid"
+
+
+def test_candidate_bound_schema_projects_yes_no_relation_locally() -> None:
+    yes_schema = semantic_proposition_response_format(
+        [], ["support:proposition"], candidate="yes"
+    )["json_schema"]["schema"]
+    no_schema = semantic_proposition_response_format(
+        [], ["support:proposition"], candidate="no"
+    )["json_schema"]["schema"]
+    assert "evidence_relation" not in yes_schema["properties"]
+    assert "evidence_relation" not in yes_schema["required"]
+    assert "evidence_relation" not in no_schema["properties"]
+    assert "evidence_relation" not in no_schema["required"]
+
+    cases = (
+        ("yes", "supported", "proposition_support", "yes"),
+        ("yes", "contradicted", "explicit_contradiction", "no"),
+        ("no", "supported", "explicit_contradiction", "no"),
+        ("no", "contradicted", "proposition_support", "yes"),
+    )
+    for candidate, judgment, relation, verdict in cases:
+        response = {
+            "candidate_judgment": judgment,
+            "support_mode": "evidence_set",
+            "proof_mode": "atomic_semantic",
+            "jointly_complete": True,
+            "each_premise_required": True,
+            "premises": [
+                {
+                    "span_selector": "E1:S1",
+                    "proposition_fragment": "the complete proposition is established",
+                    "supports_slot_ids": ["support:proposition"],
+                    "binds_proposition_slots": [
+                        "actor",
+                        "predicate",
+                        "object",
+                        "quantifier",
+                    ],
+                }
+            ],
+        }
+        parsed = parse_semantic_proposition_response(
+            json.dumps(response),
+            packed=_packed_premises(1),
+            slot_ids={"support:proposition"},
+            model="semantic-test-model",
+            seed=17,
+            candidate=candidate,
+        )
+        assert parsed.value is not None
+        assert parsed.value["evidence_relation"] == relation
+        assert parsed.value["verdict"] == verdict
+
+
+def test_unanswerable_candidate_rejects_supported_without_direction() -> None:
+    response = {
+        "candidate_judgment": "supported",
+        "support_mode": "evidence_set",
+        "proof_mode": "atomic_semantic",
+        "jointly_complete": True,
+        "each_premise_required": True,
+        "premises": [
+            {
+                "span_selector": "E1:S1",
+                "proposition_fragment": "the complete proposition is established",
+                "supports_slot_ids": ["support:proposition"],
+                "binds_proposition_slots": [
+                    "actor",
+                    "predicate",
+                    "object",
+                    "quantifier",
+                ],
+            }
+        ],
+    }
+    parsed = parse_semantic_proposition_response(
+        json.dumps(response),
+        packed=_packed_premises(1),
+        slot_ids={"support:proposition"},
+        model="semantic-test-model",
+        seed=17,
+        candidate="unanswerable",
+    )
+    assert parsed.value is None
+    assert parsed.failure_reason == "candidate_judgment_relation_mismatch"
+
+
 def test_modern_contract_records_quantifier_none_as_explicit_na() -> None:
     response = {
         "candidate_judgment": "supported",

@@ -281,9 +281,11 @@ def test_runtime_verifier_binds_candidate_and_caches_candidate_signature() -> No
     )
     assert len(messages[1].content) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS
     audit_messages, audit_kwargs = llm.calls[1]
-    assert "READ-ONLY CANDIDATE BINDING:" in audit_messages[1].content
-    assert "original_candidate=unanswerable" in audit_messages[1].content
-    assert "verifier_judgment=yes" in audit_messages[1].content
+    assert '"original_candidate":"unanswerable"' in audit_messages[1].content
+    assert '"candidate_judgment":"contradicted"' in audit_messages[1].content
+    assert '"typed_conclusion"' in audit_messages[1].content
+    assert '"polarity":"yes"' in audit_messages[1].content
+    assert "verifier_judgment" not in audit_messages[1].content
     audit_properties = audit_kwargs["response_format"]["json_schema"]["schema"][
         "properties"
     ]
@@ -473,7 +475,9 @@ def test_runtime_verifier_fails_closed_on_invalid_json() -> None:
     )
 
 
-def test_proposal_correction_prompt_is_specific_to_conflicting_unknown_assessment() -> None:
+def test_proposal_correction_prompt_is_specific_to_conflicting_unknown_assessment() -> (
+    None
+):
     corrected = _corrected_prompt(
         "Return one semantic proposition object.",
         "unexpected_unknown_assessment",

@@ -278,6 +278,7 @@ if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE
     --base-url "$TEXT_LLM_BASE_URL" \
     --model "$SEMANTIC_EVALUATOR_MODEL" \
     --output "$CONTRACT_PROBE_PATH" \
+    --audit-output "$CONTRACT_PROBE_AUDIT_PATH" \
     --timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"
   test -s "$CONTRACT_PROBE_PATH"
   "$MARA_BENCHMARK_PYTHON" -m \
