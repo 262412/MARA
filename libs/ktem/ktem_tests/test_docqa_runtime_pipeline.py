@@ -107,6 +107,33 @@ def test_qasper_release_runtime_creates_a_distinct_auditor_instance():
     assert pipeline.semantic_entailment_auditor_llm is not proposer
 
 
+def test_qasper_release_runtime_uses_configured_heterogeneous_auditor(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "MARA_QASPER_CONTRACT_AUDITOR_BASE_URL",
+        "http://127.0.0.1:38001/v1",
+    )
+    monkeypatch.setenv(
+        "MARA_QASPER_CONTRACT_AUDITOR_MODEL",
+        "Qwen/Qwen3-VL-8B-Instruct",
+    )
+    proposer = _CallableModel()
+    pipeline = SimpleNamespace(answering_pipeline=SimpleNamespace(llm=proposer))
+    request = SimpleNamespace(
+        origin="benchmark",
+        verification_domain="qasper",
+        verification_mode="strict",
+    )
+
+    configure_semantic_proposition_runtime(pipeline, request)
+
+    auditor = pipeline.semantic_entailment_auditor_llm
+    assert auditor is not proposer
+    assert auditor.base_url == "http://127.0.0.1:38001/v1"
+    assert auditor.model == "Qwen/Qwen3-VL-8B-Instruct"
+
+
 def test_qasper_release_runtime_preserves_an_explicit_distinct_auditor():
     proposer = _CallableModel()
     auditor = _CallableModel()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from copy import copy, deepcopy
 from time import monotonic
 from typing import Any
@@ -329,9 +330,31 @@ def configure_semantic_proposition_runtime(pipeline: Any, request: Any) -> None:
     answering = getattr(getattr(pipeline, "answering_pipeline", None), "llm", None)
     if callable(configured) and configured is not answering:
         return
-    auditor = copy(answering)
+    auditor = _configured_qasper_auditor() or copy(answering)
     if callable(auditor) and auditor is not answering:
         pipeline.semantic_entailment_auditor_llm = auditor
+
+
+def _configured_qasper_auditor() -> Any | None:
+    base_url = os.environ.get("MARA_QASPER_CONTRACT_AUDITOR_BASE_URL", "").strip()
+    model = os.environ.get("MARA_QASPER_CONTRACT_AUDITOR_MODEL", "").strip()
+    if not base_url and not model:
+        return None
+    if not base_url or not model:
+        raise ValueError(
+            "QASPER auditor configuration requires both base URL and model"
+        )
+
+    from kotaemon.llms import ChatOpenAI
+
+    return ChatOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY") or "local",
+        base_url=base_url,
+        model=model,
+        temperature=0,
+        timeout=float(os.environ.get("MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS", "60")),
+        max_retries=0,
+    )
 
 
 def build_visual_retriever_backend(backend_name: str):
