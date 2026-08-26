@@ -42,6 +42,12 @@ def test_provider_contract_probe_audit_passes_required_live_states(tmp_path) -> 
     assert audit["status"] == "passed"
     assert audit["contract_probe_audit"]["live_state_matrix_complete"] is False
     assert not audit["failed_gates"]
+    assert (
+        audit["debug_gate_metrics"][
+            "qasper_candidate_verifier_auditor_label_set_mismatch_count"
+        ]
+        == 0.0
+    )
     assert json.loads(output.read_text())["status"] == "passed"
 
 

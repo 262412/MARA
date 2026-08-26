@@ -293,6 +293,7 @@ def qasper_debug_contract_metrics(
         matrix,
         lane=lane,
         split=split,
+        quality_present=bool(quality),
         probes_present=bool(probes),
     )
     flags = _metric_label_flags(quality_label, probe_label)
@@ -402,6 +403,7 @@ def _metric_label_observations(
     *,
     lane: str,
     split: bool,
+    quality_present: bool,
     probes_present: bool,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     empty = _empty_online_observation()
@@ -410,8 +412,9 @@ def _metric_label_observations(
     if lane == "contract_probe":
         return empty, matrix["contract_probe_observation"]
     if split:
+        quality = matrix["quality_observation"] if quality_present else empty
         probe = matrix["contract_probe_observation"] if probes_present else empty
-        return matrix["quality_observation"], probe
+        return quality, probe
     online = matrix["online_observation"]
     return online, online
 

@@ -203,6 +203,25 @@ def test_contract_probe_passes_required_live_states_without_twelve_cell_cartesia
     assert metrics["qasper_contract_probe_structural_state_matrix_complete"] == 1.0
 
 
+def test_provider_only_metrics_ignore_absent_quality_label_observation() -> None:
+    probes = _rows()
+    for row in probes:
+        row["qasper_debug_lane"] = "contract_probe"
+
+    audit = qasper_debug_audit_extensions([], contract_probe_predictions=probes)
+
+    metrics = audit["debug_gate_metrics"]
+    assert metrics["qasper_candidate_verifier_auditor_label_set_mismatch_count"] == 0.0
+    assert (
+        audit["contract_probe_audit"]["debug_gate_metrics"][
+            "qasper_candidate_verifier_auditor_label_set_mismatch_count"
+        ]
+        == 0.0
+    )
+    assert metrics["qasper_quality_prediction_count"] == 0.0
+    assert metrics["qasper_quality_answerable_denominator_missing_count"] == 1.0
+
+
 def test_provider_probe_rejects_any_conflicting_unknown_assessment_attempt() -> None:
     probes = _rows()
     for row in probes:
