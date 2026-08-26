@@ -155,6 +155,80 @@ def _trace_from_row(row: dict[str, Any], key: str) -> dict[str, Any]:
     return value
 
 
+_SEMANTIC_AUDIT_BOOLEAN_FIELDS = frozenset(
+    {
+        "fragment_entailed",
+        "scope_consistent",
+        "proposition_bindings_valid",
+        "evidence_relation_valid",
+        "binding_valid",
+        "jointly_entails",
+        "each_premise_required",
+        "contradiction_free",
+        "conclusion_entailed",
+        "actor_consistent",
+        "predicate_consistent",
+        "object_consistent",
+        "polarity_consistent",
+        "quantifier_consistent",
+    }
+)
+
+
+def _accepted_semantic_auditor_rejection(row: dict[str, Any]) -> bool:
+    """Require a parsed audit payload with an explicit semantic rejection."""
+
+    verifier = _trace_from_row(row, "semantic_proposition_verifier")
+    if (
+        verifier.get("audit_parser_accepted") is not True
+        or verifier.get("audit_semantic_rejection") is not True
+        or verifier.get("audit_status") != "rejected"
+    ):
+        return False
+    debug = verifier.get("debug_trace")
+    events = debug.get("events") if isinstance(debug, dict) else []
+    transactions = [
+        event
+        for event in events or []
+        if isinstance(event, dict) and event.get("event") == "model_transaction"
+    ]
+    if not transactions:
+        return False
+    transaction = transactions[-1].get("transaction")
+    transaction = transaction if isinstance(transaction, dict) else {}
+    stage = transaction.get("audit")
+    stage = stage if isinstance(stage, dict) else {}
+    attempts = stage.get("attempts")
+    if (
+        stage.get("status") != "parsed"
+        or not isinstance(attempts, list)
+        or not attempts
+    ):
+        return False
+    final_attempt = attempts[-1]
+    if not isinstance(final_attempt, dict):
+        return False
+    if (
+        not isinstance(final_attempt.get("parsed_value"), dict)
+        or str(final_attempt.get("parse_failure_reason") or "")
+        or str(final_attempt.get("provider_failure_reason") or "")
+    ):
+        return False
+    return _semantic_audit_contains_false_boolean(final_attempt["parsed_value"])
+
+
+def _semantic_audit_contains_false_boolean(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if key in _SEMANTIC_AUDIT_BOOLEAN_FIELDS and nested is False:
+                return True
+            if _semantic_audit_contains_false_boolean(nested):
+                return True
+    elif isinstance(value, list):
+        return any(_semantic_audit_contains_false_boolean(item) for item in value)
+    return False
+
+
 def _observed_state(row: dict[str, Any]) -> tuple[str, str, str]:
     generation = _trace_from_row(row, "qasper_candidate_generation")
     verifier = _trace_from_row(row, "semantic_proposition_verifier")
@@ -282,6 +356,10 @@ def _assert_live_case(case: ProbeCase, row: dict[str, Any]) -> tuple[str, str, s
     if case.controlled_fault:
         if case.expected_audit_status != "failed":
             raise RuntimeError(f"{case.case_id}: controlled fault must be negative")
+        if not _accepted_semantic_auditor_rejection(row):
+            raise RuntimeError(
+                f"{case.case_id}: auditor failure lacks an accepted semantic auditor rejection"
+            )
         commit = row.get("engine_terminal_commit") or {}
         if row.get("engine_terminal_answer") != "unanswerable":
             raise RuntimeError(

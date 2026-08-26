@@ -31,7 +31,11 @@ from .mara_semantic_proposition_packing import (
     required_semantic_proposition_slots,
     semantic_proposition_verifier_prompt,
 )
-from .mara_semantic_proposition_trace import SEMANTIC_PROPOSITION_VERIFIER_SEED, digest
+from .mara_semantic_proposition_trace import (
+    SEMANTIC_PROPOSITION_VERIFIER_SEED,
+    candidate_verification_trace_status,
+    digest,
+)
 from .mara_semantic_proposition_trace import record_verifier_trace as _trace
 from .mara_semantic_proposition_trace import semantic_transaction_identity
 from .mara_semantic_proposition_transaction import (
@@ -203,14 +207,10 @@ class _SemanticPropositionVerifier:
             prompt_chars=prompt_chars,
             verdict=str((cached or {}).get("verdict") or ""),
             candidate_label=candidate,
-            candidate_verification_status=str(
-                (cached or {}).get("candidate_verification_status")
-                or (
-                    "pre_audit_failed"
-                    if cached is None
-                    and diagnostics.get("audit_status") == "not_started"
-                    else "unknown"
-                )
+            candidate_verification_status=candidate_verification_trace_status(
+                cached,
+                diagnostics,
+                audit_call_count=0,
             ),
             cache_hit=True,
             cache_source="route_local_semantic_pack",
@@ -508,14 +508,10 @@ def _store_model_response(
         diagnostics=diagnostics,
         transaction=outcome.debug_trace,
     )
-    candidate_verification_status = str(
-        (parsed or {}).get("candidate_verification_status")
-        or (
-            "pre_audit_failed"
-            if outcome.audit_call_count == 0
-            and diagnostics.get("audit_status") == "not_started"
-            else "unknown"
-        )
+    candidate_verification_status = candidate_verification_trace_status(
+        parsed,
+        diagnostics,
+        audit_call_count=outcome.audit_call_count,
     )
     _trace(
         verifier,

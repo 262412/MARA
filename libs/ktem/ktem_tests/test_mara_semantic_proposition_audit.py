@@ -165,25 +165,21 @@ def _audit(
     validity = [True, second_fragment_entailed]
     return json.dumps(
         {
-            "premise_checks": [
-                {
-                    "premise_ref": f"P{index}",
+            "premise_checks": {
+                f"P{index}": {
                     "fragment_entailed": validity[index - 1],
                     "scope_consistent": True,
-                    "proposition_bindings_valid": validity[index - 1],
                     "evidence_relation_valid": validity[index - 1],
-                    "declared_proposition_slots": slots,
-                    "proposition_slot_checks": [
-                        {
-                            "slot": slot,
+                    "proposition_slot_checks": {
+                        slot: {
                             "binding_valid": validity[index - 1],
-                            "evidence_text": evidence[slot],
+                            "evidence_ref": f"P{index}:{slot}",
                         }
                         for slot in slots
-                    ],
+                    },
                 }
-                for index, (slots, evidence) in enumerate(premise_specs, start=1)
-            ],
+                for index, (slots, _evidence) in enumerate(premise_specs, start=1)
+            },
             "jointly_entails": second_fragment_entailed,
             "each_premise_required": second_fragment_entailed,
             "contradiction_free": True,
@@ -218,7 +214,7 @@ def _audit_with_false_premise_but_joint_entailment(
             (["object"], {"object": "single-language baselines"}),
         ]
     payload = json.loads(_audit(premise_specs=premise_specs))
-    payload["premise_checks"][1]["fragment_entailed"] = False
+    payload["premise_checks"]["P2"]["fragment_entailed"] = False
     payload["jointly_entails"] = True
     payload["each_premise_required"] = True
     payload["conclusion_check"]["conclusion_entailed"] = True
@@ -299,37 +295,27 @@ def _atomic_proposal(*, selector: str = "E1:S1") -> str:
 def _atomic_audit() -> str:
     return json.dumps(
         {
-            "premise_checks": [
-                {
-                    "premise_ref": "P1",
+            "premise_checks": {
+                "P1": {
                     "fragment_entailed": True,
                     "scope_consistent": True,
-                    "proposition_bindings_valid": True,
                     "evidence_relation_valid": True,
-                    "declared_proposition_slots": [
-                        "actor",
-                        "predicate",
-                        "object",
-                    ],
-                    "proposition_slot_checks": [
-                        {
-                            "slot": "actor",
+                    "proposition_slot_checks": {
+                        "actor": {
                             "binding_valid": True,
-                            "evidence_text": "We",
+                            "evidence_ref": "P1:actor",
                         },
-                        {
-                            "slot": "predicate",
+                        "predicate": {
                             "binding_valid": True,
-                            "evidence_text": "evaluated",
+                            "evidence_ref": "P1:predicate",
                         },
-                        {
-                            "slot": "object",
+                        "object": {
                             "binding_valid": True,
-                            "evidence_text": "transfer",
+                            "evidence_ref": "P1:object",
                         },
-                    ],
+                    },
                 }
-            ],
+            },
             "jointly_entails": True,
             "each_premise_required": True,
             "contradiction_free": True,

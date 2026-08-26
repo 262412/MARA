@@ -23,9 +23,10 @@ SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT = (
     "local fragment false merely because scope or joint entailment later fails. "
     "Also verify every declared actor/predicate/object/quantifier binding and the "
     "declared proposition-support or explicit-contradiction relation; keyword "
-    "overlap alone is not a binding. For every declared applicable proposition "
-    "slot, return one slot check with binding_valid and evidence_text copied as "
-    "a non-empty exact substring of that premise quote; do not return a "
+    "overlap alone is not a binding. Every applicable slot has a required "
+    "controlled evidence_ref in the response schema. Return its binding_valid "
+    "decision without copying, rewriting, or inventing evidence text; runtime "
+    "projects the exact source span from that controlled ref. Do not return a "
     "quantifier slot when its binding is none. Then check that all fragments "
     "together "
     "entail the exact proposed yes/no "
@@ -70,6 +71,10 @@ def semantic_entailment_audit_prompt(
                 "proposition_slot_bindings": dict(
                     premise.get("proposition_slot_bindings") or {}
                 ),
+                "proposition_slot_evidence_refs": {
+                    str(slot): f"P{index}:{slot}"
+                    for slot in premise.get("binds_proposition_slots") or []
+                },
                 "evidence_relation": str(premise.get("evidence_relation") or ""),
             }
             for index, premise in enumerate(premises, start=1)
@@ -85,78 +90,92 @@ def semantic_entailment_audit_prompt(
     return prompt
 
 
-def _premise_check_schema_components(
-    premise_labels: list[str],
-    premise_slot_expectations: Mapping[str, Collection[str]] | None,
-) -> tuple[dict[str, Any], list[str]]:
-    strict_slot_checks = premise_slot_expectations is not None
+def _premise_check_schema(
+    label: str,
+    *,
+    expected_slots: Collection[str] | None,
+    premise_slot_evidence: Mapping[str, Mapping[str, str]] | None,
+) -> dict[str, Any]:
+    strict_slot_checks = expected_slots is not None
     properties: dict[str, Any] = {
-        "premise_ref": {
-            "type": "string",
-            "enum": premise_labels,
-        },
         "fragment_entailed": {"type": "boolean"},
         "scope_consistent": {"type": "boolean"},
-        "proposition_bindings_valid": {"type": "boolean"},
         "evidence_relation_valid": {"type": "boolean"},
     }
     required = [
-        "premise_ref",
         "fragment_entailed",
         "scope_consistent",
-        "proposition_bindings_valid",
         "evidence_relation_valid",
     ]
     if strict_slot_checks:
-        properties.update(
-            {
-                "declared_proposition_slots": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 4,
-                    "items": {
-                        "type": "string",
-                        "enum": ["actor", "predicate", "object", "quantifier"],
-                    },
-                },
-                "proposition_slot_checks": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 4,
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "slot": {
-                                "type": "string",
-                                "enum": [
-                                    "actor",
-                                    "predicate",
-                                    "object",
-                                    "quantifier",
-                                ],
-                            },
-                            "binding_valid": {"type": "boolean"},
-                            "evidence_text": {"type": "string", "minLength": 1},
+        slots = tuple(str(slot) for slot in expected_slots or ())
+        evidence = dict((premise_slot_evidence or {}).get(label) or {})
+        if (
+            not slots
+            or len(set(slots)) != len(slots)
+            or any(
+                slot not in {"actor", "predicate", "object", "quantifier"}
+                for slot in slots
+            )
+            or set(evidence) != set(slots)
+            or any(not str(evidence.get(slot) or "").strip() for slot in slots)
+        ):
+            raise ValueError("auditor_slot_evidence_contract_invalid")
+        properties["proposition_slot_checks"] = {
+            "type": "object",
+            "properties": {
+                slot: {
+                    "type": "object",
+                    "properties": {
+                        "binding_valid": {"type": "boolean"},
+                        "evidence_ref": {
+                            "type": "string",
+                            "enum": [f"{label}:{slot}"],
                         },
-                        "required": ["slot", "binding_valid", "evidence_text"],
-                        "additionalProperties": False,
                     },
-                },
-            }
-        )
-        required.extend(["declared_proposition_slots", "proposition_slot_checks"])
-    return properties, required
+                    "required": ["binding_valid", "evidence_ref"],
+                    "additionalProperties": False,
+                }
+                for slot in slots
+            },
+            "required": list(slots),
+            "additionalProperties": False,
+        }
+        required.append("proposition_slot_checks")
+    else:
+        properties["proposition_bindings_valid"] = {"type": "boolean"}
+        required.append("proposition_bindings_valid")
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "additionalProperties": False,
+    }
 
 
 def semantic_entailment_audit_response_format(
     premise_labels: list[str],
     *,
     premise_slot_expectations: Mapping[str, Collection[str]] | None = None,
+    premise_slot_evidence: Mapping[str, Mapping[str, str]] | None = None,
 ) -> dict[str, Any]:
-    premise_check_properties, premise_check_required = _premise_check_schema_components(
-        premise_labels,
-        premise_slot_expectations,
-    )
+    if (
+        not premise_labels
+        or len(premise_labels) > 4
+        or len(set(premise_labels)) != len(premise_labels)
+        or (
+            premise_slot_expectations is not None
+            and set(premise_slot_expectations) != set(premise_labels)
+        )
+        or (
+            premise_slot_expectations is not None
+            and (
+                premise_slot_evidence is None
+                or set(premise_slot_evidence) != set(premise_labels)
+            )
+        )
+    ):
+        raise ValueError("auditor_premise_labels_invalid")
     return {
         "type": "json_schema",
         "json_schema": {
@@ -166,41 +185,26 @@ def semantic_entailment_audit_response_format(
                 "type": "object",
                 "properties": {
                     "premise_checks": {
-                        "type": "array",
-                        "minItems": len(premise_labels),
-                        "maxItems": len(premise_labels),
-                        "items": {
-                            "type": "object",
-                            "properties": premise_check_properties,
-                            "required": premise_check_required,
-                            "additionalProperties": False,
+                        "type": "object",
+                        "properties": {
+                            label: _premise_check_schema(
+                                label,
+                                expected_slots=(
+                                    (premise_slot_expectations or {}).get(label)
+                                    if premise_slot_expectations is not None
+                                    else None
+                                ),
+                                premise_slot_evidence=premise_slot_evidence,
+                            )
+                            for label in premise_labels
                         },
+                        "required": premise_labels,
+                        "additionalProperties": False,
                     },
                     "jointly_entails": {"type": "boolean"},
                     "each_premise_required": {"type": "boolean"},
                     "contradiction_free": {"type": "boolean"},
-                    "conclusion_check": {
-                        "type": "object",
-                        "properties": {
-                            "conclusion_entailed": {"type": "boolean"},
-                            "actor_consistent": {"type": "boolean"},
-                            "predicate_consistent": {"type": "boolean"},
-                            "object_consistent": {"type": "boolean"},
-                            "polarity_consistent": {"type": "boolean"},
-                            "quantifier_consistent": {"type": "boolean"},
-                            "scope_consistent": {"type": "boolean"},
-                        },
-                        "required": [
-                            "conclusion_entailed",
-                            "actor_consistent",
-                            "predicate_consistent",
-                            "object_consistent",
-                            "polarity_consistent",
-                            "quantifier_consistent",
-                            "scope_consistent",
-                        ],
-                        "additionalProperties": False,
-                    },
+                    "conclusion_check": _conclusion_check_schema(),
                 },
                 "required": [
                     "premise_checks",
@@ -215,55 +219,62 @@ def semantic_entailment_audit_response_format(
     }
 
 
-def _premise_slot_checks_reason(
-    check: dict[str, Any],
+def _conclusion_check_schema() -> dict[str, Any]:
+    fields = (
+        "conclusion_entailed",
+        "actor_consistent",
+        "predicate_consistent",
+        "object_consistent",
+        "polarity_consistent",
+        "quantifier_consistent",
+        "scope_consistent",
+    )
+    return {
+        "type": "object",
+        "properties": {field: {"type": "boolean"} for field in fields},
+        "required": list(fields),
+        "additionalProperties": False,
+    }
+
+
+def _project_slot_checks(
+    raw_checks: Any,
     label: str,
     *,
     premise_slot_expectations: Mapping[str, Collection[str]],
     premise_slot_evidence: Mapping[str, Mapping[str, str]] | None,
-) -> str:
-    expected_slots = {
+) -> tuple[list[dict[str, Any]] | None, str]:
+    expected_slots = tuple(
         str(slot) for slot in premise_slot_expectations.get(str(label), ())
-    }
-    declared_slots = check.get("declared_proposition_slots")
-    slot_checks = check.get("proposition_slot_checks")
+    )
+    expected_evidence = dict((premise_slot_evidence or {}).get(str(label)) or {})
     if (
-        not isinstance(declared_slots, list)
-        or len(set(declared_slots)) != len(declared_slots)
-        or any(
-            slot not in {"actor", "predicate", "object", "quantifier"}
-            for slot in declared_slots
-        )
-        or set(declared_slots) != expected_slots
-        or not isinstance(slot_checks, list)
-        or len(slot_checks) != len(declared_slots)
+        not expected_slots
+        or not isinstance(raw_checks, dict)
+        or set(raw_checks) != set(expected_slots)
+        or set(expected_evidence) != set(expected_slots)
     ):
-        return "premise_check_slots_invalid"
-    by_slot: dict[str, bool] = {}
-    for slot_check in slot_checks:
+        return None, "premise_check_slots_invalid"
+    projected: list[dict[str, Any]] = []
+    for slot in expected_slots:
+        slot_check = raw_checks.get(slot)
+        evidence_text = str(expected_evidence.get(slot) or "")
         if (
             not isinstance(slot_check, dict)
-            or set(slot_check) != {"slot", "binding_valid", "evidence_text"}
-            or slot_check.get("slot") not in expected_slots
+            or set(slot_check) != {"binding_valid", "evidence_ref"}
             or not isinstance(slot_check.get("binding_valid"), bool)
-            or not isinstance(slot_check.get("evidence_text"), str)
-            or not slot_check.get("evidence_text", "").strip()
-            or slot_check.get("slot") in by_slot
+            or slot_check.get("evidence_ref") != f"{label}:{slot}"
+            or not evidence_text.strip()
         ):
-            return "premise_check_slots_invalid"
-        slot_name = str(slot_check["slot"])
-        if premise_slot_evidence is not None:
-            expected_quote = str(
-                (premise_slot_evidence.get(str(label)) or {}).get(slot_name, "")
-            )
-            if slot_check["evidence_text"] not in expected_quote:
-                return "premise_check_slot_evidence_invalid"
-        by_slot[slot_name] = slot_check["binding_valid"]
-    if set(by_slot) != expected_slots or check["proposition_bindings_valid"] is not all(
-        by_slot.values()
-    ):
-        return "premise_check_slots_inconsistent"
-    return ""
+            return None, "premise_check_slot_evidence_invalid"
+        projected.append(
+            {
+                "slot": slot,
+                "binding_valid": slot_check["binding_valid"],
+                "evidence_text": evidence_text,
+            }
+        )
+    return projected, ""
 
 
 def _parse_premise_checks(
@@ -273,48 +284,53 @@ def _parse_premise_checks(
     premise_slot_expectations: Mapping[str, Collection[str]] | None,
     premise_slot_evidence: Mapping[str, Mapping[str, str]] | None,
 ) -> tuple[dict[str, dict[str, Any]] | None, str]:
-    if not isinstance(checks, list) or len(checks) != len(premise_labels):
+    if not isinstance(checks, dict) or set(checks) != set(premise_labels):
         return None, "premise_checks_invalid"
     expected_fields = {
-        "premise_ref",
         "fragment_entailed",
         "scope_consistent",
-        "proposition_bindings_valid",
         "evidence_relation_valid",
     }
     strict_slot_checks = premise_slot_expectations is not None
     if strict_slot_checks:
-        expected_fields = expected_fields | {
-            "declared_proposition_slots",
-            "proposition_slot_checks",
-        }
+        expected_fields.add("proposition_slot_checks")
+    else:
+        expected_fields.add("proposition_bindings_valid")
     by_label: dict[str, dict[str, Any]] = {}
-    for check in checks:
+    for label in premise_labels:
+        check = checks.get(label)
         if not isinstance(check, dict) or set(check) != expected_fields:
             return None, "premise_check_schema_invalid"
-        label = check.get("premise_ref")
         if (
-            label not in premise_labels
-            or label in by_label
-            or not isinstance(check.get("fragment_entailed"), bool)
+            not isinstance(check.get("fragment_entailed"), bool)
             or not isinstance(check.get("scope_consistent"), bool)
-            or not isinstance(check.get("proposition_bindings_valid"), bool)
             or not isinstance(check.get("evidence_relation_valid"), bool)
+            or (
+                not strict_slot_checks
+                and not isinstance(check.get("proposition_bindings_valid"), bool)
+            )
         ):
             return None, "premise_check_value_invalid"
+        normalized = dict(check)
+        normalized["premise_ref"] = label
         if strict_slot_checks:
             assert premise_slot_expectations is not None
-            slot_reason = _premise_slot_checks_reason(
-                check,
+            slot_checks, slot_reason = _project_slot_checks(
+                check.get("proposition_slot_checks"),
                 str(label),
                 premise_slot_expectations=premise_slot_expectations,
                 premise_slot_evidence=premise_slot_evidence,
             )
-            if slot_reason:
+            if slot_checks is None:
                 return None, slot_reason
-        by_label[str(label)] = check
-    if set(by_label) != set(premise_labels):
-        return None, "premise_check_binding_invalid"
+            normalized["declared_proposition_slots"] = [
+                value["slot"] for value in slot_checks
+            ]
+            normalized["proposition_slot_checks"] = slot_checks
+            normalized["proposition_bindings_valid"] = all(
+                value["binding_valid"] for value in slot_checks
+            )
+        by_label[label] = normalized
     return by_label, ""
 
 

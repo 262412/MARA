@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
+from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator, ValidationError
 from ktem.docqa.question_proposition import (
     applicable_proposition_evidence_slots,
     build_question_proposition,
@@ -15,6 +18,7 @@ from ktem.docqa.semantic_entailment_audit import (
 )
 from ktem.reasoning.mara_semantic_entailment_audit import (
     parse_semantic_entailment_audit,
+    semantic_entailment_audit_response_format,
 )
 
 
@@ -137,25 +141,27 @@ def test_semantic_auditor_rejects_non_proof_spans(quote: str) -> None:
     assert _premise_audit_reason(quote) == "semantic_entailment_premise_quote_not_proof"
 
 
-def test_audit_parser_requires_exact_per_slot_evidence_for_declared_bindings() -> None:
-    payload = _atomic_audit()
-    payload["premise_checks"][0].update(
-        {
-            "declared_proposition_slots": ["actor", "predicate"],
-            "proposition_slot_checks": [
-                {
-                    "slot": "actor",
-                    "binding_valid": True,
-                    "evidence_text": "The authors",
+def test_audit_parser_rejects_an_uncontrolled_slot_evidence_ref() -> None:
+    payload: dict[str, Any] = {
+        **_atomic_audit(),
+        "premise_checks": {
+            "P1": {
+                "fragment_entailed": True,
+                "scope_consistent": True,
+                "evidence_relation_valid": True,
+                "proposition_slot_checks": {
+                    "actor": {
+                        "binding_valid": True,
+                        "evidence_ref": "P1:actor",
+                    },
+                    "predicate": {
+                        "binding_valid": True,
+                        "evidence_ref": "P1:predicate",
+                    },
                 },
-                {
-                    "slot": "predicate",
-                    "binding_valid": True,
-                    "evidence_text": "compare",
-                },
-            ],
-        }
-    )
+            }
+        },
+    }
     expected = {
         "P1": {
             "actor": "The authors compared the systems.",
@@ -170,9 +176,9 @@ def test_audit_parser_requires_exact_per_slot_evidence_for_declared_bindings() -
     )
     assert parsed.value is not None
 
-    payload["premise_checks"][0]["proposition_slot_checks"][1][
-        "evidence_text"
-    ] = "reported"
+    payload["premise_checks"]["P1"]["proposition_slot_checks"]["predicate"][
+        "evidence_ref"
+    ] = "free-form evidence"
     parsed = parse_semantic_entailment_audit(
         json.dumps(payload),
         premise_labels=["P1"],
@@ -181,3 +187,82 @@ def test_audit_parser_requires_exact_per_slot_evidence_for_declared_bindings() -
     )
     assert parsed.value is None
     assert parsed.failure_reason == "premise_check_slot_evidence_invalid"
+
+
+def test_auditor_schema_controls_slot_refs_and_parser_projects_exact_text() -> None:
+    expected = {
+        "P1": {
+            "actor": "The authors compared the systems.",
+            "predicate": "The authors compared the systems.",
+        }
+    }
+    response_format = semantic_entailment_audit_response_format(
+        ["P1"],
+        premise_slot_expectations={"P1": ("actor", "predicate")},
+        premise_slot_evidence=expected,
+    )
+    schema = response_format["json_schema"]["schema"]
+    payload: dict[str, Any] = {
+        "premise_checks": {
+            "P1": {
+                "fragment_entailed": False,
+                "scope_consistent": False,
+                "evidence_relation_valid": False,
+                "proposition_slot_checks": {
+                    "actor": {
+                        "binding_valid": True,
+                        "evidence_ref": "P1:actor",
+                    },
+                    "predicate": {
+                        "binding_valid": False,
+                        "evidence_ref": "P1:predicate",
+                    },
+                },
+            }
+        },
+        "jointly_entails": False,
+        "each_premise_required": False,
+        "contradiction_free": True,
+        "conclusion_check": {
+            "conclusion_entailed": False,
+            "actor_consistent": True,
+            "predicate_consistent": False,
+            "object_consistent": False,
+            "polarity_consistent": True,
+            "quantifier_consistent": True,
+            "scope_consistent": False,
+        },
+    }
+
+    Draft202012Validator(schema).validate(payload)
+    parsed = parse_semantic_entailment_audit(
+        json.dumps(payload),
+        premise_labels=["P1"],
+        premise_slot_expectations={"P1": ("actor", "predicate")},
+        premise_slot_evidence=expected,
+    )
+
+    assert parsed.failure_reason == ""
+    assert parsed.value is not None
+    checks = parsed.value["premise_checks"][0]
+    assert checks["declared_proposition_slots"] == ["actor", "predicate"]
+    assert checks["proposition_bindings_valid"] is False
+    assert checks["proposition_slot_checks"] == [
+        {
+            "slot": "actor",
+            "binding_valid": True,
+            "evidence_text": "The authors compared the systems.",
+        },
+        {
+            "slot": "predicate",
+            "binding_valid": False,
+            "evidence_text": "The authors compared the systems.",
+        },
+    ]
+
+    invalid = deepcopy(payload)
+    invalid["premise_checks"]["P1"]["proposition_slot_checks"]["predicate"][
+        "evidence_ref"
+    ] = "free-form evidence"
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(invalid)

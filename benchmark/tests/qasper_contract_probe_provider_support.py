@@ -301,9 +301,11 @@ def _audit_premise_checks(
     proposal: dict[str, Any],
     *,
     passed: bool,
-) -> tuple[dict[str, Any], list[dict[str, object]]]:
-    premise_properties: dict[str, Any] = {}
+) -> tuple[dict[str, Any], object]:
     premise_schema = properties.get("premise_checks")
+    if isinstance(premise_schema, dict) and premise_schema.get("type") == "object":
+        return _audit_premise_checks_object(properties, proposal, passed=passed)
+    premise_properties: dict[str, Any] = {}
     premise_item = (
         premise_schema.get("items") if isinstance(premise_schema, dict) else {}
     )
@@ -371,6 +373,113 @@ def _audit_premise_checks(
             )
         )
     return premise_properties, checks
+
+
+def _audit_premise_checks_object(
+    properties: dict[str, Any],
+    proposal: dict[str, Any],
+    *,
+    passed: bool,
+) -> tuple[dict[str, Any], dict[str, dict[str, object]]]:
+    premise_schema = properties.get("premise_checks")
+    if not isinstance(premise_schema, dict):
+        raise RuntimeError("provider semantic audit premise schema missing")
+    premise_properties = premise_schema.get("properties")
+    if not isinstance(premise_properties, dict):
+        raise RuntimeError("provider semantic audit premise properties missing")
+    labels = _audit_premise_labels(premise_schema, premise_properties)
+    source_premises = proposal.get("premises")
+    source_premises = source_premises if isinstance(source_premises, list) else []
+    checks: dict[str, dict[str, object]] = {}
+    for index, label in enumerate(labels):
+        check_schema = premise_properties.get(label)
+        if not isinstance(check_schema, dict):
+            raise RuntimeError(f"provider semantic audit premise {label} missing")
+        check_properties = check_schema.get("properties")
+        check_properties = (
+            check_properties if isinstance(check_properties, dict) else {}
+        )
+        required = {
+            str(field)
+            for field in check_schema.get("required", [])
+            if isinstance(field, str)
+        }
+        premise = _source_premise(source_premises, index)
+        values: dict[str, object] = {
+            "fragment_entailed": passed,
+            "scope_consistent": passed,
+            "proposition_bindings_valid": passed,
+            "evidence_relation_valid": passed,
+            "proposition_slot_checks": _audit_slot_checks(
+                check_properties,
+                premise,
+                label,
+                passed=passed,
+            ),
+        }
+        checks[label] = _schema_shape(
+            values,
+            check_properties,
+            required,
+            "semantic audit premise",
+        )
+    return premise_properties, checks
+
+
+def _audit_premise_labels(
+    premise_schema: dict[str, Any],
+    premise_properties: dict[str, Any],
+) -> list[str]:
+    labels = [
+        str(label)
+        for label in premise_schema.get("required", [])
+        if isinstance(label, str)
+    ]
+    return labels or [str(label) for label in premise_properties]
+
+
+def _source_premise(
+    premises: list[Any],
+    index: int,
+) -> dict[str, Any]:
+    premise = premises[index] if index < len(premises) else {}
+    return premise if isinstance(premise, dict) else {}
+
+
+def _audit_slot_checks(
+    check_properties: dict[str, Any],
+    premise: dict[str, Any],
+    label: str,
+    *,
+    passed: bool,
+) -> dict[str, dict[str, object]]:
+    slot_schema = check_properties.get("proposition_slot_checks")
+    slot_properties = (
+        slot_schema.get("properties") if isinstance(slot_schema, dict) else {}
+    )
+    slot_properties = slot_properties if isinstance(slot_properties, dict) else {}
+    source_slots = {
+        str(value)
+        for value in premise.get("binds_proposition_slots") or []
+        if str(value)
+    }
+    slots = [slot for slot in source_slots if slot in slot_properties]
+    slots = slots or [str(slot) for slot in slot_properties]
+    checks: dict[str, dict[str, object]] = {}
+    for slot in slots:
+        slot_spec = slot_properties.get(slot)
+        slot_spec = slot_spec if isinstance(slot_spec, dict) else {}
+        slot_spec_properties = slot_spec.get("properties")
+        slot_spec_properties = (
+            slot_spec_properties if isinstance(slot_spec_properties, dict) else {}
+        )
+        evidence_ref = _schema_enum(slot_spec_properties.get("evidence_ref"))
+        if not evidence_ref:
+            raise RuntimeError(
+                f"provider semantic audit evidence ref schema missing: {label}:{slot}"
+            )
+        checks[slot] = {"binding_valid": passed, "evidence_ref": evidence_ref[0]}
+    return checks
 
 
 def _audit_conclusion(

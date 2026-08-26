@@ -179,10 +179,20 @@ def proposal_diagnostics(stage: ParsedSemanticStage) -> dict[str, Any]:
 
 
 def audit_diagnostics(stage: ParsedSemanticStage, *, model: str) -> dict[str, Any]:
+    execution_status = (
+        "provider_failed"
+        if stage.provider_failure_reason
+        else "parse_failed"
+        if stage.value is None
+        else "parsed"
+    )
     return {
         "audit_contract_id": SEMANTIC_ENTAILMENT_AUDIT_CONTRACT,
         "audit_model": model,
-        "audit_status": "failed" if stage.value is None else "parsed",
+        "audit_status": execution_status,
+        "audit_execution_status": execution_status,
+        "audit_parser_accepted": stage.value is not None,
+        "audit_semantic_rejection": False,
         "audit_reason": stage.provider_failure_reason,
         "audit_retry_count": stage.retry_count,
         "audit_initial_parse_failure_reason": stage.initial_failure_reason,
@@ -299,14 +309,44 @@ def _audit_semantic_identity(
 
 
 def _normalized_premise_checks(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
+    if isinstance(value, dict):
+        raw_checks = [
+            {"premise_ref": label, **raw}
+            for label, raw in value.items()
+            if isinstance(raw, dict)
+        ]
+    elif isinstance(value, list):
+        raw_checks = value
+    else:
         return []
     normalized: list[dict[str, Any]] = []
-    for raw in value:
+    for raw in raw_checks:
         if not isinstance(raw, dict):
             continue
         slots = raw.get("declared_proposition_slots")
         slot_checks = raw.get("proposition_slot_checks")
+        if isinstance(slot_checks, dict):
+            normalized_slot_checks = [
+                {
+                    "slot": str(slot),
+                    "binding_valid": check.get("binding_valid"),
+                }
+                for slot, check in slot_checks.items()
+                if isinstance(check, dict)
+            ]
+            normalized_slots = [str(slot) for slot in slot_checks]
+        else:
+            normalized_slot_checks = [
+                {
+                    "slot": str(check.get("slot") or ""),
+                    "binding_valid": check.get("binding_valid"),
+                }
+                for check in slot_checks or []
+                if isinstance(check, dict)
+            ]
+            normalized_slots = (
+                [str(slot) for slot in slots] if isinstance(slots, list) else []
+            )
         normalized.append(
             {
                 "premise_ref": str(raw.get("premise_ref") or ""),
@@ -314,22 +354,11 @@ def _normalized_premise_checks(value: Any) -> list[dict[str, Any]]:
                 "scope_consistent": raw.get("scope_consistent"),
                 "proposition_bindings_valid": raw.get("proposition_bindings_valid"),
                 "evidence_relation_valid": raw.get("evidence_relation_valid"),
-                "declared_proposition_slots": sorted(str(slot) for slot in slots)
-                if isinstance(slots, list)
-                else [],
+                "declared_proposition_slots": sorted(normalized_slots),
                 "proposition_slot_checks": sorted(
-                    [
-                        {
-                            "slot": str(check.get("slot") or ""),
-                            "binding_valid": check.get("binding_valid"),
-                        }
-                        for check in slot_checks
-                        if isinstance(check, dict)
-                    ],
+                    normalized_slot_checks,
                     key=lambda check: check["slot"],
-                )
-                if isinstance(slot_checks, list)
-                else [],
+                ),
             }
         )
     return sorted(normalized, key=lambda check: check["premise_ref"])
@@ -451,6 +480,7 @@ def _call_audit(
                 response_format=semantic_entailment_audit_response_format(
                     premise_labels,
                     premise_slot_expectations=premise_slot_expectations,
+                    premise_slot_evidence=premise_slot_evidence,
                 ),
                 temperature=0,
                 top_p=1,
@@ -541,17 +571,16 @@ def _corrected_prompt(prompt: str, failure_reason: str) -> str:
             "typed proposition; omit unsupported bindings."
         ),
         "premise_check_slots_invalid": (
-            "Return declared_proposition_slots exactly equal to the proposal's "
-            "applicable bindings, with one proposition_slot_checks entry per "
-            "declared actor, predicate, object, or quantifier slot."
+            "Return every schema-required proposition slot exactly once using "
+            "its controlled evidence_ref."
         ),
         "premise_check_slots_inconsistent": (
-            "Set proposition_bindings_valid to the conjunction of every declared "
-            "proposition_slot_checks binding_valid value."
+            "Keep every binding_valid decision unchanged; runtime derives the "
+            "combined proposition binding state."
         ),
         "premise_check_slot_evidence_invalid": (
-            "Copy each slot check evidence_text as a non-empty exact substring "
-            "of that same premise quote."
+            "Use the exact controlled evidence_ref required by the response "
+            "schema. Do not generate or rewrite evidence text."
         ),
     }.get(
         failure_reason,

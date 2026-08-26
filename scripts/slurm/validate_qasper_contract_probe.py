@@ -33,6 +33,7 @@ _HARD_GATES = {
 }
 _LIVE_COVERAGE_GATE = "qasper_contract_probe_live_coverage_assertion_complete"
 _EXECUTION_GATE = "qasper_contract_probe_execution_complete"
+_BEHAVIOR_GATE = "qasper_contract_probe_behavior_violations"
 
 
 def _is_live_probe_artifact(predictions: list[dict[str, Any]]) -> bool:
@@ -58,6 +59,18 @@ def _failed_exception_audit(
     evidence = dict(failure_evidence or {})
     evidence["exception"] = _exception_evidence(exc)
     observed_state = _observed_state_evidence(predictions)
+    failed_gates = [_EXECUTION_GATE]
+    failure_details = {
+        "observed_state": observed_state,
+        **evidence,
+    }
+    lane_audit = {
+        "lane": "contract_probe",
+        "status": "failed",
+        "prediction_count": len(predictions),
+        "failed_gates": failed_gates,
+        "failure_evidence": failure_details,
+    }
     return {
         "contract": CONTRACT,
         "status": "failed",
@@ -73,18 +86,11 @@ def _failed_exception_audit(
                 "passed": False,
             }
         },
-        "failed_gates": [_EXECUTION_GATE],
-        "contract_probe_audit": {
-            "lane": "contract_probe",
-            "status": "failed",
-            "prediction_count": len(predictions),
-        },
+        "failed_gates": failed_gates,
+        "contract_probe_audit": lane_audit,
         "structural_state_matrix": {},
         "debug_gate_metrics": {},
-        "failure_evidence": {
-            "observed_state": observed_state,
-            **evidence,
-        },
+        "failure_evidence": failure_details,
         "audit_output": str(output_path.resolve()),
     }
 
@@ -154,6 +160,13 @@ def _evaluate_probe(
         }
         failed_gates.append(_EXECUTION_GATE)
         lane_audit["status"] = "failed"
+    if violations:
+        hard_gates[_BEHAVIOR_GATE] = {
+            "value": float(len(violations)),
+            "expected": 0.0,
+            "passed": False,
+        }
+        failed_gates.append(_BEHAVIOR_GATE)
     status = (
         "passed"
         if predictions
@@ -162,6 +175,16 @@ def _evaluate_probe(
         and not failed_gates
         else "failed"
     )
+    observed_state = _observed_state_evidence(predictions)
+    failure_details = {
+        "observed_state": observed_state,
+        **combined_failure_evidence,
+    }
+    if violations:
+        failure_details["behavior_violations"] = list(violations)
+    lane_audit["status"] = status
+    lane_audit["failed_gates"] = list(failed_gates)
+    lane_audit["failure_evidence"] = failure_details
     return {
         "status": status,
         "behavior_violations": violations,
@@ -170,10 +193,7 @@ def _evaluate_probe(
         "contract_probe_audit": lane_audit,
         "structural_state_matrix": extensions.get("structural_state_matrix") or {},
         "debug_gate_metrics": metrics,
-        "failure_evidence": {
-            "observed_state": _observed_state_evidence(predictions),
-            **combined_failure_evidence,
-        },
+        "failure_evidence": failure_details,
     }
 
 

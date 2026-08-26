@@ -172,31 +172,24 @@ def _insufficient_response() -> str:
 
 
 def _audit_response() -> str:
-    premise_specs = [
-        (["actor", "predicate"], {"actor": "Transfer", "predicate": "evaluated"}),
-        (["object"], {"object": "monolingual baselines"}),
-    ]
+    premise_specs = [["actor", "predicate"], ["object"]]
     return json.dumps(
         {
-            "premise_checks": [
-                {
-                    "premise_ref": f"P{index}",
+            "premise_checks": {
+                f"P{index}": {
                     "fragment_entailed": True,
                     "scope_consistent": True,
-                    "proposition_bindings_valid": True,
                     "evidence_relation_valid": True,
-                    "declared_proposition_slots": slots,
-                    "proposition_slot_checks": [
-                        {
-                            "slot": slot,
+                    "proposition_slot_checks": {
+                        slot: {
                             "binding_valid": True,
-                            "evidence_text": evidence[slot],
+                            "evidence_ref": f"P{index}:{slot}",
                         }
                         for slot in slots
-                    ],
+                    },
                 }
-                for index, (slots, evidence) in enumerate(premise_specs, start=1)
-            ],
+                for index, slots in enumerate(premise_specs, start=1)
+            },
             "jointly_entails": True,
             "each_premise_required": True,
             "contradiction_free": True,

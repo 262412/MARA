@@ -383,7 +383,9 @@ def _assert_real_auditor_failure(rows: list[dict[str, Any]]) -> None:
     assert parsed_proposal["candidate_judgment"] == "supported"
     audit_attempts = fail_event["transaction"]["audit"]["attempts"]
     assert audit_attempts
-    verifier = auditor_fail["evidence_metadata"]["semantic_proposition_verifier"]
+    verifier = auditor_fail["engine_terminal_evidence_bundle"]["metadata"][
+        "semantic_proposition_verifier"
+    ]
     assert verifier["audit_model_call_count"] >= 1
     assert verifier["candidate_verification_audit"]["status"] == "failed"
     assert auditor_fail["engine_terminal_answer"] == "unanswerable"

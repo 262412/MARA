@@ -106,6 +106,12 @@ def test_probe_persists_rows_and_failed_audit_on_coverage_failure(
     assert payload["source_sha256"]
     assert payload["replacement_candidate_allowed"] is False
     assert payload["failed_gates"]
+    assert payload["contract_probe_audit"]["status"] == "failed"
+    assert payload["contract_probe_audit"]["failed_gates"] == payload["failed_gates"]
+    assert (
+        payload["contract_probe_audit"]["failure_evidence"]
+        == payload["failure_evidence"]
+    )
     assert payload["failure_evidence"]["observed_state"]["prediction_count"] == len(
         probe._PROBE_CASES
     )
@@ -154,6 +160,12 @@ def test_probe_persists_partial_rows_and_exception_audit(
     assert payload["source_sha256"]
     assert payload["replacement_candidate_allowed"] is False
     assert payload["failed_gates"]
+    assert payload["contract_probe_audit"]["status"] == "failed"
+    assert payload["contract_probe_audit"]["failed_gates"] == payload["failed_gates"]
+    assert (
+        payload["contract_probe_audit"]["failure_evidence"]
+        == payload["failure_evidence"]
+    )
     assert payload["failure_evidence"]["probe_exception"]["exception_type"] == (
         "RuntimeError"
     )

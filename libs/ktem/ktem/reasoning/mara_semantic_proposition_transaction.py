@@ -348,7 +348,7 @@ def _audit_result(
         audit_result=audit.value,
     )
     if premise_reason:
-        diagnostics.update({"audit_status": "rejected", "audit_reason": premise_reason})
+        diagnostics["audit_reason"] = premise_reason
         return _audit_rejection_result(
             context,
             proposal,
@@ -376,7 +376,7 @@ def _audit_result(
         release_mode=context.release_mode,
     )
     if binding_reason:
-        diagnostics.update({"audit_status": "rejected", "audit_reason": binding_reason})
+        diagnostics["audit_reason"] = binding_reason
         return _audit_rejection_result(
             context,
             proposal,
@@ -451,10 +451,7 @@ def _audit_failure_result(
     )
     if not rejection_reason:
         return None
-    diagnostics["audit_call_rejection_count"] = (
-        int(diagnostics.get("audit_call_rejection_count") or 0) + 1
-    )
-    diagnostics.update({"audit_status": "rejected", "audit_reason": rejection_reason})
+    diagnostics["audit_reason"] = rejection_reason
     return _audit_rejection_result(
         context,
         proposal,
@@ -473,10 +470,23 @@ def _audit_rejection_result(
     debug_trace: dict[str, Any] | None,
     reason: str,
 ) -> SemanticPropositionTransactionResult:
+    rejection_reason = str(diagnostics.get("audit_reason") or reason)
+    diagnostics["audit_call_rejection_count"] = (
+        int(diagnostics.get("audit_call_rejection_count") or 0) + 1
+    )
+    diagnostics.update(
+        {
+            "audit_status": "rejected",
+            "audit_execution_status": "parsed",
+            "audit_parser_accepted": audit.value is not None,
+            "audit_semantic_rejection": audit.value is not None,
+            "audit_rejection_reason": rejection_reason,
+        }
+    )
     diagnostics.setdefault("rejected_transactions", []).append(
         rejected_semantic_transaction(
             proposal.value or {},
-            reason=str(diagnostics.get("audit_reason") or reason),
+            reason=rejection_reason,
             semantic_pack_digest=str(diagnostics.get("semantic_pack_digest") or ""),
             raw_audit_result=audit.value or {},
             local_premise_consistency=dict(

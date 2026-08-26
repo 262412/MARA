@@ -122,6 +122,25 @@ def digest(value: Any) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def candidate_verification_trace_status(
+    response: dict[str, Any] | None,
+    diagnostics: dict[str, Any],
+    *,
+    audit_call_count: int,
+) -> str:
+    recorded = str((response or {}).get("candidate_verification_status") or "")
+    if recorded:
+        return recorded
+    audit_status = str(diagnostics.get("audit_status") or "")
+    if audit_call_count == 0 and audit_status == "not_started":
+        return "pre_audit_failed"
+    if audit_status == "parse_failed":
+        return "audit_parse_failed"
+    if audit_status == "provider_failed":
+        return "audit_provider_failed"
+    return "unknown"
+
+
 def record_trace(
     bundle: EvidenceBundle,
     *,
@@ -270,6 +289,18 @@ def _candidate_audit(
             "audited_verdict": "",
             "audited_judgment": "pre_audit_failed",
             "classification": "pre_audit_failed",
+            "replacement_candidate_allowed": False,
+            "reason": reason,
+        }
+    if judgment in {"audit_parse_failed", "audit_provider_failed"}:
+        return {
+            "contract_id": "candidate_verifier_audit.v2",
+            "status": audit_status,
+            "mode": judgment,
+            "audited_candidate": candidate,
+            "audited_verdict": "",
+            "audited_judgment": judgment,
+            "classification": judgment,
             "replacement_candidate_allowed": False,
             "reason": reason,
         }
