@@ -9,6 +9,7 @@ from .question_proposition import (
     QuestionProposition,
     proposition_evidence_bindings,
 )
+from .semantic_relation_clause_validation import semantic_relation_clause_analysis
 
 
 def semantic_premise_proof_span_reason(
@@ -38,6 +39,8 @@ def semantic_premise_proof_span_reason(
             declared_slots,
             quote,
             audit_result,
+            premise=premise,
+            proposition=proposition,
         )
         if reason:
             return reason
@@ -75,12 +78,16 @@ def local_proposition_slot_checks(
     canonical = proposition_evidence_bindings(proposition)
     if not isinstance(bindings, Mapping) or set(bindings) != set(raw_slots):
         return {slot: False for slot in raw_slots}
+    analysis = semantic_relation_clause_analysis(premise, proposition)
+    locally_bound = set(analysis.get("slot_evidence") or {})
     return {
         slot: (
             slot in PROPOSITION_EVIDENCE_SLOTS
             and str(bindings.get(slot) or "") == str(canonical.get(slot) or "")
             and not (slot == "quantifier" and str(bindings.get(slot)) == "none")
             and not (slot == "actor" and _is_model_declaration(quote))
+            and slot in locally_bound
+            and analysis.get("joint_relation_clause_bound") is True
         )
         for slot in raw_slots
     }
@@ -112,6 +119,9 @@ def _audit_slot_evidence_reason(
     raw_slots: list[str],
     quote: str,
     audit_result: Mapping[str, Any] | None,
+    *,
+    premise: Mapping[str, Any],
+    proposition: QuestionProposition,
 ) -> str:
     if audit_result is None:
         return ""
@@ -131,11 +141,30 @@ def _audit_slot_evidence_reason(
     }
     if set(by_slot) != set(raw_slots):
         return "semantic_entailment_premise_audit_invalid"
+    local_analysis = semantic_relation_clause_analysis(premise, proposition)
+    expected_by_slot = dict(local_analysis.get("slot_evidence") or {})
     for slot in raw_slots:
         if by_slot[slot].get("binding_valid") is not True:
             return "semantic_entailment_proposition_binding_unbound"
+        expected = expected_by_slot.get(slot)
         evidence_text = str(by_slot[slot].get("evidence_text") or "")
-        if not evidence_text or evidence_text not in quote:
+        if (
+            not isinstance(expected, Mapping)
+            or local_analysis.get("joint_relation_clause_bound") is not True
+            or evidence_text != str(expected.get("text") or "")
+            or by_slot[slot].get("evidence_ref") != f"P{premise_index + 1}:{slot}"
+            or _optional_int(by_slot[slot].get("span_start"))
+            != _optional_int(expected.get("span_start"))
+            or _optional_int(by_slot[slot].get("span_end"))
+            != _optional_int(expected.get("span_end"))
+            or by_slot[slot].get("clause_ref") != expected.get("clause_ref")
+            or _optional_int(by_slot[slot].get("clause_start"))
+            != _optional_int(expected.get("clause_start"))
+            or _optional_int(by_slot[slot].get("clause_end"))
+            != _optional_int(expected.get("clause_end"))
+            or not evidence_text
+            or evidence_text not in quote
+        ):
             return "semantic_entailment_proposition_binding_unbound"
     return ""
 
@@ -164,3 +193,10 @@ def _is_model_declaration(quote: str) -> bool:
             re.IGNORECASE,
         )
     )
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None

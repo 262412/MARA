@@ -23,6 +23,10 @@ from .question_proposition import (
     typed_conclusion,
 )
 from .semantic_evidence_set_scope import semantic_scope_basis
+from .semantic_relation_clause_validation import (
+    semantic_relation_clause_analysis,
+    semantic_slot_evidence_projection,
+)
 
 ValidatedPremises: TypeAlias = tuple[
     tuple[BooleanEvidenceAuthority, ...] | None,
@@ -260,9 +264,13 @@ def semantic_proposition_binding_fields(
     proposition = build_question_proposition(question)
     applicable_slots = applicable_proposition_evidence_slots(proposition)
     not_applicable_slots = not_applicable_proposition_evidence_slots(proposition)
+    premise_slot_evidence = {
+        premise.evidence_ref: _semantic_premise_slot_evidence(premise, proposition)
+        for premise in premises
+    }
     slot_refs = {
         slot: sorted(
-            premise.evidence_ref
+            premise_slot_evidence[premise.evidence_ref][slot]["evidence_ref"]
             for premise in premises
             if slot in dict(premise.proposition_slot_bindings)
         )
@@ -291,10 +299,38 @@ def semantic_proposition_binding_fields(
     return {
         **payload,
         "required_proposition_slots": list(applicable_slots),
+        "proposition_slot_evidence": premise_slot_evidence,
         "proposition_evidence_set_digest": hashlib.sha256(
             canonical.encode("utf-8")
         ).hexdigest(),
     }
+
+
+def _semantic_premise_slot_evidence(
+    premise: BooleanEvidenceAuthority,
+    proposition: Any,
+) -> dict[str, dict[str, Any]]:
+    analysis = semantic_relation_clause_analysis(
+        {
+            "quote": premise.quote,
+            "binds_proposition_slots": [
+                slot for slot, _value in premise.proposition_slot_bindings
+            ],
+            "proposition_slot_bindings": dict(premise.proposition_slot_bindings),
+            "evidence_relation": premise.evidence_relation,
+        },
+        proposition,
+    )
+    span_base = (
+        premise.canonical_start
+        if premise.canonical_start is not None
+        else premise.span_start
+    )
+    return semantic_slot_evidence_projection(
+        analysis,
+        premise_ref=premise.evidence_ref,
+        span_base=span_base,
+    )
 
 
 def _evidence_relation(verdict: str) -> str:

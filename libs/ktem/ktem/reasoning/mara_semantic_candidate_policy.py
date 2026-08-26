@@ -298,6 +298,8 @@ def candidate_bound_semantic_audit_prompt(
     context: Any,
     conclusion: Any,
     value: dict[str, Any],
+    *,
+    premise_slot_evidence: dict[str, dict[str, Any]] | None = None,
 ) -> str:
     prompt = semantic_entailment_audit_prompt(
         context.proposition,
@@ -306,6 +308,7 @@ def candidate_bound_semantic_audit_prompt(
         value.get("premises") or [],
         original_candidate=candidate_from_prompt(context.proposal_prompt),
         candidate_judgment=str(value.get("candidate_judgment") or ""),
+        premise_slot_evidence=premise_slot_evidence,
     )
     return prompt
 

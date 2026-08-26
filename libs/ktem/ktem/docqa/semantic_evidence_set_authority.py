@@ -288,6 +288,9 @@ def _verified_authority_trace_fields(
         "proposition_slot_evidence_refs": dict(
             attestation.get("proposition_slot_evidence_refs") or {}
         ),
+        "proposition_slot_evidence": dict(
+            attestation.get("proposition_slot_evidence") or {}
+        ),
         "proposition_binding_evidence_set_refs": list(
             attestation.get("proposition_binding_evidence_set_refs") or []
         ),

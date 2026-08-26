@@ -36,11 +36,11 @@ def _premises() -> list[dict[str, Any]]:
     return [
         _item(
             "cross-lingual",
-            "We evaluated transfer in the cross-lingual setting.",
+            "We compared cross-lingual evaluation.",
         ),
         _item(
             "single-language",
-            "The same experiment included single-language baselines for comparison.",
+            "The same comparison included single-language evaluation.",
         ),
     ]
 
@@ -84,9 +84,9 @@ def _semantic_verdict(
                     "evidence_id": identity_of(item).key,
                     "quote": item["text"],
                     "proposition_fragment": (
-                        "cross-lingual evaluation was performed"
+                        "We compared cross-lingual evaluation."
                         if index == 0
-                        else "single-language baselines were included for comparison"
+                        else "The same comparison included single-language evaluation."
                     ),
                     "supports_slot_ids": [
                         "support:proposition",
@@ -126,8 +126,8 @@ def _same_item_semantic_verdict(
             "premises": [
                 {
                     "evidence_id": evidence_id,
-                    "quote": "We evaluated transfer in the cross-lingual setting.",
-                    "proposition_fragment": "cross-lingual evaluation was performed",
+                    "quote": "We compared cross-lingual evaluation.",
+                    "proposition_fragment": "We compared cross-lingual evaluation.",
                     "supports_slot_ids": [
                         "support:proposition",
                         "support:left_subject",
@@ -136,11 +136,10 @@ def _same_item_semantic_verdict(
                 {
                     "evidence_id": evidence_id,
                     "quote": (
-                        "The same experiment included single-language baselines "
-                        "for comparison."
+                        "The same comparison included single-language evaluation."
                     ),
                     "proposition_fragment": (
-                        "single-language baselines were included for comparison"
+                        "The same comparison included single-language evaluation."
                     ),
                     "supports_slot_ids": [
                         "support:proposition",
@@ -187,8 +186,8 @@ def test_semantic_evidence_set_commits_one_typed_boolean_proposition() -> None:
     assert {
         value["proposition_fragment"] for value in derivation["premise_contributions"]
     } == {
-        "cross-lingual evaluation was performed",
-        "single-language baselines were included for comparison",
+        "We compared cross-lingual evaluation.",
+        "The same comparison included single-language evaluation.",
     }
     required_slots = [
         slot
@@ -207,11 +206,11 @@ def test_semantic_evidence_set_binds_a_named_subject_across_local_spans() -> Non
     items = [
         _item(
             "atlas-tasks",
-            "Atlas contains a task bank of over 50 tasks.",
+            "Atlas contains definitions for its 50 tasks.",
         ),
         _item(
             "atlas-data",
-            "Tasks in Atlas have references to task data.",
+            "Atlas contains data definitions for these tasks.",
         ),
     ]
     for item in items:
@@ -241,8 +240,8 @@ def test_semantic_evidence_set_binds_a_named_subject_across_local_spans() -> Non
                     for item, fragment in zip(
                         items,
                         (
-                            "Atlas provides more than 50 tasks",
-                            "Atlas tasks reference their data",
+                            "Atlas contains definitions for its 50 tasks",
+                            "Atlas contains data definitions for these tasks",
                         ),
                     )
                 ],
@@ -373,7 +372,7 @@ def test_semantic_no_requires_an_explicit_negative_relation() -> None:
 
     assert decision.status != "supported"
     authority = bundle.metadata["semantic_proposition_authority"]
-    assert authority["reason"] == "polarity_contradiction_detected"
+    assert authority["reason"] == "local_semantic_explicit_contradiction_missing"
     assert authority["polarity_contradiction_check"]["status"] == (
         "contradiction_detected"
     )
@@ -488,8 +487,8 @@ def test_semantic_verifier_can_bind_two_nonoverlapping_spans_in_one_item() -> No
     item = _item(
         "joint-chunk",
         (
-            "We evaluated transfer in the cross-lingual setting. "
-            "The same experiment included single-language baselines for comparison."
+            "We compared cross-lingual evaluation. "
+            "The same comparison included single-language evaluation."
         ),
     )
 

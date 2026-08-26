@@ -285,6 +285,7 @@ def _rule_contract_status(
             atom_by_ref=atom_by_ref,
             conclusion=conclusion,
             question=question,
+            required=required,
         )
     return (
         "bound"

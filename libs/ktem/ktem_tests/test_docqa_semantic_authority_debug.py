@@ -75,7 +75,7 @@ def test_debug_trace_preserves_audit_verified_then_authority_rejected_stages() -
     assert decision.status != "supported"
     authority = bundle.metadata["semantic_proposition_authority"]
     assert authority["status"] == "rejected"
-    assert authority["reason"] == "polarity_contradiction_detected"
+    assert authority["reason"] == "local_semantic_explicit_contradiction_missing"
     assert authority["polarity_contradiction_check"]["status"] == (
         "contradiction_detected"
     )
@@ -84,6 +84,6 @@ def test_debug_trace_preserves_audit_verified_then_authority_rejected_stages() -
         {
             "stage": "header",
             "status": "rejected",
-            "reason": "polarity_contradiction_detected",
+            "reason": "local_semantic_explicit_contradiction_missing",
         },
     ]

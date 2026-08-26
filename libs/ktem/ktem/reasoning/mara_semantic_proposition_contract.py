@@ -136,6 +136,7 @@ def rejected_semantic_transaction(
     semantic_pack_digest: str,
     raw_audit_result: dict[str, Any] | None = None,
     local_premise_consistency: dict[str, Any] | None = None,
+    independent_semantic_constraint: dict[str, Any] | None = None,
     semantic_proof_digest: str = "",
 ) -> dict[str, Any]:
     audit = value.get("entailment_audit")
@@ -156,6 +157,10 @@ def rejected_semantic_transaction(
         )
     if local_premise_consistency is not None:
         transaction["local_premise_consistency"] = dict(local_premise_consistency)
+    if independent_semantic_constraint is not None:
+        transaction["independent_semantic_constraint"] = dict(
+            independent_semantic_constraint
+        )
     if semantic_proof_digest:
         transaction["semantic_proof_digest"] = semantic_proof_digest
     return transaction

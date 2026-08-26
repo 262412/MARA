@@ -100,7 +100,7 @@ def audit_stage(
     *,
     seed: int,
     premise_slot_expectations: dict[str, Collection[str]] | None = None,
-    premise_slot_evidence: dict[str, dict[str, str]] | None = None,
+    premise_slot_evidence: dict[str, dict[str, Any]] | None = None,
     semantic_identity: dict[str, Any] | None = None,
 ) -> ParsedSemanticStage:
     labels = [f"P{index}" for index in range(1, premise_count + 1)]
@@ -467,7 +467,7 @@ def _call_audit(
     seed: int,
     correction_reason: str,
     premise_slot_expectations: dict[str, Collection[str]] | None,
-    premise_slot_evidence: dict[str, dict[str, str]] | None,
+    premise_slot_evidence: dict[str, dict[str, Any]] | None,
 ) -> tuple[Any | None, str, str]:
     try:
         return (

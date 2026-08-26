@@ -99,13 +99,13 @@ def _items() -> list[dict[str, Any]]:
             "evidence_id": "cross-lingual",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "Transfer was evaluated across two languages.",
+            "text": "We compared cross-lingual evaluation.",
         },
         {
             "evidence_id": "single-language",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "The experiment included monolingual baselines for comparison.",
+            "text": "The comparison included single-language evaluation.",
         },
     ]
 
@@ -122,19 +122,17 @@ def _model_response() -> str:
             "premises": [
                 {
                     "span_selector": "E1:S1",
-                    "proposition_fragment": (
-                        "Transfer was evaluated across two languages."
-                    ),
+                    "proposition_fragment": ("We compared cross-lingual evaluation."),
                     "supports_slot_ids": [
                         "support:proposition",
                         "support:left_subject",
                     ],
-                    "binds_proposition_slots": ["actor", "predicate"],
+                    "binds_proposition_slots": ["actor", "predicate", "object"],
                 },
                 {
                     "span_selector": "E2:S1",
                     "proposition_fragment": (
-                        "The experiment included monolingual baselines for comparison."
+                        "The comparison included single-language evaluation."
                     ),
                     "supports_slot_ids": [
                         "support:proposition",
@@ -172,7 +170,7 @@ def _insufficient_response() -> str:
 
 
 def _audit_response() -> str:
-    premise_specs = [["actor", "predicate"], ["object"]]
+    premise_specs = [["actor", "predicate", "object"], ["object"]]
     return json.dumps(
         {
             "premise_checks": {

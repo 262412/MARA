@@ -11,11 +11,16 @@ from .boolean_authority_schema import (
     BooleanAuthorityDerivation,
     BooleanEvidenceAuthority,
 )
-from .boolean_proposition_arguments import _question_argument_tokens
 from .boolean_proposition_qualifiers import proposition_qualifier
-from .boolean_proposition_tokens import _relation_surface_tokens
 from .boolean_relations import primary_boolean_relation
 from .boolean_scope_quantifiers import _closed_quantifier
+from .question_proposition import build_question_proposition
+from .semantic_relation_clause_validation import (
+    semantic_relation_clause_analysis,
+    semantic_required_argument_tokens,
+    semantic_slot_evidence_projection,
+    validated_argument_tokens,
+)
 
 
 def semantic_evidence_set_derivation(
@@ -27,16 +32,7 @@ def semantic_evidence_set_derivation(
     slot_support: dict[str, tuple[str, ...]],
 ) -> BooleanAuthorityDerivation:
     relation = primary_boolean_relation(question) or "entails"
-    required = tuple(
-        sorted(
-            token
-            for token in _question_argument_tokens(
-                question,
-                _relation_surface_tokens(relation),
-            )
-            if token
-        )
-    ) or ("complete_proposition",)
+    required = semantic_required_argument_tokens(question)
     conclusion = _typed_derivation_conclusion(
         question,
         verdict,
@@ -45,7 +41,21 @@ def semantic_evidence_set_derivation(
         premises,
         attestation,
     )
-    contributions = _premise_contributions(premises, slot_support)
+    contributions = _premise_contributions(
+        question,
+        premises,
+        slot_support,
+        required=required,
+    )
+    covered = tuple(
+        sorted(
+            {
+                token
+                for contribution in contributions
+                for token in contribution["argument_tokens"]
+            }
+        )
+    )
     identity = boolean_derivation_identity_payload(
         rule_id=SEMANTIC_EVIDENCE_SET_RULE,
         premise_refs=tuple(value.evidence_ref for value in premises),
@@ -62,7 +72,7 @@ def semantic_evidence_set_derivation(
         premise_evidence_ids=tuple(value.evidence_id for value in premises),
         conclusion=conclusion,
         required_argument_tokens=required,
-        covered_argument_tokens=required,
+        covered_argument_tokens=covered,
         premise_contributions=contributions,
         support_mode="evidence_set",
         verifier_attestation=attestation,
@@ -115,23 +125,62 @@ def _typed_derivation_conclusion(
 
 
 def _premise_contributions(
+    question: str,
     premises: tuple[BooleanEvidenceAuthority, ...],
     slot_support: dict[str, tuple[str, ...]],
+    *,
+    required: tuple[str, ...],
 ) -> tuple[dict[str, Any], ...]:
-    return tuple(
-        {
-            "evidence_id": premise.evidence_id,
-            "evidence_ref": premise.evidence_ref,
-            "role": f"semantic_premise:{index}",
-            "order": index,
-            "argument_tokens": [],
-            "proposition_fragment": premise.object,
-            "supports_slot_ids": list(slot_support[premise.evidence_ref]),
-            "binds_proposition_slots": [
-                slot for slot, _value in premise.proposition_slot_bindings
-            ],
-            "proposition_slot_bindings": dict(premise.proposition_slot_bindings),
-            "evidence_relation": premise.evidence_relation,
-        }
-        for index, premise in enumerate(premises, start=1)
-    )
+    proposition = build_question_proposition(question)
+    contributions = []
+    for index, premise in enumerate(premises, start=1):
+        analysis = semantic_relation_clause_analysis(
+            {
+                "quote": premise.quote,
+                "binds_proposition_slots": [
+                    slot for slot, _value in premise.proposition_slot_bindings
+                ],
+                "proposition_slot_bindings": dict(premise.proposition_slot_bindings),
+                "evidence_relation": premise.evidence_relation,
+            },
+            proposition,
+        )
+        span_base = (
+            premise.canonical_start
+            if premise.canonical_start is not None
+            else premise.span_start
+        )
+        slot_evidence = semantic_slot_evidence_projection(
+            analysis,
+            premise_ref=premise.evidence_ref,
+            span_base=span_base,
+        )
+        contributions.append(
+            {
+                "evidence_id": premise.evidence_id,
+                "evidence_ref": premise.evidence_ref,
+                "role": f"semantic_premise:{index}",
+                "order": index,
+                "argument_tokens": list(
+                    validated_argument_tokens(question, analysis, required)
+                ),
+                "proposition_fragment": premise.object,
+                "supports_slot_ids": list(slot_support[premise.evidence_ref]),
+                "binds_proposition_slots": [
+                    slot for slot, _value in premise.proposition_slot_bindings
+                ],
+                "proposition_slot_bindings": dict(premise.proposition_slot_bindings),
+                "proposition_slot_evidence": slot_evidence,
+                "local_semantic_relation": {
+                    "contract_id": analysis["contract_id"],
+                    "status": analysis["status"],
+                    "evidence_relation": analysis["evidence_relation"],
+                    "joint_relation_clause_bound": analysis[
+                        "joint_relation_clause_bound"
+                    ],
+                    "analysis_digest": analysis["analysis_digest"],
+                },
+                "evidence_relation": premise.evidence_relation,
+            }
+        )
+    return tuple(contributions)

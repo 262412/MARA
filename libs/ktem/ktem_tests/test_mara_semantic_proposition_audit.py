@@ -65,14 +65,14 @@ def _items() -> list[dict[str, Any]]:
             "evidence_id": "cross-lingual",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "We evaluated transfer in the cross-lingual setting.",
+            "text": ("We compared cross-lingual and single-language evaluation."),
         },
         {
             "evidence_id": "single-language",
             "source_id": "paper",
             "section_id": "experiments",
             "text": (
-                "The same experiment included single-language baselines for comparison."
+                "The comparison covered cross-lingual and single-language evaluation."
             ),
         },
     ]
@@ -95,14 +95,17 @@ def _proposal() -> str:
             "premises": [
                 {
                     "span_selector": "E1:S1",
-                    "proposition_fragment": "cross-lingual evaluation was performed",
+                    "proposition_fragment": (
+                        "cross-lingual and single-language evaluation was compared"
+                    ),
                     "supports_slot_ids": slot_ids[:2],
                     "binds_proposition_slots": ["actor", "predicate"],
                 },
                 {
                     "span_selector": "E2:S1",
                     "proposition_fragment": (
-                        "single-language baselines were included for comparison"
+                        "cross-lingual and single-language evaluation were covered "
+                        "by the comparison"
                     ),
                     "supports_slot_ids": [slot_ids[-1]],
                     "binds_proposition_slots": ["object"],
@@ -140,7 +143,7 @@ def _rebuilt_atomic_proposal() -> str:
         {
             "span_selector": "E1:S1",
             "proposition_fragment": (
-                "We evaluated transfer in the cross-lingual setting."
+                "We compared cross-lingual and single-language evaluation."
             ),
             "supports_slot_ids": slot_ids,
             "binds_proposition_slots": [
@@ -207,8 +210,8 @@ def _audit_with_false_premise_but_joint_entailment(
                 ["actor", "predicate", "object"],
                 {
                     "actor": "We",
-                    "predicate": "evaluated",
-                    "object": "cross-lingual setting",
+                    "predicate": "compared",
+                    "object": "cross-lingual and single-language evaluation",
                 },
             ),
             (["object"], {"object": "single-language baselines"}),
@@ -278,7 +281,7 @@ def _atomic_proposal(*, selector: str = "E1:S1") -> str:
                 {
                     "span_selector": selector,
                     "proposition_fragment": (
-                        "We evaluated transfer in the cross-lingual setting."
+                        "We compared cross-lingual and single-language evaluation."
                     ),
                     "supports_slot_ids": ["support:boolean_proposition"],
                     "binds_proposition_slots": [

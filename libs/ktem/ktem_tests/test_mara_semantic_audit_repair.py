@@ -36,18 +36,18 @@ def _literal_composite_proposal(*, repaired: bool = False) -> str:
     payload = json.loads(_proposal())
     payload["premises"][0][
         "proposition_fragment"
-    ] = "We evaluated transfer in the cross-lingual setting"
+    ] = "We compared cross-lingual and single-language evaluation"
     payload["premises"][1]["proposition_fragment"] = (
-        "The same experiment included single-language baselines for comparison"
+        "The comparison covered cross-lingual and single-language evaluation"
         if repaired
-        else "single-language baselines for comparison"
+        else "cross-lingual and single-language evaluation"
     )
     return json.dumps(payload)
 
 
 def _audit_with_all_literal_premises_rejected() -> str:
     payload = json.loads(_audit())
-    for check in payload["premise_checks"]:
+    for check in payload["premise_checks"].values():
         check["fragment_entailed"] = False
     payload["jointly_entails"] = False
     payload["each_premise_required"] = False
@@ -99,7 +99,7 @@ def _inspection_proposal() -> str:
                         "decoding step to analyze the model"
                     ),
                     "supports_slot_ids": ["support:boolean_proposition"],
-                    "binds_proposition_slots": ["actor", "predicate"],
+                    "binds_proposition_slots": ["actor", "predicate", "object"],
                 },
                 {
                     "span_selector": "E2:S1",
@@ -147,7 +147,7 @@ def test_text_semantic_conjunction_can_prove_an_inspection_question() -> None:
                 _audit(
                     premise_specs=[
                         (
-                            ["actor", "predicate"],
+                            ["actor", "predicate", "object"],
                             {"actor": "We", "predicate": "visualize"},
                         ),
                         (["object"], {"object": "visual contexts"}),
@@ -177,7 +177,7 @@ def test_text_semantic_conjunction_can_prove_an_inspection_question() -> None:
     ]
 
 
-def test_literal_premise_false_negative_stops_without_a_second_answer() -> (None):
+def test_literal_premise_false_negative_stops_without_a_second_answer() -> None:
     llm = _SequenceLLM(
         [
             _response(_literal_composite_proposal()),

@@ -55,13 +55,13 @@ def _items() -> list[dict[str, Any]]:
             "evidence_id": "cross-lingual",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "We evaluated transfer in the cross-lingual setting.",
+            "text": "We compared cross-lingual evaluation.",
         },
         {
             "evidence_id": "single-language",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "The same experiment included single-language baselines for comparison.",
+            "text": "The same comparison included single-language evaluation.",
         },
     ]
 
@@ -99,8 +99,8 @@ def _yes_response(
                 for item, fragment, side in zip(
                     bundle.items,
                     (
-                        "cross-lingual evaluation was performed",
-                        "single-language baselines were included for comparison",
+                        "We compared cross-lingual evaluation.",
+                        "The same comparison included single-language evaluation.",
                     ),
                     ("left_subject", "right_subject"),
                 )

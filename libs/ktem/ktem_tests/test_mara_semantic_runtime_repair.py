@@ -91,30 +91,26 @@ def _proposal(
     )
 
 
-def _atomic_audit(request: DocQARequest, evidence_text: str) -> str:
+def _atomic_audit(request: DocQARequest, _evidence_text: str) -> str:
     applicable_slots = applicable_proposition_evidence_slots(
         build_question_proposition(request.prompt)
     )
     return json.dumps(
         {
-            "premise_checks": [
-                {
-                    "premise_ref": "P1",
+            "premise_checks": {
+                "P1": {
                     "fragment_entailed": True,
                     "scope_consistent": True,
-                    "proposition_bindings_valid": True,
                     "evidence_relation_valid": True,
-                    "declared_proposition_slots": list(applicable_slots),
-                    "proposition_slot_checks": [
-                        {
-                            "slot": slot,
+                    "proposition_slot_checks": {
+                        slot: {
                             "binding_valid": True,
-                            "evidence_text": evidence_text,
+                            "evidence_ref": f"P1:{slot}",
                         }
                         for slot in applicable_slots
-                    ],
+                    },
                 }
-            ],
+            },
             "jointly_entails": True,
             "each_premise_required": True,
             "contradiction_free": True,
@@ -161,13 +157,13 @@ def _item(evidence_id: str, section_id: str, text: str) -> dict[str, str]:
 def test_proposition_repair_completes_question_before_conclusion_audit() -> None:
     question = "Does the model have attention?"
     request = _request(question)
-    evidence_text = "The authors state that the model has an attention mechanism."
+    evidence_text = "The authors' model has an attention mechanism."
     verifier, proposal_llm, audit_llm = _release_verifier(
         [
             _proposal(
                 request,
                 "E1:S1",
-                "the authors state that the model has an attention mechanism",
+                "the authors' model has an attention mechanism",
             )
         ],
         [_atomic_audit(request, evidence_text)],
@@ -243,7 +239,7 @@ def test_independent_polarity_rejection_stops_without_reanswering() -> None:
     assert len(proposal_llm.calls) == len(audit_llm.calls) == 1
     trace = bundle.metadata["semantic_proposition_verifier"]
     assert trace["audit_status"] == "rejected"
-    assert trace["audit_reason"] == "polarity_contradiction_detected"
+    assert trace["audit_reason"] == "local_semantic_relation_explicit_contradiction"
     assert trace.get("proof_repair_count", 0) == 0
     assert trace.get("proof_reaudit_count", 0) == 0
     transition = trace["recovery_transitions"][-1]
@@ -253,28 +249,29 @@ def test_independent_polarity_rejection_stops_without_reanswering() -> None:
     assert transition["proposition_binding_digest_changed"] is False
     rejected = trace["rejected_transactions"][0]
     assert rejected["typed_conclusion"]["polarity"] == "yes"
-    assert rejected["polarity_contradiction_check"]["status"] == (
-        "contradiction_detected"
-    )
-    assert rejected["polarity_contradiction_check"]["independent_from_models"] is True
+    constraint = rejected["independent_semantic_constraint"]
+    assert constraint["status"] == "rejected"
+    assert constraint["reason"] == "local_semantic_relation_explicit_contradiction"
+    assert constraint["premise_analyses"][0]["status"] == "explicit_contradiction"
+    assert constraint["independent_from_models"] is True
 
 
-def test_runtime_scope_rejection_stops_when_semantic_state_is_unchanged() -> None:
+def test_local_actor_scope_rejection_stops_when_semantic_state_is_unchanged() -> None:
     question = "Does the model have attention?"
     request = _request(question)
-    prior_text = "Prior work uses attention in its baseline system."
-    current_text = "The authors use attention in the current system."
+    prior_text = "Prior work has an attention mechanism in its baseline system."
+    current_text = "The authors' current system has an attention mechanism."
     verifier, proposal_llm, audit_llm = _release_verifier(
         [
             _proposal(
                 request,
                 "E1:S1",
-                "prior work uses attention in its baseline system",
+                "prior work has an attention mechanism in its baseline system",
             ),
             _proposal(
                 request,
                 "E2:S1",
-                "the authors use attention in the current system",
+                "the authors' current system has an attention mechanism",
             ),
         ],
         [
@@ -295,15 +292,12 @@ def test_runtime_scope_rejection_stops_when_semantic_state_is_unchanged() -> Non
     assert result is not None and result["verdict"] == "insufficient_evidence"
     assert result["candidate_verification_audit"]["status"] == "failed"
     trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["runtime_contract_rejection_count"] == 1
-    assert trace["audit_verified_but_runtime_rejected_count"] == 1
-    assert trace["runtime_authority_rejection_reason"] == (
-        "semantic_premise_scope_rejected"
-    )
+    assert trace["audit_semantic_rejection"] is True
+    assert trace["audit_reason"] == "local_semantic_slot_span_unbound"
     transition = next(
         value
         for value in trace["recovery_transitions"]
-        if value["from"] == "runtime_authority_contract"
+        if value["from"] == "independent_semantic_constraint"
     )
     assert transition["to"] == "stop_without_reverify"
     assert transition["outcome"] == "recovery_no_progress"
@@ -317,11 +311,11 @@ def test_runtime_scope_rejection_stops_when_semantic_state_is_unchanged() -> Non
 def test_terminal_runtime_rejection_remains_a_bound_insufficient_response() -> None:
     question = "Does the model have attention?"
     request = _request(question)
-    evidence_text = "Prior work uses attention in its baseline system."
+    evidence_text = "Prior work has an attention mechanism in its baseline system."
     rejected = _proposal(
         request,
         "E1:S1",
-        "prior work uses attention in its baseline system",
+        "prior work has an attention mechanism in its baseline system",
     )
     verifier, proposal_llm, audit_llm = _release_verifier(
         [rejected, rejected],

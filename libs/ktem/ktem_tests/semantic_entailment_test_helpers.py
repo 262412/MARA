@@ -10,6 +10,9 @@ from ktem.docqa.question_proposition import (
     typed_conclusion,
 )
 from ktem.docqa.semantic_entailment_audit import semantic_entailment_audit_attestation
+from ktem.docqa.semantic_relation_clause_validation import (
+    semantic_relation_clause_analysis,
+)
 
 
 def audited_verdict(
@@ -36,6 +39,7 @@ def audited_verdict(
     response["typed_conclusion"] = conclusion.as_dict()
     _bind_test_premises(
         response["premises"],
+        proposition,
         canonical_bindings,
         evidence_relation,
         applicable_slots=applicable_slots,
@@ -66,6 +70,7 @@ def audited_verdict(
 
 def _bind_test_premises(
     premises: list[dict[str, Any]],
+    proposition: Any,
     canonical_bindings: dict[str, str],
     evidence_relation: str,
     *,
@@ -79,10 +84,11 @@ def _bind_test_premises(
         premise.setdefault("span_selector", f"test:{evidence_id}:S{index}")
         premise.setdefault("span_start", start)
         premise.setdefault("span_end", start + len(quote))
-        proposition_slots = _test_proposition_slots(
-            index,
-            len(premises),
-            applicable_slots,
+        proposition_slots = _locally_supported_slots(
+            premise,
+            proposition,
+            applicable_slots=applicable_slots,
+            evidence_relation=evidence_relation,
         )
         premise.setdefault("binds_proposition_slots", proposition_slots)
         premise["proposition_slot_bindings"] = {
@@ -93,18 +99,26 @@ def _bind_test_premises(
         offsets[evidence_id] = start + len(quote) + 1
 
 
-def _test_proposition_slots(
-    index: int,
-    premise_count: int,
+def _locally_supported_slots(
+    premise: dict[str, Any],
+    proposition: Any,
+    *,
     applicable_slots: tuple[str, ...],
+    evidence_relation: str,
 ) -> list[str]:
-    if premise_count == 1:
-        return list(applicable_slots)
-    if index == 1:
-        return [slot for slot in ("actor", "predicate") if slot in applicable_slots]
-    if index == 2:
-        return [slot for slot in ("object", "quantifier") if slot in applicable_slots]
-    return [slot for slot in ("object",) if slot in applicable_slots]
+    supported = []
+    for slot in applicable_slots:
+        analysis = semantic_relation_clause_analysis(
+            {
+                **premise,
+                "binds_proposition_slots": [slot],
+                "evidence_relation": evidence_relation,
+            },
+            proposition,
+        )
+        if analysis.get("joint_relation_clause_bound") is True:
+            supported.append(slot)
+    return supported
 
 
 def _test_audit_result(premises: list[dict[str, Any]]) -> dict[str, Any]:

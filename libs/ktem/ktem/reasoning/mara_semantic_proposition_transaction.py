@@ -13,9 +13,9 @@ from ktem.docqa.semantic_premise_proof_validation import (
     semantic_entailment_premise_validation_reason,
 )
 
+from .mara_semantic_audit_execution import execute_semantic_entailment_audit
 from .mara_semantic_candidate_policy import (
     candidate_bound_insufficient_result,
-    candidate_bound_semantic_audit_prompt,
     candidate_from_prompt,
 )
 from .mara_semantic_conclusion_binding import (
@@ -45,7 +45,6 @@ from .mara_semantic_proposition_stages import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
     ParsedSemanticStage,
     audit_diagnostics,
-    audit_stage,
     invalid_response_reason,
     proposal_diagnostics,
     proposal_stage,
@@ -58,7 +57,6 @@ from .mara_semantic_recovery_state import changed_binding_reaudit_transition
 from .mara_semantic_transaction_support import (
     audit_prompt_failure,
     bind_semantic_runtime_fields,
-    semantic_audit_input_identity,
     transaction_debug,
     transaction_result,
 )
@@ -255,31 +253,12 @@ def _audit_transaction(
     conclusion = typed_conclusion(context.proposition, str(value.get("verdict") or ""))
     value["typed_conclusion"] = conclusion.as_dict()
     try:
-        prompt = candidate_bound_semantic_audit_prompt(context, conclusion, value)
+        local_constraint, audit = execute_semantic_entailment_audit(
+            context, value, conclusion
+        )
     except ValueError:
         return audit_prompt_failure(context, proposal, diagnostics)
-    audit = audit_stage(
-        context.audit_llm,
-        prompt,
-        len(value.get("premises") or []),
-        seed=context.seed + 1,
-        premise_slot_expectations={
-            f"P{index}": tuple(
-                str(slot) for slot in premise.get("binds_proposition_slots") or []
-            )
-            for index, premise in enumerate(value.get("premises") or [], start=1)
-            if isinstance(premise, dict)
-        },
-        premise_slot_evidence={
-            f"P{index}": {
-                str(slot): str(premise.get("quote") or "")
-                for slot in premise.get("binds_proposition_slots") or []
-            }
-            for index, premise in enumerate(value.get("premises") or [], start=1)
-            if isinstance(premise, dict)
-        },
-        semantic_identity=semantic_audit_input_identity(context, value, conclusion),
-    )
+    diagnostics["independent_semantic_constraint"] = local_constraint
     diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
     local_consistency = record_local_premise_consistency(
         diagnostics,
@@ -292,7 +271,19 @@ def _audit_transaction(
         audit,
         diagnostics,
         local_consistency=local_consistency,
+        local_constraint=local_constraint,
     )
+    if local_constraint.get("status") != "passed":
+        return stop_without_reverify(
+            context,
+            proposal,
+            diagnostics,
+            result,
+            reason=str(
+                local_constraint.get("reason") or "local_semantic_relation_rejected"
+            ),
+            source="independent_semantic_constraint",
+        )
     if (
         allow_proof_repair
         and diagnostics.get("audit_reason") == "polarity_contradiction_detected"
@@ -328,6 +319,7 @@ def _audit_result(
     diagnostics: dict[str, Any],
     *,
     local_consistency: dict[str, Any],
+    local_constraint: dict[str, Any],
 ) -> SemanticPropositionTransactionResult:
     debug_trace = transaction_debug(context, proposal, audit)
     failure = _audit_failure_result(
@@ -337,6 +329,7 @@ def _audit_result(
         diagnostics,
         debug_trace,
         local_consistency=local_consistency,
+        local_constraint=local_constraint,
     )
     if failure is not None:
         return failure
@@ -368,6 +361,7 @@ def _audit_result(
         conclusion=typed_conclusion(context.proposition, str(value["verdict"])),
         auditor_relationship=context.auditor_relationship,
         audit_result=audit.value,
+        independent_semantic_constraint=local_constraint,
     )
     binding_reason = conclusion_audit_binding_reason(
         context.question,
@@ -405,6 +399,7 @@ def _audit_failure_result(
     debug_trace: dict[str, Any] | None,
     *,
     local_consistency: dict[str, Any],
+    local_constraint: dict[str, Any],
 ) -> SemanticPropositionTransactionResult | None:
     if audit.provider_failure_reason:
         return transaction_result(
@@ -449,6 +444,10 @@ def _audit_failure_result(
         if local_consistency.get("status") == "auditor_internal_inconsistency"
         else semantic_entailment_rejection_reason(audit.value)
     )
+    if not rejection_reason and local_constraint.get("status") != "passed":
+        rejection_reason = str(
+            local_constraint.get("reason") or "local_semantic_relation_rejected"
+        )
     if not rejection_reason:
         return None
     diagnostics["audit_reason"] = rejection_reason
@@ -491,6 +490,9 @@ def _audit_rejection_result(
             raw_audit_result=audit.value or {},
             local_premise_consistency=dict(
                 diagnostics.get("local_premise_consistency") or {}
+            ),
+            independent_semantic_constraint=dict(
+                diagnostics.get("independent_semantic_constraint") or {}
             ),
         )
     )

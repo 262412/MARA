@@ -53,6 +53,7 @@ def semantic_entailment_audit_prompt(
     *,
     original_candidate: str = "",
     candidate_judgment: str = "",
+    premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> str:
     payload = {
         "original_candidate": str(original_candidate or "").strip().casefold(),
@@ -71,10 +72,11 @@ def semantic_entailment_audit_prompt(
                 "proposition_slot_bindings": dict(
                     premise.get("proposition_slot_bindings") or {}
                 ),
-                "proposition_slot_evidence_refs": {
-                    str(slot): f"P{index}:{slot}"
-                    for slot in premise.get("binds_proposition_slots") or []
-                },
+                "proposition_slot_evidence_refs": _prompt_slot_evidence(
+                    f"P{index}",
+                    premise.get("binds_proposition_slots") or [],
+                    premise_slot_evidence=premise_slot_evidence,
+                ),
                 "evidence_relation": str(premise.get("evidence_relation") or ""),
             }
             for index, premise in enumerate(premises, start=1)
@@ -90,11 +92,28 @@ def semantic_entailment_audit_prompt(
     return prompt
 
 
+def _prompt_slot_evidence(
+    label: str,
+    slots: Collection[str],
+    *,
+    premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None,
+) -> dict[str, Any]:
+    evidence = dict((premise_slot_evidence or {}).get(label) or {})
+    return {
+        str(slot): (
+            _normalized_slot_evidence(label, str(slot), evidence.get(str(slot)))
+            if premise_slot_evidence is not None
+            else {"evidence_ref": f"{label}:{slot}"}
+        )
+        for slot in slots
+    }
+
+
 def _premise_check_schema(
     label: str,
     *,
     expected_slots: Collection[str] | None,
-    premise_slot_evidence: Mapping[str, Mapping[str, str]] | None,
+    premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None,
 ) -> dict[str, Any]:
     strict_slot_checks = expected_slots is not None
     properties: dict[str, Any] = {
@@ -110,6 +129,10 @@ def _premise_check_schema(
     if strict_slot_checks:
         slots = tuple(str(slot) for slot in expected_slots or ())
         evidence = dict((premise_slot_evidence or {}).get(label) or {})
+        normalized_evidence = {
+            slot: _normalized_slot_evidence(label, slot, evidence.get(slot))
+            for slot in slots
+        }
         if (
             not slots
             or len(set(slots)) != len(slots)
@@ -118,7 +141,10 @@ def _premise_check_schema(
                 for slot in slots
             )
             or set(evidence) != set(slots)
-            or any(not str(evidence.get(slot) or "").strip() for slot in slots)
+            or any(
+                not str(normalized_evidence[slot].get("text") or "").strip()
+                for slot in slots
+            )
         ):
             raise ValueError("auditor_slot_evidence_contract_invalid")
         properties["proposition_slot_checks"] = {
@@ -130,7 +156,7 @@ def _premise_check_schema(
                         "binding_valid": {"type": "boolean"},
                         "evidence_ref": {
                             "type": "string",
-                            "enum": [f"{label}:{slot}"],
+                            "enum": [normalized_evidence[slot]["evidence_ref"]],
                         },
                     },
                     "required": ["binding_valid", "evidence_ref"],
@@ -157,7 +183,7 @@ def semantic_entailment_audit_response_format(
     premise_labels: list[str],
     *,
     premise_slot_expectations: Mapping[str, Collection[str]] | None = None,
-    premise_slot_evidence: Mapping[str, Mapping[str, str]] | None = None,
+    premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if (
         not premise_labels
@@ -242,7 +268,7 @@ def _project_slot_checks(
     label: str,
     *,
     premise_slot_expectations: Mapping[str, Collection[str]],
-    premise_slot_evidence: Mapping[str, Mapping[str, str]] | None,
+    premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None,
 ) -> tuple[list[dict[str, Any]] | None, str]:
     expected_slots = tuple(
         str(slot) for slot in premise_slot_expectations.get(str(label), ())
@@ -258,22 +284,33 @@ def _project_slot_checks(
     projected: list[dict[str, Any]] = []
     for slot in expected_slots:
         slot_check = raw_checks.get(slot)
-        evidence_text = str(expected_evidence.get(slot) or "")
+        evidence = _normalized_slot_evidence(
+            str(label), slot, expected_evidence.get(slot)
+        )
+        evidence_text = str(evidence.get("text") or "")
         if (
             not isinstance(slot_check, dict)
             or set(slot_check) != {"binding_valid", "evidence_ref"}
             or not isinstance(slot_check.get("binding_valid"), bool)
-            or slot_check.get("evidence_ref") != f"{label}:{slot}"
+            or slot_check.get("evidence_ref") != evidence.get("evidence_ref")
             or not evidence_text.strip()
         ):
             return None, "premise_check_slot_evidence_invalid"
-        projected.append(
-            {
-                "slot": slot,
-                "binding_valid": slot_check["binding_valid"],
-                "evidence_text": evidence_text,
-            }
-        )
+        projected_check = {
+            "slot": slot,
+            "binding_valid": slot_check["binding_valid"],
+            "evidence_text": evidence_text,
+        }
+        if isinstance(expected_evidence.get(slot), Mapping):
+            projected_check.update(
+                evidence_ref=str(evidence["evidence_ref"]),
+                span_start=int(evidence["span_start"]),
+                span_end=int(evidence["span_end"]),
+                clause_ref=str(evidence["clause_ref"]),
+                clause_start=int(evidence["clause_start"]),
+                clause_end=int(evidence["clause_end"]),
+            )
+        projected.append(projected_check)
     return projected, ""
 
 
@@ -282,7 +319,7 @@ def _parse_premise_checks(
     premise_labels: list[str],
     *,
     premise_slot_expectations: Mapping[str, Collection[str]] | None,
-    premise_slot_evidence: Mapping[str, Mapping[str, str]] | None,
+    premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None,
 ) -> tuple[dict[str, dict[str, Any]] | None, str]:
     if not isinstance(checks, dict) or set(checks) != set(premise_labels):
         return None, "premise_checks_invalid"
@@ -339,7 +376,7 @@ def parse_semantic_entailment_audit(
     *,
     premise_labels: list[str],
     premise_slot_expectations: Mapping[str, Collection[str]] | None = None,
-    premise_slot_evidence: Mapping[str, Mapping[str, str]] | None = None,
+    premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> SemanticEntailmentAuditParse:
     try:
         payload = json.loads(response_text)
@@ -395,6 +432,55 @@ def parse_semantic_entailment_audit(
             "conclusion_check": dict(conclusion_check),
         }
     )
+
+
+def _normalized_slot_evidence(
+    label: str,
+    slot: str,
+    value: Any,
+) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        evidence = dict(value)
+        required = {
+            "text",
+            "span_start",
+            "span_end",
+            "clause_ref",
+            "clause_start",
+            "clause_end",
+            "evidence_ref",
+        }
+        if set(evidence) != required:
+            return {}
+        try:
+            start = int(evidence["span_start"])
+            end = int(evidence["span_end"])
+            clause_start = int(evidence["clause_start"])
+            clause_end = int(evidence["clause_end"])
+        except (TypeError, ValueError):
+            return {}
+        if (
+            not str(evidence.get("text") or "").strip()
+            or evidence.get("evidence_ref") != f"{label}:{slot}"
+            or start < clause_start
+            or end <= start
+            or end > clause_end
+        ):
+            return {}
+        return {
+            "evidence_ref": str(evidence["evidence_ref"]),
+            "text": str(evidence["text"]),
+            "span_start": start,
+            "span_end": end,
+            "clause_ref": str(evidence["clause_ref"]),
+            "clause_start": clause_start,
+            "clause_end": clause_end,
+        }
+    text = str(value or "")
+    return {
+        "evidence_ref": f"{label}:{slot}",
+        "text": text,
+    }
 
 
 def semantic_entailment_rejection_reason(audit: dict[str, Any]) -> str:
