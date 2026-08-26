@@ -28,6 +28,7 @@ from benchmark.terminal_outcome_contract import (
     terminal_outcome_summary_fields,
 )
 from benchmark.terminal_outcome_replay import replay_terminal_outcome_adapter
+from benchmark.verifier_observability import prediction_verifier_observability
 from scripts.slurm.validate_contract_smoke import HARD_GATES
 
 
@@ -149,12 +150,18 @@ def test_error_rows_carry_complete_mutually_exclusive_runtime_outcomes() -> None
 
 def test_operational_failure_remains_in_denominator_and_scores_zero() -> None:
     prediction = _error(RuntimeError("backend failed"))
+    prediction["predicted_answer"] = "unanswerable"
 
     metrics = score_prediction(prediction)
+    prediction["metrics"] = metrics
+    observability = prediction_verifier_observability(prediction)
 
     assert metrics["f1"] == 0.0
+    assert metrics["false_abstention"] == 0.0
+    assert observability["false_abstention"] == 0
+    assert observability["true_abstention"] == 0
     assert prediction["gold_answers"] == ["yes"]
-    assert prediction["predicted_answer"] == ""
+    assert prediction["predicted_answer"] == "unanswerable"
     assert prediction["terminal_outcome"] == "execution_failed"
 
 

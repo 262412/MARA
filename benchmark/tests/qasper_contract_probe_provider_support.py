@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -23,6 +24,19 @@ def _run_probe(
 
 def _normalize_text(value: object) -> str:
     return " ".join(str(value or "").casefold().split())
+
+
+def _candidate_selector_refs(text: str) -> set[str]:
+    refs: set[str] = set()
+    for serialized in re.findall(r"(?m)^selector_options=(\[[^\n]*\])$", text):
+        try:
+            options = json.loads(serialized)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("provider candidate selector JSON invalid") from exc
+        for option in options if isinstance(options, list) else []:
+            if isinstance(option, dict) and str(option.get("evidence_ref") or ""):
+                refs.add(str(option["evidence_ref"]))
+    return refs
 
 
 def _evidence_signal(question: str, evidence_text: str) -> str:

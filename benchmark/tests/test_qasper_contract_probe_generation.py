@@ -11,6 +11,7 @@ import pytest
 from benchmark.tests.qasper_contract_probe_provider_support import (  # noqa: F401
     _audit_entails_proposal,
     _audit_payload,
+    _candidate_selector_refs,
     _evidence_signal,
     _normalize_text,
     _proposal_payload,
@@ -76,9 +77,12 @@ class _Provider:
                 "CANDIDATE EVIDENCE-SET OBSERVATION:",
                 "candidate evidence observation",
             )
-            spans = observation.get("evidence_set_spans")
-            if not isinstance(spans, list) or not spans:
+            selected_refs = observation.get("selected_refs")
+            available_refs = _candidate_selector_refs(text)
+            if not isinstance(selected_refs, list) or not selected_refs:
                 raise RuntimeError("provider candidate evidence span missing")
+            if not set(map(str, selected_refs)) <= available_refs:
+                raise RuntimeError("provider candidate evidence ref missing")
             signal = str(observation.get("polarity_signal") or "").casefold()
             candidate = {
                 "support": "yes",
