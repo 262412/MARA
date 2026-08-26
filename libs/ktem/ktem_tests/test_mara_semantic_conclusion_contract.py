@@ -78,6 +78,15 @@ def test_release_mode_rejects_same_instance_conclusion_auditor() -> None:
     )
 
 
+def test_release_mode_rejects_distinct_instance_of_same_auditor_model() -> None:
+    conclusion, audit = _audit("distinct_instance_same_model")
+
+    assert (
+        conclusion_audit_validation_reason(audit, conclusion, release_mode=True)
+        == "release_conclusion_auditor_not_independent"
+    )
+
+
 def test_incomplete_question_proposition_is_repaired_before_conclusion() -> None:
     question = "Does the model have attention?"
 

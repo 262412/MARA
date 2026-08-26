@@ -101,7 +101,7 @@ def run_semantic_proposition_transaction(
         audit_model=audit_model,
     )
     diagnostics = _transaction_diagnostics(relationship, semantic_pack_digest)
-    if release_mode and relationship == "same_instance":
+    if release_mode and relationship != "distinct_model":
         diagnostics["audit_reason"] = "release_conclusion_auditor_not_independent"
         return transaction_result(
             None,

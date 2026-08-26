@@ -37,7 +37,9 @@ def semantic_auditor_relationship(
 ) -> str:
     if proposal_llm is audit_llm:
         return "same_instance"
-    if proposal_model == audit_model:
+    normalized_proposal_model = proposal_model.strip().rstrip("/").casefold()
+    normalized_audit_model = audit_model.strip().rstrip("/").casefold()
+    if normalized_proposal_model == normalized_audit_model:
         return "distinct_instance_same_model"
     return "distinct_model"
 

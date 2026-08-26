@@ -26,6 +26,32 @@ def _rows() -> list[dict]:
     ]
 
 
+def _required_slot_fixture() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    prediction = _qasper_debug_prediction("example-1", "controller_auto")
+    metadata = prediction["evidence_metadata"]
+    verifier = metadata["semantic_proposition_verifier"]
+    authority = metadata["semantic_proposition_authority"]
+    audit = verifier["candidate_verification_audit"]
+    return verifier, audit, authority
+
+
+def _refresh_proposition_evidence_digest(authority: dict[str, Any]) -> None:
+    payload = {
+        "evidence_relation": authority["evidence_relation"],
+        "proposition_slot_bindings": authority["proposition_slot_bindings"],
+        "proposition_slot_evidence_refs": authority["proposition_slot_evidence_refs"],
+        "proposition_binding_evidence_set_refs": authority[
+            "proposition_binding_evidence_set_refs"
+        ],
+        "not_applicable_proposition_slots": authority[
+            "not_applicable_proposition_slots"
+        ],
+    }
+    authority["proposition_evidence_set_digest"] = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 def test_lane_split_keeps_contract_probes_out_of_quality_rows() -> None:
     rows = _rows()
     for row in rows[:3]:
@@ -374,6 +400,15 @@ def test_audit_relation_is_exactly_candidate_bound() -> None:
 
 def test_required_slot_gate_requires_one_exact_applicable_slot_evidence_set() -> None:
     evidence_refs = ["span:paper:s1#quote:0:30"]
+    slot_spans = {
+        "actor": (0, 9, "The paper"),
+        "predicate": (9, 13, "uses"),
+        "object": (13, 23, "the method"),
+    }
+    slot_evidence_refs = {
+        slot: [f"{evidence_refs[0]}#slot:{slot}:{start}:{end}"]
+        for slot, (start, end, _text) in slot_spans.items()
+    }
     binding_payload = {
         "evidence_relation": "proposition_support",
         "proposition_slot_bindings": {
@@ -382,7 +417,7 @@ def test_required_slot_gate_requires_one_exact_applicable_slot_evidence_set() ->
             "object": "the method",
         },
         "proposition_slot_evidence_refs": {
-            slot: evidence_refs for slot in ("actor", "predicate", "object")
+            slot: refs for slot, refs in slot_evidence_refs.items()
         },
         "proposition_binding_evidence_set_refs": evidence_refs,
         "not_applicable_proposition_slots": ["quantifier"],
@@ -393,6 +428,21 @@ def test_required_slot_gate_requires_one_exact_applicable_slot_evidence_set() ->
         "required_slot_ids": ["support:boolean_proposition"],
         "verified_support_slot_ids": ["support:boolean_proposition"],
         "required_proposition_slots": ["actor", "predicate", "object"],
+        "proposition_slot_evidence": {
+            evidence_refs[0]: {
+                slot: {
+                    "evidence_ref": refs[0],
+                    "text": text,
+                    "span_start": start,
+                    "span_end": end,
+                    "clause_ref": "C1",
+                    "clause_start": 0,
+                    "clause_end": 30,
+                }
+                for slot, refs in slot_evidence_refs.items()
+                for start, end, text in (slot_spans[slot],)
+            }
+        },
         "proposition_evidence_set_digest": hashlib.sha256(
             json.dumps(
                 binding_payload,
@@ -418,3 +468,97 @@ def test_required_slot_gate_requires_one_exact_applicable_slot_evidence_set() ->
         if key != "object"
     }
     assert _required_slot_state_unverified(verifier, audit, metadata) is True
+
+
+def test_required_slot_gate_rejects_a_child_with_the_wrong_parent() -> None:
+    verifier, audit, authority = _required_slot_fixture()
+    parent = authority["proposition_binding_evidence_set_refs"][0]
+    authority["proposition_slot_evidence_refs"]["actor"][
+        0
+    ] = "span:paper:s2#quote:0:30#slot:actor:0:9"
+    authority["proposition_slot_evidence"][parent]["actor"]["evidence_ref"] = authority[
+        "proposition_slot_evidence_refs"
+    ]["actor"][0]
+    _refresh_proposition_evidence_digest(authority)
+
+    assert (
+        _required_slot_state_unverified(
+            verifier, audit, {"semantic_proposition_authority": authority}
+        )
+        is True
+    )
+
+
+def test_required_slot_gate_rejects_an_out_of_bounds_child_span() -> None:
+    verifier, audit, authority = _required_slot_fixture()
+    parent = authority["proposition_binding_evidence_set_refs"][0]
+    child_ref = f"{parent}#slot:actor:0:31"
+    authority["proposition_slot_evidence_refs"]["actor"][0] = child_ref
+    authority["proposition_slot_evidence"][parent]["actor"].update(
+        evidence_ref=child_ref,
+        text="x" * 31,
+        span_end=31,
+    )
+    _refresh_proposition_evidence_digest(authority)
+
+    assert (
+        _required_slot_state_unverified(
+            verifier, audit, {"semantic_proposition_authority": authority}
+        )
+        is True
+    )
+
+
+def test_required_slot_gate_rejects_a_slot_name_mismatch() -> None:
+    verifier, audit, authority = _required_slot_fixture()
+    parent = authority["proposition_binding_evidence_set_refs"][0]
+    authority["proposition_slot_evidence_refs"]["actor"][
+        0
+    ] = f"{parent}#slot:predicate:0:9"
+    _refresh_proposition_evidence_digest(authority)
+
+    assert (
+        _required_slot_state_unverified(
+            verifier, audit, {"semantic_proposition_authority": authority}
+        )
+        is True
+    )
+
+
+def test_required_slot_gate_rejects_slot_text_length_tampering() -> None:
+    verifier, audit, authority = _required_slot_fixture()
+    parent = authority["proposition_binding_evidence_set_refs"][0]
+    authority["proposition_slot_evidence"][parent]["actor"]["text"] = "short"
+    _refresh_proposition_evidence_digest(authority)
+
+    assert (
+        _required_slot_state_unverified(
+            verifier, audit, {"semantic_proposition_authority": authority}
+        )
+        is True
+    )
+
+
+def test_required_slot_gate_rejects_child_offset_tampering() -> None:
+    verifier, audit, authority = _required_slot_fixture()
+    parent = authority["proposition_binding_evidence_set_refs"][0]
+    authority["proposition_slot_evidence"][parent]["actor"]["span_start"] = 1
+
+    assert (
+        _required_slot_state_unverified(
+            verifier, audit, {"semantic_proposition_authority": authority}
+        )
+        is True
+    )
+
+
+def test_required_slot_gate_rejects_a_tampered_evidence_set_digest() -> None:
+    verifier, audit, authority = _required_slot_fixture()
+    authority["proposition_evidence_set_digest"] = "tampered"
+
+    assert (
+        _required_slot_state_unverified(
+            verifier, audit, {"semantic_proposition_authority": authority}
+        )
+        is True
+    )

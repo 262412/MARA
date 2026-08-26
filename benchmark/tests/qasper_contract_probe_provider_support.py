@@ -3,6 +3,23 @@ from __future__ import annotations
 import re
 from typing import Any
 
+_AUDITOR_BASE_URL = "http://auditor.invalid/v1"
+_AUDITOR_MODEL = "heterogeneous-auditor-model"
+
+
+def _run_probe(
+    base_url: str, model: str, *, model_factory: Any
+) -> list[dict[str, Any]]:
+    from scripts.slurm import qasper_debug_contract_probe as probe
+
+    return probe.run_live_probes(
+        base_url,
+        model,
+        auditor_base_url=_AUDITOR_BASE_URL,
+        auditor_model=_AUDITOR_MODEL,
+        model_factory=model_factory,
+    )
+
 
 def _normalize_text(value: object) -> str:
     return " ".join(str(value or "").casefold().split())

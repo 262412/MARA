@@ -400,6 +400,30 @@ def _debug_semantic_authority(verdict: str) -> dict[str, Any]:
     evidence_relation = (
         "explicit_contradiction" if verdict == "no" else "proposition_support"
     )
+    slot_spans = {
+        "actor": (0, 9, "The paper"),
+        "predicate": (9, 13, "uses"),
+        "object": (13, 23, "the method"),
+    }
+    slot_evidence_refs = {
+        slot: [f"{evidence_refs[0]}#slot:{slot}:{start}:{end}"]
+        for slot, (start, end, _text) in slot_spans.items()
+    }
+    slot_evidence = {
+        evidence_refs[0]: {
+            slot: {
+                "evidence_ref": refs[0],
+                "text": text,
+                "span_start": start,
+                "span_end": end,
+                "clause_ref": "C1",
+                "clause_start": 0,
+                "clause_end": 30,
+            }
+            for slot, refs in slot_evidence_refs.items()
+            for start, end, text in (slot_spans[slot],)
+        }
+    }
     payload = {
         "evidence_relation": evidence_relation,
         "proposition_slot_bindings": {
@@ -407,9 +431,7 @@ def _debug_semantic_authority(verdict: str) -> dict[str, Any]:
             "predicate": "use",
             "object": "the method",
         },
-        "proposition_slot_evidence_refs": {
-            slot: evidence_refs for slot in ("actor", "predicate", "object")
-        },
+        "proposition_slot_evidence_refs": slot_evidence_refs,
         "proposition_binding_evidence_set_refs": evidence_refs,
         "not_applicable_proposition_slots": ["quantifier"],
     }
@@ -420,6 +442,7 @@ def _debug_semantic_authority(verdict: str) -> dict[str, Any]:
         "required_slot_ids": ["support:boolean_proposition"],
         "verified_support_slot_ids": ["support:boolean_proposition"],
         "required_proposition_slots": ["actor", "predicate", "object"],
+        "proposition_slot_evidence": slot_evidence,
         **payload,
         "proposition_evidence_set_digest": _fixture_digest(payload),
     }

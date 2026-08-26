@@ -14,6 +14,7 @@ from benchmark.tests.qasper_contract_probe_provider_support import (  # noqa: F4
     _evidence_signal,
     _normalize_text,
     _proposal_payload,
+    _run_probe,
     _schema_body,
     _schema_branch,
     _schema_enum,
@@ -475,10 +476,8 @@ def test_controlled_proposal_identity_gate_rejects_schema_mismatch() -> None:
 
 
 def test_live_probe_uses_production_parser_and_auditor() -> None:
-    rows = probe.run_live_probes(
-        "http://provider.invalid/v1",
-        "contract-probe-model",
-        model_factory=_factory,
+    rows = _run_probe(
+        "http://provider.invalid/v1", "contract-probe-model", model_factory=_factory
     )
 
     _assert_live_state_coverage(rows)
@@ -507,9 +506,7 @@ def test_provider_state_mismatch_fails_closed() -> None:
         return WrongProvider()
 
     with pytest.raises(RuntimeError, match="provider observed|expected candidate"):
-        probe.run_live_probes(
-            "http://provider.invalid/v1", "model", model_factory=factory
-        )
+        _run_probe("http://provider.invalid/v1", "model", model_factory=factory)
 
 
 def test_provider_rejects_missing_candidate_or_evidence_from_messages() -> None:
@@ -567,11 +564,9 @@ def test_controlled_fault_requires_actual_auditor_rejection() -> None:
         del case_id, kwargs
         return _Provider(reject_fault=False)
 
-    with pytest.raises(RuntimeError, match="provider observed"):
-        probe.run_live_probes(
-            "http://provider.invalid/v1",
-            "model",
-            model_factory=passing_fault_factory,
+    with pytest.raises(RuntimeError, match="accepted semantic auditor rejection"):
+        _run_probe(
+            "http://provider.invalid/v1", "model", model_factory=passing_fault_factory
         )
 
 
@@ -584,10 +579,8 @@ def test_probe_write_replaces_artifact_without_duplicate_rows(tmp_path: Path) ->
 
 
 def test_live_stage_probe_rows_pass_formal_provider_audit(tmp_path: Path) -> None:
-    rows = probe.run_live_probes(
-        "http://provider.invalid/v1",
-        "contract-probe-model",
-        model_factory=_factory,
+    rows = _run_probe(
+        "http://provider.invalid/v1", "contract-probe-model", model_factory=_factory
     )
     predictions = tmp_path / "contract_probe_predictions.jsonl"
     audit_path = tmp_path / "contract_probe_audit.json"

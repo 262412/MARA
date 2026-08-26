@@ -431,7 +431,7 @@ def _validated_auditor(
         "distinct_model",
     }:
         return {}, "semantic_entailment_auditor_attestation_invalid"
-    if release_mode and relationship == "same_instance":
+    if release_mode and relationship != "distinct_model":
         return {}, "release_conclusion_auditor_not_independent"
     return auditor, ""
 

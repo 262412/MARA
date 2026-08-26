@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.question_proposition import build_question_proposition, typed_conclusion
 from ktem.reasoning.mara_semantic_entailment_audit import (
     semantic_entailment_audit_prompt,
+)
+from ktem.reasoning.mara_semantic_proposition_verifier import (
+    build_semantic_proposition_verifier,
 )
 
 from .test_mara_semantic_proposition_audit import (
@@ -18,6 +22,28 @@ from .test_mara_semantic_proposition_audit import (
     _SequenceLLM,
     _verifier,
 )
+
+
+def test_release_mode_same_model_alias_fails_before_model_call() -> None:
+    proposal_llm = _SequenceLLM([_response(_proposal())])
+    audit_llm = _SequenceLLM([_response(_audit())])
+    audit_llm.model_name = " Semantic-Test-Model/ "
+    bundle = EvidenceBundle(route="doc_text", items=_items())
+    verifier = build_semantic_proposition_verifier(
+        SimpleNamespace(
+            answering_pipeline=SimpleNamespace(llm=proposal_llm),
+            semantic_proposition_release_mode=True,
+        ),
+        audit_llm=audit_llm,
+    )
+
+    assert verifier is not None
+    assert verifier(_request(), QUESTION, "unanswerable", bundle) is None
+    assert proposal_llm.calls == []
+    assert audit_llm.calls == []
+    trace = bundle.metadata["semantic_proposition_verifier"]
+    assert trace["auditor_relationship"] == "distinct_instance_same_model"
+    assert trace["reason"] == "release_conclusion_auditor_not_independent"
 
 
 def test_auditor_prompt_binds_original_candidate_judgment_and_polarity() -> None:

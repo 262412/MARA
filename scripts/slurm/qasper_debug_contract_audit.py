@@ -10,6 +10,17 @@ from scripts.slurm.qasper_debug_contract_support import (
     _failed_auditor_safe_abstention,
     _mapping,
 )
+from scripts.slurm.qasper_slot_reference_audit import (
+    _canonical_parent_span_ref,
+    _canonical_slot_span_ref,
+    _child_span_contained,
+    _child_span_identity,
+    _parent_span_identity,
+    _parse_parent_span_ref,
+    _parse_slot_span_ref,
+    _parsed_parent_span_refs,
+    _projected_slot_evidence_children,
+)
 
 _PROPOSITION_BINDING_SLOTS = {"actor", "predicate", "object", "quantifier"}
 
@@ -270,12 +281,6 @@ def _proposition_binding_state_unverified(
     not_applicable = {"quantifier"} if quantifier == "none" else set()
     required_proposition_slots = _PROPOSITION_BINDING_SLOTS - not_applicable
     bindings = _mapping(authority.get("proposition_slot_bindings"))
-    raw_slot_refs = _mapping(authority.get("proposition_slot_evidence_refs"))
-    evidence_set = _string_set(authority.get("proposition_binding_evidence_set_refs"))
-    slot_refs = {
-        slot: _string_set(raw_slot_refs.get(slot))
-        for slot in required_proposition_slots
-    }
     verdict = str(verifier.get("verdict") or "").strip().casefold()
     expected_relation = {
         "yes": "proposition_support",
@@ -289,25 +294,114 @@ def _proposition_binding_state_unverified(
         != not_applicable
         or set(bindings) != required_proposition_slots
         or any(not str(bindings[slot] or "").strip() for slot in bindings)
-        or set(raw_slot_refs) != required_proposition_slots
-        or any(not refs for refs in slot_refs.values())
-        or not evidence_set
-        or any(not refs <= evidence_set for refs in slot_refs.values())
-        or set().union(*slot_refs.values()) != evidence_set
         or expected_relation is None
         or authority.get("evidence_relation") != expected_relation
     ):
         return True
+    return not _proposition_binding_evidence_valid(
+        authority,
+        required_proposition_slots=required_proposition_slots,
+        not_applicable_proposition_slots=not_applicable,
+        bindings=bindings,
+        expected_relation=expected_relation,
+    )
+
+
+def _proposition_binding_evidence_valid(
+    authority: dict[str, Any],
+    *,
+    required_proposition_slots: set[str],
+    not_applicable_proposition_slots: set[str],
+    bindings: dict[str, Any],
+    expected_relation: str,
+) -> bool:
+    """Validate parent quote spans and per-slot child spans independently."""
+
+    parent_refs = authority.get("proposition_binding_evidence_set_refs")
+    parsed_parents = _parsed_parent_span_refs(parent_refs)
+    if parsed_parents is None:
+        return False
+    parent_identities = {_parent_span_identity(parsed) for parsed in parsed_parents}
+
+    raw_slot_refs = authority.get("proposition_slot_evidence_refs")
+    if (
+        not isinstance(raw_slot_refs, dict)
+        or set(raw_slot_refs) != required_proposition_slots
+    ):
+        return False
+    declared_children: dict[str, dict[tuple[Any, ...], str]] = {}
+    for slot in sorted(required_proposition_slots):
+        refs = raw_slot_refs.get(slot)
+        if not isinstance(refs, list) or not refs:
+            return False
+        parsed_refs = [_parse_slot_span_ref(value) for value in refs]
+        if any(parsed is None for parsed in parsed_refs):
+            return False
+        children: dict[tuple[Any, ...], str] = {}
+        for raw_ref, parsed in zip(refs, parsed_refs):
+            assert parsed is not None
+            parent_ref, parsed_slot, start, end = parsed
+            parent = _parse_parent_span_ref(parent_ref)
+            if (
+                parent is None
+                or parsed_slot != slot
+                or _parent_span_identity(parent) not in parent_identities
+                or not _child_span_contained(parent, start, end)
+            ):
+                return False
+            identity = _child_span_identity(parent, parsed_slot, start, end)
+            canonical_ref = _canonical_slot_span_ref(parent, parsed_slot, start, end)
+            if identity in children or raw_ref != canonical_ref:
+                return False
+            children[identity] = canonical_ref
+        declared_children[slot] = children
+
+    slot_evidence = authority.get("proposition_slot_evidence")
+    projected_children = _projected_slot_evidence_children(
+        slot_evidence,
+        required_proposition_slots=required_proposition_slots,
+        parent_identities=parent_identities,
+    )
+    if projected_children is None:
+        return False
+    if set(projected_children) != set(required_proposition_slots):
+        return False
+    if any(
+        projected_children[slot] != declared_children[slot]
+        for slot in required_proposition_slots
+    ):
+        return False
+
+    digest = _proposition_binding_digest(
+        expected_relation,
+        bindings,
+        declared_children,
+        parsed_parents,
+        not_applicable_proposition_slots,
+    )
+    return authority.get("proposition_evidence_set_digest") == digest
+
+
+def _proposition_binding_digest(
+    expected_relation: str,
+    bindings: dict[str, Any],
+    declared_children: dict[str, dict[tuple[Any, ...], str]],
+    parsed_parents: list[tuple[str, int, int]],
+    not_applicable_proposition_slots: set[str],
+) -> str:
     payload = {
         "evidence_relation": expected_relation,
         "proposition_slot_bindings": bindings,
         "proposition_slot_evidence_refs": {
-            slot: sorted(slot_refs[slot]) for slot in sorted(slot_refs)
+            slot: sorted(declared_children[slot].values())
+            for slot in sorted(declared_children)
         },
-        "proposition_binding_evidence_set_refs": sorted(evidence_set),
-        "not_applicable_proposition_slots": sorted(not_applicable),
+        "proposition_binding_evidence_set_refs": sorted(
+            _canonical_parent_span_ref(parsed) for parsed in parsed_parents
+        ),
+        "not_applicable_proposition_slots": sorted(not_applicable_proposition_slots),
     }
-    return authority.get("proposition_evidence_set_digest") != _premise_digest(payload)
+    return _premise_digest(payload)
 
 
 def _slot_ids(value: Any) -> set[str]:

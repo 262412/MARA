@@ -12,9 +12,9 @@ from scripts.slurm.qasper_debug_contract import (
     qasper_debug_behavior_violations,
 )
 from scripts.slurm.qasper_debug_contract_probe_artifact import (
-    _MODEL_CONTRACT,
     _assert_live_coverage,
     _observed_state_evidence,
+    _provider_identity_violations,
 )
 
 CONTRACT = "qasper_provider_contract_probe_audit.v1"
@@ -32,12 +32,18 @@ _HARD_GATES = {
     "qasper_reverify_without_semantic_state_change_count": 0.0,
 }
 _LIVE_COVERAGE_GATE = "qasper_contract_probe_live_coverage_assertion_complete"
+_PROVIDER_HETEROGENEITY_GATE = "qasper_contract_probe_provider_heterogeneity_complete"
 _EXECUTION_GATE = "qasper_contract_probe_execution_complete"
 _BEHAVIOR_GATE = "qasper_contract_probe_behavior_violations"
 
 
 def _is_live_probe_artifact(predictions: list[dict[str, Any]]) -> bool:
-    return any(row.get("contract_id") == _MODEL_CONTRACT for row in predictions)
+    return any(
+        str(row.get("contract_id") or "").startswith(
+            "qasper_contract_probe_live_model."
+        )
+        for row in predictions
+    )
 
 
 def _exception_evidence(exc: BaseException) -> dict[str, str]:
@@ -59,9 +65,20 @@ def _failed_exception_audit(
     evidence = dict(failure_evidence or {})
     evidence["exception"] = _exception_evidence(exc)
     observed_state = _observed_state_evidence(predictions)
+    provider_identity_violations = _provider_identity_failure(predictions)
+    if "heterogeneous contract probe" in str(exc).casefold():
+        provider_identity_violations = [
+            {
+                "reason": "provider_configuration_rejected",
+                "exception": _exception_evidence(exc),
+            }
+        ]
     failed_gates = [_EXECUTION_GATE]
+    if provider_identity_violations:
+        failed_gates.append(_PROVIDER_HETEROGENEITY_GATE)
     failure_details = {
         "observed_state": observed_state,
+        "provider_identity_violations": provider_identity_violations,
         **evidence,
     }
     lane_audit = {
@@ -84,15 +101,56 @@ def _failed_exception_audit(
                 "value": 0.0,
                 "expected": 1.0,
                 "passed": False,
-            }
+            },
+            _PROVIDER_HETEROGENEITY_GATE: {
+                "value": 0.0 if provider_identity_violations else 1.0,
+                "expected": 1.0,
+                "passed": not provider_identity_violations,
+            },
         },
         "failed_gates": failed_gates,
         "contract_probe_audit": lane_audit,
         "structural_state_matrix": {},
         "debug_gate_metrics": {},
         "failure_evidence": failure_details,
+        "provider_identity_violations": provider_identity_violations,
         "audit_output": str(output_path.resolve()),
     }
+
+
+def _provider_identity_failure(
+    predictions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not _is_live_probe_artifact(predictions):
+        return []
+    failures: list[dict[str, Any]] = []
+    for row in predictions:
+        violations = _provider_identity_violations(row)
+        if violations:
+            failures.append(
+                {
+                    "example_id": str(row.get("example_id") or ""),
+                    "violations": violations,
+                }
+            )
+    return failures
+
+
+def _provider_configuration_failure(
+    failure_evidence: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    evidence = failure_evidence or {}
+    exception = evidence.get("probe_exception")
+    exception = exception if isinstance(exception, dict) else {}
+    message = str(exception.get("exception_message") or "")
+    if "heterogeneous contract probe" not in message.casefold():
+        return []
+    return [
+        {
+            "reason": "provider_configuration_rejected",
+            "exception": dict(exception),
+        }
+    ]
 
 
 def _coverage_failure(
@@ -141,6 +199,14 @@ def _evaluate_probe(
     )
     metrics = dict(extensions.get("debug_gate_metrics") or {})
     hard_gates, coverage_failure = _hard_gates(metrics, predictions)
+    provider_identity_violations = _provider_identity_failure(predictions)
+    if not provider_identity_violations:
+        provider_identity_violations = _provider_configuration_failure(failure_evidence)
+    hard_gates[_PROVIDER_HETEROGENEITY_GATE] = {
+        "value": 0.0 if provider_identity_violations else 1.0,
+        "expected": 1.0,
+        "passed": not provider_identity_violations,
+    }
     failed_gates = [
         name for name, result in hard_gates.items() if result["passed"] is not True
     ]
@@ -152,6 +218,10 @@ def _evaluate_probe(
     combined_failure_evidence = dict(failure_evidence or {})
     if coverage_failure is not None:
         combined_failure_evidence["coverage_exception"] = coverage_failure
+    if provider_identity_violations:
+        combined_failure_evidence[
+            "provider_identity_violations"
+        ] = provider_identity_violations
     if combined_failure_evidence:
         hard_gates[_EXECUTION_GATE] = {
             "value": 0.0,
@@ -190,6 +260,7 @@ def _evaluate_probe(
         "behavior_violations": violations,
         "hard_gates": hard_gates,
         "failed_gates": failed_gates,
+        "provider_identity_violations": provider_identity_violations,
         "contract_probe_audit": lane_audit,
         "structural_state_matrix": extensions.get("structural_state_matrix") or {},
         "debug_gate_metrics": metrics,

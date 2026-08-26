@@ -97,7 +97,7 @@ def conclusion_audit_validation_reason(
         "distinct_model",
     }:
         return "conclusion_auditor_relationship_invalid"
-    if release_mode and relationship == "same_instance":
+    if release_mode and relationship != "distinct_model":
         return "release_conclusion_auditor_not_independent"
     if any(
         value.get(field) is not True

@@ -15,7 +15,7 @@ from scripts.slurm.qasper_debug_contract_probe_cases import (
     ProbeCase,
 )
 
-_MODEL_CONTRACT = "qasper_contract_probe_live_model.v2"
+_MODEL_CONTRACT = "qasper_contract_probe_live_model.v3"
 
 
 def _terminal_snapshot(execution: Any) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -128,6 +128,9 @@ def _prediction_row(
         "evidence_bundle": execution.evidence_bundle.as_dict(),
         "evidence_metadata": terminal_metadata,
         "contract_probe_live_calls": live_calls,
+        "contract_probe_provider_identities": terminal_metadata.get(
+            "contract_probe_provider_identities", {}
+        ),
         "controlled_input": {
             "mode": "controlled_original_candidate"
             if case.controlled_candidate
@@ -153,6 +156,111 @@ def _trace_from_row(row: dict[str, Any], key: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise RuntimeError(f"{row.get('example_id')}: missing production trace {key}")
     return value
+
+
+def _normalized_provider_identity(base_url: Any, model: Any) -> tuple[str, str]:
+    return (
+        str(base_url or "").strip().rstrip("/").casefold(),
+        str(model or "").strip().casefold(),
+    )
+
+
+def _provider_identity_summary_violations(
+    row: dict[str, Any],
+    observed: dict[str, set[tuple[str, str]]],
+) -> list[str]:
+    metadata = row.get("evidence_metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    recorded = metadata.get("contract_probe_provider_identities")
+    if not isinstance(recorded, dict):
+        return ["provider_identity_summary_missing"]
+    violations: list[str] = []
+    for role in ("proposer", "auditor"):
+        role_values = recorded.get(role)
+        if not isinstance(role_values, list) or len(role_values) != 1:
+            violations.append(f"provider_identity_summary_{role}_invalid")
+            continue
+        value = role_values[0]
+        if not isinstance(value, dict):
+            violations.append(f"provider_identity_summary_{role}_invalid")
+            continue
+        if (
+            _normalized_provider_identity(value.get("base_url"), value.get("model"))
+            not in observed[role]
+        ):
+            violations.append(f"provider_identity_summary_{role}_mismatch")
+    return violations
+
+
+def _provider_identity_violations(row: dict[str, Any]) -> list[str]:
+    """Validate recorded proposer/auditor identities and runtime separation."""
+
+    violations: list[str] = []
+    calls = row.get("contract_probe_live_calls")
+    if not isinstance(calls, list) or not calls:
+        return ["provider_identity_calls_missing"]
+    observed: dict[str, set[tuple[str, str]]] = {
+        "proposer": set(),
+        "auditor": set(),
+    }
+    for index, call in enumerate(calls):
+        if not isinstance(call, dict):
+            violations.append(f"provider_identity_call_invalid:{index}")
+            continue
+        role = str(call.get("provider_role") or "").strip().casefold()
+        if role not in observed:
+            violations.append(f"provider_identity_role_invalid:{index}")
+            continue
+        base_url = str(call.get("base_url") or "").strip()
+        model = str(call.get("model") or "").strip()
+        identity = call.get("provider_identity")
+        if not base_url or not model:
+            violations.append(f"provider_identity_fields_missing:{index}")
+            continue
+        normalized = _normalized_provider_identity(base_url, model)
+        observed[role].add(normalized)
+        if not isinstance(identity, dict):
+            violations.append(f"provider_identity_declaration_missing:{index}")
+        elif (
+            _normalized_provider_identity(
+                identity.get("base_url"), identity.get("model")
+            )
+            != normalized
+            or str(identity.get("role") or "").casefold() != role
+        ):
+            violations.append(f"provider_identity_declaration_mismatch:{index}")
+
+    for role in ("proposer", "auditor"):
+        if not observed[role]:
+            violations.append(f"provider_identity_{role}_missing")
+        elif len(observed[role]) != 1:
+            violations.append(f"provider_identity_{role}_not_stable")
+    if observed["proposer"] and observed["auditor"]:
+        proposer_models = {model for _, model in observed["proposer"]}
+        auditor_models = {model for _, model in observed["auditor"]}
+        if proposer_models & auditor_models:
+            violations.append("provider_identity_same_model")
+
+    violations.extend(_provider_identity_summary_violations(row, observed))
+
+    try:
+        verifier = _trace_from_row(row, "semantic_proposition_verifier")
+    except (AttributeError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+        violations.append(
+            f"provider_identity_verifier_trace_missing:{type(exc).__name__}"
+        )
+        return violations
+    if verifier.get("auditor_relationship") != "distinct_model":
+        violations.append("provider_identity_auditor_relationship_not_distinct_model")
+    proposer_models = {model for _, model in observed["proposer"]}
+    auditor_models = {model for _, model in observed["auditor"]}
+    trace_model = str(verifier.get("model") or "").strip().casefold()
+    trace_audit_model = str(verifier.get("audit_model") or "").strip().casefold()
+    if not trace_model or trace_model not in proposer_models:
+        violations.append("provider_identity_proposer_trace_mismatch")
+    if not trace_audit_model or trace_audit_model not in auditor_models:
+        violations.append("provider_identity_auditor_trace_mismatch")
+    return violations
 
 
 _SEMANTIC_AUDIT_BOOLEAN_FIELDS = frozenset(
@@ -304,6 +412,12 @@ def _probe_case_id(row: dict[str, Any]) -> str:
 
 
 def _assert_live_case(case: ProbeCase, row: dict[str, Any]) -> tuple[str, str, str]:
+    provider_identity_errors = _provider_identity_violations(row)
+    if provider_identity_errors:
+        raise RuntimeError(
+            f"{case.case_id}: provider heterogeneity contract failed: "
+            + ",".join(provider_identity_errors)
+        )
     observed = _observed_state(row)
     expected = (
         case.expected_candidate,

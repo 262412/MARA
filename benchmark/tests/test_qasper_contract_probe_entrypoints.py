@@ -18,6 +18,8 @@ PROBE_MODULES = (
 def test_live_probe_receives_the_job_owned_formal_audit_path() -> None:
     slurm_script = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
     assert '--audit-output "$CONTRACT_PROBE_AUDIT_PATH"' in slurm_script
+    assert '--auditor-base-url "$CONTRACT_AUDITOR_BASE_URL"' in slurm_script
+    assert '--auditor-model "$CONTRACT_AUDITOR_MODEL"' in slurm_script
 
 
 def _job_owned_python(tmp_path: Path) -> Path:

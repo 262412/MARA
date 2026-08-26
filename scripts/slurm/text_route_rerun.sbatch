@@ -34,6 +34,8 @@ ROUTE_TIMEOUT_SECONDS="${MARA_TEXT_ROUTE_TIMEOUT_SECONDS:-${MARA_FINAL_ROUTE_TIM
 SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
 SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
 SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
+CONTRACT_AUDITOR_BASE_URL="${MARA_QASPER_CONTRACT_AUDITOR_BASE_URL:-}"
+CONTRACT_AUDITOR_MODEL="${MARA_QASPER_CONTRACT_AUDITOR_MODEL:-}"
 ARTIFACT_DETAIL="${MARA_TEXT_ARTIFACT_DETAIL:-compact}"
 EXECUTION_CONTRACT="${MARA_EXECUTION_JOB_CONTRACT:-}"
 REQUIRE_CONTRACT_SMOKE="${MARA_REQUIRE_CONTRACT_SMOKE:-0}"
@@ -185,6 +187,8 @@ log "route=${ROUTE} limit=${LIMIT} sample_seed=${SAMPLE_SEED} max_context=${MAX_
 log "artifact_detail=${ARTIFACT_DETAIL} semantic_debug_trace=${SEMANTIC_DEBUG_TRACE} require_contract_smoke=${REQUIRE_CONTRACT_SMOKE} require_semantic_debug_trace=${REQUIRE_SEMANTIC_DEBUG_TRACE} contract_smoke_suite_kind=${CONTRACT_SMOKE_SUITE_KIND:-none}"
 log "execution_contract=${EXECUTION_CONTRACT:-none}"
 log "text_llm_base_url=${TEXT_LLM_BASE_URL}"
+log "contract_probe_auditor_base_url=${CONTRACT_AUDITOR_BASE_URL:-unset}"
+log "contract_probe_auditor_model=${CONTRACT_AUDITOR_MODEL:-unset}"
 log "retrieval_base_url=${RETRIEVAL_BASE_URL}"
 log "node=${SLURMD_NODENAME:-$(hostname)}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader || true
@@ -277,6 +281,8 @@ if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE
     scripts.slurm.qasper_debug_contract_probe \
     --base-url "$TEXT_LLM_BASE_URL" \
     --model "$SEMANTIC_EVALUATOR_MODEL" \
+    --auditor-base-url "$CONTRACT_AUDITOR_BASE_URL" \
+    --auditor-model "$CONTRACT_AUDITOR_MODEL" \
     --output "$CONTRACT_PROBE_PATH" \
     --audit-output "$CONTRACT_PROBE_AUDIT_PATH" \
     --timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"

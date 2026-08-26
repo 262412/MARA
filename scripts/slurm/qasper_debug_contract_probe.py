@@ -49,6 +49,7 @@ from scripts.slurm.qasper_debug_contract_probe_runtime import (  # noqa: F401
     _RecordingChatModel,
     _response_finish_reason,
     _response_text,
+    validate_heterogeneous_provider_config,
 )
 
 
@@ -58,6 +59,8 @@ def _run_case(
     *,
     base_url: str,
     model: str,
+    auditor_base_url: str,
+    auditor_model: str,
     timeout_seconds: float,
     model_factory: Callable[..., Any],
 ) -> dict[str, Any]:
@@ -66,6 +69,8 @@ def _run_case(
         index,
         base_url=base_url,
         model=model,
+        auditor_base_url=auditor_base_url,
+        auditor_model=auditor_model,
         timeout_seconds=timeout_seconds,
         model_factory=model_factory,
     )
@@ -88,6 +93,8 @@ def run_live_probes(
     base_url: str,
     model: str,
     *,
+    auditor_base_url: str | None = None,
+    auditor_model: str | None = None,
     timeout_seconds: float = 60.0,
     model_factory: Callable[..., Any] | None = None,
     output_path: Path | None = None,
@@ -96,6 +103,12 @@ def run_live_probes(
     factory = model_factory or _default_model_factory
     rows: list[dict[str, Any]] = []
     try:
+        validate_heterogeneous_provider_config(
+            base_url=base_url,
+            model=model,
+            auditor_base_url=auditor_base_url,
+            auditor_model=auditor_model,
+        )
         for index, case in enumerate(_PROBE_CASES):
             rows.append(
                 _run_case(
@@ -103,6 +116,8 @@ def run_live_probes(
                     index,
                     base_url=base_url,
                     model=model,
+                    auditor_base_url=str(auditor_base_url or ""),
+                    auditor_model=str(auditor_model or ""),
                     timeout_seconds=timeout_seconds,
                     model_factory=factory,
                 )
@@ -167,6 +182,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--auditor-base-url", required=True)
+    parser.add_argument("--auditor-model", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--audit-output",
@@ -188,6 +205,8 @@ def main() -> int:
         run_live_probes(
             args.base_url,
             args.model,
+            auditor_base_url=args.auditor_base_url,
+            auditor_model=args.auditor_model,
             timeout_seconds=args.timeout_seconds,
             output_path=output_path,
             audit_path=audit_path,

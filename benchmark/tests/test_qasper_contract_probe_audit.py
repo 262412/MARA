@@ -4,6 +4,10 @@ import json
 
 import pytest
 
+from benchmark.tests.qasper_contract_probe_provider_support import (
+    _AUDITOR_BASE_URL,
+    _AUDITOR_MODEL,
+)
 from benchmark.tests.qasper_debug_contract_fixtures import _qasper_debug_prediction
 from benchmark.tests.test_qasper_contract_probe_generation import _factory
 from scripts.slurm import qasper_debug_contract_probe as probe
@@ -61,6 +65,8 @@ def test_auditor_parse_failure_does_not_satisfy_live_coverage() -> None:
     rows = probe.run_live_probes(
         "http://provider.invalid/v1",
         "contract-probe-model",
+        auditor_base_url=_AUDITOR_BASE_URL,
+        auditor_model=_AUDITOR_MODEL,
         model_factory=_factory,
     )
     auditor_fail = next(
@@ -83,6 +89,8 @@ def test_provider_audit_reconciles_behavior_failure_across_status_and_evidence(
     rows = probe.run_live_probes(
         "http://provider.invalid/v1",
         "contract-probe-model",
+        auditor_base_url=_AUDITOR_BASE_URL,
+        auditor_model=_AUDITOR_MODEL,
         model_factory=_factory,
     )
     auditor_fail = next(
