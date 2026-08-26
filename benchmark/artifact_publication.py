@@ -6,6 +6,7 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any, Iterable
 
 ARTIFACT_MANIFEST_NAME = "artifact_manifest.json"
@@ -23,6 +24,24 @@ _PRIMARY_ARTIFACTS = (
     "contract_probe_audit.json",
     "contract_smoke_audit.json",
 )
+
+_ARTIFACT_REQUIREMENT_ALIASES = {
+    "semantic_trace": "semantic_debug_traces.jsonl",
+    "semantic_traces": "semantic_debug_traces.jsonl",
+    "semantic_debug_trace": "semantic_debug_traces.jsonl",
+    "semantic_debug_traces": "semantic_debug_traces.jsonl",
+    "semantic_debug_trace_jsonl": "semantic_debug_traces.jsonl",
+    "semantic_debug_traces_jsonl": "semantic_debug_traces.jsonl",
+    "require_semantic_debug_trace": "semantic_debug_traces.jsonl",
+    "require_semantic_debug_traces": "semantic_debug_traces.jsonl",
+    "formal_audit": "contract_smoke_audit.json",
+    "contract_audit": "contract_smoke_audit.json",
+    "contract_smoke_audit": "contract_smoke_audit.json",
+    "contract_smoke_audit_json": "contract_smoke_audit.json",
+    "require_formal_audit": "contract_smoke_audit.json",
+    "require_contract_smoke_audit": "contract_smoke_audit.json",
+    "require_contract_smoke": "contract_smoke_audit.json",
+}
 
 
 def atomic_write_bytes(path: str | Path, payload: bytes) -> None:
@@ -88,10 +107,30 @@ def atomic_write_jsonl(path: str | Path, rows: Iterable[dict[str, Any]]) -> None
             temporary_path.unlink(missing_ok=True)
 
 
-def publish_artifact_contract(run_dir: str | Path) -> dict[str, Any]:
-    """Publish a digest manifest and completion marker after all artifacts exist."""
+def publish_artifact_contract(
+    run_dir: str | Path,
+    *,
+    run_requirements: Any = None,
+) -> dict[str, Any]:
+    """Publish a digest manifest and completion marker for a benchmark run.
+
+    Required artifacts come from the run requirements as well as files already
+    present.  This keeps a missing required artifact from being silently
+    reclassified as optional during publication.
+    """
 
     run_dir = Path(run_dir).resolve()
+    existing_manifest = _existing_manifest(run_dir / ARTIFACT_MANIFEST_NAME)
+    required_from_manifest = normalize_artifact_requirements(
+        existing_manifest.get("required_files")
+    )
+    required_from_run = normalize_artifact_requirements(run_requirements)
+    declared_requirements = normalize_artifact_requirements(
+        existing_manifest.get("run_requirements")
+    )
+    declared_requirements = _ordered_unique(
+        [*declared_requirements, *required_from_run]
+    )
     files: dict[str, dict[str, Any]] = {}
     for name in _PRIMARY_ARTIFACTS:
         path = run_dir / name
@@ -105,19 +144,34 @@ def publish_artifact_contract(run_dir: str | Path) -> dict[str, Any]:
             metadata["line_count"] = _physical_lf_count(path)
         files[name] = metadata
 
-    required = [name for name in _PRIMARY_ARTIFACTS if name in files]
+    required = [
+        name
+        for name in _PRIMARY_ARTIFACTS
+        if name in files or name in required_from_manifest or name in required_from_run
+    ]
+    missing_required_files = [name for name in required if name not in files]
+    required_file_failures = _required_file_failures(run_dir, required, files)
+    missing_required_files = _ordered_unique(
+        [*missing_required_files, *required_file_failures]
+    )
     manifest = {
         "contract": ARTIFACT_CONTRACT_VERSION,
         "required_files": required,
         "files": files,
+        "run_requirements": declared_requirements,
+        "missing_required_files": missing_required_files,
+        "required_file_failures": required_file_failures,
     }
     manifest_path = run_dir / ARTIFACT_MANIFEST_NAME
     atomic_write_json(manifest_path, manifest)
     marker = {
         "contract": ARTIFACT_CONTRACT_VERSION,
-        "complete": True,
+        "complete": not missing_required_files,
         "artifact_manifest": ARTIFACT_MANIFEST_NAME,
         "artifact_manifest_sha256": file_sha256(manifest_path),
+        "required_files": required,
+        "missing_required_files": missing_required_files,
+        "required_file_failures": required_file_failures,
         "published_at": datetime.now(timezone.utc).isoformat(),
     }
     atomic_write_json(run_dir / ARTIFACT_COMPLETE_NAME, marker)
@@ -127,10 +181,101 @@ def publish_artifact_contract(run_dir: str | Path) -> dict[str, Any]:
 def publish_contract_smoke_audit(
     run_dir: str | Path,
     audit: dict[str, Any],
-) -> None:
+) -> dict[str, Any]:
     run_dir = Path(run_dir).resolve()
     atomic_write_json(run_dir / "contract_smoke_audit.json", audit)
-    publish_artifact_contract(run_dir)
+    requirements: dict[str, bool] = {"contract_smoke_audit": True}
+    if str(audit.get("suite_kind") or "").strip().casefold() == "qasper_debug":
+        requirements["semantic_debug_traces"] = True
+    return publish_artifact_contract(
+        run_dir,
+        run_requirements=requirements,
+    )
+
+
+def normalize_artifact_requirements(value: Any) -> list[str]:
+    """Normalize run requirement declarations to known artifact file names."""
+
+    names: list[str] = []
+    if isinstance(value, Mapping):
+        for key, enabled in value.items():
+            key_text = str(key).strip().casefold()
+            if key_text in {"required_files", "required_artifacts", "artifacts"}:
+                if _requirement_enabled(enabled):
+                    names.extend(normalize_artifact_requirements(enabled))
+                continue
+            if not _requirement_enabled(enabled):
+                continue
+            name = _normalize_artifact_name(key_text)
+            if name:
+                names.append(name)
+    elif isinstance(value, str):
+        name = _normalize_artifact_name(value)
+        if name:
+            names.append(name)
+    elif isinstance(value, Iterable):
+        for item in value:
+            names.extend(normalize_artifact_requirements(item))
+    return _ordered_unique(names)
+
+
+def _normalize_artifact_name(value: str) -> str:
+    normalized = str(value or "").strip().casefold()
+    if not normalized:
+        return ""
+    if normalized in _ARTIFACT_REQUIREMENT_ALIASES:
+        return _ARTIFACT_REQUIREMENT_ALIASES[normalized]
+    if normalized in {name.casefold() for name in _PRIMARY_ARTIFACTS}:
+        return next(
+            name for name in _PRIMARY_ARTIFACTS if name.casefold() == normalized
+        )
+    return ""
+
+
+def _requirement_enabled(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        return bool(value.get("required", value.get("enabled", False)))
+    if isinstance(value, str):
+        return value.strip().casefold() not in {"", "0", "false", "no", "off"}
+    return bool(value)
+
+
+def _ordered_unique(values: Iterable[str]) -> list[str]:
+    return list(dict.fromkeys(str(value) for value in values if str(value)))
+
+
+def _existing_manifest(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _required_file_failures(
+    run_dir: Path,
+    required: list[str],
+    files: Mapping[str, dict[str, Any]],
+) -> list[str]:
+    semantic_name = "semantic_debug_traces.jsonl"
+    predictions_path = run_dir / "predictions.jsonl"
+    semantic_path = run_dir / semantic_name
+    if (
+        semantic_name not in required
+        or semantic_name not in files
+        or not predictions_path.is_file()
+        or not semantic_path.is_file()
+    ):
+        return []
+    expected = _nonempty_line_count(predictions_path)
+    if expected <= 0:
+        return []
+    actual = _nonempty_line_count(semantic_path)
+    if actual == expected:
+        return []
+    return [semantic_name]
 
 
 def verify_artifact_contract(run_dir: str | Path) -> dict[str, Any]:
@@ -196,6 +341,11 @@ def _physical_lf_count(path: Path) -> int:
         return sum(
             block.count(b"\n") for block in iter(lambda: handle.read(1024 * 1024), b"")
         )
+
+
+def _nonempty_line_count(path: Path) -> int:
+    with path.open("r", encoding="utf-8") as handle:
+        return sum(1 for line in handle if line.strip())
 
 
 def _read_object(path: Path) -> dict[str, Any]:

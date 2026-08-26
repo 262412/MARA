@@ -24,6 +24,16 @@ from .mara_qasper_candidate_prompt import (
     _bound_candidate_slots as _prompt_bound_candidate_slots,
 )
 from .mara_qasper_candidate_prompt import _candidate_evidence, _candidate_prompt
+from .mara_qasper_candidate_budget import (
+    QASPER_CANDIDATE_INPUT_TOKEN_BUDGET,
+    QASPER_CANDIDATE_MAX_MODEL_LEN,  # noqa: F401
+    QASPER_CANDIDATE_MAX_TOKENS,
+    QASPER_CANDIDATE_TOKEN_HEADROOM,  # noqa: F401
+    candidate_drop_index as _candidate_drop_index,
+    candidate_generation_trace as _candidate_generation_trace,
+    candidate_input_token_measurement,
+    estimate_qasper_candidate_input_tokens,  # noqa: F401
+)
 from .mara_semantic_proposition_debug import (
     provider_failure,
     response_completion_tokens,
@@ -35,7 +45,6 @@ QASPER_CANDIDATE_GENERATION_CONTRACT = "qasper_typed_candidate_generation.v2"
 QASPER_CANDIDATE_RESPONSE_CONTRACT = "qasper_typed_candidate.v1"
 QASPER_CANDIDATES = {"yes", "no", "unanswerable"}
 QASPER_CANDIDATE_MAX_RESPONSE_CHARS = 16_000
-QASPER_CANDIDATE_MAX_TOKENS = 48
 QASPER_CANDIDATE_DEFAULT_SEED = 20260724
 
 LOGGER = logging.getLogger(__name__)
@@ -92,23 +101,34 @@ def generate_qasper_typed_candidate(
     route = str(bundle.route or "")
     controlled_candidate = _contract_probe_original_candidate(request, route)
     identity = _transaction_identity(request, route, seed)
-    messages = _candidate_messages(
+    response_schema = qasper_candidate_response_format()
+    (
+        evidence,
+        evidence_diagnostics,
+        messages,
+        token_measurement,
+        request_dropped_count,
+    ) = _fit_candidate_request(
+        llm,
         question,
         evidence,
         evidence_diagnostics,
+        response_schema=response_schema,
         controlled_candidate=controlled_candidate,
     )
     serialized_messages = _serialized_messages(messages)
+    schema_digest = _digest(response_schema)
     input_digest = _digest(
         {
             "messages": serialized_messages,
+            "response_schema_digest": schema_digest,
             "seed": seed,
             "route": route,
             "benchmark_route_id": identity.get("benchmark_route_id", ""),
         }
     )
     trace = _candidate_generation_trace(
-        llm=llm,
+        model=_model_name(llm),
         identity=identity,
         route=route,
         seed=seed,
@@ -117,10 +137,12 @@ def generate_qasper_typed_candidate(
         evidence=evidence,
         evidence_diagnostics=evidence_diagnostics,
         controlled_candidate=controlled_candidate,
+        response_schema_digest=schema_digest,
+        token_measurement=token_measurement,
+        request_dropped_count=request_dropped_count,
     )
     bundle.metadata["qasper_candidate_generation"] = trace
-    if llm is None:
-        trace.update(status="failed", failure_reason="generator_llm_unavailable")
+    if not _candidate_request_ready(llm, token_measurement, trace, identity):
         return ""
     return _generate_candidate_response(
         llm,
@@ -129,59 +151,50 @@ def generate_qasper_typed_candidate(
         identity,
         input_digest,
         seed,
+        response_schema,
     )
 
 
-def _candidate_generation_trace(
-    *,
-    llm: Any,
+def _candidate_request_ready(
+    llm: Any | None,
+    token_measurement: dict[str, Any],
+    trace: dict[str, Any],
     identity: dict[str, str],
-    route: str,
-    seed: int,
-    serialized_messages: list[dict[str, Any]],
-    input_digest: str,
-    evidence: list[dict[str, Any]],
-    evidence_diagnostics: dict[str, Any],
-    controlled_candidate: str,
-) -> dict[str, Any]:
-    return {
-        "contract_id": QASPER_CANDIDATE_GENERATION_CONTRACT,
-        **identity,
-        "status": "started",
-        "failure_reason": "",
-        "model": _model_name(llm),
-        "route": route,
-        "internal_route": route,
-        "benchmark_route_id": identity.get("benchmark_route_id", ""),
-        "effective_seed": seed,
-        "message_stack": serialized_messages,
-        "message_stack_digest": _digest(serialized_messages),
-        "message_stack_chars": sum(
-            len(str(message.get("content") or "")) for message in serialized_messages
-        ),
-        "input_digest": input_digest,
-        "evidence_count": len(evidence),
-        "evidence_digest": _digest(evidence),
-        "candidate_input_mode": (
-            "controlled_contract_probe" if controlled_candidate else "generated"
-        ),
-        "controlled_original_candidate": controlled_candidate,
-        **evidence_diagnostics,
-        "attempts": [],
-        "raw_response": "",
-        "raw_response_truncated": False,
-        "cleaned_response": "",
-        "raw_candidate": "",
-        "raw_candidate_failure_reason": "",
-        "raw_candidate_digest": "",
-        "typed_candidate": "",
-        "typed_candidate_digest": "",
-        "raw_candidate_identity_preserved": False,
-        "output_digest": "",
-        "finish_reason": "",
-        "completion_tokens": -1,
-        "transformation_stages": [],
-    }
+) -> bool:
+    if llm is None:
+        trace.update(status="failed", failure_reason="generator_llm_unavailable")
+        return False
+    if token_measurement.get("tokenizer_failed"):
+        failure_detail = (
+            "tokenizer_endpoint="
+            f"{token_measurement.get('tokenizer_endpoint', '')}; "
+            "tokenizer_method="
+            f"{token_measurement.get('tokenizer_method', '')}; "
+            "tokenizer_failure_reason="
+            f"{token_measurement.get('tokenizer_failure_reason', '')}"
+        )
+        trace.update(
+            status="failed",
+            failure_reason="provider_tokenizer_failed",
+            provider_failure_reason="provider_tokenizer_failed",
+            provider_failure_detail=failure_detail,
+        )
+        trace["attempts"] = [
+            {
+                "attempt_id": identity["attempt_id"],
+                "status": "provider_failed",
+                "failure_reason": "provider_tokenizer_failed",
+                "failure_detail": failure_detail,
+            }
+        ]
+        return False
+    if (
+        token_measurement["estimated_input_tokens"]
+        > QASPER_CANDIDATE_INPUT_TOKEN_BUDGET
+    ):
+        trace.update(status="failed", failure_reason="candidate_input_budget_exceeded")
+        return False
+    return True
 
 
 def _candidate_messages(
@@ -217,6 +230,80 @@ def _candidate_messages(
     ]
 
 
+def _fit_candidate_request(
+    llm: Any | None,
+    question: str,
+    evidence: list[dict[str, Any]],
+    evidence_diagnostics: dict[str, Any],
+    *,
+    response_schema: dict[str, Any],
+    controlled_candidate: str,
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, Any],
+    list[Any],
+    dict[str, Any],
+    int,
+]:
+    selected = list(evidence)
+    dropped_count = 0
+    while True:
+        bound_slots = _bound_candidate_slots(
+            evidence_diagnostics.get("required_slots", []), selected
+        )
+        diagnostics = {
+            **evidence_diagnostics,
+            "required_slots": bound_slots,
+            "candidate_request_dropped_evidence_count": dropped_count,
+            "evidence_dropped_count": (
+                int(evidence_diagnostics.get("evidence_dropped_count") or 0)
+                + dropped_count
+            ),
+        }
+        messages = _candidate_messages(
+            question,
+            selected,
+            diagnostics,
+            controlled_candidate=controlled_candidate,
+        )
+        token_measurement = candidate_input_token_measurement(
+            llm,
+            messages,
+            response_schema,
+        )
+        if token_measurement.get("tokenizer_failed"):
+            return (
+                selected,
+                diagnostics,
+                messages,
+                token_measurement,
+                dropped_count,
+            )
+        if (
+            token_measurement["estimated_input_tokens"]
+            <= QASPER_CANDIDATE_INPUT_TOKEN_BUDGET
+            or not selected
+        ):
+            return (
+                selected,
+                diagnostics,
+                messages,
+                token_measurement,
+                dropped_count,
+            )
+        drop_index = _candidate_drop_index(selected)
+        if drop_index is None:
+            return (
+                selected,
+                diagnostics,
+                messages,
+                token_measurement,
+                dropped_count,
+            )
+        selected.pop(drop_index)
+        dropped_count += 1
+
+
 def _contract_probe_original_candidate(request: Any, route: str) -> str:
     trace_context = getattr(request, "trace_context", None)
     trace_context = trace_context if isinstance(trace_context, dict) else {}
@@ -245,12 +332,13 @@ def _generate_candidate_response(
     identity: dict[str, str],
     input_digest: str,
     seed: int,
+    response_schema: dict[str, Any],
 ) -> str:
     try:
         response = llm(
             messages,
             max_tokens=QASPER_CANDIDATE_MAX_TOKENS,
-            response_format=qasper_candidate_response_format(),
+            response_format=response_schema,
             temperature=0,
             top_p=1,
             seed=seed,
@@ -258,7 +346,12 @@ def _generate_candidate_response(
     except Exception as exc:
         LOGGER.exception("QASPER typed candidate generation failed")
         reason, detail = provider_failure(exc)
-        trace.update(status="failed", failure_reason=reason)
+        trace.update(
+            status="failed",
+            failure_reason=reason,
+            provider_failure_reason=reason,
+            provider_failure_detail=detail,
+        )
         trace["attempts"] = [
             {
                 "attempt_id": identity["attempt_id"],
@@ -317,7 +410,9 @@ def _candidate_response_state(response: Any) -> dict[str, Any]:
         "failure_reason": failure,
         "finish_reason": finish_reason,
         "completion_tokens": response_completion_tokens(response),
+        "actual_input_tokens": _response_prompt_tokens(response),
     }
+    state["actual_input_token_count"] = state["actual_input_tokens"]
     state["output_digest"] = _digest(
         {
             "raw_response_digest": raw_response_digest,
@@ -384,6 +479,8 @@ def _candidate_attempt(
         "raw_candidate_identity_preserved",
         "finish_reason",
         "completion_tokens",
+        "actual_input_tokens",
+        "actual_input_token_count",
         "output_digest",
     )
     return {
@@ -431,6 +528,48 @@ def _answering_llm(pipeline: Any) -> Any | None:
     answering_pipeline = getattr(pipeline, "answering_pipeline", None)
     llm = getattr(answering_pipeline, "llm", None)
     return llm if callable(llm) else None
+
+
+def _response_prompt_tokens(response: Any | None) -> int:
+    if response is None:
+        return -1
+    owners = (response, getattr(response, "raw", None))
+    for owner in owners:
+        for key in ("prompt_tokens", "input_tokens"):
+            value = _response_usage_value(owner, key)
+            if value >= 0:
+                return value
+    return -1
+
+
+def _response_usage_value(response: Any | None, key: str) -> int:
+    if response is None:
+        return -1
+    values = [getattr(response, key, None)]
+    for container_name in (
+        "usage",
+        "usage_metadata",
+        "response_metadata",
+        "additional_kwargs",
+    ):
+        container = getattr(response, container_name, None)
+        if isinstance(container, dict):
+            values.extend(
+                [
+                    container.get(key),
+                    container.get("token_usage", {}).get(key)
+                    if isinstance(container.get("token_usage"), dict)
+                    else None,
+                ]
+            )
+        else:
+            values.append(getattr(container, key, None))
+    for value in values:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return -1
 
 
 def _serialized_messages(messages: list[Any]) -> list[dict[str, Any]]:

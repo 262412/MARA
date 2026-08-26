@@ -24,6 +24,7 @@ from .metrics import (
 )
 from .page_metric_contract import page_metric_contract
 from .semantic_answer import SemanticJudge, semantic_answer_metrics
+from .terminal_outcome_contract import terminal_outcome_record
 from .verification_metrics import verification_metrics
 
 _TABLE_FORMATS = {"markdown_table", "markdown-table", "table"}
@@ -79,12 +80,12 @@ def score_prediction(
         markdown_table_score = 0.0
     if expected_formats & _LATEX_FORMATS and latex_score is None:
         latex_score = 0.0
-    false_abstention = false_abstention_score(predicted_answer, gold_answers)
-    if abstained and any(
-        str(answer or "").strip() and not is_abstention_answer(str(answer))
-        for answer in gold_answers
-    ):
-        false_abstention = 1.0
+    false_abstention = _false_abstention_metric(
+        prediction,
+        predicted_answer,
+        gold_answers,
+        abstained=abstained,
+    )
 
     page_contract = page_metric_contract(prediction)
 
@@ -127,6 +128,28 @@ def score_prediction(
         metrics.update(semantic_metrics)
         prediction["semantic_answer_evaluation"] = semantic_metadata
     return metrics
+
+
+def _false_abstention_metric(
+    prediction: dict[str, Any],
+    predicted_answer: str,
+    gold_answers: list[Any],
+    *,
+    abstained: bool,
+) -> float:
+    value = false_abstention_score(predicted_answer, gold_answers)
+    if abstained and any(
+        str(answer or "").strip() and not is_abstention_answer(str(answer))
+        for answer in gold_answers
+    ):
+        value = 1.0
+    if terminal_outcome_record(prediction)["outcome"] in {
+        "execution_failed",
+        "timeout",
+        "cancelled",
+    }:
+        return 0.0
+    return value
 
 
 def _prediction_answer_text(

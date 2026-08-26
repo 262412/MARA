@@ -44,6 +44,19 @@ SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS = 16000
 SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS = 640
 SEMANTIC_PROPOSITION_PACK_CONTRACT = "semantic_proposition_pack.v2"
 
+
+def compact_json(value: Any) -> str:
+    """Serialize prompt metadata deterministically without formatting padding."""
+
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+
 SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT = (
     "You are a conservative document-grounded verifier. Judge the original "
     "structured candidate against the typed question proposition and the labeled "
@@ -539,7 +552,7 @@ def semantic_proposition_pack_digest(
             for value in packed
         ],
     }
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    canonical = compact_json(payload)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 

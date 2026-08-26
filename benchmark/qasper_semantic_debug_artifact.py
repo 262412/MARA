@@ -4,6 +4,15 @@ from collections import Counter
 from copy import deepcopy
 from typing import Any, Iterable, Mapping
 
+from .qasper_pre_verifier_debug import (
+    candidate_authority_analysis as _candidate_authority_analysis,
+)
+from .qasper_pre_verifier_debug import (
+    pre_verifier_fields as _pre_verifier_fields,
+)
+from .qasper_pre_verifier_debug import (
+    pre_verifier_traces as _pre_verifier_traces,
+)
 from .qasper_semantic_debug_findings import findings_for_row
 
 QASPER_SEMANTIC_DEBUG_CONTRACT = "qasper_semantic_pipeline_debug.v3"
@@ -20,23 +29,38 @@ _RECOVERY_STAGES = {
 
 def qasper_semantic_debug_rows(
     predictions: Iterable[dict[str, Any]],
+    *,
+    include_missing: bool = False,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for prediction in predictions:
-        row = _debug_row(prediction)
+        row = _debug_row(prediction, include_missing=include_missing)
         if row is not None:
             rows.append(row)
     return rows
 
 
-def _debug_row(prediction: dict[str, Any]) -> dict[str, Any] | None:
+def _debug_row(
+    prediction: dict[str, Any],
+    *,
+    include_missing: bool,
+) -> dict[str, Any] | None:
     metadata = _terminal_metadata(prediction)
     verifier = _mapping(metadata.get("semantic_proposition_verifier"))
     debug_trace = _mapping(verifier.get("debug_trace"))
-    if debug_trace.get("contract_id") != SEMANTIC_PROPOSITION_DEBUG_CONTRACT:
-        return None
-    authority = _mapping(metadata.get("semantic_proposition_authority"))
     generator = _mapping(metadata.get("qasper_candidate_generation"))
+    has_debug_trace = (
+        debug_trace.get("contract_id") == SEMANTIC_PROPOSITION_DEBUG_CONTRACT
+    )
+    if not has_debug_trace and not generator and not include_missing:
+        return None
+    if not has_debug_trace:
+        generator, verifier = _pre_verifier_traces(
+            prediction,
+            generator,
+            verifier,
+        )
+    authority = _mapping(metadata.get("semantic_proposition_authority"))
     query_plan = _mapping(
         metadata.get("query_plan") or metadata.get("bound_query_plan")
     )
@@ -52,6 +76,7 @@ def _debug_row(prediction: dict[str, Any]) -> dict[str, Any] | None:
         rejected_transactions,
     )
     row.update(_v3_fields(prediction, generator, verifier, authority))
+    row.update(_pre_verifier_fields(prediction, generator, verifier))
     row["findings"] = findings_for_row(row)
     return row
 
@@ -212,109 +237,6 @@ def _transaction_identity(
         "verifier_input_digest": str(verifier.get("input_digest") or ""),
         "verifier_output_digest": str(verifier.get("output_digest") or ""),
     }
-
-
-def _candidate_authority_analysis(
-    prediction: Mapping[str, Any],
-    generator: Mapping[str, Any],
-    verifier: Mapping[str, Any],
-    authority: Mapping[str, Any],
-) -> dict[str, Any]:
-    candidate = str(generator.get("typed_candidate") or "")
-    verifier_candidate = str(verifier.get("candidate_label") or "")
-    verifier_status = str(verifier.get("candidate_verification_status") or "")
-    terminal_state = _mapping(prediction.get("engine_terminal_state"))
-    terminal_answer = str(
-        terminal_state.get("semantic_answer")
-        or prediction.get("engine_terminal_answer")
-        or prediction.get("predicted_answer")
-        or ""
-    )
-    gold = {
-        str(value or "").strip().casefold()
-        for value in prediction.get("gold_answers") or []
-        if str(value or "").strip()
-    }
-    answerable = bool(gold - {"unanswerable", "insufficient evidence"})
-    candidate_identity_preserved = bool(candidate and verifier_candidate == candidate)
-    terminal_is_abstention = terminal_answer.strip().casefold() == "unanswerable"
-    false_abstention_cause = _false_abstention_cause(
-        generator=generator,
-        candidate=candidate,
-        candidate_identity_preserved=candidate_identity_preserved,
-        verifier_status=verifier_status,
-        terminal_is_abstention=terminal_is_abstention,
-        answerable=answerable,
-    )
-    upstream_issue = false_abstention_cause in {
-        "upstream_candidate_contract_invalid",
-        "upstream_candidate_selected_unanswerable",
-        "candidate_contract_identity_mismatch",
-    }
-    downstream_issue = (
-        false_abstention_cause == "downstream_policy_rejected_supported_candidate"
-    )
-    return {
-        "contract_id": "qasper_candidate_authority_analysis.v1",
-        "generator_candidate": candidate,
-        "verifier_input_candidate": verifier_candidate,
-        "verifier_candidate_status": verifier_status,
-        "generator_verifier_conflict": bool(
-            candidate
-            and verifier_candidate == candidate
-            and verifier_status == "contradicted"
-        ),
-        "candidate_identity_preserved": candidate_identity_preserved,
-        "upstream_candidate_contract_status": str(generator.get("status") or ""),
-        "upstream_candidate_contract_failure_reason": str(
-            generator.get("failure_reason") or ""
-        ),
-        "upstream_candidate_contract_issue": upstream_issue,
-        "verifier_rejected_candidate": bool(
-            candidate_identity_preserved
-            and verifier_status in {"contradicted", "unknown"}
-        ),
-        "replacement_candidate_allowed": bool(
-            verifier.get("replacement_candidate_allowed", False)
-        ),
-        "semantic_authority_status": str(authority.get("status") or ""),
-        "downstream_policy_action": str(
-            _mapping(prediction.get("engine_terminal_guardrail_decision")).get("action")
-            or _mapping(prediction.get("guardrail_decision")).get("action")
-            or ""
-        ),
-        "terminal_answer": terminal_answer,
-        "downstream_acceptance_policy_issue": downstream_issue,
-        "false_abstention_cause": false_abstention_cause,
-    }
-
-
-def _false_abstention_cause(
-    *,
-    generator: Mapping[str, Any],
-    candidate: str,
-    candidate_identity_preserved: bool,
-    verifier_status: str,
-    terminal_is_abstention: bool,
-    answerable: bool,
-) -> str:
-    if not generator or not terminal_is_abstention or not answerable:
-        return ""
-    if str(generator.get("status") or "") != "parsed" or candidate not in {
-        "yes",
-        "no",
-        "unanswerable",
-    }:
-        return "upstream_candidate_contract_invalid"
-    if not candidate_identity_preserved:
-        return "candidate_contract_identity_mismatch"
-    if candidate == "unanswerable":
-        return "upstream_candidate_selected_unanswerable"
-    if verifier_status in {"contradicted", "unknown"}:
-        return f"verifier_{verifier_status}_candidate"
-    if verifier_status == "supported":
-        return "downstream_policy_rejected_supported_candidate"
-    return "candidate_verifier_status_invalid"
 
 
 def _structural_coverage(row: Mapping[str, Any]) -> dict[str, Any]:

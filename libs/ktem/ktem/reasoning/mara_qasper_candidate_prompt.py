@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from ktem.docqa.evidence_schema import EvidenceBundle
@@ -19,6 +18,7 @@ from .mara_qasper_candidate_evidence import (
 )
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+    compact_json,
     pack_semantic_proposition_evidence,
     required_semantic_proposition_slots,
 )
@@ -52,6 +52,9 @@ def _candidate_evidence(
                 for value in record.get("required_slot_ids", [])
                 if str(value).strip()
             ],
+            "proposition_alignment_score": float(
+                record.get("proposition_alignment_score") or 0.0
+            ),
             "selectors": list(record.get("selectors", [])),
         }
         for record in packing.records
@@ -110,12 +113,7 @@ def _candidate_prompt(
     proposition_resolution: dict[str, Any] | None = None,
     required_slots: list[dict[str, Any]] | None = None,
 ) -> str:
-    proposition_text = json.dumps(
-        proposition or {},
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    proposition_text = compact_json(proposition or {})
     resolution_status = str((proposition_resolution or {}).get("status") or "")
     slot_text = "\n".join(
         "- "
@@ -125,14 +123,12 @@ def _candidate_prompt(
         + "; binding_status="
         + str(slot.get("binding_status") or "missing")
         + "; retrieved_evidence_ids="
-        + json.dumps(
+        + compact_json(
             slot.get("retrieved_evidence_ids", slot.get("evidence_ids", [])),
-            ensure_ascii=False,
         )
         + "; retrieved_evidence_refs="
-        + json.dumps(
+        + compact_json(
             slot.get("retrieved_evidence_refs", slot.get("evidence_refs", [])),
-            ensure_ascii=False,
         )
         for slot in required_slots or []
     )
@@ -141,10 +137,8 @@ def _candidate_prompt(
             [
                 f"[{record['label']}] evidence_id={record['evidence_id']}",
                 "selector_options="
-                + json.dumps(
-                    _candidate_selector_options(record, question=question),
-                    ensure_ascii=False,
-                    separators=(",", ":"),
+                + compact_json(
+                    _compact_candidate_selector_options(record, question=question),
                 ),
             ]
         )
@@ -161,7 +155,7 @@ def _candidate_prompt(
         f"{slot_text or '- none'}\n\n"
         f"CANONICAL RETRIEVED EVIDENCE:\n{evidence_text}\n\n"
         "CANDIDATE EVIDENCE-SET OBSERVATION:\n"
-        f"{json.dumps(evidence_set_binding, ensure_ascii=False, separators=(',', ':'))}"
+        f"{compact_json(_compact_candidate_evidence_set_binding(evidence_set_binding))}"
         "\n\n"
         "Use exact selector options; an evidence ID or a first selector is not a "
         "proposition binding. Hints and the set observation are retrieval-only. "
@@ -171,6 +165,44 @@ def _candidate_prompt(
         "not_applicable. Do not rewrite the parsed candidate; return one JSON object "
         "matching the required schema."
     )
+
+
+def _compact_candidate_selector_options(
+    record: dict[str, Any],
+    *,
+    question: str,
+) -> list[dict[str, Any]]:
+    """Keep exact span identity while omitting fields repeated by the record."""
+
+    fields = (
+        "evidence_ref",
+        "span_start",
+        "span_end",
+        "text",
+        "slot_hints",
+        "polarity_signal",
+    )
+    return [
+        {field: option[field] for field in fields}
+        for option in _candidate_selector_options(record, question=question)
+    ]
+
+
+def _compact_candidate_evidence_set_binding(
+    binding: dict[str, Any],
+) -> dict[str, Any]:
+    """Represent set-level observations using references, not repeated span text."""
+
+    return {
+        "binding_status": binding.get("binding_status", "missing"),
+        "polarity_signal": binding.get("polarity_signal", "undetermined"),
+        "selected_refs": list(binding.get("evidence_refs") or []),
+        "support_refs": list(binding.get("support_evidence_refs") or []),
+        "contradiction_refs": list(
+            binding.get("explicit_contradiction_evidence_refs") or []
+        ),
+        "slot_refs": binding.get("slot_evidence_refs") or {},
+    }
 
 
 def _bound_candidate_slots(

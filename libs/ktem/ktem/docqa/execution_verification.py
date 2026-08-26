@@ -10,6 +10,12 @@ from .controller import RetrieveDecision, VerifyDecision
 from .evidence_identity import identity_of
 from .evidence_schema import EvidenceBundle
 from .evidence_text import extract_final_answer_text
+from .execution_pre_audit import (
+    qasper_pre_audit_failure_result as _qasper_pre_audit_failure_result,
+    qasper_pre_audit_failure_reason,
+    qasper_pre_audit_verify_decision,
+    qasper_typed_candidate_request as _qasper_typed_candidate_request,
+)
 from .pipeline_stage_timings import PipelineStageTimings
 from .qasper_answer_revision import (
     ANSWER_REVISION_CONTRACT,
@@ -40,6 +46,15 @@ def verify_generated_answer(
     abstain_message: str,
     ragtruth_empty_answer: str,
 ) -> tuple[str, VerifyDecision, Any, list[dict[str, Any]]]:
+    pre_audit_reason = qasper_pre_audit_failure_reason(request, bundle)
+    if pre_audit_reason:
+        return _qasper_pre_audit_failure_result(
+            request,
+            trace_prefix,
+            pre_audit_reason,
+            guardrail_factory=guardrail_factory,
+            abstain_message=abstain_message,
+        )
     if bundle.metadata.get("generation_backend") == "evidence_only_without_vlm":
         verify_decision = timings.measure(
             "verification_seconds",
@@ -248,7 +263,9 @@ def _finalize_nonempty_answer(
         guardrail_factory=guardrail_factory,
     )
     bundle.metadata["pre_guardrail_answer"] = answer
-    if verify_decision.status == "verified_conflict":
+    if verify_decision.status == "execution_failed":
+        answer = abstain_message
+    elif verify_decision.status == "verified_conflict":
         answer = "unanswerable"
     elif guardrail.action == "abstain":
         answer = abstain_message
@@ -275,6 +292,11 @@ def _verify_with_answer_revision(
         retrieve_decision,
         bundle,
         answer,
+    )
+    verify_decision = qasper_pre_audit_verify_decision(
+        request,
+        bundle,
+        verify_decision,
     )
     if _qasper_typed_candidate_request(request):
         return answer, verify_decision, visual_revision_trace
@@ -414,25 +436,6 @@ def _verified_boolean_answer(answer: str, decision: VerifyDecision) -> str:
     if decision.status == "supported" and polarity in {"yes", "no"}:
         return polarity
     return answer
-
-
-def _qasper_typed_candidate_request(request: Any | None) -> bool:
-    if request is None:
-        return False
-    domain = str(getattr(request, "verification_domain", "") or "").casefold()
-    origin = str(getattr(request, "origin", "") or "").casefold()
-    plan = getattr(request, "query_plan", None)
-    answer_type = (
-        plan.get("answer_type")
-        if isinstance(plan, dict)
-        else getattr(plan, "answer_type", "")
-    )
-    answer_type = str(answer_type or getattr(request, "task_type", "")).casefold()
-    return (
-        origin == "benchmark"
-        and (domain == "qasper" or domain.startswith("qasper_"))
-        and answer_type == "boolean"
-    )
 
 
 def ragtruth_contract_request(request: Any | None) -> bool:

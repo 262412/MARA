@@ -11,6 +11,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from benchmark.artifact_publication import publish_contract_smoke_audit  # noqa: E402
+from benchmark.artifact_requirements import (  # noqa: E402
+    required_artifact_violations,
+)
 from benchmark.contract_invariant_metrics import (  # noqa: E402
     contract_invariant_summary,
 )
@@ -274,6 +277,7 @@ def validate(
     expected_count = (18, 18) if suite_kind == "qasper_debug" else (2, 5)
     observed_requirements = _requirements(predictions)
     precondition_violations = _precondition_violations(
+        run_dir,
         summary,
         predictions,
         suite_kind=suite_kind,
@@ -403,6 +407,7 @@ def _debug_extensions(
 
 
 def _precondition_violations(
+    run_dir: Path,
     summary: dict[str, Any],
     predictions: list[dict[str, Any]],
     *,
@@ -425,6 +430,7 @@ def _precondition_violations(
             "missing contract smoke requirements: "
             + ", ".join(sorted(missing_requirements))
         )
+    violations.extend(required_artifact_violations(run_dir, predictions))
     return violations
 
 
@@ -446,6 +452,13 @@ def _precondition_failure_audit(
         "expected_prediction_count": list(expected_count),
         "observed_requirements": sorted(observed_requirements),
         "precondition_violations": violations,
+        "stage_audits": [],
+        "stage_violations": [],
+        "behavior_violations": [],
+        "hard_gates": {},
+        "failed_gates": ["preconditions"],
+        "contract_gates": {},
+        "contract_gate_failures": [],
         **(
             qasper_debug_audit_extensions(
                 predictions,

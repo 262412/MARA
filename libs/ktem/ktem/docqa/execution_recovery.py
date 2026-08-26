@@ -122,6 +122,30 @@ def recover_after_failed_verification(
     timings: PipelineStageTimings,
     verify: VerifyFn,
 ) -> RouteExecutionResult:
+    if initial_result.verify_decision.status == "execution_failed":
+        return initial_result
+    return _recover_after_failed_verification(
+        request,
+        initial_result,
+        retrieve,
+        rewrite,
+        workflow_plan,
+        trace_prefix,
+        timings,
+        verify,
+    )
+
+
+def _recover_after_failed_verification(
+    request: Any,
+    initial_result: RouteExecutionResult,
+    retrieve: RetrieveFn,
+    rewrite: RewriteFn | None,
+    workflow_plan: dict[str, Any],
+    trace_prefix: list[dict[str, Any]],
+    timings: PipelineStageTimings,
+    verify: VerifyFn,
+) -> RouteExecutionResult:
     _record_route_switch_reverification(initial_result)
     if not required_typed_authority_missing(request, initial_result.verify_decision):
         _mark_resolved_initial_conflict(initial_result)

@@ -62,6 +62,9 @@ export MARA_TEXT_LLM_BASE_URL="$TEXT_LLM_BASE_URL"
 export MARA_RETRIEVAL_BASE_URL="$RETRIEVAL_BASE_URL"
 export MARA_LLM_BASE_URL="$TEXT_LLM_BASE_URL"
 export MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE="$SEMANTIC_DEBUG_TRACE"
+export MARA_REQUIRE_SEMANTIC_DEBUG_TRACE="$REQUIRE_SEMANTIC_DEBUG_TRACE"
+export MARA_REQUIRE_CONTRACT_SMOKE="$REQUIRE_CONTRACT_SMOKE"
+export MARA_CONTRACT_SMOKE_SUITE_KIND="$CONTRACT_SMOKE_SUITE_KIND"
 
 SERVICE_PIDS=()
 
@@ -334,10 +337,51 @@ test -f "$RUN_DIR/report.md"
 test -f "$RUN_DIR/artifact_manifest.json"
 test -f "$RUN_DIR/artifact_complete.json"
 export MARA_BENCHMARK_ARTIFACT_DIR="$RUN_DIR"
+SEMANTIC_TRACE_GAP=0
 if [[ "$REQUIRE_SEMANTIC_DEBUG_TRACE" == "1" ]]; then
-  test -f "$RUN_DIR/semantic_debug_traces.jsonl"
-  test "$(wc -l < "$RUN_DIR/semantic_debug_traces.jsonl")" -gt 0
+  if test -f "$RUN_DIR/semantic_debug_traces.jsonl"; then
+    PREDICTION_ROW_COUNT="$(wc -l < "$RUN_DIR/predictions.jsonl")"
+    SEMANTIC_TRACE_ROW_COUNT="$(wc -l < "$RUN_DIR/semantic_debug_traces.jsonl")"
+    if [[ "$PREDICTION_ROW_COUNT" -ne "$SEMANTIC_TRACE_ROW_COUNT" ]]; then
+      SEMANTIC_TRACE_GAP=1
+      log "required semantic trace row count mismatch: ${SEMANTIC_TRACE_ROW_COUNT}/${PREDICTION_ROW_COUNT}"
+    fi
+  else
+    SEMANTIC_TRACE_GAP=1
+    log "required semantic debug trace is missing; contract smoke will publish the formal audit"
+  fi
 fi
+
+# Preserve provider-probe failures until validate_contract_smoke can publish the
+# formal failed audit for the run.
+if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
+  if [[ "$CONTRACT_PROBE_PATH" != "$RUN_DIR/contract_probe_predictions.jsonl" && -s "$CONTRACT_PROBE_PATH" ]]; then
+    cp "$CONTRACT_PROBE_PATH" "$RUN_DIR/contract_probe_predictions.jsonl"
+  fi
+  if [[ "$CONTRACT_PROBE_AUDIT_PATH" != "$RUN_DIR/contract_probe_audit.json" && -s "$CONTRACT_PROBE_AUDIT_PATH" ]]; then
+    cp "$CONTRACT_PROBE_AUDIT_PATH" "$RUN_DIR/contract_probe_audit.json"
+  fi
+fi
+
+if [[ "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
+  if [[ -z "$CONTRACT_SMOKE_SUITE_KIND" ]]; then
+    log "MARA_CONTRACT_SMOKE_SUITE_KIND is required for contract smoke validation"
+    exit 2
+  fi
+  CONTRACT_PROBE_VALIDATION_ARGS=()
+  if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" ]]; then
+    CONTRACT_PROBE_VALIDATION_ARGS+=(
+      --contract-probe-predictions
+      "$RUN_DIR/contract_probe_predictions.jsonl"
+    )
+  fi
+  "$MARA_BENCHMARK_PYTHON" \
+    "${PROJECT_ROOT}/scripts/slurm/validate_contract_smoke.py" \
+    "$RUN_DIR" \
+    --suite-kind "$CONTRACT_SMOKE_SUITE_KIND" \
+    "${CONTRACT_PROBE_VALIDATION_ARGS[@]}"
+fi
+
 if [[ -n "$EXECUTION_CONTRACT" ]]; then
   VALIDATION_ARGS=(
     --require-all-usable
@@ -364,33 +408,9 @@ fi
   "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
   "$RUN_DIR/predictions.jsonl" \
   "${VALIDATION_ARGS[@]}"
-if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
-  if [[ "$CONTRACT_PROBE_PATH" != "$RUN_DIR/contract_probe_predictions.jsonl" ]]; then
-    cp "$CONTRACT_PROBE_PATH" "$RUN_DIR/contract_probe_predictions.jsonl"
-  fi
-  test -s "$RUN_DIR/contract_probe_predictions.jsonl"
-  if [[ "$CONTRACT_PROBE_AUDIT_PATH" != "$RUN_DIR/contract_probe_audit.json" ]]; then
-    cp "$CONTRACT_PROBE_AUDIT_PATH" "$RUN_DIR/contract_probe_audit.json"
-  fi
-  test -s "$RUN_DIR/contract_probe_audit.json"
-fi
-if [[ "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
-  if [[ -z "$CONTRACT_SMOKE_SUITE_KIND" ]]; then
-    log "MARA_CONTRACT_SMOKE_SUITE_KIND is required for contract smoke validation"
-    exit 2
-  fi
-  CONTRACT_PROBE_VALIDATION_ARGS=()
-  if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" ]]; then
-    CONTRACT_PROBE_VALIDATION_ARGS+=(
-      --contract-probe-predictions
-      "$RUN_DIR/contract_probe_predictions.jsonl"
-    )
-  fi
-  "$MARA_BENCHMARK_PYTHON" \
-    "${PROJECT_ROOT}/scripts/slurm/validate_contract_smoke.py" \
-    "$RUN_DIR" \
-    --suite-kind "$CONTRACT_SMOKE_SUITE_KIND" \
-    "${CONTRACT_PROBE_VALIDATION_ARGS[@]}"
+if [[ "$SEMANTIC_TRACE_GAP" == "1" ]]; then
+  log "required semantic debug trace is incomplete"
+  exit 2
 fi
 
 mara_reconcile_benchmark_completion 0

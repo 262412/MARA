@@ -260,6 +260,14 @@ def verified_result(
         trace,
         stage_timings,
         raw_generated_answer=raw_generated_answer,
+        terminal_outcome=(
+            "execution_failed" if verify_decision.status == "execution_failed" else None
+        ),
+        terminal_outcome_reason=(
+            verify_decision.reason
+            if verify_decision.status == "execution_failed"
+            else ""
+        ),
     )
 
 

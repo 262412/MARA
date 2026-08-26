@@ -6,12 +6,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .artifact_publication import (
-    atomic_write_json,
-    atomic_write_jsonl,
-    atomic_write_text,
-    publish_artifact_contract,
-    verify_artifact_contract,
+from .artifact_publication import atomic_write_jsonl, atomic_write_text
+from .artifact_requirements import (
+    normalize_artifact_detail,
+    report_context,
+    write_report_artifacts,
+    write_report_outputs,
 )
 from .baseline_registry import assert_writable_benchmark_output
 from .dataset_decision_report import (
@@ -19,10 +19,6 @@ from .dataset_decision_report import (
     phase2_summary_markdown,
 )
 from .multimodal_route_report import phase3_report_sections, phase3_summary_markdown
-from .qasper_semantic_debug_artifact import (
-    qasper_semantic_debug_rows,
-    qasper_semantic_debug_summary,
-)
 from .report_benchmark_taxonomy import (
     failure_taxonomy_by_route_markdown,
     failure_taxonomy_markdown,
@@ -224,7 +220,7 @@ def write_reports(
     *,
     artifact_detail: str = "compact",
 ) -> Path:
-    artifact_detail = _normalize_artifact_detail(artifact_detail)
+    artifact_detail = normalize_artifact_detail(artifact_detail)
     output_dir = Path(output_dir).resolve()
     assert_writable_benchmark_output(output_dir)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -241,20 +237,18 @@ def write_reports(
     route_metrics_path = run_dir / "route_metrics.csv"
     semantic_debug_path = run_dir / "semantic_debug_traces.jsonl"
 
-    source_predictions = [
-        dict(row)
-        for row in report.get("predictions", []) or []
-        if isinstance(row, dict)
-    ]
-    semantic_debug_rows = qasper_semantic_debug_rows(source_predictions)
-    summary = {
-        **dict(report.get("summary", {}) or {}),
-        "artifact_detail": artifact_detail,
-        "artifact_limits": dict(ARTIFACT_LIMITS),
-    }
-    if semantic_debug_rows:
-        summary.update(qasper_semantic_debug_summary(semantic_debug_rows))
-    config = report.get("config", {})
+    (
+        source_predictions,
+        run_requirements,
+        semantic_debug_required,
+        semantic_debug_rows,
+        summary,
+        config,
+    ) = report_context(
+        report,
+        artifact_detail,
+        ARTIFACT_LIMITS,
+    )
     predictions = _artifact_rows(source_predictions, artifact_detail)
     documents = _artifact_rows(report.get("documents", []), artifact_detail)
     retrieval_traces = report.get("retrieval_traces")
@@ -263,46 +257,39 @@ def write_reports(
     else:
         retrieval_traces = _artifact_rows(retrieval_traces, artifact_detail)
 
-    _write_jsonl(predictions_path, predictions)
-    if semantic_debug_rows:
-        _write_jsonl(semantic_debug_path, semantic_debug_rows)
-    atomic_write_json(documents_path, documents)
-    _write_jsonl(retrieval_traces_path, retrieval_traces)
-    route_metric_table = _route_metric_table(summary)
-    if route_metric_table:
-        _write_csv(route_metrics_path, route_metric_table)
+    route_metric_table = write_report_artifacts(
+        (
+            predictions_path,
+            semantic_debug_path,
+            documents_path,
+            retrieval_traces_path,
+            route_metrics_path,
+        ),
+        predictions,
+        semantic_debug_rows,
+        semantic_debug_required,
+        documents,
+        retrieval_traces,
+        summary,
+        _write_csv,
+        _write_jsonl,
+    )
 
-    markdown = _summary_markdown_lines(summary, suite_name)
-    for label, key in (("Engine", "engine"), ("Route", "route"), ("Scope", "scope")):
-        value = _first_present(summary, config, key=key)
-        if value is not None:
-            markdown.append(f"- {label}: `{value}`")
-    markdown += [
-        "",
-        "## Files",
-        "",
-        "- Summary: `summary.json`",
-        "- Predictions: `predictions.jsonl`",
-        "- Documents: `documents.json`",
-        "- Retrieval Traces: `retrieval_traces.jsonl`",
-    ]
-    if route_metric_table:
-        markdown.append("- Route Metrics: `route_metrics.csv`")
-    if semantic_debug_rows:
-        markdown.append("- Semantic Debug Traces: `semantic_debug_traces.jsonl`")
-    markdown += _report_markdown_sections(summary, route_metric_table)
-    atomic_write_text(markdown_path, "\n".join(markdown) + "\n")
-    atomic_write_json(summary_path, summary)
-    publish_artifact_contract(run_dir)
-    verify_artifact_contract(run_dir)
+    write_report_outputs(
+        run_dir,
+        markdown_path,
+        summary_path,
+        summary,
+        suite_name,
+        config,
+        route_metric_table,
+        semantic_debug_rows,
+        run_requirements,
+        _summary_markdown_lines,
+        _report_markdown_sections,
+        _first_present,
+    )
     return run_dir
-
-
-def _normalize_artifact_detail(artifact_detail: str) -> str:
-    value = str(artifact_detail or "compact").strip().lower()
-    if value not in {"compact", "full"}:
-        raise ValueError("artifact_detail must be one of 'compact' or 'full'.")
-    return value
 
 
 def _artifact_rows(rows: Any, artifact_detail: str) -> list[dict[str, Any]]:
