@@ -32,7 +32,7 @@ def _packed_premises(count: int) -> list[dict]:
     ]
 
 
-def test_response_schema_uses_portable_subset_and_parser_rejects_duplicate_slots() -> (
+def test_response_schema_omits_runtime_selector_ids_and_parser_rejects_duplicate_slots() -> (
     None
 ):
     response_format = semantic_proposition_response_format(
@@ -463,7 +463,7 @@ def test_candidate_schema_payload_is_parser_identical_with_local_proof_mode(
     if candidate_judgment == "unknown":
         payload["unknown_assessment"] = {
             "reviewed_span_selectors": ["E1:S1"],
-            "unresolved_proposition_slots": ["predicate"],
+            "unresolved_proposition_slots": "predicate",
             "support_gap": "The predicate is not established.",
             "contradiction_gap": "The predicate is not explicitly contradicted.",
         }

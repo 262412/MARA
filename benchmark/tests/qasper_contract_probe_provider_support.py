@@ -208,6 +208,10 @@ def _proposal_values(
         relation = relation_enum[0]
     source_fragment = str(source_premise.get("proposition_fragment") or "")
     fragment = source_fragment or evidence_text
+    unresolved_slot_set = _unknown_unresolved_slot_set(
+        properties,
+        proposition_slots,
+    )
     values: dict[str, object] = {
         "candidate_judgment": proposal_judgment,
         "evidence_relation": relation,
@@ -223,7 +227,7 @@ def _proposal_values(
         ],
         "unknown_assessment": {
             "reviewed_span_selectors": [selector],
-            "unresolved_proposition_slots": list(proposition_slots),
+            "unresolved_proposition_slots": unresolved_slot_set,
             "support_gap": "The evidence does not establish the proposition.",
             "contradiction_gap": "The evidence does not explicitly contradict it.",
         },
@@ -259,6 +263,22 @@ def _proposal_values(
     elif "premises" not in properties:
         values.pop("premises", None)
     return {key: value for key, value in values.items() if key in properties}
+
+
+def _unknown_unresolved_slot_set(
+    properties: dict[str, Any],
+    proposition_slots: list[str],
+) -> str:
+    unknown_schema = properties.get("unknown_assessment")
+    unknown_properties = (
+        unknown_schema.get("properties") if isinstance(unknown_schema, dict) else {}
+    )
+    unknown_properties = (
+        unknown_properties if isinstance(unknown_properties, dict) else {}
+    )
+    allowed = _schema_enum(unknown_properties.get("unresolved_proposition_slots"))
+    selected = "|".join(proposition_slots)
+    return selected if not allowed or selected in allowed else allowed[-1]
 
 
 def _proposal_payload(
@@ -563,3 +583,12 @@ def _audit_payload(
         required_fields,
         "semantic audit",
     )
+
+
+# Keep the existing provider-support import path stable while keeping the
+# natural-quality fixture catalog in its own small module.
+from benchmark.tests.qasper_contract_probe_natural_fixtures import (  # noqa: E402,F401
+    NATURAL_QUALITY_PAYLOAD_FIXTURES,
+    NaturalQualityPayloadFixture,
+    natural_quality_payload_fixture,
+)

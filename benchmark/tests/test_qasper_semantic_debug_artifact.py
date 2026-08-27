@@ -158,6 +158,50 @@ def test_qasper_semantic_debug_rows_ignore_normal_predictions() -> None:
     assert qasper_semantic_debug_rows([prediction]) == []
 
 
+def test_online_coverage_requires_an_actual_auditor_attempt_artifact() -> None:
+    prediction = _prediction()
+    metadata = prediction["engine_terminal_evidence_bundle"]["metadata"]
+    metadata["qasper_candidate_generation"] = {
+        "model": "candidate-model",
+        "finish_reason": "stop",
+        "raw_response": '{"candidate":"yes"}',
+    }
+    verifier = metadata["semantic_proposition_verifier"]
+    verifier.update(
+        audit_model_call_count=1,
+        auditor_attempt_id="audit-attempt-1",
+        candidate_label="yes",
+        candidate_verification_status="supported",
+        candidate_verification_audit={
+            "status": "passed",
+            "mode": "candidate_bound_semantic_audit",
+            "audited_candidate": "yes",
+            "audited_judgment": "supported",
+            "replacement_candidate_allowed": False,
+        },
+    )
+    verifier["debug_trace"]["events"][0]["transaction"] = {
+        "audit": {
+            "attempts": [
+                {
+                    "attempt_id": "audit-attempt-1",
+                    "raw_response": '{"jointly_entails":true}',
+                    "parsed_value": {"jointly_entails": True},
+                }
+            ]
+        }
+    }
+
+    [observed] = qasper_semantic_debug_rows([prediction])
+    assert observed["online_model_coverage"]["auditor_attempt_observed"] is True
+
+    verifier["debug_trace"]["events"][0]["transaction"]["audit"]["attempts"] = [
+        {"attempt_id": "audit-attempt-1", "raw_response": "", "parsed_value": {}}
+    ]
+    [not_observed] = qasper_semantic_debug_rows([prediction])
+    assert not_observed["online_model_coverage"]["auditor_attempt_observed"] is False
+
+
 def test_qasper_semantic_debug_flags_only_accepted_wrong_positive_polarity() -> None:
     prediction = _prediction()
     event = prediction["engine_terminal_evidence_bundle"]["metadata"][

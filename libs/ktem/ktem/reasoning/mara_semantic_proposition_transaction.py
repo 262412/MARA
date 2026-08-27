@@ -4,7 +4,6 @@ from dataclasses import replace
 from typing import Any
 
 from ktem.docqa.question_proposition import (
-    PROPOSITION_EVIDENCE_SLOTS,
     question_proposition_completeness_reason,
     typed_conclusion,
 )
@@ -55,8 +54,10 @@ from .mara_semantic_proposition_transaction_repair import (
 )
 from .mara_semantic_recovery_state import changed_binding_reaudit_transition
 from .mara_semantic_transaction_support import (
+    applicable_proposition_slots,
     audit_prompt_failure,
     bind_semantic_runtime_fields,
+    pre_audit_transaction_failure,
     transaction_debug,
     transaction_result,
 )
@@ -149,17 +150,9 @@ def run_semantic_proposition_transaction(
         model=proposal_model,
         seed=seed,
         candidate=candidate,
-        applicable_proposition_slots=_applicable_proposition_slots(context.proposition),
+        applicable_proposition_slots=applicable_proposition_slots(context.proposition),
     )
     return _complete_proposal(context, proposal, diagnostics, candidate=candidate)
-
-
-def _applicable_proposition_slots(proposition: Any) -> tuple[str, ...]:
-    return tuple(
-        slot
-        for slot in PROPOSITION_EVIDENCE_SLOTS
-        if not (slot == "quantifier" and proposition.quantifier == "none")
-    )
 
 
 def _transaction_context(
@@ -412,6 +405,13 @@ def _audit_failure_result(
             debug_trace=debug_trace,
         )
     if audit.value is None:
+        if audit.call_count == 0 and diagnostics.get("audit_status") == "not_started":
+            return pre_audit_transaction_failure(
+                proposal,
+                audit,
+                diagnostics,
+                debug_trace,
+            )
         if audit.failure_reason == "audit_retry_semantic_identity_changed":
             reason = audit.failure_reason
             diagnostics["audit_reason"] = reason
@@ -528,7 +528,7 @@ def _repair_transaction(
         audit,
         context.slots,
         reason=reason,
-        applicable_proposition_slots=_applicable_proposition_slots(context.proposition),
+        applicable_proposition_slots=applicable_proposition_slots(context.proposition),
     )
     if repaired is None:
         return stop_without_reverify(

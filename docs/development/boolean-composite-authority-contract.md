@@ -199,9 +199,11 @@ spans and offsets, stable evidence provenance, packing limits, system prompt,
 and contract versions. Runtime UUID churn is deliberately absent from this
 digest.
 
-The provider-facing schema stays within the backend's supported grammar subset;
-set uniqueness is enforced again by the strict local parser instead of relying
-on `uniqueItems`. Prompt packing preserves complete canonical excerpts first,
+The provider-facing schema stays within the backend's supported grammar subset.
+Unknown unresolved proposition slots use a canonical, enumerated slot-set string
+so duplicate slots are physically impossible without relying on the backend's
+unsupported `uniqueItems`; remaining set uniqueness is enforced again by the
+strict local parser. Prompt packing preserves complete canonical excerpts first,
 prioritizes QueryPlan-bound evidence and then the upstream reranker order, and
 only uses a question-relevant partial window when a lower-priority full excerpt
 cannot fit. A conservative estimate caps the complete system-plus-user input at

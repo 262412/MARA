@@ -274,15 +274,7 @@ def _online_model_coverage(
     verifier: Mapping[str, Any],
 ) -> dict[str, Any]:
     audit = _mapping(verifier.get("candidate_verification_audit"))
-    auditor_attempt_observed = bool(
-        int(verifier.get("audit_model_call_count") or 0) > 0
-        and str(audit.get("mode") or "") not in {"", "deterministic_schema_audit"}
-        and audit.get("status") in {"passed", "failed"}
-        and audit.get("audited_candidate") == verifier.get("candidate_label")
-        and audit.get("audited_judgment")
-        == verifier.get("candidate_verification_status")
-        and audit.get("replacement_candidate_allowed") is False
-    )
+    auditor_attempt_observed = _actual_auditor_attempt_observed(verifier, audit)
     return {
         "contract_id": "qasper_online_model_coverage.v1",
         "generator_model": str(generator.get("model") or ""),
@@ -301,6 +293,36 @@ def _online_model_coverage(
         "auditor_status": str(audit.get("status") or ""),
         "auditor_passed": audit.get("status") == "passed",
     }
+
+
+def _actual_auditor_attempt_observed(
+    verifier: Mapping[str, Any],
+    audit: Mapping[str, Any],
+) -> bool:
+    transaction_event = _latest_transaction_event(_mapping(verifier.get("debug_trace")))
+    transaction = _mapping(transaction_event.get("transaction"))
+    audit_stage = _mapping(transaction.get("audit"))
+    attempts = audit_stage.get("attempts")
+    attempt_observed = isinstance(attempts, list) and any(
+        isinstance(attempt, Mapping)
+        and bool(str(attempt.get("attempt_id") or "").strip())
+        and (
+            bool(str(attempt.get("raw_response") or ""))
+            or bool(_mapping(attempt.get("parsed_value")))
+        )
+        for attempt in attempts
+    )
+    return bool(
+        attempt_observed
+        and int(verifier.get("audit_model_call_count") or 0) > 0
+        and verifier.get("auditor_attempt_id")
+        and str(audit.get("mode") or "") not in {"", "deterministic_schema_audit"}
+        and audit.get("status") in {"passed", "failed"}
+        and audit.get("audited_candidate") == verifier.get("candidate_label")
+        and audit.get("audited_judgment")
+        == verifier.get("candidate_verification_status")
+        and audit.get("replacement_candidate_allowed") is False
+    )
 
 
 def _required_slot_states(query_plan: Mapping[str, Any]) -> list[dict[str, Any]]:

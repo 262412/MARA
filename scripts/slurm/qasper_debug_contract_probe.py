@@ -12,6 +12,10 @@ provider contract.  Their expected states are an assertion about the live
 result, not a source of state.  In particular, the controlled auditor-fault
 case succeeds only when the production parser/local auditor rejects the
 provider's proposed proof and the terminal path abstains.
+
+Natural-quality negative payload fixtures are exposed through
+``run_pre_audit_probes``. They are a separate fail-closed check and never
+replace the six-row online coverage gate.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from typing import Any, Callable
 from scripts.slurm.qasper_debug_contract_probe_artifact import (  # noqa: F401
     _MODEL_CONTRACT,
     _assert_live_coverage,
+    _assert_pre_audit_case,
     _observed_state,
     _prediction_row,
     _probe_annotation,
@@ -35,6 +40,7 @@ from scripts.slurm.qasper_debug_contract_probe_cases import (  # noqa: F401
     _CANDIDATES,
     _JUDGMENTS,
     _PROBE_CASES,
+    _NATURAL_QUALITY_PRE_AUDIT_CASES,
     _QUESTION,
     ProbeCase,
     _build_request_and_bundle,
@@ -89,6 +95,39 @@ def _run_case(
     )
 
 
+def _run_pre_audit_case(
+    case: ProbeCase,
+    index: int,
+    *,
+    base_url: str,
+    model: str,
+    auditor_base_url: str,
+    auditor_model: str,
+    timeout_seconds: float,
+    model_factory: Callable[..., Any],
+) -> dict[str, Any]:
+    generation_candidate, verifier_candidate, execution, calls = _execute_case(
+        case,
+        index,
+        base_url=base_url,
+        model=model,
+        auditor_base_url=auditor_base_url,
+        auditor_model=auditor_model,
+        timeout_seconds=timeout_seconds,
+        model_factory=model_factory,
+    )
+    live_calls = _attach_call_evidence(execution, calls)
+    row = _prediction_row(
+        case,
+        generation_candidate,
+        verifier_candidate,
+        execution,
+        live_calls,
+    )
+    _assert_pre_audit_case(case, row)
+    return row
+
+
 def run_live_probes(
     base_url: str,
     model: str,
@@ -136,6 +175,53 @@ def run_live_probes(
         if audit_path is not None:
             _persist_pending_audit(output_path, audit_path)
     _assert_live_coverage(rows)
+    return rows
+
+
+def run_pre_audit_probes(
+    base_url: str,
+    model: str,
+    *,
+    auditor_base_url: str,
+    auditor_model: str,
+    timeout_seconds: float = 60.0,
+    model_factory: Callable[..., Any],
+    output_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Run natural-quality negative payloads through the production path.
+
+    The fixture-aware model factory is explicit because these rows are
+    intentional invalid provider payloads. They are published separately from
+    ``run_live_probes`` and never count toward its online state matrix.
+    """
+
+    validate_heterogeneous_provider_config(
+        base_url=base_url,
+        model=model,
+        auditor_base_url=auditor_base_url,
+        auditor_model=auditor_model,
+    )
+    rows: list[dict[str, Any]] = []
+    try:
+        for index, case in enumerate(_NATURAL_QUALITY_PRE_AUDIT_CASES):
+            rows.append(
+                _run_pre_audit_case(
+                    case,
+                    index,
+                    base_url=base_url,
+                    model=model,
+                    auditor_base_url=auditor_base_url,
+                    auditor_model=auditor_model,
+                    timeout_seconds=timeout_seconds,
+                    model_factory=model_factory,
+                )
+            )
+    except Exception:
+        if output_path is not None:
+            _write_rows(output_path, rows)
+        raise
+    if output_path is not None:
+        _write_rows(output_path, rows)
     return rows
 
 

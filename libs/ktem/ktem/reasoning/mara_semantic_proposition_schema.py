@@ -9,6 +9,7 @@ from ktem.docqa.boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
+from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
 
 from .mara_semantic_proposition_schema_contract import (
     proposition_slot_scope,
@@ -398,20 +399,16 @@ def _candidate_judgment_projection_valid(
 def _candidate_projection(candidate: str, judgment: str) -> tuple[str, str]:
     if judgment == "unknown":
         return "undetermined", "insufficient_evidence"
-    relation = (
-        {
-            "yes": {
-                "supported": "proposition_support",
-                "contradicted": "explicit_contradiction",
-            },
-            "no": {
-                "supported": "explicit_contradiction",
-                "contradicted": "proposition_support",
-            },
-        }
-        .get(candidate, {})
-        .get(judgment)
-    )
+    relation = {
+        "yes": {
+            "supported": "proposition_support",
+            "contradicted": "explicit_contradiction",
+        },
+        "no": {
+            "supported": "explicit_contradiction",
+            "contradicted": "proposition_support",
+        },
+    }.get(candidate, {}).get(judgment)
     if relation is None:
         return "undetermined", "insufficient_evidence"
     return relation, _verdict_for_evidence_relation(relation)
@@ -547,7 +544,9 @@ def _parse_unknown_assessment(
     }:
         return None, "unknown_assessment_schema_invalid"
     selectors = value.get("reviewed_span_selectors")
-    unresolved = value.get("unresolved_proposition_slots")
+    unresolved = _unresolved_proposition_slots(
+        value.get("unresolved_proposition_slots")
+    )
     support_gap = str(value.get("support_gap") or "").strip()
     contradiction_gap = str(value.get("contradiction_gap") or "").strip()
     if (
@@ -559,8 +558,7 @@ def _parse_unknown_assessment(
     ):
         return None, "unknown_assessment_evidence_invalid"
     if (
-        not isinstance(unresolved, list)
-        or not unresolved
+        not unresolved
         or len(set(unresolved)) != len(unresolved)
         or any(slot not in applicable_proposition_slots for slot in unresolved)
     ):
@@ -589,3 +587,13 @@ def _parse_unknown_assessment(
         "support_gap": support_gap,
         "contradiction_gap": contradiction_gap,
     }, ""
+
+
+def _unresolved_proposition_slots(value: Any) -> list[str]:
+    if isinstance(value, str):
+        slots = value.split("|")
+        canonical = [slot for slot in PROPOSITION_EVIDENCE_SLOTS if slot in set(slots)]
+        return slots if slots == canonical and "|".join(slots) == value else []
+    if isinstance(value, list):
+        return value
+    return []

@@ -11,8 +11,10 @@ from scripts.slurm.qasper_debug_contract_probe_cases import (
     _CANDIDATES,
     _JUDGMENTS,
     _PROBE_CASES,
-    _QUESTION,
     ProbeCase,
+)
+from scripts.slurm.qasper_debug_contract_probe_pre_audit import (  # noqa: F401
+    _assert_pre_audit_case,
 )
 
 _MODEL_CONTRACT = "qasper_contract_probe_live_model.v3"
@@ -47,6 +49,7 @@ def _probe_annotation(
             "expected_negative": case.expected_negative,
             "controlled_fault": case.controlled_fault,
             "proposal_judgment": case.proposal_judgment or case.expected_judgment,
+            "payload_fixture": case.payload_fixture,
         },
     }
     annotation_scores = {
@@ -97,7 +100,7 @@ def _prediction_row(
         "route": "contract_probe",
         "qasper_debug_lane": "contract_probe",
         "quality_lane_excluded": True,
-        "question": _QUESTION,
+        "question": case.question,
         "answer_type": "boolean",
         "predicted_answer": verifier_candidate,
         "answer_for_scoring": verifier_candidate,
@@ -138,6 +141,7 @@ def _prediction_row(
             "generator_candidate": generation_candidate,
             "original_candidate": verifier_candidate,
             "evidence_switch": case.controlled_fault or "none",
+            "payload_fixture": case.payload_fixture or "none",
             "quality_failure": False,
         },
         "contract_probe_expectation": (

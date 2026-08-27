@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ktem.docqa.question_proposition import proposition_evidence_bindings
+from ktem.docqa.question_proposition import (
+    PROPOSITION_EVIDENCE_SLOTS,
+    proposition_evidence_bindings,
+)
 
 from .mara_semantic_proposition_contract import (
     SemanticPropositionTransactionContext,
@@ -18,7 +21,11 @@ def audit_prompt_failure(
     diagnostics: dict[str, Any],
 ) -> SemanticPropositionTransactionResult:
     diagnostics.update(
-        {"audit_status": "failed", "audit_reason": "audit_prompt_bound_exceeded"}
+        {
+            "audit_status": "not_started",
+            "audit_execution_status": "not_started",
+            "audit_reason": "audit_prompt_bound_exceeded",
+        }
     )
     return transaction_result(
         None,
@@ -27,6 +34,33 @@ def audit_prompt_failure(
         diagnostics,
         proposal_calls=proposal.call_count,
         debug_trace=transaction_debug(context, proposal, None),
+    )
+
+
+def pre_audit_transaction_failure(
+    proposal: ParsedSemanticStage,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+    debug_trace: dict[str, Any] | None,
+) -> SemanticPropositionTransactionResult:
+    reason = audit.failure_reason or "pre_audit_failed"
+    diagnostics["audit_reason"] = reason
+    return transaction_result(
+        None,
+        "failed",
+        reason,
+        diagnostics,
+        proposal_calls=proposal.call_count,
+        audit_calls=0,
+        debug_trace=debug_trace,
+    )
+
+
+def applicable_proposition_slots(proposition: Any) -> tuple[str, ...]:
+    return tuple(
+        slot
+        for slot in PROPOSITION_EVIDENCE_SLOTS
+        if not (slot == "quantifier" and proposition.quantifier == "none")
     )
 
 

@@ -19,6 +19,10 @@ from ktem.docqa.question_proposition import (
 from ktem.docqa.retrieval_semantic_identity import semantic_retrieval_identity
 
 from .mara_qasper_candidate_evidence import evidence_polarity_priority
+from .mara_semantic_candidate_priority import (
+    candidate_source_fields,
+    semantic_record_priority,
+)
 from .mara_semantic_proposition_packing_support import (
     evidence_alignment_score,
     evidence_refs,
@@ -117,10 +121,12 @@ def pack_semantic_proposition_evidence(
     question: str,
     slots: list[dict[str, str]],
     bundle: EvidenceBundle,
+    *,
+    candidate_priority: bool = False,
 ) -> SemanticPropositionEvidencePacking:
     preferred = _preferred_evidence_ids(request)
     ranked_positions = ranked_evidence_positions(bundle)
-    records: list[tuple[int, int, float, int, dict[str, Any]]] = []
+    records: list[tuple[tuple[int | float, ...], dict[str, Any]]] = []
     seen: set[str] = set()
     for index, item in enumerate(bundle.items):
         try:
@@ -137,27 +143,33 @@ def pack_semantic_proposition_evidence(
         required_slot_ids = matching_slot_ids(slots, evidence_id)
         alignment_score = evidence_alignment_score(request, question, item)
         polarity_priority = evidence_polarity_priority(question, text)
-        records.append(
-            (
-                polarity_priority,
-                0 if evidence_id in preferred or required_slot_ids else 1,
-                -alignment_score,
-                ranked_positions.get(evidence_id, len(ranked_positions) + index),
-                {
-                    "evidence_id": evidence_id,
-                    "semantic_identity": semantic_retrieval_identity(item)
-                    or evidence_id,
-                    "source_id": stable_id,
-                    "page_label": page_label,
-                    "section_id": str(item.get("section_id") or "").strip(),
-                    "canonical_start": _optional_int(item.get("canonical_start")),
-                    "evidence_refs": list(evidence_refs(item)),
-                    "required_slot_ids": list(required_slot_ids),
-                    "proposition_alignment_score": alignment_score,
-                    "text": text,
-                },
-            )
+        slot_priority = 0 if evidence_id in preferred or required_slot_ids else 1
+        ranked_position = ranked_positions.get(
+            evidence_id, len(ranked_positions) + index
         )
+        priority = semantic_record_priority(
+            question,
+            text,
+            candidate_priority=candidate_priority,
+            polarity_priority=polarity_priority,
+            alignment_score=alignment_score,
+            slot_priority=slot_priority,
+            ranked_position=ranked_position,
+        )
+        record = {
+            "evidence_id": evidence_id,
+            "semantic_identity": semantic_retrieval_identity(item) or evidence_id,
+            "source_id": stable_id,
+            "page_label": page_label,
+            "section_id": str(item.get("section_id") or "").strip(),
+            "canonical_start": _optional_int(item.get("canonical_start")),
+            "evidence_refs": list(evidence_refs(item)),
+            "required_slot_ids": list(required_slot_ids),
+            "proposition_alignment_score": alignment_score,
+            "text": text,
+            **candidate_source_fields(text, enabled=candidate_priority),
+        }
+        records.append((priority, record))
     selected = _selected_evidence_records(records)
     item_char_limit = _evidence_item_char_limit(request)
     packed, estimated_input_tokens, truncated_count = _fit_evidence_records(
@@ -187,17 +199,14 @@ def pack_semantic_proposition_evidence(
 
 
 def _selected_evidence_records(
-    records: list[tuple[int, int, float, int, dict[str, Any]]],
+    records: list[tuple[tuple[int | float, ...], dict[str, Any]]],
 ) -> list[dict[str, Any]]:
     ranked = sorted(
         records,
-        key=lambda row: (row[0], row[1], row[2], row[3], row[4]["evidence_id"]),
+        key=lambda row: (row[0], row[1]["evidence_id"]),
     )
     return [
-        value
-        for _polarity_priority, _slot_priority, _alignment, _rank, value in ranked[
-            :SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS
-        ]
+        value for _priority, value in ranked[:SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS]
     ]
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection
+from itertools import combinations
 from typing import Any
 
 from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
@@ -290,12 +291,8 @@ def _unknown_assessment_schema(
                 "items": {"type": "string", "maxLength": 24},
             },
             "unresolved_proposition_slots": {
-                "type": "array",
-                "minItems": 1,
-                "items": {
-                    "type": "string",
-                    "enum": list(proposition_slots),
-                },
+                "type": "string",
+                "enum": _canonical_slot_sets(proposition_slots),
             },
             "support_gap": {
                 "type": "string",
@@ -316,3 +313,13 @@ def _unknown_assessment_schema(
         ],
         "additionalProperties": False,
     }
+
+
+def _canonical_slot_sets(proposition_slots: tuple[str, ...]) -> list[str]:
+    """Encode a non-empty unique slot set without unsupported ``uniqueItems``."""
+
+    return [
+        "|".join(selected)
+        for count in range(1, len(proposition_slots) + 1)
+        for selected in combinations(proposition_slots, count)
+    ]

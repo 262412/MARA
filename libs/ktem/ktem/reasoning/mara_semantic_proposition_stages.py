@@ -4,8 +4,7 @@ import json
 import logging
 from collections.abc import Collection
 from copy import deepcopy
-from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from ktem.docqa.boolean_authority_schema import SEMANTIC_ENTAILMENT_AUDIT_CONTRACT
 
@@ -23,12 +22,20 @@ from .mara_semantic_entailment_audit import (
     parse_semantic_entailment_audit,
     semantic_entailment_audit_response_format,
 )
+from .mara_semantic_audit_preflight import (
+    PRE_AUDIT_SCHEMA_VALIDATION_FAILED,
+    audit_preflight_failure_reason,
+)
 from .mara_semantic_proposition_debug import (
-    SemanticPropositionStageAttempt,
     provider_failure,
     response_completion_tokens,
     response_finish_reason,
     response_text,
+)
+from .mara_semantic_proposition_stage_runtime import (
+    ParsedSemanticStage,
+    StageCallResult,
+    parsed_stage as _parsed_stage,
 )
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT,
@@ -44,18 +51,6 @@ SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES = 1
 LOGGER = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class ParsedSemanticStage:
-    response: Any | None
-    value: dict[str, Any] | None
-    failure_reason: str
-    initial_failure_reason: str
-    retry_count: int
-    provider_failure_reason: str
-    call_count: int
-    attempts: tuple[SemanticPropositionStageAttempt, ...]
-
-
 def proposal_stage(
     llm: Any,
     prompt: str,
@@ -67,7 +62,7 @@ def proposal_stage(
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
 ) -> ParsedSemanticStage:
-    def call(correction: str = "") -> tuple[Any | None, str, str]:
+    def call(correction: str = "") -> StageCallResult:
         return _call_proposal(
             llm,
             prompt,
@@ -90,7 +85,11 @@ def proposal_stage(
             applicable_proposition_slots=applicable_proposition_slots,
         )
 
-    return _parsed_stage(call, parse)
+    return _parsed_stage(
+        call,
+        parse,
+        max_parse_retries=SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES,
+    )
 
 
 def audit_stage(
@@ -105,7 +104,15 @@ def audit_stage(
 ) -> ParsedSemanticStage:
     labels = [f"P{index}" for index in range(1, premise_count + 1)]
 
-    def call(correction: str = "") -> tuple[Any | None, str, str]:
+    preflight_reason = audit_preflight_failure_reason(
+        labels,
+        premise_slot_expectations=premise_slot_expectations,
+        premise_slot_evidence=premise_slot_evidence,
+    )
+    if preflight_reason:
+        return _pre_audit_failure_stage(preflight_reason)
+
+    def call(correction: str = "") -> StageCallResult:
         return _call_audit(
             llm,
             prompt,
@@ -132,6 +139,7 @@ def audit_stage(
             input_identity=semantic_identity,
         ),
         identity_failure_reason="audit_retry_semantic_identity_changed",
+        max_parse_retries=SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES,
     )
 
 
@@ -143,7 +151,7 @@ def candidate_unknown_audit_stage(
     verifier_judgment: str = "",
     seed: int,
 ) -> ParsedSemanticStage:
-    def call(correction: str = "") -> tuple[Any | None, str, str]:
+    def call(correction: str = "") -> StageCallResult:
         return _call_candidate_unknown_audit(
             llm,
             prompt,
@@ -160,7 +168,11 @@ def candidate_unknown_audit_stage(
             verifier_judgment=verifier_judgment,
         )
 
-    return _parsed_stage(call, parse)
+    return _parsed_stage(
+        call,
+        parse,
+        max_parse_retries=SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES,
+    )
 
 
 def proposal_diagnostics(stage: ParsedSemanticStage) -> dict[str, Any]:
@@ -182,6 +194,8 @@ def audit_diagnostics(stage: ParsedSemanticStage, *, model: str) -> dict[str, An
     execution_status = (
         "provider_failed"
         if stage.provider_failure_reason
+        else "not_started"
+        if stage.call_count == 0 and stage.value is None
         else "parse_failed"
         if stage.value is None
         else "parsed"
@@ -193,7 +207,13 @@ def audit_diagnostics(stage: ParsedSemanticStage, *, model: str) -> dict[str, An
         "audit_execution_status": execution_status,
         "audit_parser_accepted": stage.value is not None,
         "audit_semantic_rejection": False,
-        "audit_reason": stage.provider_failure_reason,
+        "audit_reason": (
+            stage.provider_failure_reason
+            if stage.provider_failure_reason
+            else stage.failure_reason
+            if execution_status == "not_started"
+            else ""
+        ),
         "audit_retry_count": stage.retry_count,
         "audit_initial_parse_failure_reason": stage.initial_failure_reason,
         "audit_parse_failure_reason": stage.failure_reason,
@@ -220,58 +240,6 @@ def invalid_response_reason(
             else "provider_output_truncated"
         )
     return invalid_reason
-
-
-def _parsed_stage(
-    call: Callable[[str], tuple[Any | None, str, str]],
-    parse: Callable[[Any], Any],
-    *,
-    semantic_identity: Callable[[Any, Any], Any] | None = None,
-    identity_failure_reason: str = "semantic_retry_identity_changed",
-) -> ParsedSemanticStage:
-    response, failure, detail = call("")
-    if response is None:
-        attempt = SemanticPropositionStageAttempt(None, None, "", "", failure, detail)
-        return ParsedSemanticStage(None, None, "", "", 0, failure, 1, (attempt,))
-    parsed = parse(response)
-    attempts = [_stage_attempt(response, parsed, "")]
-    initial_failure = str(parsed.failure_reason or "")
-    initial_identity = (
-        semantic_identity(response, parsed) if semantic_identity is not None else None
-    )
-    if parsed.value is not None or not SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES:
-        return _parsed_result(response, parsed, initial_failure, 0, attempts)
-    response, failure, detail = call(parsed.failure_reason)
-    if response is None:
-        attempts.append(
-            SemanticPropositionStageAttempt(
-                None, None, initial_failure, "", failure, detail
-            )
-        )
-        return ParsedSemanticStage(
-            None, None, "", initial_failure, 1, failure, 2, tuple(attempts)
-        )
-    parsed = parse(response)
-    attempts.append(_stage_attempt(response, parsed, initial_failure))
-    retry_identity = (
-        semantic_identity(response, parsed) if semantic_identity is not None else None
-    )
-    if (
-        initial_identity is not None
-        and retry_identity is not None
-        and retry_identity != initial_identity
-    ):
-        return ParsedSemanticStage(
-            response,
-            None,
-            identity_failure_reason,
-            initial_failure,
-            1,
-            "",
-            2,
-            tuple(attempts),
-        )
-    return _parsed_result(response, parsed, initial_failure, 1, attempts)
 
 
 def _audit_semantic_identity(
@@ -390,38 +358,6 @@ def _response_payload(response: Any) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _stage_attempt(
-    response: Any, parsed: Any, correction: str
-) -> SemanticPropositionStageAttempt:
-    return SemanticPropositionStageAttempt(
-        response,
-        deepcopy(parsed.value),
-        correction,
-        str(parsed.failure_reason or ""),
-        "",
-        "",
-    )
-
-
-def _parsed_result(
-    response: Any,
-    parsed: Any,
-    initial_failure: str,
-    retry_count: int,
-    attempts: list[SemanticPropositionStageAttempt],
-) -> ParsedSemanticStage:
-    return ParsedSemanticStage(
-        response,
-        parsed.value,
-        str(parsed.failure_reason or ""),
-        initial_failure,
-        retry_count,
-        "",
-        1 + retry_count,
-        tuple(attempts),
-    )
-
-
 def _call_proposal(
     llm: Any,
     prompt: str,
@@ -432,9 +368,9 @@ def _call_proposal(
     correction_reason: str,
     candidate: str,
     applicable_proposition_slots: Collection[str] | None,
-) -> tuple[Any | None, str, str]:
+) -> StageCallResult:
     try:
-        return (
+        return StageCallResult(
             llm(
                 [
                     SystemMessage(content=SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT),
@@ -451,12 +387,11 @@ def _call_proposal(
                 top_p=1,
                 seed=seed,
             ),
-            "",
-            "",
         )
     except Exception as exc:
         LOGGER.exception("Semantic proposition verifier model call failed")
-        return None, *provider_failure(exc)
+        failure, detail = provider_failure(exc)
+        return StageCallResult(None, failure, detail)
 
 
 def _call_audit(
@@ -468,30 +403,38 @@ def _call_audit(
     correction_reason: str,
     premise_slot_expectations: dict[str, Collection[str]] | None,
     premise_slot_evidence: dict[str, dict[str, Any]] | None,
-) -> tuple[Any | None, str, str]:
+) -> StageCallResult:
     try:
-        return (
+        response_format = semantic_entailment_audit_response_format(
+            premise_labels,
+            premise_slot_expectations=premise_slot_expectations,
+            premise_slot_evidence=premise_slot_evidence,
+        )
+    except ValueError as exc:
+        return StageCallResult(
+            None,
+            PRE_AUDIT_SCHEMA_VALIDATION_FAILED,
+            str(exc)[:4000],
+            False,
+        )
+    try:
+        return StageCallResult(
             llm(
                 [
                     SystemMessage(content=SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT),
                     HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
                 ],
                 max_tokens=SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-                response_format=semantic_entailment_audit_response_format(
-                    premise_labels,
-                    premise_slot_expectations=premise_slot_expectations,
-                    premise_slot_evidence=premise_slot_evidence,
-                ),
+                response_format=response_format,
                 temperature=0,
                 top_p=1,
                 seed=seed,
             ),
-            "",
-            "",
         )
     except Exception as exc:
         LOGGER.exception("Semantic entailment audit model call failed")
-        return None, *provider_failure(exc)
+        failure, detail = provider_failure(exc)
+        return StageCallResult(None, failure, detail)
 
 
 def _call_candidate_unknown_audit(
@@ -502,9 +445,9 @@ def _call_candidate_unknown_audit(
     verifier_judgment: str,
     seed: int,
     correction_reason: str,
-) -> tuple[Any | None, str, str]:
+) -> StageCallResult:
     try:
-        return (
+        return StageCallResult(
             llm(
                 [
                     SystemMessage(content=UNKNOWN_AUDIT_SYSTEM_PROMPT),
@@ -519,12 +462,24 @@ def _call_candidate_unknown_audit(
                 top_p=1,
                 seed=seed,
             ),
-            "",
-            "",
         )
     except Exception as exc:
         LOGGER.exception("Candidate-bound unknown audit model call failed")
-        return None, *provider_failure(exc)
+        failure, detail = provider_failure(exc)
+        return StageCallResult(None, failure, detail)
+
+
+def _pre_audit_failure_stage(reason: str) -> ParsedSemanticStage:
+    return ParsedSemanticStage(
+        None,
+        None,
+        reason,
+        reason,
+        0,
+        "",
+        0,
+        (),
+    )
 
 
 def _corrected_prompt(prompt: str, failure_reason: str) -> str:

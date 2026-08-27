@@ -18,10 +18,14 @@ from .mara_qasper_candidate_evidence import (
 )
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+    SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
     compact_json,
     pack_semantic_proposition_evidence,
     required_semantic_proposition_slots,
 )
+from .mara_semantic_proposition_span_selectors import canonical_span_selectors
+
+_CANDIDATE_SELECTORS_PER_RECORD = 4
 
 
 def _candidate_evidence(
@@ -35,6 +39,7 @@ def _candidate_evidence(
         question,
         slots,
         bundle,
+        candidate_priority=True,
     )
     records = [
         {
@@ -54,6 +59,13 @@ def _candidate_evidence(
             ],
             "proposition_alignment_score": float(
                 record.get("proposition_alignment_score") or 0.0
+            ),
+            "canonical_start": record.get("canonical_start"),
+            "candidate_source_text": str(
+                record.get("candidate_source_text") or record["text"]
+            ),
+            "candidate_source_text_start": int(
+                record.get("candidate_source_text_start") or 0
             ),
             "selectors": list(record.get("selectors", [])),
         }
@@ -132,6 +144,7 @@ def _candidate_prompt(
         )
         for slot in required_slots or []
     )
+    prompt_evidence = _prioritized_candidate_prompt_evidence(evidence, question)
     evidence_text = "\n\n".join(
         "\n".join(
             [
@@ -142,9 +155,9 @@ def _candidate_prompt(
                 ),
             ]
         )
-        for record in evidence
+        for record in prompt_evidence
     )
-    evidence_set_binding = _candidate_evidence_set_binding(evidence, question)
+    evidence_set_binding = _candidate_evidence_set_binding(prompt_evidence, question)
     return (
         "/no_think\n"
         f"QUESTION:\n{question.strip()}\n\n"
@@ -157,6 +170,13 @@ def _candidate_prompt(
         "CANDIDATE EVIDENCE-SET OBSERVATION:\n"
         f"{compact_json(_compact_candidate_evidence_set_binding(evidence_set_binding))}"
         "\n\n"
+        "CANDIDATE DECISION RULES:\n"
+        "Judge the exact typed actor-predicate-object-quantifier proposition, not "
+        "keyword co-occurrence. An incompatible definition or mutually exclusive scope, "
+        "quantity, or relation may be an explicit contradiction without the literal word "
+        "not; missing evidence alone remains unanswerable. For inspect, analyze, or "
+        "evaluate questions, an exact observation or error-analysis span may express the "
+        "predicate even when it uses a more specific verb.\n\n"
         "Use exact selector options; an evidence ID or a first selector is not a "
         "proposition binding. Hints and the set observation are retrieval-only. "
         "one to four exact selectors may cover applicable proposition slots by union. "
@@ -165,6 +185,46 @@ def _candidate_prompt(
         "not_applicable. Do not rewrite the parsed candidate; return one JSON object "
         "matching the required schema."
     )
+
+
+def _prioritized_candidate_prompt_evidence(
+    evidence: list[dict[str, Any]],
+    question: str,
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for record in evidence:
+        source_text = str(
+            record.get("candidate_source_text") or record.get("text") or ""
+        )
+        text_start = int(record.get("candidate_source_text_start") or 0)
+        canonical_start = record.get("canonical_start")
+        canonical_start = canonical_start if isinstance(canonical_start, int) else None
+        projected = {
+            **record,
+            "text": source_text,
+            "text_start": text_start,
+            "selectors": canonical_span_selectors(
+                str(record.get("label") or ""),
+                source_text,
+                text_start,
+                canonical_start,
+                selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
+            ),
+        }
+        options = _candidate_selector_options(projected, question=question)[
+            :_CANDIDATE_SELECTORS_PER_RECORD
+        ]
+        projected["selectors"] = [
+            {
+                "selector_id": option["evidence_ref"],
+                "text": option["text"],
+                "span_start": option["span_start"],
+                "span_end": option["span_end"],
+            }
+            for option in options
+        ]
+        output.append(projected)
+    return output
 
 
 def _compact_candidate_selector_options(

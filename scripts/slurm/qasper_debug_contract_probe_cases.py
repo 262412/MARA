@@ -25,6 +25,13 @@ class ProbeCase:
     # ``unknown`` by the production transaction.  Keep that terminal
     # observation distinct from the proposal sent to the auditor.
     proposal_judgment: str = ""
+    # Optional negative fixtures exercise the proposal contract before any
+    # auditor request. They stay outside ``_PROBE_CASES`` so the live
+    # heterogeneous-provider state matrix remains an online-only gate.
+    question: str = _QUESTION
+    evidence_element_type: str = ""
+    payload_fixture: str = ""
+    pre_audit_reasons: tuple[str, ...] = ()
 
 
 # These are evidence/control inputs only.  No trace, authority, or terminal
@@ -91,6 +98,68 @@ _PROBE_CASES: tuple[ProbeCase, ...] = (
 )
 
 
+# These payload fixtures are derived from natural evidence-quality failures.
+# They are negative contract probes, not benchmark labels or gold answers.
+_NATURAL_QUALITY_PRE_AUDIT_CASES: tuple[ProbeCase, ...] = (
+    ProbeCase(
+        "natural_overdeclared_actor_quantifier",
+        "The authors released the code for the evaluated system.",
+        "",
+        "pre_audit_failed",
+        "not_started",
+        expected_negative=True,
+        payload_fixture="proposer_over_declares_actor_quantifier",
+        pre_audit_reasons=("premise_proposition_binding_invalid",),
+    ),
+    ProbeCase(
+        "natural_title_only_relation_object_binding",
+        "Code Release",
+        "",
+        "pre_audit_failed",
+        "not_started",
+        expected_negative=True,
+        controlled_candidate="yes",
+        evidence_element_type="title",
+        payload_fixture="title_only_span_binds_relation_object",
+        pre_audit_reasons=(
+            "local_semantic_relation_mention_only",
+            "local_semantic_slot_span_unbound",
+            "pre_audit_slot_evidence_mismatch",
+        ),
+    ),
+    ProbeCase(
+        "natural_slot_expectation_evidence_mismatch",
+        "The authors released it.",
+        "",
+        "pre_audit_failed",
+        "not_started",
+        expected_negative=True,
+        controlled_candidate="yes",
+        payload_fixture="proposer_slot_expectations_differ_from_verified_slot_evidence",
+        pre_audit_reasons=(
+            "local_semantic_slot_span_unbound",
+            "local_semantic_slot_coverage_incomplete",
+            "pre_audit_slot_evidence_mismatch",
+        ),
+    ),
+    ProbeCase(
+        "natural_duplicate_unknown_assessment_slots",
+        (
+            "The paper reports the evaluation dataset and metrics, but it does "
+            "not state whether the authors released code for the evaluated system."
+        ),
+        "",
+        "pre_audit_failed",
+        "not_started",
+        expected_negative=True,
+        payload_fixture="unknown_assessment_duplicate_unresolved_slots",
+        pre_audit_reasons=("unknown_assessment_slot_invalid",),
+    ),
+)
+
+NATURAL_QUALITY_PRE_AUDIT_CASES = _NATURAL_QUALITY_PRE_AUDIT_CASES
+
+
 def _digest(value: Any) -> str:
     canonical = json.dumps(
         value,
@@ -112,7 +181,7 @@ def _build_request_and_bundle(case: ProbeCase, index: int) -> tuple[Any, Any]:
     )
 
     plan = build_query_plan(
-        _QUESTION,
+        case.question,
         answer_type="boolean",
         verification_domain="qasper",
     )
@@ -128,6 +197,8 @@ def _build_request_and_bundle(case: ProbeCase, index: int) -> tuple[Any, Any]:
         evidence_level="span",
         text=case.evidence,
     ).as_dict()
+    if case.evidence_element_type:
+        item["element_type"] = case.evidence_element_type
     evidence_key = identity_of(item).key
     bound_slots = tuple(
         replace(slot, status="filled", evidence_ids=(evidence_key,))
@@ -135,9 +206,9 @@ def _build_request_and_bundle(case: ProbeCase, index: int) -> tuple[Any, Any]:
     )
     plan = replace(plan, evidence_slots=bound_slots)
     request = DocQARequest(
-        prompt=_QUESTION,
-        controller_question=_QUESTION,
-        retrieval_query=_QUESTION,
+        prompt=case.question,
+        controller_question=case.question,
+        retrieval_query=case.question,
         dataset_family="qasper",
         task_type="boolean",
         answer_type="boolean",
@@ -151,9 +222,6 @@ def _build_request_and_bundle(case: ProbeCase, index: int) -> tuple[Any, Any]:
         generation_seed=20260824 + index,
         trace_context={"contract_probe_case_id": case.case_id},
     )
-    # Both production stages consume this source-owned transaction identity.
-    # Supplying it before candidate generation keeps generator/verifier
-    # provenance in one transaction group without creating a trace payload.
     assert request.generation_seed is not None
     request.trace_context["trace_group_id"] = candidate_transaction_identity(
         request,
@@ -161,9 +229,9 @@ def _build_request_and_bundle(case: ProbeCase, index: int) -> tuple[Any, Any]:
         int(request.generation_seed),
     )["trace_group_id"]
     if case.controlled_candidate:
-        request.trace_context[
-            "contract_probe_original_candidate"
-        ] = case.controlled_candidate
+        request.trace_context["contract_probe_original_candidate"] = (
+            case.controlled_candidate
+        )
     bundle = EvidenceBundle(
         route="contract_probe",
         items=[item],
@@ -172,6 +240,8 @@ def _build_request_and_bundle(case: ProbeCase, index: int) -> tuple[Any, Any]:
             "contract_probe_evidence_digest": _digest(item),
         },
     )
+    if case.payload_fixture:
+        bundle.metadata["contract_probe_payload_fixture"] = case.payload_fixture
     if case.controlled_fault:
         bundle.metadata["contract_probe_controlled_proposal"] = {
             "contract_id": "qasper_controlled_verifier_negative_probe.v1",

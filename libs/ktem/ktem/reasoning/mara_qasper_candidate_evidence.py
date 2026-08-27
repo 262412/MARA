@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import re
 from itertools import combinations
 from typing import Any
 
-from ktem.docqa.boolean_evidence_scope import _actor
 from ktem.docqa.boolean_proposition_polarity import evidence_polarity
-from ktem.docqa.boolean_proposition_tokens import _content_tokens, _object_token
 from ktem.docqa.question_proposition import build_question_proposition
 
 from .mara_qasper_candidate_evidence_projection import (
@@ -17,21 +14,15 @@ from .mara_qasper_candidate_evidence_projection import (
     span_set_slot_refs as _span_set_slot_refs,
 )
 from .mara_qasper_candidate_evidence_projection import span_set_spans as _span_set_spans
+from .mara_qasper_candidate_relation import (
+    candidate_relation_anchor,
+    candidate_slot_hints,
+)
+from .mara_qasper_candidate_relation import (
+    normalized_candidate_object_tokens as _normalized_object_tokens,
+)
 
 _PROPOSITION_SLOTS = ("actor", "predicate", "object", "quantifier")
-_NUMBER_EQUIVALENTS = {
-    "zero": "0",
-    "one": "1",
-    "two": "2",
-    "three": "3",
-    "four": "4",
-    "five": "5",
-    "six": "6",
-    "seven": "7",
-    "eight": "8",
-    "nine": "9",
-    "ten": "10",
-}
 
 
 def candidate_selector_options(
@@ -67,14 +58,8 @@ def candidate_selector_options(
                 ),
             }
         )
-    signal_priority = {
-        "support": 0,
-        "explicit_contradiction": 0,
-        "undetermined": 1,
-    }
     return sorted(
-        options,
-        key=lambda option: signal_priority[str(option["polarity_signal"])],
+        options, key=lambda option: _selector_prompt_priority(question, option)
     )
 
 
@@ -235,64 +220,27 @@ def evidence_polarity_priority(question: str, text: str) -> int:
     return 0 if observed in {"support", "explicit_contradiction"} else 1
 
 
-def candidate_slot_hints(question: str, text: str) -> list[str]:
-    """Return conservative, non-authoritative hints for one exact selector."""
-
-    proposition = build_question_proposition(question)
-    hints: list[str] = []
-    if _candidate_actor_aligned(proposition.actor, proposition.subject_surface, text):
-        hints.append("actor")
-    if evidence_polarity(question, text, desired_polarity="yes") in {"yes", "no"}:
-        hints.append("predicate")
-    if _candidate_object_aligned(proposition.object_surface, text):
-        hints.append("object")
-    if _candidate_quantifier_aligned(proposition.quantifier, text):
-        hints.append("quantifier")
-    return hints
-
-
-def _candidate_actor_aligned(actor: str, subject: str, text: str) -> bool:
-    if actor == "current_paper":
-        return _actor(text, "unknown") == "current_paper"
-    if actor == "prior_work":
-        return _actor(text, "related_work") == "cited_work"
-    subject_tokens = _normalized_object_tokens(subject)
-    return bool(subject_tokens and subject_tokens <= _normalized_object_tokens(text))
-
-
-def _candidate_object_aligned(object_surface: str, text: str) -> bool:
-    object_tokens = _normalized_object_tokens(object_surface)
-    return bool(object_tokens and object_tokens <= _normalized_object_tokens(text))
-
-
-def _normalized_object_tokens(value: str) -> set[str]:
-    return {
-        normalized
-        for token in _content_tokens(value)
-        if (normalized := _object_token(token))
+def _selector_prompt_priority(
+    question: str,
+    option: dict[str, Any],
+) -> tuple[int, int, int, int, int, int, str]:
+    signal_priority = {
+        "support": 0,
+        "explicit_contradiction": 0,
+        "undetermined": 1,
     }
-
-
-def _candidate_quantifier_aligned(quantifier: str, text: str) -> bool:
-    normalized = " ".join(str(quantifier or "").casefold().split())
-    if normalized in {"", "none"}:
-        return False
-    tokens = set(re.findall(r"[a-z0-9]+", str(text or "").casefold()))
-    if normalized.startswith("count:"):
-        count = normalized.partition(":")[2]
-        equivalent = next(
-            (word for word, value in _NUMBER_EQUIVALENTS.items() if value == count),
-            None,
-        )
-        return bool(count in tokens or (equivalent and equivalent in tokens))
-    equivalent = _NUMBER_EQUIVALENTS.get(normalized)
-    if equivalent is not None:
-        return normalized in tokens or equivalent in tokens
-    reverse = {value: key for key, value in _NUMBER_EQUIVALENTS.items()}
-    equivalent = reverse.get(normalized)
-    if equivalent is not None:
-        return normalized in tokens or equivalent in tokens
-    return normalized in " ".join(str(text or "").casefold().split())
+    text = str(option.get("text") or "")
+    overlap = len(_normalized_object_tokens(question) & _normalized_object_tokens(text))
+    meta_only = int(text.lstrip().startswith("#"))
+    return (
+        signal_priority.get(str(option.get("polarity_signal") or ""), 1),
+        0 if candidate_relation_anchor(question, text) else 1,
+        -len(option.get("slot_hints") or []),
+        meta_only,
+        -overlap,
+        int(option.get("span_start") or 0),
+        str(option.get("evidence_ref") or ""),
+    )
 
 
 def candidate_selector_ids(record: dict[str, Any]) -> tuple[str, ...]:
@@ -460,11 +408,8 @@ def _candidate_span_set(
     anchors = [
         selector
         for selector in ordered
-        if evidence_polarity(
-            question,
-            str(selector["text"]),
-            desired_polarity="yes",
-        )
+        if candidate_relation_anchor(question, str(selector["text"]))
+        and evidence_polarity(question, str(selector["text"]), desired_polarity="yes")
         == polarity
     ]
     for anchor in anchors:
@@ -543,11 +488,15 @@ def _valid_candidate_span_set(
     covered = {slot for value in ordered for slot in value["slot_hints"]}
     if not set(required_slots) <= covered:
         return None
-    if (
-        polarity is not None
-        and evidence_polarity(
+    if not any(
+        candidate_relation_anchor(question, str(value["text"])) for value in ordered
+    ):
+        return None
+    if polarity is not None and (
+        len(ordered) != 1
+        or evidence_polarity(
             question,
-            " ".join(str(value["text"]) for value in ordered),
+            str(ordered[0]["text"]),
             desired_polarity="yes",
         )
         != polarity
