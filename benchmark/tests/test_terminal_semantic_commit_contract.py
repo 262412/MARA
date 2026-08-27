@@ -178,9 +178,13 @@ def test_safe_abstention_has_one_runtime_semantic_identity() -> None:
     }
     assert committed_answers == {"unanswerable"}
     assert prediction["engine_terminal_commit"]["contract_id"] == (
-        "terminal_semantic_commit.v2"
+        "terminal_semantic_commit.v3"
     )
-    assert prediction["engine_terminal_commit"]["state_version"] == 2
+    assert prediction["engine_terminal_commit"]["state_version"] == 3
+    assert prediction["engine_terminal_commit"]["presentation_answer"] == (
+        ABSTAIN_MESSAGE
+    )
+    assert prediction["engine_terminal_commit"]["outcome"] == "safe_abstention"
     assert prediction["answer_for_user"] == ABSTAIN_MESSAGE
     assert prediction["answer_status"] == "abstained"
     assert prediction["terminal_answer_state"]["supporting_evidence"] == []
