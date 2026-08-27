@@ -40,6 +40,9 @@ def qasper_canonical_span_universe_digest(
             "allowed_proposition_slots": list(
                 selector.get("allowed_proposition_slots") or []
             ),
+            "proposition_slot_spans": deepcopy(
+                dict(selector.get("proposition_slot_spans") or {})
+            ),
             "relation_bearing": selector.get("relation_bearing"),
             "candidate_relation_role": str(
                 selector.get("candidate_relation_role") or ""
@@ -72,11 +75,12 @@ def qasper_canonical_records_reason(
             start = selector.get("span_start")
             end = selector.get("span_end")
             slots = selector.get("allowed_proposition_slots")
+            if not isinstance(slots, list):
+                return "canonical_semantic_pack_selector_invalid"
             relation_role = str(selector.get("candidate_relation_role") or "")
             local_state = str(selector.get("local_relation_state") or "")
             slots_valid = bool(
-                isinstance(slots, list)
-                and len(set(slots)) == len(slots)
+                len(set(slots)) == len(slots)
                 and all(slot in _PROPOSITION_SLOTS for slot in slots)
             )
             uncertainty_only = bool(
@@ -97,6 +101,7 @@ def qasper_canonical_records_reason(
                 or end <= start
                 or end - start != len(text)
                 or not slots_valid
+                or not _proposition_slot_spans_valid(selector, slots)
                 or (not slots and not uncertainty_only)
                 or not isinstance(selector.get("relation_bearing"), bool)
                 or relation_role not in {"polarity_evidence", "uncertainty_context"}
@@ -112,6 +117,48 @@ def qasper_canonical_records_reason(
                 return "canonical_semantic_pack_selector_invalid"
             selector_ids.add(selector_id)
     return ""
+
+
+def _proposition_slot_spans_valid(
+    selector: Mapping[str, Any],
+    slots: list[str],
+) -> bool:
+    raw = selector.get("proposition_slot_spans")
+    if not isinstance(raw, Mapping) or set(raw) != set(slots):
+        return False
+    parent_id = str(selector.get("selector_id") or "")
+    parent_text = str(selector.get("text") or "")
+    parent_start = selector.get("span_start")
+    parent_end = selector.get("span_end")
+    if not isinstance(parent_start, int) or not isinstance(parent_end, int):
+        return False
+    parent_digest = canonical_payload_digest(parent_text)
+    for slot in slots:
+        child = raw.get(slot)
+        if not isinstance(child, Mapping):
+            return False
+        text = str(child.get("text") or "")
+        start = child.get("span_start")
+        end = child.get("span_end")
+        if (
+            not text
+            or not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or start < parent_start
+            or end > parent_end
+            or end <= start
+            or end - start != len(text)
+            or parent_text[start - parent_start : end - parent_start] != text
+            or child.get("parent_selector_id") != parent_id
+            or child.get("parent_span_start") != parent_start
+            or child.get("parent_span_end") != parent_end
+            or child.get("text_digest") != canonical_payload_digest(text)
+            or child.get("parent_text_digest") != parent_digest
+        ):
+            return False
+    return True
 
 
 def qasper_semantic_pack_continuity_reason(
@@ -156,7 +203,7 @@ def qasper_semantic_pack_continuity_reason(
         "span_universe_digest": span_digest,
         "candidate_transaction_id": candidate_transaction_id,
     }
-    if _stage_identity_reason(bundle, response, expected_identity):
+    if _stage_identity_reason(bundle, response, expected_identity, payload):
         return "canonical_semantic_pack_stage_identity_mismatch"
     selector_lookup, lookup_reason = _selector_lookup(records)
     if lookup_reason:
@@ -171,6 +218,7 @@ def _stage_identity_reason(
     bundle: EvidenceBundle,
     response: Mapping[str, Any],
     expected: Mapping[str, str],
+    pack: Mapping[str, Any],
 ) -> str:
     candidate = bundle.metadata.get("qasper_candidate_generation")
     verifier_trace = bundle.metadata.get("semantic_proposition_verifier")
@@ -186,7 +234,12 @@ def _stage_identity_reason(
         "canonical_span_universe_digest": expected["span_universe_digest"],
         "transaction_id": expected["candidate_transaction_id"],
     }
-    if any(candidate.get(key) != value for key, value in candidate_expected.items()):
+    if (
+        any(candidate.get(key) != value for key, value in candidate_expected.items())
+        or candidate.get("candidate_evidence_set_binding")
+        != pack.get("proposition_binding")
+        or candidate.get("required_slots") != pack.get("slots")
+    ):
         return "candidate_stage_identity_mismatch"
     verifier_expected = {
         "semantic_pack_digest": expected["semantic_pack_digest"],

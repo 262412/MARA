@@ -8,6 +8,7 @@ from ktem.docqa.evidence_schema import EvidenceBundle
 from .mara_qasper_candidate_evidence import (
     candidate_evidence_set_binding as _candidate_evidence_set_binding,
 )
+from .mara_qasper_candidate_evidence import candidate_required_slots_from_binding
 from .mara_qasper_candidate_evidence import (
     candidate_selector_ids as _candidate_selector_ids,
 )
@@ -78,7 +79,12 @@ def _candidate_evidence(
     prioritized_records = _prioritized_candidate_prompt_evidence(records, question)
     records = prepare_qasper_canonical_records(question, prioritized_records)
     semantic_filtered_count = len(prioritized_records) - len(records)
-    records, bound_slots, candidate_dropped_count = _fit_candidate_prompt_evidence(
+    (
+        records,
+        bound_slots,
+        evidence_set_binding,
+        candidate_dropped_count,
+    ) = _fit_candidate_prompt_evidence(
         question,
         records,
         slots=slots,
@@ -102,6 +108,7 @@ def _candidate_evidence(
             "typed_proposition": packing.question_proposition,
             "question_proposition_resolution": packing.question_proposition_resolution,
             "required_slots": bound_slots,
+            "candidate_evidence_set_binding": evidence_set_binding,
         },
         packing,
     )
@@ -114,21 +121,38 @@ def _fit_candidate_prompt_evidence(
     slots: list[dict[str, Any]],
     proposition: dict[str, Any],
     proposition_resolution: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], int]:
     selected = list(records)
     while selected:
-        bound_slots = _bound_candidate_slots(slots, selected)
+        evidence_set_binding = _candidate_evidence_set_binding(selected, question)
+        bound_slots = _bound_candidate_slots(
+            slots,
+            selected,
+            binding=evidence_set_binding,
+        )
         prompt = _candidate_prompt(
             question,
             selected,
             proposition=proposition,
             proposition_resolution=proposition_resolution,
             required_slots=bound_slots,
+            evidence_set_binding=evidence_set_binding,
         )
         if len(prompt) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS:
-            return selected, bound_slots, len(records) - len(selected)
+            return (
+                selected,
+                bound_slots,
+                evidence_set_binding,
+                len(records) - len(selected),
+            )
         selected.pop()
-    return [], _bound_candidate_slots(slots, []), len(records)
+    evidence_set_binding = _candidate_evidence_set_binding([], question)
+    return (
+        [],
+        _bound_candidate_slots(slots, [], binding=evidence_set_binding),
+        evidence_set_binding,
+        len(records),
+    )
 
 
 def _candidate_prompt(
@@ -138,6 +162,7 @@ def _candidate_prompt(
     proposition: dict[str, Any] | None = None,
     proposition_resolution: dict[str, Any] | None = None,
     required_slots: list[dict[str, Any]] | None = None,
+    evidence_set_binding: dict[str, Any] | None = None,
 ) -> str:
     proposition_text = compact_json(proposition or {})
     resolution_status = str((proposition_resolution or {}).get("status") or "")
@@ -161,7 +186,11 @@ def _candidate_prompt(
         )
         for record in prompt_evidence
     )
-    evidence_set_binding = _candidate_evidence_set_binding(prompt_evidence, question)
+    evidence_set_binding = (
+        evidence_set_binding
+        if evidence_set_binding is not None
+        else _candidate_evidence_set_binding(prompt_evidence, question)
+    )
     return (
         "/no_think\n"
         f"QUESTION:\n{question.strip()}\n\n"
@@ -252,7 +281,18 @@ def _compact_candidate_selector_options(
         "polarity_signal",
     )
     return [
-        {field: option[field] for field in fields}
+        {
+            **{field: option[field] for field in fields},
+            "proposition_slot_spans": {
+                slot: {
+                    key: span[key]
+                    for key in ("evidence_ref", "span_start", "span_end", "text")
+                }
+                for slot, span in dict(
+                    option.get("proposition_slot_spans") or {}
+                ).items()
+            },
+        }
         for option in _candidate_selector_options(record, question=question)
     ]
 
@@ -264,6 +304,7 @@ def _compact_candidate_evidence_set_binding(
 
     return {
         "binding_status": binding.get("binding_status", "missing"),
+        "selector_universe_status": binding.get("selector_universe_status", "bounded"),
         "polarity_signal": binding.get("polarity_signal", "undetermined"),
         "selected_refs": list(binding.get("evidence_refs") or []),
         "support_refs": list(binding.get("support_evidence_refs") or []),
@@ -271,13 +312,29 @@ def _compact_candidate_evidence_set_binding(
             binding.get("explicit_contradiction_evidence_refs") or []
         ),
         "slot_refs": binding.get("slot_evidence_refs") or {},
+        "slot_child_refs": {
+            slot: [str(span.get("evidence_ref") or "") for span in spans]
+            for slot, spans in dict(binding.get("proposition_slot_spans") or {}).items()
+        },
+        "no_evidence_semantics": {
+            key: (binding.get("no_evidence_semantics") or {}).get(key)
+            for key in (
+                "classification",
+                "admissible_as_explicit_contradiction",
+                "closed_world_inference_required",
+            )
+        },
     }
 
 
 def _bound_candidate_slots(
     slots: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
+    *,
+    binding: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    if binding is not None:
+        return candidate_required_slots_from_binding(slots, binding)
     available = {str(record.get("evidence_id") or "") for record in evidence}
     output: list[dict[str, Any]] = []
     for slot in slots:

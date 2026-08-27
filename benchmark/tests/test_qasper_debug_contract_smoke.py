@@ -1,20 +1,26 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 
 import pytest
+from ktem.docqa.qasper_semantic_pack_contract import (
+    qasper_canonical_span_universe_digest,
+)
 
-from benchmark.tests.contract_smoke_fixtures import _write_run
+from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _write_run
 from benchmark.tests.qasper_debug_contract_fixtures import (
     _debug_candidate_audit,
     _debug_unknown_assessment,
     _qasper_contract_probe_predictions,
     _qasper_debug_prediction,
 )
+from benchmark.tests.qasper_debug_semantic_pack_fixtures import _debug_semantic_pack
 from scripts.slurm.qasper_debug_contract_pre_audit_provider import (
     controlled_pre_audit_model_factory,
 )
 from scripts.slurm.qasper_debug_contract_probe import run_pre_audit_probes
+from scripts.slurm.qasper_debug_contract_semantic_pack import _pack_identity_valid
 from scripts.slurm.validate_contract_smoke import QASPER_DEBUG_HARD_GATES, validate
 from scripts.slurm.validate_qasper_contract_probe import validate_contract_probe
 
@@ -69,6 +75,22 @@ def test_qasper_debug_contract_declares_special_hard_gates():
         "qasper_unexpected_unknown_assessment_count",
         "qasper_contract_probe_unexpected_false_abstention_count",
     } <= set(QASPER_DEBUG_HARD_GATES)
+
+
+def test_formal_pack_audit_rejects_rehashed_invalid_child_span() -> None:
+    pack = _debug_semantic_pack("candidate-transaction")
+    child = pack["records"][0]["selectors"][0]["proposition_slot_spans"]["predicate"]
+    child["text_digest"] = "invalid-child-digest"
+    pack["span_universe_digest"] = qasper_canonical_span_universe_digest(
+        pack["records"]
+    )
+    payload = deepcopy(pack)
+    payload.pop("pack_identity_digest")
+    pack["pack_identity_digest"] = _fixture_digest(payload)
+
+    assert (
+        _pack_identity_valid(pack, question="Does the paper use the method?") is False
+    )
 
 
 def test_qasper_debug_contract_smoke_audits_6x3_observability(tmp_path):
@@ -420,9 +442,7 @@ def test_qasper_debug_contract_requires_proposition_slot_binding_trace(tmp_path)
         validate(run_dir, suite_kind="qasper_debug")
 
 
-def test_qasper_debug_contract_does_not_rewrite_candidate_for_generator_slot_gap(
-    tmp_path,
-):
+def test_qasper_debug_contract_rejects_generator_pack_slot_divergence(tmp_path):
     run_dir = tmp_path / "run"
     predictions = [
         _qasper_debug_prediction(f"example-{example_index}", route)
@@ -433,11 +453,22 @@ def test_qasper_debug_contract_does_not_rewrite_candidate_for_generator_slot_gap
         "required_slots"
     ][0]
     slot.update(binding_status="missing", evidence_ids=[], evidence_refs=[])
+    candidate = predictions[0]["evidence_metadata"]["qasper_candidate_generation"][
+        "typed_candidate"
+    ]
     _write_qasper_run(run_dir, predictions=predictions)
 
-    audit = validate(run_dir, suite_kind="qasper_debug")
+    with pytest.raises(
+        ValueError,
+        match="qasper_canonical_semantic_pack_mismatch_count",
+    ):
+        validate(run_dir, suite_kind="qasper_debug")
 
-    assert audit["status"] == "passed"
     assert (
-        audit["hard_gates"]["qasper_required_slot_unverified_count"]["passed"] is True
+        predictions[0]["evidence_metadata"]["qasper_candidate_generation"][
+            "typed_candidate"
+        ]
+        == candidate
     )
+    audit = json.loads((run_dir / "contract_smoke_audit.json").read_text())
+    assert audit["status"] == "failed"

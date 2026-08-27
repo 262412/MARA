@@ -5,6 +5,7 @@ from typing import Any
 
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _prediction
 from benchmark.tests.qasper_debug_semantic_pack_fixtures import (
+    DEBUG_PACK_QUESTION,
     _debug_audited_premises,
     _debug_semantic_authority,
     _debug_semantic_pack,
@@ -45,6 +46,7 @@ def _qasper_debug_prediction(
     prediction.update(
         {
             "example_id": example_id,
+            "question": DEBUG_PACK_QUESTION,
             "route": route,
             "answer_type": "boolean",
             "gold_answers": gold,
@@ -91,6 +93,8 @@ def _populate_debug_semantic_metadata(
         canonical_semantic_pack_digest=identity["semantic_pack_digest"],
         canonical_span_universe_digest=identity["span_universe_digest"],
         canonical_pack_candidate_transaction_id=identity["candidate_transaction_id"],
+        candidate_evidence_set_binding=semantic_pack["proposition_binding"],
+        required_slots=semantic_pack["slots"],
     )
     metadata.update(
         qasper_canonical_semantic_pack=semantic_pack,

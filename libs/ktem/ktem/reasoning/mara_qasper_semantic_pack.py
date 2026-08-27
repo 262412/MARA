@@ -11,16 +11,14 @@ from ktem.docqa.qasper_semantic_pack_contract import (
     qasper_canonical_records_reason,
     qasper_canonical_span_universe_digest,
 )
-from ktem.docqa.question_proposition import (
-    applicable_proposition_evidence_slots,
-    build_question_proposition,
-)
-from ktem.docqa.semantic_relation_clause_validation import (
-    locally_observed_proposition_slots,
-    semantic_relation_clause_analysis,
-)
+from ktem.docqa.question_proposition import build_question_proposition
 
-from .mara_qasper_candidate_evidence import candidate_evidence_set_binding
+from .mara_qasper_candidate_evidence import (
+    candidate_evidence_set_binding,
+    candidate_required_slots_from_binding,
+)
+from .mara_qasper_candidate_evidence_projection import exact_selector_valid
+from .mara_qasper_candidate_selector_semantics import revalidated_selector_semantics
 from .mara_semantic_proposition_packing import (
     SemanticPropositionEvidencePacking,
     semantic_proposition_pack_digest,
@@ -33,32 +31,17 @@ def prepare_qasper_canonical_records(
 ) -> list[dict[str, Any]]:
     """Project records to the exact, locally checked selector universe."""
 
-    proposition = build_question_proposition(question)
-    applicable = applicable_proposition_evidence_slots(proposition)
     annotated: list[dict[str, Any]] = []
     for record in records:
         selectors: list[dict[str, Any]] = []
         for raw_selector in record.get("selectors") or []:
-            selector = _canonical_selector(raw_selector, proposition, applicable)
+            selector = _canonical_selector(raw_selector, record, question)
             if selector is not None:
                 selectors.append(selector)
         if selectors:
             annotated.append({**deepcopy(record), "selectors": selectors})
     observation = candidate_evidence_set_binding(annotated, question)
-    selected_refs = set(observation.get("evidence_refs") or [])
-    selected_refs.update(observation.get("support_evidence_refs") or [])
-    selected_refs.update(observation.get("explicit_contradiction_evidence_refs") or [])
-    if not selected_refs:
-        selected_refs = {
-            str(selector.get("selector_id") or "")
-            for record in annotated
-            for selector in record.get("selectors") or []
-            if selector.get("candidate_relation_role") == "uncertainty_context"
-            or (
-                selector.get("candidate_relation_role") == "polarity_evidence"
-                and "predicate" in set(selector.get("allowed_proposition_slots") or [])
-            )
-        }
+    selected_refs = set(observation.get("selector_universe_refs") or [])
     return [
         {**record, "selectors": selected}
         for record in annotated
@@ -74,56 +57,31 @@ def prepare_qasper_canonical_records(
 
 def _canonical_selector(
     raw_selector: Any,
-    proposition: Any,
-    applicable_slots: tuple[str, ...],
+    record: dict[str, Any],
+    question: str,
 ) -> dict[str, Any] | None:
-    if not isinstance(raw_selector, dict):
+    if not isinstance(raw_selector, dict) or not exact_selector_valid(
+        raw_selector,
+        record_text=record.get("text"),
+        record_text_start=record.get("text_start"),
+    ):
         return None
     selector = deepcopy(raw_selector)
     text = str(selector.get("text") or "")
-    analysis = semantic_relation_clause_analysis(
-        {
-            "quote": text,
-            "binds_proposition_slots": list(applicable_slots),
-        },
-        proposition,
-    )
-    relation_bearing = analysis.get("relation_bearing") is True
-    direct_negation = analysis.get("direct_relation_negated")
-    direct_anchor = bool(
-        relation_bearing
-        and analysis.get("target_relation_present") is True
-        and analysis.get("meta_scope") is not True
-        and isinstance(direct_negation, bool)
-    )
-    raw_state = str(analysis.get("status") or "unbound")
-    uncertainty_context = bool(
-        not direct_anchor
-        and raw_state in {"mention_only", "unbound"}
-        and relation_bearing
-        and analysis.get("target_relation_present") is True
-    )
-    allowed_slots = (
-        []
-        if uncertainty_context
-        else list(locally_observed_proposition_slots(text, proposition))
+    semantics = revalidated_selector_semantics(selector, question, text)
+    allowed_slots = list(semantics["slots"])
+    uncertainty_context = semantics["candidate_relation_role"] == (
+        "uncertainty_context"
     )
     if not allowed_slots and not uncertainty_context:
         return None
-    if direct_anchor:
-        local_state = (
-            "explicit_contradiction" if direct_negation else "affirmative_assertion"
-        )
-    else:
-        local_state = raw_state
     selector.update(
         allowed_proposition_slots=allowed_slots,
-        relation_bearing=relation_bearing,
-        candidate_relation_role=(
-            "uncertainty_context" if uncertainty_context else "polarity_evidence"
-        ),
-        local_relation_state=local_state,
-        local_relation_analysis_digest=str(analysis.get("analysis_digest") or ""),
+        proposition_slot_spans=deepcopy(semantics["slot_spans"]),
+        relation_bearing=bool(semantics["relation_bearing"]),
+        candidate_relation_role=str(semantics["candidate_relation_role"]),
+        local_relation_state=str(semantics["local_relation_state"]),
+        local_relation_analysis_digest=str(semantics["local_relation_analysis_digest"]),
     )
     return selector
 
@@ -136,6 +94,8 @@ def freeze_qasper_canonical_semantic_pack(
     source_packing: SemanticPropositionEvidencePacking,
     records: list[dict[str, Any]],
     candidate_transaction_id: str,
+    candidate_binding: dict[str, Any] | None = None,
+    candidate_required_slots: list[dict[str, Any]] | None = None,
 ) -> SemanticPropositionEvidencePacking:
     """Freeze the exact semantic object seen by one QASPER candidate.
 
@@ -148,10 +108,30 @@ def freeze_qasper_canonical_semantic_pack(
     records_reason = qasper_canonical_records_reason(canonical_records)
     if records_reason:
         raise ValueError(records_reason)
+    if (
+        prepare_qasper_canonical_records(question, canonical_records)
+        != canonical_records
+    ):
+        raise ValueError("canonical_semantic_pack_proposition_binding_mismatch")
+    authoritative_binding = candidate_evidence_set_binding(
+        canonical_records,
+        question,
+    )
+    if candidate_binding is not None and candidate_binding != authoritative_binding:
+        raise ValueError("canonical_semantic_pack_binding_inconsistent")
+    canonical_slots = candidate_required_slots_from_binding(
+        slots,
+        authoritative_binding,
+    )
+    if (
+        candidate_required_slots is not None
+        and candidate_required_slots != canonical_slots
+    ):
+        raise ValueError("canonical_semantic_pack_binding_inconsistent")
     proposition = build_question_proposition(question)
     pack_digest = semantic_proposition_pack_digest(
         proposition,
-        slots,
+        canonical_slots,
         canonical_records,
         item_char_limit=source_packing.item_char_limit,
     )
@@ -171,7 +151,8 @@ def freeze_qasper_canonical_semantic_pack(
     payload = _pack_payload(
         packing,
         question=question,
-        slots=slots,
+        slots=canonical_slots,
+        proposition_binding=authoritative_binding,
         candidate_transaction_id=candidate_transaction_id,
     )
     payload["pack_identity_digest"] = canonical_payload_digest(payload)
@@ -210,6 +191,16 @@ def load_qasper_canonical_semantic_pack(
     records_reason = qasper_canonical_records_reason(records)
     if records_reason:
         return None, records_reason
+    if prepare_qasper_canonical_records(question, records) != records:
+        return None, "canonical_semantic_pack_proposition_binding_mismatch"
+    proposition_binding = candidate_evidence_set_binding(records, question)
+    if (
+        payload.get("proposition_binding") != proposition_binding
+        or str(payload.get("proposition_binding_digest") or "")
+        != str(proposition_binding.get("binding_digest") or "")
+        or candidate_required_slots_from_binding(slots, proposition_binding) != slots
+    ):
+        return None, "canonical_semantic_pack_proposition_binding_mismatch"
     span_digest = qasper_canonical_span_universe_digest(records)
     if span_digest != str(payload.get("span_universe_digest") or ""):
         return None, "canonical_semantic_pack_identity_mismatch"
@@ -251,6 +242,17 @@ def load_qasper_canonical_semantic_pack(
     return packing, ""
 
 
+def qasper_canonical_required_slots(
+    bundle: EvidenceBundle,
+) -> list[dict[str, Any]]:
+    """Return slots from a pack already accepted by the canonical loader."""
+
+    raw = bundle.metadata.get(QASPER_CANONICAL_SEMANTIC_PACK_METADATA_KEY)
+    if not isinstance(raw, dict) or not isinstance(raw.get("slots"), list):
+        raise ValueError("canonical_semantic_pack_identity_mismatch")
+    return deepcopy(raw["slots"])
+
+
 def qasper_canonical_selector_bindings(
     records: list[dict[str, Any]],
 ) -> dict[str, tuple[str, ...]]:
@@ -271,6 +273,7 @@ def _pack_payload(
     *,
     question: str,
     slots: list[dict[str, Any]],
+    proposition_binding: dict[str, Any],
     candidate_transaction_id: str,
 ) -> dict[str, Any]:
     return {
@@ -281,6 +284,10 @@ def _pack_payload(
         "span_universe_digest": qasper_canonical_span_universe_digest(packing.records),
         "records": deepcopy(packing.records),
         "slots": deepcopy(slots),
+        "proposition_binding": deepcopy(proposition_binding),
+        "proposition_binding_digest": str(
+            proposition_binding.get("binding_digest") or ""
+        ),
         "item_char_limit": packing.item_char_limit,
         "input_token_budget": packing.input_token_budget,
         "estimated_input_tokens": packing.estimated_input_tokens,

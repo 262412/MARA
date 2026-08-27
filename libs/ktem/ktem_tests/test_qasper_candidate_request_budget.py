@@ -219,7 +219,7 @@ def test_candidate_evidence_serialization_keeps_spans_without_repeated_metadata(
     verbose_binding = candidate_evidence_set_binding([record], question)
     compact_binding = _compact_candidate_evidence_set_binding(verbose_binding)
 
-    assert compact_options[0] == {
+    expected_option = {
         "evidence_ref": "E1:S1",
         "span_start": 0,
         "span_end": len(text),
@@ -230,15 +230,32 @@ def test_candidate_evidence_serialization_keeps_spans_without_repeated_metadata(
         "local_relation_state": "affirmative_assertion",
         "polarity_signal": "support",
     }
+    assert {
+        key: value
+        for key, value in compact_options[0].items()
+        if key != "proposition_slot_spans"
+    } == expected_option
+    assert set(compact_options[0]["proposition_slot_spans"]) == {
+        "actor",
+        "predicate",
+        "object",
+    }
+    assert all(
+        set(span) == {"evidence_ref", "span_start", "span_end", "text"}
+        for span in compact_options[0]["proposition_slot_spans"].values()
+    )
     assert "evidence_id" not in compact_options[0]
     assert "joint_slot_hint" not in compact_options[0]
     assert set(compact_binding) == {
         "binding_status",
+        "selector_universe_status",
         "polarity_signal",
         "selected_refs",
         "support_refs",
         "contradiction_refs",
         "slot_refs",
+        "slot_child_refs",
+        "no_evidence_semantics",
     }
     assert len(compact_json(compact_options)) < len(compact_json(verbose_options))
     assert len(compact_json(compact_binding)) < len(compact_json(verbose_binding))

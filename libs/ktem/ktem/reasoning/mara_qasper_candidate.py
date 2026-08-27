@@ -25,6 +25,9 @@ from .mara_qasper_candidate_budget import (  # noqa: F401
     estimate_qasper_candidate_input_tokens,
 )
 from .mara_qasper_candidate_evidence import (  # noqa: F401
+    candidate_evidence_set_binding as _candidate_evidence_set_binding,
+)
+from .mara_qasper_candidate_evidence import (  # noqa: F401
     candidate_selector_options as _candidate_selector_options,
 )
 from .mara_qasper_candidate_identity import candidate_digest as _digest
@@ -233,6 +236,8 @@ def _freeze_candidate_semantic_pack(
         source_packing=source_packing,
         records=evidence,
         candidate_transaction_id=transaction_id,
+        candidate_binding=diagnostics.get("candidate_evidence_set_binding"),
+        candidate_required_slots=diagnostics.get("required_slots"),
     )
     diagnostics.update(
         evidence_pack_digest=packing.semantic_pack_digest,
@@ -309,6 +314,7 @@ def _candidate_messages(
             "question_proposition_resolution"
         ),
         required_slots=evidence_diagnostics.get("required_slots", []),
+        evidence_set_binding=evidence_diagnostics.get("candidate_evidence_set_binding"),
     )
     if not controlled_candidate:
         return [
@@ -342,12 +348,16 @@ def _fit_candidate_request(
         evidence_diagnostics.get("pre_request_dropped_evidence_count") or 0
     )
     while True:
+        evidence_set_binding = _candidate_evidence_set_binding(selected, question)
         bound_slots = _bound_candidate_slots(
-            evidence_diagnostics.get("required_slots", []), selected
+            evidence_diagnostics.get("required_slots", []),
+            selected,
+            binding=evidence_set_binding,
         )
         diagnostics = {
             **evidence_diagnostics,
             "required_slots": bound_slots,
+            "candidate_evidence_set_binding": evidence_set_binding,
             "candidate_request_dropped_evidence_count": dropped_count,
             "request_dropped_evidence_count": (
                 pre_request_dropped_count + dropped_count

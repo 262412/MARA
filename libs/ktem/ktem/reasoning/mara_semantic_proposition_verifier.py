@@ -35,7 +35,16 @@ from .mara_semantic_verifier_context import (
     auditor_semantic_pack_identity as _auditor_semantic_pack_identity,
 )
 from .mara_semantic_verifier_context import candidate_context as _candidate_context
+from .mara_semantic_verifier_context import (
+    execution_identity_free_diagnostics as _execution_identity_free_diagnostics,
+)
+from .mara_semantic_verifier_context import (
+    execution_identity_free_semantic_judgment as _execution_identity_free_judgment,
+)
 from .mara_semantic_verifier_context import model_name as _model_name
+from .mara_semantic_verifier_context import (
+    rebind_cached_semantic_judgment as _rebind_cached_semantic_judgment,
+)
 
 __all__ = [
     "SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS",
@@ -175,8 +184,17 @@ class _SemanticPropositionVerifier:
         candidate: str,
         prompt_chars: int,
     ) -> dict[str, Any] | None:
-        cached = self.cache[cache_key]
-        diagnostics = self.cache_diagnostics.get(cache_key, {})
+        cached = _rebind_cached_semantic_judgment(
+            self.cache[cache_key],
+            bundle=bundle,
+            packing=packing,
+        )
+        diagnostics = _execution_identity_free_diagnostics(
+            self.cache_diagnostics.get(cache_key, {})
+        )
+        auditor_pack_identity = _auditor_semantic_pack_identity(cached)
+        if auditor_pack_identity:
+            diagnostics["auditor_semantic_pack_identity"] = auditor_pack_identity
         self.debug_recorder.record_cache_reuse(
             cache_key,
             question,
@@ -480,8 +498,10 @@ def _store_model_response(
         candidate_bound_response(outcome.value, candidate) if outcome.value else None
     )
     diagnostics = outcome.diagnostics
-    verifier.cache[cache_key] = deepcopy(parsed)
-    verifier.cache_diagnostics[cache_key] = deepcopy(diagnostics)
+    verifier.cache[cache_key] = _execution_identity_free_judgment(parsed)
+    verifier.cache_diagnostics[cache_key] = _execution_identity_free_diagnostics(
+        diagnostics
+    )
     if parsed is None:
         verifier.failure_reasons[cache_key] = outcome.reason
     verifier.debug_recorder.record_model_transaction(

@@ -180,6 +180,7 @@ def predicate_spans(
             "control",
             _CONTROL_STEM,
             "subject",
+            "validat",
             "validate",
             "verify",
         },
@@ -326,6 +327,8 @@ def canonical_semantic_token(value: str) -> str:
 
 def _named_actor_alias_aligned(required: set[str], covered: set[str]) -> bool:
     if not covered:
+        return False
+    if "construct" in required and "construct" not in covered:
         return False
     noun_anchors = required - {"automatic", "automatically", "construct"}
     if noun_anchors and not noun_anchors & covered:

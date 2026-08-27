@@ -9,6 +9,10 @@ from .boolean_proposition_arguments import _question_argument_tokens
 from .boolean_proposition_context import normalized_object_tokens
 from .boolean_proposition_tokens import _relation_surface_tokens
 from .boolean_relations import primary_boolean_relation
+from .qasper_boolean_no_evidence import (
+    qasper_no_evidence_set_analysis,
+    qasper_support_evidence_binding_complete,
+)
 from .question_proposition import (
     QuestionProposition,
     applicable_proposition_evidence_slots,
@@ -174,6 +178,10 @@ def semantic_relation_evidence_set_constraint(
             for token in analysis.get("covered_object_tokens") or []
         }
     )
+    (
+        no_evidence_semantics,
+        support_evidence_binding_complete,
+    ) = _qasper_evidence_semantics(proposition, premises)
     reason = _evidence_set_reason(
         analyses,
         verdict,
@@ -181,6 +189,8 @@ def semantic_relation_evidence_set_constraint(
         bound_slots=bound_slots,
         required_object_tokens=required_object_tokens,
         covered_object_tokens=covered_object_tokens,
+        no_evidence_semantics=no_evidence_semantics,
+        support_evidence_binding_complete=support_evidence_binding_complete,
     )
     payload = {
         "contract_id": LOCAL_SEMANTIC_RELATION_CONSTRAINT,
@@ -207,9 +217,21 @@ def semantic_relation_evidence_set_constraint(
             str(analysis.get("status") or "unbound") for analysis in analyses
         ],
         "premise_analyses": analyses,
+        "qasper_no_evidence_semantics": no_evidence_semantics,
+        "support_evidence_binding_complete": support_evidence_binding_complete,
     }
     payload["constraint_digest"] = _digest(payload)
     return payload
+
+
+def _qasper_evidence_semantics(
+    proposition: QuestionProposition,
+    premises: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], bool]:
+    return (
+        qasper_no_evidence_set_analysis(proposition.surface, premises),
+        qasper_support_evidence_binding_complete(proposition.surface, premises),
+    )
 
 
 def premise_slot_evidence_for_audit(
@@ -312,16 +334,17 @@ def _evidence_set_reason(
     bound_slots: list[str],
     required_object_tokens: list[str],
     covered_object_tokens: list[str],
+    no_evidence_semantics: Mapping[str, Any],
+    support_evidence_binding_complete: bool,
 ) -> str:
     if not analyses:
         return "local_semantic_relation_missing"
     if any(value.get("status") == "mention_only" for value in analyses):
         return "local_semantic_relation_mention_only"
-    if verdict == "no" and not any(
-        value.get("direct_relation_negated") is True
-        and value.get("target_relation_present") is True
-        and value.get("meta_scope") is not True
-        for value in analyses
+    if (
+        verdict == "no"
+        and no_evidence_semantics.get("admissible_as_explicit_contradiction")
+        is not True
     ):
         return "local_semantic_explicit_contradiction_missing"
     if set(bound_slots) != set(required_slots):
@@ -329,6 +352,8 @@ def _evidence_set_reason(
     if set(covered_object_tokens) != set(required_object_tokens):
         return "local_semantic_object_coverage_incomplete"
     if verdict == "yes":
+        if not support_evidence_binding_complete:
+            return "local_semantic_required_role_binding_incomplete"
         if any(
             value.get("direct_relation_negated") is True
             and value.get("target_relation_present") is True
@@ -345,7 +370,7 @@ def _evidence_set_reason(
             return "local_semantic_relation_unresolved"
         return ""
     if verdict == "no":
-        if any(
+        if no_evidence_semantics.get("classification") == "explicit_negation" and any(
             value.get("direct_relation_negated") is False
             and value.get("target_relation_present") is True
             and value.get("meta_scope") is not True

@@ -261,9 +261,7 @@ def test_qasper_candidate_prompt_binds_typed_proposition_and_required_evidence_r
     assert bundle.metadata["qasper_candidate_generation"]["typed_proposition"]
 
 
-def test_qasper_candidate_parser_preserves_polarity_when_required_slot_is_unbound() -> (
-    None
-):
+def test_qasper_candidate_parser_projects_required_slot_from_candidate_binding() -> None:
     llm = _RecordingLLM('{"candidate":"yes"}')
     pipeline = SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
     request = _request()
@@ -280,7 +278,14 @@ def test_qasper_candidate_parser_preserves_polarity_when_required_slot_is_unboun
 
     assert generate_qasper_typed_candidate(pipeline, request, bundle) == "yes"
     trace = bundle.metadata["qasper_candidate_generation"]
-    assert all(slot["binding_status"] == "missing" for slot in trace["required_slots"])
+    observation = trace["candidate_evidence_set_binding"]
+    assert observation["binding_status"] == "bound"
+    assert all(slot["binding_status"] == "bound" for slot in trace["required_slots"])
+    assert all(
+        slot["evidence_refs"] == observation["evidence_refs"]
+        and slot["proposition_binding_digest"] == observation["binding_digest"]
+        for slot in trace["required_slots"]
+    )
     assert trace["failure_reason"] == ""
     assert trace["raw_candidate"] == "yes"
     assert trace["typed_candidate"] == "yes"

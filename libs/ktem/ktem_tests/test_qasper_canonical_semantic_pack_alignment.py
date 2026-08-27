@@ -205,7 +205,7 @@ def test_frozen_pack_fails_closed_when_span_universe_is_mutated() -> None:
     assert reason == "canonical_semantic_pack_identity_mismatch"
 
 
-def test_authority_rejects_any_stage_that_changes_the_frozen_object() -> None:
+def _continuity_case() -> tuple[str, EvidenceBundle, dict[str, Any]]:
     question = "Did the authors compare the two systems?"
     request = _request(question)
     bundle = _bundle(["The authors compared the two systems."])
@@ -237,6 +237,10 @@ def test_authority_rejects_any_stage_that_changes_the_frozen_object() -> None:
         "transaction_id": "candidate-transaction-1",
         "canonical_semantic_pack_digest": frozen.semantic_pack_digest,
         "canonical_span_universe_digest": span_digest,
+        "candidate_evidence_set_binding": bundle.metadata[
+            "qasper_canonical_semantic_pack"
+        ]["proposition_binding"],
+        "required_slots": bundle.metadata["qasper_canonical_semantic_pack"]["slots"],
     }
     bundle.metadata["semantic_proposition_verifier"] = {
         "semantic_pack_digest": frozen.semantic_pack_digest,
@@ -264,6 +268,11 @@ def test_authority_rejects_any_stage_that_changes_the_frozen_object() -> None:
         },
         "entailment_audit": {"semantic_pack_identity": identity},
     }
+    return question, bundle, response
+
+
+def test_authority_rejects_any_stage_that_changes_the_frozen_object() -> None:
+    question, bundle, response = _continuity_case()
 
     assert (
         qasper_semantic_pack_continuity_reason(
@@ -282,6 +291,20 @@ def test_authority_rejects_any_stage_that_changes_the_frozen_object() -> None:
             response=response,
         )
         == "canonical_semantic_pack_selection_mismatch"
+    )
+
+
+def test_authority_rejects_candidate_required_slots_that_diverge_from_pack() -> None:
+    question, bundle, response = _continuity_case()
+    bundle.metadata["qasper_candidate_generation"]["required_slots"] = []
+
+    assert (
+        qasper_semantic_pack_continuity_reason(
+            bundle,
+            question=question,
+            response=response,
+        )
+        == "canonical_semantic_pack_stage_identity_mismatch"
     )
 
 
@@ -330,6 +353,16 @@ def test_verifier_reuses_frozen_pack_and_ignores_late_bundle_evidence() -> None:
 
     assert context["pack_failure_reason"] == ""
     assert context["packing"].records == frozen.records
+    assert (
+        context["slots"] == bundle.metadata["qasper_canonical_semantic_pack"]["slots"]
+    )
+    assert all(
+        slot["proposition_binding_digest"]
+        == bundle.metadata["qasper_canonical_semantic_pack"][
+            "proposition_binding_digest"
+        ]
+        for slot in context["slots"]
+    )
     assert all(
         record["evidence_id"] != "evidence:paper:late"
         for record in context["packing"].records

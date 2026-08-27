@@ -113,7 +113,7 @@ def test_candidate_selector_options_put_relation_spans_before_titles() -> None:
     options = candidate_selector_options(record, question=question)
 
     assert options[0]["evidence_ref"] in {"E1:S2", "E1:S3"}
-    assert options[-1]["evidence_ref"] == "E1:S1"
+    assert all(option["evidence_ref"] != "E1:S1" for option in options)
 
 
 def test_composite_candidate_evidence_does_not_infer_cross_span_polarity() -> None:

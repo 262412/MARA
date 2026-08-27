@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
+
+from ktem.docqa.qasper_boolean_no_evidence import qasper_no_evidence_set_analysis
 
 from .metrics import normalize_text, round_metric, token_f1_score
 from .qasper_evidence import qasper_paragraph_f1
@@ -21,10 +24,12 @@ def qasper_annotation_diagnostics(
         native_scores._final_answer_text(prediction)
     )
     predicted_evidence = native_scores._qasper_predicted_evidence(prediction)
+    question = str(prediction.get("question") or "")
     rows = [
         _annotation_row(
             index,
             raw,
+            question,
             predicted_answer,
             predicted_evidence,
             native_scores,
@@ -43,6 +48,7 @@ def qasper_annotation_diagnostics(
 def _annotation_row(
     index: int,
     annotation: dict[str, Any],
+    question: str,
     predicted_answer: str,
     predicted_evidence: list[str],
     native_scores: Any,
@@ -60,6 +66,11 @@ def _annotation_row(
         "no",
         "unanswerable",
     }
+    no_evidence_semantics = (
+        qasper_no_evidence_set_analysis(question, evidence)
+        if answer_class == ("no",)
+        else {}
+    )
     return {
         "contract_id": "qasper_annotation_score.v1",
         "annotation_index": index,
@@ -77,6 +88,7 @@ def _annotation_row(
             bool(annotation.get("unanswerable")),
         ),
         "annotation_answer_class": list(answer_class),
+        "no_evidence_semantics": no_evidence_semantics,
         "ambiguity_marker": "",
     }
 
@@ -127,6 +139,12 @@ def _ambiguity_reasons(rows: list[dict[str, Any]]) -> list[str]:
         reasons.append("annotation_answer_disagreement")
     if len(answer_types) > 1:
         reasons.append("annotation_type_disagreement")
+    if any(
+        dict(row.get("no_evidence_semantics") or {}).get("annotation_contract_status")
+        == "ambiguous_no_evidence_semantics"
+        for row in rows
+    ):
+        reasons.append("boolean_no_requires_closed_world_inference")
     return reasons
 
 
@@ -135,10 +153,16 @@ def _diagnostics_summary(
     reasons: list[str],
 ) -> dict[str, Any]:
     answer_classes = sorted({tuple(row["annotation_answer_class"]) for row in rows})
+    no_semantics = Counter(
+        str(value.get("classification") or "")
+        for row in rows
+        if (value := dict(row.get("no_evidence_semantics") or {}))
+    )
     return {
         "contract_id": "qasper_annotation_diagnostics.v1",
         "annotation_count": len(rows),
         "ambiguous": bool(reasons),
         "ambiguity_reasons": reasons,
         "canonical_answer_classes": [list(value) for value in answer_classes],
+        "boolean_no_evidence_semantics": dict(sorted(no_semantics.items())),
     }
