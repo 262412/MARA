@@ -16,6 +16,10 @@ from scripts.slurm.qasper_debug_contract_probe_cases import (
 from scripts.slurm.qasper_debug_contract_probe_pre_audit import (  # noqa: F401
     _assert_pre_audit_case,
 )
+from scripts.slurm.qasper_debug_contract_transport import (
+    assert_controlled_candidate_transport,
+    controlled_input_payload,
+)
 
 _MODEL_CONTRACT = "qasper_contract_probe_live_model.v3"
 
@@ -84,7 +88,10 @@ def _prediction_row(
     execution: Any,
     live_calls: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    lane = "contract_pre_audit" if case.payload_fixture else "contract_probe"
     terminal_commit, terminal_metadata = _terminal_snapshot(execution)
+    generator = terminal_metadata.get("qasper_candidate_generation")
+    generator = generator if isinstance(generator, dict) else {}
     example_metadata, annotation_data = _probe_annotation(case, verifier_candidate)
     example_metadata["contract_probe_case"].update(
         {
@@ -96,9 +103,9 @@ def _prediction_row(
     # readers, but the row is explicitly excluded from quality denominators.
     return {
         "contract_id": _MODEL_CONTRACT,
-        "example_id": f"contract-probe-{case.case_id}",
+        "example_id": f"{lane.replace('_', '-')}-{case.case_id}",
         "route": "contract_probe",
-        "qasper_debug_lane": "contract_probe",
+        "qasper_debug_lane": lane,
         "quality_lane_excluded": True,
         "question": case.question,
         "answer_type": "boolean",
@@ -118,7 +125,9 @@ def _prediction_row(
         "engine_terminal_projection_hash": execution.engine_terminal_projection_hash,
         "engine_terminal_commit": terminal_commit,
         "terminal_outcome": str(terminal_commit.get("outcome") or ""),
-        "terminal_outcome_reason": str(terminal_commit.get("reason") or ""),
+        "terminal_outcome_reason": str(
+            terminal_commit.get("outcome_reason") or terminal_commit.get("reason") or ""
+        ),
         "terminal_outcome_contract_violation": bool(
             terminal_commit.get("contract_violation") is True
         ),
@@ -134,16 +143,12 @@ def _prediction_row(
         "contract_probe_provider_identities": terminal_metadata.get(
             "contract_probe_provider_identities", {}
         ),
-        "controlled_input": {
-            "mode": "controlled_original_candidate"
-            if case.controlled_candidate
-            else "none",
-            "generator_candidate": generation_candidate,
-            "original_candidate": verifier_candidate,
-            "evidence_switch": case.controlled_fault or "none",
-            "payload_fixture": case.payload_fixture or "none",
-            "quality_failure": False,
-        },
+        "controlled_input": controlled_input_payload(
+            case,
+            generation_candidate,
+            verifier_candidate,
+            generator,
+        ),
         "contract_probe_expectation": (
             "auditor_fail" if case.controlled_fault else case.case_id
         ),
@@ -416,6 +421,7 @@ def _probe_case_id(row: dict[str, Any]) -> str:
 
 
 def _assert_live_case(case: ProbeCase, row: dict[str, Any]) -> tuple[str, str, str]:
+    controlled, requested = assert_controlled_candidate_transport(case, row)
     provider_identity_errors = _provider_identity_violations(row)
     if provider_identity_errors:
         raise RuntimeError(
@@ -441,10 +447,7 @@ def _assert_live_case(case: ProbeCase, row: dict[str, Any]) -> tuple[str, str, s
         raise RuntimeError(
             f"{case.case_id}: actual model/auditor call evidence is incomplete"
         )
-    controlled = row.get("controlled_input")
-    if not isinstance(controlled, dict):
-        raise RuntimeError(f"{case.case_id}: controlled-input provenance is missing")
-    if controlled.get("original_candidate") != observed[0]:
+    if requested and controlled.get("verifier_input_candidate") != observed[0]:
         raise RuntimeError(
             f"{case.case_id}: verifier candidate is not the recorded controlled input"
         )

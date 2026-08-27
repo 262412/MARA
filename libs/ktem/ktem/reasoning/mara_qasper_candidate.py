@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from copy import deepcopy
 from typing import Any
@@ -11,6 +10,20 @@ from ktem.docqa.query_planning import request_planning_question
 from kotaemon.base import HumanMessage, SystemMessage
 
 from .mara_answer_type_contract import request_answer_type
+from .mara_qasper_candidate_budget import QASPER_CANDIDATE_MAX_MODEL_LEN  # noqa: F401
+from .mara_qasper_candidate_budget import QASPER_CANDIDATE_TOKEN_HEADROOM  # noqa: F401
+from .mara_qasper_candidate_budget import (  # noqa: F401
+    QASPER_CANDIDATE_INPUT_TOKEN_BUDGET,
+    QASPER_CANDIDATE_MAX_TOKENS,
+)
+from .mara_qasper_candidate_budget import candidate_drop_index as _candidate_drop_index
+from .mara_qasper_candidate_budget import (
+    candidate_generation_trace as _candidate_generation_trace,
+)
+from .mara_qasper_candidate_budget import (  # noqa: F401
+    candidate_input_token_measurement,
+    estimate_qasper_candidate_input_tokens,
+)
 from .mara_qasper_candidate_evidence import (  # noqa: F401
     candidate_selector_options as _candidate_selector_options,
 )
@@ -24,28 +37,34 @@ from .mara_qasper_candidate_prompt import (
     _bound_candidate_slots as _prompt_bound_candidate_slots,
 )
 from .mara_qasper_candidate_prompt import _candidate_evidence, _candidate_prompt
-from .mara_qasper_candidate_budget import (
-    QASPER_CANDIDATE_INPUT_TOKEN_BUDGET,
-    QASPER_CANDIDATE_MAX_MODEL_LEN,  # noqa: F401
-    QASPER_CANDIDATE_MAX_TOKENS,
-    QASPER_CANDIDATE_TOKEN_HEADROOM,  # noqa: F401
-    candidate_drop_index as _candidate_drop_index,
-    candidate_generation_trace as _candidate_generation_trace,
-    candidate_input_token_measurement,
-    estimate_qasper_candidate_input_tokens,  # noqa: F401
+from .mara_qasper_candidate_transport import (  # noqa: F401 - compatibility re-export
+    QASPER_CANDIDATE_MAX_RESPONSE_CHARS,
+    QASPER_CANDIDATE_RESPONSE_CONTRACT,
+    QASPER_CANDIDATES,
 )
-from .mara_semantic_proposition_debug import (
-    provider_failure,
-    response_completion_tokens,
-    response_finish_reason,
-    response_text,
+from .mara_qasper_candidate_transport import candidate_attempt as _candidate_attempt
+from .mara_qasper_candidate_transport import (
+    candidate_response_state as _candidate_response_state,
 )
+from .mara_qasper_candidate_transport import (
+    candidate_response_trace_fields as _candidate_response_trace_fields,
+)
+from .mara_qasper_candidate_transport import (  # noqa: F401 - compatibility re-export
+    parse_qasper_candidate,
+    qasper_candidate_response_format,
+)
+from .mara_semantic_proposition_debug import provider_failure
 
 QASPER_CANDIDATE_GENERATION_CONTRACT = "qasper_typed_candidate_generation.v2"
-QASPER_CANDIDATE_RESPONSE_CONTRACT = "qasper_typed_candidate.v1"
-QASPER_CANDIDATES = {"yes", "no", "unanswerable"}
-QASPER_CANDIDATE_MAX_RESPONSE_CHARS = 16_000
 QASPER_CANDIDATE_DEFAULT_SEED = 20260724
+
+_CandidateRequestFit = tuple[
+    list[dict[str, Any]],
+    dict[str, Any],
+    list[Any],
+    dict[str, Any],
+    int,
+]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -101,7 +120,9 @@ def generate_qasper_typed_candidate(
     route = str(bundle.route or "")
     controlled_candidate = _contract_probe_original_candidate(request, route)
     identity = _transaction_identity(request, route, seed)
-    response_schema = qasper_candidate_response_format()
+    response_schema = qasper_candidate_response_format(
+        controlled_candidate=controlled_candidate
+    )
     (
         evidence,
         evidence_diagnostics,
@@ -152,6 +173,7 @@ def generate_qasper_typed_candidate(
         input_digest,
         seed,
         response_schema,
+        controlled_candidate,
     )
 
 
@@ -238,13 +260,7 @@ def _fit_candidate_request(
     *,
     response_schema: dict[str, Any],
     controlled_candidate: str,
-) -> tuple[
-    list[dict[str, Any]],
-    dict[str, Any],
-    list[Any],
-    dict[str, Any],
-    int,
-]:
+) -> _CandidateRequestFit:
     selected = list(evidence)
     dropped_count = 0
     while True:
@@ -333,6 +349,7 @@ def _generate_candidate_response(
     input_digest: str,
     seed: int,
     response_schema: dict[str, Any],
+    controlled_candidate: str,
 ) -> str:
     try:
         response = llm(
@@ -367,6 +384,7 @@ def _generate_candidate_response(
         trace,
         identity,
         input_digest,
+        controlled_candidate,
     )
 
 
@@ -375,201 +393,21 @@ def _record_candidate_response(
     trace: dict[str, Any],
     identity: dict[str, str],
     input_digest: str,
+    controlled_candidate: str,
 ) -> str:
-    state = _candidate_response_state(response)
+    state = _candidate_response_state(
+        response,
+        controlled_candidate=controlled_candidate,
+    )
     trace.update(**_candidate_response_trace_fields(state))
     trace["attempts"] = [_candidate_attempt(state, identity, input_digest)]
-    return str(state["typed_candidate"])
-
-
-def _candidate_response_state(response: Any) -> dict[str, Any]:
-    raw = response_text(response)
-    bounded_raw = raw[:QASPER_CANDIDATE_MAX_RESPONSE_CHARS]
-    cleaned = bounded_raw.strip()
-    raw_candidate, raw_failure = parse_qasper_candidate(bounded_raw)
-    candidate, failure = parse_qasper_candidate(cleaned)
-    raw_candidate_identity_preserved = bool(
-        raw_candidate and candidate and raw_candidate == candidate
-    )
-    finish_reason = response_finish_reason(response)
-    provider_output_digest = _digest(raw)
-    raw_response_digest = _digest(bounded_raw)
-    state = {
-        "raw_response": bounded_raw,
-        "raw_response_digest": raw_response_digest,
-        "provider_output_digest": provider_output_digest,
-        "raw_response_truncated": len(raw) > QASPER_CANDIDATE_MAX_RESPONSE_CHARS,
-        "cleaned_response": cleaned,
-        "raw_candidate": raw_candidate,
-        "raw_candidate_failure_reason": raw_failure,
-        "raw_candidate_digest": _digest(raw_candidate),
-        "typed_candidate": candidate,
-        "typed_candidate_digest": _digest(candidate),
-        "raw_candidate_identity_preserved": raw_candidate_identity_preserved,
-        "status": "parsed" if candidate else "failed",
-        "failure_reason": failure,
-        "finish_reason": finish_reason,
-        "completion_tokens": response_completion_tokens(response),
-        "actual_input_tokens": _response_prompt_tokens(response),
-    }
-    state["actual_input_token_count"] = state["actual_input_tokens"]
-    state["output_digest"] = _digest(
-        {
-            "raw_response_digest": raw_response_digest,
-            "provider_output_digest": provider_output_digest,
-            "cleaned_response_digest": _digest(cleaned),
-            "raw_candidate": raw_candidate,
-            "raw_candidate_digest": _digest(raw_candidate),
-            "typed_candidate": candidate,
-            "typed_candidate_digest": _digest(candidate),
-            "raw_candidate_identity_preserved": raw_candidate_identity_preserved,
-            "status": "parsed" if candidate else "failed",
-            "failure_reason": failure,
-            "finish_reason": finish_reason,
-        }
-    )
-    return state
-
-
-def _candidate_response_trace_fields(state: dict[str, Any]) -> dict[str, Any]:
-    return {
-        **state,
-        "transformation_stages": [
-            {
-                "stage": "raw_response",
-                "value": state["raw_response"],
-                "digest": state["raw_response_digest"],
-                "failure_reason": "",
-            },
-            {
-                "stage": "cleaning",
-                "value": state["cleaned_response"],
-                "digest": _digest(state["cleaned_response"]),
-                "changed": state["raw_response"] != state["cleaned_response"],
-                "failure_reason": (
-                    "" if state["cleaned_response"] else "empty_cleaned_response"
-                ),
-            },
-            {
-                "stage": "typed_candidate",
-                "value": state["typed_candidate"],
-                "digest": state["typed_candidate_digest"],
-                "failure_reason": state["failure_reason"],
-                "source_stage": "cleaning",
-                "identity_preserved": state["raw_candidate_identity_preserved"],
-            },
-        ],
-    }
-
-
-def _candidate_attempt(
-    state: dict[str, Any],
-    identity: dict[str, str],
-    input_digest: str,
-) -> dict[str, Any]:
-    keys = (
-        "status",
-        "failure_reason",
-        "raw_response",
-        "cleaned_response",
-        "raw_candidate",
-        "raw_candidate_digest",
-        "typed_candidate",
-        "typed_candidate_digest",
-        "raw_candidate_identity_preserved",
-        "finish_reason",
-        "completion_tokens",
-        "actual_input_tokens",
-        "actual_input_token_count",
-        "output_digest",
-    )
-    return {
-        "attempt_id": identity["attempt_id"],
-        **{key: state[key] for key in keys},
-        "input_digest": input_digest,
-    }
-
-
-def qasper_candidate_response_format() -> dict[str, Any]:
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "qasper_typed_candidate",
-            "strict": True,
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "candidate": {
-                        "type": "string",
-                        "enum": sorted(QASPER_CANDIDATES),
-                    }
-                },
-                "required": ["candidate"],
-                "additionalProperties": False,
-            },
-        },
-    }
-
-
-def parse_qasper_candidate(text: str) -> tuple[str, str]:
-    try:
-        payload = json.loads(str(text or ""))
-    except (TypeError, json.JSONDecodeError):
-        return "", "json_decode_error"
-    if not isinstance(payload, dict) or set(payload) != {"candidate"}:
-        return "", "candidate_schema_invalid"
-    candidate = str(payload.get("candidate") or "").strip().casefold()
-    if candidate not in QASPER_CANDIDATES:
-        return "", "candidate_enum_invalid"
-    return candidate, ""
+    return str(state["verifier_input_candidate"])
 
 
 def _answering_llm(pipeline: Any) -> Any | None:
     answering_pipeline = getattr(pipeline, "answering_pipeline", None)
     llm = getattr(answering_pipeline, "llm", None)
     return llm if callable(llm) else None
-
-
-def _response_prompt_tokens(response: Any | None) -> int:
-    if response is None:
-        return -1
-    owners = (response, getattr(response, "raw", None))
-    for owner in owners:
-        for key in ("prompt_tokens", "input_tokens"):
-            value = _response_usage_value(owner, key)
-            if value >= 0:
-                return value
-    return -1
-
-
-def _response_usage_value(response: Any | None, key: str) -> int:
-    if response is None:
-        return -1
-    values = [getattr(response, key, None)]
-    for container_name in (
-        "usage",
-        "usage_metadata",
-        "response_metadata",
-        "additional_kwargs",
-    ):
-        container = getattr(response, container_name, None)
-        if isinstance(container, dict):
-            values.extend(
-                [
-                    container.get(key),
-                    container.get("token_usage", {}).get(key)
-                    if isinstance(container.get("token_usage"), dict)
-                    else None,
-                ]
-            )
-        else:
-            values.append(getattr(container, key, None))
-    for value in values:
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            continue
-    return -1
 
 
 def _serialized_messages(messages: list[Any]) -> list[dict[str, Any]]:

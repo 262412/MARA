@@ -13,7 +13,10 @@ from scripts.slurm.qasper_debug_contract_audit import (
     _supported_row_required_slot_unverified,
     _typed_conclusion_present,
 )
-from scripts.slurm.qasper_debug_contract_identity import _raw_candidate_identity_valid
+from scripts.slurm.qasper_debug_contract_identity import (
+    _controlled_candidate_transport_identity_valid,
+    _raw_candidate_identity_valid,
+)
 from scripts.slurm.qasper_debug_contract_metric_payload import (
     metric_payload as _metric_payload,
 )
@@ -321,6 +324,7 @@ def _metric_counts(
 ) -> dict[str, int]:
     counts = {
         "raw_identity_mismatches": 0,
+        "controlled_transport_mismatches": 0,
         "empty_audits": 0,
         "empty_typed_conclusions": 0,
         "entailment_failures": 0,
@@ -342,6 +346,18 @@ def _metric_counts(
         audit = _mapping(verifier.get("candidate_verification_audit"))
         counts["raw_identity_mismatches"] += int(
             not _raw_candidate_identity_valid(generator, verifier)
+        )
+        requested_candidate = str(
+            generator.get("requested_controlled_candidate")
+            or generator.get("controlled_original_candidate")
+            or ""
+        ).strip()
+        counts["controlled_transport_mismatches"] += int(
+            bool(requested_candidate)
+            and not _controlled_candidate_transport_identity_valid(
+                generator,
+                verifier,
+            )
         )
         counts["empty_audits"] += int(not _candidate_audit_complete(verifier, audit))
         counts["empty_typed_conclusions"] += int(

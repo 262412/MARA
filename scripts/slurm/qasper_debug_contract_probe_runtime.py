@@ -142,6 +142,11 @@ class _RecordingChatModel:
                 "base_url": self.provider_identity.base_url,
                 "model": self.provider_identity.model,
                 "provider_identity": self.provider_identity.as_dict(),
+                "transport_mode": (
+                    "controlled_pre_audit_fixture"
+                    if getattr(self._inner, "controlled_pre_audit", False)
+                    else "live_provider"
+                ),
                 "request_digest": _digest(request_payload),
                 "response_digest": _digest(raw),
                 "finish_reason": _response_finish_reason(response),

@@ -4,9 +4,9 @@ import hashlib
 import json
 import os
 import tempfile
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from collections.abc import Mapping
 from typing import Any, Iterable
 
 ARTIFACT_MANIFEST_NAME = "artifact_manifest.json"
@@ -21,6 +21,7 @@ _PRIMARY_ARTIFACTS = (
     "report.md",
     "route_metrics.csv",
     "contract_probe_predictions.jsonl",
+    "contract_pre_audit_predictions.jsonl",
     "contract_probe_audit.json",
     "contract_smoke_audit.json",
 )

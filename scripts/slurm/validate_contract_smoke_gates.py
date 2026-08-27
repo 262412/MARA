@@ -94,6 +94,7 @@ QASPER_DEBUG_HARD_GATES = {
     "qasper_contract_probe_structural_state_matrix_complete": ("eq", 1.0),
     "qasper_contract_probe_required_online_states_complete": ("eq", 1.0),
     "qasper_candidate_raw_identity_mismatch_count": ("eq", 0.0),
+    "qasper_controlled_candidate_transport_mismatch_count": ("eq", 0.0),
     "qasper_empty_candidate_audit_count": ("eq", 0.0),
     "qasper_empty_typed_conclusion_count": ("eq", 0.0),
     "qasper_semantic_entailment_audit_failure_count": ("eq", 0.0),

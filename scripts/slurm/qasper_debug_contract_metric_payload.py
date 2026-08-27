@@ -90,6 +90,9 @@ def _summary_metrics(
         "qasper_candidate_raw_identity_mismatch_count": float(
             counts["raw_identity_mismatches"]
         ),
+        "qasper_controlled_candidate_transport_mismatch_count": float(
+            counts["controlled_transport_mismatches"]
+        ),
         "qasper_empty_candidate_audit_count": float(counts["empty_audits"]),
         "qasper_empty_typed_conclusion_count": float(counts["empty_typed_conclusions"]),
         "qasper_semantic_entailment_audit_failure_count": float(

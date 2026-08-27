@@ -40,7 +40,11 @@ def qasper_pre_audit_failure_reason(
     if (
         isinstance(generation, dict)
         and generation.get("status") == "failed"
-        and not str(generation.get("typed_candidate") or "").strip()
+        and not str(
+            generation.get("verifier_input_candidate")
+            if "verifier_input_candidate" in generation
+            else generation.get("typed_candidate") or ""
+        ).strip()
     ):
         return str(
             generation.get("failure_reason")

@@ -10,6 +10,7 @@ from ktem.docqa.query_planning import build_query_plan
 from ktem.reasoning.mara_qasper_candidate import (
     generate_qasper_typed_candidate,
     parse_qasper_candidate,
+    qasper_candidate_response_format,
 )
 
 
@@ -106,6 +107,51 @@ def test_qasper_candidate_generator_records_full_model_boundary() -> None:
     assert trace["output_digest"]
     assert trace["attempts"][0]["attempt_id"] == trace["attempt_id"]
     assert llm.calls[0][1]["response_format"]["json_schema"]["strict"] is True
+
+
+def test_contract_probe_candidate_schema_is_bound_to_requested_candidate() -> None:
+    schema = qasper_candidate_response_format(controlled_candidate="yes")
+
+    assert schema["json_schema"]["schema"]["properties"]["candidate"]["enum"] == ["yes"]
+    assert sorted(
+        qasper_candidate_response_format()["json_schema"]["schema"]["properties"][
+            "candidate"
+        ]["enum"]
+    ) == ["no", "unanswerable", "yes"]
+
+
+def test_contract_probe_candidate_transport_mismatch_stops_before_verifier() -> None:
+    llm = _RecordingLLM('{"candidate":"no"}')
+    pipeline = SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm))
+    request = _bind_required_slots(_request(), "evidence:paper:e1")
+    request.trace_context["contract_probe_original_candidate"] = "yes"
+    bundle = EvidenceBundle(
+        route="contract_probe",
+        items=[
+            {
+                "evidence_id": "e1",
+                "source_id": "paper",
+                "text": "The authors did not compare the two systems.",
+            }
+        ],
+    )
+
+    assert generate_qasper_typed_candidate(pipeline, request, bundle) == ""
+
+    trace = bundle.metadata["qasper_candidate_generation"]
+    assert trace["status"] == "failed"
+    assert trace["failure_reason"] == "candidate_transport_failed"
+    assert trace["requested_controlled_candidate"] == "yes"
+    assert trace["provider_raw_candidate"] == "no"
+    assert trace["cleaned_candidate"] == "no"
+    assert trace["typed_candidate"] == "no"
+    assert trace["verifier_input_candidate"] == ""
+    assert trace["candidate_transport_identity_preserved"] is False
+    assert trace["verifier_execution_status"] == "not_started"
+    assert trace["auditor_execution_status"] == "not_started"
+    assert llm.calls[0][1]["response_format"]["json_schema"]["schema"]["properties"][
+        "candidate"
+    ]["enum"] == ["yes"]
 
 
 def test_qasper_candidate_parser_rejects_prose_and_extra_fields() -> None:

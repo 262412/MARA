@@ -11,6 +11,10 @@ from benchmark.tests.qasper_debug_contract_fixtures import (
     _qasper_contract_probe_predictions,
     _qasper_debug_prediction,
 )
+from scripts.slurm.qasper_debug_contract_pre_audit_provider import (
+    controlled_pre_audit_model_factory,
+)
+from scripts.slurm.qasper_debug_contract_probe import run_pre_audit_probes
 from scripts.slurm.validate_contract_smoke import QASPER_DEBUG_HARD_GATES, validate
 from scripts.slurm.validate_qasper_contract_probe import validate_contract_probe
 
@@ -25,9 +29,19 @@ def _write_qasper_run(run_dir, *, predictions):
         ),
         encoding="utf-8",
     )
+    pre_audit_path = run_dir / "contract_pre_audit_predictions.jsonl"
+    run_pre_audit_probes(
+        "http://pre-audit-proposer.invalid/v1",
+        "pre-audit-proposer",
+        auditor_base_url="http://pre-audit-auditor.invalid/v1",
+        auditor_model="pre-audit-auditor",
+        model_factory=controlled_pre_audit_model_factory,
+        output_path=pre_audit_path,
+    )
     validate_contract_probe(
         probe_path,
         output_path=run_dir / "contract_probe_audit.json",
+        pre_audit_predictions_path=pre_audit_path,
     )
 
 
@@ -44,6 +58,7 @@ def test_qasper_debug_contract_declares_special_hard_gates():
         "qasper_contract_probe_structural_state_matrix_complete",
         "qasper_contract_probe_required_online_states_complete",
         "qasper_candidate_raw_identity_mismatch_count",
+        "qasper_controlled_candidate_transport_mismatch_count",
         "qasper_empty_candidate_audit_count",
         "qasper_empty_typed_conclusion_count",
         "qasper_semantic_entailment_audit_failure_count",
@@ -111,6 +126,8 @@ def test_qasper_debug_contract_smoke_audits_6x3_observability(tmp_path):
         _qasper_contract_probe_predictions()
     )
     assert "contract_probe_audit.json" in manifest["required_files"]
+    assert "contract_pre_audit_predictions.jsonl" in manifest["required_files"]
+    assert manifest["files"]["contract_pre_audit_predictions.jsonl"]["line_count"] == 4
 
 
 def test_qasper_debug_contract_smoke_requires_live_probe_artifact(tmp_path):

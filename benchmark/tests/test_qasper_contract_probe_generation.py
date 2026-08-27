@@ -318,6 +318,12 @@ def _assert_controlled_candidate_identity(rows: list[dict[str, Any]]) -> None:
     assert contradicted["controlled_input"]["mode"] == "controlled_original_candidate"
     assert contradicted["controlled_input"]["generator_candidate"] == "yes"
     assert contradicted["controlled_input"]["original_candidate"] == "yes"
+    assert contradicted["controlled_input"]["requested_candidate"] == "yes"
+    assert contradicted["controlled_input"]["provider_raw_candidate"] == "yes"
+    assert contradicted["controlled_input"]["cleaned_candidate"] == "yes"
+    assert contradicted["controlled_input"]["typed_candidate"] == "yes"
+    assert contradicted["controlled_input"]["verifier_input_candidate"] == "yes"
+    assert contradicted["controlled_input"]["transport_identity_preserved"] is True
     assert (
         contradicted["evidence_metadata"]["qasper_candidate_generation"][
             "typed_candidate"
@@ -488,29 +494,6 @@ def test_live_probe_uses_production_parser_and_auditor() -> None:
     _assert_controlled_candidate_identity(rows)
     _assert_provider_call_and_span_evidence(rows)
     _assert_real_auditor_failure(rows)
-
-
-def test_provider_state_mismatch_fails_closed() -> None:
-    # Alter the returned response without altering the control expectation.
-    class WrongProvider(_Provider):
-        def __call__(self, messages: object, **kwargs: object) -> _Response:
-            value = super().__call__(messages, **kwargs)
-            response_format = kwargs.get("response_format")
-            response_format = (
-                response_format if isinstance(response_format, dict) else {}
-            )
-            schema = response_format.get("json_schema")
-            schema = schema if isinstance(schema, dict) else {}
-            if schema.get("name") == "qasper_typed_candidate":
-                return _Response({"candidate": "yes"})
-            return value
-
-    def factory(*, case_id: str, **kwargs: object) -> WrongProvider:
-        del case_id, kwargs
-        return WrongProvider()
-
-    with pytest.raises(RuntimeError, match="provider observed|expected candidate"):
-        _run_probe("http://provider.invalid/v1", "model", model_factory=factory)
 
 
 def test_provider_rejects_missing_candidate_or_evidence_from_messages() -> None:

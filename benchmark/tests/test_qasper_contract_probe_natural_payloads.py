@@ -1,21 +1,30 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from typing import Any
 
 from benchmark.tests.qasper_contract_probe_provider_support import (
     NATURAL_QUALITY_PAYLOAD_FIXTURES,
     natural_quality_payload_fixture,
 )
+from benchmark.tests.test_qasper_contract_probe_generation import _evidence_span
+from benchmark.tests.test_qasper_contract_probe_generation import (
+    _factory as _live_factory,
+)
 from benchmark.tests.test_qasper_contract_probe_generation import (
     _Provider,
     _Response,
-    _evidence_span,
     _structured_candidate,
 )
 from scripts.slurm import qasper_debug_contract_probe as probe
+from scripts.slurm.qasper_debug_contract_pre_audit_provider import (
+    controlled_pre_audit_model_factory,
+)
 from scripts.slurm.qasper_debug_contract_probe_cases import (
     NATURAL_QUALITY_PRE_AUDIT_CASES,
 )
+from scripts.slurm.validate_qasper_contract_probe import validate_contract_probe
 
 _PROPOSER_BASE_URL = "http://natural-proposer.invalid/v1"
 _PROPOSER_MODEL = "natural-quality-proposer-model"
@@ -29,6 +38,8 @@ _FIXTURE_BY_CASE = {
 
 class _NaturalQualityProvider(_Provider):
     """Generate one natural-quality-derived invalid proposal payload."""
+
+    controlled_pre_audit = True
 
     def __init__(self, fixture_id: str) -> None:
         super().__init__()
@@ -131,7 +142,7 @@ def test_natural_quality_payload_mutations_are_visible_in_proposal_trace() -> No
     assert over_trace["parse_failure_reason"] == "premise_proposition_binding_invalid"
     assert duplicate_trace["parse_failure_reason"] == "unknown_assessment_slot_invalid"
 
-    def proposal_payload(row: dict[str, object]) -> dict[str, object]:
+    def proposal_payload(row: dict[str, Any]) -> dict[str, Any]:
         verifier = row["evidence_metadata"]["semantic_proposition_verifier"]
         events = verifier["debug_trace"]["events"]
         transaction = events[-1]["transaction"]
@@ -174,3 +185,52 @@ def test_natural_quality_payload_mutations_are_visible_in_proposal_trace() -> No
         "object",
     }
     assert mismatch["evidence_bundle"]["items"][0]["text"].endswith("released it.")
+
+
+def test_formal_probe_audit_requires_independent_four_case_pre_audit_channel(
+    tmp_path: Path,
+) -> None:
+    live_rows = probe.run_live_probes(
+        _PROPOSER_BASE_URL,
+        _PROPOSER_MODEL,
+        auditor_base_url=_AUDITOR_BASE_URL,
+        auditor_model=_AUDITOR_MODEL,
+        model_factory=_live_factory,
+    )
+    # Use the production controlled provider for the formal pre-audit lane.
+    pre_audit_rows = probe.run_pre_audit_probes(
+        _PROPOSER_BASE_URL,
+        _PROPOSER_MODEL,
+        auditor_base_url=_AUDITOR_BASE_URL,
+        auditor_model=_AUDITOR_MODEL,
+        model_factory=controlled_pre_audit_model_factory,
+    )
+    live_path = tmp_path / "contract_probe_predictions.jsonl"
+    pre_audit_path = tmp_path / "contract_pre_audit_predictions.jsonl"
+    audit_path = tmp_path / "contract_probe_audit.json"
+    probe._write_rows(live_path, live_rows)
+    probe._write_rows(pre_audit_path, pre_audit_rows)
+
+    audit = validate_contract_probe(
+        live_path,
+        output_path=audit_path,
+        pre_audit_predictions_path=pre_audit_path,
+    )
+
+    assert audit["status"] == "passed"
+    assert audit["prediction_count"] == 6
+    assert audit["pre_audit_channel"]["prediction_count"] == 4
+    assert audit["pre_audit_channel"]["status"] == "passed"
+    assert audit["pre_audit_channel"]["auditor_model_call_count"] == 0
+    assert (
+        audit["hard_gates"]["qasper_contract_probe_pre_audit_case_coverage_complete"][
+            "passed"
+        ]
+        is True
+    )
+    assert (
+        audit["hard_gates"]["qasper_contract_probe_pre_audit_terminalization_complete"][
+            "passed"
+        ]
+        is True
+    )

@@ -31,6 +31,14 @@ def _assert_pre_audit_case(case: ProbeCase, row: dict[str, Any]) -> None:
     calls = row.get("contract_probe_live_calls")
     if not isinstance(calls, list):
         raise RuntimeError(f"{case.case_id}: provider call evidence is missing")
+    if any(
+        not isinstance(call, dict)
+        or call.get("transport_mode") != "controlled_pre_audit_fixture"
+        for call in calls
+    ):
+        raise RuntimeError(
+            f"{case.case_id}: pre-audit channel transport identity is invalid"
+        )
     auditor_calls = [
         call
         for call in calls

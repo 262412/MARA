@@ -49,6 +49,7 @@ HEALTH_JSON="${HEALTH_ROOT}/${NAME}-${RUN_ID}.json"
 TOOL_CALL_SMOKE_JSON="${HEALTH_ROOT}/${NAME}-${RUN_ID}-tool-calls.json"
 TOOL_CALL_SMOKE_LOG="${LOG_ROOT}/tool-call-smoke.log"
 CONTRACT_PROBE_PATH="${MARA_QASPER_CONTRACT_PROBE_PATH:-${OUT_ROOT}/contract_probe_predictions.jsonl}"
+CONTRACT_PRE_AUDIT_PATH="${MARA_QASPER_CONTRACT_PRE_AUDIT_PATH:-${OUT_ROOT}/contract_pre_audit_predictions.jsonl}"
 CONTRACT_PROBE_AUDIT_PATH="${MARA_QASPER_CONTRACT_PROBE_AUDIT_PATH:-${OUT_ROOT}/contract_probe_audit.json}"
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/mnt/fastscratch/users/tbczhang/cache/uv}"
@@ -192,6 +193,7 @@ log "execution_contract=${EXECUTION_CONTRACT:-none}"
 log "text_llm_base_url=${TEXT_LLM_BASE_URL}"
 log "contract_probe_auditor_base_url=${CONTRACT_AUDITOR_BASE_URL:-unset}"
 log "contract_probe_auditor_model=${CONTRACT_AUDITOR_MODEL:-unset}"
+log "contract_pre_audit_path=${CONTRACT_PRE_AUDIT_PATH}"
 log "retrieval_base_url=${RETRIEVAL_BASE_URL}"
 log "node=${SLURMD_NODENAME:-$(hostname)}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader || true
@@ -287,12 +289,15 @@ if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE
     --auditor-base-url "$CONTRACT_AUDITOR_BASE_URL" \
     --auditor-model "$CONTRACT_AUDITOR_MODEL" \
     --output "$CONTRACT_PROBE_PATH" \
+    --pre-audit-output "$CONTRACT_PRE_AUDIT_PATH" \
     --audit-output "$CONTRACT_PROBE_AUDIT_PATH" \
     --timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"
   test -s "$CONTRACT_PROBE_PATH"
+  test -s "$CONTRACT_PRE_AUDIT_PATH"
   "$MARA_BENCHMARK_PYTHON" -m \
     scripts.slurm.validate_qasper_contract_probe \
     "$CONTRACT_PROBE_PATH" \
+    --pre-audit-predictions "$CONTRACT_PRE_AUDIT_PATH" \
     --output "$CONTRACT_PROBE_AUDIT_PATH"
   test -s "$CONTRACT_PROBE_AUDIT_PATH"
 fi
@@ -357,6 +362,9 @@ fi
 if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
   if [[ "$CONTRACT_PROBE_PATH" != "$RUN_DIR/contract_probe_predictions.jsonl" && -s "$CONTRACT_PROBE_PATH" ]]; then
     cp "$CONTRACT_PROBE_PATH" "$RUN_DIR/contract_probe_predictions.jsonl"
+  fi
+  if [[ "$CONTRACT_PRE_AUDIT_PATH" != "$RUN_DIR/contract_pre_audit_predictions.jsonl" && -s "$CONTRACT_PRE_AUDIT_PATH" ]]; then
+    cp "$CONTRACT_PRE_AUDIT_PATH" "$RUN_DIR/contract_pre_audit_predictions.jsonl"
   fi
   if [[ "$CONTRACT_PROBE_AUDIT_PATH" != "$RUN_DIR/contract_probe_audit.json" && -s "$CONTRACT_PROBE_AUDIT_PATH" ]]; then
     cp "$CONTRACT_PROBE_AUDIT_PATH" "$RUN_DIR/contract_probe_audit.json"

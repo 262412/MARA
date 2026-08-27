@@ -8,6 +8,7 @@ from scripts.slurm.qasper_debug_contract_support import (
     _QASPER_CANDIDATE_MAX_RESPONSE_CHARS,
 )
 
+
 def _raw_candidate_fields_present(generator: dict[str, Any]) -> bool:
     required = {
         "raw_response",
@@ -36,7 +37,35 @@ def _raw_candidate_identity_valid(
         and _raw_candidate_stages_valid(generator, parts)
         and _raw_candidate_output_valid(generator, parts)
         and _raw_candidate_attempt_valid(generator, parts)
+        and _controlled_candidate_transport_identity_valid(generator, verifier)
         and _verifier_raw_identity_valid(verifier, parts)
+    )
+
+
+def _controlled_candidate_transport_identity_valid(
+    generator: dict[str, Any],
+    verifier: dict[str, Any],
+) -> bool:
+    requested = _normalized_candidate(
+        generator.get("requested_controlled_candidate")
+        or generator.get("controlled_original_candidate")
+    )
+    if not requested:
+        return True
+    values = (
+        _normalized_candidate(generator.get("provider_raw_candidate")),
+        _normalized_candidate(generator.get("cleaned_candidate")),
+        _normalized_candidate(generator.get("typed_candidate")),
+        _normalized_candidate(generator.get("verifier_input_candidate")),
+        _normalized_candidate(verifier.get("candidate_label")),
+    )
+    return bool(
+        requested in {"yes", "no", "unanswerable"}
+        and generator.get("candidate_transport_contract_id")
+        == "qasper_candidate_transport_identity.v1"
+        and all(value == requested for value in values)
+        and generator.get("candidate_transport_identity_preserved") is True
+        and generator.get("candidate_transport_status") == "passed"
     )
 
 
@@ -96,15 +125,18 @@ def _raw_candidate_stages_valid(
     stages = generator.get("transformation_stages")
     stages = stages if isinstance(stages, list) else []
     names = [
-        str(stage.get("stage") or "")
-        for stage in stages
-        if isinstance(stage, dict)
+        str(stage.get("stage") or "") for stage in stages if isinstance(stage, dict)
     ]
-    if len(stages) != 3 or len(names) != 3 or set(names) != {
-        "raw_response",
-        "cleaning",
-        "typed_candidate",
-    }:
+    if (
+        len(stages) != 3
+        or len(names) != 3
+        or set(names)
+        != {
+            "raw_response",
+            "cleaning",
+            "typed_candidate",
+        }
+    ):
         return False
     by_name = {
         str(stage.get("stage") or ""): stage
