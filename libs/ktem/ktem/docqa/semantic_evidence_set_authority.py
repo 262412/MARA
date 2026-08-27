@@ -12,6 +12,7 @@ from .boolean_authority_schema import (
 )
 from .boolean_candidate_authority import structured_boolean_candidate_label
 from .evidence_schema import EvidenceBundle
+from .qasper_semantic_pack_contract import qasper_semantic_pack_continuity_reason
 from .semantic_evidence_set_derivation import semantic_evidence_set_derivation
 from .semantic_evidence_set_validation import (
     semantic_proposition_binding_fields,
@@ -62,6 +63,14 @@ def semantic_evidence_set_claim_authority(
         str(verifier_trace.get("status") or "returned"),
         str(verifier_trace.get("reason") or ""),
     )
+    if not _canonical_pack_accepted(
+        request,
+        prompt,
+        bundle,
+        response,
+        debug_trace,
+    ):
+        return None
     header, header_reason = validated_semantic_header(
         response,
         prompt,
@@ -94,6 +103,44 @@ def semantic_evidence_set_claim_authority(
     )
 
 
+def _canonical_pack_accepted(
+    request: Any,
+    prompt: str,
+    bundle: EvidenceBundle,
+    response: Mapping[str, Any],
+    debug_trace: dict[str, Any] | None,
+) -> bool:
+    if not _qasper_semantic_pack_required(request, bundle):
+        return True
+    reason = qasper_semantic_pack_continuity_reason(
+        bundle,
+        question=prompt,
+        response=response,
+    )
+    if reason:
+        _append_debug_stage(
+            debug_trace,
+            "canonical_semantic_pack",
+            "rejected",
+            reason,
+        )
+        _record_trace(
+            bundle,
+            "rejected",
+            reason,
+            debug_trace=debug_trace,
+            **_rejected_transaction_fields(response),
+        )
+        return False
+    _append_debug_stage(
+        debug_trace,
+        "canonical_semantic_pack",
+        "accepted",
+        "",
+    )
+    return True
+
+
 def _record_insufficient_authority(
     bundle: EvidenceBundle,
     response: Mapping[str, Any],
@@ -119,6 +166,7 @@ def _record_insufficient_authority(
         ),
         audited_typed_conclusion=dict(response.get("audited_typed_conclusion") or {}),
         unknown_assessment=dict(response.get("unknown_assessment") or {}),
+        **_canonical_pack_trace_fields(response),
         replacement_candidate_allowed=False,
     )
 
@@ -273,6 +321,7 @@ def _verified_authority_trace_fields(
         "semantic_pack_digest": str(
             (response.get("verifier") or {}).get("semantic_pack_digest") or ""
         ),
+        **_canonical_pack_trace_fields(response),
         "evidence_relation": str(attestation.get("evidence_relation") or ""),
         "required_slot_ids": list(attestation.get("required_slot_ids") or []),
         "verified_slot_ids": list(attestation.get("required_slot_ids") or []),
@@ -361,6 +410,39 @@ def _rejected_transaction_fields(response: Mapping[str, Any]) -> dict[str, Any]:
             response.get("candidate_verification_audit") or {}
         ),
         "unknown_assessment": dict(response.get("unknown_assessment") or {}),
+        **_canonical_pack_trace_fields(response),
+    }
+
+
+def _canonical_pack_trace_fields(response: Mapping[str, Any]) -> dict[str, Any]:
+    verifier = response.get("verifier")
+    verifier = verifier if isinstance(verifier, Mapping) else {}
+    audit: Mapping[str, Any] = {}
+    for key in ("entailment_audit", "candidate_verification_audit"):
+        value = response.get(key)
+        if isinstance(value, Mapping) and isinstance(
+            value.get("semantic_pack_identity"), Mapping
+        ):
+            audit = value
+            break
+    if not audit:
+        rejected = response.get("rejected_transaction")
+        if isinstance(rejected, Mapping) and isinstance(
+            rejected.get("semantic_pack_identity"), Mapping
+        ):
+            audit = {"semantic_pack_identity": rejected["semantic_pack_identity"]}
+    return {
+        "semantic_pack_digest": str(verifier.get("semantic_pack_digest") or ""),
+        "canonical_span_universe_digest": str(
+            verifier.get("canonical_span_universe_digest") or ""
+        ),
+        "candidate_transaction_id": str(verifier.get("candidate_transaction_id") or ""),
+        "canonical_pack_continuity_status": str(
+            verifier.get("canonical_pack_continuity_status") or ""
+        ),
+        "auditor_semantic_pack_identity": dict(
+            audit.get("semantic_pack_identity") or {}
+        ),
     }
 
 
@@ -386,6 +468,22 @@ def _semantic_release_mode(request: Any) -> bool:
         == "qasper"
         and str(getattr(request, "verification_mode", "") or "").strip().casefold()
         == "strict"
+    )
+
+
+def _qasper_semantic_pack_required(request: Any, bundle: EvidenceBundle) -> bool:
+    domain = str(getattr(request, "verification_domain", "") or "").strip().casefold()
+    family = str(getattr(request, "dataset_family", "") or "").strip().casefold()
+    if domain != "qasper" and family != "qasper":
+        return False
+    trace = bundle.metadata.get("qasper_candidate_generation")
+    pack = bundle.metadata.get("qasper_canonical_semantic_pack")
+    return bool(
+        isinstance(pack, Mapping)
+        or (
+            isinstance(trace, Mapping)
+            and trace.get("contract_id") == "qasper_typed_candidate_generation.v2"
+        )
     )
 
 

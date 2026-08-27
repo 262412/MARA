@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from scripts.slurm.qasper_debug_contract_identity import _raw_candidate_identity_valid
+from scripts.slurm.qasper_debug_contract_semantic_pack import (
+    canonical_semantic_pack_alignment_valid,
+)
 from scripts.slurm.qasper_debug_contract_support import (
     _candidate_bound_auditor_attempt_observed,
     _candidate_bound_auditor_passed,
@@ -102,5 +105,8 @@ def _observability_counts(predictions: list[dict[str, Any]]) -> dict[str, int]:
             _failed_auditor_safe_abstention(verifier, prediction)
         )
         fields["semantic_verifier_debug"] += int(_semantic_debug_complete(verifier))
+        fields["canonical_semantic_pack_alignment"] += int(
+            canonical_semantic_pack_alignment_valid(prediction)
+        )
         fields["live_model"] += int(_live_models_observed(generator, verifier))
     return fields

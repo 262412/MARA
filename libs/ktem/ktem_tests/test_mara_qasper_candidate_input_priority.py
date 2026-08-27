@@ -3,14 +3,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from ktem.docqa.evidence_schema import EvidenceBundle
-from ktem.reasoning.mara_qasper_candidate_evidence import candidate_selector_options
 from ktem.reasoning.mara_qasper_candidate_evidence import (
     candidate_evidence_set_binding,
+    candidate_selector_options,
 )
 from ktem.reasoning.mara_qasper_candidate_prompt import _candidate_prompt
-from ktem.reasoning.mara_semantic_candidate_priority import (
-    candidate_record_slot_hints,
-)
+from ktem.reasoning.mara_semantic_candidate_priority import candidate_record_slot_hints
 from ktem.reasoning.mara_semantic_proposition_packing import (
     pack_semantic_proposition_evidence,
 )
@@ -145,7 +143,7 @@ def test_composite_candidate_evidence_does_not_infer_cross_span_polarity() -> No
     assert observation["explicit_contradiction_evidence_refs"] == []
 
 
-def test_candidate_prompt_uses_full_source_for_prioritized_exact_spans() -> None:
+def test_candidate_prompt_cannot_add_spans_outside_supplied_pack() -> None:
     question = "Are the automatically constructed datasets subject to quality control?"
     prefix = "Automatically generated datasets permit controlled experiments. "
     gap = "Unrelated discussion. " * 80
@@ -169,6 +167,7 @@ def test_candidate_prompt_uses_full_source_for_prioritized_exact_spans() -> None
         required_slots=[],
     )
 
-    assert decisive in prompt
+    assert decisive not in prompt
+    assert prefix.strip() in prompt
     assert "CANDIDATE DECISION RULES:" in prompt
     assert "incompatible definition or mutually exclusive scope" in prompt

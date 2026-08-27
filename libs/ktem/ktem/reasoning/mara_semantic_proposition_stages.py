@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from copy import deepcopy
 from typing import Any
 
@@ -16,26 +16,21 @@ from .mara_candidate_unknown_audit import (
     candidate_unknown_audit_response_format,
     parse_candidate_unknown_audit,
 )
+from .mara_semantic_audit_preflight import (
+    PRE_AUDIT_SCHEMA_VALIDATION_FAILED,
+    audit_preflight_failure_reason,
+)
 from .mara_semantic_entailment_audit import (
     SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
     SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT,
     parse_semantic_entailment_audit,
     semantic_entailment_audit_response_format,
 )
-from .mara_semantic_audit_preflight import (
-    PRE_AUDIT_SCHEMA_VALIDATION_FAILED,
-    audit_preflight_failure_reason,
-)
 from .mara_semantic_proposition_debug import (
     provider_failure,
     response_completion_tokens,
     response_finish_reason,
     response_text,
-)
-from .mara_semantic_proposition_stage_runtime import (
-    ParsedSemanticStage,
-    StageCallResult,
-    parsed_stage as _parsed_stage,
 )
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT,
@@ -44,6 +39,11 @@ from .mara_semantic_proposition_schema import (
     parse_semantic_proposition_response,
     semantic_proposition_response_format,
 )
+from .mara_semantic_proposition_stage_runtime import (
+    ParsedSemanticStage,
+    StageCallResult,
+)
+from .mara_semantic_proposition_stage_runtime import parsed_stage as _parsed_stage
 
 SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS = 768
 SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES = 1
@@ -61,6 +61,7 @@ def proposal_stage(
     seed: int,
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
 ) -> ParsedSemanticStage:
     def call(correction: str = "") -> StageCallResult:
         return _call_proposal(
@@ -72,6 +73,7 @@ def proposal_stage(
             correction_reason=correction,
             candidate=candidate,
             applicable_proposition_slots=applicable_proposition_slots,
+            allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
         )
 
     def parse(response: Any) -> Any:
@@ -83,6 +85,7 @@ def proposal_stage(
             seed=seed,
             candidate=candidate,
             applicable_proposition_slots=applicable_proposition_slots,
+            allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
         )
 
     return _parsed_stage(
@@ -368,6 +371,7 @@ def _call_proposal(
     correction_reason: str,
     candidate: str,
     applicable_proposition_slots: Collection[str] | None,
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
 ) -> StageCallResult:
     try:
         return StageCallResult(
@@ -378,10 +382,18 @@ def _call_proposal(
                 ],
                 max_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
                 response_format=semantic_proposition_response_format(
-                    [],
+                    [
+                        str(selector.get("selector_id") or "")
+                        for record in packed
+                        for selector in record.get("selectors") or []
+                        if str(selector.get("selector_id") or "")
+                    ],
                     [value["slot_id"] for value in slots],
                     candidate=candidate,
                     applicable_proposition_slots=applicable_proposition_slots,
+                    allowed_proposition_slot_bindings=(
+                        allowed_proposition_slot_bindings
+                    ),
                 ),
                 temperature=0,
                 top_p=1,

@@ -66,10 +66,11 @@ def semantic_relation_clause_analysis(
     ]
     selected = max(clauses, key=_clause_score, default=_empty_clause())
     status = _analysis_status(selected, clauses, declared_slots)
+    binding_validity = dict(selected.get("slot_binding_validity") or {})
     slot_evidence = {
         slot: dict(span)
         for slot, span in selected.get("slot_evidence", {}).items()
-        if slot in declared_slots
+        if slot in declared_slots and binding_validity.get(slot) is True
     }
     fully_bound = bool(
         declared_slots
@@ -92,12 +93,52 @@ def semantic_relation_clause_analysis(
         "required_object_tokens": sorted(required_object_tokens),
         "covered_object_tokens": list(selected.get("object_tokens_covered") or []),
         "target_relation_present": bool(selected.get("target_relation_present")),
+        "relation_bearing": bool(selected.get("relation_bearing")),
         "meta_scope": bool(selected.get("meta_scope")),
         "direct_relation_negated": selected.get("direct_relation_negated"),
         "clauses": clauses,
     }
     payload["analysis_digest"] = _digest(payload)
     return payload
+
+
+def locally_allowed_proposition_slots(
+    quote: str,
+    proposition: QuestionProposition,
+) -> tuple[str, ...]:
+    """Return exact slots a selector may declare before the verifier is called."""
+
+    analysis, observed = _locally_observed_slots(quote, proposition)
+    if (
+        analysis.get("relation_bearing") is not True
+        or analysis.get("meta_scope") is True
+    ):
+        return ()
+    return observed
+
+
+def locally_observed_proposition_slots(
+    quote: str,
+    proposition: QuestionProposition,
+) -> tuple[str, ...]:
+    """Return exact local slot observations, including companion noun spans."""
+
+    analysis, observed = _locally_observed_slots(quote, proposition)
+    return () if analysis.get("meta_scope") is True else observed
+
+
+def _locally_observed_slots(
+    quote: str,
+    proposition: QuestionProposition,
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    applicable = applicable_proposition_evidence_slots(proposition)
+    analysis = semantic_relation_clause_analysis(
+        {"quote": quote, "binds_proposition_slots": list(applicable)},
+        proposition,
+    )
+    evidence = dict(analysis.get("slot_evidence") or {})
+    observed = tuple(slot for slot in applicable if slot in evidence)
+    return analysis, observed
 
 
 def semantic_relation_evidence_set_constraint(
@@ -116,7 +157,8 @@ def semantic_relation_evidence_set_constraint(
             str(slot)
             for analysis in analyses
             for slot in analysis.get("slot_evidence") or {}
-            if analysis.get("joint_relation_clause_bound") is True
+            if analysis.get("relation_bearing") is True
+            and analysis.get("meta_scope") is not True
         }
     )
     required_object_tokens = sorted(
@@ -126,6 +168,9 @@ def semantic_relation_evidence_set_constraint(
         {
             str(token)
             for analysis in analyses
+            if analysis.get("relation_bearing") is True
+            and analysis.get("meta_scope") is not True
+            and "object" in (analysis.get("slot_evidence") or {})
             for token in analysis.get("covered_object_tokens") or []
         }
     )
@@ -134,6 +179,8 @@ def semantic_relation_evidence_set_constraint(
         verdict,
         required_slots=required_slots,
         bound_slots=bound_slots,
+        required_object_tokens=required_object_tokens,
+        covered_object_tokens=covered_object_tokens,
     )
     payload = {
         "contract_id": LOCAL_SEMANTIC_RELATION_CONSTRAINT,
@@ -263,39 +310,45 @@ def _evidence_set_reason(
     *,
     required_slots: list[str],
     bound_slots: list[str],
+    required_object_tokens: list[str],
+    covered_object_tokens: list[str],
 ) -> str:
     if not analyses:
         return "local_semantic_relation_missing"
     if any(value.get("status") == "mention_only" for value in analyses):
         return "local_semantic_relation_mention_only"
-    if any(value.get("status") == "unbound" for value in analyses):
-        return "local_semantic_slot_span_unbound"
-    if any(value.get("joint_relation_clause_bound") is not True for value in analyses):
-        return "local_semantic_slot_span_unbound"
+    if verdict == "no" and not any(
+        value.get("direct_relation_negated") is True
+        and value.get("target_relation_present") is True
+        and value.get("meta_scope") is not True
+        for value in analyses
+    ):
+        return "local_semantic_explicit_contradiction_missing"
     if set(bound_slots) != set(required_slots):
         return "local_semantic_slot_coverage_incomplete"
+    if set(covered_object_tokens) != set(required_object_tokens):
+        return "local_semantic_object_coverage_incomplete"
     if verdict == "yes":
         if any(
-            value.get("status") == "explicit_contradiction"
+            value.get("direct_relation_negated") is True
             and value.get("target_relation_present") is True
+            and value.get("meta_scope") is not True
             for value in analyses
         ):
             return "local_semantic_relation_explicit_contradiction"
         if not any(
-            value.get("status") == "affirmative_assertion"
+            value.get("direct_relation_negated") is False
             and value.get("target_relation_present") is True
+            and value.get("meta_scope") is not True
             for value in analyses
         ):
             return "local_semantic_relation_unresolved"
         return ""
     if verdict == "no":
-        if not any(
-            value.get("status") == "explicit_contradiction" for value in analyses
-        ):
-            return "local_semantic_explicit_contradiction_missing"
         if any(
-            value.get("status") == "affirmative_assertion"
+            value.get("direct_relation_negated") is False
             and value.get("target_relation_present") is True
+            and value.get("meta_scope") is not True
             and "predicate" in (value.get("declared_proposition_slots") or [])
             for value in analyses
         ):
@@ -354,7 +407,12 @@ def _clause_analysis(
         relation_negated = not relation_negated
     binding_validity = {
         "actor": actor_matches,
-        "predicate": bool(predicate_spans),
+        "predicate": bool(predicate_spans)
+        and _predicate_actor_order_valid(
+            proposition,
+            actor_span=actor_span,
+            predicate_span=predicate_span,
+        ),
         "object": bool(required_object_tokens and object_tokens),
         "quantifier": candidates["quantifier"] is not None,
     }
@@ -420,6 +478,24 @@ def _analysis_status(
     ):
         return "mention_only"
     return "unbound"
+
+
+def _predicate_actor_order_valid(
+    proposition: QuestionProposition,
+    *,
+    actor_span: Mapping[str, Any] | None,
+    predicate_span: Mapping[str, Any] | None,
+) -> bool:
+    if proposition.predicate not in {"be_collection_of", "be_subject_to"}:
+        return True
+    if actor_span is None or predicate_span is None:
+        return False
+    predicate_text = str(predicate_span.get("text") or "").casefold()
+    if predicate_text not in {"is", "are", "was", "were", "be"}:
+        return True
+    return int(actor_span.get("span_end") or 0) <= int(
+        predicate_span.get("span_start") or -1
+    )
 
 
 def _clause_score(value: Mapping[str, Any]) -> tuple[int, int, int, int, int]:

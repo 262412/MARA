@@ -434,6 +434,10 @@ def _assert_live_case(case: ProbeCase, row: dict[str, Any]) -> tuple[str, str, s
         case.expected_judgment,
         case.expected_audit_status,
     )
+    if case.controlled_fault and not _accepted_semantic_auditor_rejection(row):
+        raise RuntimeError(
+            f"{case.case_id}: auditor failure lacks an accepted semantic auditor rejection"
+        )
     if observed != expected:
         raise RuntimeError(
             f"{case.case_id}: provider observed {observed!r}, expected {expected!r}"
@@ -477,10 +481,6 @@ def _assert_live_case(case: ProbeCase, row: dict[str, Any]) -> tuple[str, str, s
     if case.controlled_fault:
         if case.expected_audit_status != "failed":
             raise RuntimeError(f"{case.case_id}: controlled fault must be negative")
-        if not _accepted_semantic_auditor_rejection(row):
-            raise RuntimeError(
-                f"{case.case_id}: auditor failure lacks an accepted semantic auditor rejection"
-            )
         commit = row.get("engine_terminal_commit") or {}
         if row.get("engine_terminal_answer") != "unanswerable":
             raise RuntimeError(

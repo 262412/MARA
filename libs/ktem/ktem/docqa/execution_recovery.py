@@ -3,14 +3,21 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from .boolean_authoritative_conflict import authoritative_conflict_complete
 from .controller import RetrieveDecision, evaluate_retrieval_quality
 from .evidence import EvidenceBundle
 from .execution_authority_policy import required_typed_authority_missing
-from .execution_models import RetrieveFn, RewriteFn, RouteExecutionResult, VerifyFn
+from .execution_models import (
+    GenerateFn,
+    RetrieveFn,
+    RewriteFn,
+    RouteExecutionResult,
+    VerifyFn,
+)
 from .execution_planning import build_execution_workflow_plan
-from .execution_recovery_events import authority_state as _authority_state
-from .execution_recovery_events import bundle_evidence_ids as _bundle_evidence_ids
+from .execution_qasper_candidate_recovery import (
+    regenerate_qasper_candidate as _regenerate_qasper_candidate,
+)
+from .execution_recovery_completion import complete_verifier_recovery
 from .execution_recovery_events import (
     copy_reverification_outcome as _copy_reverification_outcome,
 )
@@ -33,7 +40,6 @@ from .execution_recovery_events import (
 )
 from .execution_recovery_events import same_route_verifier_recovery_trace
 from .execution_recovery_events import typed_slot_states as _typed_slot_states
-from .execution_results import guarded_result, verified_result
 from .execution_route_switch_recovery import (
     switch_after_failed_retrieval,
     switch_after_failed_verification,
@@ -121,6 +127,8 @@ def recover_after_failed_verification(
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
     verify: VerifyFn,
+    *,
+    generate: GenerateFn | None = None,
 ) -> RouteExecutionResult:
     if initial_result.verify_decision.status == "execution_failed":
         return initial_result
@@ -133,6 +141,7 @@ def recover_after_failed_verification(
         trace_prefix,
         timings,
         verify,
+        generate=generate,
     )
 
 
@@ -145,6 +154,8 @@ def _recover_after_failed_verification(
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
     verify: VerifyFn,
+    *,
+    generate: GenerateFn | None = None,
 ) -> RouteExecutionResult:
     _record_route_switch_reverification(initial_result)
     if not required_typed_authority_missing(request, initial_result.verify_decision):
@@ -160,49 +171,18 @@ def _recover_after_failed_verification(
     )
     slot_state = _typed_slot_state(initial_result.evidence_bundle)
     if slot_state == "retrieved_unverified" and policy != "crag_guarded":
-        rebound, recovery_trace = _rebind_existing_verifier_recovery(
+        return _recover_retrieved_unverified(
             request,
             initial_result,
-            rewrite,
-            candidate_answer,
-            workflow_plan,
-            trace_prefix,
-            timings,
-            verify,
-        )
-        if not required_typed_authority_missing(request, rebound.verify_decision):
-            return rebound
-        if policy == "controller_auto":
-            recovery_trace[-1].pop("stop_reason", None)
-            recovery_trace[-1]["recovery_action"] = "rebind_existing_evidence"
-            switched = _controller_verifier_recovery(
-                request,
-                rebound,
-                retrieve,
-                rewrite,
-                candidate_answer,
-                policy,
-                [*trace_prefix, *recovery_trace],
-                timings,
-                verify,
-            )
-            if switched is not None:
-                return switched
-            _mark_recovery_no_progress(recovery_trace[-1])
-            return rebound
-        recovery_trace[-1].pop("stop_reason", None)
-        recovery_trace[-1]["recovery_action"] = "rebind_existing_evidence"
-        return _same_route_verifier_recovery(
-            request,
-            rebound,
             retrieve,
             rewrite,
             candidate_answer,
             policy,
             workflow_plan,
-            [*trace_prefix, *recovery_trace],
+            trace_prefix,
             timings,
             verify,
+            generate=generate,
         )
     return _same_route_verifier_recovery(
         request,
@@ -215,6 +195,70 @@ def _recover_after_failed_verification(
         trace_prefix,
         timings,
         verify,
+        generate=generate,
+    )
+
+
+def _recover_retrieved_unverified(
+    request: Any,
+    initial_result: RouteExecutionResult,
+    retrieve: RetrieveFn,
+    rewrite: RewriteFn | None,
+    candidate_answer: str,
+    policy: str,
+    workflow_plan: dict[str, Any],
+    trace_prefix: list[dict[str, Any]],
+    timings: PipelineStageTimings,
+    verify: VerifyFn,
+    *,
+    generate: GenerateFn | None,
+) -> RouteExecutionResult:
+    rebound, recovery_trace = _rebind_existing_verifier_recovery(
+        request,
+        initial_result,
+        rewrite,
+        candidate_answer,
+        workflow_plan,
+        trace_prefix,
+        timings,
+        verify,
+        generate=generate,
+    )
+    if not required_typed_authority_missing(request, rebound.verify_decision):
+        return rebound
+    terminal_event = recovery_trace[-1]
+    terminal_event.pop("stop_reason", None)
+    terminal_event["recovery_action"] = "rebind_existing_evidence"
+    prefixed_trace = [*trace_prefix, *recovery_trace]
+    if policy == "controller_auto":
+        switched = _controller_verifier_recovery(
+            request,
+            rebound,
+            retrieve,
+            rewrite,
+            candidate_answer,
+            policy,
+            prefixed_trace,
+            timings,
+            verify,
+            generate=generate,
+        )
+        if switched is not None:
+            return switched
+        _mark_recovery_no_progress(terminal_event)
+        return rebound
+    return _same_route_verifier_recovery(
+        request,
+        rebound,
+        retrieve,
+        rewrite,
+        candidate_answer,
+        policy,
+        workflow_plan,
+        prefixed_trace,
+        timings,
+        verify,
+        generate=generate,
     )
 
 
@@ -227,6 +271,8 @@ def _rebind_existing_verifier_recovery(
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
     verify: VerifyFn,
+    *,
+    generate: GenerateFn | None,
 ) -> tuple[RouteExecutionResult, list[dict[str, Any]]]:
     before = _typed_slot_states(initial_result.evidence_bundle)
     rebound_bundle = timings.measure(
@@ -257,6 +303,20 @@ def _rebind_existing_verifier_recovery(
         ), [rebind]
     reverify = {"stage": "reverify", "attempt": 1, **shared}
     recovery_trace = [rebind, reverify]
+    rebound_bundle, candidate_answer, stopped = _regenerate_qasper_candidate(
+        request,
+        initial_result,
+        initial_result.controller_decision,
+        initial_result.retrieve_decision,
+        rebound_bundle,
+        candidate_answer,
+        generate,
+        recovery_trace,
+        reverify,
+        timings,
+    )
+    if stopped is not None:
+        return stopped, recovery_trace
     result = complete_verifier_recovery(
         request,
         initial_result.controller_decision,
@@ -300,6 +360,8 @@ def _controller_verifier_recovery(
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
     verify: VerifyFn,
+    *,
+    generate: GenerateFn | None,
 ) -> RouteExecutionResult | None:
     if policy != "controller_auto":
         return None
@@ -332,6 +394,38 @@ def _controller_verifier_recovery(
             initial_result,
             controller_trace=[*initial_result.controller_trace, event],
         )
+    return _complete_controller_verifier_recovery(
+        request,
+        initial_result,
+        rewrite,
+        candidate_answer,
+        trace_prefix,
+        timings,
+        verify,
+        generate,
+        decision,
+        bundle,
+        retrieve_decision,
+        event,
+        shared,
+    )
+
+
+def _complete_controller_verifier_recovery(
+    request: Any,
+    initial_result: RouteExecutionResult,
+    rewrite: RewriteFn | None,
+    candidate_answer: str,
+    trace_prefix: list[dict[str, Any]],
+    timings: PipelineStageTimings,
+    verify: VerifyFn,
+    generate: GenerateFn | None,
+    decision: ControllerDecision,
+    bundle: EvidenceBundle,
+    retrieve_decision: RetrieveDecision,
+    event: dict[str, Any],
+    shared: dict[str, Any],
+) -> RouteExecutionResult:
     workflow_plan = build_execution_workflow_plan(
         request,
         decision.legacy_route,
@@ -345,6 +439,20 @@ def _controller_verifier_recovery(
         "recovery_action": "fresh_reverification",
         **shared,
     }
+    bundle, candidate_answer, stopped = _regenerate_qasper_candidate(
+        request,
+        initial_result,
+        decision,
+        retrieve_decision,
+        bundle,
+        candidate_answer,
+        generate,
+        [event, reverify],
+        reverify,
+        timings,
+    )
+    if stopped is not None:
+        return stopped
     result = complete_verifier_recovery(
         request,
         decision,
@@ -373,6 +481,8 @@ def _same_route_verifier_recovery(
     trace_prefix: list[dict[str, Any]],
     timings: PipelineStageTimings,
     verify: VerifyFn,
+    *,
+    generate: GenerateFn | None,
 ) -> RouteExecutionResult:
     recovered = timings.measure(
         "retry_seconds",
@@ -385,14 +495,7 @@ def _same_route_verifier_recovery(
         retry_reason=required_authority_recovery_reason(request),
     )
     if recovered is None:
-        if initial_result.controller_trace:
-            last_event = initial_result.controller_trace[-1]
-            if (
-                last_event.get("stage") == "evidence_rebind"
-                and last_event.get("verifier_recovery_attempt") == 1
-                and not _recovery_has_progress(last_event)
-            ):
-                _mark_recovery_no_progress(last_event)
+        _mark_last_rebind_no_progress(initial_result)
         return initial_result
     bundle, retrieve_decision, focused_query = recovered
     recovery_trace, terminal_event = same_route_verifier_recovery_trace(
@@ -406,20 +509,25 @@ def _same_route_verifier_recovery(
         candidate_answer=candidate_answer,
     )
     if not _recovery_has_progress(terminal_event):
-        _mark_recovery_no_progress(terminal_event)
-        terminal_event["authority_changed"] = False
-        recovery_trace = [
-            event for event in recovery_trace if event.get("stage") != "reverify"
-        ]
-        _mark_recovery_no_progress(recovery_trace[-1])
-        recovery_trace[-1]["authority_changed"] = False
-        return replace(
+        return _same_route_no_progress_result(
             initial_result,
-            controller_trace=[
-                *initial_result.controller_trace,
-                *recovery_trace,
-            ],
+            recovery_trace,
+            terminal_event,
         )
+    bundle, candidate_answer, stopped = _regenerate_qasper_candidate(
+        request,
+        initial_result,
+        initial_result.controller_decision,
+        retrieve_decision,
+        bundle,
+        candidate_answer,
+        generate,
+        recovery_trace,
+        terminal_event,
+        timings,
+    )
+    if stopped is not None:
+        return stopped
     return complete_verifier_recovery(
         request,
         initial_result.controller_decision,
@@ -435,104 +543,36 @@ def _same_route_verifier_recovery(
     )
 
 
-def complete_verifier_recovery(
-    request: Any,
-    decision: ControllerDecision,
-    retrieve_decision: RetrieveDecision,
-    bundle: EvidenceBundle,
-    candidate_answer: str,
-    rewrite: RewriteFn | None,
-    workflow_plan: dict[str, Any],
-    trace_prefix: list[dict[str, Any]],
-    timings: PipelineStageTimings,
-    verify: VerifyFn,
-    *,
+def _mark_last_rebind_no_progress(initial_result: RouteExecutionResult) -> None:
+    if not initial_result.controller_trace:
+        return
+    last_event = initial_result.controller_trace[-1]
+    if (
+        last_event.get("stage") == "evidence_rebind"
+        and last_event.get("verifier_recovery_attempt") == 1
+        and not _recovery_has_progress(last_event)
+    ):
+        _mark_recovery_no_progress(last_event)
+
+
+def _same_route_no_progress_result(
+    initial_result: RouteExecutionResult,
+    recovery_trace: list[dict[str, Any]],
     terminal_event: dict[str, Any],
 ) -> RouteExecutionResult:
-    if retrieve_decision.status != "good":
-        terminal_event.update(
-            {
-                "verification_status": "not_enough_evidence",
-                "slot_states_after": _typed_slot_states(bundle),
-                "recovered_evidence_ids": _bundle_evidence_ids(bundle),
-                "authority_state_after": str(
-                    terminal_event.get("authority_state_before") or ""
-                ),
-                "authority_atoms_after": list(
-                    terminal_event.get("authority_atoms_before") or []
-                ),
-                "authority_changed": False,
-                "stop_reason": "authority_recovery_exhausted",
-            }
-        )
-        return guarded_result(
-            request,
-            decision,
-            retrieve_decision,
-            bundle,
-            workflow_plan,
-            trace_prefix,
-            timings,
-            verify=verify,
-        )
-    result = verified_result(
-        request,
-        decision,
-        retrieve_decision,
-        bundle,
-        candidate_answer,
-        rewrite,
-        workflow_plan,
-        trace_prefix,
-        timings,
-        verify=verify,
-    )
-    _record_recovery_outcome(request, result, terminal_event)
-    return result
-
-
-def _record_recovery_outcome(
-    request: Any,
-    result: RouteExecutionResult,
-    terminal_event: dict[str, Any],
-) -> None:
-    recovered = not required_typed_authority_missing(request, result.verify_decision)
-    conflict_resolved = (
-        result.verify_decision.status == "verified_conflict"
-        and authoritative_conflict_complete(
-            result.verify_decision.authoritative_conflict
-        )
-    )
-    authority_state_after, authority_atoms_after = _authority_state(
-        result.verify_decision
-    )
-    authority_state_before = str(terminal_event.get("authority_state_before") or "")
-    authority_atoms_before = list(terminal_event.get("authority_atoms_before") or [])
-    candidate_before = str(terminal_event.get("candidate_answer_before") or "")
-    candidate_after = str(result.answer or "")
-    terminal_event.update(
-        {
-            "verification_status": result.verify_decision.status,
-            "slot_states_after": _typed_slot_states(result.evidence_bundle),
-            "recovered_evidence_ids": _bundle_evidence_ids(result.evidence_bundle),
-            "authority_state_after": authority_state_after,
-            "authority_atoms_after": authority_atoms_after,
-            "authority_changed": (
-                authority_state_before != authority_state_after
-                or authority_atoms_before != authority_atoms_after
-            ),
-            "candidate_answer_after": candidate_after,
-            "candidate_changed": candidate_before.strip() != candidate_after.strip(),
-            "stop_reason": (
-                "authority_conflict_resolved"
-                if conflict_resolved
-                else (
-                    "authority_recovered"
-                    if recovered
-                    else "authority_recovery_exhausted"
-                )
-            ),
-        }
+    _mark_recovery_no_progress(terminal_event)
+    terminal_event["authority_changed"] = False
+    trace_without_reverify = [
+        event for event in recovery_trace if event.get("stage") != "reverify"
+    ]
+    _mark_recovery_no_progress(trace_without_reverify[-1])
+    trace_without_reverify[-1]["authority_changed"] = False
+    return replace(
+        initial_result,
+        controller_trace=[
+            *initial_result.controller_trace,
+            *trace_without_reverify,
+        ],
     )
 
 

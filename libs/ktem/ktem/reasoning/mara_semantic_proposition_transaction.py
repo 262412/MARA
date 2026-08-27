@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Collection, Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -53,29 +54,24 @@ from .mara_semantic_proposition_transaction_repair import (
     stop_without_reverify,
 )
 from .mara_semantic_recovery_state import changed_binding_reaudit_transition
+from .mara_semantic_transaction_context import release_auditor_failure
+from .mara_semantic_transaction_context import (
+    transaction_context as _transaction_context,
+)
+from .mara_semantic_transaction_context import (
+    transaction_diagnostics as _transaction_diagnostics,
+)
 from .mara_semantic_transaction_support import (
     applicable_proposition_slots,
     audit_prompt_failure,
     bind_semantic_runtime_fields,
     pre_audit_transaction_failure,
+    semantic_pack_identity,
     transaction_debug,
     transaction_result,
 )
 
 _TransactionContext = SemanticPropositionTransactionContext
-
-
-def _transaction_diagnostics(
-    relationship: str,
-    semantic_pack_digest: str,
-) -> dict[str, Any]:
-    return {
-        "audit_status": "not_started",
-        "audit_reason": "",
-        "auditor_relationship": relationship,
-        "semantic_pack_digest": semantic_pack_digest,
-        "recovery_transitions": [],
-    }
 
 
 def run_semantic_proposition_transaction(
@@ -91,6 +87,9 @@ def run_semantic_proposition_transaction(
     seed: int,
     release_mode: bool = False,
     semantic_pack_digest: str = "",
+    canonical_span_universe_digest: str = "",
+    candidate_transaction_id: str = "",
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
     capture_debug_trace: bool = False,
     transaction_id: str = "",
     attempt_namespace: str = "initial",
@@ -102,15 +101,13 @@ def run_semantic_proposition_transaction(
         audit_model=audit_model,
     )
     diagnostics = _transaction_diagnostics(relationship, semantic_pack_digest)
-    if release_mode and relationship != "distinct_model":
-        diagnostics["audit_reason"] = "release_conclusion_auditor_not_independent"
-        return transaction_result(
-            None,
-            "failed",
-            "release_conclusion_auditor_not_independent",
-            diagnostics,
-            proposal_calls=0,
-        )
+    release_failure = release_auditor_failure(
+        release_mode,
+        relationship,
+        diagnostics,
+    )
+    if release_failure is not None:
+        return release_failure
     resolution = resolve_proposition_precondition(question, diagnostics)
     if question_proposition_completeness_reason(resolution.proposition):
         return incomplete_proposition_result(
@@ -140,6 +137,8 @@ def run_semantic_proposition_transaction(
         relationship=relationship,
         transaction_id=transaction_id,
         attempt_namespace=attempt_namespace,
+        canonical_span_universe_digest=canonical_span_universe_digest,
+        candidate_transaction_id=candidate_transaction_id,
     )
     candidate = candidate_from_prompt(prompt)
     proposal = proposal_stage(
@@ -151,48 +150,9 @@ def run_semantic_proposition_transaction(
         seed=seed,
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots(context.proposition),
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
     )
     return _complete_proposal(context, proposal, diagnostics, candidate=candidate)
-
-
-def _transaction_context(
-    *,
-    proposal_llm: Any,
-    audit_llm: Any,
-    prompt: str,
-    question: str,
-    packed: list[dict[str, Any]],
-    slots: list[dict[str, str]],
-    resolution: Any,
-    proposal_model: str,
-    audit_model: str,
-    seed: int,
-    release_mode: bool,
-    semantic_pack_digest: str,
-    capture_debug_trace: bool,
-    relationship: str,
-    transaction_id: str,
-    attempt_namespace: str,
-) -> _TransactionContext:
-    return _TransactionContext(
-        proposal_llm=proposal_llm,
-        audit_llm=audit_llm,
-        proposal_prompt=prompt,
-        question=question,
-        packed=packed,
-        slots=slots,
-        proposition=resolution.proposition,
-        proposition_resolution=resolution.as_dict(),
-        proposal_model=proposal_model,
-        audit_model=audit_model,
-        seed=seed,
-        release_mode=release_mode,
-        semantic_pack_digest=semantic_pack_digest,
-        capture_debug_trace=capture_debug_trace,
-        auditor_relationship=relationship,
-        transaction_id=transaction_id,
-        attempt_namespace=attempt_namespace,
-    )
 
 
 def _complete_proposal(
@@ -251,6 +211,8 @@ def _audit_transaction(
         )
     except ValueError:
         return audit_prompt_failure(context, proposal, diagnostics)
+    if audit.call_count > 0:
+        diagnostics["auditor_semantic_pack_identity"] = semantic_pack_identity(context)
     diagnostics["independent_semantic_constraint"] = local_constraint
     diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
     local_consistency = record_local_premise_consistency(
@@ -355,6 +317,9 @@ def _audit_result(
         auditor_relationship=context.auditor_relationship,
         audit_result=audit.value,
         independent_semantic_constraint=local_constraint,
+    )
+    value["entailment_audit"]["semantic_pack_identity"] = semantic_pack_identity(
+        context
     )
     binding_reason = conclusion_audit_binding_reason(
         context.question,
@@ -494,6 +459,7 @@ def _audit_rejection_result(
             independent_semantic_constraint=dict(
                 diagnostics.get("independent_semantic_constraint") or {}
             ),
+            semantic_pack_identity=semantic_pack_identity(context),
         )
     )
     value = insufficient_semantic_result(

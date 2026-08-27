@@ -3,9 +3,9 @@ from __future__ import annotations
 from ktem.reasoning.mara_qasper_candidate import _candidate_prompt
 from ktem.reasoning.mara_qasper_candidate_evidence import (
     candidate_evidence_set_binding,
-    candidate_slot_hints,
     exact_candidate_slot_binding,
 )
+from ktem.reasoning.mara_qasper_candidate_relation import candidate_slot_hints
 
 QUESTION = "Did the authors compare the two systems?"
 
@@ -84,7 +84,10 @@ def test_cross_record_exact_spans_with_local_offsets_form_one_set() -> None:
     binding = candidate_evidence_set_binding(records, QUESTION)
 
     assert binding["binding_status"] == "bound"
-    assert binding["support"] is True
+    # Cross-record slot coverage is structurally auditable, but the isolated
+    # predicate is not enough to project a polarity across unrelated records.
+    assert binding["support"] is False
+    assert binding["polarity_signal"] == "undetermined"
     assert binding["evidence_ids"] == ["e1", "e2", "e3"]
     assert binding["evidence_refs"] == ["E1:S1", "E2:S1", "E3:S1"]
 
@@ -288,7 +291,8 @@ def test_candidate_prompt_exposes_non_authoritative_set_binding() -> None:
     assert "CANDIDATE EVIDENCE-SET OBSERVATION:" in prompt
     assert '"binding_status":"bound"' in prompt
     assert "one to four exact selectors" in prompt
-    assert "first selector is not a proposition binding" in prompt
+    assert "immutable span universe" in prompt
+    assert "permission to invent evidence" in prompt
     assert "Quantifier none is not evidence" in prompt
 
 

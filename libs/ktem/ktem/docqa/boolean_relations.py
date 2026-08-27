@@ -68,7 +68,10 @@ _RELATION_GROUPS = {
         "extraction",
         "inspect",
         "investigate",
+        "observe",
         "study",
+        "visualize",
+        "visualise",
     },
     "improve": {
         "benefit",
@@ -105,7 +108,14 @@ _RELATION_GROUPS = {
         "utilize",
         "use",
     },
-    "validate": {"check", "control", "validate", "verify"},
+    "validate": {
+        "check",
+        "control",
+        "controlled",
+        "controlling",
+        "validate",
+        "verify",
+    },
 }
 _RELATION_BY_FORM = {
     form: canonical for canonical, forms in _RELATION_GROUPS.items() for form in forms

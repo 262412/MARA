@@ -11,7 +11,10 @@ def candidate_transaction_identity(
     request: Any,
     route: str,
     seed: int,
-) -> dict[str, str]:
+    *,
+    generation_sequence: int = 0,
+    predecessor_transaction_id: str = "",
+) -> dict[str, Any]:
     context = dict(getattr(request, "trace_context", {}) or {})
     group_id = str(context.get("trace_group_id") or "")
     benchmark_route_id = str(
@@ -34,6 +37,8 @@ def candidate_transaction_identity(
             "route": route,
             "stage": "candidate_generation",
             "seed": seed,
+            "generation_sequence": generation_sequence,
+            "predecessor_transaction_id": predecessor_transaction_id,
         }
     )
     return {
@@ -42,6 +47,8 @@ def candidate_transaction_identity(
         "internal_route": route,
         "transaction_id": transaction_id,
         "attempt_id": f"{transaction_id}:candidate_generation:1",
+        "generation_sequence": generation_sequence,
+        "predecessor_transaction_id": predecessor_transaction_id,
     }
 
 

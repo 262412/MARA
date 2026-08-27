@@ -94,6 +94,7 @@ class ControlledPreAuditProvider:
             candidate=candidate,
             selector=match.group(1),
             evidence_text=match.group(2).strip(),
+            support_slot_ids=_required_verification_slot_ids(text),
         )
 
 
@@ -147,3 +148,19 @@ def _required_line_after_marker(text: str, marker: str) -> str:
     if not value:
         raise RuntimeError(f"controlled pre-audit marker missing: {marker}")
     return value
+
+
+def _required_verification_slot_ids(text: str) -> list[str]:
+    marker = "REQUIRED VERIFICATION SLOTS:"
+    position = text.find(marker)
+    if position < 0:
+        raise RuntimeError("controlled pre-audit required slots missing")
+    section = text[position + len(marker) :].split("\n\n", maxsplit=1)[0]
+    values = [
+        match.group(1).strip()
+        for line in section.splitlines()
+        if (match := re.match(r"\s*-\s*([^:]+:[^:]+)\s*:", line))
+    ]
+    if not values:
+        raise RuntimeError("controlled pre-audit required slots missing")
+    return values

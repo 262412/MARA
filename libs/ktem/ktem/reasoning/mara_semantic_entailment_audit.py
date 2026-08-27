@@ -54,12 +54,14 @@ def semantic_entailment_audit_prompt(
     original_candidate: str = "",
     candidate_judgment: str = "",
     premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None = None,
+    semantic_pack_identity: Mapping[str, str] | None = None,
 ) -> str:
     payload = {
         "original_candidate": str(original_candidate or "").strip().casefold(),
         "candidate_judgment": str(candidate_judgment or "").strip().casefold(),
         "question_proposition": proposition.as_dict(),
         "typed_conclusion": conclusion.as_dict(),
+        "semantic_pack_identity": dict(semantic_pack_identity or {}),
         "proof_mode": proof_mode,
         "premises": [
             {

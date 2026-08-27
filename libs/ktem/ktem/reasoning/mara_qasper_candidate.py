@@ -53,7 +53,16 @@ from .mara_qasper_candidate_transport import (  # noqa: F401 - compatibility re-
     parse_qasper_candidate,
     qasper_candidate_response_format,
 )
+from .mara_qasper_semantic_pack import (
+    QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
+    freeze_qasper_canonical_semantic_pack,
+    qasper_canonical_span_universe_digest,
+)
 from .mara_semantic_proposition_debug import provider_failure
+from .mara_semantic_proposition_packing import (
+    SemanticPropositionEvidencePacking,
+    required_semantic_proposition_slots,
+)
 
 QASPER_CANDIDATE_GENERATION_CONTRACT = "qasper_typed_candidate_generation.v2"
 QASPER_CANDIDATE_DEFAULT_SEED = 20260724
@@ -108,18 +117,15 @@ def generate_qasper_typed_candidate(
 ) -> str:
     llm = _answering_llm(pipeline)
     question = request_planning_question(request)
-    evidence, evidence_diagnostics = _candidate_evidence(
+    evidence, evidence_diagnostics, source_packing = _candidate_evidence(
         request,
         question,
         bundle,
     )
-    seed = effective_candidate_seed(
-        request,
-        default_seed=QASPER_CANDIDATE_DEFAULT_SEED,
-    )
+    seed = _candidate_seed(request)
     route = str(bundle.route or "")
     controlled_candidate = _contract_probe_original_candidate(request, route)
-    identity = _transaction_identity(request, route, seed)
+    identity = _candidate_transaction(request, bundle, route, seed)
     response_schema = qasper_candidate_response_format(
         controlled_candidate=controlled_candidate
     )
@@ -136,6 +142,15 @@ def generate_qasper_typed_candidate(
         evidence_diagnostics,
         response_schema=response_schema,
         controlled_candidate=controlled_candidate,
+    )
+    _freeze_candidate_semantic_pack(
+        bundle,
+        request,
+        question,
+        source_packing,
+        evidence,
+        evidence_diagnostics,
+        identity["transaction_id"],
     )
     serialized_messages = _serialized_messages(messages)
     schema_digest = _digest(response_schema)
@@ -175,6 +190,66 @@ def generate_qasper_typed_candidate(
         response_schema,
         controlled_candidate,
     )
+
+
+def _candidate_seed(request: Any) -> int:
+    return effective_candidate_seed(
+        request,
+        default_seed=QASPER_CANDIDATE_DEFAULT_SEED,
+    )
+
+
+def _candidate_transaction(
+    request: Any,
+    bundle: EvidenceBundle,
+    route: str,
+    seed: int,
+) -> dict[str, Any]:
+    predecessor = str(
+        bundle.metadata.get("qasper_candidate_predecessor_transaction_id") or ""
+    )
+    return _transaction_identity(
+        request,
+        route,
+        seed,
+        generation_sequence=_candidate_generation_sequence(bundle),
+        predecessor_transaction_id=predecessor,
+    )
+
+
+def _freeze_candidate_semantic_pack(
+    bundle: EvidenceBundle,
+    request: Any,
+    question: str,
+    source_packing: SemanticPropositionEvidencePacking,
+    evidence: list[dict[str, Any]],
+    diagnostics: dict[str, Any],
+    transaction_id: str,
+) -> None:
+    packing = freeze_qasper_canonical_semantic_pack(
+        bundle,
+        question=question,
+        slots=required_semantic_proposition_slots(request),
+        source_packing=source_packing,
+        records=evidence,
+        candidate_transaction_id=transaction_id,
+    )
+    diagnostics.update(
+        evidence_pack_digest=packing.semantic_pack_digest,
+        canonical_semantic_pack_contract_id=QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
+        canonical_semantic_pack_digest=packing.semantic_pack_digest,
+        canonical_span_universe_digest=qasper_canonical_span_universe_digest(
+            packing.records
+        ),
+        canonical_pack_candidate_transaction_id=transaction_id,
+    )
+
+
+def _candidate_generation_sequence(bundle: EvidenceBundle) -> int:
+    value = bundle.metadata.get("qasper_candidate_generation_sequence", 0)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("qasper_candidate_generation_sequence_invalid")
+    return value
 
 
 def _candidate_request_ready(
@@ -263,6 +338,9 @@ def _fit_candidate_request(
 ) -> _CandidateRequestFit:
     selected = list(evidence)
     dropped_count = 0
+    pre_request_dropped_count = int(
+        evidence_diagnostics.get("pre_request_dropped_evidence_count") or 0
+    )
     while True:
         bound_slots = _bound_candidate_slots(
             evidence_diagnostics.get("required_slots", []), selected
@@ -271,6 +349,9 @@ def _fit_candidate_request(
             **evidence_diagnostics,
             "required_slots": bound_slots,
             "candidate_request_dropped_evidence_count": dropped_count,
+            "request_dropped_evidence_count": (
+                pre_request_dropped_count + dropped_count
+            ),
             "evidence_dropped_count": (
                 int(evidence_diagnostics.get("evidence_dropped_count") or 0)
                 + dropped_count
@@ -293,7 +374,7 @@ def _fit_candidate_request(
                 diagnostics,
                 messages,
                 token_measurement,
-                dropped_count,
+                pre_request_dropped_count + dropped_count,
             )
         if (
             token_measurement["estimated_input_tokens"]
@@ -305,7 +386,7 @@ def _fit_candidate_request(
                 diagnostics,
                 messages,
                 token_measurement,
-                dropped_count,
+                pre_request_dropped_count + dropped_count,
             )
         drop_index = _candidate_drop_index(selected)
         if drop_index is None:
@@ -314,7 +395,7 @@ def _fit_candidate_request(
                 diagnostics,
                 messages,
                 token_measurement,
-                dropped_count,
+                pre_request_dropped_count + dropped_count,
             )
         selected.pop(drop_index)
         dropped_count += 1

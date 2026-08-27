@@ -7,6 +7,7 @@ from typing import Any
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.query_planning import build_query_plan
+from ktem.reasoning import mara_qasper_candidate_budget as candidate_budget
 from ktem.reasoning.mara_qasper_candidate import (
     QASPER_CANDIDATE_INPUT_TOKEN_BUDGET,
     QASPER_CANDIDATE_MAX_MODEL_LEN,
@@ -16,7 +17,6 @@ from ktem.reasoning.mara_qasper_candidate import (
     generate_qasper_typed_candidate,
     qasper_candidate_response_format,
 )
-from ktem.reasoning import mara_qasper_candidate_budget as candidate_budget
 from ktem.reasoning.mara_qasper_candidate_evidence import (
     candidate_evidence_set_binding,
     candidate_selector_options,
@@ -25,6 +25,7 @@ from ktem.reasoning.mara_qasper_candidate_prompt import (
     _compact_candidate_evidence_set_binding,
     _compact_candidate_selector_options,
 )
+from ktem.reasoning.mara_qasper_semantic_pack import prepare_qasper_canonical_records
 from ktem.reasoning.mara_semantic_proposition_packing import compact_json
 
 
@@ -212,6 +213,7 @@ def test_candidate_evidence_serialization_keeps_spans_without_repeated_metadata(
         ],
     }
 
+    [record] = prepare_qasper_canonical_records(question, [record])
     verbose_options = candidate_selector_options(record, question=question)
     compact_options = _compact_candidate_selector_options(record, question=question)
     verbose_binding = candidate_evidence_set_binding([record], question)
@@ -222,7 +224,10 @@ def test_candidate_evidence_serialization_keeps_spans_without_repeated_metadata(
         "span_start": 0,
         "span_end": len(text),
         "text": text,
-        "slot_hints": ["actor", "predicate", "object"],
+        "allowed_proposition_slots": ["actor", "predicate", "object"],
+        "relation_bearing": True,
+        "candidate_relation_role": "polarity_evidence",
+        "local_relation_state": "affirmative_assertion",
         "polarity_signal": "support",
     }
     assert "evidence_id" not in compact_options[0]
@@ -318,7 +323,10 @@ def test_candidate_compaction_keeps_aligned_evidence_record() -> None:
     trace = bundle.metadata["qasper_candidate_generation"]
     assert trace["request_dropped_evidence_count"] == 1
     assert trace["evidence_count"] == 1
-    assert "[E1] evidence_id=evidence:paper:e1" in trace["message_stack"][1]["content"]
+    candidate_message = trace["message_stack"][1]["content"]
+    assert "[E1]" in candidate_message
+    assert "evidence_id=evidence:paper:e1" not in candidate_message
+    assert '"evidence_ref":"E1:S1"' in candidate_message
     assert (
         "[E2] evidence_id=evidence:paper:e2" not in trace["message_stack"][1]["content"]
     )

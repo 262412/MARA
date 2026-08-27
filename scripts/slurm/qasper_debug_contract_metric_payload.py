@@ -105,6 +105,9 @@ def _summary_metrics(
         "qasper_reverify_without_semantic_state_change_count": float(
             counts["reverify_without_state_change"]
         ),
+        "qasper_canonical_semantic_pack_mismatch_count": float(
+            counts["canonical_pack_mismatches"]
+        ),
     }
 
 

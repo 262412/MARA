@@ -251,10 +251,11 @@ def test_qasper_candidate_prompt_binds_typed_proposition_and_required_evidence_r
     assert '"quantifier":"none"' in prompt
     assert "REQUIRED VERIFICATION SLOTS:" in prompt
     assert "support:left_subject" in prompt
-    assert "binding_status=missing" in prompt
-    assert "retrieved_evidence_ids=" in prompt
-    assert "retrieved_evidence_refs=" in prompt
-    assert "an evidence ID or a first selector is not a proposition binding" in prompt
+    assert "retrieved_evidence_ids=" not in prompt
+    assert "retrieved_evidence_refs=" not in prompt
+    assert "evidence_id=" not in prompt
+    assert "CANONICAL RELATION-BEARING SPAN SET:" in prompt
+    assert "immutable span universe" in prompt
     assert '"evidence_ref":"E1:S1"' in prompt
     assert '"evidence_ref":"E2:S1"' in prompt
     assert bundle.metadata["qasper_candidate_generation"]["typed_proposition"]

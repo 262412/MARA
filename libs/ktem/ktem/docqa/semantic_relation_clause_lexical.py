@@ -115,6 +115,30 @@ def actor_span(
         span = literal_span(clause, surface, offset=offset)
         if span is not None:
             return span, True
+    subject_tokens = semantic_content_token_set(proposition.subject_surface)
+    clause_tokens = [
+        (match, canonical_semantic_token(match.group(0)))
+        for match in _TOKEN_RE.finditer(clause)
+    ]
+    matching_subject_tokens = [
+        (match, token)
+        for match, token in clause_tokens
+        if token and token in subject_tokens
+    ]
+    alias_span = _best_named_actor_alias_span(
+        matching_subject_tokens,
+        required=subject_tokens,
+    )
+    if alias_span is not None:
+        return (
+            _span_payload(
+                clause,
+                alias_span[0],
+                alias_span[1],
+                offset=offset,
+            ),
+            True,
+        )
     fallback = _ANY_ACTOR_RE.search(clause)
     if fallback is not None:
         return (
@@ -140,6 +164,26 @@ def predicate_spans(
         if part and part not in {"be", "of", "on", "to"}
     }
     target_stems.add(_token_stem(predicate))
+    target_aliases = {
+        "be_collection_of": {
+            "are",
+            "be",
+            "collection",
+            "comprise",
+            "consist",
+            "is",
+            "was",
+            "were",
+        },
+        "be_subject_to": {
+            "check",
+            "control",
+            _CONTROL_STEM,
+            "subject",
+            "validate",
+            "verify",
+        },
+    }.get(str(predicate or "").casefold(), set())
     output = []
     for match in _TOKEN_RE.finditer(clause):
         token = match.group(0).casefold()
@@ -148,6 +192,7 @@ def predicate_spans(
             relation == target
             or token in target_surfaces
             or _token_stem(token) in target_stems
+            or _token_stem(token) in target_aliases
         ):
             output.append(
                 _span_payload(clause, match.start(), match.end(), offset=offset)
@@ -270,9 +315,43 @@ def canonical_semantic_token(value: str) -> str:
         "evaluation": "metric",
         "predict": "prediction",
         "predicting": "prediction",
+        "probe": "dataset",
+        _GENERATE_STEM: "construct",
+        "construct": "construct",
+        _CONTROL_STEM: "control",
         "system": "component",
         "visual": "image",
     }.get(stem, stem)
+
+
+def _named_actor_alias_aligned(required: set[str], covered: set[str]) -> bool:
+    if not covered:
+        return False
+    noun_anchors = required - {"automatic", "automatically", "construct"}
+    if noun_anchors and not noun_anchors & covered:
+        return False
+    return len(required & covered) >= max(1, (len(required) + 1) // 2)
+
+
+def _best_named_actor_alias_span(
+    matches: list[tuple[re.Match[str], str]],
+    *,
+    required: set[str],
+) -> tuple[int, int] | None:
+    candidates: list[tuple[int, int, int]] = []
+    for start_index in range(len(matches)):
+        covered: set[str] = set()
+        for end_index in range(start_index, len(matches)):
+            covered.add(matches[end_index][1])
+            if not _named_actor_alias_aligned(required, covered):
+                continue
+            start = matches[start_index][0].start()
+            end = matches[end_index][0].end()
+            candidates.append((start, end - start, end))
+    if not candidates:
+        return None
+    start, _width, end = min(candidates)
+    return start, end
 
 
 def _token_stem(value: str) -> str:
@@ -291,6 +370,10 @@ def _token_stem(value: str) -> str:
     if token.endswith("s") and not token.endswith(("ss", "us")) and len(token) > 4:
         return token[:-1]
     return token
+
+
+_GENERATE_STEM = _token_stem("generated")
+_CONTROL_STEM = _token_stem("controlled")
 
 
 def _span_payload(

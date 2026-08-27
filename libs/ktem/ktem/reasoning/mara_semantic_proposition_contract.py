@@ -45,6 +45,8 @@ class SemanticPropositionTransactionContext:
     auditor_relationship: str
     transaction_id: str = ""
     attempt_namespace: str = "initial"
+    canonical_span_universe_digest: str = ""
+    candidate_transaction_id: str = ""
 
 
 def resolve_proposition_precondition(
@@ -138,6 +140,7 @@ def rejected_semantic_transaction(
     local_premise_consistency: dict[str, Any] | None = None,
     independent_semantic_constraint: dict[str, Any] | None = None,
     semantic_proof_digest: str = "",
+    semantic_pack_identity: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     audit = value.get("entailment_audit")
     audit = audit if isinstance(audit, dict) else {}
@@ -150,6 +153,7 @@ def rejected_semantic_transaction(
             audit.get("polarity_contradiction_check") or {}
         ),
         "semantic_pack_digest": semantic_pack_digest,
+        "premises": list(value.get("premises") or []),
     }
     if raw_audit_result is not None:
         transaction["raw_conclusion_check"] = dict(
@@ -163,4 +167,6 @@ def rejected_semantic_transaction(
         )
     if semantic_proof_digest:
         transaction["semantic_proof_digest"] = semantic_proof_digest
+    if semantic_pack_identity is not None:
+        transaction["semantic_pack_identity"] = dict(semantic_pack_identity)
     return transaction

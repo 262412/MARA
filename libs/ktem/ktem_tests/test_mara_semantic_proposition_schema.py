@@ -32,7 +32,7 @@ def _packed_premises(count: int) -> list[dict]:
     ]
 
 
-def test_response_schema_omits_runtime_selector_ids_and_parser_rejects_duplicate_slots() -> (
+def test_response_schema_binds_runtime_selector_ids_and_parser_rejects_duplicate_slots() -> (
     None
 ):
     response_format = semantic_proposition_response_format(
@@ -41,10 +41,10 @@ def test_response_schema_omits_runtime_selector_ids_and_parser_rejects_duplicate
     )
     schema_text = json.dumps(response_format)
     assert "uniqueItems" not in schema_text
-    assert "E1:S1" not in schema_text
-    assert response_format == semantic_proposition_response_format(
-        [f"E{index}:S{index}" for index in range(1, 101)],
-        ["support:proposition", "support:left_subject"],
+    assert '"E1:S1"' in schema_text
+    assert '"E2:S1"' in schema_text
+    assert response_format != semantic_proposition_response_format(
+        ["E9:S9"], ["support:proposition", "support:left_subject"]
     )
 
     response = json.loads(_model_response())

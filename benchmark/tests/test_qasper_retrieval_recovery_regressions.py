@@ -114,6 +114,7 @@ def test_qasper_expanded_boolean_query_keeps_toolkit_evidence_candidate():
 
     [bound_slot] = bound.evidence_slots
     assert slot.metric == "they experiment with toolkits"
+    assert plan.constraints["question"] == TOOLKIT_QUESTION
     assert bound_slot.status == "retrieved_unverified"
     assert bound_slot.evidence_ids
 

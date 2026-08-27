@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -45,6 +46,7 @@ def candidate_unknown_audit_prompt(
     unknown_assessment: dict[str, Any],
     *,
     verifier_judgment: str = "",
+    semantic_pack_identity: Mapping[str, str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     conclusion = candidate_typed_conclusion(proposition, candidate)
     audited_premises = _unknown_audit_premises(unknown_assessment)
@@ -60,6 +62,7 @@ def candidate_unknown_audit_prompt(
         "replacement_candidate_allowed": False,
         "question_proposition": proposition.as_dict(),
         "audited_typed_conclusion": conclusion,
+        "semantic_pack_identity": dict(semantic_pack_identity or {}),
         "audited_premises": audited_premises,
         # The reviewed evidence is carried once, in audited_premises. Keeping
         # the full parser projection here used to duplicate every quote and

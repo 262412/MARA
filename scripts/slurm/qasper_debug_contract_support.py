@@ -322,6 +322,7 @@ def _empty_coverage_counts() -> dict[str, int]:
         "candidate_verifier_audit": 0,
         "auditor_failed_safe_abstention": 0,
         "semantic_verifier_debug": 0,
+        "canonical_semantic_pack_alignment": 0,
         "live_model": 0,
     }
 
@@ -355,6 +356,9 @@ _GENERATOR_REQUIRED_FIELDS = (
     "effective_seed",
     "input_digest",
     "output_digest",
+    "canonical_semantic_pack_digest",
+    "canonical_span_universe_digest",
+    "canonical_pack_candidate_transaction_id",
 )
 
 _VERIFIER_REQUIRED_FIELDS = (
@@ -372,4 +376,9 @@ _VERIFIER_REQUIRED_FIELDS = (
     "effective_seed",
     "input_digest",
     "output_digest",
+    "semantic_pack_digest",
+    "canonical_span_universe_digest",
+    "candidate_transaction_id",
+    "canonical_pack_continuity_status",
+    "auditor_semantic_pack_identity",
 )

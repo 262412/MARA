@@ -27,6 +27,9 @@ from scripts.slurm.qasper_debug_contract_recovery import (
     _answerable_false_abstention,
     _reverify_without_state_change_count,
 )
+from scripts.slurm.qasper_debug_contract_semantic_pack import (
+    canonical_semantic_pack_alignment_valid,
+)
 from scripts.slurm.qasper_debug_contract_support import (
     _candidate_bound_auditor_attempt_observed,
     _mapping,
@@ -147,6 +150,7 @@ def _lane_audit(
             and metrics["qasper_quality_answerable_row_count"] > 0
             and metrics["answerable_false_abstention_count"] == 0
             and metrics["qasper_online_auditor_attempt_missing_count"] == 0
+            and metrics["qasper_canonical_semantic_pack_mismatch_count"] == 0
             and not observation["missing_required_candidate_labels"]
         )
     else:
@@ -194,6 +198,7 @@ def _live_probe_complete(
         and metrics["qasper_online_auditor_attempt_missing_count"] == 0.0
         and metrics["qasper_online_verifier_missing_count"] == 0.0
         and metrics["qasper_unexpected_unknown_assessment_count"] == 0.0
+        and metrics["qasper_canonical_semantic_pack_mismatch_count"] == 0.0
     )
 
 
@@ -338,9 +343,11 @@ def _metric_counts(
         "answerable_rows": 0,
         "required_slot_overlap": 0,
         "unexpected_unknown_assessment": 0,
+        "canonical_pack_mismatches": 0,
     }
     for prediction in all_predictions:
         metadata = terminal_metadata(prediction)
+        canonical_pack = _mapping(metadata.get("qasper_canonical_semantic_pack"))
         generator = _mapping(metadata.get("qasper_candidate_generation"))
         verifier = _mapping(metadata.get("semantic_proposition_verifier"))
         audit = _mapping(verifier.get("candidate_verification_audit"))
@@ -384,6 +391,10 @@ def _metric_counts(
         counts["unexpected_unknown_assessment"] += _unexpected_unknown_assessment_count(
             verifier
         )
+        if canonical_pack or generator or verifier:
+            counts["canonical_pack_mismatches"] += int(
+                not canonical_semantic_pack_alignment_valid(prediction)
+            )
     _add_quality_metric_counts(counts, quality)
     return counts
 

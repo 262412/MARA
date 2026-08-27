@@ -26,13 +26,13 @@ NATURAL_QUALITY_PAYLOAD_FIXTURES: tuple[NaturalQualityPayloadFixture, ...] = (
         "title_only_span_binds_relation_object",
         "supported",
         "support",
-        "none",
+        "replace_bindings_with_applicable_slots",
     ),
     NaturalQualityPayloadFixture(
         "proposer_slot_expectations_differ_from_verified_slot_evidence",
         "supported",
         "support",
-        "none",
+        "replace_bindings_with_applicable_slots",
     ),
     NaturalQualityPayloadFixture(
         "unknown_assessment_duplicate_unresolved_slots",
@@ -54,6 +54,7 @@ def natural_quality_payload_fixture(
     candidate: str,
     selector: str,
     evidence_text: str,
+    support_slot_ids: list[str],
 ) -> dict[str, object]:
     """Build a schema-shaped payload and apply exactly one controlled defect."""
 
@@ -70,6 +71,7 @@ def natural_quality_payload_fixture(
         selector=selector,
         evidence_text=evidence_text,
         signal=fixture.signal,
+        support_slot_ids=support_slot_ids,
     )
     if fixture.mutation == "append_quantifier_to_bindings":
         premise = _first_premise(payload)
@@ -86,6 +88,13 @@ def natural_quality_payload_fixture(
             raise RuntimeError("natural-quality unresolved slots missing")
         first = unresolved.split("|", maxsplit=1)[0]
         assessment["unresolved_proposition_slots"] = f"{first}|{first}"
+    elif fixture.mutation == "replace_bindings_with_applicable_slots":
+        premise = _first_premise(payload)
+        branch = _schema_branch(schema, fixture.proposal_judgment)
+        applicable_slots, _ = _schema_proposition_scope(
+            _mapping(branch.get("properties"))
+        )
+        premise["binds_proposition_slots"] = applicable_slots
     elif fixture.mutation != "none":
         raise RuntimeError(
             f"unsupported natural-quality payload mutation: {fixture.mutation}"
@@ -111,14 +120,18 @@ def _proposal_payload(
     selector: str,
     evidence_text: str,
     signal: str,
+    support_slot_ids: list[str],
 ) -> dict[str, object]:
     del candidate
     branch = _schema_branch(schema, proposal_judgment)
     properties = _mapping(branch.get("properties"))
     required = _string_set(branch.get("required"))
-    premise_properties, proposition_slots, support_slot_ids = _premise_context(
-        properties
+    (premise_properties, selector_slots, schema_support_slot_ids,) = _premise_context(
+        properties,
+        selector=selector,
     )
+    proposition_slots, not_applicable_slots = _schema_proposition_scope(properties)
+    selected_support_slot_ids = schema_support_slot_ids or support_slot_ids
     relation = {
         "support": "proposition_support",
         "explicit_contradiction": "explicit_contradiction",
@@ -135,11 +148,7 @@ def _proposal_payload(
         "jointly_complete": proposal_judgment != "unknown",
         "each_premise_required": proposal_judgment != "unknown",
         "premises": [],
-        "not_applicable_proposition_slots": [
-            slot
-            for slot in ("actor", "predicate", "object", "quantifier")
-            if slot not in proposition_slots
-        ],
+        "not_applicable_proposition_slots": not_applicable_slots,
         "unknown_assessment": _unknown_assessment(
             properties,
             proposition_slots,
@@ -147,18 +156,22 @@ def _proposal_payload(
         ),
     }
     if proposal_judgment != "unknown":
-        if not proposition_slots:
-            raise RuntimeError("natural-quality proposition slots missing")
+        premise_fields = premise_properties or {
+            "span_selector": {},
+            "proposition_fragment": {},
+            "supports_slot_ids": {},
+            "binds_proposition_slots": {},
+        }
         values["premises"] = [
             {
                 key: value
                 for key, value in {
                     "span_selector": selector,
                     "proposition_fragment": evidence_text[:320],
-                    "supports_slot_ids": support_slot_ids[:1],
-                    "binds_proposition_slots": proposition_slots,
+                    "supports_slot_ids": selected_support_slot_ids[:1],
+                    "binds_proposition_slots": selector_slots or proposition_slots,
                 }.items()
-                if key in premise_properties
+                if key in premise_fields
             }
         ]
         values.pop("unknown_assessment", None)
@@ -188,15 +201,61 @@ def _schema_branch(schema: dict[str, object], judgment: str) -> dict[str, Any]:
 
 def _premise_context(
     properties: dict[str, Any],
+    *,
+    selector: str,
 ) -> tuple[dict[str, Any], list[str], list[str]]:
     premise_schema = _mapping(properties.get("premises"))
     premise_item = _mapping(premise_schema.get("items"))
+    premise_item = _selector_premise_branch(premise_item, selector=selector)
     premise_properties = _mapping(premise_item.get("properties"))
     binding_schema = _mapping(premise_properties.get("binds_proposition_slots"))
-    proposition_slots = _enum(_mapping(binding_schema.get("items")))
+    binding_values = binding_schema.get("enum")
+    if (
+        isinstance(binding_values, list)
+        and len(binding_values) == 1
+        and isinstance(binding_values[0], list)
+    ):
+        proposition_slots = [str(value) for value in binding_values[0]]
+    else:
+        proposition_slots = _enum(_mapping(binding_schema.get("items")))
     support_schema = _mapping(premise_properties.get("supports_slot_ids"))
     support_slot_ids = _enum(_mapping(support_schema.get("items")))
     return premise_properties, proposition_slots, support_slot_ids
+
+
+def _selector_premise_branch(
+    premise_item: dict[str, Any],
+    *,
+    selector: str,
+) -> dict[str, Any]:
+    branches = premise_item.get("oneOf")
+    if not isinstance(branches, list):
+        return premise_item
+    for raw_branch in branches:
+        branch = _mapping(raw_branch)
+        properties = _mapping(branch.get("properties"))
+        if selector in _enum(properties.get("span_selector")):
+            return branch
+    raise RuntimeError("natural-quality selector is outside proposal schema")
+
+
+def _schema_proposition_scope(
+    properties: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    all_slots = ("actor", "predicate", "object", "quantifier")
+    not_applicable_schema = _mapping(properties.get("not_applicable_proposition_slots"))
+    values = not_applicable_schema.get("enum")
+    if (
+        not isinstance(values, list)
+        or len(values) != 1
+        or not isinstance(values[0], list)
+    ):
+        raise RuntimeError("natural-quality proposition scope missing")
+    not_applicable = [str(value) for value in values[0]]
+    return (
+        [slot for slot in all_slots if slot not in not_applicable],
+        not_applicable,
+    )
 
 
 def _unknown_assessment(

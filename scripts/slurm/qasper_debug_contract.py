@@ -55,6 +55,9 @@ from scripts.slurm.qasper_debug_contract_schema import (  # noqa: F401
     _schema_proposal_attempt_violations,
     _schema_version_violations,
 )
+from scripts.slurm.qasper_debug_contract_semantic_pack import (
+    canonical_semantic_pack_alignment_valid as _canonical_pack_alignment_valid,
+)
 from scripts.slurm.qasper_debug_contract_support import (  # noqa: F401
     _CANDIDATE_VERIFIER_AUDIT_CONTRACT,
     _CONCLUSION_AUDIT_CONTRACT,
@@ -177,35 +180,12 @@ def _prediction_violations(
             require_auditor=require_auditor,
         )
     )
-    _require(
+    _append_cross_stage_violations(
         violations,
-        generator.get("trace_group_id") == verifier.get("trace_group_id"),
-        f"transaction_trace_group_mismatch:{prefix}",
-    )
-    _require(
-        violations,
-        generator.get("effective_seed") == verifier.get("effective_seed"),
-        f"effective_seed_mismatch:{prefix}",
-    )
-    _require(
-        violations,
-        _live_models_observed(generator, verifier),
-        f"online_model_coverage_missing:{prefix}",
-    )
-    _require(
-        violations,
-        _semantic_debug_complete(verifier),
-        f"semantic_verifier_debug_incomplete:{prefix}",
-    )
-    _require(
-        violations,
-        claim_aggregation_complete(prediction),
-        f"claim_aggregation_diff_missing:{prefix}",
-    )
-    _require(
-        violations,
-        _annotation_scores_complete(prediction),
-        f"annotation_score_coverage_missing:{prefix}",
+        prediction,
+        generator,
+        verifier,
+        prefix,
     )
     audit = _mapping(verifier.get("candidate_verification_audit"))
     if audit.get("status") == "failed":
@@ -235,6 +215,50 @@ def _prediction_violations(
         f"candidate_verifier_audit_empty:{prefix}",
     )
     return violations
+
+
+def _append_cross_stage_violations(
+    violations: list[str],
+    prediction: dict[str, Any],
+    generator: dict[str, Any],
+    verifier: dict[str, Any],
+    prefix: str,
+) -> None:
+    _require(
+        violations,
+        generator.get("trace_group_id") == verifier.get("trace_group_id"),
+        f"transaction_trace_group_mismatch:{prefix}",
+    )
+    _require(
+        violations,
+        generator.get("effective_seed") == verifier.get("effective_seed"),
+        f"effective_seed_mismatch:{prefix}",
+    )
+    _require(
+        violations,
+        _canonical_pack_alignment_valid(prediction),
+        f"canonical_semantic_pack_mismatch:{prefix}",
+    )
+    _require(
+        violations,
+        _live_models_observed(generator, verifier),
+        f"online_model_coverage_missing:{prefix}",
+    )
+    _require(
+        violations,
+        _semantic_debug_complete(verifier),
+        f"semantic_verifier_debug_incomplete:{prefix}",
+    )
+    _require(
+        violations,
+        claim_aggregation_complete(prediction),
+        f"claim_aggregation_diff_missing:{prefix}",
+    )
+    _require(
+        violations,
+        _annotation_scores_complete(prediction),
+        f"annotation_score_coverage_missing:{prefix}",
+    )
 
 
 def _generator_violations(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from ktem.docqa.evidence_schema import EvidenceBundle
@@ -16,9 +17,11 @@ from .mara_qasper_candidate_evidence import (
 from .mara_qasper_candidate_evidence import (
     exact_candidate_slot_binding as _exact_candidate_slot_binding,
 )
+from .mara_qasper_semantic_pack import prepare_qasper_canonical_records
 from .mara_semantic_proposition_packing import (
-    SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
     SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
+    SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+    SemanticPropositionEvidencePacking,
     compact_json,
     pack_semantic_proposition_evidence,
     required_semantic_proposition_slots,
@@ -32,7 +35,7 @@ def _candidate_evidence(
     request: Any,
     question: str,
     bundle: EvidenceBundle,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any], SemanticPropositionEvidencePacking]:
     slots = required_semantic_proposition_slots(request)
     packing = pack_semantic_proposition_evidence(
         request,
@@ -43,6 +46,7 @@ def _candidate_evidence(
     )
     records = [
         {
+            **deepcopy(record),
             "label": str(record["label"]),
             "evidence_id": str(record["evidence_id"]),
             "text": str(record["text"]),
@@ -71,6 +75,9 @@ def _candidate_evidence(
         }
         for record in packing.records
     ]
+    prioritized_records = _prioritized_candidate_prompt_evidence(records, question)
+    records = prepare_qasper_canonical_records(question, prioritized_records)
+    semantic_filtered_count = len(prioritized_records) - len(records)
     records, bound_slots, candidate_dropped_count = _fit_candidate_prompt_evidence(
         question,
         records,
@@ -78,19 +85,26 @@ def _candidate_evidence(
         proposition=packing.question_proposition,
         proposition_resolution=packing.question_proposition_resolution,
     )
-    return records, {
-        "evidence_input_count": len(bundle.items),
-        "evidence_dropped_count": packing.dropped_count + candidate_dropped_count,
-        "candidate_prompt_dropped_evidence_count": candidate_dropped_count,
-        "evidence_truncated_count": packing.truncated_count,
-        "evidence_estimated_input_tokens": packing.estimated_input_tokens,
-        "evidence_token_budget": packing.input_token_budget,
-        "evidence_pack_digest": packing.semantic_pack_digest,
-        "prompt_char_limit": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
-        "typed_proposition": packing.question_proposition,
-        "question_proposition_resolution": packing.question_proposition_resolution,
-        "required_slots": bound_slots,
-    }
+    pre_request_dropped_count = semantic_filtered_count + candidate_dropped_count
+    return (
+        records,
+        {
+            "evidence_input_count": len(bundle.items),
+            "evidence_dropped_count": packing.dropped_count + pre_request_dropped_count,
+            "semantic_pack_filtered_evidence_count": semantic_filtered_count,
+            "candidate_prompt_dropped_evidence_count": pre_request_dropped_count,
+            "pre_request_dropped_evidence_count": pre_request_dropped_count,
+            "evidence_truncated_count": packing.truncated_count,
+            "evidence_estimated_input_tokens": packing.estimated_input_tokens,
+            "evidence_token_budget": packing.input_token_budget,
+            "evidence_pack_digest": packing.semantic_pack_digest,
+            "prompt_char_limit": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+            "typed_proposition": packing.question_proposition,
+            "question_proposition_resolution": packing.question_proposition_resolution,
+            "required_slots": bound_slots,
+        },
+        packing,
+    )
 
 
 def _fit_candidate_prompt_evidence(
@@ -132,23 +146,13 @@ def _candidate_prompt(
         + str(slot.get("slot_id") or "")
         + ": "
         + str(slot.get("description") or "complete proposition support")
-        + "; binding_status="
-        + str(slot.get("binding_status") or "missing")
-        + "; retrieved_evidence_ids="
-        + compact_json(
-            slot.get("retrieved_evidence_ids", slot.get("evidence_ids", [])),
-        )
-        + "; retrieved_evidence_refs="
-        + compact_json(
-            slot.get("retrieved_evidence_refs", slot.get("evidence_refs", [])),
-        )
         for slot in required_slots or []
     )
-    prompt_evidence = _prioritized_candidate_prompt_evidence(evidence, question)
+    prompt_evidence = evidence
     evidence_text = "\n\n".join(
         "\n".join(
             [
-                f"[{record['label']}] evidence_id={record['evidence_id']}",
+                f"[{record['label']}]",
                 "selector_options="
                 + compact_json(
                     _compact_candidate_selector_options(record, question=question),
@@ -166,7 +170,7 @@ def _candidate_prompt(
         f"QUESTION PROPOSITION RESOLUTION STATUS: {resolution_status or 'unknown'}\n\n"
         "REQUIRED VERIFICATION SLOTS:\n"
         f"{slot_text or '- none'}\n\n"
-        f"CANONICAL RETRIEVED EVIDENCE:\n{evidence_text}\n\n"
+        f"CANONICAL RELATION-BEARING SPAN SET:\n{evidence_text}\n\n"
         "CANDIDATE EVIDENCE-SET OBSERVATION:\n"
         f"{compact_json(_compact_candidate_evidence_set_binding(evidence_set_binding))}"
         "\n\n"
@@ -177,8 +181,10 @@ def _candidate_prompt(
         "not; missing evidence alone remains unanswerable. For inspect, analyze, or "
         "evaluate questions, an exact observation or error-analysis span may express the "
         "predicate even when it uses a more specific verb.\n\n"
-        "Use exact selector options; an evidence ID or a first selector is not a "
-        "proposition binding. Hints and the set observation are retrieval-only. "
+        "Use only the exact selector options in this immutable span universe. "
+        "Locally verified slot bindings and the set observation are structural "
+        "constraints, not permission to invent evidence. A record ID or first "
+        "selector is not a proposition binding. "
         "one to four exact selectors may cover applicable proposition slots by union. "
         "Support and explicit_contradiction are separate set-level observations; "
         "conflicts remain undetermined. Quantifier none is not evidence and remains "
@@ -239,7 +245,10 @@ def _compact_candidate_selector_options(
         "span_start",
         "span_end",
         "text",
-        "slot_hints",
+        "allowed_proposition_slots",
+        "relation_bearing",
+        "candidate_relation_role",
+        "local_relation_state",
         "polarity_signal",
     )
     return [

@@ -7,6 +7,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from ktem.docqa.evidence_schema import EvidenceBundle
 
+from .mara_qasper_semantic_pack import qasper_canonical_selector_bindings
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
     SemanticPropositionEvidencePacking,
@@ -44,6 +45,13 @@ def controlled_contract_probe_proposal(
     applicable = ["actor", "predicate", "object"]
     if str(proposition.get("quantifier") or "") != "none":
         applicable.append("quantifier")
+    allowed_bindings = qasper_canonical_selector_bindings(packing.records)
+    selector_id = str(selectors[0].get("selector_id") or "")
+    selector_bindings = list(allowed_bindings.get(selector_id, ()))
+    if set(selector_bindings) != set(applicable):
+        raise ControlledContractProbeIdentityError(
+            "controlled_payload_selector_not_locally_complete"
+        )
     controlled_payload: dict[str, Any] = {
         "candidate_judgment": str(control.get("candidate_judgment") or ""),
         "support_mode": "evidence_set",
@@ -51,10 +59,10 @@ def controlled_contract_probe_proposal(
         "each_premise_required": True,
         "premises": [
             {
-                "span_selector": str(selectors[0].get("selector_id") or ""),
+                "span_selector": selector_id,
                 "proposition_fragment": str(selectors[0].get("text") or ""),
                 "supports_slot_ids": [slot["slot_id"] for slot in slots],
-                "binds_proposition_slots": applicable,
+                "binds_proposition_slots": selector_bindings,
             }
         ],
         "not_applicable_proposition_slots": [
@@ -77,6 +85,7 @@ def controlled_contract_probe_proposal(
         slots=slots,
         candidate=normalized_candidate,
         applicable_proposition_slots=applicable,
+        allowed_proposition_slot_bindings=allowed_bindings,
     )
     controlled = (
         prompt
@@ -97,12 +106,14 @@ def _validate_controlled_payload_identity(
     slots: list[dict[str, str]],
     candidate: str,
     applicable_proposition_slots: list[str],
+    allowed_proposition_slot_bindings: dict[str, tuple[str, ...]],
 ) -> dict[str, Any]:
     slot_ids = [str(slot.get("slot_id") or "") for slot in slots]
     schema = semantic_proposition_schema(
         slot_ids,
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots,
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
     )
     errors = sorted(
         Draft202012Validator(schema).iter_errors(payload),
@@ -122,6 +133,7 @@ def _validate_controlled_payload_identity(
         seed=0,
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots,
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
     )
     if parsed.value is None:
         raise ControlledContractProbeIdentityError(

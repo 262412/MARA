@@ -284,6 +284,7 @@ def _execute_retrieval_turn(
         route_switch_trace,
         timings,
         verify,
+        generate=generate,
     )
 
 

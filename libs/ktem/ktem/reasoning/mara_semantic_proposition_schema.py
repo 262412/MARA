@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,11 +9,13 @@ from ktem.docqa.boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
-from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
 
 from .mara_semantic_proposition_schema_contract import (
     proposition_slot_scope,
     semantic_proposition_schema,
+)
+from .mara_semantic_proposition_unknown_schema import (
+    parse_unknown_assessment as _parse_unknown_assessment,
 )
 
 
@@ -24,11 +26,12 @@ class SemanticPropositionParse:
 
 
 def semantic_proposition_response_format(
-    _span_selectors: list[str],
+    span_selectors: list[str],
     slot_ids: list[str],
     *,
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
 ) -> dict[str, Any]:
     return {
         "type": "json_schema",
@@ -37,8 +40,10 @@ def semantic_proposition_response_format(
             "strict": True,
             "schema": semantic_proposition_schema(
                 slot_ids,
+                span_selectors=span_selectors,
                 candidate=candidate,
                 applicable_proposition_slots=applicable_proposition_slots,
+                allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
             ),
         },
     }
@@ -53,6 +58,7 @@ def parse_semantic_proposition_result(
     seed: int,
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
 ) -> dict[str, Any] | None:
     return parse_semantic_proposition_response(
         response_text,
@@ -62,6 +68,7 @@ def parse_semantic_proposition_result(
         seed=seed,
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots,
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
     ).value
 
 
@@ -73,6 +80,7 @@ def _parse_proposition_evidence(
     *,
     verdict: str,
     applicable_proposition_slots: set[str],
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
 ) -> tuple[list[dict[str, Any]] | None, dict[str, Any] | None, str]:
     selector_lookup = {
         str(selector["selector_id"]): {
@@ -87,6 +95,7 @@ def _parse_proposition_evidence(
         selector_lookup,
         slot_ids,
         applicable_proposition_slots=applicable_proposition_slots,
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
     )
     if premises is None:
         return None, None, premise_reason
@@ -113,6 +122,7 @@ def parse_semantic_proposition_response(
     seed: int,
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
 ) -> SemanticPropositionParse:
     try:
         payload = json.loads(response_text)
@@ -142,6 +152,7 @@ def parse_semantic_proposition_response(
         slot_ids,
         verdict=verdict,
         applicable_proposition_slots=applicable_slots,
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
     )
     if evidence_reason:
         return SemanticPropositionParse(None, evidence_reason)
@@ -399,16 +410,20 @@ def _candidate_judgment_projection_valid(
 def _candidate_projection(candidate: str, judgment: str) -> tuple[str, str]:
     if judgment == "unknown":
         return "undetermined", "insufficient_evidence"
-    relation = {
-        "yes": {
-            "supported": "proposition_support",
-            "contradicted": "explicit_contradiction",
-        },
-        "no": {
-            "supported": "explicit_contradiction",
-            "contradicted": "proposition_support",
-        },
-    }.get(candidate, {}).get(judgment)
+    relation = (
+        {
+            "yes": {
+                "supported": "proposition_support",
+                "contradicted": "explicit_contradiction",
+            },
+            "no": {
+                "supported": "explicit_contradiction",
+                "contradicted": "proposition_support",
+            },
+        }
+        .get(candidate, {})
+        .get(judgment)
+    )
     if relation is None:
         return "undetermined", "insufficient_evidence"
     return relation, _verdict_for_evidence_relation(relation)
@@ -474,6 +489,7 @@ def _parse_premises(
     slot_ids: set[str],
     *,
     applicable_proposition_slots: set[str],
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
 ) -> tuple[list[dict[str, Any]] | None, str]:
     premises: list[dict[str, Any]] = []
     for raw in raw_premises:
@@ -510,6 +526,13 @@ def _parse_premises(
             or len(set(proposition_slots)) != len(proposition_slots)
         ):
             return None, "premise_proposition_binding_invalid"
+        if allowed_proposition_slot_bindings is not None:
+            allowed = tuple(
+                str(slot)
+                for slot in allowed_proposition_slot_bindings.get(selector_id, ())
+            )
+            if tuple(proposition_slots) != allowed:
+                return None, "premise_proposition_binding_not_allowed"
         premises.append(
             {
                 "evidence_id": str(selector["evidence_id"]),
@@ -528,72 +551,3 @@ def _parse_premises(
     if len(premise_spans) != len(premises):
         return None, "premise_span_duplicate"
     return premises, ""
-
-
-def _parse_unknown_assessment(
-    value: Any,
-    selector_lookup: dict[str, dict[str, Any]],
-    *,
-    applicable_proposition_slots: set[str],
-) -> tuple[dict[str, Any] | None, str]:
-    if not isinstance(value, dict) or set(value) != {
-        "reviewed_span_selectors",
-        "unresolved_proposition_slots",
-        "support_gap",
-        "contradiction_gap",
-    }:
-        return None, "unknown_assessment_schema_invalid"
-    selectors = value.get("reviewed_span_selectors")
-    unresolved = _unresolved_proposition_slots(
-        value.get("unresolved_proposition_slots")
-    )
-    support_gap = str(value.get("support_gap") or "").strip()
-    contradiction_gap = str(value.get("contradiction_gap") or "").strip()
-    if (
-        not isinstance(selectors, list)
-        or not selectors
-        or len(selectors) > 12
-        or len(set(selectors)) != len(selectors)
-        or any(selector not in selector_lookup for selector in selectors)
-    ):
-        return None, "unknown_assessment_evidence_invalid"
-    if (
-        not unresolved
-        or len(set(unresolved)) != len(unresolved)
-        or any(slot not in applicable_proposition_slots for slot in unresolved)
-    ):
-        return None, "unknown_assessment_slot_invalid"
-    if (
-        not support_gap
-        or not contradiction_gap
-        or len(support_gap) > 320
-        or len(contradiction_gap) > 320
-    ):
-        return None, "unknown_assessment_gap_invalid"
-    reviewed = [
-        {
-            "span_selector": selector,
-            "evidence_id": str(selector_lookup[selector]["evidence_id"]),
-            "quote": str(selector_lookup[selector]["text"]),
-            "span_start": int(selector_lookup[selector]["span_start"]),
-            "span_end": int(selector_lookup[selector]["span_end"]),
-        }
-        for selector in selectors
-    ]
-    return {
-        "reviewed_span_selectors": list(selectors),
-        "reviewed_evidence": reviewed,
-        "unresolved_proposition_slots": list(unresolved),
-        "support_gap": support_gap,
-        "contradiction_gap": contradiction_gap,
-    }, ""
-
-
-def _unresolved_proposition_slots(value: Any) -> list[str]:
-    if isinstance(value, str):
-        slots = value.split("|")
-        canonical = [slot for slot in PROPOSITION_EVIDENCE_SLOTS if slot in set(slots)]
-        return slots if slots == canonical and "|".join(slots) == value else []
-    if isinstance(value, list):
-        return value
-    return []

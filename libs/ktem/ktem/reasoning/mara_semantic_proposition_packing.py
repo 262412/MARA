@@ -18,7 +18,7 @@ from ktem.docqa.question_proposition import (
 )
 from ktem.docqa.retrieval_semantic_identity import semantic_retrieval_identity
 
-from .mara_qasper_candidate_evidence import evidence_polarity_priority
+from .mara_qasper_candidate_selector_semantics import evidence_polarity_priority
 from .mara_semantic_candidate_priority import (
     candidate_source_fields,
     semantic_record_priority,
@@ -46,7 +46,7 @@ SEMANTIC_PROPOSITION_VERIFIER_ITEM_CHARS = 2000
 SEMANTIC_PROPOSITION_VERIFIER_MIN_ITEM_CHARS = 512
 SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS = 16000
 SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS = 640
-SEMANTIC_PROPOSITION_PACK_CONTRACT = "semantic_proposition_pack.v2"
+SEMANTIC_PROPOSITION_PACK_CONTRACT = "semantic_proposition_pack.v3"
 
 
 def compact_json(value: Any) -> str:
@@ -539,8 +539,7 @@ def semantic_proposition_pack_digest(
             "input_token_budget": SEMANTIC_PROPOSITION_VERIFIER_INPUT_TOKEN_BUDGET,
             "max_prompt_chars": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
             "selector_max_chars": SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
-            "system_prompt": SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT,
-            "proposal_schema": "semantic_proposition_verdict.v4",
+            "identity_scope": "typed_proposition_slots_and_exact_span_universe",
         },
         "evidence": [
             {

@@ -3,8 +3,8 @@ from __future__ import annotations
 from itertools import combinations
 from typing import Any
 
-from ktem.docqa.boolean_proposition_polarity import evidence_polarity
 from ktem.docqa.question_proposition import build_question_proposition
+from ktem.docqa.semantic_relation_clause_lexical import semantic_content_token_set
 
 from .mara_qasper_candidate_evidence_projection import (
     exact_selector_valid as _exact_selector_valid,
@@ -14,13 +14,29 @@ from .mara_qasper_candidate_evidence_projection import (
     span_set_slot_refs as _span_set_slot_refs,
 )
 from .mara_qasper_candidate_evidence_projection import span_set_spans as _span_set_spans
-from .mara_qasper_candidate_relation import (
-    candidate_relation_anchor,
-    candidate_slot_hints,
-)
+from .mara_qasper_candidate_relation import candidate_relation_anchor
 from .mara_qasper_candidate_relation import (
     normalized_candidate_object_tokens as _normalized_object_tokens,
 )
+from .mara_qasper_candidate_selector_semantics import (
+    applicable_candidate_slots as _applicable_candidate_slots,
+)
+from .mara_qasper_candidate_selector_semantics import (
+    candidate_structural_features as _candidate_structural_features,
+)
+from .mara_qasper_candidate_selector_semantics import (
+    required_candidate_slots as _required_candidate_slots,
+)
+from .mara_qasper_candidate_selector_semantics import (
+    selector_direct_polarity_evidence as _selector_direct_polarity_evidence,
+)
+from .mara_qasper_candidate_selector_semantics import (
+    selector_local_slots as _selector_local_slots,
+)
+from .mara_qasper_candidate_selector_semantics import (
+    selector_polarity_signal as _selector_polarity_signal,
+)
+from .mara_qasper_candidate_selector_semantics import spans_overlap as _spans_overlap
 
 _PROPOSITION_SLOTS = ("actor", "predicate", "object", "quantifier")
 
@@ -40,8 +56,13 @@ def candidate_selector_options(
         ):
             continue
         selector_text = str(selector.get("text") or "")
-        slot_hints = candidate_slot_hints(question, selector_text)
-        jointly_aligned = required_slots <= set(slot_hints)
+        slot_hints = _selector_local_slots(selector, question, selector_text)
+        locally_verified_slots = [
+            str(slot)
+            for slot in selector.get("allowed_proposition_slots", slot_hints)
+            if str(slot) in _PROPOSITION_SLOTS
+        ]
+        jointly_aligned = required_slots <= set(locally_verified_slots)
         options.append(
             {
                 "evidence_id": str(record.get("evidence_id") or "").strip(),
@@ -50,9 +71,16 @@ def candidate_selector_options(
                 "span_end": selector.get("span_end"),
                 "text": selector_text,
                 "slot_hints": slot_hints,
+                "locally_verified_slots": locally_verified_slots,
+                "allowed_proposition_slots": locally_verified_slots,
+                "relation_bearing": bool(selector.get("relation_bearing", False)),
+                "candidate_relation_role": str(
+                    selector.get("candidate_relation_role") or ""
+                ),
+                "local_relation_state": str(selector.get("local_relation_state") or ""),
                 "joint_slot_hint": jointly_aligned,
                 "polarity_signal": (
-                    candidate_polarity_signal(question, selector_text)
+                    _selector_polarity_signal(selector, question, selector_text)
                     if jointly_aligned
                     else "undetermined"
                 ),
@@ -79,9 +107,15 @@ def candidate_evidence_set_binding(
             "text": str(selector.get("text") or ""),
             "span_start": selector.get("span_start"),
             "span_end": selector.get("span_end"),
-            "slot_hints": candidate_slot_hints(
+            "slot_hints": _selector_local_slots(
+                selector,
                 question,
                 str(selector.get("text") or ""),
+            ),
+            "relation_bearing": bool(selector.get("relation_bearing", False)),
+            "local_relation_state": str(selector.get("local_relation_state") or ""),
+            "object_tokens": sorted(
+                semantic_content_token_set(str(selector.get("text") or ""))
             ),
         }
         for record in packed_records
@@ -117,6 +151,7 @@ def candidate_evidence_set_binding(
     )
     return _candidate_evidence_set_result(
         packed_records,
+        question,
         applicable_slots,
         support,
         contradiction,
@@ -126,6 +161,7 @@ def candidate_evidence_set_binding(
 
 def _candidate_evidence_set_result(
     records: list[dict[str, Any]],
+    question: str,
     applicable_slots: tuple[str, ...],
     support: tuple[dict[str, Any], ...] | None,
     contradiction: tuple[dict[str, Any], ...] | None,
@@ -138,6 +174,11 @@ def _candidate_evidence_set_result(
     support_slots = _span_set_slot_refs(support)
     contradiction_slots = _span_set_slot_refs(contradiction)
     selected_slots = _span_set_slot_refs(selected)
+    relation_anchor_refs = [
+        str(selector["selector_id"])
+        for selector in selected or ()
+        if "predicate" in selector.get("slot_hints", [])
+    ]
     has_support = support is not None
     has_contradiction = contradiction is not None
     if has_support and not has_contradiction:
@@ -176,16 +217,7 @@ def _candidate_evidence_set_result(
         "slot_states": slot_states,
         "quantifier_evidence_state": slot_states["quantifier"],
         "binding_status": "bound" if complete is not None else "missing",
-        "binding_reason": (
-            "exact_span_set"
-            if complete is not None
-            else "record_identity_only"
-            if any(
-                str(record.get("evidence_id") or "").strip() or record.get("selectors")
-                for record in records
-            )
-            else "no_exact_selectors"
-        ),
+        "binding_reason": _candidate_binding_reason(records, complete),
         "evidence_refs": selected_refs,
         "evidence_set_spans": _span_set_spans(selected),
         "slot_evidence_refs": selected_slots,
@@ -198,26 +230,27 @@ def _candidate_evidence_set_result(
         "explicit_contradiction_evidence_set_spans": _span_set_spans(contradiction),
         "explicit_contradiction_slot_evidence_refs": contradiction_slots,
         "polarity_signal": polarity_signal,
+        "relation_anchor_refs": relation_anchor_refs,
+        "structural_features": _candidate_structural_features(
+            question,
+            selected,
+            applicable_slots=applicable_slots,
+        ),
     }
 
 
-def candidate_polarity_signal(question: str, text: str) -> str:
-    if not set(_required_candidate_slots(question)) <= set(
-        candidate_slot_hints(question, text)
+def _candidate_binding_reason(
+    records: list[dict[str, Any]],
+    complete: tuple[dict[str, Any], ...] | None,
+) -> str:
+    if complete is not None:
+        return "exact_span_set"
+    if any(
+        str(record.get("evidence_id") or "").strip() or record.get("selectors")
+        for record in records
     ):
-        return "undetermined"
-    observed = evidence_polarity(question, text, desired_polarity="yes")
-    return {
-        "yes": "support",
-        "no": "explicit_contradiction",
-    }.get(observed, "undetermined")
-
-
-def evidence_polarity_priority(question: str, text: str) -> int:
-    """Prefer explicit support or contradiction over unresolved text."""
-
-    observed = candidate_polarity_signal(question, text)
-    return 0 if observed in {"support", "explicit_contradiction"} else 1
+        return "record_identity_only"
+    return "no_exact_selectors"
 
 
 def _selector_prompt_priority(
@@ -368,22 +401,6 @@ def candidate_declared_refs(value: Any) -> set[str]:
     return {str(ref).strip() for ref in values if str(ref).strip()}
 
 
-def _required_candidate_slots(question: str) -> tuple[str, ...]:
-    return tuple(_applicable_candidate_slots(question))
-
-
-def _applicable_candidate_slots(question: str) -> tuple[str, ...]:
-    proposition = build_question_proposition(question)
-    slots = list(_PROPOSITION_SLOTS[:-1])
-    if " ".join(str(proposition.quantifier or "").casefold().split()) in {
-        "",
-        "none",
-    }:
-        return tuple(slots)
-    slots.append("quantifier")
-    return tuple(slots)
-
-
 def _candidate_span_set(
     question: str,
     selectors: list[dict[str, Any]],
@@ -408,9 +425,13 @@ def _candidate_span_set(
     anchors = [
         selector
         for selector in ordered
-        if candidate_relation_anchor(question, str(selector["text"]))
-        and evidence_polarity(question, str(selector["text"]), desired_polarity="yes")
-        == polarity
+        if "predicate" in selector.get("slot_hints", [])
+        and _selector_polarity_signal(
+            selector,
+            question,
+            str(selector["text"]),
+        )
+        == ("support" if polarity == "yes" else "explicit_contradiction")
     ]
     for anchor in anchors:
         pool = _bounded_selector_pool(ordered, required_slots, (anchor,))
@@ -488,34 +509,65 @@ def _valid_candidate_span_set(
     covered = {slot for value in ordered for slot in value["slot_hints"]}
     if not set(required_slots) <= covered:
         return None
-    if not any(
-        candidate_relation_anchor(question, str(value["text"])) for value in ordered
-    ):
+    if not _object_coverage_sufficient(question, ordered):
         return None
-    if polarity is not None and (
-        len(ordered) != 1
-        or evidence_polarity(
-            question,
-            str(ordered[0]["text"]),
-            desired_polarity="yes",
-        )
-        != polarity
+    if not any("predicate" in value.get("slot_hints", []) for value in ordered):
+        return None
+    if not any(_selector_direct_polarity_evidence(value) for value in ordered):
+        return None
+    if polarity is not None and not _polarity_span_set_valid(
+        question,
+        ordered,
+        required_slots,
+        polarity=polarity,
     ):
         return None
     return ordered
 
 
-def _spans_overlap(selectors: tuple[dict[str, Any], ...]) -> bool:
-    previous_evidence_id = ""
-    previous_end = -1
-    for selector in selectors:
-        evidence_id = str(selector["evidence_id"])
-        if evidence_id != previous_evidence_id:
-            previous_evidence_id = evidence_id
-            previous_end = -1
-        start = int(selector["span_start"])
-        end = int(selector["span_end"])
-        if start < previous_end:
+def _object_coverage_sufficient(
+    question: str,
+    selected: tuple[dict[str, Any], ...],
+) -> bool:
+    required = semantic_content_token_set(
+        build_question_proposition(question).object_surface
+    )
+    if not required:
+        return False
+    covered = {
+        str(token)
+        for selector in selected
+        if "object" in selector.get("slot_hints", [])
+        for token in selector.get("object_tokens") or []
+        if str(token) in required
+    }
+    minimum = len(required) if len(required) <= 3 else (len(required) + 1) // 2
+    return len(covered) >= minimum
+
+
+def _polarity_span_set_valid(
+    question: str,
+    selected: tuple[dict[str, Any], ...],
+    required_slots: tuple[str, ...],
+    *,
+    polarity: str,
+) -> bool:
+    anchors = [
+        selector
+        for selector in selected
+        if "predicate" in selector.get("slot_hints", [])
+        and _selector_polarity_signal(
+            selector,
+            question,
+            str(selector["text"]),
+        )
+        == ("support" if polarity == "yes" else "explicit_contradiction")
+    ]
+    for anchor in anchors:
+        same_record = all(
+            selector["evidence_id"] == anchor["evidence_id"] for selector in selected
+        )
+        anchor_slots = set(anchor.get("slot_hints") or [])
+        if same_record or set(required_slots) - {"actor"} <= anchor_slots:
             return True
-        previous_end = end
     return False

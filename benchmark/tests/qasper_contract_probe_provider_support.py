@@ -4,6 +4,18 @@ import json
 import re
 from typing import Any
 
+from benchmark.tests.qasper_contract_probe_schema_support import (  # noqa: F401
+    _proposal_schema_context,
+    _schema_body,
+    _schema_branch,
+    _schema_enum,
+    _schema_properties,
+    _schema_proposition_scope,
+    _schema_required,
+    _schema_shape,
+    _selector_premise_branch,
+)
+
 _AUDITOR_BASE_URL = "http://auditor.invalid/v1"
 _AUDITOR_MODEL = "heterogeneous-auditor-model"
 
@@ -47,140 +59,11 @@ def _evidence_signal(question: str, evidence_text: str) -> str:
         normalized,
     ):
         return "undetermined"
-    from ktem.reasoning.mara_qasper_candidate_evidence import candidate_polarity_signal
+    from ktem.reasoning.mara_qasper_candidate_selector_semantics import (
+        candidate_polarity_signal,
+    )
 
     return candidate_polarity_signal(question, evidence_text)
-
-
-def _schema_body(schema: dict[str, object]) -> dict[str, Any]:
-    body = schema.get("schema")
-    if not isinstance(body, dict):
-        raise RuntimeError("provider response schema body missing")
-    return body
-
-
-def _schema_properties(schema: dict[str, object]) -> dict[str, Any]:
-    properties = _schema_body(schema).get("properties")
-    if not isinstance(properties, dict):
-        raise RuntimeError("provider response schema properties missing")
-    return properties
-
-
-def _schema_required(schema: dict[str, object]) -> set[str]:
-    required = _schema_body(schema).get("required")
-    return (
-        {str(field) for field in required if isinstance(field, str)}
-        if isinstance(required, list)
-        else set()
-    )
-
-
-def _schema_enum(value: object) -> list[str]:
-    if not isinstance(value, dict):
-        return []
-    enum = value.get("enum")
-    return [str(item) for item in enum] if isinstance(enum, list) else []
-
-
-def _schema_branch(schema: dict[str, object], judgment: str) -> dict[str, Any]:
-    body = _schema_body(schema)
-    branches = body.get("oneOf")
-    if not isinstance(branches, list) or not branches:
-        return body
-    for branch in branches:
-        if not isinstance(branch, dict):
-            continue
-        properties = branch.get("properties")
-        if not isinstance(properties, dict):
-            continue
-        if judgment in _schema_enum(properties.get("candidate_judgment")):
-            return branch
-    raise RuntimeError("provider candidate judgment is outside response schema")
-
-
-def _schema_shape(
-    values: dict[str, object],
-    properties: dict[str, Any],
-    required: set[str],
-    label: str,
-) -> dict[str, object]:
-    output = {key: value for key, value in values.items() if key in properties}
-    missing = required - set(output)
-    if missing:
-        raise RuntimeError(f"provider {label} schema fields missing: {sorted(missing)}")
-    return output
-
-
-def _proposal_schema_context(
-    schema: dict[str, object],
-    proposal_judgment: str,
-    source: dict[str, Any],
-) -> tuple[
-    dict[str, Any],
-    set[str],
-    dict[str, Any],
-    dict[str, Any],
-    list[str],
-    list[str],
-]:
-    branch = _schema_branch(schema, proposal_judgment)
-    properties = branch.get("properties")
-    if not isinstance(properties, dict):
-        raise RuntimeError("provider proposal schema properties missing")
-    required = branch.get("required")
-    required_fields = (
-        {str(field) for field in required if isinstance(field, str)}
-        if isinstance(required, list)
-        else set()
-    )
-    premise_schema = properties.get("premises")
-    premise_item = (
-        premise_schema.get("items") if isinstance(premise_schema, dict) else {}
-    )
-    premise_properties = (
-        premise_item.get("properties") if isinstance(premise_item, dict) else {}
-    )
-    premise_properties = (
-        premise_properties if isinstance(premise_properties, dict) else {}
-    )
-    source_premises = source.get("premises")
-    source_premise = (
-        source_premises[0]
-        if isinstance(source_premises, list)
-        and source_premises
-        and isinstance(source_premises[0], dict)
-        else {}
-    )
-    slot_schema = premise_properties.get("binds_proposition_slots", {})
-    slot_items = slot_schema.get("items")
-    slot_items = slot_items if isinstance(slot_items, dict) else {}
-    proposition_slots = _schema_enum(slot_items)
-    if not proposition_slots:
-        proposition_slots = [
-            str(value)
-            for value in source_premise.get("binds_proposition_slots") or []
-            if str(value)
-        ]
-    support_schema = premise_properties.get("supports_slot_ids", {})
-    support_items = support_schema.get("items")
-    support_items = support_items if isinstance(support_items, dict) else {}
-    support_slot_ids = _schema_enum(support_items)
-    if not support_slot_ids:
-        support_slot_ids = [
-            str(value)
-            for value in source_premise.get("supports_slot_ids") or []
-            if str(value)
-        ]
-    if proposal_judgment != "unknown" and not proposition_slots:
-        raise RuntimeError("provider proposal proposition slots missing")
-    return (
-        properties,
-        required_fields,
-        premise_properties,
-        source_premise,
-        proposition_slots,
-        support_slot_ids,
-    )
 
 
 def _proposal_values(
@@ -189,6 +72,8 @@ def _proposal_values(
     source_premise: dict[str, Any],
     proposition_slots: list[str],
     support_slot_ids: list[str],
+    applicable_slots: list[str],
+    not_applicable_slots: list[str],
     *,
     proposal_judgment: str,
     candidate: str,
@@ -210,7 +95,7 @@ def _proposal_values(
     fragment = source_fragment or evidence_text
     unresolved_slot_set = _unknown_unresolved_slot_set(
         properties,
-        proposition_slots,
+        applicable_slots,
     )
     values: dict[str, object] = {
         "candidate_judgment": proposal_judgment,
@@ -220,11 +105,7 @@ def _proposal_values(
         "jointly_complete": proposal_judgment != "unknown",
         "each_premise_required": proposal_judgment != "unknown",
         "premises": [],
-        "not_applicable_proposition_slots": [
-            slot
-            for slot in ("actor", "predicate", "object", "quantifier")
-            if slot not in proposition_slots
-        ],
+        "not_applicable_proposition_slots": not_applicable_slots,
         "unknown_assessment": {
             "reviewed_span_selectors": [selector],
             "unresolved_proposition_slots": unresolved_slot_set,
@@ -298,13 +179,22 @@ def _proposal_payload(
         source_premise,
         proposition_slots,
         support_slot_ids,
-    ) = _proposal_schema_context(schema, proposal_judgment, source)
+        applicable_slots,
+        not_applicable_slots,
+    ) = _proposal_schema_context(
+        schema,
+        proposal_judgment,
+        source,
+        selector=selector,
+    )
     values = _proposal_values(
         properties,
         premise_properties,
         source_premise,
         proposition_slots,
         support_slot_ids,
+        applicable_slots,
+        not_applicable_slots,
         proposal_judgment=proposal_judgment,
         candidate=candidate,
         selector=selector,
@@ -337,6 +227,9 @@ def _audit_entails_proposal(proposal: dict[str, Any]) -> bool:
         if not isinstance(premise, dict):
             return False
         quote = str(premise.get("quote") or "")
+        normalized_quote = _normalize_text(quote)
+        if normalized_quote.startswith(("if ", "unless ")):
+            return False
         fragment = _normalize_text(premise.get("proposition_fragment"))
         if not quote or not fragment or fragment not in _normalize_text(quote):
             return False

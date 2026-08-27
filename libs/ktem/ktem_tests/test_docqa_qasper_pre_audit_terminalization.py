@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -15,7 +16,6 @@ from ktem.reasoning.mara_qasper_candidate import (
 from ktem.reasoning.mara_semantic_proposition_verifier import (
     build_semantic_proposition_verifier,
 )
-
 
 QUESTION = "Did the authors compare cross-lingual and single-language evaluation?"
 EVIDENCE = "We compared cross-lingual and single-language evaluation."
@@ -61,6 +61,32 @@ class _BudgetFailureLLM:
     def __call__(self, _messages: Any, **_kwargs: Any) -> Any:
         self.calls += 1
         raise AssertionError("budget failure must stop before provider invocation")
+
+
+class _CandidateLLM:
+    model_name = "candidate-test-model"
+
+    def __init__(self, candidate: str) -> None:
+        self.candidate = candidate
+
+    def __call__(self, _messages: Any, **_kwargs: Any) -> Any:
+        return SimpleNamespace(
+            text=json.dumps({"candidate": self.candidate}),
+            finish_reason="stop",
+        )
+
+
+def _candidate_generator(candidate: str) -> Any:
+    llm = _CandidateLLM(candidate)
+
+    def generate(request: Any, _decision: Any, bundle: Any) -> str:
+        return generate_qasper_typed_candidate(
+            SimpleNamespace(answering_pipeline=SimpleNamespace(llm=llm)),
+            request,
+            bundle,
+        )
+
+    return generate
 
 
 def _request() -> DocQARequest:
@@ -138,7 +164,7 @@ def test_qasper_pre_audit_failure_is_terminal_and_does_not_recover(
     result = execute_controller_turn(
         _request(),
         retrieve=retrieve,
-        generate=lambda *_args: candidate,
+        generate=_candidate_generator(candidate),
         proposition_verifier=verifier,
     )
 
@@ -200,7 +226,7 @@ def test_qasper_pre_audit_failure_keeps_candidate_trace_reason_on_cached_retry()
     result = execute_controller_turn(
         _request(),
         retrieve=retrieve,
-        generate=lambda *_args: "yes",
+        generate=_candidate_generator("yes"),
         proposition_verifier=verifier,
     )
 

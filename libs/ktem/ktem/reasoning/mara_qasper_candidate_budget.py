@@ -363,7 +363,7 @@ def _measurement(
 def candidate_generation_trace(
     *,
     model: str,
-    identity: dict[str, str],
+    identity: dict[str, Any],
     route: str,
     seed: int,
     serialized_messages: list[dict[str, Any]],

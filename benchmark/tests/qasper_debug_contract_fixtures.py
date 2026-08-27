@@ -4,6 +4,12 @@ import json
 from typing import Any
 
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _prediction
+from benchmark.tests.qasper_debug_semantic_pack_fixtures import (
+    _debug_audited_premises,
+    _debug_semantic_authority,
+    _debug_semantic_pack,
+    _debug_semantic_pack_identity,
+)
 
 
 def _qasper_debug_prediction(
@@ -27,20 +33,15 @@ def _qasper_debug_prediction(
     gold = case["gold"]
     ambiguous = case["ambiguous"]
     metadata = prediction["evidence_metadata"]
-    metadata.update(
-        {
-            "qasper_candidate_generation": _debug_generator_trace(
-                example_id, route, group_id, candidate
-            ),
-            "semantic_proposition_verifier": _debug_verifier_trace(
-                example_id, route, group_id, candidate, relation, audit_status
-            ),
-        }
+    _populate_debug_semantic_metadata(
+        metadata,
+        example_id,
+        route,
+        group_id,
+        candidate,
+        relation,
+        audit_status,
     )
-    if relation in {"supported", "contradicted"} and audit_status == "passed":
-        metadata["semantic_proposition_authority"] = _debug_semantic_authority(
-            _debug_verifier_verdict(candidate, relation)
-        )
     prediction.update(
         {
             "example_id": example_id,
@@ -72,6 +73,43 @@ def _qasper_debug_prediction(
         }
     )
     return prediction
+
+
+def _populate_debug_semantic_metadata(
+    metadata: dict[str, Any],
+    example_id: str,
+    route: str,
+    group_id: str,
+    candidate: str,
+    relation: str,
+    audit_status: str,
+) -> None:
+    generator = _debug_generator_trace(example_id, route, group_id, candidate)
+    semantic_pack = _debug_semantic_pack(str(generator["transaction_id"]))
+    identity = _debug_semantic_pack_identity(semantic_pack)
+    generator.update(
+        canonical_semantic_pack_digest=identity["semantic_pack_digest"],
+        canonical_span_universe_digest=identity["span_universe_digest"],
+        canonical_pack_candidate_transaction_id=identity["candidate_transaction_id"],
+    )
+    metadata.update(
+        qasper_canonical_semantic_pack=semantic_pack,
+        qasper_candidate_generation=generator,
+        semantic_proposition_verifier=_debug_verifier_trace(
+            example_id,
+            route,
+            group_id,
+            candidate,
+            relation,
+            audit_status,
+            identity,
+        ),
+    )
+    if relation in {"supported", "contradicted"} and audit_status == "passed":
+        metadata["semantic_proposition_authority"] = _debug_semantic_authority(
+            _debug_verifier_verdict(candidate, relation),
+            identity,
+        )
 
 
 def _qasper_contract_probe_predictions() -> list[dict[str, Any]]:
@@ -316,19 +354,18 @@ def _debug_verifier_trace(
     candidate: str,
     relation: str,
     audit_status: str,
+    pack_identity: dict[str, str],
 ) -> dict[str, Any]:
     transaction_id = f"verifier:{example_id}:{route}"
     verdict = _debug_verifier_verdict(candidate, relation)
-    typed_conclusion = {
-        "contract_id": "typed_conclusion.v1",
-        "conclusion_id": f"conclusion:{example_id}",
-        "polarity": candidate,
-    }
-    conclusion_audit = {"contract_id": "conclusion_audit.v2"}
-    safe_terminal = relation != "supported"
-    candidate_audit = _debug_candidate_audit(
-        candidate, relation, audit_status, typed_conclusion
+    typed_conclusion, conclusion_audit, candidate_audit = _debug_verifier_payload(
+        example_id,
+        candidate,
+        relation,
+        audit_status,
+        pack_identity,
     )
+    safe_terminal = relation != "supported"
     return {
         "contract_id": "semantic_proposition_verifier_runtime.v3",
         "status": "parsed",
@@ -362,6 +399,11 @@ def _debug_verifier_trace(
         "audit_reason": "fixture_audit",
         "evidence_label_map": {"E1": "span:paper:s1"},
         "unknown_assessment": _debug_unknown_assessment(relation),
+        "semantic_pack_digest": pack_identity["semantic_pack_digest"],
+        "canonical_span_universe_digest": pack_identity["span_universe_digest"],
+        "candidate_transaction_id": pack_identity["candidate_transaction_id"],
+        "canonical_pack_continuity_status": "preserved",
+        "auditor_semantic_pack_identity": pack_identity,
         "required_slot_ids": ["support:boolean_proposition"]
         if relation == "supported"
         else [],
@@ -385,6 +427,29 @@ def _debug_verifier_trace(
     }
 
 
+def _debug_verifier_payload(
+    example_id: str,
+    candidate: str,
+    relation: str,
+    audit_status: str,
+    pack_identity: dict[str, str],
+) -> tuple[dict[str, Any], dict[str, str], dict[str, Any]]:
+    typed_conclusion = {
+        "contract_id": "typed_conclusion.v1",
+        "conclusion_id": f"conclusion:{example_id}",
+        "polarity": candidate,
+    }
+    conclusion_audit = {"contract_id": "conclusion_audit.v2"}
+    candidate_audit = _debug_candidate_audit(
+        candidate,
+        relation,
+        audit_status,
+        typed_conclusion,
+        semantic_pack_identity=pack_identity,
+    )
+    return typed_conclusion, conclusion_audit, candidate_audit
+
+
 def _debug_verifier_verdict(candidate: str, relation: str) -> str:
     if relation == "unknown":
         return "insufficient_evidence"
@@ -395,64 +460,13 @@ def _debug_verifier_verdict(candidate: str, relation: str) -> str:
     return "no" if candidate == "yes" else "yes"
 
 
-def _debug_semantic_authority(verdict: str) -> dict[str, Any]:
-    evidence_refs = ["span:paper:s1#quote:0:30"]
-    evidence_relation = (
-        "explicit_contradiction" if verdict == "no" else "proposition_support"
-    )
-    slot_spans = {
-        "actor": (0, 9, "The paper"),
-        "predicate": (9, 13, "uses"),
-        "object": (13, 23, "the method"),
-    }
-    slot_evidence_refs = {
-        slot: [f"{evidence_refs[0]}#slot:{slot}:{start}:{end}"]
-        for slot, (start, end, _text) in slot_spans.items()
-    }
-    slot_evidence = {
-        evidence_refs[0]: {
-            slot: {
-                "evidence_ref": refs[0],
-                "text": text,
-                "span_start": start,
-                "span_end": end,
-                "clause_ref": "C1",
-                "clause_start": 0,
-                "clause_end": 30,
-            }
-            for slot, refs in slot_evidence_refs.items()
-            for start, end, text in (slot_spans[slot],)
-        }
-    }
-    payload = {
-        "evidence_relation": evidence_relation,
-        "proposition_slot_bindings": {
-            "actor": "current_paper",
-            "predicate": "use",
-            "object": "the method",
-        },
-        "proposition_slot_evidence_refs": slot_evidence_refs,
-        "proposition_binding_evidence_set_refs": evidence_refs,
-        "not_applicable_proposition_slots": ["quantifier"],
-    }
-    return {
-        "contract_id": "semantic_proposition_verdict.v4",
-        "status": "verified",
-        "reason": "semantic_evidence_set_bound",
-        "required_slot_ids": ["support:boolean_proposition"],
-        "verified_support_slot_ids": ["support:boolean_proposition"],
-        "required_proposition_slots": ["actor", "predicate", "object"],
-        "proposition_slot_evidence": slot_evidence,
-        **payload,
-        "proposition_evidence_set_digest": _fixture_digest(payload),
-    }
-
-
 def _debug_candidate_audit(
     candidate: str,
     relation: str,
     audit_status: str,
     typed_conclusion: dict[str, Any],
+    *,
+    semantic_pack_identity: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     audit = {
         "contract_id": "candidate_verifier_audit.v2",
@@ -462,6 +476,7 @@ def _debug_candidate_audit(
         "audited_judgment": relation,
         "reason": "fixture_audit",
         "replacement_candidate_allowed": False,
+        "semantic_pack_identity": dict(semantic_pack_identity or {}),
     }
     if relation == "supported":
         audit.update(
@@ -496,18 +511,6 @@ def _debug_candidate_audit(
             }
         )
     return audit
-
-
-def _debug_audited_premises() -> list[dict[str, Any]]:
-    return [
-        {
-            "span_selector": "E1:S1",
-            "evidence_id": "span:paper:s1",
-            "quote": "The paper reports the result.",
-            "span_start": 0,
-            "span_end": 30,
-        }
-    ]
 
 
 def _debug_unknown_assessment(relation: str) -> dict[str, Any]:

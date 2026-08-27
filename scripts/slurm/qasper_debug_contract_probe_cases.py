@@ -84,8 +84,8 @@ _PROBE_CASES: tuple[ProbeCase, ...] = (
     ProbeCase(
         "auditor_fail",
         (
-            "The authors released code for a different baseline, but this sentence "
-            "does not establish release for the evaluated system."
+            "If the authors released the code for the evaluated system, "
+            "reproducibility would improve."
         ),
         "yes",
         "unknown",
@@ -122,6 +122,8 @@ _NATURAL_QUALITY_PRE_AUDIT_CASES: tuple[ProbeCase, ...] = (
         evidence_element_type="title",
         payload_fixture="title_only_span_binds_relation_object",
         pre_audit_reasons=(
+            "premise_proposition_binding_invalid",
+            "premise_proposition_binding_not_allowed",
             "local_semantic_relation_mention_only",
             "local_semantic_slot_span_unbound",
             "pre_audit_slot_evidence_mismatch",
@@ -137,6 +139,8 @@ _NATURAL_QUALITY_PRE_AUDIT_CASES: tuple[ProbeCase, ...] = (
         controlled_candidate="yes",
         payload_fixture="proposer_slot_expectations_differ_from_verified_slot_evidence",
         pre_audit_reasons=(
+            "premise_proposition_binding_invalid",
+            "premise_proposition_binding_not_allowed",
             "local_semantic_slot_span_unbound",
             "local_semantic_slot_coverage_incomplete",
             "pre_audit_slot_evidence_mismatch",
@@ -229,9 +233,9 @@ def _build_request_and_bundle(case: ProbeCase, index: int) -> tuple[Any, Any]:
         int(request.generation_seed),
     )["trace_group_id"]
     if case.controlled_candidate:
-        request.trace_context["contract_probe_original_candidate"] = (
-            case.controlled_candidate
-        )
+        request.trace_context[
+            "contract_probe_original_candidate"
+        ] = case.controlled_candidate
     bundle = EvidenceBundle(
         route="contract_probe",
         items=[item],

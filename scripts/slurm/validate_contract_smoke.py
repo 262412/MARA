@@ -11,9 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from benchmark.artifact_publication import publish_contract_smoke_audit  # noqa: E402
-from benchmark.artifact_requirements import (  # noqa: E402
-    required_artifact_violations,
-)
+from benchmark.artifact_requirements import required_artifact_violations  # noqa: E402
 from benchmark.contract_invariant_metrics import (  # noqa: E402
     contract_invariant_summary,
 )
@@ -350,6 +348,11 @@ def _complete_audit(
                 contract_probe_predictions=contract_probe_predictions,
             )
         )
+    elif suite_kind == "qasper":
+        qasper_metrics = qasper_debug_contract_metrics(predictions)
+        metrics["qasper_canonical_semantic_pack_mismatch_count"] = qasper_metrics[
+            "qasper_canonical_semantic_pack_mismatch_count"
+        ]
     hard_gates = _hard_gate_results(metrics, suite_kind=suite_kind)
     failed_gates = [
         metric for metric, result in hard_gates.items() if not result["passed"]

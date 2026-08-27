@@ -44,6 +44,11 @@ def query_plan_constraints(
             )
         ),
     }
+    if str(verification_domain or "").strip().casefold() == "qasper":
+        # Retrieval queries may be expanded between rounds.  Semantic candidate
+        # ranking must remain bound to the original proposition instead of
+        # silently treating that retrieval-only expansion as a new question.
+        constraints["question"] = str(question or "").strip()
     if segment_comparison:
         constraints.update(
             {

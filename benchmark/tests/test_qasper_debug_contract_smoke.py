@@ -65,6 +65,7 @@ def test_qasper_debug_contract_declares_special_hard_gates():
         "qasper_semantic_entailment_audit_rejection_count",
         "qasper_required_slot_unverified_count",
         "qasper_reverify_without_semantic_state_change_count",
+        "qasper_canonical_semantic_pack_mismatch_count",
         "qasper_unexpected_unknown_assessment_count",
         "qasper_contract_probe_unexpected_false_abstention_count",
     } <= set(QASPER_DEBUG_HARD_GATES)
@@ -190,6 +191,32 @@ def test_qasper_debug_contract_smoke_fails_closed_on_missing_raw_response(
     assert any(
         violation.startswith("generator_field_missing:raw_response")
         for violation in audit["behavior_violations"]
+    )
+
+
+def test_qasper_debug_contract_fails_closed_on_semantic_pack_drift(tmp_path):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    predictions[0]["evidence_metadata"]["semantic_proposition_verifier"][
+        "semantic_pack_digest"
+    ] = "different-pack"
+    _write_qasper_run(run_dir, predictions=predictions)
+
+    with pytest.raises(
+        ValueError,
+        match="qasper_canonical_semantic_pack_mismatch_count",
+    ):
+        validate(run_dir, suite_kind="qasper_debug")
+
+    audit = json.loads((run_dir / "contract_smoke_audit.json").read_text())
+    assert audit["status"] == "failed"
+    assert (
+        audit["debug_gate_metrics"]["qasper_canonical_semantic_pack_mismatch_count"]
+        == 1.0
     )
 
 

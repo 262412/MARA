@@ -87,6 +87,9 @@ def bind_semantic_runtime_fields(
             "release_mode": context.release_mode,
             "auditor_relationship": context.auditor_relationship,
             "semantic_pack_digest": context.semantic_pack_digest,
+            "canonical_span_universe_digest": (context.canonical_span_universe_digest),
+            "candidate_transaction_id": context.candidate_transaction_id,
+            "canonical_pack_continuity_status": "preserved",
         }
     )
 
@@ -125,6 +128,17 @@ def semantic_audit_input_identity(
             for premise in value.get("premises") or []
             if isinstance(premise, dict)
         ],
+        "semantic_pack_identity": semantic_pack_identity(context),
+    }
+
+
+def semantic_pack_identity(
+    context: SemanticPropositionTransactionContext,
+) -> dict[str, str]:
+    return {
+        "semantic_pack_digest": str(context.semantic_pack_digest or ""),
+        "span_universe_digest": str(context.canonical_span_universe_digest or ""),
+        "candidate_transaction_id": str(context.candidate_transaction_id or ""),
     }
 
 

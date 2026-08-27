@@ -19,6 +19,7 @@ from benchmark.tests.test_qasper_contract_probe_generation import (
 )
 from scripts.slurm import qasper_debug_contract_probe as probe
 from scripts.slurm.qasper_debug_contract_pre_audit_provider import (
+    _required_verification_slot_ids,
     controlled_pre_audit_model_factory,
 )
 from scripts.slurm.qasper_debug_contract_probe_cases import (
@@ -55,6 +56,7 @@ class _NaturalQualityProvider(_Provider):
             candidate=candidate,
             selector=selector,
             evidence_text=evidence_text,
+            support_slot_ids=_required_verification_slot_ids(text),
         )
         return _Response(payload)
 
@@ -171,6 +173,7 @@ def test_natural_quality_payload_mutations_are_visible_in_proposal_trace() -> No
     }
     assert title_reasons & {
         "pre_audit_slot_evidence_mismatch",
+        "premise_proposition_binding_not_allowed",
         "local_semantic_relation_mention_only",
         "local_semantic_slot_span_unbound",
     }

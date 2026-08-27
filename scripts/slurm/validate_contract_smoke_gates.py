@@ -79,6 +79,7 @@ QASPER_HARD_GATES = {
     "citation_claim_support_violation_count": ("eq", 0.0),
     "citation_scope_violation_count": ("eq", 0.0),
     "citation_nonminimal_count": ("eq", 0.0),
+    "qasper_canonical_semantic_pack_mismatch_count": ("eq", 0.0),
 }
 QASPER_DEBUG_HARD_GATES = {
     "terminal_outcome_contract_violation_count": ("eq", 0.0),
@@ -101,6 +102,7 @@ QASPER_DEBUG_HARD_GATES = {
     "qasper_semantic_entailment_audit_rejection_count": ("eq", 0.0),
     "qasper_required_slot_unverified_count": ("eq", 0.0),
     "qasper_reverify_without_semantic_state_change_count": ("eq", 0.0),
+    "qasper_canonical_semantic_pack_mismatch_count": ("eq", 0.0),
     "qasper_unexpected_unknown_assessment_count": ("eq", 0.0),
     "qasper_contract_probe_unexpected_false_abstention_count": ("eq", 0.0),
 }

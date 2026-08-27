@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from itertools import combinations
 from typing import Any
 
@@ -10,8 +10,10 @@ from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
 def semantic_proposition_schema(
     slot_ids: list[str],
     *,
+    span_selectors: Collection[str] = (),
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
 ) -> dict[str, Any]:
     normalized_candidate = str(candidate or "").strip().casefold()
     include_not_applicable = applicable_proposition_slots is not None
@@ -23,6 +25,11 @@ def semantic_proposition_schema(
     )
     proposition_slots = tuple(
         slot for slot in PROPOSITION_EVIDENCE_SLOTS if slot in requested_slots
+    )
+    selectors = tuple(dict.fromkeys(str(value) for value in span_selectors if value))
+    allowed_bindings = _normalized_allowed_bindings(
+        allowed_proposition_slot_bindings,
+        proposition_slots,
     )
     required = [
         "candidate_judgment",
@@ -39,6 +46,8 @@ def semantic_proposition_schema(
             slot_ids,
             include_not_applicable,
             proposition_slots,
+            selectors=selectors,
+            allowed_bindings=allowed_bindings,
             include_evidence_relation=include_evidence_relation,
         ),
         "required": required,
@@ -49,6 +58,8 @@ def semantic_proposition_schema(
                 candidate=normalized_candidate,
                 include_not_applicable=include_not_applicable,
                 proposition_slots=proposition_slots,
+                selectors=selectors,
+                allowed_bindings=allowed_bindings,
                 include_evidence_relation=include_evidence_relation,
             ),
         ],
@@ -99,6 +110,8 @@ def _proposition_properties(
     include_not_applicable: bool,
     proposition_slots: tuple[str, ...],
     *,
+    selectors: tuple[str, ...],
+    allowed_bindings: dict[str, tuple[str, ...]] | None,
     include_evidence_relation: bool,
 ) -> dict[str, Any]:
     properties = {
@@ -113,9 +126,17 @@ def _proposition_properties(
             "type": "array",
             "minItems": 0,
             "maxItems": 4,
-            "items": _premise_schema(slot_ids, proposition_slots),
+            "items": _premise_schema(
+                slot_ids,
+                proposition_slots,
+                selectors=selectors,
+                allowed_bindings=allowed_bindings,
+            ),
         },
-        "unknown_assessment": _unknown_assessment_schema(proposition_slots),
+        "unknown_assessment": _unknown_assessment_schema(
+            proposition_slots,
+            selectors=selectors,
+        ),
     }
     if include_evidence_relation:
         properties["evidence_relation"] = {
@@ -127,10 +148,12 @@ def _proposition_properties(
             ],
         }
     if include_not_applicable:
+        not_applicable = [
+            slot for slot in PROPOSITION_EVIDENCE_SLOTS if slot not in proposition_slots
+        ]
         properties["not_applicable_proposition_slots"] = {
             "type": "array",
-            "maxItems": len(PROPOSITION_EVIDENCE_SLOTS),
-            "items": {"type": "string", "enum": list(PROPOSITION_EVIDENCE_SLOTS)},
+            "enum": [not_applicable],
         }
     return properties
 
@@ -142,6 +165,8 @@ def _judgment_branch(
     include_not_applicable: bool,
     proposition_slots: tuple[str, ...],
     *,
+    selectors: tuple[str, ...],
+    allowed_bindings: dict[str, tuple[str, ...]] | None,
     include_evidence_relation: bool,
     evidence_relations: Collection[str] | None = None,
 ) -> dict[str, Any]:
@@ -149,6 +174,8 @@ def _judgment_branch(
         slot_ids,
         include_not_applicable,
         proposition_slots,
+        selectors=selectors,
+        allowed_bindings=allowed_bindings,
         include_evidence_relation=include_evidence_relation,
     )
     properties["candidate_judgment"] = {"type": "string", "enum": [judgment]}
@@ -171,7 +198,12 @@ def _judgment_branch(
         "type": "array",
         "minItems": 0 if unknown else 1,
         "maxItems": 0 if unknown else 4,
-        "items": _premise_schema(slot_ids, proposition_slots),
+        "items": _premise_schema(
+            slot_ids,
+            proposition_slots,
+            selectors=selectors,
+            allowed_bindings=allowed_bindings,
+        ),
     }
     required = [
         "candidate_judgment",
@@ -202,6 +234,8 @@ def _judgment_branches(
     candidate: str,
     include_not_applicable: bool,
     proposition_slots: tuple[str, ...],
+    selectors: tuple[str, ...],
+    allowed_bindings: dict[str, tuple[str, ...]] | None,
     include_evidence_relation: bool,
 ) -> list[dict[str, Any]]:
     if candidate == "unanswerable":
@@ -212,6 +246,8 @@ def _judgment_branches(
                 False,
                 include_not_applicable,
                 proposition_slots,
+                selectors=selectors,
+                allowed_bindings=allowed_bindings,
                 include_evidence_relation=True,
                 evidence_relations=(
                     "proposition_support",
@@ -224,6 +260,8 @@ def _judgment_branches(
                 True,
                 include_not_applicable,
                 proposition_slots,
+                selectors=selectors,
+                allowed_bindings=allowed_bindings,
                 include_evidence_relation=False,
             ),
         ]
@@ -234,6 +272,8 @@ def _judgment_branches(
             judgment == "unknown",
             include_not_applicable,
             proposition_slots,
+            selectors=selectors,
+            allowed_bindings=allowed_bindings,
             include_evidence_relation=include_evidence_relation,
         )
         for judgment in ("supported", "contradicted", "unknown")
@@ -243,14 +283,18 @@ def _judgment_branches(
 def _premise_schema(
     slot_ids: list[str],
     proposition_slots: tuple[str, ...],
+    *,
+    selectors: tuple[str, ...],
+    allowed_bindings: dict[str, tuple[str, ...]] | None,
 ) -> dict[str, Any]:
-    return {
+    base: dict[str, Any] = {
         "type": "object",
         "properties": {
             "span_selector": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 24,
+                **({"enum": list(selectors)} if selectors else {}),
             },
             "proposition_fragment": {
                 "type": "string",
@@ -276,10 +320,29 @@ def _premise_schema(
         ],
         "additionalProperties": False,
     }
+    if allowed_bindings is None:
+        return base
+    branches = []
+    for selector, bound_slots in allowed_bindings.items():
+        branch = {
+            **base,
+            "properties": {
+                **base["properties"],
+                "span_selector": {"type": "string", "enum": [selector]},
+                "binds_proposition_slots": {
+                    "type": "array",
+                    "enum": [list(bound_slots)],
+                },
+            },
+        }
+        branches.append(branch)
+    return {"oneOf": branches} if branches else {"not": {}}
 
 
 def _unknown_assessment_schema(
     proposition_slots: tuple[str, ...],
+    *,
+    selectors: tuple[str, ...],
 ) -> dict[str, Any]:
     return {
         "type": "object",
@@ -288,7 +351,11 @@ def _unknown_assessment_schema(
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 12,
-                "items": {"type": "string", "maxLength": 24},
+                "items": {
+                    "type": "string",
+                    "maxLength": 24,
+                    **({"enum": list(selectors)} if selectors else {}),
+                },
             },
             "unresolved_proposition_slots": {
                 "type": "string",
@@ -323,3 +390,23 @@ def _canonical_slot_sets(proposition_slots: tuple[str, ...]) -> list[str]:
         for count in range(1, len(proposition_slots) + 1)
         for selected in combinations(proposition_slots, count)
     ]
+
+
+def _normalized_allowed_bindings(
+    value: Mapping[str, Collection[str]] | None,
+    proposition_slots: tuple[str, ...],
+) -> dict[str, tuple[str, ...]] | None:
+    if value is None:
+        return None
+    allowed_slots = set(proposition_slots)
+    normalized: dict[str, tuple[str, ...]] = {}
+    for raw_selector, raw_slots in value.items():
+        selector = str(raw_selector or "").strip()
+        selected = tuple(
+            slot
+            for slot in PROPOSITION_EVIDENCE_SLOTS
+            if slot in {str(value) for value in raw_slots} and slot in allowed_slots
+        )
+        if selector and selected:
+            normalized[selector] = selected
+    return normalized

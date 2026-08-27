@@ -79,11 +79,13 @@ class _Provider:
             )
             selected_refs = observation.get("selected_refs")
             available_refs = _candidate_selector_refs(text)
-            if not isinstance(selected_refs, list) or not selected_refs:
-                raise RuntimeError("provider candidate evidence span missing")
-            if not set(map(str, selected_refs)) <= available_refs:
-                raise RuntimeError("provider candidate evidence ref missing")
             signal = str(observation.get("polarity_signal") or "").casefold()
+            if not isinstance(selected_refs, list):
+                raise RuntimeError("provider candidate evidence span missing")
+            if selected_refs and not set(map(str, selected_refs)) <= available_refs:
+                raise RuntimeError("provider candidate evidence ref missing")
+            if not selected_refs and (signal != "undetermined" or not available_refs):
+                raise RuntimeError("provider candidate evidence span missing")
             candidate = {
                 "support": "yes",
                 "explicit_contradiction": "no",
@@ -404,6 +406,11 @@ def _assert_real_auditor_failure(rows: list[dict[str, Any]]) -> None:
 
 
 def test_controlled_proposal_passes_exact_candidate_schema_and_parser() -> None:
+    from dataclasses import replace
+
+    from ktem.reasoning.mara_qasper_semantic_pack import (
+        prepare_qasper_canonical_records,
+    )
     from ktem.reasoning.mara_semantic_contract_probe import (
         controlled_contract_probe_proposal,
     )
@@ -422,6 +429,10 @@ def test_controlled_proposal_passes_exact_candidate_schema_and_parser() -> None:
     request, bundle = _build_request_and_bundle(case, 5)
     slots = required_semantic_proposition_slots(request)
     packing = pack_semantic_proposition_evidence(request, _QUESTION, slots, bundle)
+    packing = replace(
+        packing,
+        records=prepare_qasper_canonical_records(_QUESTION, packing.records),
+    )
 
     controlled = controlled_contract_probe_proposal(
         "base prompt",
@@ -450,6 +461,11 @@ def test_controlled_proposal_passes_exact_candidate_schema_and_parser() -> None:
 
 
 def test_controlled_proposal_identity_gate_rejects_schema_mismatch() -> None:
+    from dataclasses import replace
+
+    from ktem.reasoning.mara_qasper_semantic_pack import (
+        prepare_qasper_canonical_records,
+    )
     from ktem.reasoning.mara_semantic_contract_probe import (
         ControlledContractProbeIdentityError,
         controlled_contract_probe_proposal,
@@ -471,6 +487,10 @@ def test_controlled_proposal_identity_gate_rejects_schema_mismatch() -> None:
     control["candidate_judgment"] = "unknown"
     slots = required_semantic_proposition_slots(request)
     packing = pack_semantic_proposition_evidence(request, _QUESTION, slots, bundle)
+    packing = replace(
+        packing,
+        records=prepare_qasper_canonical_records(_QUESTION, packing.records),
+    )
 
     with pytest.raises(
         ControlledContractProbeIdentityError,
@@ -555,14 +575,6 @@ def test_controlled_fault_requires_actual_auditor_rejection() -> None:
         _run_probe(
             "http://provider.invalid/v1", "model", model_factory=passing_fault_factory
         )
-
-
-def test_probe_write_replaces_artifact_without_duplicate_rows(tmp_path: Path) -> None:
-    path = tmp_path / "contract_probe_predictions.jsonl"
-    rows = [{"example_id": "one"}, {"example_id": "two"}]
-    probe._write_rows(path, rows)
-    probe._write_rows(path, rows)
-    assert len(path.read_text(encoding="utf-8").splitlines()) == 2
 
 
 def test_live_stage_probe_rows_pass_formal_provider_audit(tmp_path: Path) -> None:

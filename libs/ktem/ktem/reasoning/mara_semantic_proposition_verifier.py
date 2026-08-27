@@ -3,20 +3,14 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from ktem.docqa.boolean_candidate_authority import structured_boolean_candidate_label
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.semantic_evidence_set_authority import PropositionVerifier
 
-from .mara_semantic_candidate_policy import (
-    CANDIDATE_VERIFICATION_CONTRACT,
-    candidate_bound_response,
-)
+from .mara_qasper_semantic_pack import qasper_canonical_selector_bindings
+from .mara_semantic_candidate_policy import candidate_bound_response
 from .mara_semantic_contract_probe import (
     ControlledContractProbeIdentityError,
     controlled_contract_probe_proposal,
-)
-from .mara_semantic_local_consistency import (
-    DETERMINISTIC_LOCAL_PREMISE_CONSISTENCY_CONTRACT,
 )
 from .mara_semantic_proposition_contract import insufficient_semantic_result
 from .mara_semantic_proposition_debug import (
@@ -27,22 +21,21 @@ from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
     SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS,
     SemanticPropositionEvidencePacking,
-    pack_semantic_proposition_evidence,
-    required_semantic_proposition_slots,
     semantic_proposition_verifier_prompt,
 )
-from .mara_semantic_proposition_trace import (
-    SEMANTIC_PROPOSITION_VERIFIER_SEED,
-    candidate_verification_trace_status,
-    digest,
-)
+from .mara_semantic_proposition_trace import candidate_verification_trace_status
 from .mara_semantic_proposition_trace import record_verifier_trace as _trace
-from .mara_semantic_proposition_trace import semantic_transaction_identity
 from .mara_semantic_proposition_transaction import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
     run_semantic_proposition_transaction,
 )
 from .mara_semantic_runtime_repair import reject_runtime_contract_without_reverify
+from .mara_semantic_verifier_context import answering_llm as _answering_llm
+from .mara_semantic_verifier_context import (
+    auditor_semantic_pack_identity as _auditor_semantic_pack_identity,
+)
+from .mara_semantic_verifier_context import candidate_context as _candidate_context
+from .mara_semantic_verifier_context import model_name as _model_name
 
 __all__ = [
     "SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS",
@@ -108,6 +101,10 @@ class _SemanticPropositionVerifier:
         seed = context["seed"]
         model = context["model"]
         cache_key = context["cache_key"]
+        pack_failure_reason = context["pack_failure_reason"]
+        if pack_failure_reason:
+            _record_pack_failure(self, bundle, context)
+            return None
         if not candidate:
             _trace(
                 self,
@@ -222,44 +219,27 @@ class _SemanticPropositionVerifier:
         return deepcopy(cached)
 
 
-def _candidate_context(
+def _record_pack_failure(
     verifier: Any,
-    request: Any,
-    question: str,
-    answer: str,
     bundle: EvidenceBundle,
-) -> dict[str, Any]:
-    candidate = structured_boolean_candidate_label(answer)
-    slots = required_semantic_proposition_slots(request)
-    packing = pack_semantic_proposition_evidence(request, question, slots, bundle)
-    seed = _verifier_seed(request)
-    model = _model_name(verifier.llm)
-    audit_model = _model_name(verifier.audit_llm)
-    bundle.metadata[
-        "semantic_candidate_transaction_identity"
-    ] = semantic_transaction_identity(
-        request,
+    context: dict[str, Any],
+) -> None:
+    _trace(
+        verifier,
         bundle,
-        question=question,
-        candidate=candidate,
-        semantic_pack_digest=packing.semantic_pack_digest,
-        seed=seed,
+        "failed",
+        context["pack_failure_reason"],
+        context["packing"],
+        context["slots"],
+        context["model"],
+        context["seed"],
+        candidate_label=context["candidate"],
+        candidate_verification_status="pre_audit_failed",
+        audit_status="not_started",
+        verifier_execution_status="not_started",
+        auditor_execution_status="not_started",
+        canonical_pack_continuity_status="failed",
     )
-    return {
-        "candidate": candidate,
-        "slots": slots,
-        "packing": packing,
-        "seed": seed,
-        "model": model,
-        "cache_key": _semantic_cache_key(
-            packing.semantic_pack_digest,
-            candidate=candidate,
-            proposal_model=model,
-            audit_model=audit_model,
-            seed=seed,
-            release_mode=verifier.release_mode,
-        ),
-    }
 
 
 def _candidate_prompt_or_none(
@@ -456,6 +436,13 @@ def _run_model_transaction(
         seed=seed,
         release_mode=verifier.release_mode,
         semantic_pack_digest=packing.semantic_pack_digest,
+        canonical_span_universe_digest=str(
+            identity.get("canonical_span_universe_digest") or ""
+        ),
+        candidate_transaction_id=str(identity.get("candidate_transaction_id") or ""),
+        allowed_proposition_slot_bindings=(
+            qasper_canonical_selector_bindings(packing.records) or None
+        ),
         capture_debug_trace=verifier.debug_recorder.enabled,
         transaction_id=transaction_id,
         attempt_namespace="initial",
@@ -513,6 +500,9 @@ def _store_model_response(
         diagnostics,
         audit_call_count=outcome.audit_call_count,
     )
+    auditor_pack_identity = _auditor_semantic_pack_identity(parsed)
+    if auditor_pack_identity:
+        diagnostics["auditor_semantic_pack_identity"] = auditor_pack_identity
     _trace(
         verifier,
         bundle,
@@ -529,51 +519,3 @@ def _store_model_response(
         **diagnostics,
     )
     return deepcopy(parsed)
-
-
-def _answering_llm(pipeline: Any) -> Any | None:
-    answering_pipeline = getattr(pipeline, "answering_pipeline", None)
-    llm = getattr(answering_pipeline, "llm", None)
-    return llm if callable(llm) else None
-
-
-def _verifier_seed(request: Any) -> int:
-    seed = getattr(request, "generation_seed", None)
-    return SEMANTIC_PROPOSITION_VERIFIER_SEED if seed is None else int(seed)
-
-
-def _semantic_cache_key(
-    semantic_pack_digest: str,
-    *,
-    candidate: str,
-    proposal_model: str,
-    audit_model: str,
-    seed: int,
-    release_mode: bool,
-) -> str:
-    payload = {
-        "semantic_pack_digest": semantic_pack_digest,
-        "candidate": candidate,
-        "candidate_contract": CANDIDATE_VERIFICATION_CONTRACT,
-        "proposal_model": proposal_model,
-        "audit_model": audit_model,
-        "seed": seed,
-        "release_mode": release_mode,
-        "proposal_contract": "semantic_proposition_verdict.v4",
-        "audit_contract": "semantic_entailment_audit.v3",
-        "local_premise_consistency_contract": (
-            DETERMINISTIC_LOCAL_PREMISE_CONSISTENCY_CONTRACT
-        ),
-        "proof_repair_policy": "state_change_only_reaudit.v3",
-        "runtime_repair_policy": "stop_without_semantic_state_change.v1",
-        "polarity_check_contract": "polarity_contradiction_check.v1",
-    }
-    return digest(payload)
-
-
-def _model_name(llm: Any) -> str:
-    for key in ("model_name", "model", "model_id"):
-        value = str(getattr(llm, key, "") or "").strip()
-        if value:
-            return value
-    return f"{type(llm).__module__}.{type(llm).__name__}"

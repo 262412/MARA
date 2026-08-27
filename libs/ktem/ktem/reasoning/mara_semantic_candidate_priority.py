@@ -52,7 +52,7 @@ def semantic_record_priority(
     ranked_position: int,
 ) -> tuple[int | float, ...]:
     if not candidate_priority:
-        return polarity_priority, slot_priority, -alignment_score, ranked_position
+        return polarity_priority, slot_priority, ranked_position, -alignment_score
     slot_hints = candidate_record_slot_hints(question, text)
     return (
         0 if candidate_relation_anchor(question, text) else 1,

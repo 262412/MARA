@@ -28,6 +28,7 @@ from .mara_semantic_proposition_stages import (
 )
 from .mara_semantic_transaction_support import (
     bind_semantic_runtime_fields,
+    semantic_pack_identity,
     transaction_debug,
     transaction_result,
 )
@@ -131,6 +132,7 @@ def candidate_bound_insufficient_result(
             candidate,
             assessment,
             verifier_judgment=verifier_judgment,
+            semantic_pack_identity=semantic_pack_identity(context),
         )
     except ValueError as exc:
         reason = str(exc)
@@ -166,8 +168,7 @@ def candidate_bound_insufficient_result(
     audit = _run_candidate_unknown_audit(
         context, audit_prompt, candidate, verifier_judgment
     )
-    diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
-    diagnostics["audit_contract_id"] = "candidate_verifier_audit.v2"
+    _record_unknown_audit_diagnostics(context, audit, diagnostics)
     rejection_reason = candidate_unknown_audit_stage_rejection_reason(audit)
     debug_trace = transaction_debug(context, proposal, audit)
     if rejection_reason:
@@ -184,6 +185,7 @@ def candidate_bound_insufficient_result(
             debug_trace=debug_trace,
         )
     return _candidate_unknown_success(
+        context,
         proposal,
         audit,
         diagnostics,
@@ -192,6 +194,17 @@ def candidate_bound_insufficient_result(
         assessment=assessment,
         debug_trace=debug_trace,
     )
+
+
+def _record_unknown_audit_diagnostics(
+    context: Any,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+) -> None:
+    if audit.call_count > 0:
+        diagnostics["auditor_semantic_pack_identity"] = semantic_pack_identity(context)
+    diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
+    diagnostics["audit_contract_id"] = "candidate_verifier_audit.v2"
 
 
 def _run_candidate_unknown_audit(
@@ -220,6 +233,7 @@ def _candidate_unknown_inputs(
 
 
 def _candidate_unknown_success(
+    context: Any,
     proposal: ParsedSemanticStage,
     audit: ParsedSemanticStage,
     diagnostics: dict[str, Any],
@@ -236,6 +250,7 @@ def _candidate_unknown_success(
         typed_conclusion_value=audited_conclusion,
         unknown_assessment=assessment,
     )
+    candidate_audit["semantic_pack_identity"] = semantic_pack_identity(context)
     value.update(
         audited_typed_conclusion=audited_conclusion,
         candidate_verification_audit=candidate_audit,
@@ -309,6 +324,7 @@ def candidate_bound_semantic_audit_prompt(
         original_candidate=candidate_from_prompt(context.proposal_prompt),
         candidate_judgment=str(value.get("candidate_judgment") or ""),
         premise_slot_evidence=premise_slot_evidence,
+        semantic_pack_identity=semantic_pack_identity(context),
     )
     return prompt
 

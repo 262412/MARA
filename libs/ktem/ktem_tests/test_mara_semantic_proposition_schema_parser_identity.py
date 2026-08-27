@@ -10,7 +10,6 @@ from ktem.reasoning.mara_semantic_proposition_schema import (
     semantic_proposition_response_format,
 )
 
-
 CONTROLLED_BRANCHES = (
     ("yes", "supported"),
     ("yes", "contradicted"),
@@ -23,6 +22,7 @@ CONTROLLED_BRANCHES = (
 )
 APPLICABLE_PROPOSITION_SLOTS = ("actor", "predicate", "object")
 SLOT_IDS = ("support:proposition",)
+ALLOWED_BINDINGS = {"E1:S1": APPLICABLE_PROPOSITION_SLOTS}
 
 
 def _packed() -> list[dict[str, Any]]:
@@ -77,6 +77,7 @@ def _schema(candidate: str) -> dict[str, Any]:
         list(SLOT_IDS),
         candidate=candidate,
         applicable_proposition_slots=APPLICABLE_PROPOSITION_SLOTS,
+        allowed_proposition_slot_bindings=ALLOWED_BINDINGS,
     )["json_schema"]["schema"]
 
 
@@ -96,6 +97,7 @@ def test_candidate_specific_schema_payload_is_parser_accepted(
         seed=17,
         candidate=candidate,
         applicable_proposition_slots=APPLICABLE_PROPOSITION_SLOTS,
+        allowed_proposition_slot_bindings=ALLOWED_BINDINGS,
     )
 
     assert parsed.failure_reason == ""
@@ -120,9 +122,9 @@ def test_unknown_schema_rejects_duplicate_canonical_slot_set(
     judgment: str,
 ) -> None:
     payload = _response(candidate, judgment)
-    payload["unknown_assessment"]["unresolved_proposition_slots"] = (
-        "predicate|predicate"
-    )
+    payload["unknown_assessment"][
+        "unresolved_proposition_slots"
+    ] = "predicate|predicate"
 
     with pytest.raises(ValidationError):
         validate(instance=payload, schema=_schema(candidate))
