@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from jsonschema import validate
+import pytest
+from jsonschema import ValidationError, validate
 from ktem.docqa.question_proposition import (
     PROPOSITION_EVIDENCE_SLOTS,
     build_question_proposition,
@@ -310,3 +311,37 @@ def test_complete_slot_union_without_object_event_binding_cannot_be_authority() 
     )
 
     assert selected is None
+
+
+def test_schema_rejects_non_unknown_incomplete_slot_union() -> None:
+    plan = _natural_plan(first_event="event-a", second_event="event-b")
+    incomplete_selector = plan["selectors"][1]
+    incomplete_selector["slot_hints"] = ["object"]
+    plan["allowed_bindings"][incomplete_selector["selector_id"]] = ("object",)
+    plan["payload"]["premises"][1]["binds_proposition_slots"] = ["object"]
+
+    response_format = semantic_proposition_response_format(
+        list(plan["allowed_bindings"]),
+        [SLOT_ID],
+        candidate="yes",
+        applicable_proposition_slots=plan["applicable_slots"],
+        allowed_proposition_slot_bindings=plan["allowed_bindings"],
+    )
+    schema = response_format["json_schema"]["schema"]
+
+    parsed = parse_semantic_proposition_response(
+        json.dumps(plan["payload"]),
+        packed=plan["packed"],
+        slot_ids={SLOT_ID},
+        model="characterization-model",
+        seed=17,
+        candidate="yes",
+        applicable_proposition_slots=plan["applicable_slots"],
+        allowed_proposition_slot_bindings=plan["allowed_bindings"],
+    )
+    assert parsed.value is None
+    assert parsed.failure_reason == "proposition_slot_coverage_incomplete"
+
+    # Schema acceptance must imply parser acceptance for this structural rule.
+    with pytest.raises(ValidationError):
+        validate(instance=plan["payload"], schema=schema)
