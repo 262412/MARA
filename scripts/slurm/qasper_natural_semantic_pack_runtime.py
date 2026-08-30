@@ -6,9 +6,19 @@ from types import SimpleNamespace
 from typing import Any
 
 from ktem.docqa.evidence_schema import EvidenceBundle
-from ktem.reasoning.mara_qasper_candidate import _record_candidate_request
-from ktem.reasoning.mara_qasper_candidate_prompt import _candidate_evidence
-from ktem.reasoning.mara_qasper_candidate_request import fit_candidate_request
+from ktem.reasoning.mara_qasper_candidate import (
+    _record_candidate_request,
+    _serialized_messages,
+)
+from ktem.reasoning.mara_qasper_candidate_evidence import candidate_evidence_set_binding
+from ktem.reasoning.mara_qasper_candidate_prompt import (
+    _bound_candidate_slots,
+    _candidate_evidence,
+)
+from ktem.reasoning.mara_qasper_candidate_request import (
+    candidate_messages,
+    candidate_request_diagnostics,
+)
 from ktem.reasoning.mara_qasper_candidate_transport import (
     qasper_candidate_response_format,
 )
@@ -48,8 +58,9 @@ def freeze_natural_pack(
     code_sha: str,
 ) -> NaturalPackContext:
     request = _natural_request(question, replay)
+    candidate_route = str(replay.candidate_identity.get("internal_route") or route)
     bundle = EvidenceBundle(
-        route=route or "natural_semantic_pack",
+        route=candidate_route or "natural_semantic_pack",
         items=deepcopy(replay.items),
         metadata=deepcopy(replay.bundle_metadata),
     )
@@ -75,6 +86,7 @@ def freeze_natural_pack(
         bundle,
         question=question,
         transaction_id=transaction_id,
+        replay=replay,
     )
     binding = _mapping(diagnostics.get("candidate_evidence_set_binding"))
     bound_slots = _bound_slots(diagnostics)
@@ -93,7 +105,7 @@ def freeze_natural_pack(
         messages=messages,
         response_schema=response_schema,
         identity=identity,
-        route=route,
+        route=candidate_route,
         seed=replay.candidate_seed,
         records=records,
         diagnostics=diagnostics,
@@ -195,7 +207,15 @@ def _prepare_candidate_request(
     *,
     question: str,
     transaction_id: str,
+    replay: CandidateReplayContext,
 ) -> tuple[Any, ...]:
+    frozen_request = _mapping(replay.online_candidate_request)
+    if replay.observation.get("complete") is not True:
+        reasons = replay.observation.get("incompleteness_reasons") or []
+        detail = ", ".join(str(reason) for reason in reasons)
+        if frozen_request.get("complete") is not True:
+            raise ValueError(f"frozen candidate request incomplete: {detail}")
+        raise ValueError(f"frozen candidate-stage snapshot incomplete: {detail}")
     records, diagnostics, source_packing = _candidate_evidence(
         request,
         question,
@@ -203,16 +223,18 @@ def _prepare_candidate_request(
         candidate_transaction_id=transaction_id,
     )
     response_schema = qasper_candidate_response_format()
-    records, diagnostics, messages, token_measurement, dropped_count = (
-        fit_candidate_request(
-            None,
-            question,
-            records,
-            diagnostics,
-            response_schema=response_schema,
-            controlled_candidate="",
-            candidate_transaction_id=transaction_id,
-        )
+    (
+        records,
+        diagnostics,
+        messages,
+        token_measurement,
+        dropped_count,
+    ) = _replay_frozen_candidate_request(
+        question,
+        records,
+        diagnostics,
+        candidate_transaction_id=transaction_id,
+        frozen_request=frozen_request,
     )
     return (
         records,
@@ -223,6 +245,103 @@ def _prepare_candidate_request(
         token_measurement,
         dropped_count,
     )
+
+
+def _replay_frozen_candidate_request(
+    question: str,
+    records: list[dict[str, Any]],
+    diagnostics: dict[str, Any],
+    *,
+    candidate_transaction_id: str,
+    frozen_request: dict[str, Any],
+) -> tuple[Any, ...]:
+    projection = _mapping(frozen_request.get("candidate_request_projection_trace"))
+    selected = _frozen_selected_records(records, projection)
+    candidate_dropped = int(
+        frozen_request.get("candidate_request_dropped_evidence_count") or 0
+    )
+    pre_request_dropped = int(
+        diagnostics.get("pre_request_dropped_evidence_count") or 0
+    )
+    if len(records) - len(selected) != candidate_dropped:
+        raise ValueError("frozen candidate request drop count mismatch")
+    expected_total_dropped = pre_request_dropped + candidate_dropped
+    if frozen_request.get("request_dropped_evidence_count") != expected_total_dropped:
+        raise ValueError("frozen candidate total drop count mismatch")
+    binding = candidate_evidence_set_binding(
+        selected,
+        question,
+        candidate_transaction_id=candidate_transaction_id,
+    )
+    bound_slots = _bound_candidate_slots(
+        diagnostics.get("required_slots", []),
+        selected,
+        binding=binding,
+    )
+    replay_diagnostics = candidate_request_diagnostics(
+        diagnostics,
+        bound_slots,
+        binding,
+        dropped_count=candidate_dropped,
+        pre_request_dropped_count=pre_request_dropped,
+    )
+    replay_diagnostics["candidate_request_projection_trace"] = deepcopy(projection)
+    messages = candidate_messages(
+        question,
+        selected,
+        replay_diagnostics,
+        controlled_candidate="",
+    )
+    serialized_messages = _serialized_messages(messages)
+    replay_diagnostics["frozen_candidate_request_replay"] = {
+        "contract_id": "qasper_frozen_candidate_request_replay.v1",
+        "status": (
+            "matched"
+            if serialized_messages == frozen_request.get("message_stack")
+            else "diverged"
+        ),
+        "selected_record_ids": [
+            str(record.get("evidence_id") or "") for record in selected
+        ],
+        "selected_record_ids_digest": canonical_digest(
+            [str(record.get("evidence_id") or "") for record in selected]
+        ),
+        "message_stack_digest": canonical_digest(serialized_messages),
+        "frozen_message_stack_digest": str(
+            frozen_request.get("message_stack_digest") or ""
+        ),
+    }
+    return (
+        selected,
+        replay_diagnostics,
+        messages,
+        deepcopy(_mapping(frozen_request.get("token_measurement"))),
+        expected_total_dropped,
+    )
+
+
+def _frozen_selected_records(
+    records: list[dict[str, Any]],
+    projection: dict[str, Any],
+) -> list[dict[str, Any]]:
+    record_ids = [str(record.get("evidence_id") or "") for record in records]
+    decisions = [_mapping(decision) for decision in projection.get("decisions") or []]
+    decision_ids = [str(decision.get("evidence_id") or "") for decision in decisions]
+    if decision_ids != record_ids or len(set(record_ids)) != len(record_ids):
+        raise ValueError("frozen candidate request record identity mismatch")
+    selected_ids = {
+        str(decision.get("evidence_id") or "")
+        for decision in decisions
+        if decision.get("selected") is True
+    }
+    selected = [
+        deepcopy(record)
+        for record in records
+        if str(record.get("evidence_id") or "") in selected_ids
+    ]
+    if len(selected) != int(projection.get("selected_record_count") or 0):
+        raise ValueError("frozen candidate request selected count mismatch")
+    return selected
 
 
 def _natural_request(question: str, replay: CandidateReplayContext) -> Any:

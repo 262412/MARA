@@ -2,10 +2,18 @@ from __future__ import annotations
 
 import hashlib
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any, cast
 
 from ktem.docqa.boolean_evidence_scope import evidence_item_text
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.evidence_schema import EvidenceBundle
+from ktem.reasoning.mara_qasper_candidate import _record_candidate_request
+from ktem.reasoning.mara_qasper_candidate_prompt import _candidate_evidence
+from ktem.reasoning.mara_qasper_candidate_request import fit_candidate_request
+from ktem.reasoning.mara_qasper_candidate_transport import (
+    qasper_candidate_response_format,
+)
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
 from scripts.slurm import qasper_natural_semantic_pack_probe as probe
@@ -81,9 +89,11 @@ def _attach_replay_context(row: dict[str, Any]) -> dict[str, Any]:
         "source_items": source_items,
         "ranked_evidence_present": True,
         "ranked_evidence": ranked,
+        "query_plan": deepcopy(query_plan),
         "query_plan_digest": canonical_digest(query_plan),
         "max_context_length": None,
     }
+    snapshot["snapshot_digest"] = canonical_digest(snapshot)
     metadata["qasper_canonical_semantic_pack"] = {
         "source_packing_observation": {"source_input_snapshot": snapshot}
     }
@@ -100,6 +110,7 @@ def _attach_replay_context(row: dict[str, Any]) -> dict[str, Any]:
         "candidate_request_dropped_evidence_count": 0,
     }
     row["retrieved_hits"] = deepcopy(items)
+    _record_fixture_candidate_request(row)
     replay = candidate_replay_context(row)
     context = probe.freeze_natural_pack(
         str(row.get("question") or ""),
@@ -129,6 +140,77 @@ def _attach_replay_context(row: dict[str, Any]) -> dict[str, Any]:
         },
     }
     return row
+
+
+def _record_fixture_candidate_request(row: dict[str, Any]) -> None:
+    metadata = cast(dict[str, Any], row["evidence_metadata"])
+    initial = cast(dict[str, Any], metadata["qasper_candidate_generation"])
+    replay = candidate_replay_context(row)
+    question = str(row["question"])
+    transaction_id = str(initial["transaction_id"])
+    request = SimpleNamespace(
+        origin="benchmark",
+        verification_domain="qasper",
+        dataset_family="qasper",
+        answer_type="boolean",
+        question=question,
+        query=question,
+        query_plan=deepcopy(replay.query_plan),
+    )
+    bundle = EvidenceBundle(
+        route=str(row["route"]),
+        items=deepcopy(replay.items),
+        metadata=deepcopy(replay.bundle_metadata),
+    )
+    records, diagnostics, _source_packing = _candidate_evidence(
+        request,
+        question,
+        bundle,
+        candidate_transaction_id=transaction_id,
+    )
+    response_schema = qasper_candidate_response_format()
+    (
+        records,
+        diagnostics,
+        messages,
+        token_measurement,
+        dropped_count,
+    ) = fit_candidate_request(
+        None,
+        question,
+        records,
+        diagnostics,
+        response_schema=response_schema,
+        controlled_candidate="",
+        candidate_transaction_id=transaction_id,
+    )
+    identity = {
+        key: deepcopy(initial.get(key))
+        for key in (
+            "trace_group_id",
+            "benchmark_route_id",
+            "internal_route",
+            "transaction_id",
+            "attempt_id",
+            "generation_sequence",
+            "predecessor_transaction_id",
+        )
+    }
+    observation, _input_digest = _record_candidate_request(
+        bundle,
+        llm=None,
+        messages=messages,
+        response_schema=response_schema,
+        identity=identity,
+        route=str(row["route"]),
+        seed=int(initial["effective_seed"]),
+        evidence=records,
+        evidence_diagnostics=diagnostics,
+        controlled_candidate="",
+        token_measurement=token_measurement,
+        request_dropped_count=dropped_count,
+    )
+    metadata["qasper_candidate_generation"] = observation
 
 
 def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint() -> (

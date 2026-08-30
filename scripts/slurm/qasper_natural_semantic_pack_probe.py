@@ -23,22 +23,20 @@ from ktem.reasoning.mara_semantic_proposition_schema import (
 from benchmark.qasper_causal_evidence_chain import (
     qasper_causal_evidence_chain_prefix_complete,
 )
+from scripts.slurm.qasper_natural_causal_transaction import (
+    natural_causal_transaction_replay,
+)
 from scripts.slurm.qasper_natural_semantic_pack_audit import build_audit
 from scripts.slurm.qasper_natural_semantic_pack_audit import (
     runtime_code_identity as _runtime_code_identity,
 )
-from scripts.slurm.qasper_natural_causal_transaction import (
-    natural_causal_transaction_replay,
-)
 from scripts.slurm.qasper_natural_semantic_pack_probe_payload import build_probe_result
-from scripts.slurm.qasper_natural_semantic_pack_runtime import (
-    freeze_natural_pack,
-)
 from scripts.slurm.qasper_natural_semantic_pack_replay import (
     candidate_path_replay_complete,
-    candidate_request_replay_complete,
     candidate_replay_context,
+    candidate_request_replay_complete,
 )
+from scripts.slurm.qasper_natural_semantic_pack_runtime import freeze_natural_pack
 
 CONTRACT = "qasper_natural_semantic_pack_probe.v1"
 _BOUND_STATES = {
@@ -71,11 +69,12 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
     question = str(row.get("question") or "").strip()
     route = str(row.get("route") or "").strip()
     example_id = str(row.get("example_id") or "").strip()
-    query_plan = _mapping(_mapping(row.get("evidence_metadata")).get("query_plan"))
     items = _mapping(row.get("evidence_bundle")).get("items")
-    if not question or not isinstance(items, list) or not query_plan:
+    if not question or not isinstance(items, list):
         raise ValueError("natural probe input incomplete")
     replay = candidate_replay_context(row)
+    if not replay.query_plan:
+        raise ValueError("natural probe frozen query plan missing")
     context = freeze_natural_pack(
         question,
         route=route,

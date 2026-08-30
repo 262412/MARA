@@ -27,25 +27,19 @@ def candidate_replay_context(row: Mapping[str, Any]) -> CandidateReplayContext:
     bundle = _mapping(row.get("evidence_bundle"))
     items = list(bundle.get("items") or [])
     metadata = _mapping(row.get("evidence_metadata"))
-    query_plan = _mapping(metadata.get("query_plan"))
-    pack = _mapping(metadata.get("qasper_canonical_semantic_pack"))
-    source = _mapping(pack.get("source_packing_observation"))
     candidate = _mapping(metadata.get("qasper_candidate_generation"))
-    snapshot = _mapping(source.get("source_input_snapshot"))
-    if snapshot.get("contract_id") == "semantic_source_input_snapshot.v1":
-        replay_items, ranked, ranked_present, max_context, reasons = _exact_replay(
-            items,
-            query_plan,
-            snapshot,
-        )
-        context_source = "stage_input_snapshot"
-    else:
-        replay_items, ranked, ranked_present, max_context, reasons = _legacy_replay(
-            items,
-            source,
-        )
-        context_source = "legacy_source_priority_projection"
-        reasons.append("legacy_replay_not_causally_verifiable")
+    (
+        replay_items,
+        ranked,
+        ranked_present,
+        max_context,
+        query_plan,
+        terminal_query_plan,
+        source,
+        context_source,
+        query_plan_source,
+        reasons,
+    ) = _source_replay_inputs(items, metadata)
     (
         candidate_identity,
         candidate_seed,
@@ -78,7 +72,9 @@ def candidate_replay_context(row: Mapping[str, Any]) -> CandidateReplayContext:
         "ranked_evidence_count": len(ranked),
         "ranked_evidence_digest": canonical_digest(ranked),
         "ranked_evidence": ranked,
+        "query_plan_source": query_plan_source,
         "query_plan_digest": canonical_digest(query_plan),
+        "terminal_query_plan_digest": canonical_digest(terminal_query_plan),
         "max_context_length": max_context,
         "historical_candidate_request_drop_count": request_drop,
         "candidate_identity": deepcopy(candidate_identity),
@@ -96,6 +92,38 @@ def candidate_replay_context(row: Mapping[str, Any]) -> CandidateReplayContext:
         candidate_seed=candidate_seed,
         online_candidate_request=online_candidate_request,
         observation=observation,
+    )
+
+
+def _source_replay_inputs(
+    items: list[Any],
+    metadata: Mapping[str, Any],
+) -> tuple[Any, ...]:
+    terminal_query_plan = _mapping(metadata.get("query_plan"))
+    pack = _mapping(metadata.get("qasper_canonical_semantic_pack"))
+    source = _mapping(pack.get("source_packing_observation"))
+    snapshot = _mapping(source.get("source_input_snapshot"))
+    if snapshot.get("contract_id") == "semantic_source_input_snapshot.v1":
+        exact_replay = _exact_replay(items, snapshot)
+        return (
+            *exact_replay[:-1],
+            terminal_query_plan,
+            source,
+            "stage_input_snapshot",
+            "stage_input_snapshot",
+            exact_replay[-1],
+        )
+    legacy_replay = _legacy_replay(items, source)
+    reasons = legacy_replay[-1]
+    reasons.append("legacy_replay_not_causally_verifiable")
+    return (
+        *legacy_replay[:-1],
+        terminal_query_plan,
+        terminal_query_plan,
+        source,
+        "legacy_source_priority_projection",
+        "terminal_query_plan_legacy",
+        reasons,
     )
 
 
@@ -117,13 +145,53 @@ def _candidate_replay_inputs(
         reasons.append("candidate_response_schema_digest_missing")
     if not request.get("input_digest"):
         reasons.append("candidate_input_digest_missing")
+    if canonical_digest(request.get("message_stack") or []) != request.get(
+        "message_stack_digest"
+    ):
+        reasons.append("candidate_message_stack_digest_mismatch")
+    projection = _mapping(request.get("candidate_request_projection_trace"))
+    if not _projection_complete(
+        projection,
+        contract_id="qasper_candidate_request_projection.v1",
+        input_count_key="input_record_count",
+        attempts_required=True,
+    ):
+        reasons.append("candidate_request_projection_incomplete")
+    token_measurement = _mapping(request.get("token_measurement"))
+    token_measurement_complete = _frozen_token_measurement_complete(token_measurement)
+    if not token_measurement_complete:
+        reasons.append("candidate_token_measurement_incomplete")
+    budget = _mapping(request.get("budget"))
+    budget_complete = _frozen_budget_complete(budget)
+    if not budget_complete:
+        reasons.append("candidate_token_budget_incomplete")
+    if (
+        token_measurement_complete
+        and budget_complete
+        and int(token_measurement["estimated_input_tokens"])
+        > int(budget["candidate_input_token_budget"])
+    ):
+        reasons.append("candidate_token_budget_exceeded")
     request_drop = _non_negative_int(
         candidate.get("candidate_request_dropped_evidence_count")
     )
     if request_drop is None:
         reasons.append("candidate_request_drop_observation_missing")
-    elif request_drop:
-        reasons.append("candidate_request_token_budget_changed_the_pack")
+        request_drop = 0
+    elif (
+        int(projection.get("input_record_count") or 0)
+        - int(projection.get("selected_record_count") or 0)
+        != request_drop
+    ):
+        reasons.append("candidate_request_drop_projection_mismatch")
+    total_request_drop = _non_negative_int(
+        candidate.get("request_dropped_evidence_count")
+    )
+    if total_request_drop is None:
+        reasons.append("candidate_total_request_drop_observation_missing")
+    elif total_request_drop < request_drop:
+        reasons.append("candidate_total_request_drop_count_mismatch")
+    request["complete"] = not any(reason.startswith("candidate_") for reason in reasons)
     return identity, seed, request, request_drop
 
 
@@ -151,6 +219,33 @@ def _online_candidate_request(candidate: Mapping[str, Any]) -> dict[str, Any]:
         "candidate_request_projection_trace": deepcopy(
             candidate.get("candidate_request_projection_trace") or {}
         ),
+        "candidate_request_dropped_evidence_count": candidate.get(
+            "candidate_request_dropped_evidence_count"
+        ),
+        "request_dropped_evidence_count": candidate.get(
+            "request_dropped_evidence_count"
+        ),
+        "token_measurement": {
+            "estimated_input_tokens": candidate.get("estimated_input_tokens"),
+            "message_tokens": candidate.get("estimated_message_tokens"),
+            "schema_tokens": candidate.get("estimated_schema_tokens"),
+            "tokenizer_identity": str(candidate.get("tokenizer_identity") or ""),
+            "tokenizer_method": str(candidate.get("tokenizer_method") or ""),
+            "tokenizer_exact": candidate.get("tokenizer_exact") is True,
+            "tokenizer_endpoint": str(candidate.get("tokenizer_endpoint") or ""),
+            "tokenizer_failed": candidate.get("tokenizer_failed") is True,
+            "tokenizer_failure_reason": str(
+                candidate.get("tokenizer_failure_reason") or ""
+            ),
+        },
+        "budget": {
+            "candidate_input_token_budget": candidate.get(
+                "candidate_input_token_budget"
+            ),
+            "max_model_len": candidate.get("max_model_len"),
+            "max_output_tokens": candidate.get("max_output_tokens"),
+            "token_headroom_tokens": candidate.get("token_headroom_tokens"),
+        },
     }
 
 
@@ -181,7 +276,7 @@ def candidate_path_replay_complete(
         == current_snapshot.get("ranked_evidence_present")
         and replay_ranked == current_ranked
         and replay.get("query_plan_digest") == current_snapshot.get("query_plan_digest")
-        and replay.get("historical_candidate_request_drop_count") == 0
+        and _mapping(replay.get("online_candidate_request")).get("complete") is True
         and _projection_complete(
             prompt_projection,
             contract_id="qasper_candidate_prompt_projection.v1",
@@ -206,6 +301,11 @@ def candidate_request_replay_complete(
     request_projection = _mapping(
         replay_trace.get("candidate_request_projection_trace")
     )
+    online_projection = _mapping(
+        online_request.get("candidate_request_projection_trace")
+    )
+    token_measurement = _mapping(online_request.get("token_measurement"))
+    budget = _mapping(online_request.get("budget"))
     return bool(
         messages
         and messages == online_messages
@@ -215,6 +315,13 @@ def candidate_request_replay_complete(
         and replay_trace.get("response_schema_digest")
         == online_request.get("response_schema_digest")
         and replay_trace.get("input_digest") == online_request.get("input_digest")
+        and request_projection == online_projection
+        and replay_trace.get("candidate_request_dropped_evidence_count")
+        == online_request.get("candidate_request_dropped_evidence_count")
+        and replay_trace.get("request_dropped_evidence_count")
+        == online_request.get("request_dropped_evidence_count")
+        and _trace_token_measurement(replay_trace) == token_measurement
+        and _trace_budget(replay_trace) == budget
         and _projection_complete(
             request_projection,
             contract_id="qasper_candidate_request_projection.v1",
@@ -224,12 +331,79 @@ def candidate_request_replay_complete(
     )
 
 
+def _frozen_token_measurement_complete(value: Mapping[str, Any]) -> bool:
+    estimated = _non_negative_int(value.get("estimated_input_tokens"))
+    message_tokens = _non_negative_int(value.get("message_tokens"))
+    schema_tokens = _non_negative_int(value.get("schema_tokens"))
+    return bool(
+        value.get("tokenizer_identity")
+        and value.get("tokenizer_method")
+        and value.get("tokenizer_failed") is False
+        and estimated is not None
+        and message_tokens is not None
+        and schema_tokens is not None
+        and estimated == message_tokens + schema_tokens
+    )
+
+
+def _frozen_budget_complete(value: Mapping[str, Any]) -> bool:
+    input_budget = _non_negative_int(value.get("candidate_input_token_budget"))
+    max_model_len = _non_negative_int(value.get("max_model_len"))
+    max_output_tokens = _non_negative_int(value.get("max_output_tokens"))
+    headroom = _non_negative_int(value.get("token_headroom_tokens"))
+    values = (input_budget, max_model_len, max_output_tokens, headroom)
+    if any(item is None or item <= 0 for item in values):
+        return False
+    assert input_budget is not None
+    assert max_model_len is not None
+    assert max_output_tokens is not None
+    assert headroom is not None
+    return input_budget == max_model_len - max_output_tokens - headroom
+
+
+def _trace_token_measurement(value: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "estimated_input_tokens": value.get("estimated_input_tokens"),
+        "message_tokens": value.get("estimated_message_tokens"),
+        "schema_tokens": value.get("estimated_schema_tokens"),
+        "tokenizer_identity": str(value.get("tokenizer_identity") or ""),
+        "tokenizer_method": str(value.get("tokenizer_method") or ""),
+        "tokenizer_exact": value.get("tokenizer_exact") is True,
+        "tokenizer_endpoint": str(value.get("tokenizer_endpoint") or ""),
+        "tokenizer_failed": value.get("tokenizer_failed") is True,
+        "tokenizer_failure_reason": str(value.get("tokenizer_failure_reason") or ""),
+    }
+
+
+def _trace_budget(value: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        key: value.get(key)
+        for key in (
+            "candidate_input_token_budget",
+            "max_model_len",
+            "max_output_tokens",
+            "token_headroom_tokens",
+        )
+    }
+
+
 def _exact_replay(
     items: list[Any],
-    query_plan: dict[str, Any],
     snapshot: dict[str, Any],
-) -> tuple[list[Any], list[dict[str, Any]], bool, int | None, list[str]]:
+) -> tuple[
+    list[Any],
+    list[dict[str, Any]],
+    bool,
+    int | None,
+    dict[str, Any],
+    list[str],
+]:
     reasons: list[str] = []
+    snapshot_payload = {
+        key: value for key, value in snapshot.items() if key != "snapshot_digest"
+    }
+    if canonical_digest(snapshot_payload) != snapshot.get("snapshot_digest"):
+        reasons.append("source_input_snapshot_digest_mismatch")
     expected_items = list(snapshot.get("source_items") or [])
     replay_items = _items_in_snapshot_order(items, expected_items)
     if replay_items is None:
@@ -237,14 +411,17 @@ def _exact_replay(
         reasons.append("source_item_snapshot_does_not_match_probe_items")
     ranked = _ranked_rows(snapshot.get("ranked_evidence"))
     ranked_present = snapshot.get("ranked_evidence_present") is True
-    if canonical_digest(query_plan) != snapshot.get("query_plan_digest"):
-        reasons.append("query_plan_does_not_match_stage_snapshot")
+    query_plan = _mapping(snapshot.get("query_plan"))
+    if not query_plan:
+        reasons.append("stage_query_plan_missing")
+    elif canonical_digest(query_plan) != snapshot.get("query_plan_digest"):
+        reasons.append("stage_query_plan_digest_mismatch")
     if snapshot.get("complete") is not True:
         reasons.append("source_input_snapshot_incomplete")
     max_context = _non_negative_int(snapshot.get("max_context_length"))
     if max_context == 0:
         max_context = None
-    return replay_items, ranked, ranked_present, max_context, reasons
+    return replay_items, ranked, ranked_present, max_context, query_plan, reasons
 
 
 def _legacy_replay(
@@ -388,7 +565,7 @@ def _projection_complete(
     return bool(
         trace.get("contract_id") == contract_id
         and trace.get("complete") is True
-        and int(trace.get(input_count_key) or 0) == len(decisions) > 0
+        and int(trace.get(input_count_key) or 0) == len(decisions)
         and int(trace.get("decision_count") or 0) == len(decisions)
         and canonical_digest(decisions) == trace.get("decisions_digest")
         and attempts_complete

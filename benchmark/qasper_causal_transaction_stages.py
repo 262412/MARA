@@ -18,7 +18,7 @@ def causal_transaction_stage_payloads(
     generator = _mapping(debug_row.get("main_candidate_generator"))
     verifier = _mapping(debug_row.get("semantic_verifier"))
     lineage = _mapping(verifier.get("semantic_data_lineage"))
-    source = _mapping(lineage.get("source_packing"))
+    source = _candidate_stage_source(prediction)
     construction = _mapping(lineage.get("plan_construction"))
     event = _latest_model_transaction(verifier)
     transaction = _mapping(event.get("transaction"))
@@ -159,6 +159,10 @@ def _candidate_input_payload(
 ) -> dict[str, Any]:
     snapshot = deepcopy(_mapping(source.get("source_input_snapshot")))
     messages = deepcopy(generator.get("message_stack") or [])
+    request_projection = deepcopy(
+        _mapping(generator.get("candidate_request_projection_trace"))
+    )
+    selected_record_ids = _selected_request_record_ids(request_projection)
     reasons = []
     if snapshot.get("contract_id") != "semantic_source_input_snapshot.v1":
         reasons.append("source_input_snapshot_missing")
@@ -179,13 +183,52 @@ def _candidate_input_payload(
         candidate_request_drop_count=int(
             generator.get("candidate_request_dropped_evidence_count") or 0
         ),
+        request_drop_count=int(generator.get("request_dropped_evidence_count") or 0),
+        token_measurement=_candidate_token_measurement(generator),
+        token_budget=_candidate_token_budget(generator),
+        selected_record_ids=selected_record_ids,
+        selected_record_ids_digest=canonical_digest(selected_record_ids),
         prompt_projection=deepcopy(
             generator.get("candidate_prompt_projection_trace") or {}
         ),
-        request_projection=deepcopy(
-            generator.get("candidate_request_projection_trace") or {}
-        ),
+        request_projection=request_projection,
     )
+
+
+def _candidate_token_measurement(generator: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "estimated_input_tokens": generator.get("estimated_input_tokens"),
+        "message_tokens": generator.get("estimated_message_tokens"),
+        "schema_tokens": generator.get("estimated_schema_tokens"),
+        "tokenizer_identity": str(generator.get("tokenizer_identity") or ""),
+        "tokenizer_method": str(generator.get("tokenizer_method") or ""),
+        "tokenizer_exact": generator.get("tokenizer_exact") is True,
+        "tokenizer_endpoint": str(generator.get("tokenizer_endpoint") or ""),
+        "tokenizer_failed": generator.get("tokenizer_failed") is True,
+        "tokenizer_failure_reason": str(
+            generator.get("tokenizer_failure_reason") or ""
+        ),
+    }
+
+
+def _candidate_token_budget(generator: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        key: generator.get(key)
+        for key in (
+            "candidate_input_token_budget",
+            "max_model_len",
+            "max_output_tokens",
+            "token_headroom_tokens",
+        )
+    }
+
+
+def _selected_request_record_ids(projection: Mapping[str, Any]) -> list[str]:
+    return [
+        str(_mapping(decision).get("evidence_id") or "")
+        for decision in projection.get("decisions") or []
+        if _mapping(decision).get("selected") is True
+    ]
 
 
 def _selector_payload(
@@ -371,6 +414,12 @@ def _latest_parsed_value(stage: Mapping[str, Any]) -> dict[str, Any]:
         ):
             return dict(attempt["parsed_value"])
     return {}
+
+
+def _candidate_stage_source(prediction: Mapping[str, Any]) -> dict[str, Any]:
+    metadata = _mapping(prediction.get("evidence_metadata"))
+    pack = _mapping(metadata.get("qasper_canonical_semantic_pack"))
+    return _mapping(pack.get("source_packing_observation"))
 
 
 def _payload(reasons: list[str], **values: Any) -> dict[str, Any]:

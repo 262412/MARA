@@ -11,7 +11,6 @@ from benchmark.qasper_causal_transaction import (
 )
 from benchmark.tests.qasper_causal_evidence_chain_fixtures import causal_row
 
-
 _CODE_SHA = "a" * 40
 _MANIFEST_SHA = "b" * 64
 
@@ -45,13 +44,32 @@ def _prediction_and_debug_row() -> tuple[dict, dict]:
 
 def _candidate_generator(debug_row: dict) -> dict:
     generator = debug_row["main_candidate_generator"]
+    messages = [
+        {"role": "system", "content": "Return one candidate label."},
+        {"role": "user", "content": "Did the authors compare systems?"},
+    ]
     generator.update(
         {
             "model": "candidate-model:v1",
-            "message_stack": [
-                {"role": "system", "content": "Return one candidate label."},
-                {"role": "user", "content": "Did the authors compare systems?"},
-            ],
+            "message_stack": messages,
+            "message_stack_digest": canonical_digest(messages),
+            "response_schema_digest": "3" * 64,
+            "estimated_input_tokens": 30,
+            "estimated_message_tokens": 20,
+            "estimated_schema_tokens": 10,
+            "tokenizer_identity": "fixture-tokenizer:v1",
+            "tokenizer_method": "fixture_exact",
+            "tokenizer_exact": True,
+            "tokenizer_endpoint": "fixture://tokenizer",
+            "tokenizer_failed": False,
+            "tokenizer_failure_reason": "",
+            "candidate_input_token_budget": 3920,
+            "max_model_len": 4096,
+            "max_output_tokens": 48,
+            "token_headroom_tokens": 128,
+            "candidate_request_dropped_evidence_count": 0,
+            "request_dropped_evidence_count": 0,
+            "candidate_request_projection_trace": _candidate_request_projection(),
             "raw_response": '{"candidate":"yes"}',
             "cleaned_response": '{"candidate":"yes"}',
             "raw_response_truncated": False,
@@ -67,6 +85,37 @@ def _candidate_generator(debug_row: dict) -> dict:
         }
     )
     return generator
+
+
+def _candidate_request_projection() -> dict:
+    decisions = [
+        {
+            "evidence_id": "evidence-1",
+            "selected": True,
+            "decision": "selected_for_model_request",
+        }
+    ]
+    attempts = [
+        {
+            "record_ids": ["evidence-1"],
+            "estimated_input_tokens": 30,
+            "tokenizer_failed": False,
+            "decision": "accepted",
+            "dropped_evidence_id": "",
+        }
+    ]
+    return {
+        "contract_id": "qasper_candidate_request_projection.v1",
+        "complete": True,
+        "input_record_count": 1,
+        "selected_record_count": 1,
+        "decision_count": 1,
+        "decisions_digest": canonical_digest(decisions),
+        "decisions": decisions,
+        "attempt_count": 1,
+        "attempts_digest": canonical_digest(attempts),
+        "attempts": attempts,
+    }
 
 
 def _proposal_value() -> dict:
@@ -179,6 +228,9 @@ def _model_transaction(
 
 
 def _prediction(generator: dict, debug_row: dict) -> dict:
+    source_packing = debug_row["semantic_verifier"]["semantic_data_lineage"][
+        "source_packing"
+    ]
     return {
         "example_id": "example-1",
         "route": "text_rag",
@@ -209,6 +261,9 @@ def _prediction(generator: dict, debug_row: dict) -> dict:
         "evidence_metadata": {
             "candidate_ranked_evidence": [{"canonical_id": "evidence-1"}],
             "qasper_candidate_generation": generator,
+            "qasper_canonical_semantic_pack": {
+                "source_packing_observation": deepcopy(source_packing),
+            },
         },
         "controller_trace": [_recovery_transition()],
         "predicted_answer": "yes",
@@ -306,6 +361,33 @@ def test_transaction_keeps_exact_raw_responses_and_model_inputs() -> None:
     )
 
 
+def test_candidate_input_stage_freezes_request_identity_counts_and_budget() -> None:
+    transaction = _transaction()
+    candidate = transaction["stages"][2]["payload"]
+
+    assert candidate["token_measurement"] == {
+        "estimated_input_tokens": 30,
+        "message_tokens": 20,
+        "schema_tokens": 10,
+        "tokenizer_identity": "fixture-tokenizer:v1",
+        "tokenizer_method": "fixture_exact",
+        "tokenizer_exact": True,
+        "tokenizer_endpoint": "fixture://tokenizer",
+        "tokenizer_failed": False,
+        "tokenizer_failure_reason": "",
+    }
+    assert candidate["token_budget"] == {
+        "candidate_input_token_budget": 3920,
+        "max_model_len": 4096,
+        "max_output_tokens": 48,
+        "token_headroom_tokens": 128,
+    }
+    assert candidate["selected_record_ids"] == ["evidence-1"]
+    assert candidate["selected_record_ids_digest"] == canonical_digest(["evidence-1"])
+    assert candidate["candidate_request_drop_count"] == 0
+    assert candidate["request_drop_count"] == 0
+
+
 def test_transaction_fails_closed_when_an_exact_model_response_was_truncated() -> None:
     prediction, debug_row = _prediction_and_debug_row()
     debug_row["main_candidate_generator"]["raw_response_truncated"] = True
@@ -318,9 +400,8 @@ def test_transaction_fails_closed_when_an_exact_model_response_was_truncated() -
     )
 
     assert transaction["status"] == "incomplete"
-    assert (
-        "model_response_and_parser:candidate_raw_response_truncated"
-        in (transaction["incompleteness_reasons"])
+    assert "model_response_and_parser:candidate_raw_response_truncated" in (
+        transaction["incompleteness_reasons"]
     )
 
 
