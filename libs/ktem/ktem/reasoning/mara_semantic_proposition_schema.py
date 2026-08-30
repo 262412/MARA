@@ -10,6 +10,19 @@ from ktem.docqa.boolean_authority_schema import (
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
 
+from .mara_semantic_proposition_evidence_plan import (
+    candidate_projection as _candidate_projection,
+)
+from .mara_semantic_proposition_evidence_plan import canonical_premise_metadata
+from .mara_semantic_proposition_evidence_plan import (
+    projected_evidence_relation as _projected_evidence_relation,
+)
+from .mara_semantic_proposition_evidence_plan import (
+    selected_evidence_plan_id as _selected_evidence_plan_id,
+)
+from .mara_semantic_proposition_evidence_plan import (
+    verdict_for_evidence_relation as _verdict_for_evidence_relation,
+)
 from .mara_semantic_proposition_schema_contract import (
     proposition_slot_scope,
     semantic_proposition_schema,
@@ -32,6 +45,7 @@ def semantic_proposition_response_format(
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "type": "json_schema",
@@ -44,6 +58,7 @@ def semantic_proposition_response_format(
                 candidate=candidate,
                 applicable_proposition_slots=applicable_proposition_slots,
                 allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+                allowed_proposition_evidence_plans=(allowed_proposition_evidence_plans),
             ),
         },
     }
@@ -59,6 +74,7 @@ def parse_semantic_proposition_result(
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     return parse_semantic_proposition_response(
         response_text,
@@ -69,6 +85,7 @@ def parse_semantic_proposition_result(
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots,
         allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
     ).value
 
 
@@ -123,6 +140,7 @@ def parse_semantic_proposition_response(
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> SemanticPropositionParse:
     try:
         payload = json.loads(response_text)
@@ -162,16 +180,55 @@ def parse_semantic_proposition_response(
         candidate_judgment,
         verdict,
     )
-    if (
-        verdict in {"yes", "no"}
-        and {
-            slot
-            for premise in premises
-            for slot in premise.get("binds_proposition_slots", [])
-        }
-        != applicable_slots
-    ):
+    evidence_plan_id, plan_reason = _selected_evidence_plan_id(
+        premises,
+        evidence_relation=evidence_relation,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
+    )
+    if plan_reason:
+        return SemanticPropositionParse(None, plan_reason)
+    if verdict in {"yes", "no"} and _premise_bound_slots(premises) != applicable_slots:
         return SemanticPropositionParse(None, "proposition_slot_coverage_incomplete")
+    value = _semantic_proposition_value(
+        payload,
+        candidate_judgment=candidate_judgment,
+        verdict=verdict,
+        evidence_relation=evidence_relation,
+        proof_mode=proof_mode,
+        premises=premises,
+        not_applicable_slots=not_applicable_slots,
+        model=model,
+        seed=seed,
+        canonical_evidence_plan_id=evidence_plan_id,
+        include_canonical_plan=allowed_proposition_evidence_plans is not None,
+        unknown_assessment=unknown_assessment,
+    )
+    return SemanticPropositionParse(value)
+
+
+def _premise_bound_slots(premises: list[dict[str, Any]]) -> set[str]:
+    return {
+        slot
+        for premise in premises
+        for slot in premise.get("binds_proposition_slots", [])
+    }
+
+
+def _semantic_proposition_value(
+    payload: dict[str, Any],
+    *,
+    candidate_judgment: str,
+    verdict: str,
+    evidence_relation: str,
+    proof_mode: str,
+    premises: list[dict[str, Any]],
+    not_applicable_slots: set[str],
+    model: str,
+    seed: int,
+    canonical_evidence_plan_id: str,
+    include_canonical_plan: bool,
+    unknown_assessment: dict[str, Any] | None,
+) -> dict[str, Any]:
     value = {
         "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
         "candidate_judgment": candidate_judgment,
@@ -189,9 +246,11 @@ def parse_semantic_proposition_response(
             "seed": seed,
         },
     }
+    if include_canonical_plan:
+        value["canonical_evidence_plan_id"] = canonical_evidence_plan_id
     if unknown_assessment is not None:
         value["unknown_assessment"] = unknown_assessment
-    return SemanticPropositionParse(value)
+    return value
 
 
 def _verdict_payload_for_candidate(
@@ -407,52 +466,6 @@ def _candidate_judgment_projection_valid(
     return candidate_judgment != "unknown"
 
 
-def _candidate_projection(candidate: str, judgment: str) -> tuple[str, str]:
-    if judgment == "unknown":
-        return "undetermined", "insufficient_evidence"
-    relation = (
-        {
-            "yes": {
-                "supported": "proposition_support",
-                "contradicted": "explicit_contradiction",
-            },
-            "no": {
-                "supported": "explicit_contradiction",
-                "contradicted": "proposition_support",
-            },
-        }
-        .get(candidate, {})
-        .get(judgment)
-    )
-    if relation is None:
-        return "undetermined", "insufficient_evidence"
-    return relation, _verdict_for_evidence_relation(relation)
-
-
-def _verdict_for_evidence_relation(relation: str) -> str:
-    return {
-        "proposition_support": "yes",
-        "explicit_contradiction": "no",
-        "undetermined": "insufficient_evidence",
-    }[relation]
-
-
-def _projected_evidence_relation(
-    candidate: str,
-    candidate_judgment: str,
-    verdict: str,
-) -> str:
-    normalized_candidate = str(candidate or "").strip().casefold()
-    if candidate_judgment == "unknown" or verdict == "insufficient_evidence":
-        return "undetermined"
-    if normalized_candidate == "unanswerable":
-        return "proposition_support" if verdict == "yes" else "explicit_contradiction"
-    if normalized_candidate in {"yes", "no"}:
-        relation, _ = _candidate_projection(normalized_candidate, candidate_judgment)
-        return relation
-    return "proposition_support" if verdict == "yes" else "explicit_contradiction"
-
-
 def _verdict_payload(
     payload: Any,
     *,
@@ -545,6 +558,7 @@ def _parse_premises(
                 "proposition_fragment": fragment,
                 "supports_slot_ids": list(supports),
                 "binds_proposition_slots": list(proposition_slots),
+                **canonical_premise_metadata(selector),
             }
         )
     premise_spans = {value["span_selector"] for value in premises}

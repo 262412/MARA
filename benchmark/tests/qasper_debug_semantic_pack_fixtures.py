@@ -54,6 +54,7 @@ def _debug_semantic_pack(candidate_transaction_id: str) -> dict[str, Any]:
     proposition_binding = candidate_evidence_set_binding(
         records,
         DEBUG_PACK_QUESTION,
+        candidate_transaction_id=candidate_transaction_id,
     )
     slots = candidate_required_slots_from_binding(base_slots, proposition_binding)
     proposition = build_question_proposition(DEBUG_PACK_QUESTION)

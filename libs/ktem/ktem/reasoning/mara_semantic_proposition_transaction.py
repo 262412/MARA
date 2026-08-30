@@ -40,7 +40,6 @@ from .mara_semantic_proposition_contract import (
     rejected_semantic_transaction,
     resolve_proposition_precondition,
 )
-from .mara_semantic_proposition_debug import semantic_auditor_relationship
 from .mara_semantic_proposition_stages import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
     ParsedSemanticStage,
@@ -54,13 +53,10 @@ from .mara_semantic_proposition_transaction_repair import (
     stop_without_reverify,
 )
 from .mara_semantic_recovery_state import changed_binding_reaudit_transition
-from .mara_semantic_transaction_context import release_auditor_failure
 from .mara_semantic_transaction_context import (
     transaction_context as _transaction_context,
 )
-from .mara_semantic_transaction_context import (
-    transaction_diagnostics as _transaction_diagnostics,
-)
+from .mara_semantic_transaction_context import transaction_preflight
 from .mara_semantic_transaction_support import (
     applicable_proposition_slots,
     audit_prompt_failure,
@@ -90,21 +86,18 @@ def run_semantic_proposition_transaction(
     canonical_span_universe_digest: str = "",
     candidate_transaction_id: str = "",
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
     capture_debug_trace: bool = False,
     transaction_id: str = "",
     attempt_namespace: str = "initial",
 ) -> SemanticPropositionTransactionResult:
-    relationship = semantic_auditor_relationship(
+    relationship, diagnostics, release_failure = transaction_preflight(
         proposal_llm,
         audit_llm,
         proposal_model=proposal_model,
         audit_model=audit_model,
-    )
-    diagnostics = _transaction_diagnostics(relationship, semantic_pack_digest)
-    release_failure = release_auditor_failure(
-        release_mode,
-        relationship,
-        diagnostics,
+        release_mode=release_mode,
+        semantic_pack_digest=semantic_pack_digest,
     )
     if release_failure is not None:
         return release_failure
@@ -141,18 +134,46 @@ def run_semantic_proposition_transaction(
         candidate_transaction_id=candidate_transaction_id,
     )
     candidate = candidate_from_prompt(prompt)
-    proposal = proposal_stage(
+    proposal = _transaction_proposal(
         proposal_llm,
         prompt,
+        context=context,
         packed=packed,
         slots=slots,
         model=proposal_model,
         seed=seed,
         candidate=candidate,
-        applicable_proposition_slots=applicable_proposition_slots(context.proposition),
         allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
     )
     return _complete_proposal(context, proposal, diagnostics, candidate=candidate)
+
+
+def _transaction_proposal(
+    proposal_llm: Any,
+    prompt: str,
+    *,
+    context: _TransactionContext,
+    packed: list[dict[str, Any]],
+    slots: list[dict[str, str]],
+    model: str,
+    seed: int,
+    candidate: str,
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None,
+) -> ParsedSemanticStage:
+    return proposal_stage(
+        proposal_llm,
+        prompt,
+        packed=packed,
+        slots=slots,
+        model=model,
+        seed=seed,
+        candidate=candidate,
+        applicable_proposition_slots=applicable_proposition_slots(context.proposition),
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
+    )
 
 
 def _complete_proposal(

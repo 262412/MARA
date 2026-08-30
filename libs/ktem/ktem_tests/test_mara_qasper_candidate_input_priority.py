@@ -137,7 +137,8 @@ def test_composite_candidate_evidence_does_not_infer_cross_span_polarity() -> No
 
     observation = candidate_evidence_set_binding(records, question)
 
-    assert observation["binding_status"] == "bound"
+    assert observation["binding_status"] == "missing"
+    assert observation["binding_state"] == "unresolved"
     assert observation["polarity_signal"] == "undetermined"
     assert observation["support_evidence_refs"] == []
     assert observation["explicit_contradiction_evidence_refs"] == []

@@ -18,6 +18,7 @@ from .mara_qasper_candidate_evidence import (
     candidate_required_slots_from_binding,
 )
 from .mara_qasper_candidate_evidence_projection import exact_selector_valid
+from .mara_qasper_candidate_plan_metadata import candidate_selector_plan_metadata
 from .mara_qasper_candidate_selector_semantics import revalidated_selector_semantics
 from .mara_semantic_proposition_packing import (
     SemanticPropositionEvidencePacking,
@@ -82,6 +83,12 @@ def _canonical_selector(
         candidate_relation_role=str(semantics["candidate_relation_role"]),
         local_relation_state=str(semantics["local_relation_state"]),
         local_relation_analysis_digest=str(semantics["local_relation_analysis_digest"]),
+        **candidate_selector_plan_metadata(
+            record,
+            selector,
+            question,
+            semantics,
+        ),
     )
     return selector
 
@@ -116,6 +123,7 @@ def freeze_qasper_canonical_semantic_pack(
     authoritative_binding = candidate_evidence_set_binding(
         canonical_records,
         question,
+        candidate_transaction_id=candidate_transaction_id,
     )
     if candidate_binding is not None and candidate_binding != authoritative_binding:
         raise ValueError("canonical_semantic_pack_binding_inconsistent")
@@ -193,31 +201,21 @@ def load_qasper_canonical_semantic_pack(
         return None, records_reason
     if prepare_qasper_canonical_records(question, records) != records:
         return None, "canonical_semantic_pack_proposition_binding_mismatch"
-    proposition_binding = candidate_evidence_set_binding(records, question)
-    if (
-        payload.get("proposition_binding") != proposition_binding
-        or str(payload.get("proposition_binding_digest") or "")
-        != str(proposition_binding.get("binding_digest") or "")
-        or candidate_required_slots_from_binding(slots, proposition_binding) != slots
+    if _stored_binding_reason(
+        payload,
+        records,
+        slots,
+        question=question,
+        candidate_transaction_id=stored_transaction,
     ):
         return None, "canonical_semantic_pack_proposition_binding_mismatch"
     span_digest = qasper_canonical_span_universe_digest(records)
     if span_digest != str(payload.get("span_universe_digest") or ""):
         return None, "canonical_semantic_pack_identity_mismatch"
-    item_char_limit = _nonnegative_int(payload.get("item_char_limit"))
-    integer_fields: dict[str, int] = {}
-    for key in (
-        "input_token_budget",
-        "estimated_input_tokens",
-        "dropped_count",
-        "truncated_count",
-    ):
-        value = _nonnegative_int(payload.get(key))
-        if value is None:
-            return None, "canonical_semantic_pack_identity_mismatch"
-        integer_fields[key] = value
-    if item_char_limit is None:
+    integer_fields = _pack_integer_fields(payload)
+    if integer_fields is None:
         return None, "canonical_semantic_pack_identity_mismatch"
+    item_char_limit = integer_fields.pop("item_char_limit")
     recomputed_pack_digest = semantic_proposition_pack_digest(
         build_question_proposition(question),
         slots,
@@ -240,6 +238,46 @@ def load_qasper_canonical_semantic_pack(
         ),
     )
     return packing, ""
+
+
+def _stored_binding_reason(
+    payload: dict[str, Any],
+    records: list[dict[str, Any]],
+    slots: list[dict[str, Any]],
+    *,
+    question: str,
+    candidate_transaction_id: str,
+) -> str:
+    binding = candidate_evidence_set_binding(
+        records,
+        question,
+        candidate_transaction_id=candidate_transaction_id,
+    )
+    if payload.get("proposition_binding") != binding:
+        return "canonical_semantic_pack_proposition_binding_mismatch"
+    if str(payload.get("proposition_binding_digest") or "") != str(
+        binding.get("binding_digest") or ""
+    ):
+        return "canonical_semantic_pack_proposition_binding_mismatch"
+    if candidate_required_slots_from_binding(slots, binding) != slots:
+        return "canonical_semantic_pack_proposition_binding_mismatch"
+    return ""
+
+
+def _pack_integer_fields(payload: dict[str, Any]) -> dict[str, int] | None:
+    fields: dict[str, int] = {}
+    for key in (
+        "item_char_limit",
+        "input_token_budget",
+        "estimated_input_tokens",
+        "dropped_count",
+        "truncated_count",
+    ):
+        value = _nonnegative_int(payload.get(key))
+        if value is None:
+            return None
+        fields[key] = value
+    return fields
 
 
 def qasper_canonical_required_slots(
@@ -265,6 +303,59 @@ def qasper_canonical_selector_bindings(
         if isinstance(selector, dict)
         and str(selector.get("selector_id") or "")
         and selector.get("allowed_proposition_slots")
+    }
+
+
+def qasper_canonical_evidence_plans(
+    bundle: EvidenceBundle,
+) -> dict[str, dict[str, Any]] | None:
+    """Return the validated frozen plan choices for the QASPER verifier.
+
+    ``None`` means this is not a frozen QASPER path.  An empty mapping is a
+    deliberate fail-closed state: ambiguous and unresolved observations may be
+    reviewed, but neither can be selected as semantic authority.
+    """
+
+    raw_pack = bundle.metadata.get(QASPER_CANONICAL_SEMANTIC_PACK_METADATA_KEY)
+    if not isinstance(raw_pack, dict):
+        return None
+    binding = raw_pack.get("proposition_binding")
+    if not isinstance(binding, dict):
+        return {}
+    state = str(binding.get("binding_state") or "")
+    plan = binding.get("canonical_evidence_plan")
+    if not isinstance(plan, dict):
+        return {}
+    selected_key = {
+        "relation_bound_support": "support_plan",
+        "relation_bound_contradiction": "contradiction_plan",
+    }.get(state)
+    if selected_key is None:
+        return {}
+    selected = plan.get(selected_key)
+    if not isinstance(selected, dict):
+        return {}
+    plan_id = str(selected.get("plan_id") or "")
+    span_refs = tuple(str(ref) for ref in selected.get("span_refs") or [] if ref)
+    relation = str(selected.get("polarity_relation") or "")
+    if (
+        not plan_id
+        or not span_refs
+        or relation
+        not in {
+            "proposition_support",
+            "explicit_contradiction",
+        }
+    ):
+        return {}
+    return {
+        plan_id: {
+            "plan_id": plan_id,
+            "polarity_relation": relation,
+            "span_refs": span_refs,
+            "slot_refs": deepcopy(selected.get("slot_refs") or {}),
+            "event_binding_id": str(selected.get("event_binding_id") or ""),
+        }
     }
 
 

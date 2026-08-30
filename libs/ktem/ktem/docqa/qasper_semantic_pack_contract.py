@@ -51,6 +51,10 @@ def qasper_canonical_span_universe_digest(
             "local_relation_analysis_digest": str(
                 selector.get("local_relation_analysis_digest") or ""
             ),
+            "event_id": str(selector.get("event_id") or ""),
+            "object_tokens": list(selector.get("object_tokens") or []),
+            "event_core_tokens": list(selector.get("event_core_tokens") or []),
+            "predicate_match_kind": str(selector.get("predicate_match_kind") or ""),
         }
         for record in records
         for selector in record.get("selectors") or []
@@ -208,7 +212,11 @@ def qasper_semantic_pack_continuity_reason(
     selector_lookup, lookup_reason = _selector_lookup(records)
     if lookup_reason:
         return lookup_reason
-    selection_reason = _response_selection_reason(response, selector_lookup)
+    selection_reason = _response_selection_reason(
+        response,
+        selector_lookup,
+        pack=payload,
+    )
     if selection_reason:
         return selection_reason
     return ""
@@ -288,15 +296,19 @@ def _selector_lookup(
 def _response_selection_reason(
     response: Mapping[str, Any],
     selectors: Mapping[str, Mapping[str, Any]],
+    *,
+    pack: Mapping[str, Any],
 ) -> str:
     verdict = str(response.get("verdict") or "")
     premises = response.get("premises")
     selected = premises if isinstance(premises, list) and premises else None
+    selection_owner: Mapping[str, Any] = response
     rejected = response.get("rejected_transaction")
     if selected is None and isinstance(rejected, Mapping):
         rejected_premises = rejected.get("premises")
         if isinstance(rejected_premises, list) and rejected_premises:
             selected = rejected_premises
+            selection_owner = rejected
     if (
         selected is None
         and verdict == "insufficient_evidence"
@@ -325,7 +337,28 @@ def _response_selection_reason(
             selector.get("allowed_proposition_slots") or []
         ):
             return "canonical_semantic_pack_slot_binding_mismatch"
+    if selection_owner is not response or verdict in {"yes", "no"}:
+        expected_plan_id = _pack_selected_evidence_plan_id(pack)
+        if (
+            not expected_plan_id
+            or selection_owner.get("canonical_evidence_plan_id") != expected_plan_id
+        ):
+            return "canonical_semantic_pack_evidence_plan_mismatch"
     return ""
+
+
+def _pack_selected_evidence_plan_id(pack: Mapping[str, Any]) -> str:
+    binding = pack.get("proposition_binding")
+    binding = binding if isinstance(binding, Mapping) else {}
+    state = str(binding.get("binding_state") or "")
+    plan = binding.get("canonical_evidence_plan")
+    plan = plan if isinstance(plan, Mapping) else {}
+    key = {
+        "relation_bound_support": "support_plan",
+        "relation_bound_contradiction": "contradiction_plan",
+    }.get(state, "")
+    selected = plan.get(key) if key else None
+    return str(selected.get("plan_id") or "") if isinstance(selected, Mapping) else ""
 
 
 def _auditor_identity_source(

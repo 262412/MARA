@@ -122,10 +122,7 @@ def _proposal_premise_context(
     selector: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     premise_schema = properties.get("premises")
-    premise_item = (
-        premise_schema.get("items") if isinstance(premise_schema, dict) else {}
-    )
-    premise_item = _selector_premise_branch(premise_item, selector=selector)
+    premise_item = _planned_premise_item(premise_schema, selector=selector)
     premise_properties = (
         premise_item.get("properties") if isinstance(premise_item, dict) else {}
     )
@@ -140,6 +137,30 @@ def _proposal_premise_context(
         else {}
     )
     return premise_properties, source_premise
+
+
+def _planned_premise_item(
+    premise_schema: object,
+    *,
+    selector: str,
+) -> dict[str, Any]:
+    schema = premise_schema if isinstance(premise_schema, dict) else {}
+    raw_plans = schema.get("oneOf")
+    plans = raw_plans if isinstance(raw_plans, list) else [schema]
+    for raw_plan in plans:
+        plan = raw_plan if isinstance(raw_plan, dict) else {}
+        item = plan.get("items")
+        item = item if isinstance(item, dict) else {}
+        branches = item.get("oneOf")
+        candidates = branches if isinstance(branches, list) else [item]
+        for raw_candidate in candidates:
+            candidate = raw_candidate if isinstance(raw_candidate, dict) else {}
+            properties = candidate.get("properties")
+            properties = properties if isinstance(properties, dict) else {}
+            allowed = _schema_enum(properties.get("span_selector"))
+            if not allowed or selector in allowed:
+                return candidate
+    raise RuntimeError("provider proposal selector is outside response schema")
 
 
 def _proposal_proposition_slots(

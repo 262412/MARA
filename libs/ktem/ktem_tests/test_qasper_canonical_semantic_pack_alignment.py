@@ -228,6 +228,8 @@ def _continuity_case() -> tuple[str, EvidenceBundle, dict[str, Any]]:
     [record] = frozen.records
     [selector] = record["selectors"]
     span_digest = qasper_canonical_span_universe_digest(frozen.records)
+    binding = bundle.metadata["qasper_canonical_semantic_pack"]["proposition_binding"]
+    selected_plan = binding["canonical_evidence_plan"]["support_plan"]
     identity = {
         "semantic_pack_digest": frozen.semantic_pack_digest,
         "span_universe_digest": span_digest,
@@ -250,6 +252,7 @@ def _continuity_case() -> tuple[str, EvidenceBundle, dict[str, Any]]:
     }
     response: dict[str, Any] = {
         "verdict": "yes",
+        "canonical_evidence_plan_id": selected_plan["plan_id"],
         "premises": [
             {
                 "evidence_id": record["evidence_id"],
@@ -487,7 +490,7 @@ def test_verifier_schema_physically_binds_selector_to_local_slots() -> None:
 
 
 @pytest.mark.parametrize(
-    ("question", "spans", "required_feature"),
+    ("question", "spans", "expected_state", "required_feature"),
     [
         (
             "Did they collected the two datasets?",
@@ -495,6 +498,7 @@ def test_verifier_schema_physically_binds_selector_to_local_slots() -> None:
                 "We used two datasets in the experiments.",
                 "The authors collected CreateDebate, but FBFans came from an existing source.",
             ],
+            "relation_bound_contradiction",
             "quantifier",
         ),
         (
@@ -503,6 +507,7 @@ def test_verifier_schema_physically_binds_selector_to_local_slots() -> None:
                 "We use one joint Bayesian model.",
                 "For each language pair, we add a crosslingual latent variable.",
             ],
+            "unresolved",
             "quantifier",
         ),
         (
@@ -511,6 +516,7 @@ def test_verifier_schema_physically_binds_selector_to_local_slots() -> None:
                 "We evaluate the method on sentiment classification.",
                 "It yields large improvements on that downstream task.",
             ],
+            "unresolved",
             "cross_span",
         ),
         (
@@ -519,6 +525,7 @@ def test_verifier_schema_physically_binds_selector_to_local_slots() -> None:
                 "The authors visualize the modality attention of their model.",
                 "The visualization links image regions with entity-related words.",
             ],
+            "unresolved",
             "paraphrase",
         ),
         (
@@ -527,6 +534,7 @@ def test_verifier_schema_physically_binds_selector_to_local_slots() -> None:
                 "Car-speak is abstract language about vehicle attributes.",
                 "The classifier is trained on review vectors, not on car-speak features.",
             ],
+            "unresolved",
             "cross_span",
         ),
         (
@@ -535,6 +543,7 @@ def test_verifier_schema_physically_binds_selector_to_local_slots() -> None:
                 "We inspect automatically constructed probes to ensure their quality.",
                 "The generated datasets are carefully controlled for annotation artifacts.",
             ],
+            "unresolved",
             "entity_alias",
         ),
     ],
@@ -542,6 +551,7 @@ def test_verifier_schema_physically_binds_selector_to_local_slots() -> None:
 def test_six_natural_questions_expose_auditable_structural_features(
     question: str,
     spans: list[str],
+    expected_state: str,
     required_feature: str,
 ) -> None:
     records = [
@@ -557,7 +567,13 @@ def test_six_natural_questions_expose_auditable_structural_features(
     binding = candidate_evidence_set_binding(canonical, question)
 
     assert canonical
-    assert binding["binding_status"] == "bound"
-    assert 1 <= len(binding["evidence_refs"]) <= 4
-    assert binding["relation_anchor_refs"]
-    assert required_feature in binding["structural_features"]
+    assert binding["binding_state"] == expected_state
+    if expected_state == "unresolved":
+        assert binding["binding_status"] == "missing"
+        assert binding["evidence_refs"] == []
+    else:
+        assert binding["binding_status"] == "bound"
+        assert 1 <= len(binding["evidence_refs"]) <= 4
+        assert binding["relation_anchor_refs"]
+        assert required_feature in binding["structural_features"]
+    assert 1 <= len(binding["selector_universe_refs"]) <= 4

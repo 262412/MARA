@@ -301,7 +301,12 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
 
 
 @pytest.mark.parametrize(
-    ("question", "paragraphs", "expected_structural_features"),
+    (
+        "question",
+        "paragraphs",
+        "expected_binding_state",
+        "expected_structural_features",
+    ),
     [
         (
             "Did they collected the two datasets?",
@@ -312,6 +317,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "The CreateDebate dataset was collected from an English online "
                 "debate forum.",
             ],
+            "relation_bound_contradiction",
             {"cross_span", "quantifier", "entity_alias"},
         ),
         (
@@ -321,6 +327,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "We make copies of the monolingual model for each language and "
                 "add additional crosslingual latent variables to couple the models."
             ],
+            "unresolved",
             {"quantifier", "entity_alias"},
         ),
         (
@@ -330,6 +337,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "across all tasks. This holds for phrase-structure parsing. Overall, "
                 "shallow syntax is not particularly helpful when using cwrs."
             ],
+            "unresolved",
             {"cross_span", "paraphrase", "entity_alias"},
         ),
         (
@@ -340,6 +348,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "prediction of named entities. The model links image regions with "
                 "entity-related words."
             ],
+            "unresolved",
             {"cross_span", "paraphrase", "entity_alias"},
         ),
         (
@@ -350,6 +359,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "attributes.",
                 "We train three classifiers on the review vectors that we prepared.",
             ],
+            "relation_bound_contradiction",
             {"cross_span", "paraphrase", "entity_alias"},
         ),
         (
@@ -359,6 +369,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "It is much harder to validate the quality control of such data at scale. "
                 "Initial experiments validate only samples of our data.",
             ],
+            "relation_bound_contradiction",
             {"cross_span", "paraphrase"},
         ),
     ],
@@ -366,6 +377,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
 def test_natural_qasper_structures_share_one_bounded_selector_universe(
     question: str,
     paragraphs: list[str],
+    expected_binding_state: str,
     expected_structural_features: set[str],
 ) -> None:
     records = [
@@ -387,8 +399,13 @@ def test_natural_qasper_structures_share_one_bounded_selector_universe(
     canonical = prepare_qasper_canonical_records(question, records)
     binding = candidate_evidence_set_binding(canonical, question)
 
-    assert binding["binding_status"] == "bound"
-    assert set(binding["required_slots"]) <= set(binding["covered_slots"])
-    assert expected_structural_features <= set(binding["structural_features"])
+    assert binding["binding_state"] == expected_binding_state
+    if expected_binding_state == "unresolved":
+        assert binding["binding_status"] == "missing"
+        assert binding["evidence_refs"] == []
+    else:
+        assert binding["binding_status"] == "bound"
+        assert set(binding["required_slots"]) <= set(binding["covered_slots"])
+        assert expected_structural_features <= set(binding["structural_features"])
     assert 1 <= len(binding["selector_universe_refs"]) <= 4
     assert sum(len(record["selectors"]) for record in canonical) <= 4

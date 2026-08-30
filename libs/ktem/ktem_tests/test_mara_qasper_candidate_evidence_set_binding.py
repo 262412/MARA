@@ -62,7 +62,7 @@ def test_one_evidence_set_can_union_three_exact_spans_for_support() -> None:
     ]
 
 
-def test_cross_record_exact_spans_with_local_offsets_form_one_set() -> None:
+def test_cross_record_exact_spans_with_local_offsets_remain_unresolved() -> None:
     records = [
         {
             "evidence_id": "e1",
@@ -83,13 +83,12 @@ def test_cross_record_exact_spans_with_local_offsets_form_one_set() -> None:
 
     binding = candidate_evidence_set_binding(records, QUESTION)
 
-    assert binding["binding_status"] == "bound"
-    # Cross-record slot coverage is structurally auditable, but the isolated
-    # predicate is not enough to project a polarity across unrelated records.
+    assert binding["binding_status"] == "missing"
+    assert binding["binding_state"] == "unresolved"
     assert binding["support"] is False
     assert binding["polarity_signal"] == "undetermined"
-    assert binding["evidence_ids"] == ["e1", "e2", "e3"]
-    assert binding["evidence_refs"] == ["E1:S1", "E2:S1", "E3:S1"]
+    assert binding["evidence_ids"] == []
+    assert binding["evidence_refs"] == []
 
 
 def test_windowed_record_normalizes_source_relative_exact_offsets() -> None:
@@ -125,12 +124,14 @@ def test_support_and_contradiction_are_separate_set_level_observations() -> None
 
     assert binding["support"] is True
     assert binding["explicit_contradiction"] is True
+    assert binding["binding_status"] == "missing"
+    assert binding["binding_state"] == "ambiguous_conflict"
     assert binding["polarity_signal"] == "undetermined"
     assert binding["support_evidence_refs"] == ["E1:S1", "E1:S2", "E1:S3"]
     assert binding["explicit_contradiction_evidence_refs"] == [
         "E1:S1",
-        "E1:S3",
         "E1:S4",
+        "E1:S5",
     ]
 
 

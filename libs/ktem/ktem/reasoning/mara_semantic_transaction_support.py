@@ -112,6 +112,9 @@ def semantic_audit_input_identity(
         "original_candidate": candidate,
         "candidate_judgment": str(value.get("candidate_judgment") or ""),
         "evidence_relation": str(value.get("evidence_relation") or ""),
+        "canonical_evidence_plan_id": str(
+            value.get("canonical_evidence_plan_id") or ""
+        ),
         "proof_mode": str(value.get("proof_mode") or ""),
         "jointly_complete": value.get("jointly_complete"),
         "each_premise_required": value.get("each_premise_required"),

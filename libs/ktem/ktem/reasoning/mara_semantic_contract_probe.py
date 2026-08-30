@@ -7,7 +7,10 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from ktem.docqa.evidence_schema import EvidenceBundle
 
-from .mara_qasper_semantic_pack import qasper_canonical_selector_bindings
+from .mara_qasper_semantic_pack import (
+    qasper_canonical_evidence_plans,
+    qasper_canonical_selector_bindings,
+)
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
     SemanticPropositionEvidencePacking,
@@ -46,6 +49,7 @@ def controlled_contract_probe_proposal(
     if str(proposition.get("quantifier") or "") != "none":
         applicable.append("quantifier")
     allowed_bindings = qasper_canonical_selector_bindings(packing.records)
+    allowed_plans = qasper_canonical_evidence_plans(bundle)
     selector_id = str(selectors[0].get("selector_id") or "")
     selector_bindings = list(allowed_bindings.get(selector_id, ()))
     if set(selector_bindings) != set(applicable):
@@ -86,6 +90,7 @@ def controlled_contract_probe_proposal(
         candidate=normalized_candidate,
         applicable_proposition_slots=applicable,
         allowed_proposition_slot_bindings=allowed_bindings,
+        allowed_proposition_evidence_plans=allowed_plans,
     )
     controlled = (
         prompt
@@ -107,6 +112,7 @@ def _validate_controlled_payload_identity(
     candidate: str,
     applicable_proposition_slots: list[str],
     allowed_proposition_slot_bindings: dict[str, tuple[str, ...]],
+    allowed_proposition_evidence_plans: dict[str, dict[str, Any]] | None,
 ) -> dict[str, Any]:
     slot_ids = [str(slot.get("slot_id") or "") for slot in slots]
     schema = semantic_proposition_schema(
@@ -114,6 +120,7 @@ def _validate_controlled_payload_identity(
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots,
         allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
     )
     errors = sorted(
         Draft202012Validator(schema).iter_errors(payload),
@@ -134,6 +141,7 @@ def _validate_controlled_payload_identity(
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots,
         allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
     )
     if parsed.value is None:
         raise ControlledContractProbeIdentityError(

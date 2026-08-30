@@ -6,6 +6,7 @@ from .mara_semantic_proposition_contract import (
     SemanticPropositionTransactionContext,
     SemanticPropositionTransactionResult,
 )
+from .mara_semantic_proposition_debug import semantic_auditor_relationship
 from .mara_semantic_transaction_support import transaction_result
 
 
@@ -38,6 +39,26 @@ def release_auditor_failure(
         diagnostics,
         proposal_calls=0,
     )
+
+
+def transaction_preflight(
+    proposal_llm: Any,
+    audit_llm: Any,
+    *,
+    proposal_model: str,
+    audit_model: str,
+    release_mode: bool,
+    semantic_pack_digest: str,
+) -> tuple[str, dict[str, Any], SemanticPropositionTransactionResult | None]:
+    relationship = semantic_auditor_relationship(
+        proposal_llm,
+        audit_llm,
+        proposal_model=proposal_model,
+        audit_model=audit_model,
+    )
+    diagnostics = transaction_diagnostics(relationship, semantic_pack_digest)
+    failure = release_auditor_failure(release_mode, relationship, diagnostics)
+    return relationship, diagnostics, failure
 
 
 def transaction_context(

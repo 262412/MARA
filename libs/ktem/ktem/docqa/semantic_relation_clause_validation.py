@@ -9,6 +9,10 @@ from .boolean_proposition_arguments import _question_argument_tokens
 from .boolean_proposition_context import normalized_object_tokens
 from .boolean_proposition_tokens import _relation_surface_tokens
 from .boolean_relations import primary_boolean_relation
+from .canonical_proposition_evidence_constraint import (
+    canonical_evidence_constraint_projection,
+    semantic_constraint_observation,
+)
 from .qasper_boolean_no_evidence import (
     qasper_no_evidence_set_analysis,
     qasper_support_evidence_binding_complete,
@@ -155,43 +159,41 @@ def semantic_relation_evidence_set_constraint(
     analyses = [
         semantic_relation_clause_analysis(premise, proposition) for premise in premises
     ]
-    required_slots = list(applicable_proposition_evidence_slots(proposition))
-    bound_slots = sorted(
-        {
-            str(slot)
-            for analysis in analyses
-            for slot in analysis.get("slot_evidence") or {}
-            if analysis.get("relation_bearing") is True
-            and analysis.get("meta_scope") is not True
-        }
-    )
-    required_object_tokens = sorted(
-        _semantic_content_token_set(proposition.object_surface)
-    )
-    covered_object_tokens = sorted(
-        {
-            str(token)
-            for analysis in analyses
-            if analysis.get("relation_bearing") is True
-            and analysis.get("meta_scope") is not True
-            and "object" in (analysis.get("slot_evidence") or {})
-            for token in analysis.get("covered_object_tokens") or []
-        }
+    (
+        required_slots,
+        bound_slots,
+        required_object_tokens,
+        covered_object_tokens,
+    ) = semantic_constraint_observation(
+        analyses,
+        proposition,
     )
     (
         no_evidence_semantics,
         support_evidence_binding_complete,
     ) = _qasper_evidence_semantics(proposition, premises)
-    reason = _evidence_set_reason(
-        analyses,
+    canonical = canonical_evidence_constraint_projection(
+        premises,
+        proposition,
         verdict,
         required_slots=required_slots,
-        bound_slots=bound_slots,
         required_object_tokens=required_object_tokens,
-        covered_object_tokens=covered_object_tokens,
-        no_evidence_semantics=no_evidence_semantics,
-        support_evidence_binding_complete=support_evidence_binding_complete,
     )
+    if canonical is not None:
+        bound_slots = list(canonical.bound_slots)
+        covered_object_tokens = list(canonical.covered_object_tokens)
+        reason = canonical.reason
+    else:
+        reason = _evidence_set_reason(
+            analyses,
+            verdict,
+            required_slots=required_slots,
+            bound_slots=bound_slots,
+            required_object_tokens=required_object_tokens,
+            covered_object_tokens=covered_object_tokens,
+            no_evidence_semantics=no_evidence_semantics,
+            support_evidence_binding_complete=support_evidence_binding_complete,
+        )
     payload = {
         "contract_id": LOCAL_SEMANTIC_RELATION_CONSTRAINT,
         "status": "passed" if not reason else "rejected",

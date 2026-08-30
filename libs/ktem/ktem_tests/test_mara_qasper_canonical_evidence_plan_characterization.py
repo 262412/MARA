@@ -10,6 +10,9 @@ from ktem.docqa.question_proposition import (
     build_question_proposition,
 )
 from ktem.docqa.semantic_relation_clause_lexical import semantic_content_token_set
+from ktem.docqa.semantic_relation_clause_validation import (
+    semantic_relation_evidence_set_constraint,
+)
 from ktem.reasoning.mara_qasper_candidate_evidence import candidate_evidence_set_binding
 from ktem.reasoning.mara_qasper_candidate_evidence_sets import candidate_span_set
 from ktem.reasoning.mara_semantic_proposition_schema import (
@@ -265,7 +268,8 @@ def test_support_and_contradiction_have_conflict_polarity_state() -> None:
 
     assert binding["support"] is True
     assert binding["explicit_contradiction"] is True
-    assert binding["polarity_signal"] in {"conflict", "ambiguous"}
+    assert binding["binding_state"] == "ambiguous_conflict"
+    assert binding["polarity_signal"] == "undetermined"
 
 
 def test_absent_support_and_contradiction_remain_unresolved() -> None:
@@ -279,7 +283,8 @@ def test_absent_support_and_contradiction_remain_unresolved() -> None:
 
     assert binding["support"] is False
     assert binding["explicit_contradiction"] is False
-    assert binding["polarity_signal"] == "unresolved"
+    assert binding["binding_state"] == "unresolved"
+    assert binding["polarity_signal"] == "undetermined"
 
 
 def test_schema_accepted_natural_plan_is_parser_accepted() -> None:
@@ -345,3 +350,78 @@ def test_schema_rejects_non_unknown_incomplete_slot_union() -> None:
     # Schema acceptance must imply parser acceptance for this structural rule.
     with pytest.raises(ValidationError):
         validate(instance=plan["payload"], schema=schema)
+
+
+def test_schema_and_parser_select_the_same_complete_evidence_plan() -> None:
+    plan = _natural_plan()
+    plan_id = "complete-support-plan"
+    allowed_plans = {
+        plan_id: {
+            "plan_id": plan_id,
+            "polarity_relation": "proposition_support",
+            "span_refs": list(plan["allowed_bindings"]),
+        }
+    }
+    response_format = semantic_proposition_response_format(
+        list(plan["allowed_bindings"]),
+        [SLOT_ID],
+        candidate="yes",
+        applicable_proposition_slots=plan["applicable_slots"],
+        allowed_proposition_slot_bindings=plan["allowed_bindings"],
+        allowed_proposition_evidence_plans=allowed_plans,
+    )
+    validate(
+        instance=plan["payload"],
+        schema=response_format["json_schema"]["schema"],
+    )
+
+    parsed = parse_semantic_proposition_response(
+        json.dumps(plan["payload"]),
+        packed=plan["packed"],
+        slot_ids={SLOT_ID},
+        model="characterization-model",
+        seed=17,
+        candidate="yes",
+        applicable_proposition_slots=plan["applicable_slots"],
+        allowed_proposition_slot_bindings=plan["allowed_bindings"],
+        allowed_proposition_evidence_plans=allowed_plans,
+    )
+
+    assert parsed.failure_reason == ""
+    assert parsed.value is not None
+    assert parsed.value["canonical_evidence_plan_id"] == plan_id
+
+
+def test_downstream_constraint_reuses_canonical_event_predicate() -> None:
+    proposition = build_question_proposition(QUESTION)
+    premises = [
+        {
+            "evidence_id": selector["evidence_id"],
+            "span_selector": selector["selector_id"],
+            "quote": selector["text"],
+            "span_start": selector["span_start"],
+            "span_end": selector["span_end"],
+            "binds_proposition_slots": selector["slot_hints"],
+            "event_id": selector["event_id"],
+            "object_tokens": selector["object_tokens"],
+            "event_core_tokens": selector["object_tokens"],
+            "predicate_match_kind": (
+                "exact" if "predicate" in selector["slot_hints"] else "missing"
+            ),
+            "local_relation_state": "affirmative_assertion",
+        }
+        for selector in _split_plan_selectors(
+            first_event="event-a",
+            second_event="event-b",
+        )
+    ]
+
+    constraint = semantic_relation_evidence_set_constraint(
+        premises,
+        proposition,
+        "yes",
+        auditor_relationship="distinct_model",
+    )
+
+    assert constraint["status"] == "rejected"
+    assert constraint["reason"] == "local_semantic_event_binding_inconsistent"

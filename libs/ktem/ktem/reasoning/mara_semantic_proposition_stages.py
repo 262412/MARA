@@ -62,6 +62,7 @@ def proposal_stage(
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> ParsedSemanticStage:
     def call(correction: str = "") -> StageCallResult:
         return _call_proposal(
@@ -74,6 +75,7 @@ def proposal_stage(
             candidate=candidate,
             applicable_proposition_slots=applicable_proposition_slots,
             allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+            allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
         )
 
     def parse(response: Any) -> Any:
@@ -86,6 +88,7 @@ def proposal_stage(
             candidate=candidate,
             applicable_proposition_slots=applicable_proposition_slots,
             allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+            allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
         )
 
     return _parsed_stage(
@@ -372,6 +375,7 @@ def _call_proposal(
     candidate: str,
     applicable_proposition_slots: Collection[str] | None,
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None,
 ) -> StageCallResult:
     try:
         return StageCallResult(
@@ -393,6 +397,9 @@ def _call_proposal(
                     applicable_proposition_slots=applicable_proposition_slots,
                     allowed_proposition_slot_bindings=(
                         allowed_proposition_slot_bindings
+                    ),
+                    allowed_proposition_evidence_plans=(
+                        allowed_proposition_evidence_plans
                     ),
                 ),
                 temperature=0,

@@ -36,6 +36,8 @@ def _candidate_evidence(
     request: Any,
     question: str,
     bundle: EvidenceBundle,
+    *,
+    candidate_transaction_id: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, Any], SemanticPropositionEvidencePacking]:
     slots = required_semantic_proposition_slots(request)
     packing = pack_semantic_proposition_evidence(
@@ -45,6 +47,37 @@ def _candidate_evidence(
         bundle,
         candidate_priority=True,
     )
+    records = _candidate_prompt_records(packing)
+    prioritized_records = _prioritized_candidate_prompt_evidence(records, question)
+    records = prepare_qasper_canonical_records(question, prioritized_records)
+    semantic_filtered_count = len(prioritized_records) - len(records)
+    (
+        records,
+        bound_slots,
+        evidence_set_binding,
+        candidate_dropped_count,
+    ) = _fit_candidate_prompt_evidence(
+        question,
+        records,
+        slots=slots,
+        proposition=packing.question_proposition,
+        proposition_resolution=packing.question_proposition_resolution,
+        candidate_transaction_id=candidate_transaction_id,
+    )
+    diagnostics = _candidate_evidence_diagnostics(
+        bundle,
+        packing,
+        semantic_filtered_count=semantic_filtered_count,
+        candidate_dropped_count=candidate_dropped_count,
+        bound_slots=bound_slots,
+        evidence_set_binding=evidence_set_binding,
+    )
+    return records, diagnostics, packing
+
+
+def _candidate_prompt_records(
+    packing: SemanticPropositionEvidencePacking,
+) -> list[dict[str, Any]]:
     records = [
         {
             **deepcopy(record),
@@ -76,42 +109,35 @@ def _candidate_evidence(
         }
         for record in packing.records
     ]
-    prioritized_records = _prioritized_candidate_prompt_evidence(records, question)
-    records = prepare_qasper_canonical_records(question, prioritized_records)
-    semantic_filtered_count = len(prioritized_records) - len(records)
-    (
-        records,
-        bound_slots,
-        evidence_set_binding,
-        candidate_dropped_count,
-    ) = _fit_candidate_prompt_evidence(
-        question,
-        records,
-        slots=slots,
-        proposition=packing.question_proposition,
-        proposition_resolution=packing.question_proposition_resolution,
-    )
+    return records
+
+
+def _candidate_evidence_diagnostics(
+    bundle: EvidenceBundle,
+    packing: SemanticPropositionEvidencePacking,
+    *,
+    semantic_filtered_count: int,
+    candidate_dropped_count: int,
+    bound_slots: list[dict[str, Any]],
+    evidence_set_binding: dict[str, Any],
+) -> dict[str, Any]:
     pre_request_dropped_count = semantic_filtered_count + candidate_dropped_count
-    return (
-        records,
-        {
-            "evidence_input_count": len(bundle.items),
-            "evidence_dropped_count": packing.dropped_count + pre_request_dropped_count,
-            "semantic_pack_filtered_evidence_count": semantic_filtered_count,
-            "candidate_prompt_dropped_evidence_count": pre_request_dropped_count,
-            "pre_request_dropped_evidence_count": pre_request_dropped_count,
-            "evidence_truncated_count": packing.truncated_count,
-            "evidence_estimated_input_tokens": packing.estimated_input_tokens,
-            "evidence_token_budget": packing.input_token_budget,
-            "evidence_pack_digest": packing.semantic_pack_digest,
-            "prompt_char_limit": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
-            "typed_proposition": packing.question_proposition,
-            "question_proposition_resolution": packing.question_proposition_resolution,
-            "required_slots": bound_slots,
-            "candidate_evidence_set_binding": evidence_set_binding,
-        },
-        packing,
-    )
+    return {
+        "evidence_input_count": len(bundle.items),
+        "evidence_dropped_count": packing.dropped_count + pre_request_dropped_count,
+        "semantic_pack_filtered_evidence_count": semantic_filtered_count,
+        "candidate_prompt_dropped_evidence_count": pre_request_dropped_count,
+        "pre_request_dropped_evidence_count": pre_request_dropped_count,
+        "evidence_truncated_count": packing.truncated_count,
+        "evidence_estimated_input_tokens": packing.estimated_input_tokens,
+        "evidence_token_budget": packing.input_token_budget,
+        "evidence_pack_digest": packing.semantic_pack_digest,
+        "prompt_char_limit": SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
+        "typed_proposition": packing.question_proposition,
+        "question_proposition_resolution": packing.question_proposition_resolution,
+        "required_slots": bound_slots,
+        "candidate_evidence_set_binding": evidence_set_binding,
+    }
 
 
 def _fit_candidate_prompt_evidence(
@@ -121,10 +147,15 @@ def _fit_candidate_prompt_evidence(
     slots: list[dict[str, Any]],
     proposition: dict[str, Any],
     proposition_resolution: dict[str, Any],
+    candidate_transaction_id: str = "",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], int]:
     selected = list(records)
     while selected:
-        evidence_set_binding = _candidate_evidence_set_binding(selected, question)
+        evidence_set_binding = _candidate_evidence_set_binding(
+            selected,
+            question,
+            candidate_transaction_id=candidate_transaction_id,
+        )
         bound_slots = _bound_candidate_slots(
             slots,
             selected,
@@ -146,7 +177,11 @@ def _fit_candidate_prompt_evidence(
                 len(records) - len(selected),
             )
         selected.pop()
-    evidence_set_binding = _candidate_evidence_set_binding([], question)
+    evidence_set_binding = _candidate_evidence_set_binding(
+        [],
+        question,
+        candidate_transaction_id=candidate_transaction_id,
+    )
     return (
         [],
         _bound_candidate_slots(slots, [], binding=evidence_set_binding),

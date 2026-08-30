@@ -6,6 +6,10 @@ from typing import Any
 
 from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
 
+from .mara_semantic_proposition_evidence_plan import (
+    normalized_proposition_evidence_plans,
+)
+
 
 def semantic_proposition_schema(
     slot_ids: list[str],
@@ -14,6 +18,7 @@ def semantic_proposition_schema(
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     normalized_candidate = str(candidate or "").strip().casefold()
     include_not_applicable = applicable_proposition_slots is not None
@@ -30,6 +35,10 @@ def semantic_proposition_schema(
     allowed_bindings = _normalized_allowed_bindings(
         allowed_proposition_slot_bindings,
         proposition_slots,
+    )
+    allowed_plans = _normalized_allowed_plans(
+        allowed_proposition_evidence_plans,
+        allowed_bindings,
     )
     required = [
         "candidate_judgment",
@@ -60,6 +69,7 @@ def semantic_proposition_schema(
                 proposition_slots=proposition_slots,
                 selectors=selectors,
                 allowed_bindings=allowed_bindings,
+                allowed_plans=allowed_plans,
                 include_evidence_relation=include_evidence_relation,
             ),
         ],
@@ -167,6 +177,7 @@ def _judgment_branch(
     *,
     selectors: tuple[str, ...],
     allowed_bindings: dict[str, tuple[str, ...]] | None,
+    allowed_plans: dict[str, dict[str, Any]] | None,
     include_evidence_relation: bool,
     evidence_relations: Collection[str] | None = None,
 ) -> dict[str, Any]:
@@ -194,17 +205,15 @@ def _judgment_branch(
     flag = not unknown
     properties["jointly_complete"] = {"type": "boolean", "enum": [flag]}
     properties["each_premise_required"] = {"type": "boolean", "enum": [flag]}
-    properties["premises"] = {
-        "type": "array",
-        "minItems": 0 if unknown else 1,
-        "maxItems": 0 if unknown else 4,
-        "items": _premise_schema(
-            slot_ids,
-            proposition_slots,
-            selectors=selectors,
-            allowed_bindings=allowed_bindings,
-        ),
-    }
+    properties["premises"] = _judgment_premises_schema(
+        slot_ids,
+        proposition_slots,
+        unknown=unknown,
+        selectors=selectors,
+        allowed_bindings=allowed_bindings,
+        allowed_plans=allowed_plans,
+        evidence_relations=evidence_relations,
+    )
     required = [
         "candidate_judgment",
         "support_mode",
@@ -228,6 +237,66 @@ def _judgment_branch(
     }
 
 
+def _judgment_premises_schema(
+    slot_ids: list[str],
+    proposition_slots: tuple[str, ...],
+    *,
+    unknown: bool,
+    selectors: tuple[str, ...],
+    allowed_bindings: dict[str, tuple[str, ...]] | None,
+    allowed_plans: dict[str, dict[str, Any]] | None,
+    evidence_relations: Collection[str] | None,
+) -> dict[str, Any]:
+    schema: dict[str, Any] = {
+        "type": "array",
+        "minItems": 0 if unknown else 1,
+        "maxItems": 0 if unknown else 4,
+        "items": _premise_schema(
+            slot_ids,
+            proposition_slots,
+            selectors=selectors,
+            allowed_bindings=allowed_bindings,
+        ),
+        **(
+            {}
+            if unknown
+            else {
+                "allOf": [
+                    {
+                        "contains": {
+                            "type": "object",
+                            "properties": {
+                                "binds_proposition_slots": {
+                                    "type": "array",
+                                    "contains": {
+                                        "type": "string",
+                                        "enum": [slot],
+                                    },
+                                }
+                            },
+                            "required": ["binds_proposition_slots"],
+                        }
+                    }
+                    for slot in proposition_slots
+                ]
+            }
+        ),
+    }
+    if not unknown and allowed_plans is not None:
+        eligible_plans = {
+            plan_id: plan
+            for plan_id, plan in allowed_plans.items()
+            if str(plan["polarity_relation"]) in set(evidence_relations or ())
+        }
+        return _planned_premises_schema(
+            slot_ids,
+            proposition_slots,
+            eligible_plans,
+            allowed_bindings=allowed_bindings or {},
+        )
+    return schema
+
+
 def _judgment_branches(
     slot_ids: list[str],
     *,
@@ -236,6 +305,7 @@ def _judgment_branches(
     proposition_slots: tuple[str, ...],
     selectors: tuple[str, ...],
     allowed_bindings: dict[str, tuple[str, ...]] | None,
+    allowed_plans: dict[str, dict[str, Any]] | None,
     include_evidence_relation: bool,
 ) -> list[dict[str, Any]]:
     if candidate == "unanswerable":
@@ -248,6 +318,7 @@ def _judgment_branches(
                 proposition_slots,
                 selectors=selectors,
                 allowed_bindings=allowed_bindings,
+                allowed_plans=allowed_plans,
                 include_evidence_relation=True,
                 evidence_relations=(
                     "proposition_support",
@@ -262,6 +333,7 @@ def _judgment_branches(
                 proposition_slots,
                 selectors=selectors,
                 allowed_bindings=allowed_bindings,
+                allowed_plans=allowed_plans,
                 include_evidence_relation=False,
             ),
         ]
@@ -274,7 +346,9 @@ def _judgment_branches(
             proposition_slots,
             selectors=selectors,
             allowed_bindings=allowed_bindings,
+            allowed_plans=allowed_plans,
             include_evidence_relation=include_evidence_relation,
+            evidence_relations=_candidate_judgment_relations(candidate, judgment),
         )
         for judgment in ("supported", "contradicted", "unknown")
     ]
@@ -336,6 +410,52 @@ def _premise_schema(
             },
         }
         branches.append(branch)
+    return {"oneOf": branches} if branches else {"not": {}}
+
+
+def _planned_premises_schema(
+    slot_ids: list[str],
+    proposition_slots: tuple[str, ...],
+    plans: Mapping[str, Mapping[str, Any]],
+    *,
+    allowed_bindings: dict[str, tuple[str, ...]],
+) -> dict[str, Any]:
+    branches: list[dict[str, Any]] = []
+    for plan in plans.values():
+        refs = tuple(str(ref) for ref in plan.get("span_refs") or ())
+        plan_bindings = {
+            ref: allowed_bindings[ref] for ref in refs if ref in allowed_bindings
+        }
+        if not refs or len(plan_bindings) != len(refs):
+            continue
+        branches.append(
+            {
+                "type": "array",
+                "minItems": len(refs),
+                "maxItems": len(refs),
+                "items": _premise_schema(
+                    slot_ids,
+                    proposition_slots,
+                    selectors=refs,
+                    allowed_bindings=plan_bindings,
+                ),
+                "allOf": [
+                    {
+                        "contains": {
+                            "type": "object",
+                            "properties": {
+                                "span_selector": {
+                                    "type": "string",
+                                    "enum": [ref],
+                                }
+                            },
+                            "required": ["span_selector"],
+                        }
+                    }
+                    for ref in refs
+                ],
+            }
+        )
     return {"oneOf": branches} if branches else {"not": {}}
 
 
@@ -410,3 +530,40 @@ def _normalized_allowed_bindings(
         if selector and selected:
             normalized[selector] = selected
     return normalized
+
+
+def _normalized_allowed_plans(
+    value: Mapping[str, Mapping[str, Any]] | None,
+    allowed_bindings: dict[str, tuple[str, ...]] | None,
+) -> dict[str, dict[str, Any]] | None:
+    normalized = normalized_proposition_evidence_plans(value)
+    if normalized is None:
+        return None
+    if allowed_bindings is None:
+        return {}
+    return {
+        plan_id: plan
+        for plan_id, plan in normalized.items()
+        if set(plan["span_refs"]) <= set(allowed_bindings)
+    }
+
+
+def _candidate_judgment_relations(
+    candidate: str,
+    judgment: str,
+) -> tuple[str, ...]:
+    if judgment == "unknown":
+        return ()
+    if candidate == "yes":
+        return (
+            ("proposition_support",)
+            if judgment == "supported"
+            else ("explicit_contradiction",)
+        )
+    if candidate == "no":
+        return (
+            ("explicit_contradiction",)
+            if judgment == "supported"
+            else ("proposition_support",)
+        )
+    return ("proposition_support", "explicit_contradiction")

@@ -6,7 +6,10 @@ from typing import Any
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.semantic_evidence_set_authority import PropositionVerifier
 
-from .mara_qasper_semantic_pack import qasper_canonical_selector_bindings
+from .mara_qasper_semantic_pack import (
+    qasper_canonical_evidence_plans,
+    qasper_canonical_selector_bindings,
+)
 from .mara_semantic_candidate_policy import candidate_bound_response
 from .mara_semantic_contract_probe import (
     ControlledContractProbeIdentityError,
@@ -461,6 +464,7 @@ def _run_model_transaction(
         allowed_proposition_slot_bindings=(
             qasper_canonical_selector_bindings(packing.records) or None
         ),
+        allowed_proposition_evidence_plans=qasper_canonical_evidence_plans(bundle),
         capture_debug_trace=verifier.debug_recorder.enabled,
         transaction_id=transaction_id,
         attempt_namespace="initial",

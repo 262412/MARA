@@ -155,6 +155,10 @@ def rejected_semantic_transaction(
         "semantic_pack_digest": semantic_pack_digest,
         "premises": list(value.get("premises") or []),
     }
+    if str(value.get("canonical_evidence_plan_id") or ""):
+        transaction["canonical_evidence_plan_id"] = str(
+            value["canonical_evidence_plan_id"]
+        )
     if raw_audit_result is not None:
         transaction["raw_conclusion_check"] = dict(
             raw_audit_result.get("conclusion_check") or {}

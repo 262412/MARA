@@ -120,15 +120,16 @@ def generate_qasper_typed_candidate(
 ) -> str:
     llm = _answering_llm(pipeline)
     question = request_planning_question(request)
-    evidence, evidence_diagnostics, source_packing = _candidate_evidence(
-        request,
-        question,
-        bundle,
-    )
     seed = _candidate_seed(request)
     route = str(bundle.route or "")
     controlled_candidate = _contract_probe_original_candidate(request, route)
     identity = _candidate_transaction(request, bundle, route, seed)
+    evidence, evidence_diagnostics, source_packing = _candidate_evidence(
+        request,
+        question,
+        bundle,
+        candidate_transaction_id=identity["transaction_id"],
+    )
     response_schema = qasper_candidate_response_format(
         controlled_candidate=controlled_candidate
     )
@@ -145,6 +146,7 @@ def generate_qasper_typed_candidate(
         evidence_diagnostics,
         response_schema=response_schema,
         controlled_candidate=controlled_candidate,
+        candidate_transaction_id=identity["transaction_id"],
     )
     _freeze_candidate_semantic_pack(
         bundle,
@@ -155,6 +157,49 @@ def generate_qasper_typed_candidate(
         evidence_diagnostics,
         identity["transaction_id"],
     )
+    trace, input_digest = _record_candidate_request(
+        bundle,
+        llm=llm,
+        messages=messages,
+        response_schema=response_schema,
+        identity=identity,
+        route=route,
+        seed=seed,
+        evidence=evidence,
+        evidence_diagnostics=evidence_diagnostics,
+        controlled_candidate=controlled_candidate,
+        token_measurement=token_measurement,
+        request_dropped_count=request_dropped_count,
+    )
+    if not _candidate_request_ready(llm, token_measurement, trace, identity):
+        return ""
+    return _generate_candidate_response(
+        llm,
+        messages,
+        trace,
+        identity,
+        input_digest,
+        seed,
+        response_schema,
+        controlled_candidate,
+    )
+
+
+def _record_candidate_request(
+    bundle: EvidenceBundle,
+    *,
+    llm: Any,
+    messages: list[Any],
+    response_schema: dict[str, Any],
+    identity: dict[str, Any],
+    route: str,
+    seed: int,
+    evidence: list[dict[str, Any]],
+    evidence_diagnostics: dict[str, Any],
+    controlled_candidate: str,
+    token_measurement: dict[str, Any],
+    request_dropped_count: int,
+) -> tuple[dict[str, Any], str]:
     serialized_messages = _serialized_messages(messages)
     schema_digest = _digest(response_schema)
     input_digest = _digest(
@@ -181,18 +226,7 @@ def generate_qasper_typed_candidate(
         request_dropped_count=request_dropped_count,
     )
     bundle.metadata["qasper_candidate_generation"] = trace
-    if not _candidate_request_ready(llm, token_measurement, trace, identity):
-        return ""
-    return _generate_candidate_response(
-        llm,
-        messages,
-        trace,
-        identity,
-        input_digest,
-        seed,
-        response_schema,
-        controlled_candidate,
-    )
+    return trace, input_digest
 
 
 def _candidate_seed(request: Any) -> int:
@@ -341,6 +375,7 @@ def _fit_candidate_request(
     *,
     response_schema: dict[str, Any],
     controlled_candidate: str,
+    candidate_transaction_id: str = "",
 ) -> _CandidateRequestFit:
     selected = list(evidence)
     dropped_count = 0
@@ -348,25 +383,23 @@ def _fit_candidate_request(
         evidence_diagnostics.get("pre_request_dropped_evidence_count") or 0
     )
     while True:
-        evidence_set_binding = _candidate_evidence_set_binding(selected, question)
+        evidence_set_binding = _candidate_evidence_set_binding(
+            selected,
+            question,
+            candidate_transaction_id=candidate_transaction_id,
+        )
         bound_slots = _bound_candidate_slots(
             evidence_diagnostics.get("required_slots", []),
             selected,
             binding=evidence_set_binding,
         )
-        diagnostics = {
-            **evidence_diagnostics,
-            "required_slots": bound_slots,
-            "candidate_evidence_set_binding": evidence_set_binding,
-            "candidate_request_dropped_evidence_count": dropped_count,
-            "request_dropped_evidence_count": (
-                pre_request_dropped_count + dropped_count
-            ),
-            "evidence_dropped_count": (
-                int(evidence_diagnostics.get("evidence_dropped_count") or 0)
-                + dropped_count
-            ),
-        }
+        diagnostics = _candidate_request_diagnostics(
+            evidence_diagnostics,
+            bound_slots,
+            evidence_set_binding,
+            dropped_count=dropped_count,
+            pre_request_dropped_count=pre_request_dropped_count,
+        )
         messages = _candidate_messages(
             question,
             selected,
@@ -409,6 +442,26 @@ def _fit_candidate_request(
             )
         selected.pop(drop_index)
         dropped_count += 1
+
+
+def _candidate_request_diagnostics(
+    evidence_diagnostics: dict[str, Any],
+    bound_slots: list[dict[str, Any]],
+    evidence_set_binding: dict[str, Any],
+    *,
+    dropped_count: int,
+    pre_request_dropped_count: int,
+) -> dict[str, Any]:
+    return {
+        **evidence_diagnostics,
+        "required_slots": bound_slots,
+        "candidate_evidence_set_binding": evidence_set_binding,
+        "candidate_request_dropped_evidence_count": dropped_count,
+        "request_dropped_evidence_count": pre_request_dropped_count + dropped_count,
+        "evidence_dropped_count": (
+            int(evidence_diagnostics.get("evidence_dropped_count") or 0) + dropped_count
+        ),
+    }
 
 
 def _contract_probe_original_candidate(request: Any, route: str) -> str:
