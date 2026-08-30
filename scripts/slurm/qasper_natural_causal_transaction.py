@@ -4,10 +4,8 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
-from benchmark.qasper_causal_transaction import (
-    compare_qasper_causal_transaction_prefix,
-)
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
+from benchmark.qasper_causal_transaction import compare_qasper_causal_transaction_prefix
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
 
 _PREMODEL_THROUGH_STAGE = 5
@@ -89,10 +87,6 @@ def _local_replay_prediction(
         }
     )
     _replace_terminal_metadata(prediction, metadata)
-    bundle = _mapping(prediction.get("evidence_bundle"))
-    bundle["items"] = deepcopy(context.bundle.items)
-    bundle["metadata"] = deepcopy(context.bundle.metadata)
-    prediction["evidence_bundle"] = bundle
     return prediction
 
 
