@@ -1,0 +1,42 @@
+[
+  {
+    "case_id": "supported_yes",
+    "candidate": "yes",
+    "candidate_judgment": "supported",
+    "expected_verdict": "yes",
+    "plan_id": "1b0210b1ddb5bac86af7ae11aef1e01503b8f9914a6c74e0600bd5431b9ba8e0",
+    "polarity_relation": "proposition_support",
+    "raw_response_sha256": "325d7489c10e4e551e74f10b53e20c247bce08f499801ff3399a55995a6d638f",
+    "raw_response": "{\n\n\n  \"candidate_judgment\": \"supported\",\n  \"support_mode\": \"evidence_set\",\n  \"jointly_complete\": true,\n  \"each_premise_required\": true,\n  \"premises\": [\n    {\n      \"evidence_set\": \"E1\",\n      \"span_selector\": \"E1:S1\",\n      \"binds_proposition_slots\": {\n        \"actor\": \"The authors\",\n        \"predicate\": \"released\",\n        \"object\": \"the code for the evaluated system\",\n        \"quantifier\": \"not_applicable\"\n      }\n    }\n  ]\n  ,\n  \"not_applicable_proposition_slots\": [\"quantifier\"]\n  }"
+  },
+  {
+    "case_id": "supported_no",
+    "candidate": "no",
+    "candidate_judgment": "supported",
+    "expected_verdict": "no",
+    "plan_id": "77fbad17842c0288056394a616df65ed47885b882d794df7da2f8362e7f31ff8",
+    "polarity_relation": "explicit_contradiction",
+    "raw_response_sha256": "8345ab42b300b1091855caabbef386ba9b13120d3592cf494e89b72230e381c3",
+    "raw_response": "{\n\n\n  \"candidate_judgment\": \"supported\",\n  \"support_mode\": \"evidence_set\",\n  \"jointly_complete\": true,\n  \"each_premise_required\": true,\n  \"premises\": [\n    {\n      \"evidence_span\": \"E1:S1\",\n      \"binds_proposition_slots\": {\n        \"actor\": \"the authors\",\n        \"predicate\": \"release\",\n        \"object\": \"the code for the evaluated system\",\n        \"quantifier\": \"none\"\n      },\n      \"evidence_relation\": \"negation\"\n    }\n  ]\n  ,\n  \"not_applicable_proposition_slots\": [\"quantifier\"]\n}"
+  },
+  {
+    "case_id": "contradicted_yes",
+    "candidate": "yes",
+    "candidate_judgment": "contradicted",
+    "expected_verdict": "no",
+    "plan_id": "5c92c2c8ef5bd1b6fa54f9e85afe97d4eb0f889322accf64c91b80864677ce31",
+    "polarity_relation": "explicit_contradiction",
+    "raw_response_sha256": "5930b5e7364c0724ae2b4cc0202b4ceb18bf0064f1b95d6144d2f7c894dbabd6",
+    "raw_response": "{\n\n\n  \"candidate_judgment\": \"contradicted\",\n  \"support_mode\": \"evidence_set\",\n  \"jointly_complete\": true,\n  \"each_premise_required\": true,\n  \"premises\": [\n    {\n      \"evidence_span\": \"E1:S1\",\n      \"binds_proposition_slots\": {\n        \"actor\": \"The authors\",\n        \"predicate\": \"did not release\",\n        \"object\": \"the code for the evaluated system\",\n        \"quantifier\": \"none\"\n      },\n      \"evidence_relation\": \"contradiction\"\n    }\n  ]\n  ,\n  \"not_applicable_proposition_slots\": [\"quantifier\"]\n}"
+  },
+  {
+    "case_id": "contradicted_no",
+    "candidate": "no",
+    "candidate_judgment": "contradicted",
+    "expected_verdict": "yes",
+    "plan_id": "f8bb296d24e9ee55d22c99c9c4ed49198d6f7425135888a18e780da38a563d53",
+    "polarity_relation": "proposition_support",
+    "raw_response_sha256": "a5a184c6ed6db0aa23804086b47377e0fd640b657690dc7b4b380fa1a878c6c1",
+    "raw_response": "{\n\n\n  \"candidate_judgment\": \"contradicted\",\n  \"support_mode\": \"evidence_set\",\n  \"jointly_complete\": true,\n  \"each_premise_required\": true,\n  \"premises\": [\n    {\n      \"evidence_set\": \"E1\",\n      \"span_selector\": \"E1:S1\",\n      \"binds_proposition_slots\": {\n        \"actor\": \"The authors\",\n        \"predicate\": \"released\",\n        \"object\": \"the code for the evaluated system\",\n        \"quantifier\": \"not_applicable\"\n      }\n    }\n  ],\n  \"not_applicable_proposition_slots\": [\"quantifier\"]\n}"
+  }
+]
