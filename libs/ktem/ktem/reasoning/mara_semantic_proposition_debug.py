@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from copy import deepcopy
 from dataclasses import dataclass
@@ -19,6 +21,7 @@ class SemanticPropositionStageAttempt:
     parse_failure_reason: str
     provider_failure_reason: str
     provider_failure_detail: str
+    request_snapshot: dict[str, Any] | None = None
 
 
 def semantic_proposition_debug_enabled(pipeline: Any) -> bool:
@@ -54,6 +57,8 @@ def semantic_transaction_debug(
     auditor_relationship: str,
     transaction_id: str = "",
     attempt_namespace: str = "initial",
+    proposal_input: dict[str, Any] | None = None,
+    audit_input: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     if not enabled:
         return None
@@ -73,7 +78,7 @@ def semantic_transaction_debug(
         if audit is not None
         else {"status": "not_run", "attempt_ids": []}
     )
-    return {
+    payload = {
         "contract_id": SEMANTIC_PROPOSITION_DEBUG_CONTRACT,
         "proposal_model": proposal_model,
         "audit_model": audit_model,
@@ -85,6 +90,15 @@ def semantic_transaction_debug(
         "proposal_attempt_ids": list(proposal_debug.get("attempt_ids") or []),
         "audit_attempt_ids": list(audit_debug.get("attempt_ids") or []),
     }
+    if proposal_input is not None:
+        recorded_proposal_input = _stage_input(proposal_input, proposal)
+        payload["proposal_input"] = recorded_proposal_input
+        payload["proposal_input_digest"] = _canonical_digest(recorded_proposal_input)
+    if audit_input is not None:
+        recorded_audit_input = _stage_input(audit_input, audit)
+        payload["audit_input"] = recorded_audit_input
+        payload["audit_input_digest"] = _canonical_digest(recorded_audit_input)
+    return payload
 
 
 class SemanticPropositionDebugRecorder:
@@ -305,6 +319,10 @@ def _stage_debug(
             "raw_response": _bounded_response_text(attempt.response),
             "raw_response_truncated": _response_text_exceeds_bound(attempt.response),
             "parsed_value": deepcopy(attempt.parsed_value),
+            "request_snapshot": deepcopy(attempt.request_snapshot or {}),
+            "request_snapshot_digest": _canonical_digest(
+                attempt.request_snapshot or {}
+            ),
         }
         for index, attempt in enumerate(stage.attempts, start=1)
     ]
@@ -341,3 +359,24 @@ def _truthy(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _canonical_digest(value: Any) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _stage_input(value: dict[str, Any], stage: Any | None) -> dict[str, Any]:
+    payload = deepcopy(value)
+    payload["model_requests"] = [
+        deepcopy(attempt.request_snapshot)
+        for attempt in getattr(stage, "attempts", ())
+        if attempt.request_snapshot
+    ]
+    return payload

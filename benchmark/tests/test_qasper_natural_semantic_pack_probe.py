@@ -23,6 +23,7 @@ def _row() -> dict[str, object]:
             "example_id": "natural-probe-example",
             "route": "text_rag",
             "question": question,
+            "gold_answers": ["yes"],
             "evidence_bundle": {
                 "items": [
                     {
@@ -86,8 +87,46 @@ def _attach_replay_context(row: dict[str, Any]) -> dict[str, Any]:
     metadata["qasper_canonical_semantic_pack"] = {
         "source_packing_observation": {"source_input_snapshot": snapshot}
     }
+    transaction_id = "c" * 64
     metadata["qasper_candidate_generation"] = {
-        "candidate_request_dropped_evidence_count": 0
+        "trace_group_id": "natural-probe-fixture",
+        "benchmark_route_id": str(row.get("route") or ""),
+        "internal_route": str(row.get("route") or ""),
+        "transaction_id": transaction_id,
+        "attempt_id": f"{transaction_id}:candidate_generation:1",
+        "generation_sequence": 0,
+        "predecessor_transaction_id": "",
+        "effective_seed": 20260724,
+        "candidate_request_dropped_evidence_count": 0,
+    }
+    row["retrieved_hits"] = deepcopy(items)
+    replay = candidate_replay_context(row)
+    context = probe.freeze_natural_pack(
+        str(row.get("question") or ""),
+        route=str(row.get("route") or ""),
+        example_id=str(row.get("example_id") or ""),
+        replay=replay,
+        code_sha=_CODE_SHA,
+    )
+    metadata["qasper_candidate_generation"] = deepcopy(context.candidate_generation)
+    metadata["qasper_canonical_semantic_pack"] = deepcopy(
+        context.bundle.metadata["qasper_canonical_semantic_pack"]
+    )
+    metadata["candidate_ranked_evidence"] = deepcopy(
+        context.bundle.metadata["candidate_ranked_evidence"]
+    )
+    metadata["semantic_proposition_verifier"] = {
+        "contract_id": "semantic_proposition_verifier_runtime.v3",
+        "status": "not_run_in_fixture_reference",
+        "semantic_data_lineage": {
+            "contract_id": "semantic_proposition_data_lineage.v1",
+            "source_packing": deepcopy(
+                context.bundle.metadata["qasper_canonical_semantic_pack"][
+                    "source_packing_observation"
+                ]
+            ),
+            "plan_construction": deepcopy(context.binding["plan_construction_trace"]),
+        },
     }
     return row
 
@@ -113,6 +152,13 @@ def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint(
     assert result["packing_observation"]["source_records"][0]["stop_stage"]
     assert result["checks"]["causal_trace_prefix_complete"] is True
     assert result["checks"]["production_candidate_path_replayed"] is True
+    assert result["checks"]["candidate_request_input_replayed"] is True
+    assert result["checks"]["online_local_causal_prefix_matched"] is True
+    causal_replay = result["causal_transaction_replay"]
+    assert causal_replay["status"] == "matched"
+    assert causal_replay["through_stage"] == "candidate_plans"
+    assert causal_replay["comparison"]["status"] == "matched_prefix"
+    assert causal_replay["comparison"]["later_stages_evaluated"] is False
     assert result["candidate_path_replay"]["stage_sequence"][-1] == (
         "canonical_pack_freeze"
     )
@@ -137,6 +183,36 @@ def test_natural_probe_fails_closed_on_a_tampered_trace_digest(monkeypatch) -> N
 
     assert result["checks"]["causal_trace_prefix_complete"] is False
     assert result["status"] == "failed"
+
+
+def test_natural_probe_reports_only_the_first_online_local_path_divergence() -> None:
+    row = _row()
+    generator = cast(
+        dict[str, Any],
+        cast(dict[str, Any], row["evidence_metadata"])["qasper_candidate_generation"],
+    )
+    messages = deepcopy(generator["message_stack"])
+    messages[1]["content"] += "\nTAMPERED ONLINE INPUT"
+    generator["message_stack"] = messages
+    generator["message_stack_digest"] = canonical_digest(messages)
+    generator["input_digest"] = canonical_digest(
+        {
+            "messages": messages,
+            "response_schema_digest": generator["response_schema_digest"],
+            "seed": generator["effective_seed"],
+            "route": row["route"],
+            "benchmark_route_id": generator["benchmark_route_id"],
+        }
+    )
+
+    result = probe_prediction(row, code_sha=_CODE_SHA)
+
+    comparison = result["causal_transaction_replay"]["comparison"]
+    assert comparison["status"] == "diverged"
+    assert comparison["first_divergence"]["stage_index"] == 3
+    assert comparison["first_divergence"]["stage"] == "candidate_input"
+    assert comparison["later_stages_evaluated"] is False
+    assert "later_divergences" not in comparison
 
 
 def test_natural_probe_rejects_unambiguous_unresolved_zero_plan() -> None:
@@ -312,8 +388,12 @@ def test_legacy_replay_uses_candidate_stage_rank_not_late_bundle_rank() -> None:
 
     replay = candidate_replay_context(row)
 
-    assert replay.observation["complete"] is True
+    assert replay.observation["complete"] is False
     assert replay.observation["context_source"] == ("legacy_source_priority_projection")
+    assert (
+        "legacy_replay_not_causally_verifiable"
+        in replay.observation["incompleteness_reasons"]
+    )
     assert [row["canonical_id"] for row in replay.observation["ranked_evidence"]] == [
         identity_of(item).key for item in reversed(items)
     ]

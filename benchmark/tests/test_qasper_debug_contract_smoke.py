@@ -12,6 +12,7 @@ from ktem.reasoning.mara_semantic_proposition_causal_lineage import (
 )
 
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _write_run
+from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
 from benchmark.tests.qasper_debug_contract_fixtures import (
     _debug_candidate_audit,
     _debug_unknown_assessment,
@@ -43,6 +44,29 @@ def _qasper_debug_prediction(example_id: str, route: str):
 
 def _write_qasper_run(run_dir, *, predictions):
     _write_run(run_dir, predictions=predictions)
+    semantic_rows = qasper_semantic_debug_rows(
+        predictions,
+        include_missing=True,
+        run_context={
+            "worktree_path": "/fixture/worktree",
+            "run_provenance": {
+                "git": {"commit": "a" * 40, "dirty": False},
+                "manifest": {
+                    "path": "/fixture/manifest.json",
+                    "sha256": "b" * 64,
+                },
+                "config": {"suite": "qasper_debug"},
+            },
+            "backend_metadata": {
+                route: {"model": "Qwen/Qwen3-8B"}
+                for route in {row["route"] for row in predictions}
+            },
+        },
+    )
+    (run_dir / "semantic_debug_traces.jsonl").write_text(
+        "".join(f"{json.dumps(row, ensure_ascii=False)}\n" for row in semantic_rows),
+        encoding="utf-8",
+    )
     probe_path = run_dir / "contract_probe_predictions.jsonl"
     probe_path.write_text(
         "".join(
@@ -124,6 +148,10 @@ def test_qasper_debug_contract_smoke_audits_6x3_observability(tmp_path):
     assert audit["prediction_count"] == 18
     assert audit["status"] == "passed"
     assert audit["observability_coverage"]["complete"] is True
+    causal_audit = audit["causal_transaction_audit"]
+    assert causal_audit["status"] == "passed"
+    assert causal_audit["hard_rule"] == "stop_at_first_divergence"
+    assert causal_audit["complete_transaction_count"] == 18
     covered = audit["observability_coverage"]["covered_counts"]
     assert covered["candidate_verifier_audit"] == 18
     assert covered["auditor_failed_safe_abstention"] == 0
@@ -230,6 +258,11 @@ def test_qasper_debug_contract_smoke_fails_closed_on_missing_raw_response(
         violation.startswith("generator_field_missing:raw_response")
         for violation in audit["behavior_violations"]
     )
+    causal_observation = audit["causal_transaction_audit"]["observations"][0]
+    assert causal_observation["first_failure"]["stage_index"] == 8
+    assert causal_observation["first_failure"]["stage"] == ("model_response_and_parser")
+    assert causal_observation["later_stages_evaluated"] is False
+    assert "later_failures" not in causal_observation
 
 
 def test_qasper_debug_contract_fails_closed_on_semantic_pack_drift(tmp_path):

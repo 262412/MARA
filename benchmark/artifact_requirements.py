@@ -24,8 +24,21 @@ def semantic_debug_artifacts(
 ) -> tuple[list[str], bool, list[dict[str, Any]]]:
     requirements = run_artifact_requirements(report)
     required = "semantic_debug_traces.jsonl" in requirements
-    rows = qasper_semantic_debug_rows(predictions, include_missing=required)
+    rows = qasper_semantic_debug_rows(
+        predictions,
+        include_missing=required,
+        run_context=_semantic_debug_run_context(report),
+    )
     return requirements, required, rows
+
+
+def _semantic_debug_run_context(report: dict[str, Any]) -> dict[str, Any]:
+    summary = dict(report.get("summary") or {})
+    return {
+        "worktree_path": str(Path(__file__).resolve().parents[1]),
+        "run_provenance": dict(summary.get("run_provenance") or {}),
+        "backend_metadata": dict(summary.get("backend_metadata") or {}),
+    }
 
 
 def report_context(

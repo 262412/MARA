@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from ktem.docqa.semantic_relation_clause_validation import (
@@ -16,7 +17,7 @@ def execute_semantic_entailment_audit(
     context: Any,
     value: dict[str, Any],
     conclusion: Any,
-) -> tuple[dict[str, Any], Any]:
+) -> tuple[dict[str, Any], Any, dict[str, Any]]:
     """Build exact slot inputs and execute one candidate-bound audit."""
 
     constraint = semantic_relation_evidence_set_constraint(
@@ -48,4 +49,12 @@ def execute_semantic_entailment_audit(
         premise_slot_evidence=slot_evidence,
         semantic_identity=semantic_audit_input_identity(context, value, conclusion),
     )
-    return constraint, audit
+    audit_input = {
+        "prompt": prompt,
+        "question": str(context.question or ""),
+        "candidate_proposal": deepcopy(value),
+        "typed_conclusion": deepcopy(conclusion.as_dict()),
+        "premise_slot_evidence": deepcopy(slot_evidence),
+        "independent_semantic_constraint": deepcopy(constraint),
+    }
+    return constraint, audit, audit_input

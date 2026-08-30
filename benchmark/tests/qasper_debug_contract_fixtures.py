@@ -50,6 +50,7 @@ def _qasper_debug_prediction(
         relation,
         audit_status,
     )
+    retrieved_record = dict(metadata["canonical_candidate_evidence"][0])
     prediction.update(
         {
             "example_id": example_id,
@@ -57,6 +58,11 @@ def _qasper_debug_prediction(
             "route": route,
             "answer_type": "boolean",
             "gold_answers": gold,
+            "retrieved_hits": [retrieved_record],
+            "evidence_bundle": {
+                "items": [retrieved_record],
+                "metadata": metadata,
+            },
             "predicted_answer": terminal_answer,
             "answer_for_scoring": terminal_answer,
             "controller_trace": [

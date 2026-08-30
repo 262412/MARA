@@ -13,6 +13,7 @@ class StageCallResult:
     failure_reason: str = ""
     failure_detail: str = ""
     provider_call_started: bool = True
+    request_snapshot: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ def parsed_stage(
     if response is None:
         return _failed_stage(initial_call)
     parsed = parse(response)
-    attempts = [_stage_attempt(response, parsed, "")]
+    attempts = [_stage_attempt(response, parsed, "", initial_call.request_snapshot)]
     initial_failure = str(parsed.failure_reason or "")
     initial_identity = (
         semantic_identity(response, parsed) if semantic_identity is not None else None
@@ -56,7 +57,14 @@ def parsed_stage(
             attempts,
         )
     parsed = parse(response)
-    attempts.append(_stage_attempt(response, parsed, initial_failure))
+    attempts.append(
+        _stage_attempt(
+            response,
+            parsed,
+            initial_failure,
+            retry_call.request_snapshot,
+        )
+    )
     retry_identity = (
         semantic_identity(response, parsed) if semantic_identity is not None else None
     )
@@ -133,11 +141,15 @@ def _failed_attempt(
         parse_failure_reason,
         provider_failure_reason,
         call.failure_detail if call.provider_call_started else "",
+        call.request_snapshot,
     )
 
 
 def _stage_attempt(
-    response: Any, parsed: Any, correction: str
+    response: Any,
+    parsed: Any,
+    correction: str,
+    request_snapshot: dict[str, Any] | None,
 ) -> SemanticPropositionStageAttempt:
     return SemanticPropositionStageAttempt(
         response,
@@ -146,6 +158,7 @@ def _stage_attempt(
         str(parsed.failure_reason or ""),
         "",
         "",
+        request_snapshot,
     )
 
 

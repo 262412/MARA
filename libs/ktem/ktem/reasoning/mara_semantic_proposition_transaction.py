@@ -5,12 +5,12 @@ from dataclasses import replace
 from typing import Any
 
 from ktem.docqa.question_proposition import typed_conclusion
-from ktem.docqa.semantic_entailment_audit import semantic_entailment_audit_attestation
 from ktem.docqa.semantic_premise_proof_validation import (
     semantic_entailment_premise_validation_reason,
 )
 
 from .mara_semantic_audit_execution import execute_semantic_entailment_audit
+from .mara_semantic_audit_attestation import attach_verified_entailment_audit
 from .mara_semantic_candidate_policy import (
     candidate_bound_insufficient_result,
     candidate_from_prompt,
@@ -239,7 +239,7 @@ def _audit_transaction(
     conclusion = typed_conclusion(context.proposition, str(value.get("verdict") or ""))
     value["typed_conclusion"] = conclusion.as_dict()
     try:
-        local_constraint, audit = execute_semantic_entailment_audit(
+        local_constraint, audit, audit_input = execute_semantic_entailment_audit(
             context, value, conclusion
         )
     except ValueError:
@@ -261,6 +261,7 @@ def _audit_transaction(
         diagnostics,
         local_consistency=local_consistency,
         local_constraint=local_constraint,
+        audit_input=audit_input,
     )
     if local_constraint.get("status") != "passed":
         return stop_without_reverify(
@@ -311,8 +312,9 @@ def _audit_result(
     *,
     local_consistency: dict[str, Any],
     local_constraint: dict[str, Any],
+    audit_input: dict[str, Any],
 ) -> SemanticPropositionTransactionResult:
-    debug_trace = transaction_debug(context, proposal, audit)
+    debug_trace = transaction_debug(context, proposal, audit, audit_input=audit_input)
     failure = _audit_failure_result(
         context,
         proposal,
@@ -341,21 +343,11 @@ def _audit_result(
             debug_trace,
             "semantic_entailment_premise_validation_rejected",
         )
-    value["entailment_audit"] = semantic_entailment_audit_attestation(
-        context.question,
-        value["verdict"],
-        value["premises"],
-        model=context.audit_model,
-        seed=context.seed + 1,
-        proof_mode=str(value.get("proof_mode") or ""),
-        proposition=context.proposition,
-        conclusion=typed_conclusion(context.proposition, str(value["verdict"])),
-        auditor_relationship=context.auditor_relationship,
-        audit_result=audit.value,
-        independent_semantic_constraint=local_constraint,
-    )
-    value["entailment_audit"]["semantic_pack_identity"] = semantic_pack_identity(
-        context
+    attach_verified_entailment_audit(
+        value,
+        context,
+        audit.value,
+        local_constraint,
     )
     binding_reason = conclusion_audit_binding_reason(
         context.question,

@@ -26,6 +26,7 @@ def build_audit(
     runtime_code_sha: str = "",
     runtime_worktree_clean: bool | None = None,
 ) -> dict[str, Any]:
+    causal_replay_observations = _causal_replay_observations(predictions)
     observed_cohorts = {
         cohort for row in predictions for cohort in row.get("no_policy_cohorts") or []
     }
@@ -37,6 +38,11 @@ def build_audit(
     gates = {
         "prediction_count_complete": len(predictions) == expected_count,
         "all_structural_checks_passed": not failed,
+        "online_local_causal_prefix_matched": bool(predictions)
+        and all(
+            observation["status"] == "matched"
+            for observation in causal_replay_observations
+        ),
         "no_policy_cohort_coverage_complete": _REQUIRED_NO_COHORTS <= observed_cohorts,
         "single_clean_code_identity": _git_sha(code_sha)
         and {str(row.get("code_sha") or "") for row in predictions} == {code_sha}
@@ -71,8 +77,35 @@ def build_audit(
         ),
         "ambiguity_denominator": ambiguity_denominator,
         "failed_examples": failed,
+        "causal_transaction_replay_audit": {
+            "contract_id": "qasper_natural_causal_replay_audit.v1",
+            "hard_rule": "stop_at_first_divergence",
+            "observations": causal_replay_observations,
+        },
         "hard_gates": gates,
     }
+
+
+def _causal_replay_observations(
+    predictions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    observations = []
+    for prediction in predictions:
+        replay = _mapping(prediction.get("causal_transaction_replay"))
+        comparison = _mapping(replay.get("comparison"))
+        observations.append(
+            {
+                "example_id": str(prediction.get("example_id") or ""),
+                "route": str(prediction.get("route") or ""),
+                "status": str(replay.get("status") or "missing"),
+                "compared_stage_count": int(
+                    comparison.get("compared_stage_count") or 0
+                ),
+                "first_divergence": dict(_mapping(comparison.get("first_divergence"))),
+                "later_stages_evaluated": comparison.get("later_stages_evaluated"),
+            }
+        )
+    return observations
 
 
 def runtime_code_identity() -> tuple[str, bool]:

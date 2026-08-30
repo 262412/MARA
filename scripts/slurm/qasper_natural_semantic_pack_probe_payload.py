@@ -18,6 +18,7 @@ def build_probe_result(
     canonical_plan_count: int,
     ambiguity: dict[str, Any],
     schema_parser: dict[str, Any],
+    causal_transaction_replay: dict[str, Any],
     no_policy_cohorts: list[str],
     checks: dict[str, bool],
 ) -> dict[str, Any]:
@@ -42,6 +43,7 @@ def build_probe_result(
         "candidate_prompt_projection_trace": deepcopy(
             context.candidate_prompt_projection
         ),
+        "candidate_generation_replay": deepcopy(context.candidate_generation),
         "canonical_selector_projection_trace": deepcopy(
             context.canonical_selector_projection
         ),
@@ -72,6 +74,7 @@ def build_probe_result(
         "semantic_pack_digest": context.frozen.semantic_pack_digest,
         "span_universe_digest": str(stored_pack.get("span_universe_digest") or ""),
         "schema_parser": schema_parser,
+        "causal_transaction_replay": deepcopy(causal_transaction_replay),
         "no_policy_cohorts": no_policy_cohorts,
         "checks": checks,
         "status": "passed" if all(checks.values()) else "failed",

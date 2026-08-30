@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -97,6 +99,36 @@ def test_debug_trace_records_proposal_and_audit_without_changing_result() -> Non
     assert proposal_attempt["parsed_value"]["verdict"] == "yes"
     assert audit_attempt["raw_response"] == _audit()
     assert audit_attempt["parsed_value"]["jointly_entails"] is True
+    transaction = event["transaction"]
+    assert transaction["proposal_input"]["prompt"] == llm.calls[0][0][1].content
+    assert transaction["proposal_input"]["packed_evidence"] == event["packed_evidence"]
+    assert transaction["audit_input"]["prompt"] == llm.calls[1][0][1].content
+    assert transaction["audit_input"]["candidate_proposal"]["verdict"] == "yes"
+    assert transaction["proposal_input"]["model_requests"][0]["messages"] == [
+        {"role": "system", "content": llm.calls[0][0][0].content},
+        {"role": "user", "content": llm.calls[0][0][1].content},
+    ]
+    assert transaction["audit_input"]["model_requests"][0]["messages"] == [
+        {"role": "system", "content": llm.calls[1][0][0].content},
+        {"role": "user", "content": llm.calls[1][0][1].content},
+    ]
+    assert transaction["proposal_input_digest"] == _canonical_digest(
+        transaction["proposal_input"]
+    )
+    assert transaction["audit_input_digest"] == _canonical_digest(
+        transaction["audit_input"]
+    )
+
+
+def _canonical_digest(value: Any) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def test_debug_trace_preserves_cache_reuse_after_a_rejected_audit() -> None:
@@ -142,8 +174,7 @@ def test_debug_trace_can_be_enabled_by_the_slurm_environment(monkeypatch: Any) -
 
 def test_canonical_sentence_span_selector_preserves_exact_quote_and_offsets() -> None:
     source_text = (
-        "Lead-in context. We evaluated transfer across two languages. "
-        "Trailing context."
+        "Lead-in context. We evaluated transfer across two languages. Trailing context."
     )
     target_quote = "We evaluated transfer across two languages."
     local_start = source_text.index(target_quote)

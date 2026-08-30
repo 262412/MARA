@@ -17,6 +17,9 @@ class CandidateReplayContext:
     bundle_metadata: dict[str, Any]
     query_plan: dict[str, Any]
     max_context_length: int | None
+    candidate_identity: dict[str, Any]
+    candidate_seed: int
+    online_candidate_request: dict[str, Any]
     observation: dict[str, Any]
 
 
@@ -42,13 +45,13 @@ def candidate_replay_context(row: Mapping[str, Any]) -> CandidateReplayContext:
             source,
         )
         context_source = "legacy_source_priority_projection"
-    request_drop = _non_negative_int(
-        candidate.get("candidate_request_dropped_evidence_count")
-    )
-    if request_drop is None:
-        reasons.append("candidate_request_drop_observation_missing")
-    elif request_drop:
-        reasons.append("candidate_request_token_budget_changed_the_pack")
+        reasons.append("legacy_replay_not_causally_verifiable")
+    (
+        candidate_identity,
+        candidate_seed,
+        online_candidate_request,
+        request_drop,
+    ) = _candidate_replay_inputs(candidate, reasons)
     if not query_plan:
         reasons.append("query_plan_missing")
     ranked_metadata = (
@@ -78,6 +81,9 @@ def candidate_replay_context(row: Mapping[str, Any]) -> CandidateReplayContext:
         "query_plan_digest": canonical_digest(query_plan),
         "max_context_length": max_context,
         "historical_candidate_request_drop_count": request_drop,
+        "candidate_identity": deepcopy(candidate_identity),
+        "candidate_seed": candidate_seed,
+        "online_candidate_request": deepcopy(online_candidate_request),
         "source_observation_digest": canonical_digest(source),
     }
     observation["replay_digest"] = canonical_digest(observation)
@@ -86,8 +92,66 @@ def candidate_replay_context(row: Mapping[str, Any]) -> CandidateReplayContext:
         bundle_metadata=ranked_metadata,
         query_plan=query_plan,
         max_context_length=max_context,
+        candidate_identity=candidate_identity,
+        candidate_seed=candidate_seed,
+        online_candidate_request=online_candidate_request,
         observation=observation,
     )
+
+
+def _candidate_replay_inputs(
+    candidate: Mapping[str, Any],
+    reasons: list[str],
+) -> tuple[dict[str, Any], int, dict[str, Any], int | None]:
+    identity = _candidate_identity(candidate)
+    seed = _non_negative_int(candidate.get("effective_seed"))
+    request = _online_candidate_request(candidate)
+    if not identity.get("transaction_id"):
+        reasons.append("candidate_transaction_identity_missing")
+    if seed is None:
+        reasons.append("candidate_seed_missing")
+        seed = 0
+    if not request.get("message_stack"):
+        reasons.append("candidate_message_stack_missing")
+    if not request.get("response_schema_digest"):
+        reasons.append("candidate_response_schema_digest_missing")
+    if not request.get("input_digest"):
+        reasons.append("candidate_input_digest_missing")
+    request_drop = _non_negative_int(
+        candidate.get("candidate_request_dropped_evidence_count")
+    )
+    if request_drop is None:
+        reasons.append("candidate_request_drop_observation_missing")
+    elif request_drop:
+        reasons.append("candidate_request_token_budget_changed_the_pack")
+    return identity, seed, request, request_drop
+
+
+def _candidate_identity(candidate: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        key: deepcopy(candidate.get(key))
+        for key in (
+            "trace_group_id",
+            "benchmark_route_id",
+            "internal_route",
+            "transaction_id",
+            "attempt_id",
+            "generation_sequence",
+            "predecessor_transaction_id",
+        )
+    }
+
+
+def _online_candidate_request(candidate: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "message_stack": deepcopy(candidate.get("message_stack") or []),
+        "message_stack_digest": str(candidate.get("message_stack_digest") or ""),
+        "response_schema_digest": str(candidate.get("response_schema_digest") or ""),
+        "input_digest": str(candidate.get("input_digest") or ""),
+        "candidate_request_projection_trace": deepcopy(
+            candidate.get("candidate_request_projection_trace") or {}
+        ),
+    }
 
 
 def candidate_path_replay_complete(
@@ -129,6 +193,33 @@ def candidate_path_replay_complete(
             contract_id="qasper_canonical_selector_projection.v1",
             input_count_key="input_selector_count",
             attempts_required=False,
+        )
+    )
+
+
+def candidate_request_replay_complete(
+    replay_trace: Mapping[str, Any],
+    online_request: Mapping[str, Any],
+) -> bool:
+    messages = list(replay_trace.get("message_stack") or [])
+    online_messages = list(online_request.get("message_stack") or [])
+    request_projection = _mapping(
+        replay_trace.get("candidate_request_projection_trace")
+    )
+    return bool(
+        messages
+        and messages == online_messages
+        and canonical_digest(messages) == replay_trace.get("message_stack_digest")
+        and replay_trace.get("message_stack_digest")
+        == online_request.get("message_stack_digest")
+        and replay_trace.get("response_schema_digest")
+        == online_request.get("response_schema_digest")
+        and replay_trace.get("input_digest") == online_request.get("input_digest")
+        and _projection_complete(
+            request_projection,
+            contract_id="qasper_candidate_request_projection.v1",
+            input_count_key="input_record_count",
+            attempts_required=True,
         )
     )
 

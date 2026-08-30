@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from ktem.docqa.question_proposition import (
@@ -150,7 +151,18 @@ def transaction_debug(
     context: SemanticPropositionTransactionContext,
     proposal: ParsedSemanticStage,
     audit: ParsedSemanticStage | None,
+    *,
+    audit_input: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
+    proposal_input = {
+        "prompt": context.proposal_prompt,
+        "question": context.question,
+        "packed_evidence": deepcopy(context.packed),
+        "required_slots": deepcopy(context.slots),
+        "question_proposition": deepcopy(context.proposition.as_dict()),
+        "question_proposition_resolution": deepcopy(context.proposition_resolution),
+        "semantic_pack_identity": semantic_pack_identity(context),
+    }
     return semantic_transaction_debug(
         context.capture_debug_trace,
         proposal,
@@ -160,6 +172,8 @@ def transaction_debug(
         auditor_relationship=context.auditor_relationship,
         transaction_id=context.transaction_id,
         attempt_namespace=context.attempt_namespace,
+        proposal_input=proposal_input,
+        audit_input=audit_input,
     )
 
 

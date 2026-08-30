@@ -39,6 +39,7 @@ from .mara_semantic_proposition_schema import (
     parse_semantic_proposition_response,
     semantic_proposition_response_format,
 )
+from .mara_semantic_request_snapshot import model_request_snapshot
 from .mara_semantic_proposition_stage_runtime import (
     ParsedSemanticStage,
     StageCallResult,
@@ -384,40 +385,45 @@ def _call_proposal(
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
     allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None,
 ) -> StageCallResult:
+    request_snapshot: dict[str, Any] | None = None
     try:
-        return StageCallResult(
-            llm(
+        messages = [
+            SystemMessage(content=SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT),
+            HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
+        ]
+        parameters = {
+            "max_tokens": SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
+            "response_format": semantic_proposition_response_format(
                 [
-                    SystemMessage(content=SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT),
-                    HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
+                    str(selector.get("selector_id") or "")
+                    for record in packed
+                    for selector in record.get("selectors") or []
+                    if str(selector.get("selector_id") or "")
                 ],
-                max_tokens=SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
-                response_format=semantic_proposition_response_format(
-                    [
-                        str(selector.get("selector_id") or "")
-                        for record in packed
-                        for selector in record.get("selectors") or []
-                        if str(selector.get("selector_id") or "")
-                    ],
-                    [value["slot_id"] for value in slots],
-                    candidate=candidate,
-                    applicable_proposition_slots=applicable_proposition_slots,
-                    allowed_proposition_slot_bindings=(
-                        allowed_proposition_slot_bindings
-                    ),
-                    allowed_proposition_evidence_plans=(
-                        allowed_proposition_evidence_plans
-                    ),
-                ),
-                temperature=0,
-                top_p=1,
-                seed=seed,
+                [value["slot_id"] for value in slots],
+                candidate=candidate,
+                applicable_proposition_slots=applicable_proposition_slots,
+                allowed_proposition_slot_bindings=(allowed_proposition_slot_bindings),
+                allowed_proposition_evidence_plans=(allowed_proposition_evidence_plans),
             ),
+            "temperature": 0,
+            "top_p": 1,
+            "seed": seed,
+        }
+        request_snapshot = model_request_snapshot(messages, parameters)
+        return StageCallResult(
+            llm(messages, **parameters),
+            request_snapshot=request_snapshot,
         )
     except Exception as exc:
         LOGGER.exception("Semantic proposition verifier model call failed")
         failure, detail = provider_failure(exc)
-        return StageCallResult(None, failure, detail)
+        return StageCallResult(
+            None,
+            failure,
+            detail,
+            request_snapshot=request_snapshot,
+        )
 
 
 def _call_audit(
@@ -443,24 +449,33 @@ def _call_audit(
             str(exc)[:4000],
             False,
         )
+    request_snapshot: dict[str, Any] | None = None
     try:
+        messages = [
+            SystemMessage(content=SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT),
+            HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
+        ]
+        parameters = {
+            "max_tokens": SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
+            "response_format": response_format,
+            "temperature": 0,
+            "top_p": 1,
+            "seed": seed,
+        }
+        request_snapshot = model_request_snapshot(messages, parameters)
         return StageCallResult(
-            llm(
-                [
-                    SystemMessage(content=SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT),
-                    HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
-                ],
-                max_tokens=SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-                response_format=response_format,
-                temperature=0,
-                top_p=1,
-                seed=seed,
-            ),
+            llm(messages, **parameters),
+            request_snapshot=request_snapshot,
         )
     except Exception as exc:
         LOGGER.exception("Semantic entailment audit model call failed")
         failure, detail = provider_failure(exc)
-        return StageCallResult(None, failure, detail)
+        return StageCallResult(
+            None,
+            failure,
+            detail,
+            request_snapshot=request_snapshot,
+        )
 
 
 def _call_candidate_unknown_audit(
@@ -472,27 +487,36 @@ def _call_candidate_unknown_audit(
     seed: int,
     correction_reason: str,
 ) -> StageCallResult:
+    request_snapshot: dict[str, Any] | None = None
     try:
-        return StageCallResult(
-            llm(
-                [
-                    SystemMessage(content=UNKNOWN_AUDIT_SYSTEM_PROMPT),
-                    HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
-                ],
-                max_tokens=UNKNOWN_AUDIT_MAX_TOKENS,
-                response_format=candidate_unknown_audit_response_format(
-                    candidate,
-                    verifier_judgment=verifier_judgment,
-                ),
-                temperature=0,
-                top_p=1,
-                seed=seed,
+        messages = [
+            SystemMessage(content=UNKNOWN_AUDIT_SYSTEM_PROMPT),
+            HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
+        ]
+        parameters = {
+            "max_tokens": UNKNOWN_AUDIT_MAX_TOKENS,
+            "response_format": candidate_unknown_audit_response_format(
+                candidate,
+                verifier_judgment=verifier_judgment,
             ),
+            "temperature": 0,
+            "top_p": 1,
+            "seed": seed,
+        }
+        request_snapshot = model_request_snapshot(messages, parameters)
+        return StageCallResult(
+            llm(messages, **parameters),
+            request_snapshot=request_snapshot,
         )
     except Exception as exc:
         LOGGER.exception("Candidate-bound unknown audit model call failed")
         failure, detail = provider_failure(exc)
-        return StageCallResult(None, failure, detail)
+        return StageCallResult(
+            None,
+            failure,
+            detail,
+            request_snapshot=request_snapshot,
+        )
 
 
 def _pre_audit_failure_stage(reason: str) -> ParsedSemanticStage:

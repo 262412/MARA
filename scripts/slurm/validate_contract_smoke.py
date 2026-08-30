@@ -12,9 +12,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from benchmark.artifact_publication import publish_contract_smoke_audit  # noqa: E402
 from benchmark.artifact_requirements import required_artifact_violations  # noqa: E402
-from benchmark.contract_invariant_metrics import (  # noqa: E402
-    contract_invariant_summary,
-)
 from benchmark.jsonl import read_jsonl  # noqa: E402
 from benchmark.terminal_outcome_contract import (  # noqa: E402
     terminal_outcome_summary_fields,
@@ -25,13 +22,16 @@ from scripts.slurm.contract_smoke_behavior import (  # noqa: E402
 from scripts.slurm.qasper_debug_contract import (  # noqa: E402
     qasper_debug_audit_extensions,
     qasper_debug_behavior_violations,
-    qasper_debug_contract_metrics,
+)
+from scripts.slurm.qasper_causal_transaction_gate import (  # noqa: E402
+    qasper_causal_transaction_artifact_audit,
 )
 from scripts.slurm.validate_contract_smoke_gates import (  # noqa: E402
-    FINANCE_HARD_GATES,
-    HARD_GATES,
-    QASPER_DEBUG_HARD_GATES,
-    QASPER_HARD_GATES,
+    FINANCE_HARD_GATES as FINANCE_HARD_GATES,
+    HARD_GATES as HARD_GATES,
+    QASPER_DEBUG_HARD_GATES as QASPER_DEBUG_HARD_GATES,
+    QASPER_HARD_GATES as QASPER_HARD_GATES,
+    contract_smoke_gate_state,
 )
 from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
     contract_probe_preflight_audit as _contract_probe_preflight_audit,
@@ -193,35 +193,6 @@ def _requirements(predictions: list[dict[str, Any]]) -> set[str]:
     return values
 
 
-def _hard_gate_results(
-    metrics: dict[str, Any],
-    *,
-    suite_kind: str,
-) -> dict[str, dict[str, Any]]:
-    results: dict[str, dict[str, Any]] = {}
-    gates = (
-        QASPER_DEBUG_HARD_GATES
-        if suite_kind == "qasper_debug"
-        else {
-            **HARD_GATES,
-            **(FINANCE_HARD_GATES if suite_kind == "finance" else {}),
-            **(QASPER_HARD_GATES if suite_kind == "qasper" else {}),
-        }
-    )
-    for metric, (comparison, expected) in gates.items():
-        value = metrics.get(metric)
-        passed = value is not None and (
-            float(value) == expected if comparison == "eq" else False
-        )
-        results[metric] = {
-            "value": value,
-            "comparison": comparison,
-            "expected": expected,
-            "passed": passed,
-        }
-    return results
-
-
 def _observed_qasper_runtime_pass_through(prediction: dict[str, Any]) -> bool:
     metadata = prediction.get("evidence_metadata")
     trace = metadata.get("qasper_answerability") if isinstance(metadata, dict) else None
@@ -319,11 +290,19 @@ def _complete_audit(
     observed_requirements: set[str],
     contract_probe_predictions: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    causal_transaction_audit, causal_transaction_violations = (
+        qasper_causal_transaction_artifact_audit(
+            run_dir,
+            predictions,
+            suite_kind=suite_kind,
+        )
+    )
     behavior_violations = _behavior_violations(
         predictions,
         suite_kind=suite_kind,
         contract_probe_predictions=contract_probe_predictions,
     )
+    behavior_violations.extend(causal_transaction_violations)
     behavior_violations.extend(
         _contract_probe_preflight_violations(
             run_dir,
@@ -340,24 +319,13 @@ def _complete_audit(
     stage_audits, stage_violations = _all_stage_audits(
         predictions, suite_kind=suite_kind
     )
-    metrics = contract_invariant_summary(predictions)
-    if suite_kind == "qasper_debug":
-        metrics.update(
-            qasper_debug_contract_metrics(
-                predictions,
-                contract_probe_predictions=contract_probe_predictions,
-            )
+    metrics, hard_gates, failed_gates, contract_gate_failures = (
+        contract_smoke_gate_state(
+            predictions,
+            suite_kind=suite_kind,
+            contract_probe_predictions=contract_probe_predictions,
         )
-    elif suite_kind == "qasper":
-        qasper_metrics = qasper_debug_contract_metrics(predictions)
-        metrics["qasper_canonical_semantic_pack_mismatch_count"] = qasper_metrics[
-            "qasper_canonical_semantic_pack_mismatch_count"
-        ]
-    hard_gates = _hard_gate_results(metrics, suite_kind=suite_kind)
-    failed_gates = [
-        metric for metric, result in hard_gates.items() if not result["passed"]
-    ]
-    contract_gate_failures = _contract_gate_failures(metrics, suite_kind=suite_kind)
+    )
     status = (
         "passed"
         if not stage_violations
@@ -385,6 +353,7 @@ def _complete_audit(
             run_dir,
             suite_kind=suite_kind,
         ),
+        "causal_transaction_audit": causal_transaction_audit,
         **debug_extensions,
         "status": status,
     }
@@ -462,6 +431,14 @@ def _precondition_failure_audit(
         "failed_gates": ["preconditions"],
         "contract_gates": {},
         "contract_gate_failures": [],
+        "causal_transaction_audit": {
+            "contract_id": "qasper_causal_transaction_artifact_audit.v1",
+            "applicable": suite_kind == "qasper_debug",
+            "status": "not_evaluated",
+            "hard_rule": "stop_at_first_divergence",
+            "observations": [],
+            "violations": [],
+        },
         **(
             qasper_debug_audit_extensions(
                 predictions,
@@ -472,20 +449,6 @@ def _precondition_failure_audit(
         ),
         "status": "failed",
     }
-
-
-def _contract_gate_failures(
-    metrics: dict[str, Any],
-    *,
-    suite_kind: str,
-) -> list[str]:
-    if suite_kind == "qasper_debug":
-        return []
-    return [
-        name
-        for name, gate in dict(metrics.get("contract_gates") or {}).items()
-        if isinstance(gate, dict) and gate.get("status") == "failed"
-    ]
 
 
 def _failure_details(audit: dict[str, Any]) -> str:

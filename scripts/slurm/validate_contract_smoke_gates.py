@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from typing import Any
+
+
 HARD_GATES = {
     "identity_collision_count": ("eq", 0.0),
     "runtime_benchmark_roundtrip": ("eq", 1.0),
@@ -106,3 +111,75 @@ QASPER_DEBUG_HARD_GATES = {
     "qasper_unexpected_unknown_assessment_count": ("eq", 0.0),
     "qasper_contract_probe_unexpected_false_abstention_count": ("eq", 0.0),
 }
+
+
+def contract_smoke_gate_state(
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    contract_probe_predictions: list[dict[str, Any]],
+) -> tuple[
+    dict[str, Any],
+    dict[str, dict[str, Any]],
+    list[str],
+    list[str],
+]:
+    from benchmark.contract_invariant_metrics import contract_invariant_summary
+    from scripts.slurm.qasper_debug_contract import qasper_debug_contract_metrics
+
+    metrics = contract_invariant_summary(predictions)
+    if suite_kind == "qasper_debug":
+        metrics.update(
+            qasper_debug_contract_metrics(
+                predictions,
+                contract_probe_predictions=contract_probe_predictions,
+            )
+        )
+    elif suite_kind == "qasper":
+        qasper_metrics = qasper_debug_contract_metrics(predictions)
+        metrics["qasper_canonical_semantic_pack_mismatch_count"] = qasper_metrics[
+            "qasper_canonical_semantic_pack_mismatch_count"
+        ]
+    hard_gates = hard_gate_results(metrics, suite_kind=suite_kind)
+    failed_gates = [
+        metric for metric, result in hard_gates.items() if not result["passed"]
+    ]
+    contract_gate_failures = (
+        []
+        if suite_kind == "qasper_debug"
+        else [
+            name
+            for name, gate in dict(metrics.get("contract_gates") or {}).items()
+            if isinstance(gate, dict) and gate.get("status") == "failed"
+        ]
+    )
+    return metrics, hard_gates, failed_gates, contract_gate_failures
+
+
+def hard_gate_results(
+    metrics: dict[str, Any],
+    *,
+    suite_kind: str,
+) -> dict[str, dict[str, Any]]:
+    results: dict[str, dict[str, Any]] = {}
+    gates = (
+        QASPER_DEBUG_HARD_GATES
+        if suite_kind == "qasper_debug"
+        else {
+            **HARD_GATES,
+            **(FINANCE_HARD_GATES if suite_kind == "finance" else {}),
+            **(QASPER_HARD_GATES if suite_kind == "qasper" else {}),
+        }
+    )
+    for metric, (comparison, expected) in gates.items():
+        value = metrics.get(metric)
+        passed = value is not None and (
+            float(value) == expected if comparison == "eq" else False
+        )
+        results[metric] = {
+            "value": value,
+            "comparison": comparison,
+            "expected": expected,
+            "passed": passed,
+        }
+    return results

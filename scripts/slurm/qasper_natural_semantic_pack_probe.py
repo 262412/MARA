@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-from copy import deepcopy
-from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 from jsonschema import ValidationError, validate
@@ -15,15 +11,9 @@ from ktem.docqa.question_proposition import build_question_proposition
 from ktem.docqa.semantic_relation_clause_validation import (
     semantic_relation_evidence_set_constraint,
 )
-from ktem.reasoning.mara_qasper_candidate_prompt import _candidate_evidence
 from ktem.reasoning.mara_qasper_semantic_pack import (
-    freeze_qasper_canonical_semantic_pack,
-    load_qasper_canonical_semantic_pack,
     qasper_canonical_evidence_plans,
     qasper_canonical_selector_bindings,
-)
-from ktem.reasoning.mara_semantic_proposition_packing import (
-    required_semantic_proposition_slots,
 )
 from ktem.reasoning.mara_semantic_proposition_schema import (
     parse_semantic_proposition_response,
@@ -37,10 +27,16 @@ from scripts.slurm.qasper_natural_semantic_pack_audit import build_audit
 from scripts.slurm.qasper_natural_semantic_pack_audit import (
     runtime_code_identity as _runtime_code_identity,
 )
+from scripts.slurm.qasper_natural_causal_transaction import (
+    natural_causal_transaction_replay,
+)
 from scripts.slurm.qasper_natural_semantic_pack_probe_payload import build_probe_result
+from scripts.slurm.qasper_natural_semantic_pack_runtime import (
+    freeze_natural_pack,
+)
 from scripts.slurm.qasper_natural_semantic_pack_replay import (
-    CandidateReplayContext,
     candidate_path_replay_complete,
+    candidate_request_replay_complete,
     candidate_replay_context,
 )
 
@@ -49,31 +45,6 @@ _BOUND_STATES = {
     "relation_bound_support",
     "relation_bound_contradiction",
 }
-
-
-@dataclass(frozen=True)
-class NaturalPackContext:
-    bundle: EvidenceBundle
-    slots: list[dict[str, Any]]
-    frozen: Any
-    loaded: Any
-    load_reason: str
-    binding: dict[str, Any]
-    transaction_id: str
-    canonical_selector_projection: dict[str, Any]
-    candidate_prompt_projection: dict[str, Any]
-    candidate_path_replay: dict[str, Any]
-
-
-def canonical_digest(value: Any) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def load_probe_inputs(path: Path, *, route: str) -> list[dict[str, Any]]:
@@ -105,7 +76,7 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
     if not question or not isinstance(items, list) or not query_plan:
         raise ValueError("natural probe input incomplete")
     replay = candidate_replay_context(row)
-    context = _freeze_natural_pack(
+    context = freeze_natural_pack(
         question,
         route=route,
         example_id=example_id,
@@ -120,6 +91,7 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
         slots=context.slots,
     )
     ambiguity = _ambiguity_observation(row, context.binding)
+    causal_transaction_replay = natural_causal_transaction_replay(row, context)
     canonical_plan_count = int(schema_parser.get("canonical_plan_count") or 0)
     checks = _structural_checks(
         context.bundle,
@@ -132,7 +104,9 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
         ambiguity=ambiguity,
         canonical_selector_projection=context.canonical_selector_projection,
         candidate_prompt_projection=context.candidate_prompt_projection,
+        candidate_generation=context.candidate_generation,
         candidate_path_replay=context.candidate_path_replay,
+        causal_transaction_replay=causal_transaction_replay,
     )
     return build_probe_result(
         contract_id=CONTRACT,
@@ -145,90 +119,9 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
         canonical_plan_count=canonical_plan_count,
         ambiguity=ambiguity,
         schema_parser=schema_parser,
+        causal_transaction_replay=causal_transaction_replay,
         no_policy_cohorts=_no_policy_cohorts(row, context.binding),
         checks=checks,
-    )
-
-
-def _freeze_natural_pack(
-    question: str,
-    *,
-    route: str,
-    example_id: str,
-    replay: CandidateReplayContext,
-    code_sha: str,
-) -> NaturalPackContext:
-    request = SimpleNamespace(
-        origin="benchmark",
-        verification_domain="qasper",
-        dataset_family="qasper",
-        answer_type="boolean",
-        question=question,
-        query=question,
-        query_plan=deepcopy(replay.query_plan),
-    )
-    if replay.max_context_length is not None:
-        request.max_context_length = replay.max_context_length
-    bundle = EvidenceBundle(
-        route=route or "natural_semantic_pack",
-        items=deepcopy(replay.items),
-        metadata=deepcopy(replay.bundle_metadata),
-    )
-    slots = required_semantic_proposition_slots(request)
-    transaction_id = (
-        "natural-probe:"
-        + canonical_digest(
-            {
-                "code_sha": code_sha,
-                "example_id": example_id,
-                "route": route,
-                "question": question,
-                "candidate_path_replay": replay.observation,
-            }
-        )[:24]
-    )
-    records, diagnostics, source_packing = _candidate_evidence(
-        request,
-        question,
-        bundle,
-        candidate_transaction_id=transaction_id,
-    )
-    binding = _mapping(diagnostics.get("candidate_evidence_set_binding"))
-    bound_slots = [
-        dict(slot)
-        for slot in diagnostics.get("required_slots") or []
-        if isinstance(slot, dict)
-    ]
-    frozen = freeze_qasper_canonical_semantic_pack(
-        bundle,
-        question=question,
-        slots=slots,
-        source_packing=source_packing,
-        records=records,
-        candidate_transaction_id=transaction_id,
-        candidate_binding=binding,
-        candidate_required_slots=bound_slots,
-    )
-    loaded, load_reason = load_qasper_canonical_semantic_pack(
-        bundle,
-        question=question,
-        candidate_transaction_id=transaction_id,
-    )
-    return NaturalPackContext(
-        bundle=bundle,
-        slots=bound_slots,
-        frozen=frozen,
-        loaded=loaded,
-        load_reason=load_reason,
-        binding=binding,
-        transaction_id=transaction_id,
-        canonical_selector_projection=_mapping(
-            diagnostics.get("canonical_selector_projection_trace")
-        ),
-        candidate_prompt_projection=_mapping(
-            diagnostics.get("candidate_prompt_projection_trace")
-        ),
-        candidate_path_replay=deepcopy(replay.observation),
     )
 
 
@@ -346,7 +239,9 @@ def _structural_checks(
     ambiguity: dict[str, Any],
     canonical_selector_projection: dict[str, Any],
     candidate_prompt_projection: dict[str, Any],
+    candidate_generation: dict[str, Any],
     candidate_path_replay: dict[str, Any],
+    causal_transaction_replay: dict[str, Any],
 ) -> dict[str, bool]:
     state = str(binding.get("binding_state") or "")
     expected_flags = {
@@ -369,17 +264,11 @@ def _structural_checks(
     }
     stored = _mapping(bundle.metadata.get("qasper_canonical_semantic_pack"))
     source_observation = _mapping(stored.get("source_packing_observation"))
-    trace_prefix = {
-        "main_candidate_generator": {
-            "canonical_selector_projection_trace": canonical_selector_projection,
-        },
-        "semantic_verifier": {
-            "semantic_data_lineage": {
-                "source_packing": _mapping(stored.get("source_packing_observation")),
-                "plan_construction": _mapping(binding.get("plan_construction_trace")),
-            }
-        },
-    }
+    trace_prefix = _causal_trace_prefix(
+        stored,
+        binding=binding,
+        canonical_selector_projection=canonical_selector_projection,
+    )
     return {
         "pack_round_trip": loaded is not None and not load_reason,
         "pack_digest_stable": (
@@ -403,15 +292,64 @@ def _structural_checks(
         "causal_trace_prefix_complete": (
             qasper_causal_evidence_chain_prefix_complete(trace_prefix)
         ),
+        **_candidate_replay_checks(
+            source_observation=source_observation,
+            canonical_selector_projection=canonical_selector_projection,
+            candidate_prompt_projection=candidate_prompt_projection,
+            candidate_generation=candidate_generation,
+            candidate_path_replay=candidate_path_replay,
+            causal_transaction_replay=causal_transaction_replay,
+        ),
+        "unambiguous_zero_plan_rejected": (
+            bool(ambiguity.get("ambiguous")) or canonical_plan_count > 0
+        ),
+    }
+
+
+def _candidate_replay_checks(
+    *,
+    source_observation: dict[str, Any],
+    canonical_selector_projection: dict[str, Any],
+    candidate_prompt_projection: dict[str, Any],
+    candidate_generation: dict[str, Any],
+    candidate_path_replay: dict[str, Any],
+    causal_transaction_replay: dict[str, Any],
+) -> dict[str, bool]:
+    return {
         "production_candidate_path_replayed": candidate_path_replay_complete(
             candidate_path_replay,
             _mapping(source_observation.get("source_input_snapshot")),
             candidate_prompt_projection,
             canonical_selector_projection,
         ),
-        "unambiguous_zero_plan_rejected": (
-            bool(ambiguity.get("ambiguous")) or canonical_plan_count > 0
+        "candidate_request_input_replayed": candidate_request_replay_complete(
+            candidate_generation,
+            _mapping(candidate_path_replay.get("online_candidate_request")),
         ),
+        "online_local_causal_prefix_matched": (
+            causal_transaction_replay.get("status") == "matched"
+        ),
+    }
+
+
+def _causal_trace_prefix(
+    stored_pack: dict[str, Any],
+    *,
+    binding: dict[str, Any],
+    canonical_selector_projection: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "main_candidate_generator": {
+            "canonical_selector_projection_trace": canonical_selector_projection,
+        },
+        "semantic_verifier": {
+            "semantic_data_lineage": {
+                "source_packing": _mapping(
+                    stored_pack.get("source_packing_observation")
+                ),
+                "plan_construction": _mapping(binding.get("plan_construction_trace")),
+            }
+        },
     }
 
 

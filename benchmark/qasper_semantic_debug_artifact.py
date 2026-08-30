@@ -6,6 +6,7 @@ from typing import Any, Iterable, Mapping
 
 from .qasper_candidate_input_state import candidate_input_state_observation
 from .qasper_causal_evidence_chain import qasper_causal_evidence_chain
+from .qasper_causal_transaction import qasper_causal_transaction
 from .qasper_pre_verifier_debug import (
     candidate_authority_analysis as _candidate_authority_analysis,
 )
@@ -29,10 +30,15 @@ def qasper_semantic_debug_rows(
     predictions: Iterable[dict[str, Any]],
     *,
     include_missing: bool = False,
+    run_context: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for prediction in predictions:
-        row = _debug_row(prediction, include_missing=include_missing)
+        row = _debug_row(
+            prediction,
+            include_missing=include_missing,
+            run_context=run_context,
+        )
         if row is not None:
             rows.append(row)
     return rows
@@ -42,6 +48,7 @@ def _debug_row(
     prediction: dict[str, Any],
     *,
     include_missing: bool,
+    run_context: Mapping[str, Any] | None,
 ) -> dict[str, Any] | None:
     metadata = _terminal_metadata(prediction)
     verifier = _mapping(metadata.get("semantic_proposition_verifier"))
@@ -75,6 +82,12 @@ def _debug_row(
     )
     row.update(_v3_fields(prediction, generator, verifier, authority))
     row.update(_pre_verifier_fields(prediction, generator, verifier))
+    row["causal_transaction"] = qasper_causal_transaction(
+        prediction,
+        row,
+        run_context=run_context,
+        origin="online",
+    )
     row["causal_evidence_chain"] = qasper_causal_evidence_chain(row)
     row["findings"] = findings_for_row(row)
     return row

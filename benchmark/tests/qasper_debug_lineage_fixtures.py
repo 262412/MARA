@@ -76,6 +76,22 @@ def _debug_semantic_trace(
 ) -> dict[str, Any]:
     proposal_raw = _debug_plan_selection_raw(relation, plan_id)
     audit_raw = '{"status":"verified"}'
+    proposal_input, audit_input = _debug_model_inputs(
+        candidate,
+        relation,
+        typed_conclusion,
+        plan_id=plan_id,
+    )
+    transaction = _debug_trace_transaction(
+        candidate,
+        relation,
+        audit_status,
+        plan_id=plan_id,
+        proposal_raw=proposal_raw,
+        audit_raw=audit_raw,
+        proposal_input=proposal_input,
+        audit_input=audit_input,
+    )
     return {
         "contract_id": "semantic_proposition_debug_trace.v3",
         "event_count": 1,
@@ -83,41 +99,7 @@ def _debug_semantic_trace(
         "events": [
             {
                 "event": "model_transaction",
-                "transaction": {
-                    "proposal": {
-                        "status": "parsed",
-                        "attempts": [
-                            {
-                                "attempt": 1,
-                                "attempt_id": "proposal-attempt",
-                                "raw_response": proposal_raw,
-                                "finish_reason": "stop",
-                                "parse_failure_reason": "",
-                                "provider_failure_reason": "",
-                                "parsed_value": {
-                                    "contract_id": "semantic_proposition_verdict.v4",
-                                    "verdict": candidate,
-                                    "candidate_judgment": relation,
-                                    "canonical_evidence_plan_id": plan_id,
-                                },
-                            }
-                        ],
-                    },
-                    "audit": {
-                        "status": "parsed",
-                        "attempts": [
-                            {
-                                "attempt": 1,
-                                "attempt_id": "audit-attempt",
-                                "raw_response": audit_raw,
-                                "finish_reason": "stop",
-                                "parse_failure_reason": "",
-                                "provider_failure_reason": "",
-                                "parsed_value": {"status": audit_status},
-                            }
-                        ],
-                    },
-                },
+                "transaction": transaction,
                 "outcome": {
                     "status": "parsed",
                     "reason": "fixture_audit",
@@ -134,6 +116,99 @@ def _debug_semantic_trace(
             }
         ],
     }
+
+
+def _debug_trace_transaction(
+    candidate: str,
+    relation: str,
+    audit_status: str,
+    *,
+    plan_id: str,
+    proposal_raw: str,
+    audit_raw: str,
+    proposal_input: dict[str, Any],
+    audit_input: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "proposal_model": "Qwen/Qwen3-8B",
+        "audit_model": "Qwen/Qwen3-8B",
+        "proposal_input": proposal_input,
+        "proposal_input_digest": _fixture_digest(proposal_input),
+        "audit_input": audit_input,
+        "audit_input_digest": _fixture_digest(audit_input),
+        "proposal": {
+            "status": "parsed",
+            "attempts": [
+                {
+                    "attempt": 1,
+                    "attempt_id": "proposal-attempt",
+                    "raw_response": proposal_raw,
+                    "finish_reason": "stop",
+                    "parse_failure_reason": "",
+                    "provider_failure_reason": "",
+                    "parsed_value": {
+                        "contract_id": "semantic_proposition_verdict.v4",
+                        "verdict": candidate,
+                        "candidate_judgment": relation,
+                        "canonical_evidence_plan_id": plan_id,
+                    },
+                }
+            ],
+        },
+        "audit": {
+            "status": "parsed",
+            "attempts": [
+                {
+                    "attempt": 1,
+                    "attempt_id": "audit-attempt",
+                    "raw_response": audit_raw,
+                    "finish_reason": "stop",
+                    "parse_failure_reason": "",
+                    "provider_failure_reason": "",
+                    "parsed_value": {"status": audit_status},
+                }
+            ],
+        },
+    }
+
+
+def _debug_model_inputs(
+    candidate: str,
+    relation: str,
+    typed_conclusion: dict[str, Any],
+    *,
+    plan_id: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    proposal_input = {
+        "prompt": "Select one frozen local plan.",
+        "question": "Does the paper use the method?",
+        "candidate_proposal": {
+            "candidate": candidate,
+            "candidate_judgment": relation,
+            "canonical_evidence_plan_id": plan_id,
+        },
+        "model_request": {
+            "messages": [
+                {"role": "system", "content": "Return candidate judgment and plan ID."},
+                {"role": "user", "content": "Does the paper use the method?"},
+            ],
+            "temperature": 0.0,
+        },
+    }
+    audit_input = {
+        "prompt": "Audit the frozen local projection.",
+        "question": proposal_input["question"],
+        "candidate_proposal": proposal_input["candidate_proposal"],
+        "typed_conclusion": typed_conclusion,
+        "model_request": {
+            "messages": [
+                {"role": "system", "content": "Audit without changing the candidate."},
+                {"role": "user", "content": candidate},
+            ],
+            "temperature": 0.0,
+        },
+    }
+    return proposal_input, audit_input
 
 
 def _debug_semantic_data_lineage(

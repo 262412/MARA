@@ -1,0 +1,358 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from copy import deepcopy
+from typing import Any
+
+from benchmark.qasper_causal_evidence_chain_utils import canonical_digest, is_sha256
+
+
+def runtime_transaction_stage_payloads(
+    prediction: Mapping[str, Any],
+    generator: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+    event: Mapping[str, Any],
+    transaction: Mapping[str, Any],
+    proposal: Mapping[str, Any],
+    audit: Mapping[str, Any],
+    run_context: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
+    return {
+        "model_response_and_parser": _model_response_payload(
+            generator, proposal, audit
+        ),
+        "verifier_and_auditor": _verifier_auditor_payload(event, transaction, verifier),
+        "recovery_state": _recovery_payload(prediction, verifier),
+        "finalizer_and_scorer": _finalizer_scorer_payload(prediction),
+        "run_provenance_and_artifact": _provenance_payload(
+            prediction, generator, verifier, run_context
+        ),
+    }
+
+
+def _model_response_payload(
+    generator: Mapping[str, Any],
+    proposal: Mapping[str, Any],
+    audit: Mapping[str, Any],
+) -> dict[str, Any]:
+    candidate = {
+        "status": str(generator.get("status") or ""),
+        "raw_response": str(generator.get("raw_response") or ""),
+        "raw_response_digest": str(generator.get("raw_response_digest") or ""),
+        "raw_response_truncated": generator.get("raw_response_truncated") is True,
+        "cleaned_response": str(generator.get("cleaned_response") or ""),
+        "typed_candidate": str(generator.get("typed_candidate") or ""),
+        "parse_failure_reason": str(generator.get("failure_reason") or ""),
+        "attempts": deepcopy(generator.get("attempts") or []),
+    }
+    reasons = []
+    if not candidate["raw_response"] and not candidate["parse_failure_reason"]:
+        reasons.append("candidate_raw_response_missing")
+    if candidate["raw_response_truncated"]:
+        reasons.append("candidate_raw_response_truncated")
+    reasons.extend(_attempt_response_reasons("proposal", proposal))
+    reasons.extend(_attempt_response_reasons("audit", audit, allow_not_run=True))
+    return _payload(
+        reasons,
+        candidate_generation=candidate,
+        semantic_proposal=deepcopy(dict(proposal)),
+        semantic_audit=deepcopy(dict(audit)),
+    )
+
+
+def _verifier_auditor_payload(
+    event: Mapping[str, Any],
+    transaction: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+) -> dict[str, Any]:
+    proposal_input = deepcopy(_mapping(transaction.get("proposal_input")))
+    audit_input = deepcopy(_mapping(transaction.get("audit_input")))
+    proposal_output = deepcopy(_mapping(transaction.get("proposal")))
+    audit_output = deepcopy(_mapping(transaction.get("audit")))
+    reasons = []
+    if not proposal_input:
+        reasons.append("verifier_input_missing")
+    elif canonical_digest(proposal_input) != transaction.get("proposal_input_digest"):
+        reasons.append("verifier_input_digest_mismatch")
+    audit_ran = bool(audit_output.get("attempts"))
+    if audit_ran and not audit_input:
+        reasons.append("auditor_input_missing")
+    elif audit_input and canonical_digest(audit_input) != transaction.get(
+        "audit_input_digest"
+    ):
+        reasons.append("auditor_input_digest_mismatch")
+    return _payload(
+        reasons,
+        verifier_model=str(
+            transaction.get("proposal_model") or verifier.get("model") or ""
+        ),
+        auditor_model=str(
+            transaction.get("audit_model") or verifier.get("audit_model") or ""
+        ),
+        event_input={
+            "question": str(event.get("question") or ""),
+            "question_proposition": deepcopy(event.get("question_proposition") or {}),
+            "packed_evidence": deepcopy(event.get("packed_evidence") or []),
+            "required_slots": deepcopy(event.get("required_slots") or []),
+        },
+        proposal_input=proposal_input,
+        proposal_input_digest=str(transaction.get("proposal_input_digest") or ""),
+        proposal_output=proposal_output,
+        audit_input=audit_input,
+        audit_input_digest=str(transaction.get("audit_input_digest") or ""),
+        audit_output=audit_output,
+        runtime_outcome=deepcopy(event.get("outcome") or {}),
+    )
+
+
+def _recovery_payload(
+    prediction: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+) -> dict[str, Any]:
+    controller = [
+        deepcopy(event)
+        for event in prediction.get("controller_trace") or []
+        if isinstance(event, Mapping)
+        and str(event.get("stage") or "")
+        in {
+            "evidence_rebind",
+            "focused_retrieval",
+            "reverify",
+            "targeted_retrieval",
+            "typed_boolean_generation_recovery",
+        }
+    ]
+    semantic = [
+        deepcopy(event)
+        for event in verifier.get("recovery_transitions") or []
+        if isinstance(event, Mapping)
+    ]
+    observations = [
+        _recovery_observation(event, source="controller") for event in controller
+    ] + [_recovery_observation(event, source="semantic_verifier") for event in semantic]
+    reasons = [
+        f"recovery_transition_{index}_state_diff_missing"
+        for index, value in enumerate(observations, start=1)
+        if not value["state_dimensions"]
+    ]
+    return _payload(
+        reasons,
+        recovery_status="observed" if observations else "not_run",
+        transition_count=len(observations),
+        transitions=observations,
+        transitions_digest=canonical_digest(observations),
+    )
+
+
+def _finalizer_scorer_payload(prediction: Mapping[str, Any]) -> dict[str, Any]:
+    finalizer = {
+        "answer_finalization": deepcopy(prediction.get("answer_finalization") or {}),
+        "terminal_semantic_commit": deepcopy(
+            prediction.get("terminal_semantic_commit") or {}
+        ),
+        "engine_terminal_state": deepcopy(
+            prediction.get("engine_terminal_state") or {}
+        ),
+        "engine_verify_decision": deepcopy(
+            prediction.get("engine_verify_decision") or {}
+        ),
+        "terminal_outcome": str(prediction.get("terminal_outcome") or ""),
+        "answer_status": str(prediction.get("answer_status") or ""),
+    }
+    scorer_input = {
+        "example_id": str(prediction.get("example_id") or ""),
+        "route": str(prediction.get("route") or ""),
+        "answer_type": str(prediction.get("answer_type") or ""),
+        "modality": str(prediction.get("modality") or ""),
+        "predicted_answer": prediction.get("predicted_answer"),
+        "answer_for_scoring": prediction.get("answer_for_scoring"),
+        "gold_answers": deepcopy(prediction.get("gold_answers") or []),
+        "gold_evidence": deepcopy(prediction.get("gold_evidence") or []),
+        "predicted_citations": deepcopy(prediction.get("predicted_citations") or []),
+        "scored_predicted_sources": deepcopy(
+            prediction.get("scored_predicted_sources") or []
+        ),
+        "expected_formats": deepcopy(prediction.get("expected_formats") or []),
+        "expected_guardrails": deepcopy(prediction.get("expected_guardrails") or []),
+        "claim_verification": deepcopy(prediction.get("claim_verification") or {}),
+        "terminal_outcome": str(prediction.get("terminal_outcome") or ""),
+        "terminal_semantic_commit": deepcopy(
+            prediction.get("terminal_semantic_commit") or {}
+        ),
+        "evidence_bundle": deepcopy(prediction.get("evidence_bundle") or {}),
+        "example_metadata": deepcopy(prediction.get("example_metadata") or {}),
+        "annotation_diagnostics": deepcopy(
+            prediction.get("qasper_annotation_diagnostics") or {}
+        ),
+    }
+    scorer_output = {
+        "product_metrics": deepcopy(prediction.get("product_metrics") or {}),
+        "annotation_scores": deepcopy(prediction.get("qasper_annotation_scores") or []),
+        "metrics": deepcopy(prediction.get("metrics") or {}),
+        "diagnostics": deepcopy(prediction.get("diagnostics") or {}),
+        "verifier_observability": deepcopy(
+            prediction.get("verifier_observability") or {}
+        ),
+        "semantic_answer_evaluation": deepcopy(
+            prediction.get("semantic_answer_evaluation") or {}
+        ),
+        "stage_metrics": deepcopy(prediction.get("stage_metrics") or {}),
+        "stage_metric_status": deepcopy(prediction.get("stage_metric_status") or {}),
+        "adapter_metrics": deepcopy(prediction.get("adapter_metrics") or {}),
+        "external_adapter_metrics": deepcopy(
+            prediction.get("external_adapter_metrics") or {}
+        ),
+    }
+    reasons = []
+    if not finalizer["terminal_semantic_commit"]:
+        reasons.append("terminal_semantic_commit_missing")
+    if prediction.get("answer_for_scoring") is None:
+        reasons.append("scorer_input_answer_missing")
+    return _payload(
+        reasons,
+        finalizer_decision=finalizer,
+        finalizer_decision_digest=canonical_digest(finalizer),
+        scorer_input=scorer_input,
+        scorer_input_digest=canonical_digest(scorer_input),
+        scorer_output=scorer_output,
+        scorer_output_digest=canonical_digest(scorer_output),
+    )
+
+
+def _provenance_payload(
+    prediction: Mapping[str, Any],
+    generator: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+    run_context: Mapping[str, Any],
+) -> dict[str, Any]:
+    run = _mapping(run_context.get("run_provenance"))
+    git = _mapping(run.get("git"))
+    manifest = deepcopy(_mapping(run.get("manifest")))
+    config = deepcopy(_mapping(run.get("config")))
+    service = deepcopy(_mapping(run.get("service")))
+    route = str(prediction.get("route") or "")
+    backends = _mapping(run_context.get("backend_metadata"))
+    provider_model = {
+        "route_backend": deepcopy(_mapping(backends.get(route))),
+        "candidate_model": str(generator.get("model") or ""),
+        "candidate_tokenizer": str(generator.get("tokenizer_identity") or ""),
+        "candidate_tokenizer_endpoint": str(generator.get("tokenizer_endpoint") or ""),
+        "verifier_model": str(verifier.get("model") or ""),
+        "auditor_model": str(verifier.get("audit_model") or ""),
+        "service": service,
+    }
+    code_identity = {
+        "sha": str(git.get("commit") or ""),
+        "worktree_path": str(run_context.get("worktree_path") or ""),
+        "worktree_clean": git.get("dirty") is False,
+    }
+    reasons = []
+    if not _git_sha(code_identity["sha"]):
+        reasons.append("code_sha_missing")
+    if not code_identity["worktree_path"]:
+        reasons.append("worktree_path_missing")
+    if code_identity["worktree_clean"] is not True:
+        reasons.append("worktree_not_clean")
+    if not is_sha256(manifest.get("sha256")):
+        reasons.append("manifest_digest_missing")
+    if not config:
+        reasons.append("run_config_missing")
+    if not any(
+        provider_model.get(key)
+        for key in ("candidate_model", "verifier_model", "auditor_model")
+    ):
+        reasons.append("provider_model_identity_missing")
+    artifact = {
+        "source_prediction_digest": canonical_digest(prediction),
+        "artifact_kind": "per_route_prediction_and_semantic_trace",
+    }
+    return _payload(
+        reasons,
+        run_provenance={
+            "code_identity": code_identity,
+            "manifest": manifest,
+            "config": config,
+            "config_digest": canonical_digest(config),
+            "contract_hash": str(run.get("contract_hash") or ""),
+            "execution_hash": str(run.get("execution_hash") or ""),
+            "provider_model_identity": provider_model,
+            "provider_model_identity_digest": canonical_digest(provider_model),
+        },
+        artifact_binding=artifact,
+        artifact_binding_digest=canonical_digest(artifact),
+    )
+
+
+def _attempt_response_reasons(
+    stage: str,
+    value: Mapping[str, Any],
+    *,
+    allow_not_run: bool = False,
+) -> list[str]:
+    attempts = [
+        _mapping(attempt)
+        for attempt in value.get("attempts") or []
+        if isinstance(attempt, Mapping)
+    ]
+    if not attempts:
+        return [] if allow_not_run else [f"{stage}_attempt_missing"]
+    reasons: list[str] = []
+    for attempt in attempts:
+        if attempt.get("raw_response_truncated") is True:
+            reasons.append(f"{stage}_raw_response_truncated")
+        if not str(attempt.get("raw_response") or "") and not (
+            attempt.get("provider_failure_reason")
+            or attempt.get("parse_failure_reason")
+        ):
+            reasons.append(f"{stage}_raw_response_missing")
+    return reasons
+
+
+def _recovery_observation(
+    event: Mapping[str, Any],
+    *,
+    source: str,
+) -> dict[str, Any]:
+    before: dict[str, Any] = {}
+    after: dict[str, Any] = {}
+    for key, value in event.items():
+        if key.endswith("_before"):
+            before[key.removesuffix("_before")] = deepcopy(value)
+        elif key.endswith("_after"):
+            after[key.removesuffix("_after")] = deepcopy(value)
+    dimensions = sorted(set(before) & set(after))
+    before_state = {key: before[key] for key in dimensions}
+    after_state = {key: after[key] for key in dimensions}
+    return {
+        "source": source,
+        "stage": str(event.get("stage") or event.get("to") or ""),
+        "action": str(event.get("recovery_action") or ""),
+        "outcome": str(event.get("recovery_outcome") or event.get("outcome") or ""),
+        "state_dimensions": dimensions,
+        "before": before_state,
+        "after": after_state,
+        "before_digest": canonical_digest(before_state),
+        "after_digest": canonical_digest(after_state),
+        "changed": any(before[key] != after[key] for key in dimensions),
+        "recorded_event": deepcopy(dict(event)),
+    }
+
+
+def _payload(reasons: list[str], **values: Any) -> dict[str, Any]:
+    unique = list(dict.fromkeys(reason for reason in reasons if reason))
+    return {
+        "status": "complete" if not unique else "incomplete",
+        "incompleteness_reasons": unique,
+        **values,
+    }
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _git_sha(value: Any) -> bool:
+    text = str(value or "")
+    return len(text) == 40 and all(
+        character in "0123456789abcdef" for character in text
+    )
