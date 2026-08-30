@@ -152,3 +152,26 @@ def test_six_sample_probe_requires_the_frozen_four_two_denominator() -> None:
     assert audit["ambiguity_denominator"] == {"unambiguous": 6}
     assert audit["hard_gates"]["six_sample_ambiguity_denominator_4_2"] is False
     assert audit["status"] == "failed"
+
+
+def test_six_sample_probe_accepts_four_ambiguous_two_unambiguous() -> None:
+    prediction = probe_prediction(_row(), code_sha="test-sha")
+    predictions = [deepcopy(prediction) for _index in range(6)]
+    for value in predictions[:4]:
+        value["ambiguity"] = {
+            "ambiguous": True,
+            "reasons": ["boolean_no_requires_closed_world_inference"],
+            "denominator": "ambiguous",
+        }
+    audit = probe.build_audit(
+        predictions,
+        code_sha="test-sha",
+        input_path=__import__("pathlib").Path(__file__),
+        expected_count=6,
+    )
+
+    assert audit["ambiguity_denominator"] == {
+        "ambiguous": 4,
+        "unambiguous": 2,
+    }
+    assert audit["hard_gates"]["six_sample_ambiguity_denominator_4_2"] is True

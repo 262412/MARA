@@ -49,8 +49,8 @@ _REQUIRED_NO_COHORTS = {
     "annotation_disagreement",
 }
 _SIX_SAMPLE_AMBIGUITY_DENOMINATOR = {
-    "ambiguous": 2,
-    "unambiguous": 4,
+    "ambiguous": 4,
+    "unambiguous": 2,
 }
 
 
