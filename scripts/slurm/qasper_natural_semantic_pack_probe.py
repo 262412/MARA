@@ -22,7 +22,7 @@ from ktem.reasoning.mara_qasper_candidate_evidence import (
 from ktem.reasoning.mara_qasper_semantic_pack import (
     freeze_qasper_canonical_semantic_pack,
     load_qasper_canonical_semantic_pack,
-    prepare_qasper_canonical_records,
+    prepare_qasper_canonical_records_with_trace,
     qasper_canonical_evidence_plans,
     qasper_canonical_selector_bindings,
 )
@@ -35,6 +35,9 @@ from ktem.reasoning.mara_semantic_proposition_schema import (
     semantic_proposition_response_format,
 )
 
+from benchmark.qasper_causal_evidence_chain import (
+    qasper_causal_evidence_chain_prefix_complete,
+)
 from scripts.slurm.qasper_natural_semantic_pack_probe_payload import build_probe_result
 
 CONTRACT = "qasper_natural_semantic_pack_probe.v1"
@@ -63,6 +66,7 @@ class NaturalPackContext:
     load_reason: str
     binding: dict[str, Any]
     transaction_id: str
+    canonical_selector_projection: dict[str, Any]
 
 
 def canonical_digest(value: Any) -> str:
@@ -130,6 +134,7 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
         schema_parser=schema_parser,
         canonical_plan_count=canonical_plan_count,
         ambiguity=ambiguity,
+        canonical_selector_projection=context.canonical_selector_projection,
     )
     return build_probe_result(
         contract_id=CONTRACT,
@@ -176,7 +181,13 @@ def _freeze_natural_pack(
         bundle,
         candidate_priority=True,
     )
-    records = prepare_qasper_canonical_records(question, source_packing.records)
+    (
+        records,
+        canonical_selector_projection,
+    ) = prepare_qasper_canonical_records_with_trace(
+        question,
+        source_packing.records,
+    )
     transaction_id = (
         "natural-probe:"
         + canonical_digest(
@@ -218,6 +229,7 @@ def _freeze_natural_pack(
         load_reason=load_reason,
         binding=binding,
         transaction_id=transaction_id,
+        canonical_selector_projection=canonical_selector_projection,
     )
 
 
@@ -333,6 +345,7 @@ def _structural_checks(
     schema_parser: dict[str, Any],
     canonical_plan_count: int,
     ambiguity: dict[str, Any],
+    canonical_selector_projection: dict[str, Any],
 ) -> dict[str, bool]:
     state = str(binding.get("binding_state") or "")
     expected_flags = {
@@ -354,6 +367,17 @@ def _structural_checks(
         "not_applicable",
     }
     stored = _mapping(bundle.metadata.get("qasper_canonical_semantic_pack"))
+    trace_prefix = {
+        "main_candidate_generator": {
+            "canonical_selector_projection_trace": canonical_selector_projection,
+        },
+        "semantic_verifier": {
+            "semantic_data_lineage": {
+                "source_packing": _mapping(stored.get("source_packing_observation")),
+                "plan_construction": _mapping(binding.get("plan_construction_trace")),
+            }
+        },
+    }
     return {
         "pack_round_trip": loaded is not None and not load_reason,
         "pack_digest_stable": (
@@ -373,6 +397,9 @@ def _structural_checks(
             binding,
             schema_parser,
             canonical_plan_count=canonical_plan_count,
+        ),
+        "causal_trace_prefix_complete": (
+            qasper_causal_evidence_chain_prefix_complete(trace_prefix)
         ),
         "unambiguous_zero_plan_rejected": (
             bool(ambiguity.get("ambiguous")) or canonical_plan_count > 0

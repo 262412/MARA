@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from copy import deepcopy
 from typing import Any
 
@@ -16,9 +17,13 @@ from .mara_qasper_candidate_evidence import (
     candidate_selector_options as _candidate_selector_options,
 )
 from .mara_qasper_candidate_evidence import (
+    candidate_selector_options_with_trace as _candidate_selector_options_with_trace,
+)
+from .mara_qasper_candidate_evidence import (
     exact_candidate_slot_binding as _exact_candidate_slot_binding,
 )
-from .mara_qasper_semantic_pack import prepare_qasper_canonical_records
+from .mara_qasper_candidate_identity import candidate_digest as _trace_digest
+from .mara_qasper_semantic_pack import prepare_qasper_canonical_records_with_trace
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
@@ -27,7 +32,7 @@ from .mara_semantic_proposition_packing import (
     pack_semantic_proposition_evidence,
     required_semantic_proposition_slots,
 )
-from .mara_semantic_proposition_span_selectors import canonical_span_selectors
+from .mara_semantic_proposition_span_selectors import canonical_span_selector_projection
 
 _CANDIDATE_SELECTORS_PER_RECORD = 4
 
@@ -49,13 +54,20 @@ def _candidate_evidence(
     )
     records = _candidate_prompt_records(packing)
     prioritized_records = _prioritized_candidate_prompt_evidence(records, question)
-    records = prepare_qasper_canonical_records(question, prioritized_records)
+    (
+        records,
+        canonical_selector_projection_trace,
+    ) = prepare_qasper_canonical_records_with_trace(
+        question,
+        prioritized_records,
+    )
     semantic_filtered_count = len(prioritized_records) - len(records)
     (
         records,
         bound_slots,
         evidence_set_binding,
         candidate_dropped_count,
+        candidate_prompt_projection_trace,
     ) = _fit_candidate_prompt_evidence(
         question,
         records,
@@ -71,6 +83,8 @@ def _candidate_evidence(
         candidate_dropped_count=candidate_dropped_count,
         bound_slots=bound_slots,
         evidence_set_binding=evidence_set_binding,
+        candidate_prompt_projection_trace=candidate_prompt_projection_trace,
+        canonical_selector_projection_trace=canonical_selector_projection_trace,
     )
     return records, diagnostics, packing
 
@@ -120,6 +134,8 @@ def _candidate_evidence_diagnostics(
     candidate_dropped_count: int,
     bound_slots: list[dict[str, Any]],
     evidence_set_binding: dict[str, Any],
+    candidate_prompt_projection_trace: dict[str, Any],
+    canonical_selector_projection_trace: dict[str, Any],
 ) -> dict[str, Any]:
     pre_request_dropped_count = semantic_filtered_count + candidate_dropped_count
     return {
@@ -137,6 +153,8 @@ def _candidate_evidence_diagnostics(
         "question_proposition_resolution": packing.question_proposition_resolution,
         "required_slots": bound_slots,
         "candidate_evidence_set_binding": evidence_set_binding,
+        "candidate_prompt_projection_trace": candidate_prompt_projection_trace,
+        "canonical_selector_projection_trace": canonical_selector_projection_trace,
     }
 
 
@@ -148,8 +166,15 @@ def _fit_candidate_prompt_evidence(
     proposition: dict[str, Any],
     proposition_resolution: dict[str, Any],
     candidate_transaction_id: str = "",
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], int]:
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any],
+    int,
+    dict[str, Any],
+]:
     selected = list(records)
+    attempts: list[dict[str, Any]] = []
     while selected:
         evidence_set_binding = _candidate_evidence_set_binding(
             selected,
@@ -169,12 +194,27 @@ def _fit_candidate_prompt_evidence(
             required_slots=bound_slots,
             evidence_set_binding=evidence_set_binding,
         )
+        attempts.append(
+            {
+                "attempt": len(attempts) + 1,
+                "record_ids": [
+                    str(record.get("evidence_id") or "") for record in selected
+                ],
+                "prompt_chars": len(prompt),
+                "decision": (
+                    "accepted"
+                    if len(prompt) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS
+                    else "drop_last_record"
+                ),
+            }
+        )
         if len(prompt) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS:
             return (
                 selected,
                 bound_slots,
                 evidence_set_binding,
                 len(records) - len(selected),
+                _prompt_projection_trace(records, selected, attempts),
             )
         selected.pop()
     evidence_set_binding = _candidate_evidence_set_binding(
@@ -187,7 +227,40 @@ def _fit_candidate_prompt_evidence(
         _bound_candidate_slots(slots, [], binding=evidence_set_binding),
         evidence_set_binding,
         len(records),
+        _prompt_projection_trace(records, [], attempts),
     )
+
+
+def _prompt_projection_trace(
+    records: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    selected_ids = {str(record.get("evidence_id") or "") for record in selected}
+    decisions = [
+        {
+            "evidence_id": str(record.get("evidence_id") or ""),
+            "selected": str(record.get("evidence_id") or "") in selected_ids,
+            "decision": (
+                "selected_for_candidate_prompt"
+                if str(record.get("evidence_id") or "") in selected_ids
+                else "candidate_prompt_char_budget"
+            ),
+        }
+        for record in records
+    ]
+    return {
+        "contract_id": "qasper_candidate_prompt_projection.v1",
+        "complete": True,
+        "input_record_count": len(records),
+        "selected_record_count": len(selected),
+        "decision_count": len(decisions),
+        "decisions_digest": _trace_digest(decisions),
+        "decisions": decisions,
+        "attempt_count": len(attempts),
+        "attempts_digest": _trace_digest(attempts),
+        "attempts": attempts,
+    }
 
 
 def _candidate_prompt(
@@ -269,21 +342,24 @@ def _prioritized_candidate_prompt_evidence(
         text_start = int(record.get("candidate_source_text_start") or 0)
         canonical_start = record.get("canonical_start")
         canonical_start = canonical_start if isinstance(canonical_start, int) else None
+        raw_selectors, span_projection = canonical_span_selector_projection(
+            str(record.get("label") or ""),
+            source_text,
+            text_start,
+            canonical_start,
+            selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
+        )
         projected = {
             **record,
             "text": source_text,
             "text_start": text_start,
-            "selectors": canonical_span_selectors(
-                str(record.get("label") or ""),
-                source_text,
-                text_start,
-                canonical_start,
-                selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
-            ),
+            "selectors": raw_selectors,
         }
-        options = _candidate_selector_options(projected, question=question)[
-            :_CANDIDATE_SELECTORS_PER_RECORD
-        ]
+        eligible, eligibility_decisions = _candidate_selector_options_with_trace(
+            projected,
+            question=question,
+        )
+        options = eligible[:_CANDIDATE_SELECTORS_PER_RECORD]
         projected["selectors"] = [
             {
                 "selector_id": option["evidence_ref"],
@@ -293,8 +369,95 @@ def _prioritized_candidate_prompt_evidence(
             }
             for option in options
         ]
+        projected[
+            "candidate_selector_projection_trace"
+        ] = _candidate_selector_projection_trace(
+            raw_selectors,
+            eligible,
+            options,
+            span_projection=span_projection,
+            eligibility_decisions=eligibility_decisions,
+        )
         output.append(projected)
     return output
+
+
+def _candidate_selector_projection_trace(
+    raw_selectors: list[dict[str, Any]],
+    eligible_options: list[dict[str, Any]],
+    selected_options: list[dict[str, Any]],
+    *,
+    span_projection: dict[str, Any],
+    eligibility_decisions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    eligible_ranks = {
+        str(option.get("evidence_ref") or ""): rank
+        for rank, option in enumerate(eligible_options, start=1)
+    }
+    selected_refs = [
+        str(option.get("evidence_ref") or "") for option in selected_options
+    ]
+    selected = set(selected_refs)
+    eligibility_by_index = {
+        int(decision.get("source_selector_index") or 0): decision
+        for decision in eligibility_decisions
+    }
+    decisions = [
+        _candidate_selector_decision(
+            selector,
+            eligibility=eligibility_by_index.get(index, {}),
+            eligible_rank=eligible_ranks.get(str(selector.get("selector_id") or "")),
+            selected=str(selector.get("selector_id") or "") in selected,
+        )
+        for index, selector in enumerate(raw_selectors, start=1)
+    ]
+    return {
+        "contract_id": "qasper_candidate_selector_projection.v1",
+        "complete": True,
+        "input_selector_count": len(raw_selectors),
+        "eligible_selector_count": len(eligible_options),
+        "selected_selector_count": len(selected_options),
+        "decision_count": len(decisions),
+        "selected_selector_refs": selected_refs,
+        "decisions_digest": _trace_digest(decisions),
+        "span_projection": span_projection,
+        "decisions": decisions,
+    }
+
+
+def _candidate_selector_decision(
+    selector: dict[str, Any],
+    *,
+    eligibility: dict[str, Any],
+    eligible_rank: int | None,
+    selected: bool,
+) -> dict[str, Any]:
+    selector_id = str(selector.get("selector_id") or "")
+    identity = {
+        "selector_id": selector_id,
+        "span_start": selector.get("span_start"),
+        "span_end": selector.get("span_end"),
+        "text": str(selector.get("text") or ""),
+    }
+    return {
+        "selector_id": selector_id,
+        "selector_identity_digest": _trace_digest(identity),
+        "span_start": selector.get("span_start"),
+        "span_end": selector.get("span_end"),
+        "text_digest": hashlib.sha256(
+            str(selector.get("text") or "").encode("utf-8")
+        ).hexdigest(),
+        "eligible_rank": eligible_rank,
+        "eligibility_reason": str(eligibility.get("reason") or ""),
+        "selected": selected,
+        "decision": (
+            "selected_for_canonical_projection"
+            if selected
+            else "candidate_selector_limit"
+            if eligible_rank is not None
+            else str(eligibility.get("reason") or "semantic_projection_filtered")
+        ),
+    }
 
 
 def _compact_candidate_selector_options(

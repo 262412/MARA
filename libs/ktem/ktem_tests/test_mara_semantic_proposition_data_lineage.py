@@ -142,6 +142,11 @@ def test_unambiguous_answerable_zero_plan_cannot_finalize_lineage_as_passed() ->
     assert lineage["plan_construction"]["reason"] == "no_legal_evidence_plan"
     assert lineage["status"] == "failed"
     assert lineage["first_inconsistency"]["stage"] == "plan_construction"
+    assert lineage["first_decisive_transition"]["stage"] == "plan_construction"
+    assert lineage["first_decisive_transition"]["decision"] == (
+        "no_legal_evidence_plan"
+    )
+    assert len(lineage["first_decisive_transition"]["decision_context_digest"]) == 64
 
 
 def test_zero_plan_is_recorded_before_a_later_model_parse_failure() -> None:
@@ -179,4 +184,84 @@ def test_zero_plan_is_recorded_before_a_later_model_parse_failure() -> None:
     assert lineage["first_inconsistency"]["reason"] == "no_legal_evidence_plan"
     assert lineage["proposal_attempts"][0]["parse_failure_reason"] == (
         "plan_selection_schema_invalid"
+    )
+    assert lineage["first_decisive_transition"]["stage"] == "plan_construction"
+
+
+def test_unanswerable_with_a_legal_plan_records_the_candidate_plan_conflict() -> None:
+    diagnostics: dict[str, Any] = {}
+    record_proposal_data_lineage(
+        diagnostics,
+        _stage(
+            {
+                "candidate_judgment": "unknown",
+                "canonical_evidence_plan_id": "",
+            }
+        ),
+        context=_context(),
+        candidate="unanswerable",
+        applicable_proposition_slots=("actor", "predicate", "object"),
+        allowed_proposition_slot_bindings={"E1:S1": ("actor", "predicate", "object")},
+        allowed_proposition_evidence_plans={
+            "plan-1": {
+                "plan_id": "plan-1",
+                "polarity_relation": "proposition_support",
+                "span_refs": ["E1:S1"],
+                "slot_refs": {
+                    "actor": ["E1:S1"],
+                    "predicate": ["E1:S1"],
+                    "object": ["E1:S1"],
+                },
+                "required_object_tokens": ["systems", "two"],
+                "covered_object_tokens": ["systems", "two"],
+            }
+        },
+    )
+
+    transition = diagnostics["semantic_data_lineage"]["first_decisive_transition"]
+    assert transition["stage"] == "candidate_generation"
+    assert transition["decision"] == "unanswerable_despite_legal_local_plan"
+    assert transition["classification_hint"] == "candidate_plan_conflict"
+    assert transition["decision_context"]["legal_plan_count"] == 1
+
+
+def test_candidate_bound_audit_is_the_decisive_transition() -> None:
+    diagnostics: dict[str, Any] = {}
+    record_proposal_data_lineage(
+        diagnostics,
+        _stage({"candidate_judgment": "unknown", "canonical_evidence_plan_id": ""}),
+        context=_context(),
+        candidate="yes",
+        applicable_proposition_slots=("actor", "predicate", "object"),
+        allowed_proposition_slot_bindings={"E1:S1": ("actor", "predicate", "object")},
+        allowed_proposition_evidence_plans={
+            "plan-1": {
+                "plan_id": "plan-1",
+                "polarity_relation": "proposition_support",
+                "span_refs": ["E1:S1"],
+                "slot_refs": {
+                    "actor": ["E1:S1"],
+                    "predicate": ["E1:S1"],
+                    "object": ["E1:S1"],
+                },
+            }
+        },
+    )
+    diagnostics.update(
+        audit_status="candidate_bound",
+        audit_reason="candidate_relation_unknown",
+    )
+
+    finalize_semantic_data_lineage(
+        diagnostics,
+        status="parsed",
+        reason="strict_schema_and_candidate_audit",
+    )
+
+    transition = diagnostics["semantic_data_lineage"]["first_decisive_transition"]
+    assert transition["stage"] == "auditor_semantics"
+    assert transition["decision"] == "candidate_bound"
+    assert transition["classification_hint"] == "candidate_bound_terminal_abstention"
+    assert transition["decision_context"]["audit_reason"] == (
+        "candidate_relation_unknown"
     )

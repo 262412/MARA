@@ -23,6 +23,11 @@ from .mara_semantic_proposition_packing_support import (
     stable_source_id,
 )
 
+_RankedSourceRecordsTrace = tuple[
+    list[tuple[tuple[int | float, ...], dict[str, Any]]],
+    list[dict[str, Any]],
+]
+
 
 def ranked_source_records(
     request: Any,
@@ -32,50 +37,206 @@ def ranked_source_records(
     *,
     candidate_priority: bool,
 ) -> list[tuple[tuple[int | float, ...], dict[str, Any]]]:
+    records, _decisions = ranked_source_records_with_trace(
+        request,
+        question,
+        slots,
+        bundle,
+        candidate_priority=candidate_priority,
+    )
+    return records
+
+
+def ranked_source_records_with_trace(
+    request: Any,
+    question: str,
+    slots: list[dict[str, str]],
+    bundle: EvidenceBundle,
+    *,
+    candidate_priority: bool,
+) -> _RankedSourceRecordsTrace:
     preferred = _preferred_evidence_ids(request)
     ranked_positions = ranked_evidence_positions(bundle)
     records: list[tuple[tuple[int | float, ...], dict[str, Any]]] = []
+    decisions: list[dict[str, Any]] = []
     seen: set[str] = set()
     for index, item in enumerate(bundle.items):
+        text = evidence_item_text(item)
+        text_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
         try:
             identity = identity_of(item)
         except ValueError:
+            _append_rejection(
+                decisions,
+                index,
+                text_digest=text_digest,
+                text_chars=len(text),
+                reason="source_identity_invalid",
+            )
             continue
         evidence_id = identity.key
-        text = evidence_item_text(item)
-        if not text.strip() or evidence_id in seen:
+        if not text.strip():
+            _append_rejection(
+                decisions,
+                index,
+                evidence_id=evidence_id,
+                text_digest=text_digest,
+                text_chars=len(text),
+                reason="empty_source_text",
+            )
+            continue
+        if evidence_id in seen:
+            _append_rejection(
+                decisions,
+                index,
+                evidence_id=evidence_id,
+                text_digest=text_digest,
+                text_chars=len(text),
+                reason="duplicate_evidence_id",
+            )
             continue
         seen.add(evidence_id)
-        source_id, page_label = source_page_locator(item)
-        required_slot_ids = matching_slot_ids(slots, evidence_id)
-        alignment_score = evidence_alignment_score(request, question, item)
-        priority = semantic_record_priority(
+        priority, source_record = _rank_source_record(
+            request,
             question,
-            text,
+            slots,
+            item,
+            identity=identity,
+            evidence_id=evidence_id,
+            text=text,
+            index=index,
+            preferred=preferred,
+            ranked_positions=ranked_positions,
             candidate_priority=candidate_priority,
-            polarity_priority=evidence_polarity_priority(question, text),
-            alignment_score=alignment_score,
-            slot_priority=0 if evidence_id in preferred or required_slot_ids else 1,
-            ranked_position=ranked_positions.get(
-                evidence_id, len(ranked_positions) + index
-            ),
         )
-        records.append(
-            (
-                priority,
-                _source_record(
-                    item,
-                    identity=identity,
-                    text=text,
-                    source_id=source_id,
-                    page_label=page_label,
-                    required_slot_ids=required_slot_ids,
-                    alignment_score=alignment_score,
-                    candidate_priority=candidate_priority,
-                ),
+        records.append((priority, source_record))
+        decisions.append(
+            _raw_source_decision(
+                index,
+                evidence_id=evidence_id,
+                text_digest=text_digest,
+                text_chars=len(text),
+                decision="eligible",
+                reason="accepted_for_semantic_ranking",
             )
         )
-    return records
+    return records, decisions
+
+
+def _rank_source_record(
+    request: Any,
+    question: str,
+    slots: list[dict[str, str]],
+    item: Any,
+    *,
+    identity: Any,
+    evidence_id: str,
+    text: str,
+    index: int,
+    preferred: set[str],
+    ranked_positions: dict[str, int],
+    candidate_priority: bool,
+) -> tuple[tuple[int | float, ...], dict[str, Any]]:
+    source_id, page_label = source_page_locator(item)
+    required_slot_ids = matching_slot_ids(slots, evidence_id)
+    alignment_score = evidence_alignment_score(request, question, item)
+    priority = semantic_record_priority(
+        question,
+        text,
+        candidate_priority=candidate_priority,
+        polarity_priority=evidence_polarity_priority(question, text),
+        alignment_score=alignment_score,
+        slot_priority=0 if evidence_id in preferred or required_slot_ids else 1,
+        ranked_position=ranked_positions.get(
+            evidence_id, len(ranked_positions) + index
+        ),
+    )
+    return priority, _source_record(
+        item,
+        identity=identity,
+        text=text,
+        source_id=source_id,
+        page_label=page_label,
+        required_slot_ids=required_slot_ids,
+        alignment_score=alignment_score,
+        candidate_priority=candidate_priority,
+    )
+
+
+def _append_rejection(
+    decisions: list[dict[str, Any]],
+    index: int,
+    *,
+    text_digest: str,
+    text_chars: int,
+    reason: str,
+    evidence_id: str = "",
+) -> None:
+    decisions.append(
+        _raw_source_decision(
+            index,
+            evidence_id=evidence_id,
+            text_digest=text_digest,
+            text_chars=text_chars,
+            decision="rejected",
+            reason=reason,
+        )
+    )
+
+
+def source_record_decisions(
+    raw_decisions: list[dict[str, Any]],
+    observations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Close each raw source decision at its final packing boundary."""
+
+    by_evidence_id = {
+        str(observation.get("evidence_id") or ""): observation
+        for observation in observations
+        if str(observation.get("evidence_id") or "")
+    }
+    output: list[dict[str, Any]] = []
+    for raw in raw_decisions:
+        evidence_id = str(raw.get("evidence_id") or "")
+        observation = by_evidence_id.get(evidence_id)
+        if observation is None or raw.get("decision") != "eligible":
+            output.append(dict(raw))
+            continue
+        stop_stage = str(observation.get("stop_stage") or "")
+        output.append(
+            {
+                **raw,
+                "semantic_rank": observation.get("semantic_rank"),
+                "priority": list(observation.get("priority") or []),
+                "selected_for_windowing": observation.get("selected_for_windowing")
+                is True,
+                "packed": observation.get("packed") is True,
+                "decision": "packed"
+                if observation.get("packed") is True
+                else "rejected",
+                "reason": stop_stage or "source_record_unresolved",
+            }
+        )
+    return output
+
+
+def _raw_source_decision(
+    index: int,
+    *,
+    text_digest: str,
+    text_chars: int,
+    decision: str,
+    reason: str,
+    evidence_id: str = "",
+) -> dict[str, Any]:
+    return {
+        "source_item_index": index + 1,
+        "evidence_id": evidence_id,
+        "text_digest": text_digest,
+        "text_chars": text_chars,
+        "decision": decision,
+        "reason": reason,
+    }
 
 
 def selected_source_records(

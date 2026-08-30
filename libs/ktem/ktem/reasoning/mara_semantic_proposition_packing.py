@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ktem.docqa.evidence_schema import EvidenceBundle
@@ -16,9 +15,16 @@ from ktem.docqa.question_proposition import (
 
 from .mara_semantic_proposition_packing_records import (
     dropped_source_record_count,
-    ranked_source_records,
+    ranked_source_records_with_trace,
     selected_source_records,
+    source_record_decisions,
     source_record_observations,
+)
+from .mara_semantic_proposition_packing_support import (
+    FittingWindowResult as _FittingWindowResult,
+)
+from .mara_semantic_proposition_packing_support import (
+    estimated_text_tokens as _estimated_text_tokens,
 )
 from .mara_semantic_proposition_packing_support import optional_int as _optional_int
 from .mara_semantic_proposition_packing_support import (
@@ -27,11 +33,11 @@ from .mara_semantic_proposition_packing_support import (
 from .mara_semantic_proposition_packing_support import slot_value as _slot_value
 from .mara_semantic_proposition_packing_support import slot_values
 from .mara_semantic_proposition_span_selectors import (
-    canonical_span_selectors as _canonical_span_selectors,
+    canonical_span_selector_projection as _canonical_span_selector_projection,
 )
 from .mara_semantic_proposition_windowing import (
     relevant_evidence_window,
-    windowed_evidence_records,
+    windowed_evidence_records_with_trace,
 )
 
 SEMANTIC_PROPOSITION_VERIFIER_MIN_MODEL_CONTEXT_TOKENS = 4096
@@ -108,6 +114,8 @@ class SemanticPropositionEvidencePacking:
     semantic_pack_digest: str
     question_proposition: dict[str, Any]
     question_proposition_resolution: dict[str, Any]
+    source_decisions: list[dict[str, Any]] = field(default_factory=list)
+    window_decisions: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def packed_chars(self) -> int:
@@ -122,7 +130,7 @@ def pack_semantic_proposition_evidence(
     *,
     candidate_priority: bool = False,
 ) -> SemanticPropositionEvidencePacking:
-    records = ranked_source_records(
+    records, raw_source_decisions = ranked_source_records_with_trace(
         request,
         question,
         slots,
@@ -134,17 +142,23 @@ def pack_semantic_proposition_evidence(
         max_items=SEMANTIC_PROPOSITION_VERIFIER_MAX_ITEMS,
     )
     item_char_limit = _evidence_item_char_limit(request)
-    packed, estimated_input_tokens, truncated_count = _fit_evidence_records(
+    (
+        packed,
+        estimated_input_tokens,
+        truncated_count,
+        window_decisions,
+    ) = _fit_evidence_records(
         selected,
         question=question,
         slots=slots,
         item_char_limit=item_char_limit,
     )
+    source_observations = source_record_observations(records, selected, packed)
     resolution = resolve_question_proposition(question)
     proposition = resolution.proposition
     return SemanticPropositionEvidencePacking(
         records=packed,
-        source_records=source_record_observations(records, selected, packed),
+        source_records=source_observations,
         item_char_limit=item_char_limit,
         input_token_budget=SEMANTIC_PROPOSITION_VERIFIER_INPUT_TOKEN_BUDGET,
         estimated_input_tokens=estimated_input_tokens,
@@ -161,6 +175,11 @@ def pack_semantic_proposition_evidence(
         ),
         question_proposition=proposition.as_dict(),
         question_proposition_resolution=resolution.as_dict(),
+        source_decisions=source_record_decisions(
+            raw_source_decisions,
+            source_observations,
+        ),
+        window_decisions=window_decisions,
     )
 
 
@@ -297,7 +316,7 @@ def _fit_evidence_records(
     question: str,
     slots: list[dict[str, str]],
     item_char_limit: int,
-) -> tuple[list[dict[str, Any]], int, int]:
+) -> tuple[list[dict[str, Any]], int, int, list[dict[str, Any]]]:
     fitted: list[dict[str, Any]] = []
     source_lengths = {
         str(record.get("evidence_id") or ""): len(str(record.get("text") or ""))
@@ -306,38 +325,29 @@ def _fit_evidence_records(
     truncated_source_ids: set[str] = set()
     estimated_input_tokens = 0
     fair_item_limit = _fair_item_char_limit(item_char_limit, len(records))
-    windowed_records = windowed_evidence_records(
+    windowed_records, window_selection_decisions = windowed_evidence_records_with_trace(
         records,
         question,
         item_char_limit=fair_item_limit,
         max_windows=SEMANTIC_PROPOSITION_MAX_WINDOWS_PER_RECORD,
         selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
     )
+    window_fit_decisions: list[dict[str, Any]] = []
     for window_record in windowed_records:
-        text = str(window_record["text"] or "")
-        text_start = int(window_record.get("text_start") or 0)
-        candidate, candidate_input_tokens = _fitting_candidate(
+        (
+            candidate,
+            candidate_input_tokens,
+            text,
+            text_start,
+            decision,
+        ) = _fit_window_record(
             fitted,
             window_record,
-            text,
-            text_start=text_start,
             question=question,
             slots=slots,
+            item_char_limit=item_char_limit,
         )
-        if candidate is None:
-            (
-                candidate,
-                candidate_input_tokens,
-                text,
-                text_start,
-            ) = _largest_fitting_window(
-                fitted,
-                window_record,
-                str(window_record.get("candidate_source_text") or text),
-                question=question,
-                slots=slots,
-                item_char_limit=item_char_limit,
-            )
+        window_fit_decisions.append(decision)
         if candidate is None:
             continue
         fitted = candidate
@@ -345,7 +355,77 @@ def _fit_evidence_records(
         evidence_id = str(window_record.get("evidence_id") or "")
         if text_start > 0 or len(text) < source_lengths.get(evidence_id, len(text)):
             truncated_source_ids.add(evidence_id)
-    return fitted, estimated_input_tokens, len(truncated_source_ids)
+    selection_trace = [
+        {"stage": "window_selection", **decision}
+        for decision in window_selection_decisions
+    ]
+    return (
+        fitted,
+        estimated_input_tokens,
+        len(truncated_source_ids),
+        [*selection_trace, *window_fit_decisions],
+    )
+
+
+def _fit_window_record(
+    fitted: list[dict[str, Any]],
+    window_record: dict[str, Any],
+    *,
+    question: str,
+    slots: list[dict[str, str]],
+    item_char_limit: int,
+) -> tuple[list[dict[str, Any]] | None, int, str, int, dict[str, Any]]:
+    text = str(window_record["text"] or "")
+    text_start = int(window_record.get("text_start") or 0)
+    candidate, candidate_input_tokens, primary_reason = _fitting_candidate(
+        fitted,
+        window_record,
+        text,
+        text_start=text_start,
+        question=question,
+        slots=slots,
+    )
+    fallback_attempts: list[dict[str, Any]] = []
+    if candidate is None:
+        (
+            candidate,
+            candidate_input_tokens,
+            text,
+            text_start,
+            fallback_attempts,
+        ) = _largest_fitting_window(
+            fitted,
+            window_record,
+            str(window_record.get("candidate_source_text") or text),
+            question=question,
+            slots=slots,
+            item_char_limit=item_char_limit,
+        )
+    selected = candidate is not None
+    decision = {
+        "stage": "fit_to_input_budget",
+        "evidence_id": str(window_record.get("evidence_id") or ""),
+        "window_index": window_record.get("window_index"),
+        "window_start": int(window_record.get("text_start") or 0),
+        "window_end": int(window_record.get("text_start") or 0)
+        + len(str(window_record.get("text") or "")),
+        "window_text_digest": hashlib.sha256(
+            str(window_record.get("text") or "").encode("utf-8")
+        ).hexdigest(),
+        "selected": selected,
+        "decision": "packed" if selected else "rejected",
+        "reason": (
+            "accepted_with_fallback_window"
+            if selected and fallback_attempts
+            else "accepted_with_primary_window"
+            if selected
+            else "no_window_fits_input_budget"
+        ),
+        "primary_attempt_reason": primary_reason,
+        "estimated_input_tokens": candidate_input_tokens,
+        "fallback_attempts": fallback_attempts,
+    }
+    return candidate, candidate_input_tokens, text, text_start, decision
 
 
 def _fair_item_char_limit(item_char_limit: int, record_count: int) -> int:
@@ -368,7 +448,7 @@ def _fitting_candidate(
     text_start: int,
     question: str,
     slots: list[dict[str, str]],
-) -> tuple[list[dict[str, Any]] | None, int]:
+) -> tuple[list[dict[str, Any]] | None, int, str]:
     candidate = _label_evidence_records(
         [*fitted, {**record, "text": text, "text_start": text_start}],
         question=question,
@@ -376,11 +456,11 @@ def _fitting_candidate(
     try:
         prompt = semantic_proposition_verifier_prompt(question, slots, candidate)
     except ValueError:
-        return None, 0
+        return None, 0, "verifier_prompt_contract_rejected"
     estimated_input_tokens = _estimated_message_tokens(prompt)
     if estimated_input_tokens > SEMANTIC_PROPOSITION_VERIFIER_INPUT_TOKEN_BUDGET:
-        return None, 0
-    return candidate, estimated_input_tokens
+        return None, estimated_input_tokens, "verifier_input_token_budget"
+    return candidate, estimated_input_tokens, "accepted"
 
 
 def _largest_fitting_window(
@@ -391,15 +471,16 @@ def _largest_fitting_window(
     question: str,
     slots: list[dict[str, str]],
     item_char_limit: int,
-) -> tuple[list[dict[str, Any]] | None, int, str, int]:
+) -> _FittingWindowResult:
     upper = min(len(source_text), item_char_limit) - 1
     if upper < SEMANTIC_PROPOSITION_VERIFIER_MIN_ITEM_CHARS:
-        return None, 0, "", 0
+        return None, 0, "", 0, []
     lower = SEMANTIC_PROPOSITION_VERIFIER_MIN_ITEM_CHARS
     best_candidate: list[dict[str, Any]] | None = None
     best_estimate = 0
     best_text = ""
     best_start = 0
+    attempts: list[dict[str, Any]] = []
     while lower <= upper:
         limit = (lower + upper) // 2
         text, text_start = relevant_evidence_window(
@@ -408,13 +489,24 @@ def _largest_fitting_window(
             limit,
             selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
         )
-        candidate, estimate = _fitting_candidate(
+        candidate, estimate, reason = _fitting_candidate(
             fitted,
             record,
             text,
             text_start=text_start,
             question=question,
             slots=slots,
+        )
+        attempts.append(
+            {
+                "limit": limit,
+                "window_start": text_start,
+                "window_end": text_start + len(text),
+                "window_text_digest": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                "decision": "accepted" if candidate is not None else "rejected",
+                "reason": reason,
+                "estimated_input_tokens": estimate,
+            }
         )
         if candidate is None:
             upper = limit - 1
@@ -424,7 +516,7 @@ def _largest_fitting_window(
         best_text = text
         best_start = text_start
         lower = limit + 1
-    return best_candidate, best_estimate, best_text, best_start
+    return best_candidate, best_estimate, best_text, best_start, attempts
 
 
 def _label_evidence_records(
@@ -435,19 +527,21 @@ def _label_evidence_records(
     labeled: list[dict[str, Any]] = []
     for index, record in enumerate(records, start=1):
         label = f"E{index}"
+        selectors, selector_trace = _canonical_span_selector_projection(
+            label,
+            str(record["text"]),
+            int(record.get("text_start") or 0),
+            _optional_int(record.get("canonical_start")),
+            selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
+            question=question,
+            max_selectors=SEMANTIC_PROPOSITION_MAX_SELECTORS_PER_RECORD,
+        )
         labeled.append(
             {
                 **record,
                 "label": label,
-                "selectors": _canonical_span_selectors(
-                    label,
-                    str(record["text"]),
-                    int(record.get("text_start") or 0),
-                    _optional_int(record.get("canonical_start")),
-                    selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
-                    question=question,
-                    max_selectors=SEMANTIC_PROPOSITION_MAX_SELECTORS_PER_RECORD,
-                ),
+                "selectors": selectors,
+                "source_selector_projection_trace": selector_trace,
             }
         )
     return labeled
@@ -459,14 +553,6 @@ def _estimated_message_tokens(prompt: str) -> int:
         + _estimated_text_tokens(SEMANTIC_PROPOSITION_VERIFIER_SYSTEM_PROMPT)
         + _estimated_text_tokens(prompt)
     )
-
-
-def _estimated_text_tokens(text: str) -> int:
-    byte_count = len(text.encode("utf-8"))
-    lexical_piece_count = len(re.findall(r"\w+|[^\w\s]", text))
-    byte_estimate = (byte_count + 2) // 3
-    lexical_estimate = (lexical_piece_count * 3 + 1) // 2
-    return max(byte_estimate, lexical_estimate)
 
 
 def semantic_proposition_pack_digest(

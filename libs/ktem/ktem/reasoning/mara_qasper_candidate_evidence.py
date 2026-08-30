@@ -34,54 +34,125 @@ def candidate_selector_options(
     *,
     question: str = "",
 ) -> list[dict[str, Any]]:
+    options, _decisions = candidate_selector_options_with_trace(
+        record,
+        question=question,
+    )
+    return options
+
+
+def candidate_selector_options_with_trace(
+    record: dict[str, Any],
+    *,
+    question: str = "",
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return selector options and one disposition for every raw selector."""
+
     required_slots = set(_required_candidate_slots(question))
     options: list[dict[str, Any]] = []
-    for selector in record.get("selectors") or []:
-        if not isinstance(selector, dict) or not _exact_selector_valid(
+    decisions: list[dict[str, Any]] = []
+    for source_index, selector in enumerate(record.get("selectors") or [], start=1):
+        option, decision = _selector_disposition(
+            record,
             selector,
-            record_text=record.get("text"),
-            record_text_start=record.get("text_start"),
-        ):
-            continue
-        selector_text = str(selector.get("text") or "")
-        semantics = _revalidated_selector_semantics(
-            selector,
-            question,
-            selector_text,
+            required_slots=required_slots,
+            question=question,
+            source_index=source_index,
         )
-        slot_hints = list(semantics["slots"])
-        if (
-            not slot_hints
-            and semantics["candidate_relation_role"] != "uncertainty_context"
-        ):
-            continue
-        locally_verified_slots = list(slot_hints)
-        jointly_aligned = required_slots <= set(locally_verified_slots)
-        options.append(
-            {
-                "evidence_id": str(record.get("evidence_id") or "").strip(),
-                "evidence_ref": str(selector.get("selector_id") or ""),
-                "span_start": selector.get("span_start"),
-                "span_end": selector.get("span_end"),
-                "text": selector_text,
-                "slot_hints": slot_hints,
-                "locally_verified_slots": locally_verified_slots,
-                "allowed_proposition_slots": locally_verified_slots,
-                "relation_bearing": bool(semantics["relation_bearing"]),
-                "candidate_relation_role": str(semantics["candidate_relation_role"]),
-                "local_relation_state": str(semantics["local_relation_state"]),
-                "proposition_slot_spans": semantics["slot_spans"],
-                "joint_slot_hint": jointly_aligned,
-                "polarity_signal": (
-                    str(semantics["polarity_signal"])
-                    if jointly_aligned
-                    else "undetermined"
-                ),
-            }
-        )
-    return sorted(
+        if option is not None:
+            options.append(option)
+        decisions.append(decision)
+    ranked = sorted(
         options, key=lambda option: _selector_prompt_priority(question, option)
     )
+    ranks = {
+        str(option.get("evidence_ref") or ""): rank
+        for rank, option in enumerate(ranked, start=1)
+    }
+    for decision in decisions:
+        decision["eligible_rank"] = ranks.get(str(decision.get("selector_ref") or ""))
+    return ranked, decisions
+
+
+def _selector_disposition(
+    record: dict[str, Any],
+    selector: Any,
+    *,
+    required_slots: set[str],
+    question: str,
+    source_index: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    if not isinstance(selector, dict):
+        return None, _selector_option_decision(
+            {},
+            source_index=source_index,
+            decision="rejected",
+            reason="invalid_selector_type",
+        )
+    if not _exact_selector_valid(
+        selector,
+        record_text=record.get("text"),
+        record_text_start=record.get("text_start"),
+    ):
+        return None, _selector_option_decision(
+            selector,
+            source_index=source_index,
+            decision="rejected",
+            reason="exact_selector_invalid",
+        )
+    selector_text = str(selector.get("text") or "")
+    semantics = _revalidated_selector_semantics(selector, question, selector_text)
+    slot_hints = list(semantics["slots"])
+    if not slot_hints and semantics["candidate_relation_role"] != "uncertainty_context":
+        return None, _selector_option_decision(
+            selector,
+            source_index=source_index,
+            decision="rejected",
+            reason="slotless_non_uncertainty",
+        )
+    locally_verified_slots = list(slot_hints)
+    jointly_aligned = required_slots <= set(locally_verified_slots)
+    option = {
+        "evidence_id": str(record.get("evidence_id") or "").strip(),
+        "evidence_ref": str(selector.get("selector_id") or ""),
+        "span_start": selector.get("span_start"),
+        "span_end": selector.get("span_end"),
+        "text": selector_text,
+        "slot_hints": slot_hints,
+        "locally_verified_slots": locally_verified_slots,
+        "allowed_proposition_slots": locally_verified_slots,
+        "relation_bearing": bool(semantics["relation_bearing"]),
+        "candidate_relation_role": str(semantics["candidate_relation_role"]),
+        "local_relation_state": str(semantics["local_relation_state"]),
+        "proposition_slot_spans": semantics["slot_spans"],
+        "joint_slot_hint": jointly_aligned,
+        "polarity_signal": (
+            str(semantics["polarity_signal"]) if jointly_aligned else "undetermined"
+        ),
+    }
+    return option, _selector_option_decision(
+        selector,
+        source_index=source_index,
+        decision="eligible",
+        reason="locally_auditable_selector",
+    )
+
+
+def _selector_option_decision(
+    selector: dict[str, Any],
+    *,
+    source_index: int,
+    decision: str,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "source_selector_index": source_index,
+        "selector_ref": str(selector.get("selector_id") or ""),
+        "span_start": selector.get("span_start"),
+        "span_end": selector.get("span_end"),
+        "decision": decision,
+        "reason": reason,
+    }
 
 
 def candidate_evidence_set_binding(

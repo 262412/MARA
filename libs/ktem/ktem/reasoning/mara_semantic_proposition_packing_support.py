@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ktem.docqa.boolean_proposition_candidates import (
@@ -7,6 +8,22 @@ from ktem.docqa.boolean_proposition_candidates import (
 )
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.query_evidence_binding_support import candidate_score_for_slot
+
+FittingWindowResult = tuple[
+    list[dict[str, Any]] | None,
+    int,
+    str,
+    int,
+    list[dict[str, Any]],
+]
+
+
+def estimated_text_tokens(text: str) -> int:
+    byte_count = len(text.encode("utf-8"))
+    lexical_piece_count = len(re.findall(r"\w+|[^\w\s]", text))
+    byte_estimate = (byte_count + 2) // 3
+    lexical_estimate = (lexical_piece_count * 3 + 1) // 2
+    return max(byte_estimate, lexical_estimate)
 
 
 def slot_values(slot: Any, key: str) -> tuple[str, ...]:

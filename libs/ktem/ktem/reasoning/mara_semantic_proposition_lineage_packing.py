@@ -12,6 +12,9 @@ def source_packing_lineage(context: Any) -> dict[str, Any]:
     observation["status"] = "passed"
     observation["source_records"] = _mapping_list(observation.get("source_records"))
     observation["records"] = _mapping_list(observation.get("records"))
+    observation["canonical_records"] = _mapping_list(
+        observation.get("canonical_records")
+    )
     return observation
 
 
@@ -21,6 +24,8 @@ def empty_source_packing_lineage(status: str = "not_run") -> dict[str, Any]:
         "contract_id": "",
         "source_records": [],
         "records": [],
+        "canonical_records": [],
+        "selector_crosswalk": {},
         "dropped_count": 0,
         "truncated_count": 0,
     }

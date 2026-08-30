@@ -340,6 +340,23 @@ def test_candidate_compaction_keeps_aligned_evidence_record() -> None:
     trace = bundle.metadata["qasper_candidate_generation"]
     assert trace["request_dropped_evidence_count"] == 1
     assert trace["evidence_count"] == 1
+    request_projection = trace["candidate_request_projection_trace"]
+    prompt_projection = trace["candidate_prompt_projection_trace"]
+    assert prompt_projection["complete"] is True
+    assert (
+        prompt_projection["decision_count"] == prompt_projection["input_record_count"]
+    )
+    assert prompt_projection["attempt_count"] == len(prompt_projection["attempts"])
+    assert request_projection["complete"] is True
+    assert request_projection["input_record_count"] == trace["evidence_count"] == 1
+    assert request_projection["selected_record_count"] == 1
+    assert request_projection["decision_count"] == 1
+    assert {decision["decision"] for decision in request_projection["decisions"]} == {
+        "selected_for_model_request"
+    }
+    assert {attempt["decision"] for attempt in request_projection["attempts"]} == {
+        "accepted"
+    }
     candidate_message = trace["message_stack"][1]["content"]
     assert "[E1]" in candidate_message
     assert "evidence_id=evidence:paper:e1" not in candidate_message

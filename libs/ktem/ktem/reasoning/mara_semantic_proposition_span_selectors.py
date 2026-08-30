@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from typing import Any
 
@@ -25,6 +27,69 @@ def canonical_span_selectors(
     question: str | None = None,
     max_selectors: int | None = None,
 ) -> list[dict[str, Any]]:
+    selectors, _trace = canonical_span_selector_projection(
+        evidence_label,
+        text,
+        text_start,
+        canonical_start,
+        selector_max_chars=selector_max_chars,
+        question=question,
+        max_selectors=max_selectors,
+    )
+    return selectors
+
+
+def canonical_span_selector_projection(
+    evidence_label: str,
+    text: str,
+    text_start: int,
+    canonical_start: int | None,
+    *,
+    selector_max_chars: int,
+    question: str | None = None,
+    max_selectors: int | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Return unchanged selectors plus every pre-limit span decision."""
+
+    spans = _candidate_spans(text, selector_max_chars)
+    selected_indices, selection_ranks = _relevant_span_selection(
+        text,
+        spans,
+        question=question,
+        max_selectors=max_selectors,
+    )
+    selected_spans = [
+        span for index, span in enumerate(spans) if index in selected_indices
+    ]
+    selectors = _selectors_for_spans(
+        evidence_label,
+        text,
+        selected_spans,
+        text_start=text_start,
+        canonical_start=canonical_start,
+    )
+    decisions = _span_projection_decisions(
+        evidence_label,
+        text,
+        spans,
+        selectors,
+        selected_indices=selected_indices,
+        selection_ranks=selection_ranks,
+        text_start=text_start,
+        max_selectors=max_selectors,
+    )
+    return selectors, {
+        "contract_id": "canonical_span_selector_projection.v1",
+        "complete": True,
+        "input_span_count": len(spans),
+        "selected_span_count": len(selectors),
+        "decision_count": len(decisions),
+        "decisions_digest": _digest(decisions),
+        "decisions": decisions,
+    }
+
+
+def _candidate_spans(text: str, selector_max_chars: int) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
     cursor = 0
     for match in re.finditer(r".+?(?:[.!?](?=\s|$)|\n+|$)", text, re.DOTALL):
@@ -35,12 +100,17 @@ def canonical_span_selectors(
     if cursor < len(text):
         start, end = _trimmed_span(text, cursor, len(text))
         spans.extend(_bounded_spans(text, start, end, selector_max_chars))
-    spans = _select_relevant_spans(
-        text,
-        spans,
-        question=question,
-        max_selectors=max_selectors,
-    )
+    return spans
+
+
+def _selectors_for_spans(
+    evidence_label: str,
+    text: str,
+    spans: list[tuple[int, int]],
+    *,
+    text_start: int,
+    canonical_start: int | None,
+) -> list[dict[str, Any]]:
     return [
         {
             "selector_id": f"{evidence_label}:S{index}",
@@ -62,6 +132,45 @@ def canonical_span_selectors(
     ]
 
 
+def _span_projection_decisions(
+    evidence_label: str,
+    text: str,
+    spans: list[tuple[int, int]],
+    selectors: list[dict[str, Any]],
+    *,
+    selected_indices: set[int],
+    selection_ranks: dict[int, int],
+    text_start: int,
+    max_selectors: int | None,
+) -> list[dict[str, Any]]:
+    selector_by_span = {
+        (selector["span_start"], selector["span_end"]): selector["selector_id"]
+        for selector in selectors
+    }
+    return [
+        _span_decision(
+            evidence_label,
+            text,
+            span,
+            source_index=index,
+            selection_rank=selection_ranks[index],
+            selected=index in selected_indices,
+            selector_id=selector_by_span.get(
+                (text_start + span[0], text_start + span[1]),
+                "",
+            ),
+            text_start=text_start,
+            max_selectors=max_selectors,
+            limited=bool(
+                max_selectors is not None
+                and max_selectors > 0
+                and len(spans) > max_selectors
+            ),
+        )
+        for index, span in enumerate(spans)
+    ]
+
+
 def _select_relevant_spans(
     text: str,
     spans: list[tuple[int, int]],
@@ -71,10 +180,32 @@ def _select_relevant_spans(
 ) -> list[tuple[int, int]]:
     """Keep a bounded, question-aware span universe without rewriting spans."""
 
+    selected, _ranks = _relevant_span_selection(
+        text,
+        spans,
+        question=question,
+        max_selectors=max_selectors,
+    )
+    return [span for index, span in enumerate(spans) if index in selected]
+
+
+def _relevant_span_selection(
+    text: str,
+    spans: list[tuple[int, int]],
+    *,
+    question: str | None,
+    max_selectors: int | None,
+) -> tuple[set[int], dict[int, int]]:
+    """Return selected source indexes and their deterministic selection ranks."""
+
     if max_selectors is None or max_selectors <= 0 or len(spans) <= max_selectors:
-        return spans
+        indexes = list(range(len(spans)))
+        return set(indexes), {index: rank for rank, index in enumerate(indexes, 1)}
     if not question:
-        return spans[:max_selectors]
+        indexes = list(range(len(spans)))
+        return set(indexes[:max_selectors]), {
+            index: rank for rank, index in enumerate(indexes, 1)
+        }
     question_tokens = semantic_content_token_set(question)
     ranked = sorted(
         enumerate(spans),
@@ -87,8 +218,61 @@ def _select_relevant_spans(
             value[0],
         ),
     )
-    selected = {index for index, _span in ranked[:max_selectors]}
-    return [span for index, span in enumerate(spans) if index in selected]
+    return (
+        {index for index, _span in ranked[:max_selectors]},
+        {index: rank for rank, (index, _span) in enumerate(ranked, 1)},
+    )
+
+
+def _span_decision(
+    evidence_label: str,
+    text: str,
+    span: tuple[int, int],
+    *,
+    source_index: int,
+    selection_rank: int,
+    selected: bool,
+    selector_id: str,
+    text_start: int,
+    max_selectors: int | None,
+    limited: bool,
+) -> dict[str, Any]:
+    start, end = span
+    span_text = text[start:end]
+    absolute_start = text_start + start
+    absolute_end = text_start + end
+    identity = {
+        "evidence_label": evidence_label,
+        "span_start": absolute_start,
+        "span_end": absolute_end,
+        "text_digest": hashlib.sha256(span_text.encode("utf-8")).hexdigest(),
+    }
+    return {
+        "span_identity_digest": _digest(identity),
+        **identity,
+        "source_span_index": source_index + 1,
+        "selection_rank": selection_rank,
+        "selected": selected,
+        "selector_id": selector_id,
+        "decision": (
+            "selected_within_limit"
+            if selected and limited
+            else "selected_without_limit"
+            if selected
+            else "per_record_selector_limit"
+        ),
+        "max_selectors": max_selectors,
+    }
+
+
+def _digest(value: Any) -> str:
+    canonical = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _span_semantic_rank(

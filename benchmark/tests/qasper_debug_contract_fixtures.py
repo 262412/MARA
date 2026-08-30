@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _prediction
+from benchmark.tests.qasper_debug_contract_trace_helpers import (
+    debug_generator_trace as _debug_generator_trace,
+)
 from benchmark.tests.qasper_debug_lineage_fixtures import (
+    _debug_plan_construction,
     _debug_semantic_chain_fixture,
     _debug_verifier_state_fields,
 )
@@ -69,12 +72,21 @@ def _qasper_debug_prediction(
                 example_id, candidate, terminal_answer, ambiguous
             ),
             "terminal_outcome": terminal_outcome,
+            "answer_status": (
+                "answered" if terminal_outcome == "answered" else "abstained"
+            ),
             "terminal_outcome_reason": "",
             "terminal_outcome_contract_violation": False,
             "terminal_semantic_commit": {
                 "contract_id": "terminal_semantic_commit.v3",
                 "semantic_answer": terminal_answer,
                 "outcome": terminal_outcome,
+                "answer_status": (
+                    "answered" if terminal_outcome == "answered" else "abstained"
+                ),
+                "projection_hash": _fixture_digest(
+                    {"example_id": example_id, "terminal_outcome": terminal_outcome}
+                ),
             },
         }
     )
@@ -90,9 +102,24 @@ def _populate_debug_semantic_metadata(
     relation: str,
     audit_status: str,
 ) -> None:
-    generator = _debug_generator_trace(example_id, route, group_id, candidate)
-    semantic_pack = _debug_semantic_pack(str(generator["transaction_id"]))
+    transaction_id = f"generator:{example_id}:{route}"
+    semantic_pack = _debug_semantic_pack(transaction_id)
     identity = _debug_semantic_pack_identity(semantic_pack)
+    canonical_plan = semantic_pack["proposition_binding"]["canonical_evidence_plan"]
+    canonical_plan_id = str(canonical_plan["support_plan"]["plan_id"])
+    plan_trace = _debug_plan_construction(
+        canonical_plan_id,
+        selected_plan_id=canonical_plan_id,
+        selector_ref="E1:S1",
+        event_id="fixture-event",
+    )
+    generator = _debug_generator_trace(
+        example_id,
+        route,
+        group_id,
+        candidate,
+        plan_candidate_decisions_digest=str(plan_trace["candidate_decisions_digest"]),
+    )
     generator.update(
         canonical_semantic_pack_digest=identity["semantic_pack_digest"],
         canonical_span_universe_digest=identity["span_universe_digest"],
@@ -111,6 +138,7 @@ def _populate_debug_semantic_metadata(
             relation,
             audit_status,
             identity,
+            canonical_plan_id,
         ),
     )
     if relation in {"supported", "contradicted"} and audit_status == "passed":
@@ -224,137 +252,6 @@ def _state_case(state: tuple[str, str, bool]) -> dict[str, Any]:
     }
 
 
-def _debug_generator_trace(
-    example_id: str,
-    route: str,
-    group_id: str,
-    candidate: str,
-) -> dict[str, Any]:
-    transaction_id = f"generator:{example_id}:{route}"
-    raw_response = json.dumps(
-        {"candidate": candidate}, ensure_ascii=False, separators=(",", ":")
-    )
-    raw_digest = _fixture_digest(raw_response)
-    candidate_digest = _fixture_digest(candidate)
-    output_digest = _fixture_digest(
-        {
-            "raw_response_digest": raw_digest,
-            "provider_output_digest": raw_digest,
-            "cleaned_response_digest": raw_digest,
-            "raw_candidate": candidate,
-            "raw_candidate_digest": candidate_digest,
-            "typed_candidate": candidate,
-            "typed_candidate_digest": candidate_digest,
-            "raw_candidate_identity_preserved": True,
-            "status": "parsed",
-            "failure_reason": "",
-            "finish_reason": "stop",
-        }
-    )
-    return {
-        "contract_id": "qasper_typed_candidate_generation.v2",
-        "status": "parsed",
-        "model": "Qwen/Qwen3-8B",
-        "message_stack": [
-            {"index": 0, "role": "system", "content": "verify"},
-            {"index": 1, "role": "user", "content": "question"},
-        ],
-        "raw_response": raw_response,
-        "raw_response_digest": raw_digest,
-        "provider_output_digest": raw_digest,
-        "raw_response_truncated": False,
-        "cleaned_response": raw_response,
-        "raw_candidate": candidate,
-        "raw_candidate_failure_reason": "",
-        "raw_candidate_digest": candidate_digest,
-        "typed_candidate": candidate,
-        "typed_candidate_digest": candidate_digest,
-        "raw_candidate_identity_preserved": True,
-        "typed_proposition": {
-            "actor": "current_paper",
-            "predicate": "use",
-            "object_surface": "the method",
-            "quantifier": "none",
-        },
-        "question_proposition_resolution": {"status": "complete"},
-        "required_slots": [
-            {
-                "slot_id": "support:boolean_proposition",
-                "binding_status": "bound",
-                "evidence_ids": ["span:paper:s1"],
-                "evidence_refs": ["E1:S1"],
-            }
-        ],
-        "finish_reason": "stop",
-        "failure_reason": "",
-        **_debug_generator_lineage(
-            candidate,
-            raw_response,
-            raw_digest,
-            candidate_digest,
-            output_digest,
-            transaction_id,
-        ),
-        "trace_group_id": group_id,
-        "transaction_id": transaction_id,
-        "attempt_id": f"{transaction_id}:1",
-        "effective_seed": 20260724,
-        "input_digest": f"generator-input:{route}",
-        "output_digest": output_digest,
-    }
-
-
-def _debug_generator_lineage(
-    candidate: str,
-    raw_response: str,
-    raw_digest: str,
-    candidate_digest: str,
-    output_digest: str,
-    transaction_id: str,
-) -> dict[str, Any]:
-    return {
-        "transformation_stages": [
-            {
-                "stage": "raw_response",
-                "value": raw_response,
-                "digest": raw_digest,
-                "failure_reason": "",
-            },
-            {
-                "stage": "cleaning",
-                "value": raw_response,
-                "digest": raw_digest,
-                "changed": False,
-                "failure_reason": "",
-            },
-            {
-                "stage": "typed_candidate",
-                "value": candidate,
-                "digest": candidate_digest,
-                "failure_reason": "",
-                "source_stage": "cleaning",
-                "identity_preserved": True,
-            },
-        ],
-        "attempts": [
-            {
-                "attempt_id": f"{transaction_id}:1",
-                "status": "parsed",
-                "failure_reason": "",
-                "raw_response": raw_response,
-                "cleaned_response": raw_response,
-                "raw_candidate": candidate,
-                "raw_candidate_digest": candidate_digest,
-                "typed_candidate": candidate,
-                "typed_candidate_digest": candidate_digest,
-                "raw_candidate_identity_preserved": True,
-                "finish_reason": "stop",
-                "output_digest": output_digest,
-            }
-        ],
-    }
-
-
 def _debug_verifier_trace(
     example_id: str,
     route: str,
@@ -363,6 +260,7 @@ def _debug_verifier_trace(
     relation: str,
     audit_status: str,
     pack_identity: dict[str, str],
+    canonical_plan_id: str,
 ) -> dict[str, Any]:
     transaction_id = f"verifier:{example_id}:{route}"
     verdict = _debug_verifier_verdict(candidate, relation)
@@ -395,6 +293,11 @@ def _debug_verifier_trace(
         "audit_reason": "fixture_audit",
         "evidence_label_map": {"E1": "span:paper:s1"},
         "unknown_assessment": _debug_unknown_assessment(relation),
+        "rejected_transactions": (
+            [{"canonical_evidence_plan_id": canonical_plan_id}]
+            if audit_status == "failed" and relation != "unknown"
+            else []
+        ),
         "semantic_pack_digest": pack_identity["semantic_pack_digest"],
         "canonical_span_universe_digest": pack_identity["span_universe_digest"],
         "candidate_transaction_id": pack_identity["candidate_transaction_id"],
@@ -412,6 +315,7 @@ def _debug_verifier_trace(
             typed_conclusion,
             conclusion_audit,
             pack_identity,
+            canonical_plan_id,
         ),
         "trace_group_id": group_id,
         "transaction_id": transaction_id,

@@ -126,6 +126,11 @@ def test_qasper_semantic_debug_row_projects_the_full_consistency_chain() -> None
             "evidence_ids": [],
         }
     ]
+    assert row["causal_evidence_chain"]["status"] == "incomplete"
+    assert (
+        "source_packing_observation_missing"
+        in row["causal_evidence_chain"]["incompleteness_reasons"]
+    )
     assert {finding["code"] for finding in row["findings"]} == {
         "audit_verified_authority_rejected",
         "same_instance_proposal_and_audit",

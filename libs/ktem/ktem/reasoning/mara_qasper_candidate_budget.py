@@ -406,6 +406,12 @@ def candidate_generation_trace(
         "controlled_original_candidate": controlled_candidate,
         "requested_controlled_candidate": controlled_candidate,
         **evidence_diagnostics,
+        **_candidate_trace_defaults(),
+    }
+
+
+def _candidate_trace_defaults() -> dict[str, Any]:
+    return {
         "attempts": [],
         "raw_response": "",
         "raw_response_truncated": False,
@@ -434,6 +440,16 @@ def candidate_generation_trace(
         "actual_input_tokens": -1,
         "actual_input_token_count": -1,
         "transformation_stages": [],
+        "model_decision": {
+            "contract_id": "qasper_model_candidate_decision.v1",
+            "status": "not_started",
+            "decision": "",
+            "decision_origin": "model_output",
+            "rationale_status": "not_requested_by_low_entropy_contract",
+            "decision_context": {},
+            "decision_context_digest": "",
+            "raw_response_digest": "",
+        },
     }
 
 

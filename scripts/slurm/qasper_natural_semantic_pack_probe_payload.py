@@ -38,6 +38,9 @@ def build_probe_result(
         "packing_observation": deepcopy(
             _mapping(stored_pack.get("source_packing_observation"))
         ),
+        "canonical_selector_projection_trace": deepcopy(
+            context.canonical_selector_projection
+        ),
         "candidate_transaction_id": context.transaction_id,
         "binding_state": str(binding.get("binding_state") or ""),
         "binding_status": str(binding.get("binding_status") or ""),

@@ -13,12 +13,18 @@ from ktem.docqa.semantic_relation_clause_lexical import (
     canonical_proposition_object_token_set,
 )
 
+from .mara_semantic_proposition_causal_lineage import (
+    finalize_decisive_transition,
+    plan_decision_trace_fields,
+    record_candidate_bound_decisive_transition,
+    record_plan_decisive_transition,
+)
 from .mara_semantic_proposition_debug import response_text
 from .mara_semantic_proposition_lineage_packing import (
     empty_source_packing_lineage,
     source_packing_lineage,
 )
-from .mara_semantic_proposition_schema import semantic_proposition_response_format
+from .mara_semantic_proposition_lineage_proposal import proposal_lineage_fields
 
 SEMANTIC_PROPOSITION_DATA_LINEAGE_CONTRACT = "semantic_proposition_data_lineage.v1"
 
@@ -33,56 +39,20 @@ def record_proposal_data_lineage(
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
     allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None,
 ) -> None:
-    plan_mode = allowed_proposition_evidence_plans is not None
     stage_value = stage.value if isinstance(stage.value, Mapping) else {}
     selectors = _context_selectors(context)
-    response_format = semantic_proposition_response_format(
-        [str(selector.get("selector_id") or "") for selector in selectors],
-        [str(slot.get("slot_id") or "") for slot in context.slots],
-        candidate=candidate,
-        applicable_proposition_slots=applicable_proposition_slots,
-        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
-        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
-    )
     lineage = _lineage(diagnostics)
     lineage.update(
-        {
-            "identities": {
-                "semantic_pack_digest": str(context.semantic_pack_digest or ""),
-                "canonical_span_universe_digest": str(
-                    context.canonical_span_universe_digest or ""
-                ),
-                "candidate_transaction_id": str(context.candidate_transaction_id or ""),
-            },
-            "proposal_contract": {
-                "mode": (
-                    "canonical_plan_selection"
-                    if plan_mode
-                    else "model_premise_generation"
-                ),
-                "allowed_plan_ids": sorted(
-                    str(plan_id)
-                    for plan_id in (allowed_proposition_evidence_plans or {})
-                    if str(plan_id)
-                ),
-                "response_schema_digest": _canonical_digest(
-                    response_format.get("json_schema", {}).get("schema", {})
-                ),
-            },
-            "proposal_attempts": _attempt_lineage(stage),
-            "local_projection": {
-                "status": (
-                    "passed"
-                    if plan_mode and stage_value
-                    else "not_run"
-                    if plan_mode
-                    else "not_applicable"
-                ),
-                "selected_plan_id": str(
-                    stage_value.get("canonical_evidence_plan_id") or ""
-                ),
-            },
-        }
+        proposal_lineage_fields(
+            context=context,
+            candidate=candidate,
+            selectors=selectors,
+            stage_value=stage_value,
+            proposal_attempts=_attempt_lineage(stage),
+            applicable_proposition_slots=applicable_proposition_slots,
+            allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+            allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
+        )
     )
     selector, construction = _plan_construction_lineage(
         context=context,
@@ -95,6 +65,7 @@ def record_proposal_data_lineage(
     lineage["selector"] = selector
     lineage["plan_construction"] = construction
     lineage["source_packing"] = source_packing_lineage(context)
+    record_plan_decisive_transition(lineage, candidate=candidate)
     _record_early_plan_construction_failure(lineage, construction)
     _record_stage_first_inconsistency(
         lineage,
@@ -143,6 +114,13 @@ def finalize_semantic_data_lineage(
             "attempts": [],
         },
     )
+    if str(diagnostics.get("audit_status") or "") == "candidate_bound":
+        record_candidate_bound_decisive_transition(
+            lineage,
+            status=status,
+            reason=reason,
+            audit_reason=str(diagnostics.get("audit_reason") or ""),
+        )
     construction = lineage.get("plan_construction")
     plan_failed = (
         isinstance(construction, Mapping)
@@ -156,8 +134,10 @@ def finalize_semantic_data_lineage(
         lineage["status"] = "failed"
         _record_plan_construction_inconsistency(lineage)
         if status == "parsed" or lineage.get("first_inconsistency"):
+            finalize_decisive_transition(lineage, status=status, reason=reason)
             return
     if status == "parsed" or lineage.get("first_inconsistency"):
+        finalize_decisive_transition(lineage, status=status, reason=reason)
         return
     stage = _diagnostic_failure_stage(diagnostics, reason)
     attempt = 0
@@ -179,6 +159,7 @@ def finalize_semantic_data_lineage(
         "attempt": attempt,
         "raw_response_digest": raw_response_digest,
     }
+    finalize_decisive_transition(lineage, status=status, reason=reason)
 
 
 def _plan_construction_lineage(
@@ -254,6 +235,7 @@ def _plan_construction_lineage(
         "covered_object_tokens": covered_tokens,
         "event_ids": event_ids or selector["event_ids"],
         "selected_plan_id": selected_plan_id,
+        **plan_decision_trace_fields(trace),
     }
 
 
@@ -483,6 +465,7 @@ def _lineage(diagnostics: dict[str, Any]) -> dict[str, Any]:
         },
         "audit": {"status": "not_run", "reason": "", "attempts": []},
         "first_inconsistency": {},
+        "first_decisive_transition": {},
     }
     diagnostics["semantic_data_lineage"] = lineage
     return lineage

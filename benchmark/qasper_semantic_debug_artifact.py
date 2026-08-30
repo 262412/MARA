@@ -4,15 +4,12 @@ from collections import Counter
 from copy import deepcopy
 from typing import Any, Iterable, Mapping
 
+from .qasper_causal_evidence_chain import qasper_causal_evidence_chain
 from .qasper_pre_verifier_debug import (
     candidate_authority_analysis as _candidate_authority_analysis,
 )
-from .qasper_pre_verifier_debug import (
-    pre_verifier_fields as _pre_verifier_fields,
-)
-from .qasper_pre_verifier_debug import (
-    pre_verifier_traces as _pre_verifier_traces,
-)
+from .qasper_pre_verifier_debug import pre_verifier_fields as _pre_verifier_fields
+from .qasper_pre_verifier_debug import pre_verifier_traces as _pre_verifier_traces
 from .qasper_semantic_debug_findings import findings_for_row
 
 QASPER_SEMANTIC_DEBUG_CONTRACT = "qasper_semantic_pipeline_debug.v3"
@@ -77,6 +74,7 @@ def _debug_row(
     )
     row.update(_v3_fields(prediction, generator, verifier, authority))
     row.update(_pre_verifier_fields(prediction, generator, verifier))
+    row["causal_evidence_chain"] = qasper_causal_evidence_chain(row)
     row["findings"] = findings_for_row(row)
     return row
 
@@ -101,6 +99,9 @@ def _base_row(
         "failure_taxonomy": prediction.get("failure_taxonomy"),
         "terminal_outcome": prediction.get("terminal_outcome"),
         "terminal_outcome_reason": prediction.get("terminal_outcome_reason"),
+        "terminal_semantic_commit": deepcopy(
+            prediction.get("terminal_semantic_commit") or {}
+        ),
         "semantic_verifier": deepcopy(verifier),
         "semantic_authority": deepcopy(authority),
         "question_proposition_resolution": deepcopy(

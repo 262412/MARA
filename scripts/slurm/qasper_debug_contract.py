@@ -17,6 +17,9 @@ from scripts.slurm.qasper_debug_contract_audit import (  # noqa: F401
     _typed_conclusion_present,
     _unknown_audit_premises_complete,
 )
+from scripts.slurm.qasper_debug_contract_causal import (
+    causal_evidence_chain_complete as _causal_evidence_chain_complete,
+)
 from scripts.slurm.qasper_debug_contract_identity import (  # noqa: F401
     _digest,
     _normalized_candidate,
@@ -123,6 +126,7 @@ def qasper_debug_behavior_violations(
                 _prediction_violations(
                     prediction,
                     require_auditor=True,
+                    require_causal_chain=lane == "quality",
                 )
             )
         if lane == "quality":
@@ -166,6 +170,7 @@ def _prediction_violations(
     prediction: dict[str, Any],
     *,
     require_auditor: bool = True,
+    require_causal_chain: bool = True,
 ) -> list[str]:
     metadata = terminal_metadata(prediction)
     generator = _mapping(metadata.get("qasper_candidate_generation"))
@@ -189,6 +194,7 @@ def _prediction_violations(
         generator,
         verifier,
         prefix,
+        require_causal_chain=require_causal_chain,
     )
     audit = _mapping(verifier.get("candidate_verification_audit"))
     if audit.get("status") == "failed":
@@ -226,6 +232,8 @@ def _append_cross_stage_violations(
     generator: dict[str, Any],
     verifier: dict[str, Any],
     prefix: str,
+    *,
+    require_causal_chain: bool,
 ) -> None:
     _require(
         violations,
@@ -257,6 +265,12 @@ def _append_cross_stage_violations(
         _semantic_data_lineage_complete(verifier),
         f"semantic_data_lineage_incomplete:{prefix}",
     )
+    if require_causal_chain:
+        _require(
+            violations,
+            _causal_evidence_chain_complete(prediction),
+            f"causal_evidence_chain_incomplete:{prefix}",
+        )
     _require(
         violations,
         claim_aggregation_complete(prediction),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any
 
@@ -20,16 +21,39 @@ def windowed_evidence_records(
     max_windows: int,
     selector_max_chars: int,
 ) -> list[dict[str, Any]]:
-    groups = [
-        relevant_evidence_windows(
+    windowed, _decisions = windowed_evidence_records_with_trace(
+        records,
+        question,
+        item_char_limit=item_char_limit,
+        max_windows=max_windows,
+        selector_max_chars=selector_max_chars,
+    )
+    return windowed
+
+
+def windowed_evidence_records_with_trace(
+    records: list[dict[str, Any]],
+    question: str,
+    *,
+    item_char_limit: int,
+    max_windows: int,
+    selector_max_chars: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    groups: list[list[tuple[str, int]]] = []
+    decisions: list[dict[str, Any]] = []
+    for record in records:
+        windows, record_decisions = relevant_evidence_window_projection(
             str(record.get("text") or ""),
             question,
             item_char_limit,
             max_windows=max_windows,
             selector_max_chars=selector_max_chars,
         )
-        for record in records
-    ]
+        evidence_id = str(record.get("evidence_id") or "")
+        groups.append(windows)
+        decisions.extend(
+            {**decision, "evidence_id": evidence_id} for decision in record_decisions
+        )
     windowed: list[dict[str, Any]] = []
     for window_index in range(max_windows):
         for record, windows in zip(records, groups):
@@ -45,7 +69,7 @@ def windowed_evidence_records(
                         "window_index": window_index + 1,
                     }
                 )
-    return windowed
+    return windowed, decisions
 
 
 def relevant_evidence_window(
@@ -75,10 +99,103 @@ def relevant_evidence_windows(
 ) -> list[tuple[str, int]]:
     """Return bounded, proposition-anchored windows with exact source offsets."""
 
+    windows, _decisions = relevant_evidence_window_projection(
+        text,
+        question,
+        limit,
+        max_windows=max_windows,
+        selector_max_chars=selector_max_chars,
+    )
+    return windows
+
+
+def relevant_evidence_window_projection(
+    text: str,
+    question: str,
+    limit: int,
+    *,
+    max_windows: int,
+    selector_max_chars: int,
+) -> tuple[list[tuple[str, int]], list[dict[str, Any]]]:
+    """Return unchanged windows plus every candidate-window disposition."""
+
+    early = _early_window_projection(text, limit=limit, max_windows=max_windows)
+    if early is not None:
+        return early
+    starts, scores = _ranked_window_inputs(
+        text,
+        question,
+        limit=limit,
+        selector_max_chars=selector_max_chars,
+    )
+    if not starts:
+        return [(text[:limit], 0)], [
+            _window_decision(
+                text,
+                start=0,
+                limit=limit,
+                score=(),
+                selected=True,
+                reason="deterministic_prefix_fallback",
+            )
+        ]
+    ranked = sorted(starts, key=lambda start: (*scores[start], start))
+    selected = _select_window_starts(
+        text,
+        question,
+        starts=starts,
+        ranked=ranked,
+        limit=limit,
+        max_windows=max_windows,
+    )
+    decisions = _ranked_window_decisions(
+        text,
+        ranked,
+        selected,
+        scores=scores,
+        limit=limit,
+    )
+    return ([(text[start : start + limit], start) for start in selected], decisions)
+
+
+def _early_window_projection(
+    text: str,
+    *,
+    limit: int,
+    max_windows: int,
+) -> tuple[list[tuple[str, int]], list[dict[str, Any]]] | None:
     if not text or limit <= 0 or max_windows <= 0:
-        return []
+        return [], [
+            _window_decision(
+                text,
+                start=0,
+                limit=max(0, limit),
+                score=(),
+                selected=False,
+                reason="window_input_unavailable",
+            )
+        ]
     if len(text) <= limit:
-        return [(text, 0)]
+        return [(text, 0)], [
+            _window_decision(
+                text,
+                start=0,
+                limit=limit,
+                score=(),
+                selected=True,
+                reason="full_source_within_limit",
+            )
+        ]
+    return None
+
+
+def _ranked_window_inputs(
+    text: str,
+    question: str,
+    *,
+    limit: int,
+    selector_max_chars: int,
+) -> tuple[set[int], dict[int, tuple[int, ...]]]:
     tokens = _question_window_tokens(question)
     max_start = len(text) - limit
     semantic_starts = _semantic_anchor_window_starts(
@@ -94,31 +211,68 @@ def relevant_evidence_windows(
         limit=limit,
         max_start=max_start,
     )
-    if not starts:
-        return [(text[:limit], 0)]
-    ranked = sorted(
-        starts,
-        key=lambda start: (
-            *_window_score(
-                text,
-                question,
-                tokens,
-                start=start,
-                limit=limit,
-                semantic_starts=semantic_starts,
+    scores: dict[int, tuple[int, ...]] = {
+        start: _window_score(
+            text,
+            question,
+            tokens,
+            start=start,
+            limit=limit,
+            semantic_starts=semantic_starts,
+        )
+        for start in starts
+    }
+    return starts, scores
+
+
+def _ranked_window_decisions(
+    text: str,
+    ranked: list[int],
+    selected: list[int],
+    *,
+    scores: dict[int, tuple[int, ...]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    minimum_distance = max(1, limit // 2)
+    selected_set = set(selected)
+    return [
+        _window_decision(
+            text,
+            start=start,
+            limit=limit,
+            score=scores[start],
+            selected=start in selected_set,
+            reason=(
+                "selected_for_windowing"
+                if start in selected_set
+                else "minimum_window_distance"
+                if any(abs(start - chosen) < minimum_distance for chosen in selected)
+                else "max_windows_limit"
             ),
-            start,
-        ),
-    )
-    selected = _select_window_starts(
-        text,
-        question,
-        starts=starts,
-        ranked=ranked,
-        limit=limit,
-        max_windows=max_windows,
-    )
-    return [(text[start : start + limit], start) for start in selected]
+        )
+        for start in ranked
+    ]
+
+
+def _window_decision(
+    text: str,
+    *,
+    start: int,
+    limit: int,
+    score: tuple[int, ...],
+    selected: bool,
+    reason: str,
+) -> dict[str, Any]:
+    window = text[start : start + limit]
+    return {
+        "window_start": start,
+        "window_end": start + len(window),
+        "window_text_digest": hashlib.sha256(window.encode("utf-8")).hexdigest(),
+        "semantic_score": list(score),
+        "selected": selected,
+        "decision": "selected" if selected else "rejected",
+        "reason": reason,
+    }
 
 
 def _question_window_tokens(question: str) -> list[str]:

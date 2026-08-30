@@ -7,6 +7,9 @@ import pytest
 from ktem.docqa.qasper_semantic_pack_contract import (
     qasper_canonical_span_universe_digest,
 )
+from ktem.reasoning.mara_semantic_proposition_causal_lineage import (
+    record_candidate_bound_decisive_transition,
+)
 
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _write_run
 from benchmark.tests.qasper_debug_contract_fixtures import (
@@ -282,8 +285,23 @@ def test_qasper_debug_contract_accepts_candidate_bound_unknown_audit(tmp_path):
         prediction["gold_answers"] = ["unanswerable"]
         prediction["predicted_answer"] = "unanswerable"
         prediction["answer_for_scoring"] = "unanswerable"
+        prediction["terminal_outcome"] = "safe_abstention"
+        prediction["answer_status"] = "abstained"
         prediction["terminal_semantic_commit"]["semantic_answer"] = "unanswerable"
         prediction["terminal_semantic_commit"]["outcome"] = "safe_abstention"
+        prediction["terminal_semantic_commit"]["answer_status"] = "abstained"
+        prediction["terminal_semantic_commit"]["projection_hash"] = _fixture_digest(
+            {
+                "example_id": prediction["example_id"],
+                "terminal_outcome": "safe_abstention",
+            }
+        )
+        record_candidate_bound_decisive_transition(
+            verifier["semantic_data_lineage"],
+            status="parsed",
+            reason="strict_schema_and_candidate_audit",
+            audit_reason=str(verifier["candidate_verification_audit"]["reason"]),
+        )
     _write_qasper_run(run_dir, predictions=predictions)
 
     audit = validate(run_dir, suite_kind="qasper_debug")

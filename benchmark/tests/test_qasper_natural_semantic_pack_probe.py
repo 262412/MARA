@@ -43,7 +43,9 @@ def _row() -> dict[str, object]:
     }
 
 
-def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint() -> None:
+def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint() -> (
+    None
+):
     result = probe_prediction(_row(), code_sha="test-sha")
 
     assert result["status"] == "passed"
@@ -60,7 +62,28 @@ def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint(
     assert result["packing_observation"]["selector_count"] >= 1
     assert result["packing_observation"]["source_records"]
     assert result["packing_observation"]["source_records"][0]["stop_stage"]
+    assert result["checks"]["causal_trace_prefix_complete"] is True
     assert all(result["checks"].values())
+
+
+def test_natural_probe_fails_closed_on_a_tampered_trace_digest(monkeypatch) -> None:
+    original = probe.qasper_causal_evidence_chain_prefix_complete
+
+    def tampered_prefix(row: dict[str, Any]) -> bool:
+        lineage = row["semantic_verifier"]["semantic_data_lineage"]
+        lineage["source_packing"]["source_decisions_digest"] = "0" * 64
+        return original(row)
+
+    monkeypatch.setattr(
+        probe,
+        "qasper_causal_evidence_chain_prefix_complete",
+        tampered_prefix,
+    )
+
+    result = probe_prediction(_row(), code_sha="test-sha")
+
+    assert result["checks"]["causal_trace_prefix_complete"] is False
+    assert result["status"] == "failed"
 
 
 def test_natural_probe_rejects_unambiguous_unresolved_zero_plan() -> None:

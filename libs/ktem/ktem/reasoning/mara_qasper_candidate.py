@@ -7,7 +7,7 @@ from typing import Any
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.query_planning import request_planning_question
 
-from kotaemon.base import HumanMessage, SystemMessage
+from kotaemon.base import SystemMessage
 
 from .mara_answer_type_contract import request_answer_type
 from .mara_qasper_candidate_budget import QASPER_CANDIDATE_MAX_MODEL_LEN  # noqa: F401
@@ -16,7 +16,6 @@ from .mara_qasper_candidate_budget import (  # noqa: F401
     QASPER_CANDIDATE_INPUT_TOKEN_BUDGET,
     QASPER_CANDIDATE_MAX_TOKENS,
 )
-from .mara_qasper_candidate_budget import candidate_drop_index as _candidate_drop_index
 from .mara_qasper_candidate_budget import (
     candidate_generation_trace as _candidate_generation_trace,
 )
@@ -39,7 +38,16 @@ from .mara_qasper_candidate_identity import effective_candidate_seed
 from .mara_qasper_candidate_prompt import (
     _bound_candidate_slots as _prompt_bound_candidate_slots,
 )
-from .mara_qasper_candidate_prompt import _candidate_evidence, _candidate_prompt
+from .mara_qasper_candidate_prompt import (  # noqa: F401
+    _candidate_evidence,
+    _candidate_prompt,
+)
+from .mara_qasper_candidate_request import (  # noqa: F401
+    candidate_messages as _candidate_messages,
+)
+from .mara_qasper_candidate_request import (
+    fit_candidate_request as _fit_candidate_request,
+)
 from .mara_qasper_candidate_transport import (  # noqa: F401 - compatibility re-export
     QASPER_CANDIDATE_MAX_RESPONSE_CHARS,
     QASPER_CANDIDATE_RESPONSE_CONTRACT,
@@ -70,37 +78,10 @@ from .mara_semantic_proposition_packing import (
 QASPER_CANDIDATE_GENERATION_CONTRACT = "qasper_typed_candidate_generation.v2"
 QASPER_CANDIDATE_DEFAULT_SEED = 20260724
 
-_CandidateRequestFit = tuple[
-    list[dict[str, Any]],
-    dict[str, Any],
-    list[Any],
-    dict[str, Any],
-    int,
-]
-
 LOGGER = logging.getLogger(__name__)
 
 # Preserve the existing private test/debug seam after moving prompt construction.
 _bound_candidate_slots = _prompt_bound_candidate_slots
-
-_SYSTEM_PROMPT = (
-    "You are the sole answer-candidate generator for a QASPER Boolean question. "
-    "Use only the typed question proposition and labeled retrieved evidence. "
-    "Return exactly one structured "
-    "candidate: yes, no, or unanswerable. Prefer proposition- and slot-aligned "
-    "evidence when deciding the candidate: use yes for proposition support, no "
-    "for an explicit contradiction, and unanswerable only when neither is present. "
-    "Candidate parsing is format-only; "
-    "verification uncertainty is handled later by the verifier. Do not "
-    "include explanation, citations, or an alternative answer."
-)
-
-_CONTRACT_PROBE_SYSTEM_PROMPT = (
-    "You are exercising the QASPER candidate transport contract. Preserve the "
-    "supplied original candidate exactly. Do not answer the question or change "
-    "the candidate after reading the audit context. Return only the required "
-    "structured candidate object."
-)
 
 
 def qasper_typed_candidate_request(request: Any) -> bool:
@@ -333,137 +314,6 @@ def _candidate_request_ready(
     return True
 
 
-def _candidate_messages(
-    question: str,
-    evidence: list[dict[str, Any]],
-    evidence_diagnostics: dict[str, Any],
-    *,
-    controlled_candidate: str,
-) -> list[Any]:
-    audit_context = _candidate_prompt(
-        question,
-        evidence,
-        proposition=evidence_diagnostics.get("typed_proposition"),
-        proposition_resolution=evidence_diagnostics.get(
-            "question_proposition_resolution"
-        ),
-        required_slots=evidence_diagnostics.get("required_slots", []),
-        evidence_set_binding=evidence_diagnostics.get("candidate_evidence_set_binding"),
-    )
-    if not controlled_candidate:
-        return [
-            SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=audit_context),
-        ]
-    return [
-        SystemMessage(content=_CONTRACT_PROBE_SYSTEM_PROMPT),
-        HumanMessage(
-            content=(
-                "/no_think\nCONTROLLED ORIGINAL CANDIDATE UNDER AUDIT:\n"
-                f"{controlled_candidate}\n\nAUDIT CONTEXT (DO NOT RE-ANSWER):\n"
-                f"{audit_context}"
-            )
-        ),
-    ]
-
-
-def _fit_candidate_request(
-    llm: Any | None,
-    question: str,
-    evidence: list[dict[str, Any]],
-    evidence_diagnostics: dict[str, Any],
-    *,
-    response_schema: dict[str, Any],
-    controlled_candidate: str,
-    candidate_transaction_id: str = "",
-) -> _CandidateRequestFit:
-    selected = list(evidence)
-    dropped_count = 0
-    pre_request_dropped_count = int(
-        evidence_diagnostics.get("pre_request_dropped_evidence_count") or 0
-    )
-    while True:
-        evidence_set_binding = _candidate_evidence_set_binding(
-            selected,
-            question,
-            candidate_transaction_id=candidate_transaction_id,
-        )
-        bound_slots = _bound_candidate_slots(
-            evidence_diagnostics.get("required_slots", []),
-            selected,
-            binding=evidence_set_binding,
-        )
-        diagnostics = _candidate_request_diagnostics(
-            evidence_diagnostics,
-            bound_slots,
-            evidence_set_binding,
-            dropped_count=dropped_count,
-            pre_request_dropped_count=pre_request_dropped_count,
-        )
-        messages = _candidate_messages(
-            question,
-            selected,
-            diagnostics,
-            controlled_candidate=controlled_candidate,
-        )
-        token_measurement = candidate_input_token_measurement(
-            llm,
-            messages,
-            response_schema,
-        )
-        if token_measurement.get("tokenizer_failed"):
-            return (
-                selected,
-                diagnostics,
-                messages,
-                token_measurement,
-                pre_request_dropped_count + dropped_count,
-            )
-        if (
-            token_measurement["estimated_input_tokens"]
-            <= QASPER_CANDIDATE_INPUT_TOKEN_BUDGET
-            or not selected
-        ):
-            return (
-                selected,
-                diagnostics,
-                messages,
-                token_measurement,
-                pre_request_dropped_count + dropped_count,
-            )
-        drop_index = _candidate_drop_index(selected)
-        if drop_index is None:
-            return (
-                selected,
-                diagnostics,
-                messages,
-                token_measurement,
-                pre_request_dropped_count + dropped_count,
-            )
-        selected.pop(drop_index)
-        dropped_count += 1
-
-
-def _candidate_request_diagnostics(
-    evidence_diagnostics: dict[str, Any],
-    bound_slots: list[dict[str, Any]],
-    evidence_set_binding: dict[str, Any],
-    *,
-    dropped_count: int,
-    pre_request_dropped_count: int,
-) -> dict[str, Any]:
-    return {
-        **evidence_diagnostics,
-        "required_slots": bound_slots,
-        "candidate_evidence_set_binding": evidence_set_binding,
-        "candidate_request_dropped_evidence_count": dropped_count,
-        "request_dropped_evidence_count": pre_request_dropped_count + dropped_count,
-        "evidence_dropped_count": (
-            int(evidence_diagnostics.get("evidence_dropped_count") or 0) + dropped_count
-        ),
-    }
-
-
 def _contract_probe_original_candidate(request: Any, route: str) -> str:
     trace_context = getattr(request, "trace_context", None)
     trace_context = trace_context if isinstance(trace_context, dict) else {}
@@ -545,7 +395,60 @@ def _record_candidate_response(
     )
     trace.update(**_candidate_response_trace_fields(state))
     trace["attempts"] = [_candidate_attempt(state, identity, input_digest)]
+    trace["model_decision"] = _candidate_model_decision(trace, state)
     return str(state["verifier_input_candidate"])
+
+
+def _candidate_model_decision(
+    trace: dict[str, Any],
+    state: dict[str, Any],
+) -> dict[str, Any]:
+    binding = trace.get("candidate_evidence_set_binding")
+    binding = binding if isinstance(binding, dict) else {}
+    plan_trace = binding.get("plan_construction_trace")
+    plan_trace = plan_trace if isinstance(plan_trace, dict) else {}
+    valid_counts = plan_trace.get("valid_candidate_counts")
+    valid_counts = valid_counts if isinstance(valid_counts, dict) else {}
+    legal_plan_count = sum(int(value or 0) for value in valid_counts.values())
+    decision = str(state.get("typed_candidate") or "")
+    context = {
+        "input_digest": str(trace.get("input_digest") or ""),
+        "evidence_digest": str(trace.get("evidence_digest") or ""),
+        "binding_digest": str(binding.get("binding_digest") or ""),
+        "binding_state": str(binding.get("binding_state") or ""),
+        "legal_plan_count": legal_plan_count,
+        "plan_candidate_decisions_digest": str(
+            plan_trace.get("candidate_decisions_digest") or ""
+        ),
+        "decision_plan_alignment": _candidate_plan_alignment(
+            decision,
+            legal_plan_count=legal_plan_count,
+        ),
+    }
+    return {
+        "contract_id": "qasper_model_candidate_decision.v1",
+        "status": str(state.get("status") or ""),
+        "decision": decision,
+        "decision_origin": "model_output",
+        "rationale_status": "not_requested_by_low_entropy_contract",
+        "decision_context": context,
+        "decision_context_digest": _digest(context),
+        "raw_response_digest": str(state.get("raw_response_digest") or ""),
+    }
+
+
+def _candidate_plan_alignment(decision: str, *, legal_plan_count: int) -> str:
+    if decision == "unanswerable":
+        return (
+            "aligned_no_legal_local_plan"
+            if legal_plan_count == 0
+            else "conflicts_with_legal_local_plan"
+        )
+    return (
+        "candidate_without_legal_local_plan"
+        if legal_plan_count == 0
+        else "locally_plan_eligible"
+    )
 
 
 def _answering_llm(pipeline: Any) -> Any | None:
