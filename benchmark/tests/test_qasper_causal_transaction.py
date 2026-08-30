@@ -353,6 +353,35 @@ def test_first_divergence_stops_comparison_and_suppresses_later_diagnostics() ->
     assert "later_divergences" not in comparison
 
 
+def test_candidate_request_truncation_does_not_change_retrieval_ranking_stage() -> None:
+    reference_prediction, reference_row = _prediction_and_debug_row()
+    replay_prediction = deepcopy(reference_prediction)
+    replay_row = deepcopy(reference_row)
+    replay_prediction["evidence_metadata"]["candidate_ranked_evidence"] = []
+    reference = qasper_causal_transaction(
+        reference_prediction,
+        reference_row,
+        run_context=_run_context(),
+        origin="online",
+    )
+    replay = qasper_causal_transaction(
+        replay_prediction,
+        replay_row,
+        run_context=_run_context(),
+        origin="local_replay",
+    )
+
+    comparison = compare_qasper_causal_transaction_prefix(
+        reference,
+        replay,
+        through_stage=2,
+    )
+
+    assert comparison["status"] == "matched_prefix"
+    retrieval = reference["stages"][1]["payload"]
+    assert retrieval["ranking_source"] == "retrieved_hits_order"
+
+
 def test_tampered_stage_digest_is_the_only_reported_investigation_boundary() -> None:
     reference = _transaction()
     replay = deepcopy(reference)

@@ -15,7 +15,6 @@ def causal_transaction_stage_payloads(
     debug_row: Mapping[str, Any],
     run_context: Mapping[str, Any],
 ) -> dict[str, dict[str, Any]]:
-    metadata = _terminal_metadata(prediction)
     generator = _mapping(debug_row.get("main_candidate_generator"))
     verifier = _mapping(debug_row.get("semantic_verifier"))
     lineage = _mapping(verifier.get("semantic_data_lineage"))
@@ -28,7 +27,7 @@ def causal_transaction_stage_payloads(
     proposal_value = _latest_parsed_value(proposal_output)
     stages = {
         "dataset_and_gold": _dataset_payload(prediction, debug_row),
-        "retrieval_and_ranking": _retrieval_payload(prediction, metadata),
+        "retrieval_and_ranking": _retrieval_payload(prediction),
         "candidate_input": _candidate_input_payload(generator, source),
         "proposition_spans_and_selector_universe": _selector_payload(generator, source),
         "candidate_plans": _candidate_plans_payload(construction),
@@ -125,14 +124,12 @@ def _dataset_payload(
     )
 
 
-def _retrieval_payload(
-    prediction: Mapping[str, Any],
-    metadata: Mapping[str, Any],
-) -> dict[str, Any]:
+def _retrieval_payload(prediction: Mapping[str, Any]) -> dict[str, Any]:
     raw_records = deepcopy(prediction.get("retrieved_hits") or [])
     bundle = _mapping(prediction.get("evidence_bundle"))
     production_input_records = deepcopy(bundle.get("items") or [])
-    ranking_records, ranking_source = _ranking_snapshot(raw_records, metadata)
+    ranking_records = deepcopy(raw_records)
+    ranking_source = "retrieved_hits_order"
     ranking = _ranking_identity(ranking_records)
     retrieval_trace = deepcopy(prediction.get("retrieval_trace") or [])
     reasons = []
@@ -334,30 +331,11 @@ def _projection_payload(
     )
 
 
-def _ranking_snapshot(
-    raw_records: list[Any],
-    metadata: Mapping[str, Any],
-) -> tuple[list[Any], str]:
-    for key in ("candidate_ranked_evidence", "reranked_evidence"):
-        values = metadata.get(key)
-        if isinstance(values, list) and values:
-            return deepcopy(values), key
-    ranking = [
-        {
-            "position": index,
-            "canonical_id": str(_mapping(record).get("canonical_id") or ""),
-            "reranker_rank": _mapping(record).get("reranker_rank"),
-            "reranker_score": _mapping(record).get("reranker_score"),
-        }
-        for index, record in enumerate(raw_records)
-    ]
-    return ranking, "retrieved_hits_order"
-
-
 def _ranking_identity(records: list[Any]) -> list[dict[str, Any]]:
     ranking = []
     for index, record in enumerate(records):
         value = _mapping(record)
+        metadata = _mapping(value.get("metadata"))
         position = value.get("ranked_position")
         if isinstance(position, bool) or not isinstance(position, int):
             position = index
@@ -367,8 +345,12 @@ def _ranking_identity(records: list[Any]) -> list[dict[str, Any]]:
                 "canonical_id": str(
                     value.get("canonical_id") or value.get("evidence_id") or ""
                 ),
-                "reranker_rank": value.get("reranker_rank"),
-                "reranker_score": value.get("reranker_score"),
+                "reranker_rank": value.get(
+                    "reranker_rank", metadata.get("reranker_rank")
+                ),
+                "reranker_score": value.get(
+                    "reranker_score", metadata.get("reranker_score")
+                ),
             }
         )
     return ranking
@@ -389,13 +371,6 @@ def _latest_parsed_value(stage: Mapping[str, Any]) -> dict[str, Any]:
         ):
             return dict(attempt["parsed_value"])
     return {}
-
-
-def _terminal_metadata(prediction: Mapping[str, Any]) -> dict[str, Any]:
-    terminal = _mapping(prediction.get("engine_terminal_evidence_bundle"))
-    return _mapping(terminal.get("metadata")) or _mapping(
-        prediction.get("evidence_metadata")
-    )
 
 
 def _payload(reasons: list[str], **values: Any) -> dict[str, Any]:
