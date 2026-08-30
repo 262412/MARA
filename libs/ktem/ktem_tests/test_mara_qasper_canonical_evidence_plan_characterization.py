@@ -6,6 +6,10 @@ from typing import Any
 
 import pytest
 from jsonschema import ValidationError, validate
+from ktem.docqa.canonical_proposition_evidence_plan import (
+    canonical_evidence_set_analysis,
+    canonical_proposition_evidence_selection,
+)
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.question_proposition import (
     PROPOSITION_EVIDENCE_SLOTS,
@@ -482,3 +486,96 @@ def test_downstream_constraint_reuses_canonical_event_predicate() -> None:
 
     assert constraint["status"] == "rejected"
     assert constraint["reason"] == "local_semantic_event_binding_inconsistent"
+
+
+def test_partial_scope_does_not_force_fill_missing_object_coverage() -> None:
+    question = "Are the automatically constructed datasets subject to quality control?"
+    selectors = [
+        _candidate_selector(
+            "E2:S14",
+            (
+                "In contrast to this work, we focus on generating data in an "
+                "entirely automatic fashion, which obviates the need for "
+                "expensive annotation and gives us the flexibility to construct "
+                "much larger datasets that control a rich set of semantic "
+                "aspects of the target questions."
+            ),
+            2429,
+            event_id="automatic-construction-event",
+            slot_hints=("actor", "predicate", "object"),
+            object_tokens={"control"},
+        ),
+        _candidate_selector(
+            "E3:S24",
+            (
+                "Initial crowd-sourcing experiments that look at validating "
+                "samples of our data show high agreement across probes."
+            ),
+            4364,
+            event_id="sample-validation-event",
+            slot_hints=("predicate",),
+            object_tokens=set(),
+        ),
+    ]
+
+    analysis = canonical_evidence_set_analysis(
+        question,
+        selectors,
+        _applicable_slots(question),
+        polarity_relation="explicit_contradiction",
+    )
+
+    assert analysis["valid"] is False
+    assert analysis["covered_object_tokens"] == ("control",)
+    assert analysis["required_object_tokens"] == ("control", "quality")
+    assert "object_coverage_incomplete" in analysis["rejection_reasons"]
+    assert "event_subplan_incomplete" in analysis["rejection_reasons"]
+
+
+def test_multi_event_contradiction_has_typed_complete_event_subplans() -> None:
+    question = "Are the automatically constructed datasets subject to quality control?"
+    required_slots = _applicable_slots(question)
+    required_objects = {"control", "quality"}
+    selectors = [
+        _candidate_selector(
+            "E1:S1",
+            (
+                "The automatically constructed datasets are subject to quality "
+                "control."
+            ),
+            0,
+            event_id="full-scope-control-event",
+            slot_hints=required_slots,
+            object_tokens=required_objects,
+        ),
+        _candidate_selector(
+            "E2:S1",
+            (
+                "Only a sampled subset of the automatically constructed datasets "
+                "was subject to quality control."
+            ),
+            200,
+            event_id="restricted-scope-control-event",
+            slot_hints=required_slots,
+            object_tokens=required_objects,
+        ),
+    ]
+
+    selection = canonical_proposition_evidence_selection(
+        question,
+        selectors,
+        required_slots,
+    )
+
+    contradiction = selection.plan.contradiction_plan
+    assert contradiction is not None
+    payload = contradiction.as_dict()
+    assert payload["comparison_relation"]["relation_type"] == "partial_scope"
+    assert len(payload["event_subplans"]) == 2
+    assert {subplan["event_id"] for subplan in payload["event_subplans"]} == {
+        "full-scope-control-event",
+        "restricted-scope-control-event",
+    }
+    for subplan in payload["event_subplans"]:
+        assert set(subplan["slot_refs"]) == set(required_slots)
+        assert subplan["covered_object_tokens"] == sorted(required_objects)

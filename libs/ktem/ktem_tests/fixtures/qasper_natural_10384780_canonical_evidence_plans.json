@@ -1,0 +1,2735 @@
+{
+  "contract": "qasper_natural_canonical_evidence_plan_fixture.v1",
+  "source": {
+    "job_id": "10384780",
+    "quality_run": "focused-21552f8-qasper-semantic-quality-10384780",
+    "code_sha": "21552f8742161ce9ebda7ab40980b36e6fff24ae",
+    "artifact_files": {
+      "predictions.jsonl": {
+        "line_count": 18,
+        "sha256": "b43d190b616e007581035ced4bdd87903dec09fac3c76719775a0180cc843d30"
+      },
+      "semantic_debug_traces.jsonl": {
+        "line_count": 18,
+        "sha256": "dcb73a80027519692c7543b0bc26ce933f6eb4f09d0f60e6c9ae9c44f256d458"
+      }
+    }
+  },
+  "sample_count": 6,
+  "route_count": 3,
+  "instance_count": 18,
+  "expected_empty_allowed_plan_count": 15,
+  "expected_cross_event_allowed_plan_count": 3,
+  "instances": [
+    {
+      "sample_id": "natural_01",
+      "question": "Did they collected the two datasets?",
+      "question_digest": "dc4d5c370351695212d3a31c5c9a75d9ebddc2e088295511098c54121b625304",
+      "route_question_digest": "09782d39d828259039304d3cb610146d5f35b47847dba160001ee0f2615017cd",
+      "document_id": "1611.03599",
+      "example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65",
+      "route": "text_rag",
+      "benchmark_route_id": "text_rag",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "unanswerable",
+      "typed_candidate": "unanswerable",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S1",
+          "evidence_id": "evidence:8c7968f5-a8e4-4bd3-9607-57a02420c53d:stable-chunk%3Aae998e87e7ffa1cdb0c4cf7210c1fab815cedca9f99c013b7d9a617c84784495",
+          "event_id": "69e7bd7687e82c942264b0c0817baa57f4c8fa6e051cd888518123e213b3a373",
+          "span_start": 0,
+          "span_end": 194,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "dataset"
+          ],
+          "event_core_tokens": [
+            "dataset"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 0,
+              "span_end": 2,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S1"
+            },
+            "predicate": {
+              "span_start": 107,
+              "span_end": 112,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S1"
+            },
+            "object": {
+              "span_start": 54,
+              "span_end": 61,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S1"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S25",
+          "evidence_id": "evidence:8c7968f5-a8e4-4bd3-9607-57a02420c53d:stable-chunk%3A43f5ed20690a18cd05ce6ee04ff895658d887543ab5a9262dfc30aa8664d0611",
+          "event_id": "61f3e83af05c47b15dc43158228ca826e6fb65c082591261de12f23648793a6e",
+          "span_start": 2766,
+          "span_end": 2960,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "dataset"
+          ],
+          "event_core_tokens": [
+            "dataset"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 2766,
+              "span_end": 2768,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S25"
+            },
+            "predicate": {
+              "span_start": 2873,
+              "span_end": 2878,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S25"
+            },
+            "object": {
+              "span_start": 2820,
+              "span_end": 2827,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S25"
+            }
+          }
+        },
+        {
+          "selector_id": "E3:S7",
+          "evidence_id": "evidence:8c7968f5-a8e4-4bd3-9607-57a02420c53d:stable-chunk%3Af43d83846a87e2b97c80dfa773456209e97c03fe475d488060a79d3ea34a8b8f",
+          "event_id": "c061bbde3497363007d1b6245ba3ed4eb0ba3f18620ebfc42ca3148251f91992",
+          "span_start": 1021,
+          "span_end": 1188,
+          "slot_hints": [
+            "actor",
+            "object",
+            "quantifier"
+          ],
+          "object_tokens": [
+            "two"
+          ],
+          "event_core_tokens": [
+            "two"
+          ],
+          "predicate_match_kind": "missing",
+          "local_relation_state": "unbound",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 1071,
+              "span_end": 1073,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S7"
+            },
+            "object": {
+              "span_start": 1080,
+              "span_end": 1083,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S7"
+            },
+            "quantifier": {
+              "span_start": 1080,
+              "span_end": 1083,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S7"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object",
+        "quantifier"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "dataset",
+        "two"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S25",
+        "E1:S1",
+        "E3:S7"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "651e91c92a688ef26eebbbcecdf6a8e60c67de24b64b071bd4da4e0c9379b6db",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "0e65b1abff60f8e2c646a89e7a30237facced8a8d1f466dde0a6e4f2094158d3",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_01",
+      "question": "Did they collected the two datasets?",
+      "question_digest": "dc4d5c370351695212d3a31c5c9a75d9ebddc2e088295511098c54121b625304",
+      "route_question_digest": "bcc2784130c902018fbabf4f42cfdddefd7d0c0ab1a41904733dd12e0e8c1114",
+      "document_id": "1611.03599",
+      "example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65",
+      "route": "controller_auto",
+      "benchmark_route_id": "controller_auto",
+      "internal_route": "hybrid",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "unanswerable",
+      "typed_candidate": "unanswerable",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S1",
+          "evidence_id": "evidence:8c7968f5-a8e4-4bd3-9607-57a02420c53d:stable-chunk%3Aae998e87e7ffa1cdb0c4cf7210c1fab815cedca9f99c013b7d9a617c84784495",
+          "event_id": "69e7bd7687e82c942264b0c0817baa57f4c8fa6e051cd888518123e213b3a373",
+          "span_start": 0,
+          "span_end": 194,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "dataset"
+          ],
+          "event_core_tokens": [
+            "dataset"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 0,
+              "span_end": 2,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S1"
+            },
+            "predicate": {
+              "span_start": 107,
+              "span_end": 112,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S1"
+            },
+            "object": {
+              "span_start": 54,
+              "span_end": 61,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S1"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S25",
+          "evidence_id": "evidence:8c7968f5-a8e4-4bd3-9607-57a02420c53d:stable-chunk%3A43f5ed20690a18cd05ce6ee04ff895658d887543ab5a9262dfc30aa8664d0611",
+          "event_id": "61f3e83af05c47b15dc43158228ca826e6fb65c082591261de12f23648793a6e",
+          "span_start": 2766,
+          "span_end": 2960,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "dataset"
+          ],
+          "event_core_tokens": [
+            "dataset"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 2766,
+              "span_end": 2768,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S25"
+            },
+            "predicate": {
+              "span_start": 2873,
+              "span_end": 2878,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S25"
+            },
+            "object": {
+              "span_start": 2820,
+              "span_end": 2827,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S25"
+            }
+          }
+        },
+        {
+          "selector_id": "E4:S1",
+          "evidence_id": "element:8c7968f5-a8e4-4bd3-9607-57a02420c53d:results%3A8c7968f5-a8e4-4bd3-9607-57a02420c53d",
+          "event_id": "dea0a4a3f665a6dfec5a921ffcdc7d92cfa6ad11831c18ea0e551f574f50796b",
+          "span_start": 0,
+          "span_end": 139,
+          "slot_hints": [
+            "object",
+            "quantifier"
+          ],
+          "object_tokens": [
+            "dataset",
+            "two"
+          ],
+          "event_core_tokens": [
+            "dataset",
+            "two"
+          ],
+          "predicate_match_kind": "missing",
+          "local_relation_state": "unbound",
+          "proposition_slot_spans": {
+            "object": {
+              "span_start": 20,
+              "span_end": 32,
+              "clause_ref": "C1",
+              "parent_selector_id": "E4:S1"
+            },
+            "quantifier": {
+              "span_start": 20,
+              "span_end": 23,
+              "clause_ref": "C1",
+              "parent_selector_id": "E4:S1"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object",
+        "quantifier"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "dataset",
+        "two"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S25",
+        "E1:S1",
+        "E4:S1"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "784da3768d82f510ae4bbd44f90ca5ca85221d6639ecd9707cef170e88463255",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "63216f848c35c8d09e471831191b8ae813ff52fd598610b2be5b5db75619e8e3",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_01",
+      "question": "Did they collected the two datasets?",
+      "question_digest": "dc4d5c370351695212d3a31c5c9a75d9ebddc2e088295511098c54121b625304",
+      "route_question_digest": "5e341c377512d5c34c00a6556721224d13dc013ebf6071eb7d5cc822d146d736",
+      "document_id": "1611.03599",
+      "example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65",
+      "route": "crag_guarded",
+      "benchmark_route_id": "crag_guarded",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "unanswerable",
+      "typed_candidate": "unanswerable",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S1",
+          "evidence_id": "evidence:8c7968f5-a8e4-4bd3-9607-57a02420c53d:stable-chunk%3Aae998e87e7ffa1cdb0c4cf7210c1fab815cedca9f99c013b7d9a617c84784495",
+          "event_id": "69e7bd7687e82c942264b0c0817baa57f4c8fa6e051cd888518123e213b3a373",
+          "span_start": 0,
+          "span_end": 194,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "dataset"
+          ],
+          "event_core_tokens": [
+            "dataset"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 0,
+              "span_end": 2,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S1"
+            },
+            "predicate": {
+              "span_start": 107,
+              "span_end": 112,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S1"
+            },
+            "object": {
+              "span_start": 54,
+              "span_end": 61,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S1"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S25",
+          "evidence_id": "evidence:8c7968f5-a8e4-4bd3-9607-57a02420c53d:stable-chunk%3A43f5ed20690a18cd05ce6ee04ff895658d887543ab5a9262dfc30aa8664d0611",
+          "event_id": "61f3e83af05c47b15dc43158228ca826e6fb65c082591261de12f23648793a6e",
+          "span_start": 2766,
+          "span_end": 2960,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "dataset"
+          ],
+          "event_core_tokens": [
+            "dataset"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 2766,
+              "span_end": 2768,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S25"
+            },
+            "predicate": {
+              "span_start": 2873,
+              "span_end": 2878,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S25"
+            },
+            "object": {
+              "span_start": 2820,
+              "span_end": 2827,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S25"
+            }
+          }
+        },
+        {
+          "selector_id": "E3:S7",
+          "evidence_id": "evidence:8c7968f5-a8e4-4bd3-9607-57a02420c53d:stable-chunk%3Af43d83846a87e2b97c80dfa773456209e97c03fe475d488060a79d3ea34a8b8f",
+          "event_id": "c061bbde3497363007d1b6245ba3ed4eb0ba3f18620ebfc42ca3148251f91992",
+          "span_start": 1021,
+          "span_end": 1188,
+          "slot_hints": [
+            "actor",
+            "object",
+            "quantifier"
+          ],
+          "object_tokens": [
+            "two"
+          ],
+          "event_core_tokens": [
+            "two"
+          ],
+          "predicate_match_kind": "missing",
+          "local_relation_state": "unbound",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 1071,
+              "span_end": 1073,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S7"
+            },
+            "object": {
+              "span_start": 1080,
+              "span_end": 1083,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S7"
+            },
+            "quantifier": {
+              "span_start": 1080,
+              "span_end": 1083,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S7"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object",
+        "quantifier"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "dataset",
+        "two"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S25",
+        "E1:S1",
+        "E3:S7"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "37b6bc9ab5cb4eb8441a77efeda8e5ffed3c72681fdf3e5706007da3cd797c19",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "b1cf9ada9478ad878487dd41d947fa7276f9979e7a0e27cf88a10ae2ae4b1d4d",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_02",
+      "question": "Do they add one latent variable for each language pair in their Bayesian model?",
+      "question_digest": "d46cc993b8bc445f1d266f2db7b758a0904cb9a76380cb66cece42e3e615d651",
+      "route_question_digest": "7dbb5ba59b95c3cfa9d2092009489d3f8e414ea34d6138dea9cc7a1fe9404f44",
+      "document_id": "1603.01514",
+      "example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e",
+      "route": "text_rag",
+      "benchmark_route_id": "text_rag",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "yes",
+      "typed_candidate": "yes",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S3",
+          "evidence_id": "evidence:7aa7a68f-477a-406c-b9fa-08d43c637386:stable-chunk%3Acda57498825be12aadbdd1a15f44e052b36e1b8f76f1c84685598733e2367a52",
+          "event_id": "188616f59ca5f2adf966e7f578f195688da02b454bb6086eeced6f1abc27e06e",
+          "span_start": 156,
+          "span_end": 350,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object",
+            "quantifier"
+          ],
+          "object_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "event_core_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "predicate_match_kind": "exact",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 156,
+              "span_end": 158,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            },
+            "predicate": {
+              "span_start": 218,
+              "span_end": 221,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            },
+            "object": {
+              "span_start": 190,
+              "span_end": 302,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            },
+            "quantifier": {
+              "span_start": 200,
+              "span_end": 204,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S27",
+          "evidence_id": "evidence:7aa7a68f-477a-406c-b9fa-08d43c637386:stable-chunk%3Acc08426747de3f7487cd7a6d3f8711e20b98617adef6f3f30b4f3e91f6273a46",
+          "event_id": "c4759ebe5f388d49badce2bcf474b5b3f78cdf3d3acb4d18166f8f41f3f09477",
+          "span_start": 2505,
+          "span_end": 2699,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object",
+            "quantifier"
+          ],
+          "object_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "event_core_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "predicate_match_kind": "exact",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 2505,
+              "span_end": 2507,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            },
+            "predicate": {
+              "span_start": 2567,
+              "span_end": 2570,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            },
+            "object": {
+              "span_start": 2539,
+              "span_end": 2651,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            },
+            "quantifier": {
+              "span_start": 2549,
+              "span_end": 2553,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object",
+        "quantifier"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "bayesian",
+        "each",
+        "language",
+        "latent",
+        "model",
+        "one",
+        "pair",
+        "variable"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S27",
+        "E1:S3"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "29eb9ab9697839dc1fc3972d9e54c7a3ac4d012d87a3c04a2ee98aa116012d22",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "12ef8166a48107c6df8dea1d0d01cee1ea2ff0100e1736d391149e45dc24df25",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_02",
+      "question": "Do they add one latent variable for each language pair in their Bayesian model?",
+      "question_digest": "d46cc993b8bc445f1d266f2db7b758a0904cb9a76380cb66cece42e3e615d651",
+      "route_question_digest": "a7db4e59d2891caeb7d5afc0927809046965f5367cb346333fc61161f82780f5",
+      "document_id": "1603.01514",
+      "example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e",
+      "route": "controller_auto",
+      "benchmark_route_id": "controller_auto",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "yes",
+      "typed_candidate": "yes",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S3",
+          "evidence_id": "evidence:7aa7a68f-477a-406c-b9fa-08d43c637386:stable-chunk%3Acda57498825be12aadbdd1a15f44e052b36e1b8f76f1c84685598733e2367a52",
+          "event_id": "188616f59ca5f2adf966e7f578f195688da02b454bb6086eeced6f1abc27e06e",
+          "span_start": 156,
+          "span_end": 350,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object",
+            "quantifier"
+          ],
+          "object_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "event_core_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "predicate_match_kind": "exact",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 156,
+              "span_end": 158,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            },
+            "predicate": {
+              "span_start": 218,
+              "span_end": 221,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            },
+            "object": {
+              "span_start": 190,
+              "span_end": 302,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            },
+            "quantifier": {
+              "span_start": 200,
+              "span_end": 204,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S27",
+          "evidence_id": "evidence:7aa7a68f-477a-406c-b9fa-08d43c637386:stable-chunk%3Acc08426747de3f7487cd7a6d3f8711e20b98617adef6f3f30b4f3e91f6273a46",
+          "event_id": "c4759ebe5f388d49badce2bcf474b5b3f78cdf3d3acb4d18166f8f41f3f09477",
+          "span_start": 2505,
+          "span_end": 2699,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object",
+            "quantifier"
+          ],
+          "object_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "event_core_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "predicate_match_kind": "exact",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 2505,
+              "span_end": 2507,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            },
+            "predicate": {
+              "span_start": 2567,
+              "span_end": 2570,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            },
+            "object": {
+              "span_start": 2539,
+              "span_end": 2651,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            },
+            "quantifier": {
+              "span_start": 2549,
+              "span_end": 2553,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object",
+        "quantifier"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "bayesian",
+        "each",
+        "language",
+        "latent",
+        "model",
+        "one",
+        "pair",
+        "variable"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S27",
+        "E1:S3"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "0a466ce91c4f61e203fa3bdef60a49d533f4ffbe069bd088731ebf0c7d03cccc",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "9768ccaf3e3d28546fb29548c7507bb8faa227e45c6db43c37ca82778d16add6",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_02",
+      "question": "Do they add one latent variable for each language pair in their Bayesian model?",
+      "question_digest": "d46cc993b8bc445f1d266f2db7b758a0904cb9a76380cb66cece42e3e615d651",
+      "route_question_digest": "faa418c89115b58aa92342d80276fc8601515d88cbbdced175f66e3cdb81ded7",
+      "document_id": "1603.01514",
+      "example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e",
+      "route": "crag_guarded",
+      "benchmark_route_id": "crag_guarded",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "yes",
+      "typed_candidate": "yes",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S3",
+          "evidence_id": "evidence:7aa7a68f-477a-406c-b9fa-08d43c637386:stable-chunk%3Acda57498825be12aadbdd1a15f44e052b36e1b8f76f1c84685598733e2367a52",
+          "event_id": "188616f59ca5f2adf966e7f578f195688da02b454bb6086eeced6f1abc27e06e",
+          "span_start": 156,
+          "span_end": 350,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object",
+            "quantifier"
+          ],
+          "object_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "event_core_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "predicate_match_kind": "exact",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 156,
+              "span_end": 158,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            },
+            "predicate": {
+              "span_start": 218,
+              "span_end": 221,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            },
+            "object": {
+              "span_start": 190,
+              "span_end": 302,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            },
+            "quantifier": {
+              "span_start": 200,
+              "span_end": 204,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S3"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S27",
+          "evidence_id": "evidence:7aa7a68f-477a-406c-b9fa-08d43c637386:stable-chunk%3Acc08426747de3f7487cd7a6d3f8711e20b98617adef6f3f30b4f3e91f6273a46",
+          "event_id": "c4759ebe5f388d49badce2bcf474b5b3f78cdf3d3acb4d18166f8f41f3f09477",
+          "span_start": 2505,
+          "span_end": 2699,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object",
+            "quantifier"
+          ],
+          "object_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "event_core_tokens": [
+            "each",
+            "language",
+            "latent",
+            "model",
+            "variable"
+          ],
+          "predicate_match_kind": "exact",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 2505,
+              "span_end": 2507,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            },
+            "predicate": {
+              "span_start": 2567,
+              "span_end": 2570,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            },
+            "object": {
+              "span_start": 2539,
+              "span_end": 2651,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            },
+            "quantifier": {
+              "span_start": 2549,
+              "span_end": 2553,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S27"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object",
+        "quantifier"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "bayesian",
+        "each",
+        "language",
+        "latent",
+        "model",
+        "one",
+        "pair",
+        "variable"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S27",
+        "E1:S3"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "30a61e303282b1676f7e35e53e66da5a926fe92051252b9af21bc2e526dc1c20",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "4080014b8769e11f173e15dfd60c1e6c9312502a311cb66aad3cedb84bdbd3ea",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_03",
+      "question": "Does this method help in sentiment classification task improvement?",
+      "question_digest": "6d7de6f6860f1fd1d9baead0f010d7a1defac18b2118913f9cc12ab6617293f0",
+      "route_question_digest": "517e29808c9aeadfddb9639b4b9d60caeb33718a04bbe6adccd57fa65e529c56",
+      "document_id": "1908.11047",
+      "example_id": "f2155dc4aeab86bf31a838c8ff388c85440fce6e",
+      "route": "text_rag",
+      "benchmark_route_id": "text_rag",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "unanswerable",
+      "typed_candidate": "unanswerable",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S12",
+          "evidence_id": "evidence:10771182-d360-4b8c-9e0a-2bfba3fd4a1e:stable-chunk%3A96688fe91c39d0895b0585b85dd0ff8774a24f0b07e0835da3279152c5a1c704",
+          "event_id": "3ebda624057250f0c98f2e614036989dbe49821079e5513381405171c0e7ebc0",
+          "span_start": 1216,
+          "span_end": 1298,
+          "slot_hints": [
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "improve",
+            "task"
+          ],
+          "event_core_tokens": [
+            "improve",
+            "task"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "predicate": {
+              "span_start": 1268,
+              "span_end": 1280,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S12"
+            },
+            "object": {
+              "span_start": 1268,
+              "span_end": 1297,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S12"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S31",
+          "evidence_id": "evidence:10771182-d360-4b8c-9e0a-2bfba3fd4a1e:stable-chunk%3A679a23626f270e11da5c1242273191fbc476094730db5447df0ec8e27cc07e24",
+          "event_id": "816ac1dcb0695581c4ad446ffd1d26cda919f1cd499c01d6d517663cc994a604",
+          "span_start": 3455,
+          "span_end": 3545,
+          "slot_hints": [
+            "actor",
+            "object"
+          ],
+          "object_tokens": [
+            "classificat",
+            "senti"
+          ],
+          "event_core_tokens": [
+            "classificat",
+            "senti"
+          ],
+          "predicate_match_kind": "missing",
+          "local_relation_state": "unbound",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 3455,
+              "span_end": 3457,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S31"
+            },
+            "object": {
+              "span_start": 3490,
+              "span_end": 3526,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S31"
+            }
+          }
+        },
+        {
+          "selector_id": "E3:S15",
+          "evidence_id": "evidence:10771182-d360-4b8c-9e0a-2bfba3fd4a1e:stable-chunk%3A3f9889e7db654c83d18d48c3563ec25fb579b52bd55311e4e5037175748cf434",
+          "event_id": "9ebec720ff253c930097f528aa14786c4721bdfb127d3b3c6c2ce8ff1de327c4",
+          "span_start": 1490,
+          "span_end": 1591,
+          "slot_hints": [
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "improve",
+            "task"
+          ],
+          "event_core_tokens": [
+            "improve",
+            "task"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "mention_only",
+          "proposition_slot_spans": {
+            "predicate": {
+              "span_start": 1562,
+              "span_end": 1569,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S15"
+            },
+            "object": {
+              "span_start": 1562,
+              "span_end": 1574,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S15"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "classificat",
+        "improve",
+        "senti",
+        "task"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E3:S15",
+        "E1:S12",
+        "E2:S31"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "994612231438e2fa3481e3497ceb7905fba36743cca009598e364a60d802b748",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "230e1d8a1562c8e97752c7380c3f12895eaf040ff9c0bc0f7296db875f9d19ef",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_03",
+      "question": "Does this method help in sentiment classification task improvement?",
+      "question_digest": "6d7de6f6860f1fd1d9baead0f010d7a1defac18b2118913f9cc12ab6617293f0",
+      "route_question_digest": "640187bd5aa01200be96c142c4af92b3913d7a86a0314046a804d2e067dbf0b3",
+      "document_id": "1908.11047",
+      "example_id": "f2155dc4aeab86bf31a838c8ff388c85440fce6e",
+      "route": "controller_auto",
+      "benchmark_route_id": "controller_auto",
+      "internal_route": "hybrid",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "unanswerable",
+      "typed_candidate": "unanswerable",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S12",
+          "evidence_id": "evidence:10771182-d360-4b8c-9e0a-2bfba3fd4a1e:stable-chunk%3A96688fe91c39d0895b0585b85dd0ff8774a24f0b07e0835da3279152c5a1c704",
+          "event_id": "3ebda624057250f0c98f2e614036989dbe49821079e5513381405171c0e7ebc0",
+          "span_start": 1216,
+          "span_end": 1298,
+          "slot_hints": [
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "improve",
+            "task"
+          ],
+          "event_core_tokens": [
+            "improve",
+            "task"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "predicate": {
+              "span_start": 1268,
+              "span_end": 1280,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S12"
+            },
+            "object": {
+              "span_start": 1268,
+              "span_end": 1297,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S12"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S15",
+          "evidence_id": "evidence:10771182-d360-4b8c-9e0a-2bfba3fd4a1e:stable-chunk%3A3f9889e7db654c83d18d48c3563ec25fb579b52bd55311e4e5037175748cf434",
+          "event_id": "9ebec720ff253c930097f528aa14786c4721bdfb127d3b3c6c2ce8ff1de327c4",
+          "span_start": 1490,
+          "span_end": 1591,
+          "slot_hints": [
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "improve",
+            "task"
+          ],
+          "event_core_tokens": [
+            "improve",
+            "task"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "mention_only",
+          "proposition_slot_spans": {
+            "predicate": {
+              "span_start": 1562,
+              "span_end": 1569,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S15"
+            },
+            "object": {
+              "span_start": 1562,
+              "span_end": 1574,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S15"
+            }
+          }
+        },
+        {
+          "selector_id": "E3:S31",
+          "evidence_id": "evidence:10771182-d360-4b8c-9e0a-2bfba3fd4a1e:stable-chunk%3A679a23626f270e11da5c1242273191fbc476094730db5447df0ec8e27cc07e24",
+          "event_id": "816ac1dcb0695581c4ad446ffd1d26cda919f1cd499c01d6d517663cc994a604",
+          "span_start": 3455,
+          "span_end": 3545,
+          "slot_hints": [
+            "actor",
+            "object"
+          ],
+          "object_tokens": [
+            "classificat",
+            "senti"
+          ],
+          "event_core_tokens": [
+            "classificat",
+            "senti"
+          ],
+          "predicate_match_kind": "missing",
+          "local_relation_state": "unbound",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 3455,
+              "span_end": 3457,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S31"
+            },
+            "object": {
+              "span_start": 3490,
+              "span_end": 3526,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S31"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "classificat",
+        "improve",
+        "senti",
+        "task"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S15",
+        "E1:S12",
+        "E3:S31"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "587026511d5d7530a19866ec6c107f5603aa84a60dc4e0e889787ca569ca4342",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "5c3537a66c8393ea868f87c57f7021e7bc177e5c4cbaf234801146e7e5204e07",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_03",
+      "question": "Does this method help in sentiment classification task improvement?",
+      "question_digest": "6d7de6f6860f1fd1d9baead0f010d7a1defac18b2118913f9cc12ab6617293f0",
+      "route_question_digest": "d0f5837e804aae3f94e8b5a96696c3be0c84fd309339e7085d1a9993420cc95e",
+      "document_id": "1908.11047",
+      "example_id": "f2155dc4aeab86bf31a838c8ff388c85440fce6e",
+      "route": "crag_guarded",
+      "benchmark_route_id": "crag_guarded",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "unanswerable",
+      "typed_candidate": "unanswerable",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S12",
+          "evidence_id": "evidence:10771182-d360-4b8c-9e0a-2bfba3fd4a1e:stable-chunk%3A96688fe91c39d0895b0585b85dd0ff8774a24f0b07e0835da3279152c5a1c704",
+          "event_id": "3ebda624057250f0c98f2e614036989dbe49821079e5513381405171c0e7ebc0",
+          "span_start": 1216,
+          "span_end": 1298,
+          "slot_hints": [
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "improve",
+            "task"
+          ],
+          "event_core_tokens": [
+            "improve",
+            "task"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "predicate": {
+              "span_start": 1268,
+              "span_end": 1280,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S12"
+            },
+            "object": {
+              "span_start": 1268,
+              "span_end": 1297,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S12"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S31",
+          "evidence_id": "evidence:10771182-d360-4b8c-9e0a-2bfba3fd4a1e:stable-chunk%3A679a23626f270e11da5c1242273191fbc476094730db5447df0ec8e27cc07e24",
+          "event_id": "816ac1dcb0695581c4ad446ffd1d26cda919f1cd499c01d6d517663cc994a604",
+          "span_start": 3455,
+          "span_end": 3545,
+          "slot_hints": [
+            "actor",
+            "object"
+          ],
+          "object_tokens": [
+            "classificat",
+            "senti"
+          ],
+          "event_core_tokens": [
+            "classificat",
+            "senti"
+          ],
+          "predicate_match_kind": "missing",
+          "local_relation_state": "unbound",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 3455,
+              "span_end": 3457,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S31"
+            },
+            "object": {
+              "span_start": 3490,
+              "span_end": 3526,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S31"
+            }
+          }
+        },
+        {
+          "selector_id": "E3:S15",
+          "evidence_id": "evidence:10771182-d360-4b8c-9e0a-2bfba3fd4a1e:stable-chunk%3A3f9889e7db654c83d18d48c3563ec25fb579b52bd55311e4e5037175748cf434",
+          "event_id": "9ebec720ff253c930097f528aa14786c4721bdfb127d3b3c6c2ce8ff1de327c4",
+          "span_start": 1490,
+          "span_end": 1591,
+          "slot_hints": [
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "improve",
+            "task"
+          ],
+          "event_core_tokens": [
+            "improve",
+            "task"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "mention_only",
+          "proposition_slot_spans": {
+            "predicate": {
+              "span_start": 1562,
+              "span_end": 1569,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S15"
+            },
+            "object": {
+              "span_start": 1562,
+              "span_end": 1574,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S15"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "classificat",
+        "improve",
+        "senti",
+        "task"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E3:S15",
+        "E1:S12",
+        "E2:S31"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "1ddf43c3df5f16210b4cf494dd77fed654ce51cd13057cf58e038d48d4462fb4",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "969e4acb8983db9faba904e129eee2cd69209370ae3ef434375180d19f121f14",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_04",
+      "question": "Do they inspect their model to see if their model learned to associate image parts with words related to entities?",
+      "question_digest": "b408037a3afb98d5575c545dc259f10cdfcaf26b0aa63763029e390d58f65b81",
+      "route_question_digest": "6733d3a7c718b275c34678be0cf94636c0a82f2c0277d56f1083f0c6fea54ad5",
+      "document_id": "1802.07862",
+      "example_id": "7cd22ca9e107d2b13a7cc94252aaa9007976b338",
+      "route": "text_rag",
+      "benchmark_route_id": "text_rag",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "no",
+      "typed_candidate": "no",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S16",
+          "evidence_id": "evidence:e77ce399-1337-492f-9ee5-5ff02d2e3118:stable-chunk%3A3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+          "event_id": "9fcfd3598f6672366284677ce78029b9ecd4b75ddbb9ef7df88c42e057bfe378",
+          "span_start": 3419,
+          "span_end": 3635,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "model",
+            "word"
+          ],
+          "event_core_tokens": [
+            "model",
+            "word"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 3446,
+              "span_end": 3448,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S16"
+            },
+            "predicate": {
+              "span_start": 3449,
+              "span_end": 3456,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S16"
+            },
+            "object": {
+              "span_start": 3433,
+              "span_end": 3616,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S16"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S1",
+          "evidence_id": "evidence:e77ce399-1337-492f-9ee5-5ff02d2e3118:stable-chunk%3A13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+          "event_id": "e7883ebefddffc59618a628e5e66700cd756dec4c0bf2296b03c58cc4441d9aa",
+          "span_start": 0,
+          "span_end": 216,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "model",
+            "word"
+          ],
+          "event_core_tokens": [
+            "model",
+            "word"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 27,
+              "span_end": 29,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S1"
+            },
+            "predicate": {
+              "span_start": 30,
+              "span_end": 37,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S1"
+            },
+            "object": {
+              "span_start": 14,
+              "span_end": 197,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S1"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "associate",
+        "entity",
+        "image",
+        "learn",
+        "model",
+        "part",
+        "relat",
+        "word"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S1",
+        "E1:S16"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "05d81a8317208a082dae05b06d3b30d429793158652fafbeab7a0407b790b542",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "753396596b7c894c087538b20896ed1b901461e63838aa95ac018eee30b1900b",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_04",
+      "question": "Do they inspect their model to see if their model learned to associate image parts with words related to entities?",
+      "question_digest": "b408037a3afb98d5575c545dc259f10cdfcaf26b0aa63763029e390d58f65b81",
+      "route_question_digest": "0981ab7f996a85334272541d4a96f20545294e1d6bc590f60bf697861f4f7aec",
+      "document_id": "1802.07862",
+      "example_id": "7cd22ca9e107d2b13a7cc94252aaa9007976b338",
+      "route": "controller_auto",
+      "benchmark_route_id": "controller_auto",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "no",
+      "typed_candidate": "no",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S16",
+          "evidence_id": "evidence:e77ce399-1337-492f-9ee5-5ff02d2e3118:stable-chunk%3A3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+          "event_id": "9fcfd3598f6672366284677ce78029b9ecd4b75ddbb9ef7df88c42e057bfe378",
+          "span_start": 3419,
+          "span_end": 3635,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "model",
+            "word"
+          ],
+          "event_core_tokens": [
+            "model",
+            "word"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 3446,
+              "span_end": 3448,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S16"
+            },
+            "predicate": {
+              "span_start": 3449,
+              "span_end": 3456,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S16"
+            },
+            "object": {
+              "span_start": 3433,
+              "span_end": 3616,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S16"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S1",
+          "evidence_id": "evidence:e77ce399-1337-492f-9ee5-5ff02d2e3118:stable-chunk%3A13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+          "event_id": "e7883ebefddffc59618a628e5e66700cd756dec4c0bf2296b03c58cc4441d9aa",
+          "span_start": 0,
+          "span_end": 216,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "model",
+            "word"
+          ],
+          "event_core_tokens": [
+            "model",
+            "word"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 27,
+              "span_end": 29,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S1"
+            },
+            "predicate": {
+              "span_start": 30,
+              "span_end": 37,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S1"
+            },
+            "object": {
+              "span_start": 14,
+              "span_end": 197,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S1"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "associate",
+        "entity",
+        "image",
+        "learn",
+        "model",
+        "part",
+        "relat",
+        "word"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S1",
+        "E1:S16"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "fd7681cf5790a3e1f2ce9a9b7d7d4be194d8a713d228eb567e5aff26e94364eb",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "c3d80e39e9290f501892e38f038ac3dab71bed1bec87ffde55d210f5cbdc8b24",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_04",
+      "question": "Do they inspect their model to see if their model learned to associate image parts with words related to entities?",
+      "question_digest": "b408037a3afb98d5575c545dc259f10cdfcaf26b0aa63763029e390d58f65b81",
+      "route_question_digest": "5fa29e79368680bb73f7962f636dfe693773ab94298794b3c7cf04e5e0276a7c",
+      "document_id": "1802.07862",
+      "example_id": "7cd22ca9e107d2b13a7cc94252aaa9007976b338",
+      "route": "crag_guarded",
+      "benchmark_route_id": "crag_guarded",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "no",
+      "typed_candidate": "no",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S16",
+          "evidence_id": "evidence:e77ce399-1337-492f-9ee5-5ff02d2e3118:stable-chunk%3A3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+          "event_id": "9fcfd3598f6672366284677ce78029b9ecd4b75ddbb9ef7df88c42e057bfe378",
+          "span_start": 3419,
+          "span_end": 3635,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "model",
+            "word"
+          ],
+          "event_core_tokens": [
+            "model",
+            "word"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 3446,
+              "span_end": 3448,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S16"
+            },
+            "predicate": {
+              "span_start": 3449,
+              "span_end": 3456,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S16"
+            },
+            "object": {
+              "span_start": 3433,
+              "span_end": 3616,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S16"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S1",
+          "evidence_id": "evidence:e77ce399-1337-492f-9ee5-5ff02d2e3118:stable-chunk%3A13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+          "event_id": "e7883ebefddffc59618a628e5e66700cd756dec4c0bf2296b03c58cc4441d9aa",
+          "span_start": 0,
+          "span_end": 216,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "model",
+            "word"
+          ],
+          "event_core_tokens": [
+            "model",
+            "word"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 27,
+              "span_end": 29,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S1"
+            },
+            "predicate": {
+              "span_start": 30,
+              "span_end": 37,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S1"
+            },
+            "object": {
+              "span_start": 14,
+              "span_end": 197,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S1"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "associate",
+        "entity",
+        "image",
+        "learn",
+        "model",
+        "part",
+        "relat",
+        "word"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E2:S1",
+        "E1:S16"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "8b65ce57dbaf22dce2291c9b898787bdfc01c05bb99019f36862db0ccd3c733f",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "2445925b5342c1083c31474502bf4c3f1ec7e247c30f04e32d4e66a8c64680df",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_05",
+      "question": "Is car-speak language collection of abstract features that classifier is later trained on?",
+      "question_digest": "921a187124b4cc951f49a01e3936a9b62b1a01fa04a4689c74a43c7c699ac00f",
+      "route_question_digest": "699c348ee6bef673c58c3cb97738431721e264f0f1c3e0cf7caebc99d22734ec",
+      "document_id": "2002.02070",
+      "example_id": "25c1c4a91f5dedd4e06d14121af3b5921db125e9",
+      "route": "text_rag",
+      "benchmark_route_id": "text_rag",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "yes",
+      "typed_candidate": "yes",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S6",
+          "evidence_id": "evidence:cef9b0e7-d429-4c11-9f5b-e93ab5e41a2d:stable-chunk%3A30545095bda3a70a04a3ef31b812660cb4682935dc59849a426fb2b3a486cba1",
+          "event_id": "c6233f85e1046bb707e70bdfc3067c4505ce1af523c12718aa030914fcf3a2b0",
+          "span_start": 411,
+          "span_end": 487,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "abstract"
+          ],
+          "event_core_tokens": [
+            "abstract"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 411,
+              "span_end": 420,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S6"
+            },
+            "predicate": {
+              "span_start": 421,
+              "span_end": 423,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S6"
+            },
+            "object": {
+              "span_start": 424,
+              "span_end": 432,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S6"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S14",
+          "evidence_id": "evidence:cef9b0e7-d429-4c11-9f5b-e93ab5e41a2d:stable-chunk%3A4c71502cabbb9defd7cbb0b1149adda476428cc8d97bc91c040917bf17371e1f",
+          "event_id": "df0392e99d181db32e66cd0944bbff9ec161d99bf6781c90befcf6495e2da431",
+          "span_start": 1133,
+          "span_end": 1211,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "abstract"
+          ],
+          "event_core_tokens": [
+            "abstract"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 1133,
+              "span_end": 1142,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            },
+            "predicate": {
+              "span_start": 1143,
+              "span_end": 1145,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            },
+            "object": {
+              "span_start": 1146,
+              "span_end": 1154,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "abstract",
+        "classifier",
+        "feature",
+        "later",
+        "train"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E1:S6",
+        "E2:S14"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "164a5e42ad2ecc616997c33174976107b8e77516ad3fb67839e4e77609ac6d72",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "bd983f41cde25af1f53dc6bfdcd74d86a9d2b21e623cc0b2476bd94fcc43eeca",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_05",
+      "question": "Is car-speak language collection of abstract features that classifier is later trained on?",
+      "question_digest": "921a187124b4cc951f49a01e3936a9b62b1a01fa04a4689c74a43c7c699ac00f",
+      "route_question_digest": "148d5c35b08d8b0d85ca6e37beeb30d9aeea53da5033f4c1d92178242eb88e96",
+      "document_id": "2002.02070",
+      "example_id": "25c1c4a91f5dedd4e06d14121af3b5921db125e9",
+      "route": "controller_auto",
+      "benchmark_route_id": "controller_auto",
+      "internal_route": "hybrid",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "yes",
+      "typed_candidate": "yes",
+      "selector_refs": [
+        {
+          "selector_id": "E3:S1",
+          "evidence_id": "element:cef9b0e7-d429-4c11-9f5b-e93ab5e41a2d:car-speak-is-abstract-language-that-pertains-to-a-car-s-physical-attribute-s%3Acef9b0e7-d429-4c11-9f5b-e93ab5e41a2d",
+          "event_id": "c55bd0e937d60a12dc6f8a9a25bd6a40f52e39de2956ef3f3cc9140bee1f1689",
+          "span_start": 0,
+          "span_end": 78,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "abstract"
+          ],
+          "event_core_tokens": [
+            "abstract"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 0,
+              "span_end": 9,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S1"
+            },
+            "predicate": {
+              "span_start": 10,
+              "span_end": 12,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S1"
+            },
+            "object": {
+              "span_start": 13,
+              "span_end": 21,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S1"
+            }
+          }
+        },
+        {
+          "selector_id": "E4:S1",
+          "evidence_id": "element:cef9b0e7-d429-4c11-9f5b-e93ab5e41a2d:car-speak-is-abstract-language-that-pertains-to-a-car-s-physical-attributes%3Acef9b0e7-d429-4c11-9f5b-e93ab5e41a2d",
+          "event_id": "f1c573dbcab66cb0820cd02243e366e67d463ad07d038808eb63d01b48615c19",
+          "span_start": 0,
+          "span_end": 76,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "abstract"
+          ],
+          "event_core_tokens": [
+            "abstract"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 0,
+              "span_end": 9,
+              "clause_ref": "C1",
+              "parent_selector_id": "E4:S1"
+            },
+            "predicate": {
+              "span_start": 10,
+              "span_end": 12,
+              "clause_ref": "C1",
+              "parent_selector_id": "E4:S1"
+            },
+            "object": {
+              "span_start": 13,
+              "span_end": 21,
+              "clause_ref": "C1",
+              "parent_selector_id": "E4:S1"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "abstract",
+        "classifier",
+        "feature",
+        "later",
+        "train"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E3:S1",
+        "E4:S1"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "02a9b12c4e4cd6ff6133f6cf0b208be41016b7e8386101e796841363eb77fe6c",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "65120a2bf4ee521c677a5d3d5de5ac0e20b0ae0fd63777fbe33bd4f009780bad",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_05",
+      "question": "Is car-speak language collection of abstract features that classifier is later trained on?",
+      "question_digest": "921a187124b4cc951f49a01e3936a9b62b1a01fa04a4689c74a43c7c699ac00f",
+      "route_question_digest": "022bda3e92acf20597e5e38455347630aaa54ef4b125a9446a5bcfab07771347",
+      "document_id": "2002.02070",
+      "example_id": "25c1c4a91f5dedd4e06d14121af3b5921db125e9",
+      "route": "crag_guarded",
+      "benchmark_route_id": "crag_guarded",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "yes",
+      "typed_candidate": "yes",
+      "selector_refs": [
+        {
+          "selector_id": "E1:S6",
+          "evidence_id": "evidence:cef9b0e7-d429-4c11-9f5b-e93ab5e41a2d:stable-chunk%3A30545095bda3a70a04a3ef31b812660cb4682935dc59849a426fb2b3a486cba1",
+          "event_id": "c6233f85e1046bb707e70bdfc3067c4505ce1af523c12718aa030914fcf3a2b0",
+          "span_start": 411,
+          "span_end": 487,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "abstract"
+          ],
+          "event_core_tokens": [
+            "abstract"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 411,
+              "span_end": 420,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S6"
+            },
+            "predicate": {
+              "span_start": 421,
+              "span_end": 423,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S6"
+            },
+            "object": {
+              "span_start": 424,
+              "span_end": 432,
+              "clause_ref": "C1",
+              "parent_selector_id": "E1:S6"
+            }
+          }
+        },
+        {
+          "selector_id": "E2:S14",
+          "evidence_id": "evidence:cef9b0e7-d429-4c11-9f5b-e93ab5e41a2d:stable-chunk%3A4c71502cabbb9defd7cbb0b1149adda476428cc8d97bc91c040917bf17371e1f",
+          "event_id": "df0392e99d181db32e66cd0944bbff9ec161d99bf6781c90befcf6495e2da431",
+          "span_start": 1133,
+          "span_end": 1211,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "abstract"
+          ],
+          "event_core_tokens": [
+            "abstract"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 1133,
+              "span_end": 1142,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            },
+            "predicate": {
+              "span_start": 1143,
+              "span_end": 1145,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            },
+            "object": {
+              "span_start": 1146,
+              "span_end": 1154,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [],
+      "required_object_tokens": [
+        "abstract",
+        "classifier",
+        "feature",
+        "later",
+        "train"
+      ],
+      "covered_object_tokens": [],
+      "binding_state": "unresolved",
+      "binding_status": "missing",
+      "binding_reason": "record_identity_only",
+      "selector_universe_refs": [
+        "E1:S6",
+        "E2:S14"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "ab72b3b175dba09984401029600b82c910c9c6d4dbe8741b384bcc308a38c769",
+      "canonical_plan_state": "unresolved",
+      "canonical_plan_span_refs": [],
+      "allowed_plan_ids": [],
+      "selected_plan_id": "",
+      "plan_state": "passed",
+      "plan_rejection_reason": "",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "passed",
+      "first_inconsistency": {},
+      "semantic_authority_status": "insufficient",
+      "semantic_authority_reason": "semantic_evidence_set_insufficient",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "c59acc96e3846b9a9c99664ad9bf839a52009159712108148f372a7af0c1e386",
+      "expected_defect_class": "empty_plan"
+    },
+    {
+      "sample_id": "natural_06",
+      "question": "Are the automatically constructed datasets subject to quality control?",
+      "question_digest": "6467acf22faf2fa54d060379e52852d3d4e93ef2c20b66ecef77b5d52fae0537",
+      "route_question_digest": "a0eef880c2bdb5048673f52f1fa5d15df00abd1cf090542498dc5caa183ebbc7",
+      "document_id": "1912.13337",
+      "example_id": "e97186c51d4af490dba6faaf833d269c8256426c",
+      "route": "text_rag",
+      "benchmark_route_id": "text_rag",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "no",
+      "typed_candidate": "no",
+      "selector_refs": [
+        {
+          "selector_id": "E2:S14",
+          "evidence_id": "evidence:bd767f88-ce27-49db-8b34-12bd90f7665d:stable-chunk%3A2cd75e276e8c7efc81e45b7c175b5b08628878d871e2eb00b884febe87f559c4",
+          "event_id": "374e924d01ebd3da03402b033648310df01257948c1e5fc05820bbdc52a725d5",
+          "span_start": 2429,
+          "span_end": 2697,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "control"
+          ],
+          "event_core_tokens": [
+            "control"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 2467,
+              "span_end": 2628,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            },
+            "predicate": {
+              "span_start": 2634,
+              "span_end": 2641,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            },
+            "object": {
+              "span_start": 2634,
+              "span_end": 2641,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            }
+          }
+        },
+        {
+          "selector_id": "E3:S24",
+          "evidence_id": "evidence:bd767f88-ce27-49db-8b34-12bd90f7665d:stable-chunk%3Aa0415df55454257a9c80d92f2d33cb3def58f20b9564bf5704a30ae8dd43bd5c",
+          "event_id": "b844e25fff4474d82e4df75abc420494de897662f46d532838fb79f00de6e363",
+          "span_start": 4364,
+          "span_end": 4559,
+          "slot_hints": [
+            "predicate"
+          ],
+          "object_tokens": [],
+          "event_core_tokens": [],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "predicate": {
+              "span_start": 4412,
+              "span_end": 4422,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S24"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "required_object_tokens": [
+        "control",
+        "quality"
+      ],
+      "covered_object_tokens": [
+        "control",
+        "quality"
+      ],
+      "binding_state": "relation_bound_contradiction",
+      "binding_status": "bound",
+      "binding_reason": "exact_span_set",
+      "selector_universe_refs": [
+        "E2:S14",
+        "E3:S24"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "87328ff72c16ee5f9c4b8d1473216ac78f38cef12f819d47695a529fe637145f",
+      "canonical_plan_state": "relation_bound_contradiction",
+      "canonical_plan_span_refs": [
+        "E2:S14",
+        "E3:S24"
+      ],
+      "allowed_plan_ids": [
+        "af7aae550a5a1baee632bbd248e4b6cc248e35a8207dbee84a2a9d6108c42ec0"
+      ],
+      "selected_plan_id": "af7aae550a5a1baee632bbd248e4b6cc248e35a8207dbee84a2a9d6108c42ec0",
+      "plan_state": "passed",
+      "plan_rejection_reason": "auditor_internal_inconsistency",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "failed",
+      "first_inconsistency": {
+        "stage": "auditor_semantics",
+        "reason": "auditor_internal_inconsistency",
+        "attempt": 1,
+        "raw_response_digest": "d9ea99f66e45b7b2020a8beb218a05ca85f2342db5cc64d9f61fb5a061750914"
+      },
+      "semantic_authority_status": "rejected",
+      "semantic_authority_reason": "candidate_typed_conclusion_binding_invalid",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "152379abb4f77b1649d588d9717b55162b66eb2b18a91bb1d42929f233566620",
+      "expected_defect_class": "cross_event_invalid"
+    },
+    {
+      "sample_id": "natural_06",
+      "question": "Are the automatically constructed datasets subject to quality control?",
+      "question_digest": "6467acf22faf2fa54d060379e52852d3d4e93ef2c20b66ecef77b5d52fae0537",
+      "route_question_digest": "b8d937426f6055a790b4603db0a0a7d7f65f5954560f5774e1216c9a1785fcb1",
+      "document_id": "1912.13337",
+      "example_id": "e97186c51d4af490dba6faaf833d269c8256426c",
+      "route": "controller_auto",
+      "benchmark_route_id": "controller_auto",
+      "internal_route": "hybrid",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "no",
+      "typed_candidate": "no",
+      "selector_refs": [
+        {
+          "selector_id": "E3:S1",
+          "evidence_id": "element:bd767f88-ce27-49db-8b34-12bd90f7665d:bibref8%3Abd767f88-ce27-49db-8b34-12bd90f7665d",
+          "event_id": "36dbfc105a6346e1efc9deed6ce2b61eb6d2f7d0facb4f771b7537c4c64ea3b2",
+          "span_start": 0,
+          "span_end": 275,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "control"
+          ],
+          "event_core_tokens": [
+            "control"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 19,
+              "span_end": 43,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S1"
+            },
+            "predicate": {
+              "span_start": 224,
+              "span_end": 231,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S1"
+            },
+            "object": {
+              "span_start": 224,
+              "span_end": 231,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S1"
+            }
+          }
+        },
+        {
+          "selector_id": "E4:S24",
+          "evidence_id": "evidence:bd767f88-ce27-49db-8b34-12bd90f7665d:stable-chunk%3Aa0415df55454257a9c80d92f2d33cb3def58f20b9564bf5704a30ae8dd43bd5c",
+          "event_id": "b844e25fff4474d82e4df75abc420494de897662f46d532838fb79f00de6e363",
+          "span_start": 4364,
+          "span_end": 4559,
+          "slot_hints": [
+            "predicate"
+          ],
+          "object_tokens": [],
+          "event_core_tokens": [],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "predicate": {
+              "span_start": 4412,
+              "span_end": 4422,
+              "clause_ref": "C1",
+              "parent_selector_id": "E4:S24"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "required_object_tokens": [
+        "control",
+        "quality"
+      ],
+      "covered_object_tokens": [
+        "control",
+        "quality"
+      ],
+      "binding_state": "relation_bound_contradiction",
+      "binding_status": "bound",
+      "binding_reason": "exact_span_set",
+      "selector_universe_refs": [
+        "E3:S1",
+        "E4:S24"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "7c1e493fe3969147d61c8f997bbcf7d89ccb52c3e884338212b844b89231546e",
+      "canonical_plan_state": "relation_bound_contradiction",
+      "canonical_plan_span_refs": [
+        "E3:S1",
+        "E4:S24"
+      ],
+      "allowed_plan_ids": [
+        "01fde21c158fd924263ff1f7d640068299e004ecf56fdcdf42ceef1d3492056a"
+      ],
+      "selected_plan_id": "01fde21c158fd924263ff1f7d640068299e004ecf56fdcdf42ceef1d3492056a",
+      "plan_state": "passed",
+      "plan_rejection_reason": "auditor_internal_inconsistency",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "failed",
+      "first_inconsistency": {
+        "stage": "auditor_semantics",
+        "reason": "auditor_internal_inconsistency",
+        "attempt": 1,
+        "raw_response_digest": "d9ea99f66e45b7b2020a8beb218a05ca85f2342db5cc64d9f61fb5a061750914"
+      },
+      "semantic_authority_status": "rejected",
+      "semantic_authority_reason": "candidate_typed_conclusion_binding_invalid",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "e29cfa81badd017f57c36c229f43cc5be64dd985e23f323bc0ea31229bb7ad1d",
+      "expected_defect_class": "cross_event_invalid"
+    },
+    {
+      "sample_id": "natural_06",
+      "question": "Are the automatically constructed datasets subject to quality control?",
+      "question_digest": "6467acf22faf2fa54d060379e52852d3d4e93ef2c20b66ecef77b5d52fae0537",
+      "route_question_digest": "bf36b70a446068f2434eb62afcb28bc65caef7748fa2eb9e386359405f58ddd5",
+      "document_id": "1912.13337",
+      "example_id": "e97186c51d4af490dba6faaf833d269c8256426c",
+      "route": "crag_guarded",
+      "benchmark_route_id": "crag_guarded",
+      "internal_route": "doc_text",
+      "route_policy": "auto",
+      "decision_route": "doc_text",
+      "candidate": "no",
+      "typed_candidate": "no",
+      "selector_refs": [
+        {
+          "selector_id": "E2:S14",
+          "evidence_id": "evidence:bd767f88-ce27-49db-8b34-12bd90f7665d:stable-chunk%3A2cd75e276e8c7efc81e45b7c175b5b08628878d871e2eb00b884febe87f559c4",
+          "event_id": "374e924d01ebd3da03402b033648310df01257948c1e5fc05820bbdc52a725d5",
+          "span_start": 2429,
+          "span_end": 2697,
+          "slot_hints": [
+            "actor",
+            "predicate",
+            "object"
+          ],
+          "object_tokens": [
+            "control"
+          ],
+          "event_core_tokens": [
+            "control"
+          ],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "actor": {
+              "span_start": 2467,
+              "span_end": 2628,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            },
+            "predicate": {
+              "span_start": 2634,
+              "span_end": 2641,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            },
+            "object": {
+              "span_start": 2634,
+              "span_end": 2641,
+              "clause_ref": "C1",
+              "parent_selector_id": "E2:S14"
+            }
+          }
+        },
+        {
+          "selector_id": "E3:S24",
+          "evidence_id": "evidence:bd767f88-ce27-49db-8b34-12bd90f7665d:stable-chunk%3Aa0415df55454257a9c80d92f2d33cb3def58f20b9564bf5704a30ae8dd43bd5c",
+          "event_id": "b844e25fff4474d82e4df75abc420494de897662f46d532838fb79f00de6e363",
+          "span_start": 4364,
+          "span_end": 4559,
+          "slot_hints": [
+            "predicate"
+          ],
+          "object_tokens": [],
+          "event_core_tokens": [],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "proposition_slot_spans": {
+            "predicate": {
+              "span_start": 4412,
+              "span_end": 4422,
+              "clause_ref": "C1",
+              "parent_selector_id": "E3:S24"
+            }
+          }
+        }
+      ],
+      "required_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "covered_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "required_object_tokens": [
+        "control",
+        "quality"
+      ],
+      "covered_object_tokens": [
+        "control",
+        "quality"
+      ],
+      "binding_state": "relation_bound_contradiction",
+      "binding_status": "bound",
+      "binding_reason": "exact_span_set",
+      "selector_universe_refs": [
+        "E2:S14",
+        "E3:S24"
+      ],
+      "selector_universe_status": "bounded",
+      "canonical_plan_id": "15e91134a8180c7ad03ba2b86e03a85d6d00d828943b68fb556faa52ce2f604c",
+      "canonical_plan_state": "relation_bound_contradiction",
+      "canonical_plan_span_refs": [
+        "E2:S14",
+        "E3:S24"
+      ],
+      "allowed_plan_ids": [
+        "af7aae550a5a1baee632bbd248e4b6cc248e35a8207dbee84a2a9d6108c42ec0"
+      ],
+      "selected_plan_id": "af7aae550a5a1baee632bbd248e4b6cc248e35a8207dbee84a2a9d6108c42ec0",
+      "plan_state": "passed",
+      "plan_rejection_reason": "auditor_internal_inconsistency",
+      "lineage_contract": "semantic_proposition_data_lineage.v1",
+      "lineage_status": "failed",
+      "first_inconsistency": {
+        "stage": "auditor_semantics",
+        "reason": "auditor_internal_inconsistency",
+        "attempt": 1,
+        "raw_response_digest": "d9ea99f66e45b7b2020a8beb218a05ca85f2342db5cc64d9f61fb5a061750914"
+      },
+      "semantic_authority_status": "rejected",
+      "semantic_authority_reason": "candidate_typed_conclusion_binding_invalid",
+      "terminal_outcome": "safe_abstention",
+      "semantic_pack_digest": "c14faf1638da631d61783ea0b873356d231186c31746f5ec34d1b4c4b5147ac9",
+      "expected_defect_class": "cross_event_invalid"
+    }
+  ]
+}
