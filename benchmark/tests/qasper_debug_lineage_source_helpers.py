@@ -4,6 +4,9 @@ import hashlib
 from typing import Any
 
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest
+from benchmark.tests.qasper_debug_semantic_pack_fixtures import (
+    _debug_source_input_snapshot,
+)
 
 
 def debug_source_packing(pack_identity: dict[str, str]) -> dict[str, Any]:
@@ -12,8 +15,13 @@ def debug_source_packing(pack_identity: dict[str, str]) -> dict[str, Any]:
         {
             "source_item_index": 1,
             "evidence_id": "span:paper:s1",
+            "text_digest": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "text_chars": len(text),
             "decision": "packed",
             "reason": "packed",
+            "semantic_rank": 1,
+            "priority": [0, 1, 0, 0.0],
+            "priority_factors": {"ranked_position": 0},
         }
     ]
     window_decisions = [
@@ -35,6 +43,10 @@ def debug_source_packing(pack_identity: dict[str, str]) -> dict[str, Any]:
     return {
         **_source_packing_fields(pack_identity, text),
         **_source_decision_fields(source_decisions, window_decisions),
+        "source_input_snapshot": _debug_source_input_snapshot(
+            text,
+            route="fixture",
+        ),
         "records": [
             {
                 "evidence_id": "span:paper:s1",

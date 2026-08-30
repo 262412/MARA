@@ -21,6 +21,10 @@ def digest_incompleteness_reasons(
 ) -> list[str]:
     checks = (
         ("source_decisions_digest_mismatch", source_digests_match(source)),
+        (
+            "source_input_snapshot_digest_mismatch",
+            source_input_snapshot_digests_match(source),
+        ),
         ("selector_crosswalk_digest_mismatch", crosswalk_digest_matches(crosswalk)),
         ("selector_projection_digest_mismatch", selector_digests_match(source)),
         (
@@ -54,6 +58,103 @@ def digest_incompleteness_reasons(
         ),
     )
     return [reason for reason, matched in checks if not matched]
+
+
+def source_input_snapshot_digests_match(source: Mapping[str, Any]) -> bool:
+    snapshot = mapping(source.get("source_input_snapshot"))
+    if not snapshot:
+        return True
+    payload = {
+        key: value for key, value in snapshot.items() if key != "snapshot_digest"
+    }
+    return bool(
+        digest_matches(payload, snapshot.get("snapshot_digest"))
+        and digest_matches(
+            snapshot.get("source_items"), snapshot.get("source_items_digest")
+        )
+        and digest_matches(
+            snapshot.get("ranked_evidence"), snapshot.get("ranked_evidence_digest")
+        )
+        and digest_matches(
+            snapshot.get("required_slots"), snapshot.get("required_slots_digest")
+        )
+        and digest_matches(
+            snapshot.get("query_plan"), snapshot.get("query_plan_digest")
+        )
+    )
+
+
+def candidate_input_state_digests_match(value: Mapping[str, Any]) -> bool:
+    if not value:
+        return True
+    payload = {key: item for key, item in value.items() if key != "observation_digest"}
+    return bool(
+        digest_matches(payload, value.get("observation_digest"))
+        and digest_matches(
+            value.get("stage_ranked_evidence"),
+            value.get("stage_ranked_evidence_digest"),
+        )
+        and digest_matches(
+            value.get("terminal_ranked_evidence"),
+            value.get("terminal_ranked_evidence_digest"),
+        )
+    )
+
+
+def source_input_snapshot_complete(source: Mapping[str, Any]) -> bool:
+    snapshot = mapping(source.get("source_input_snapshot"))
+    items = [mapping(value) for value in list_values(snapshot.get("source_items"))]
+    decisions = [
+        mapping(value) for value in list_values(source.get("source_decisions"))
+    ]
+    ranked = [mapping(value) for value in list_values(snapshot.get("ranked_evidence"))]
+    identity_keys = ("source_item_index", "evidence_id", "text_digest", "text_chars")
+    aligned_items = [
+        {key: decision.get(key) for key in identity_keys} for decision in decisions
+    ]
+    snapshot_items = [{key: item.get(key) for key in identity_keys} for item in items]
+    return bool(
+        snapshot.get("contract_id") == "semantic_source_input_snapshot.v1"
+        and snapshot.get("complete") is True
+        and int(snapshot.get("source_item_count") or 0) == len(items) == len(decisions)
+        and int(snapshot.get("ranked_evidence_count") or 0) == len(ranked)
+        and aligned_items == snapshot_items
+        and digest_matches(items, snapshot.get("source_items_digest"))
+        and digest_matches(ranked, snapshot.get("ranked_evidence_digest"))
+        and digest_matches(
+            snapshot.get("required_slots"), snapshot.get("required_slots_digest")
+        )
+        and digest_matches(
+            snapshot.get("query_plan"), snapshot.get("query_plan_digest")
+        )
+        and digest_matches(
+            str(snapshot.get("question") or "").strip(),
+            snapshot.get("question_digest"),
+        )
+        and digest_matches(
+            {key: value for key, value in snapshot.items() if key != "snapshot_digest"},
+            snapshot.get("snapshot_digest"),
+        )
+        and all(row.get("ranked_position") == index for index, row in enumerate(ranked))
+    )
+
+
+def candidate_input_state_complete(
+    value: Mapping[str, Any],
+    source: Mapping[str, Any],
+) -> bool:
+    stage_rows = list_values(value.get("stage_ranked_evidence"))
+    terminal_rows = list_values(value.get("terminal_ranked_evidence"))
+    snapshot = mapping(source.get("source_input_snapshot"))
+    return bool(
+        value.get("contract_id") == "qasper_candidate_input_state_observation.v1"
+        and value.get("complete") is True
+        and value.get("status") in {"preserved", "drifted"}
+        and int(value.get("stage_ranked_evidence_count") or 0) == len(stage_rows)
+        and int(value.get("terminal_ranked_evidence_count") or 0) == len(terminal_rows)
+        and value.get("source_input_snapshot_digest") == snapshot.get("snapshot_digest")
+        and candidate_input_state_digests_match(value)
+    )
 
 
 def source_digests_match(source: Mapping[str, Any]) -> bool:

@@ -22,7 +22,11 @@ from benchmark.tests.contract_smoke_fixtures import _fixture_digest
 DEBUG_PACK_QUESTION = "Does the paper use the method?"
 
 
-def _debug_semantic_pack(candidate_transaction_id: str) -> dict[str, Any]:
+def _debug_semantic_pack(
+    candidate_transaction_id: str,
+    *,
+    route: str = "fixture",
+) -> dict[str, Any]:
     text = "The paper uses the method."
     records = prepare_qasper_canonical_records(
         DEBUG_PACK_QUESTION,
@@ -87,6 +91,7 @@ def _debug_semantic_pack(candidate_transaction_id: str) -> dict[str, Any]:
         "source_packing_observation": _debug_source_packing_observation(
             text,
             semantic_pack_digest,
+            route=route,
         ),
     }
     payload["pack_identity_digest"] = _fixture_digest(payload)
@@ -96,11 +101,14 @@ def _debug_semantic_pack(candidate_transaction_id: str) -> dict[str, Any]:
 def _debug_source_packing_observation(
     text: str,
     semantic_pack_digest: str,
+    *,
+    route: str,
 ) -> dict[str, Any]:
     return {
         "contract_id": "qasper_source_packing_observation.v1",
         "semantic_pack_digest": semantic_pack_digest,
         "source_semantic_pack_digest": semantic_pack_digest,
+        "source_input_snapshot": _debug_source_input_snapshot(text, route=route),
         "record_count": 1,
         "selector_count": 1,
         "estimated_input_tokens": 128,
@@ -136,6 +144,50 @@ def _debug_source_packing_observation(
             }
         ],
     }
+
+
+def _debug_source_input_snapshot(
+    text: str,
+    *,
+    route: str,
+) -> dict[str, Any]:
+    text_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    source_items = [
+        {
+            "source_item_index": 1,
+            "evidence_id": "span:paper:s1",
+            "text_digest": text_digest,
+            "text_chars": len(text),
+            "identity_decision": "packed",
+            "identity_reason": "packed",
+        }
+    ]
+    ranked_evidence = [{"ranked_position": 0, "canonical_id": "span:paper:s1"}]
+    query_plan = {"plan_id": "debug-semantic-pack"}
+    required_slots = [{"slot_id": "support:boolean_proposition"}]
+    payload = {
+        "contract_id": "semantic_source_input_snapshot.v1",
+        "complete": True,
+        "route": route,
+        "candidate_priority": True,
+        "question": DEBUG_PACK_QUESTION,
+        "question_digest": _fixture_digest(DEBUG_PACK_QUESTION),
+        "query_plan": query_plan,
+        "query_plan_digest": _fixture_digest(query_plan),
+        "required_slots": required_slots,
+        "required_slots_digest": _fixture_digest(required_slots),
+        "max_context_length": None,
+        "item_char_limit": 1200,
+        "source_item_count": len(source_items),
+        "source_items_digest": _fixture_digest(source_items),
+        "source_items": source_items,
+        "ranked_evidence_present": True,
+        "ranked_evidence_count": len(ranked_evidence),
+        "ranked_evidence_digest": _fixture_digest(ranked_evidence),
+        "ranked_evidence": ranked_evidence,
+    }
+    payload["snapshot_digest"] = _fixture_digest(payload)
+    return payload
 
 
 def _debug_semantic_pack_identity(pack: dict[str, Any]) -> dict[str, str]:

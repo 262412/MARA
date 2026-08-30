@@ -41,6 +41,7 @@ def test_job_10385302_proves_why_the_old_trace_cannot_close_the_chain() -> None:
     rows = payload["instances"]
 
     assert payload["trace_gaps"] == [
+        "candidate_stage_input_snapshot_missing",
         "source_to_canonical_selector_crosswalk_missing",
         "pre_limit_selector_decisions_missing",
         "all_plan_candidate_decisions_missing",
@@ -64,6 +65,26 @@ def test_job_10385302_proves_why_the_old_trace_cannot_close_the_chain() -> None:
         for row in missing
         if row["example_id"].startswith("7cd22")
     } == {False}
+
+
+def test_job_10385302_freezes_the_probe_candidate_path_divergence() -> None:
+    divergence = _fixture()["candidate_path_divergence"]
+
+    assert divergence["example_id"] == ("7cd22ca9e107d2b13a7cc94252aaa9007976b338")
+    assert divergence["route_count"] == 3
+    assert divergence["first_divergence_stage"] == "candidate_ranked_evidence_input"
+    assert divergence["cause"] == (
+        "candidate_stage_ranking_was_overwritten_by_later_pipeline_state"
+    )
+    assert divergence["candidate_stage_ranked_chunk_ids"] != (
+        divergence["late_bundle_ranked_chunk_ids"]
+    )
+    assert divergence["candidate_stage_canonical_selector_refs"] != (
+        divergence["late_state_probe_canonical_selector_refs"]
+    )
+    assert divergence["candidate_stage_legal_plan_count"] == 0
+    assert divergence["late_state_probe_legal_plan_count"] == 1
+    assert divergence["candidate_request_token_budget_drop_count"] == 0
 
 
 def test_job_10385302_freezes_candidate_elimination_and_auditor_boundaries() -> None:

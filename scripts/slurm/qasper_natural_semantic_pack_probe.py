@@ -15,19 +15,14 @@ from ktem.docqa.question_proposition import build_question_proposition
 from ktem.docqa.semantic_relation_clause_validation import (
     semantic_relation_evidence_set_constraint,
 )
-from ktem.reasoning.mara_qasper_candidate_evidence import (
-    candidate_evidence_set_binding,
-    candidate_required_slots_from_binding,
-)
+from ktem.reasoning.mara_qasper_candidate_prompt import _candidate_evidence
 from ktem.reasoning.mara_qasper_semantic_pack import (
     freeze_qasper_canonical_semantic_pack,
     load_qasper_canonical_semantic_pack,
-    prepare_qasper_canonical_records_with_trace,
     qasper_canonical_evidence_plans,
     qasper_canonical_selector_bindings,
 )
 from ktem.reasoning.mara_semantic_proposition_packing import (
-    pack_semantic_proposition_evidence,
     required_semantic_proposition_slots,
 )
 from ktem.reasoning.mara_semantic_proposition_schema import (
@@ -38,22 +33,21 @@ from ktem.reasoning.mara_semantic_proposition_schema import (
 from benchmark.qasper_causal_evidence_chain import (
     qasper_causal_evidence_chain_prefix_complete,
 )
+from scripts.slurm.qasper_natural_semantic_pack_audit import build_audit
+from scripts.slurm.qasper_natural_semantic_pack_audit import (
+    runtime_code_identity as _runtime_code_identity,
+)
 from scripts.slurm.qasper_natural_semantic_pack_probe_payload import build_probe_result
+from scripts.slurm.qasper_natural_semantic_pack_replay import (
+    CandidateReplayContext,
+    candidate_path_replay_complete,
+    candidate_replay_context,
+)
 
 CONTRACT = "qasper_natural_semantic_pack_probe.v1"
-AUDIT_CONTRACT = "qasper_natural_semantic_pack_probe_audit.v1"
 _BOUND_STATES = {
     "relation_bound_support",
     "relation_bound_contradiction",
-}
-_REQUIRED_NO_COHORTS = {
-    "auditable_no",
-    "closed_world_no",
-    "annotation_disagreement",
-}
-_SIX_SAMPLE_AMBIGUITY_DENOMINATOR = {
-    "ambiguous": 4,
-    "unambiguous": 2,
 }
 
 
@@ -67,6 +61,8 @@ class NaturalPackContext:
     binding: dict[str, Any]
     transaction_id: str
     canonical_selector_projection: dict[str, Any]
+    candidate_prompt_projection: dict[str, Any]
+    candidate_path_replay: dict[str, Any]
 
 
 def canonical_digest(value: Any) -> str:
@@ -108,12 +104,12 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
     items = _mapping(row.get("evidence_bundle")).get("items")
     if not question or not isinstance(items, list) or not query_plan:
         raise ValueError("natural probe input incomplete")
+    replay = candidate_replay_context(row)
     context = _freeze_natural_pack(
         question,
         route=route,
         example_id=example_id,
-        items=items,
-        query_plan=query_plan,
+        replay=replay,
         code_sha=code_sha,
     )
     schema_parser = _schema_parser_probe(
@@ -135,6 +131,8 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
         canonical_plan_count=canonical_plan_count,
         ambiguity=ambiguity,
         canonical_selector_projection=context.canonical_selector_projection,
+        candidate_prompt_projection=context.candidate_prompt_projection,
+        candidate_path_replay=context.candidate_path_replay,
     )
     return build_probe_result(
         contract_id=CONTRACT,
@@ -157,8 +155,7 @@ def _freeze_natural_pack(
     *,
     route: str,
     example_id: str,
-    items: list[Any],
-    query_plan: dict[str, Any],
+    replay: CandidateReplayContext,
     code_sha: str,
 ) -> NaturalPackContext:
     request = SimpleNamespace(
@@ -168,26 +165,16 @@ def _freeze_natural_pack(
         answer_type="boolean",
         question=question,
         query=question,
-        query_plan=deepcopy(query_plan),
+        query_plan=deepcopy(replay.query_plan),
     )
+    if replay.max_context_length is not None:
+        request.max_context_length = replay.max_context_length
     bundle = EvidenceBundle(
-        route=route or "natural_semantic_pack", items=deepcopy(items)
+        route=route or "natural_semantic_pack",
+        items=deepcopy(replay.items),
+        metadata=deepcopy(replay.bundle_metadata),
     )
     slots = required_semantic_proposition_slots(request)
-    source_packing = pack_semantic_proposition_evidence(
-        request,
-        question,
-        slots,
-        bundle,
-        candidate_priority=True,
-    )
-    (
-        records,
-        canonical_selector_projection,
-    ) = prepare_qasper_canonical_records_with_trace(
-        question,
-        source_packing.records,
-    )
     transaction_id = (
         "natural-probe:"
         + canonical_digest(
@@ -196,16 +183,22 @@ def _freeze_natural_pack(
                 "example_id": example_id,
                 "route": route,
                 "question": question,
-                "items": items,
+                "candidate_path_replay": replay.observation,
             }
         )[:24]
     )
-    binding = candidate_evidence_set_binding(
-        records,
+    records, diagnostics, source_packing = _candidate_evidence(
+        request,
         question,
+        bundle,
         candidate_transaction_id=transaction_id,
     )
-    bound_slots = candidate_required_slots_from_binding(slots, binding)
+    binding = _mapping(diagnostics.get("candidate_evidence_set_binding"))
+    bound_slots = [
+        dict(slot)
+        for slot in diagnostics.get("required_slots") or []
+        if isinstance(slot, dict)
+    ]
     frozen = freeze_qasper_canonical_semantic_pack(
         bundle,
         question=question,
@@ -229,7 +222,13 @@ def _freeze_natural_pack(
         load_reason=load_reason,
         binding=binding,
         transaction_id=transaction_id,
-        canonical_selector_projection=canonical_selector_projection,
+        canonical_selector_projection=_mapping(
+            diagnostics.get("canonical_selector_projection_trace")
+        ),
+        candidate_prompt_projection=_mapping(
+            diagnostics.get("candidate_prompt_projection_trace")
+        ),
+        candidate_path_replay=deepcopy(replay.observation),
     )
 
 
@@ -346,6 +345,8 @@ def _structural_checks(
     canonical_plan_count: int,
     ambiguity: dict[str, Any],
     canonical_selector_projection: dict[str, Any],
+    candidate_prompt_projection: dict[str, Any],
+    candidate_path_replay: dict[str, Any],
 ) -> dict[str, bool]:
     state = str(binding.get("binding_state") or "")
     expected_flags = {
@@ -367,6 +368,7 @@ def _structural_checks(
         "not_applicable",
     }
     stored = _mapping(bundle.metadata.get("qasper_canonical_semantic_pack"))
+    source_observation = _mapping(stored.get("source_packing_observation"))
     trace_prefix = {
         "main_candidate_generator": {
             "canonical_selector_projection_trace": canonical_selector_projection,
@@ -400,6 +402,12 @@ def _structural_checks(
         ),
         "causal_trace_prefix_complete": (
             qasper_causal_evidence_chain_prefix_complete(trace_prefix)
+        ),
+        "production_candidate_path_replayed": candidate_path_replay_complete(
+            candidate_path_replay,
+            _mapping(source_observation.get("source_input_snapshot")),
+            candidate_prompt_projection,
+            canonical_selector_projection,
         ),
         "unambiguous_zero_plan_rejected": (
             bool(ambiguity.get("ambiguous")) or canonical_plan_count > 0
@@ -480,65 +488,6 @@ def _no_policy_cohorts(
     return list(dict.fromkeys(cohorts))
 
 
-def build_audit(
-    predictions: list[dict[str, Any]],
-    *,
-    code_sha: str,
-    input_path: Path,
-    expected_count: int,
-) -> dict[str, Any]:
-    observed_cohorts = {
-        cohort for row in predictions for cohort in row.get("no_policy_cohorts") or []
-    }
-    failed = [row["example_id"] for row in predictions if row["status"] != "passed"]
-    ambiguity_denominator = _counts(
-        str(_mapping(row.get("ambiguity")).get("denominator") or "unambiguous")
-        for row in predictions
-    )
-    gates = {
-        "prediction_count_complete": len(predictions) == expected_count,
-        "all_structural_checks_passed": not failed,
-        "no_policy_cohort_coverage_complete": _REQUIRED_NO_COHORTS <= observed_cohorts,
-        "single_clean_code_identity": bool(code_sha)
-        and {str(row.get("code_sha") or "") for row in predictions} == {code_sha},
-        "ambiguity_denominator_complete": (
-            sum(ambiguity_denominator.values()) == len(predictions)
-            and set(ambiguity_denominator) <= {"ambiguous", "unambiguous"}
-        ),
-        "six_sample_ambiguity_denominator_4_2": (
-            expected_count != 6
-            or ambiguity_denominator == _SIX_SAMPLE_AMBIGUITY_DENOMINATOR
-        ),
-    }
-    return {
-        "contract_id": AUDIT_CONTRACT,
-        "status": "passed" if all(gates.values()) else "failed",
-        "code_sha": code_sha,
-        "source": str(input_path.resolve()),
-        "source_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
-        "prediction_count": len(predictions),
-        "expected_prediction_count": expected_count,
-        "binding_state_counts": _counts(
-            str(row.get("binding_state") or "") for row in predictions
-        ),
-        "no_policy_cohort_counts": _counts(
-            cohort
-            for row in predictions
-            for cohort in row.get("no_policy_cohorts") or []
-        ),
-        "ambiguity_denominator": ambiguity_denominator,
-        "failed_examples": failed,
-        "hard_gates": gates,
-    }
-
-
-def _counts(values: Any) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for value in values:
-        counts[str(value)] = counts.get(str(value), 0) + 1
-    return counts
-
-
 def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
@@ -562,11 +511,14 @@ def main() -> int:
 
     rows = load_probe_inputs(args.input, route=args.route)
     predictions = [probe_prediction(row, code_sha=args.code_sha) for row in rows]
+    runtime_code_sha, runtime_worktree_clean = _runtime_code_identity()
     audit = build_audit(
         predictions,
         code_sha=args.code_sha,
         input_path=args.input,
         expected_count=args.expected_count,
+        runtime_code_sha=runtime_code_sha,
+        runtime_worktree_clean=runtime_worktree_clean,
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     predictions_path = args.output_dir / "natural_semantic_pack_predictions.jsonl"

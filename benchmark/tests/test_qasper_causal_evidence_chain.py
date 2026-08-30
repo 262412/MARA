@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from benchmark.qasper_candidate_input_state import candidate_input_state_observation
 from benchmark.qasper_causal_evidence_chain import (
     qasper_causal_evidence_chain,
     qasper_causal_evidence_chain_prefix_complete,
@@ -84,3 +85,46 @@ def test_pre_model_prefix_accepts_complete_recorded_trace() -> None:
     row = _row(ambiguous=False, candidate="unanswerable", legal_plan_count=0)
 
     assert qasper_causal_evidence_chain_prefix_complete(row) is True
+
+
+def test_missing_source_input_snapshot_fails_closed_before_model_reasoning() -> None:
+    row = _row(ambiguous=False, candidate="unanswerable", legal_plan_count=0)
+    del row["semantic_verifier"]["semantic_data_lineage"]["source_packing"][
+        "source_input_snapshot"
+    ]
+
+    chain = qasper_causal_evidence_chain(row)
+
+    assert chain["status"] == "incomplete"
+    assert "source_input_snapshot_incomplete" in chain["incompleteness_reasons"]
+    assert qasper_causal_evidence_chain_prefix_complete(row) is False
+
+
+def test_post_candidate_rank_drift_is_explicit_but_the_trace_remains_complete() -> None:
+    row = _row(ambiguous=False, candidate="unanswerable", legal_plan_count=0)
+    source = row["semantic_verifier"]["semantic_data_lineage"]["source_packing"]
+    observation = candidate_input_state_observation(
+        {
+            "qasper_canonical_semantic_pack": {
+                "source_packing_observation": source,
+            },
+            "candidate_ranked_evidence": [{"canonical_id": "late-evidence"}],
+        }
+    )
+    row["candidate_input_state_observation"] = observation
+
+    chain = qasper_causal_evidence_chain(row)
+
+    assert observation["status"] == "drifted"
+    assert observation["first_divergence"] == {
+        "ranked_position": 0,
+        "stage_canonical_id": "evidence-1",
+        "terminal_canonical_id": "late-evidence",
+    }
+    assert chain["status"] == "complete"
+    state = next(
+        stage
+        for stage in chain["stages"]
+        if stage["stage"] == "post_candidate_input_state"
+    )
+    assert state["status"] == "drifted"

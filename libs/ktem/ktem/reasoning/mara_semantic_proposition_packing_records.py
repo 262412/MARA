@@ -11,6 +11,7 @@ from ktem.docqa.retrieval_semantic_identity import semantic_retrieval_identity
 
 from .mara_qasper_candidate_selector_semantics import evidence_polarity_priority
 from .mara_semantic_candidate_priority import (
+    candidate_record_slot_hints,
     candidate_source_fields,
     semantic_record_priority,
 )
@@ -140,16 +141,17 @@ def _rank_source_record(
     source_id, page_label = source_page_locator(item)
     required_slot_ids = matching_slot_ids(slots, evidence_id)
     alignment_score = evidence_alignment_score(request, question, item)
+    polarity_priority = evidence_polarity_priority(question, text)
+    slot_priority = 0 if evidence_id in preferred or required_slot_ids else 1
+    ranked_position = ranked_positions.get(evidence_id, len(ranked_positions) + index)
     priority = semantic_record_priority(
         question,
         text,
         candidate_priority=candidate_priority,
-        polarity_priority=evidence_polarity_priority(question, text),
+        polarity_priority=polarity_priority,
         alignment_score=alignment_score,
-        slot_priority=0 if evidence_id in preferred or required_slot_ids else 1,
-        ranked_position=ranked_positions.get(
-            evidence_id, len(ranked_positions) + index
-        ),
+        slot_priority=slot_priority,
+        ranked_position=ranked_position,
     )
     return priority, _source_record(
         item,
@@ -160,6 +162,21 @@ def _rank_source_record(
         required_slot_ids=required_slot_ids,
         alignment_score=alignment_score,
         candidate_priority=candidate_priority,
+        priority_factors={
+            "candidate_priority": candidate_priority,
+            "candidate_relation_anchor": (
+                priority[0] == 0 if candidate_priority else None
+            ),
+            "candidate_slot_hints": (
+                list(candidate_record_slot_hints(question, text))
+                if candidate_priority
+                else []
+            ),
+            "polarity_priority": polarity_priority,
+            "alignment_score": alignment_score,
+            "slot_priority": slot_priority,
+            "ranked_position": ranked_position,
+        },
     )
 
 
@@ -208,6 +225,7 @@ def source_record_decisions(
                 **raw,
                 "semantic_rank": observation.get("semantic_rank"),
                 "priority": list(observation.get("priority") or []),
+                "priority_factors": dict(observation.get("priority_factors") or {}),
                 "selected_for_windowing": observation.get("selected_for_windowing")
                 is True,
                 "packed": observation.get("packed") is True,
@@ -291,6 +309,7 @@ def source_record_observations(
                 "text_chars": len(text),
                 "semantic_rank": rank,
                 "priority": list(priority),
+                "priority_factors": dict(record.get("priority_factors") or {}),
                 "selected_for_windowing": selected,
                 "packed": packed,
                 "stop_stage": (
@@ -315,6 +334,7 @@ def _source_record(
     required_slot_ids: tuple[str, ...],
     alignment_score: float,
     candidate_priority: bool,
+    priority_factors: dict[str, Any],
 ) -> dict[str, Any]:
     stable_id = stable_source_id(item) or source_id or identity.source_id
     evidence_id = identity.key
@@ -328,6 +348,7 @@ def _source_record(
         "evidence_refs": list(evidence_refs(item)),
         "required_slot_ids": list(required_slot_ids),
         "proposition_alignment_score": alignment_score,
+        "priority_factors": priority_factors,
         "text": text,
         **candidate_source_fields(text, enabled=candidate_priority),
     }

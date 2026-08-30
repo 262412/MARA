@@ -13,6 +13,9 @@ from ktem.docqa.question_proposition import (
     resolve_question_proposition,
 )
 
+from .mara_semantic_proposition_packing_labels import (
+    label_evidence_records as _label_evidence_records,
+)
 from .mara_semantic_proposition_packing_records import (
     dropped_source_record_count,
     ranked_source_records_with_trace,
@@ -26,15 +29,12 @@ from .mara_semantic_proposition_packing_support import (
 from .mara_semantic_proposition_packing_support import (
     estimated_text_tokens as _estimated_text_tokens,
 )
-from .mara_semantic_proposition_packing_support import optional_int as _optional_int
 from .mara_semantic_proposition_packing_support import (
     slot_description as _slot_description,
 )
 from .mara_semantic_proposition_packing_support import slot_value as _slot_value
 from .mara_semantic_proposition_packing_support import slot_values
-from .mara_semantic_proposition_span_selectors import (
-    canonical_span_selector_projection as _canonical_span_selector_projection,
-)
+from .mara_semantic_proposition_source_snapshot import source_input_snapshot
 from .mara_semantic_proposition_windowing import (
     relevant_evidence_window,
     windowed_evidence_records_with_trace,
@@ -116,6 +116,7 @@ class SemanticPropositionEvidencePacking:
     question_proposition_resolution: dict[str, Any]
     source_decisions: list[dict[str, Any]] = field(default_factory=list)
     window_decisions: list[dict[str, Any]] = field(default_factory=list)
+    source_input_snapshot: dict[str, Any] = field(default_factory=dict)
 
     @property
     def packed_chars(self) -> int:
@@ -154,6 +155,10 @@ def pack_semantic_proposition_evidence(
         item_char_limit=item_char_limit,
     )
     source_observations = source_record_observations(records, selected, packed)
+    source_decisions = source_record_decisions(
+        raw_source_decisions,
+        source_observations,
+    )
     resolution = resolve_question_proposition(question)
     proposition = resolution.proposition
     return SemanticPropositionEvidencePacking(
@@ -175,9 +180,15 @@ def pack_semantic_proposition_evidence(
         ),
         question_proposition=proposition.as_dict(),
         question_proposition_resolution=resolution.as_dict(),
-        source_decisions=source_record_decisions(
+        source_decisions=source_decisions,
+        source_input_snapshot=source_input_snapshot(
+            request,
+            question,
+            slots,
+            bundle,
             raw_source_decisions,
-            source_observations,
+            candidate_priority=candidate_priority,
+            item_char_limit=item_char_limit,
         ),
         window_decisions=window_decisions,
     )
@@ -452,6 +463,8 @@ def _fitting_candidate(
     candidate = _label_evidence_records(
         [*fitted, {**record, "text": text, "text_start": text_start}],
         question=question,
+        selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
+        max_selectors=SEMANTIC_PROPOSITION_MAX_SELECTORS_PER_RECORD,
     )
     try:
         prompt = semantic_proposition_verifier_prompt(question, slots, candidate)
@@ -517,34 +530,6 @@ def _largest_fitting_window(
         best_start = text_start
         lower = limit + 1
     return best_candidate, best_estimate, best_text, best_start, attempts
-
-
-def _label_evidence_records(
-    records: list[dict[str, Any]],
-    *,
-    question: str,
-) -> list[dict[str, Any]]:
-    labeled: list[dict[str, Any]] = []
-    for index, record in enumerate(records, start=1):
-        label = f"E{index}"
-        selectors, selector_trace = _canonical_span_selector_projection(
-            label,
-            str(record["text"]),
-            int(record.get("text_start") or 0),
-            _optional_int(record.get("canonical_start")),
-            selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
-            question=question,
-            max_selectors=SEMANTIC_PROPOSITION_MAX_SELECTORS_PER_RECORD,
-        )
-        labeled.append(
-            {
-                **record,
-                "label": label,
-                "selectors": selectors,
-                "source_selector_projection_trace": selector_trace,
-            }
-        )
-    return labeled
 
 
 def _estimated_message_tokens(prompt: str) -> int:

@@ -21,6 +21,7 @@ def source_packing_observation(
         "contract_id": "qasper_source_packing_observation.v1",
         "semantic_pack_digest": canonical_semantic_pack_digest,
         "source_semantic_pack_digest": packing.semantic_pack_digest,
+        "source_input_snapshot": deepcopy(packing.source_input_snapshot),
         "record_count": len(packing.records),
         "selector_count": sum(
             len(record.get("selectors") or []) for record in packing.records

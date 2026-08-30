@@ -294,6 +294,7 @@ def _build_frozen_packing(
         ),
         source_decisions=deepcopy(source_packing.source_decisions),
         window_decisions=deepcopy(source_packing.window_decisions),
+        source_input_snapshot=deepcopy(source_packing.source_input_snapshot),
     )
 
 
@@ -392,6 +393,9 @@ def _build_loaded_packing(
         ),
         source_decisions=deepcopy(_mapping_list(observation.get("source_decisions"))),
         window_decisions=deepcopy(_mapping_list(observation.get("window_decisions"))),
+        source_input_snapshot=deepcopy(
+            _mapping(observation.get("source_input_snapshot"))
+        ),
     )
 
 

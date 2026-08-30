@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from benchmark.qasper_candidate_input_state import candidate_input_state_observation
 from benchmark.qasper_causal_evidence_chain import qasper_causal_evidence_chain
 from scripts.slurm.qasper_debug_contract_support import _mapping, terminal_metadata
 
@@ -22,6 +23,9 @@ def causal_evidence_chain_complete(prediction: dict[str, Any]) -> bool:
             ),
             "main_candidate_generator": _mapping(
                 metadata.get("qasper_candidate_generation")
+            ),
+            "candidate_input_state_observation": candidate_input_state_observation(
+                metadata
             ),
             "semantic_verifier": _mapping(
                 metadata.get("semantic_proposition_verifier")

@@ -121,6 +121,7 @@ def stages(
     construction: Mapping[str, Any],
     lineage: Mapping[str, Any],
     audit: Mapping[str, Any],
+    input_state: Mapping[str, Any],
     source_pipeline_complete: Callable[[Mapping[str, Any]], bool],
     crosswalk_complete: Callable[[Mapping[str, Any]], bool],
     canonical_selector_projection_complete: Callable[[Any], bool],
@@ -139,6 +140,7 @@ def stages(
         ),
         _plan_stage(construction, candidate_decisions_complete),
         _generation_stage(generator, record_projection_complete),
+        _candidate_input_state_stage(input_state),
         _identity_stage(
             generator,
             verifier,
@@ -151,6 +153,21 @@ def stages(
         _recovery_stage(row, verifier, lineage),
         _terminal_stage(row),
     ]
+
+
+def _candidate_input_state_stage(value: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "stage": "post_candidate_input_state",
+        "status": str(value.get("status") or "missing"),
+        "stage_ranked_evidence_count": int(
+            value.get("stage_ranked_evidence_count") or 0
+        ),
+        "terminal_ranked_evidence_count": int(
+            value.get("terminal_ranked_evidence_count") or 0
+        ),
+        "first_divergence": mapping(value.get("first_divergence")),
+        "identity_digest": str(value.get("observation_digest") or ""),
+    }
 
 
 def _source_stage(source: Mapping[str, Any]) -> dict[str, Any]:

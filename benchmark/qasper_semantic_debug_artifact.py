@@ -4,6 +4,7 @@ from collections import Counter
 from copy import deepcopy
 from typing import Any, Iterable, Mapping
 
+from .qasper_candidate_input_state import candidate_input_state_observation
 from .qasper_causal_evidence_chain import qasper_causal_evidence_chain
 from .qasper_pre_verifier_debug import (
     candidate_authority_analysis as _candidate_authority_analysis,
@@ -167,6 +168,9 @@ def _v3_fields(
             prediction.get("qasper_annotation_diagnostics") or {}
         ),
         "transaction_identity": _transaction_identity(generator, verifier),
+        "candidate_input_state_observation": candidate_input_state_observation(
+            _terminal_metadata(prediction)
+        ),
     }
     fields["candidate_authority_analysis"] = _candidate_authority_analysis(
         prediction, generator, verifier, authority

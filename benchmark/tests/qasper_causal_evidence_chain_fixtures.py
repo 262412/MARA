@@ -21,6 +21,7 @@ def causal_row(*, ambiguous: bool, candidate: str, legal_plan_count: int) -> dic
         **_terminal_fields(),
         "qasper_annotation_diagnostics": {"ambiguous": ambiguous},
         "recovery_events": _recovery_events(),
+        "candidate_input_state_observation": _candidate_input_state(),
         "main_candidate_generator": _generator_fields(
             candidate,
             legal_plan_count,
@@ -206,7 +207,19 @@ def _lineage_fields(
 
 
 def _source_packing() -> dict[str, Any]:
-    source_decisions = [{"decision": "packed", "reason": "packed"}]
+    source_decisions = [
+        {
+            "source_item_index": 1,
+            "evidence_id": "evidence-1",
+            "text_digest": "1" * 64,
+            "text_chars": 10,
+            "decision": "packed",
+            "reason": "packed",
+            "semantic_rank": 1,
+            "priority": [0, 0],
+            "priority_factors": {"ranked_position": 0},
+        }
+    ]
     window_decisions = [
         {
             "stage": "window_selection",
@@ -223,6 +236,7 @@ def _source_packing() -> dict[str, Any]:
     return {
         "contract_id": "qasper_source_packing_observation.v1",
         "status": "passed",
+        "source_input_snapshot": _source_input_snapshot(),
         "source_decisions_complete": True,
         "source_input_count": 1,
         "source_decision_count": 1,
@@ -257,6 +271,68 @@ def _source_packing() -> dict[str, Any]:
         ],
         "selector_crosswalk": crosswalk,
     }
+
+
+def _source_input_snapshot() -> dict[str, Any]:
+    source_items = [
+        {
+            "source_item_index": 1,
+            "evidence_id": "evidence-1",
+            "text_digest": "1" * 64,
+            "text_chars": 10,
+            "identity_decision": "eligible",
+            "identity_reason": "accepted_for_semantic_ranking",
+        }
+    ]
+    ranked = [{"ranked_position": 0, "canonical_id": "evidence-1"}]
+    slots = [{"slot_id": "support:boolean_proposition"}]
+    query_plan = {"plan_id": "plan-1"}
+    payload = {
+        "contract_id": "semantic_source_input_snapshot.v1",
+        "complete": True,
+        "route": "text_rag",
+        "candidate_priority": True,
+        "question": "Did the authors compare the systems?",
+        "question_digest": canonical_digest("Did the authors compare the systems?"),
+        "query_plan": query_plan,
+        "query_plan_digest": canonical_digest(query_plan),
+        "required_slots": slots,
+        "required_slots_digest": canonical_digest(slots),
+        "max_context_length": None,
+        "item_char_limit": 2000,
+        "source_item_count": 1,
+        "source_items_digest": canonical_digest(source_items),
+        "source_items": source_items,
+        "ranked_evidence_present": True,
+        "ranked_evidence_count": 1,
+        "ranked_evidence_digest": canonical_digest(ranked),
+        "ranked_evidence": ranked,
+    }
+    payload["snapshot_digest"] = canonical_digest(payload)
+    return payload
+
+
+def _candidate_input_state() -> dict[str, Any]:
+    ranked = [{"ranked_position": 0, "canonical_id": "evidence-1"}]
+    payload = {
+        "contract_id": "qasper_candidate_input_state_observation.v1",
+        "complete": True,
+        "status": "preserved",
+        "stage_ranked_evidence_present": True,
+        "stage_ranked_evidence_count": 1,
+        "stage_ranked_evidence_digest": canonical_digest(ranked),
+        "stage_ranked_evidence": ranked,
+        "terminal_ranked_evidence_present": True,
+        "terminal_ranked_evidence_count": 1,
+        "terminal_ranked_evidence_digest": canonical_digest(ranked),
+        "terminal_ranked_evidence": ranked,
+        "first_divergence": {},
+        "added_after_candidate": [],
+        "removed_after_candidate": [],
+        "source_input_snapshot_digest": _source_input_snapshot()["snapshot_digest"],
+    }
+    payload["observation_digest"] = canonical_digest(payload)
+    return payload
 
 
 def _selector_projection(contract_id: str, input_key: str) -> dict[str, Any]:

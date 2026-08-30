@@ -4,10 +4,16 @@ from collections.abc import Mapping
 from typing import Any
 
 from benchmark.qasper_causal_evidence_chain_integrity import (
+    candidate_input_state_complete as _candidate_input_state_complete,
+)
+from benchmark.qasper_causal_evidence_chain_integrity import (
     crosswalk_digest_matches as _crosswalk_digest_matches,
 )
 from benchmark.qasper_causal_evidence_chain_integrity import (
     digest_incompleteness_reasons as _digest_incompleteness_reasons,
+)
+from benchmark.qasper_causal_evidence_chain_integrity import (
+    source_input_snapshot_complete as _source_input_snapshot_complete,
 )
 from benchmark.qasper_causal_evidence_chain_stages import (
     first_decisive_transition as _first_decisive_transition,
@@ -31,6 +37,7 @@ def qasper_causal_evidence_chain(row: Mapping[str, Any]) -> dict[str, Any]:
     crosswalk = _mapping(source.get("selector_crosswalk"))
     construction = _mapping(lineage.get("plan_construction"))
     audit = _mapping(lineage.get("audit"))
+    input_state = _mapping(row.get("candidate_input_state_observation"))
     reasons = _incompleteness_reasons(
         row,
         generator=generator,
@@ -40,6 +47,7 @@ def qasper_causal_evidence_chain(row: Mapping[str, Any]) -> dict[str, Any]:
         construction=construction,
         lineage=lineage,
         audit=audit,
+        input_state=input_state,
     )
     status = "complete" if not reasons else "incomplete"
     first = (
@@ -65,6 +73,7 @@ def qasper_causal_evidence_chain(row: Mapping[str, Any]) -> dict[str, Any]:
             construction=construction,
             lineage=lineage,
             audit=audit,
+            input_state=input_state,
         ),
     }
 
@@ -80,6 +89,7 @@ def qasper_causal_evidence_chain_prefix_complete(row: Mapping[str, Any]) -> bool
     crosswalk = _mapping(source.get("selector_crosswalk"))
     return bool(
         source.get("contract_id") == "qasper_source_packing_observation.v1"
+        and _source_input_snapshot_complete(source)
         and _source_pipeline_decisions_complete(source)
         and _crosswalk_complete(crosswalk)
         and _source_selector_decisions_complete(source)
@@ -100,10 +110,13 @@ def _incompleteness_reasons(
     construction: Mapping[str, Any],
     lineage: Mapping[str, Any],
     audit: Mapping[str, Any],
+    input_state: Mapping[str, Any],
 ) -> list[str]:
     reasons: list[str] = []
     if source.get("contract_id") != "qasper_source_packing_observation.v1":
         reasons.append("source_packing_observation_missing")
+    if not _source_input_snapshot_complete(source):
+        reasons.append("source_input_snapshot_incomplete")
     if not _source_pipeline_decisions_complete(source):
         reasons.append("source_or_window_decisions_incomplete")
     if not crosswalk:
@@ -120,6 +133,8 @@ def _incompleteness_reasons(
         reasons.append("plan_candidate_decisions_incomplete")
     if not _generator_decision_complete(generator):
         reasons.append("generator_decision_incomplete")
+    if not _candidate_input_state_complete(input_state, source):
+        reasons.append("candidate_input_state_observation_incomplete")
     if not _record_projection_complete(
         generator.get("candidate_prompt_projection_trace"),
         contract_id="qasper_candidate_prompt_projection.v1",
@@ -194,6 +209,14 @@ def _source_pipeline_decisions_complete(source: Mapping[str, Any]) -> bool:
         and source_decision_count == source_input_count == len(source_decisions)
         and _digest_matches(source_decisions, source.get("source_decisions_digest"))
         and all(_mapping(decision).get("reason") for decision in source_decisions)
+        and all(
+            not _mapping(decision).get("semantic_rank")
+            or (
+                _mapping(decision).get("priority")
+                and _mapping(decision).get("priority_factors")
+            )
+            for decision in source_decisions
+        )
         and source.get("window_decisions_complete") is True
         and window_selection_count
         == int(source.get("window_selection_decision_count") or 0)
@@ -522,6 +545,7 @@ def _stages(
     construction: Mapping[str, Any],
     lineage: Mapping[str, Any],
     audit: Mapping[str, Any],
+    input_state: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
     return _build_stages(
         row,
@@ -532,6 +556,7 @@ def _stages(
         construction=construction,
         lineage=lineage,
         audit=audit,
+        input_state=input_state,
         source_pipeline_complete=_source_pipeline_decisions_complete,
         crosswalk_complete=_crosswalk_complete,
         canonical_selector_projection_complete=_canonical_selector_projection_complete,

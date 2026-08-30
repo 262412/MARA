@@ -38,6 +38,10 @@ def build_probe_result(
         "packing_observation": deepcopy(
             _mapping(stored_pack.get("source_packing_observation"))
         ),
+        "candidate_path_replay": deepcopy(context.candidate_path_replay),
+        "candidate_prompt_projection_trace": deepcopy(
+            context.candidate_prompt_projection
+        ),
         "canonical_selector_projection_trace": deepcopy(
             context.canonical_selector_projection
         ),

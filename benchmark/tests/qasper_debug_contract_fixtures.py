@@ -129,6 +129,7 @@ def _populate_debug_semantic_metadata(
     )
     metadata.update(
         qasper_canonical_semantic_pack=semantic_pack,
+        candidate_ranked_evidence=[{"canonical_id": "span:paper:s1"}],
         qasper_candidate_generation=generator,
         semantic_proposition_verifier=_debug_verifier_trace(
             example_id,
