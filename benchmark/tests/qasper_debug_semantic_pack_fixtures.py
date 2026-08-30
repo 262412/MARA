@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from ktem.docqa.qasper_semantic_pack_contract import (
+    canonical_payload_digest,
     qasper_canonical_span_universe_digest,
 )
 from ktem.docqa.question_proposition import build_question_proposition
@@ -58,16 +60,17 @@ def _debug_semantic_pack(candidate_transaction_id: str) -> dict[str, Any]:
     )
     slots = candidate_required_slots_from_binding(base_slots, proposition_binding)
     proposition = build_question_proposition(DEBUG_PACK_QUESTION)
+    semantic_pack_digest = semantic_proposition_pack_digest(
+        proposition,
+        slots,
+        records,
+        item_char_limit=1200,
+    )
     payload = {
         "contract_id": "qasper_canonical_semantic_pack.v1",
         "candidate_transaction_id": candidate_transaction_id,
         "question_digest": _fixture_digest(DEBUG_PACK_QUESTION),
-        "semantic_pack_digest": semantic_proposition_pack_digest(
-            proposition,
-            slots,
-            records,
-            item_char_limit=1200,
-        ),
+        "semantic_pack_digest": semantic_pack_digest,
         "span_universe_digest": qasper_canonical_span_universe_digest(records),
         "records": records,
         "slots": slots,
@@ -81,9 +84,58 @@ def _debug_semantic_pack(candidate_transaction_id: str) -> dict[str, Any]:
         "question_proposition": proposition.as_dict(),
         "question_proposition_resolution": {"status": "complete"},
         "immutable_after_candidate_generation": True,
+        "source_packing_observation": _debug_source_packing_observation(
+            text,
+            semantic_pack_digest,
+        ),
     }
     payload["pack_identity_digest"] = _fixture_digest(payload)
     return payload
+
+
+def _debug_source_packing_observation(
+    text: str,
+    semantic_pack_digest: str,
+) -> dict[str, Any]:
+    return {
+        "contract_id": "qasper_source_packing_observation.v1",
+        "semantic_pack_digest": semantic_pack_digest,
+        "source_semantic_pack_digest": semantic_pack_digest,
+        "record_count": 1,
+        "selector_count": 1,
+        "estimated_input_tokens": 128,
+        "input_token_budget": 4096,
+        "item_char_limit": 1200,
+        "dropped_count": 0,
+        "truncated_count": 0,
+        "source_records": [
+            {
+                "evidence_id": "span:paper:s1",
+                "semantic_identity": "fixture-semantic-identity",
+                "source_id": "paper",
+                "page_label": None,
+                "section_id": "",
+                "canonical_start": None,
+                "text_digest": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                "text_chars": len(text),
+                "semantic_rank": 1,
+                "priority": [0, 1, 0, 0.0],
+                "selected_for_windowing": True,
+                "packed": True,
+                "stop_stage": "packed",
+            }
+        ],
+        "records": [
+            {
+                "evidence_id": "span:paper:s1",
+                "label": "E1",
+                "text_start": 0,
+                "window_index": None,
+                "text_digest": canonical_payload_digest(text),
+                "selector_refs": ["E1:S1"],
+            }
+        ],
+    }
 
 
 def _debug_semantic_pack_identity(pack: dict[str, Any]) -> dict[str, str]:

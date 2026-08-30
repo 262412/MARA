@@ -304,6 +304,45 @@ def _failed_auditor_safe_abstention(
     }
 
 
+def _controlled_negative_safe_abstention_allowed(
+    verifier: dict[str, Any],
+    prediction: dict[str, Any],
+) -> bool:
+    """Allow safe-abstention masking only for an explicitly non-quality probe."""
+
+    if not _failed_auditor_safe_abstention(verifier, prediction):
+        return False
+    sources = (
+        prediction,
+        _mapping(prediction.get("example_metadata")),
+        _mapping(prediction.get("evidence_metadata")),
+    )
+    lane_values = {
+        str(source.get(field) or "").strip().casefold()
+        for source in sources
+        for field in (
+            "qasper_debug_lane",
+            "contract_probe_lane",
+            "contract_smoke_lane",
+            "debug_lane",
+            "benchmark_role",
+        )
+        if str(source.get(field) or "").strip()
+    }
+    if lane_values & {"quality", "real", "quality_audit", "qa_quality"}:
+        return False
+    if any(
+        source.get("expected_negative_probe") is True
+        or str(source.get("contract_probe_expectation") or "").strip().casefold()
+        in {"auditor_fail", "expected_auditor_fail"}
+        for source in sources
+    ):
+        return True
+    if lane_values & {"contract_probe", "probe", "synthetic", "negative"}:
+        return True
+    return False
+
+
 def _empty_coverage_counts() -> dict[str, int]:
     return {
         "generator_trace": 0,

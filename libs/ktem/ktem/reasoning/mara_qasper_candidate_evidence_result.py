@@ -9,7 +9,9 @@ from ktem.docqa.canonical_proposition_evidence_plan import (
 )
 from ktem.docqa.qasper_boolean_no_evidence import qasper_no_evidence_set_analysis
 from ktem.docqa.question_proposition import build_question_proposition
-from ktem.docqa.semantic_relation_clause_lexical import semantic_content_token_set
+from ktem.docqa.semantic_relation_clause_lexical import (
+    canonical_proposition_object_token_set,
+)
 
 from .mara_qasper_candidate_evidence_projection import (
     span_set_refs,
@@ -20,6 +22,7 @@ from .mara_qasper_candidate_evidence_sets import selector_sort_key
 from .mara_qasper_candidate_selector_semantics import candidate_structural_features
 
 _PROPOSITION_SLOTS = ("actor", "predicate", "object", "quantifier")
+_MAX_SELECTOR_UNIVERSE = 16
 
 
 def candidate_evidence_set_result(
@@ -30,6 +33,8 @@ def candidate_evidence_set_result(
     plan: CanonicalPropositionEvidencePlan,
     support: tuple[dict[str, Any], ...] | None,
     contradiction: tuple[dict[str, Any], ...] | None,
+    *,
+    construction_trace: dict[str, Any],
 ) -> dict[str, Any]:
     selected_lookup = {
         str(selector.get("selector_id") or ""): selector for selector in selectors
@@ -48,6 +53,7 @@ def candidate_evidence_set_result(
         support_refs,
         contradiction_refs,
         selected_refs,
+        construction_trace=construction_trace,
     )
     slot_states = _candidate_slot_states(applicable_slots, selected_slots)
     return {
@@ -73,6 +79,7 @@ def candidate_evidence_set_result(
         "canonical_evidence_plan": plan.as_dict(),
         "canonical_evidence_plan_id": plan.plan_id,
         "canonical_evidence_plan_digest": plan.plan_digest,
+        "plan_construction_trace": construction_trace,
         "event_binding_id": plan.event_binding_id,
         "evidence_refs": selected_refs,
         "selector_universe_refs": selector_refs,
@@ -160,10 +167,25 @@ def _selector_universe(
     support_refs: list[str],
     contradiction_refs: list[str],
     selected_refs: list[str],
+    *,
+    construction_trace: dict[str, Any],
 ) -> tuple[list[str], str]:
+    valid_refs = construction_trace.get("valid_candidate_refs")
+    if isinstance(valid_refs, dict):
+        proposition_bearing = list(
+            dict.fromkeys(
+                str(ref)
+                for relation in (
+                    "proposition_support",
+                    "explicit_contradiction",
+                )
+                for ref in valid_refs.get(relation) or []
+                if str(ref)
+            )
+        )
+        if proposition_bearing:
+            return proposition_bearing, "bounded"
     polarized = list(dict.fromkeys([*support_refs, *contradiction_refs]))
-    if len(polarized) > 4:
-        return [], "conflict_exceeds_four_spans"
     refs = (
         polarized
         or selected_refs
@@ -198,8 +220,8 @@ def _relation_aligned_selector_refs(
     selectors: list[dict[str, Any]],
     required_slots: tuple[str, ...],
 ) -> list[str]:
-    required_object_tokens = semantic_content_token_set(
-        build_question_proposition(question).object_surface
+    required_object_tokens = canonical_proposition_object_token_set(
+        build_question_proposition(question)
     )
     anchors = [
         selector
@@ -216,7 +238,7 @@ def _relation_aligned_selector_refs(
     )
     if not anchors:
         return []
-    selected = anchors[:2]
+    selected = anchors[:_MAX_SELECTOR_UNIVERSE]
     covered = {slot for value in selected for slot in value.get("slot_hints", [])}
     anchor_records = {str(value.get("evidence_id") or "") for value in selected}
     ranked = sorted(
@@ -230,14 +252,14 @@ def _relation_aligned_selector_refs(
         ),
     )
     for selector in ranked:
-        if selector in selected or len(selected) >= 4:
+        if selector in selected or len(selected) >= _MAX_SELECTOR_UNIVERSE:
             continue
         slots = set(selector.get("slot_hints") or [])
         object_overlap = required_object_tokens & set(
             selector.get("object_tokens") or []
         )
         same_record = str(selector.get("evidence_id") or "") in anchor_records
-        if slots - covered and (object_overlap or same_record):
+        if object_overlap and (slots - covered or same_record):
             selected.append(selector)
             covered.update(slots)
     return [str(value["selector_id"]) for value in selected]

@@ -55,6 +55,9 @@ def qasper_canonical_span_universe_digest(
             "object_tokens": list(selector.get("object_tokens") or []),
             "event_core_tokens": list(selector.get("event_core_tokens") or []),
             "predicate_match_kind": str(selector.get("predicate_match_kind") or ""),
+            "semantic_alignment": deepcopy(
+                dict(selector.get("semantic_alignment") or {})
+            ),
         }
         for record in records
         for selector in record.get("selectors") or []

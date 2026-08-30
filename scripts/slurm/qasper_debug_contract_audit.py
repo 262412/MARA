@@ -7,7 +7,7 @@ from typing import Any
 from scripts.slurm.qasper_debug_contract_identity import _normalized_candidate
 from scripts.slurm.qasper_debug_contract_support import (
     _CANDIDATE_VERIFIER_AUDIT_CONTRACT,
-    _failed_auditor_safe_abstention,
+    _controlled_negative_safe_abstention_allowed,
     _mapping,
 )
 from scripts.slurm.qasper_slot_reference_audit import (
@@ -149,7 +149,7 @@ def _semantic_audit_failure_flags(
 ) -> tuple[bool, bool]:
     """Classify semantic-audit failure/rejection without hiding safe negatives."""
 
-    if audit.get("status") == "failed" and _failed_auditor_safe_abstention(
+    if audit.get("status") == "failed" and _controlled_negative_safe_abstention_allowed(
         verifier, prediction
     ):
         return False, False
@@ -175,6 +175,13 @@ def _semantic_audit_failure_flags(
             reasons.append(value)
     for field in ("entailment_audit", "semantic_entailment_audit"):
         nested = _mapping(verifier.get(field))
+        status = str(nested.get("status") or "").strip().casefold()
+        reason = str(nested.get("reason") or "").strip().casefold()
+        if status:
+            statuses.append(status)
+        if reason:
+            reasons.append(reason)
+    for nested in (audit, _mapping(verifier.get("candidate_verification_audit"))):
         status = str(nested.get("status") or "").strip().casefold()
         reason = str(nested.get("reason") or "").strip().casefold()
         if status:

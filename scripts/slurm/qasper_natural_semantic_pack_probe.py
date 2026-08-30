@@ -35,6 +35,8 @@ from ktem.reasoning.mara_semantic_proposition_schema import (
     semantic_proposition_response_format,
 )
 
+from scripts.slurm.qasper_natural_semantic_pack_probe_payload import build_probe_result
+
 CONTRACT = "qasper_natural_semantic_pack_probe.v1"
 AUDIT_CONTRACT = "qasper_natural_semantic_pack_probe_audit.v1"
 _BOUND_STATES = {
@@ -45,6 +47,10 @@ _REQUIRED_NO_COHORTS = {
     "auditable_no",
     "closed_world_no",
     "annotation_disagreement",
+}
+_SIX_SAMPLE_AMBIGUITY_DENOMINATOR = {
+    "ambiguous": 2,
+    "unambiguous": 4,
 }
 
 
@@ -94,14 +100,10 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
     question = str(row.get("question") or "").strip()
     route = str(row.get("route") or "").strip()
     example_id = str(row.get("example_id") or "").strip()
-    evidence_metadata = _mapping(row.get("evidence_metadata"))
-    query_plan = _mapping(evidence_metadata.get("query_plan"))
-    source_bundle = _mapping(row.get("evidence_bundle"))
-    items = source_bundle.get("items")
+    query_plan = _mapping(_mapping(row.get("evidence_metadata")).get("query_plan"))
+    items = _mapping(row.get("evidence_bundle")).get("items")
     if not question or not isinstance(items, list) or not query_plan:
-        raise ValueError(
-            "natural probe input is missing question, query plan, or evidence"
-        )
+        raise ValueError("natural probe input incomplete")
     context = _freeze_natural_pack(
         question,
         route=route,
@@ -117,6 +119,8 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
         records=context.frozen.records,
         slots=context.slots,
     )
+    ambiguity = _ambiguity_observation(row, context.binding)
+    canonical_plan_count = int(schema_parser.get("canonical_plan_count") or 0)
     checks = _structural_checks(
         context.bundle,
         binding=context.binding,
@@ -124,48 +128,23 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
         loaded=context.loaded,
         load_reason=context.load_reason,
         schema_parser=schema_parser,
+        canonical_plan_count=canonical_plan_count,
+        ambiguity=ambiguity,
     )
-    return {
-        "contract_id": CONTRACT,
-        "code_sha": code_sha,
-        "example_id": example_id,
-        "route": route,
-        "question": question,
-        "question_digest": canonical_digest(question),
-        "retrieval_evidence_digest": canonical_digest(items),
-        "retrieval_record_count": len(items),
-        "canonical_record_count": len(context.frozen.records),
-        "candidate_transaction_id": context.transaction_id,
-        "binding_state": str(context.binding.get("binding_state") or ""),
-        "binding_status": str(context.binding.get("binding_status") or ""),
-        "canonical_evidence_plan": deepcopy(
-            context.binding.get("canonical_evidence_plan") or {}
-        ),
-        "canonical_selectors": _canonical_selector_observations(context.frozen.records),
-        "binding_observation": {
-            key: deepcopy(context.binding.get(key))
-            for key in (
-                "applicable_slots",
-                "covered_slots",
-                "evidence_refs",
-                "support_evidence_refs",
-                "explicit_contradiction_evidence_refs",
-                "no_evidence_semantics",
-                "binding_reason",
-            )
-        },
-        "semantic_pack_digest": context.frozen.semantic_pack_digest,
-        "span_universe_digest": str(
-            context.bundle.metadata["qasper_canonical_semantic_pack"].get(
-                "span_universe_digest"
-            )
-            or ""
-        ),
-        "schema_parser": schema_parser,
-        "no_policy_cohorts": _no_policy_cohorts(row, context.binding),
-        "checks": checks,
-        "status": "passed" if all(checks.values()) else "failed",
-    }
+    return build_probe_result(
+        contract_id=CONTRACT,
+        code_sha=code_sha,
+        example_id=example_id,
+        route=route,
+        question=question,
+        items=items,
+        context=context,
+        canonical_plan_count=canonical_plan_count,
+        ambiguity=ambiguity,
+        schema_parser=schema_parser,
+        no_policy_cohorts=_no_policy_cohorts(row, context.binding),
+        checks=checks,
+    )
 
 
 def _freeze_natural_pack(
@@ -306,6 +285,7 @@ def _schema_parser_probe(
         "parser_accepted": parsed.value is not None,
         "parser_reason": parsed.failure_reason,
         "expected_plan_id": expected_plan_id,
+        "canonical_plan_count": len(allowed_plans or {}),
         "parsed_plan_id": (
             str(parsed.value.get("canonical_evidence_plan_id") or "")
             if parsed.value is not None
@@ -351,6 +331,8 @@ def _structural_checks(
     loaded: Any,
     load_reason: str,
     schema_parser: dict[str, Any],
+    canonical_plan_count: int,
+    ambiguity: dict[str, Any],
 ) -> dict[str, bool]:
     state = str(binding.get("binding_state") or "")
     expected_flags = {
@@ -387,6 +369,53 @@ def _structural_checks(
         "parser_accepts": bool(schema_parser["parser_accepted"]),
         "schema_parser_plan_identical": plan_id_matches,
         "downstream_reuses_plan_predicate": downstream_matches,
+        "canonical_plan_audit_valid": _canonical_plan_audit_valid(
+            binding,
+            schema_parser,
+            canonical_plan_count=canonical_plan_count,
+        ),
+        "unambiguous_zero_plan_rejected": (
+            bool(ambiguity.get("ambiguous")) or canonical_plan_count > 0
+        ),
+    }
+
+
+def _canonical_plan_audit_valid(
+    binding: dict[str, Any],
+    schema_parser: dict[str, Any],
+    *,
+    canonical_plan_count: int,
+) -> bool:
+    """Require every bound plan to survive the independent relation audit."""
+
+    state = str(binding.get("binding_state") or "")
+    if state not in _BOUND_STATES:
+        return True
+    return (
+        canonical_plan_count > 0
+        and bool(schema_parser.get("parser_accepted"))
+        and schema_parser.get("expected_plan_id") == schema_parser.get("parsed_plan_id")
+        and schema_parser.get("downstream_status") == "passed"
+    )
+
+
+def _ambiguity_observation(
+    row: dict[str, Any],
+    binding: dict[str, Any],
+) -> dict[str, Any]:
+    diagnostics = _mapping(row.get("qasper_annotation_diagnostics"))
+    reasons = _string_list(diagnostics.get("ambiguity_reasons"))
+    state = str(binding.get("binding_state") or "")
+    ambiguous = bool(diagnostics.get("ambiguous")) or state == "ambiguous_conflict"
+    ambiguous = ambiguous or (
+        bool(binding.get("support")) and bool(binding.get("explicit_contradiction"))
+    )
+    if "annotation_answer_disagreement" in reasons:
+        ambiguous = True
+    return {
+        "ambiguous": ambiguous,
+        "reasons": reasons,
+        "denominator": "ambiguous" if ambiguous else "unambiguous",
     }
 
 
@@ -424,29 +453,6 @@ def _no_policy_cohorts(
     return list(dict.fromkeys(cohorts))
 
 
-def _canonical_selector_observations(
-    records: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    return [
-        {
-            "evidence_id": str(record.get("evidence_id") or ""),
-            "selector_id": str(selector.get("selector_id") or ""),
-            "text": str(selector.get("text") or ""),
-            "span_start": selector.get("span_start"),
-            "span_end": selector.get("span_end"),
-            "allowed_proposition_slots": list(
-                selector.get("allowed_proposition_slots") or []
-            ),
-            "event_id": str(selector.get("event_id") or ""),
-            "object_tokens": list(selector.get("object_tokens") or []),
-            "predicate_match_kind": str(selector.get("predicate_match_kind") or ""),
-            "local_relation_state": str(selector.get("local_relation_state") or ""),
-        }
-        for record in records
-        for selector in record.get("selectors") or []
-    ]
-
-
 def build_audit(
     predictions: list[dict[str, Any]],
     *,
@@ -458,12 +464,24 @@ def build_audit(
         cohort for row in predictions for cohort in row.get("no_policy_cohorts") or []
     }
     failed = [row["example_id"] for row in predictions if row["status"] != "passed"]
+    ambiguity_denominator = _counts(
+        str(_mapping(row.get("ambiguity")).get("denominator") or "unambiguous")
+        for row in predictions
+    )
     gates = {
         "prediction_count_complete": len(predictions) == expected_count,
         "all_structural_checks_passed": not failed,
         "no_policy_cohort_coverage_complete": _REQUIRED_NO_COHORTS <= observed_cohorts,
         "single_clean_code_identity": bool(code_sha)
         and {str(row.get("code_sha") or "") for row in predictions} == {code_sha},
+        "ambiguity_denominator_complete": (
+            sum(ambiguity_denominator.values()) == len(predictions)
+            and set(ambiguity_denominator) <= {"ambiguous", "unambiguous"}
+        ),
+        "six_sample_ambiguity_denominator_4_2": (
+            expected_count != 6
+            or ambiguity_denominator == _SIX_SAMPLE_AMBIGUITY_DENOMINATOR
+        ),
     }
     return {
         "contract_id": AUDIT_CONTRACT,
@@ -481,6 +499,7 @@ def build_audit(
             for row in predictions
             for cohort in row.get("no_policy_cohorts") or []
         ),
+        "ambiguity_denominator": ambiguity_denominator,
         "failed_examples": failed,
         "hard_gates": gates,
     }
@@ -495,6 +514,12 @@ def _counts(values: Any) -> dict[str, int]:
 
 def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        return []
+    return list(dict.fromkeys(str(item) for item in value if str(item)))
 
 
 def main() -> int:

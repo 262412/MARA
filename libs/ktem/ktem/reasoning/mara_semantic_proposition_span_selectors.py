@@ -3,6 +3,17 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ktem.docqa.question_proposition import (
+    applicable_proposition_evidence_slots,
+    build_question_proposition,
+)
+from ktem.docqa.semantic_relation_clause_lexical import semantic_content_token_set
+from ktem.docqa.semantic_relation_clause_validation import (
+    semantic_relation_clause_analysis,
+)
+
+from .mara_qasper_candidate_selector_semantics import auditable_target_relation_present
+
 
 def canonical_span_selectors(
     evidence_label: str,
@@ -11,6 +22,8 @@ def canonical_span_selectors(
     canonical_start: int | None,
     *,
     selector_max_chars: int,
+    question: str | None = None,
+    max_selectors: int | None = None,
 ) -> list[dict[str, Any]]:
     spans: list[tuple[int, int]] = []
     cursor = 0
@@ -22,6 +35,12 @@ def canonical_span_selectors(
     if cursor < len(text):
         start, end = _trimmed_span(text, cursor, len(text))
         spans.extend(_bounded_spans(text, start, end, selector_max_chars))
+    spans = _select_relevant_spans(
+        text,
+        spans,
+        question=question,
+        max_selectors=max_selectors,
+    )
     return [
         {
             "selector_id": f"{evidence_label}:S{index}",
@@ -41,6 +60,58 @@ def canonical_span_selectors(
         }
         for index, (start, end) in enumerate(spans, start=1)
     ]
+
+
+def _select_relevant_spans(
+    text: str,
+    spans: list[tuple[int, int]],
+    *,
+    question: str | None,
+    max_selectors: int | None,
+) -> list[tuple[int, int]]:
+    """Keep a bounded, question-aware span universe without rewriting spans."""
+
+    if max_selectors is None or max_selectors <= 0 or len(spans) <= max_selectors:
+        return spans
+    if not question:
+        return spans[:max_selectors]
+    question_tokens = semantic_content_token_set(question)
+    ranked = sorted(
+        enumerate(spans),
+        key=lambda value: (
+            *_span_semantic_rank(
+                text[value[1][0] : value[1][1]],
+                question,
+                question_tokens,
+            ),
+            value[0],
+        ),
+    )
+    selected = {index for index, _span in ranked[:max_selectors]}
+    return [span for index, span in enumerate(spans) if index in selected]
+
+
+def _span_semantic_rank(
+    span: str,
+    question: str,
+    question_tokens: set[str],
+) -> tuple[int, int, int, int]:
+    proposition = build_question_proposition(question)
+    analysis = semantic_relation_clause_analysis(
+        {
+            "quote": span,
+            "binds_proposition_slots": list(
+                applicable_proposition_evidence_slots(proposition)
+            ),
+        },
+        proposition,
+    )
+    return (
+        0 if auditable_target_relation_present(question, span) else 1,
+        -len(analysis.get("slot_evidence") or {}),
+        -len(analysis.get("covered_object_tokens") or []),
+        -len(question_tokens & semantic_content_token_set(span)),
+    )
 
 
 def _trimmed_span(text: str, start: int, end: int) -> tuple[int, int]:

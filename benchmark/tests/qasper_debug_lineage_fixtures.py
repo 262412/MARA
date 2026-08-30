@@ -171,6 +171,7 @@ def _debug_semantic_data_lineage(
             "status": "passed",
             "selected_plan_id": plan_id,
         },
+        **_debug_lineage_plan_fields(pack_identity, plan_id),
         "audit": {
             "status": "parsed",
             "reason": "",
@@ -193,6 +194,98 @@ def _debug_semantic_data_lineage(
             if failed
             else {}
         ),
+    }
+
+
+def _debug_lineage_plan_fields(
+    pack_identity: dict[str, str],
+    plan_id: str,
+) -> dict[str, Any]:
+    selector_ref = "E1:S1"
+    event_id = "fixture-event"
+    return {
+        "source_packing": _debug_source_packing(pack_identity),
+        "selector": {
+            "status": "passed",
+            "universe": [selector_ref],
+            "universe_refs": [selector_ref],
+            "universe_records": [
+                {
+                    "evidence_id": "span:paper:s1",
+                    "selector_id": selector_ref,
+                    "event_id": event_id,
+                }
+            ],
+            "candidate_count": 1,
+            "event_ids": [event_id],
+        },
+        "plan_construction": _debug_plan_construction(
+            plan_id,
+            selector_ref=selector_ref,
+            event_id=event_id,
+        ),
+    }
+
+
+def _debug_source_packing(pack_identity: dict[str, str]) -> dict[str, Any]:
+    text = "The paper uses the method."
+    return {
+        "status": "passed",
+        "contract_id": "qasper_source_packing_observation.v1",
+        "semantic_pack_digest": pack_identity["semantic_pack_digest"],
+        "source_semantic_pack_digest": pack_identity["semantic_pack_digest"],
+        "source_records": [
+            {
+                "evidence_id": "span:paper:s1",
+                "text_digest": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                "semantic_rank": 1,
+                "selected_for_windowing": True,
+                "packed": True,
+                "stop_stage": "packed",
+            }
+        ],
+        "records": [
+            {
+                "evidence_id": "span:paper:s1",
+                "text_digest": _fixture_digest(text),
+                "selector_refs": ["E1:S1"],
+            }
+        ],
+        "dropped_count": 0,
+        "truncated_count": 0,
+    }
+
+
+def _debug_plan_construction(
+    plan_id: str,
+    *,
+    selector_ref: str,
+    event_id: str,
+) -> dict[str, Any]:
+    covered = ["actor", "predicate", "object"] if plan_id else []
+    return {
+        "status": "passed",
+        "transport_status": "passed",
+        "semantic_plan_status": "passed" if plan_id else "not_applicable",
+        "universe": [selector_ref],
+        "universe_refs": [selector_ref],
+        "candidate_count": 1,
+        "legal_plan_count": 1 if plan_id else 0,
+        "valid_candidate_counts": {
+            "proposition_support": 1 if plan_id else 0,
+            "explicit_contradiction": 0,
+        },
+        "best_rejected_candidate": None,
+        "best_rejected_candidates": {},
+        "reason": "" if plan_id else "candidate_not_answerable",
+        "required_slots": ["actor", "predicate", "object"],
+        "covered_slots": covered,
+        "required_tokens": ["method"],
+        "covered_tokens": ["method"] if plan_id else [],
+        "required_object_tokens": ["method"],
+        "covered_object_tokens": ["method"] if plan_id else [],
+        "event_ids": [event_id],
+        "selected_plan_id": plan_id,
     }
 
 

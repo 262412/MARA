@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ktem.docqa.canonical_proposition_evidence_plan_contract import (
@@ -7,9 +8,10 @@ from ktem.docqa.canonical_proposition_evidence_plan_contract import (
     canonical_predicate_match_kind,
 )
 from ktem.docqa.question_proposition import build_question_proposition
-from ktem.docqa.semantic_relation_clause_lexical import clause_spans
 
 from .mara_qasper_candidate_selector_semantics import revalidated_selector_semantics
+
+_PARAGRAPH_BOUNDARY_RE = re.compile(r"(?:\r?\n[ \t]*){2,}")
 
 
 def candidate_selector_plan_metadata(
@@ -26,8 +28,20 @@ def candidate_selector_plan_metadata(
         str(selector.get("text") or ""),
     )
     analysis = dict(resolved.get("analysis") or {})
+    alignment = resolved.get("semantic_alignment")
+    aligned_tokens = (
+        alignment.get("covered_object_tokens") or []
+        if isinstance(alignment, dict)
+        else []
+    )
     object_tokens = sorted(
-        {str(token) for token in analysis.get("covered_object_tokens") or []}
+        {
+            str(token)
+            for token in (
+                *tuple(analysis.get("covered_object_tokens") or []),
+                *tuple(aligned_tokens),
+            )
+        }
     )
     return {
         "object_tokens": object_tokens,
@@ -50,10 +64,10 @@ def _selector_event_id(
     local_end = selector_end - record_start
     event_start = local_start
     event_end = local_end
-    for clause_start, clause_end in clause_spans(record_text):
-        if clause_start <= local_start and local_end <= clause_end:
-            event_start = clause_start
-            event_end = clause_end
+    for paragraph_start, paragraph_end in _paragraph_spans(record_text):
+        if paragraph_start <= local_start and local_end <= paragraph_end:
+            event_start = paragraph_start
+            event_end = paragraph_end
             break
     return canonical_event_identity(
         evidence_id,
@@ -61,6 +75,19 @@ def _selector_event_id(
         record_start + event_end,
         record_text[event_start:event_end],
     )
+
+
+def _paragraph_spans(value: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for match in _PARAGRAPH_BOUNDARY_RE.finditer(value):
+        end = match.start()
+        if start < end:
+            spans.append((start, end))
+        start = match.end()
+    if start < len(value):
+        spans.append((start, len(value)))
+    return spans or ([(0, len(value))] if value else [])
 
 
 def _predicate_match_kind(

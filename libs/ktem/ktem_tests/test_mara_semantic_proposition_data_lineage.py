@@ -38,6 +38,26 @@ def _context() -> SimpleNamespace:
         semantic_pack_digest="pack-digest",
         canonical_span_universe_digest="span-digest",
         candidate_transaction_id="candidate-transaction",
+        source_packing_observation={
+            "contract_id": "qasper_source_packing_observation.v1",
+            "source_records": [
+                {
+                    "evidence_id": "evidence-1",
+                    "semantic_rank": 1,
+                    "selected_for_windowing": True,
+                    "packed": True,
+                    "stop_stage": "packed",
+                }
+            ],
+            "records": [
+                {
+                    "evidence_id": "evidence-1",
+                    "selector_refs": ["E1:S1"],
+                }
+            ],
+            "dropped_count": 0,
+            "truncated_count": 0,
+        },
     )
 
 
@@ -89,6 +109,8 @@ def test_lineage_records_selector_and_plan_construction_trace() -> None:
     assert construction["required_slots"] == ["actor", "predicate", "object"]
     assert construction["covered_slots"] == ["actor", "predicate", "object"]
     assert construction["event_ids"] == ["event-1"]
+    assert lineage["source_packing"]["status"] == "passed"
+    assert lineage["source_packing"]["source_records"][0]["stop_stage"] == ("packed")
 
 
 def test_unambiguous_answerable_zero_plan_cannot_finalize_lineage_as_passed() -> None:
@@ -120,3 +142,41 @@ def test_unambiguous_answerable_zero_plan_cannot_finalize_lineage_as_passed() ->
     assert lineage["plan_construction"]["reason"] == "no_legal_evidence_plan"
     assert lineage["status"] == "failed"
     assert lineage["first_inconsistency"]["stage"] == "plan_construction"
+
+
+def test_zero_plan_is_recorded_before_a_later_model_parse_failure() -> None:
+    diagnostics: dict[str, Any] = {}
+    stage = SimpleNamespace(
+        value=None,
+        attempts=[
+            SimpleNamespace(
+                response=SimpleNamespace(text='{"unexpected":"shape"}'),
+                parse_failure_reason="plan_selection_schema_invalid",
+                provider_failure_reason="",
+            )
+        ],
+        provider_failure_reason="",
+        failure_reason="plan_selection_schema_invalid",
+        call_count=1,
+    )
+    record_proposal_data_lineage(
+        diagnostics,
+        stage,
+        context=_context(),
+        candidate="yes",
+        applicable_proposition_slots=("actor", "predicate", "object"),
+        allowed_proposition_slot_bindings={"E1:S1": ("actor", "predicate", "object")},
+        allowed_proposition_evidence_plans={},
+    )
+    finalize_semantic_data_lineage(
+        diagnostics,
+        status="failed",
+        reason="plan_selection_schema_invalid",
+    )
+
+    lineage = diagnostics["semantic_data_lineage"]
+    assert lineage["first_inconsistency"]["stage"] == "plan_construction"
+    assert lineage["first_inconsistency"]["reason"] == "no_legal_evidence_plan"
+    assert lineage["proposal_attempts"][0]["parse_failure_reason"] == (
+        "plan_selection_schema_invalid"
+    )

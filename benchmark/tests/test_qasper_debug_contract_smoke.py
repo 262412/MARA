@@ -13,7 +13,9 @@ from benchmark.tests.qasper_debug_contract_fixtures import (
     _debug_candidate_audit,
     _debug_unknown_assessment,
     _qasper_contract_probe_predictions,
-    _qasper_debug_prediction,
+)
+from benchmark.tests.qasper_debug_contract_fixtures import (
+    _qasper_debug_prediction as _base_qasper_debug_prediction,
 )
 from benchmark.tests.qasper_debug_semantic_pack_fixtures import _debug_semantic_pack
 from scripts.slurm.qasper_debug_contract_pre_audit_provider import (
@@ -23,6 +25,17 @@ from scripts.slurm.qasper_debug_contract_probe import run_pre_audit_probes
 from scripts.slurm.qasper_debug_contract_semantic_pack import _pack_identity_valid
 from scripts.slurm.validate_contract_smoke import QASPER_DEBUG_HARD_GATES, validate
 from scripts.slurm.validate_qasper_contract_probe import validate_contract_probe
+
+
+def _qasper_debug_prediction(example_id: str, route: str):
+    state = ("unknown", "passed", True) if example_id == "example-5" else None
+    candidate = "no" if example_id == "example-5" else None
+    return _base_qasper_debug_prediction(
+        example_id,
+        route,
+        state=state,
+        candidate=candidate,
+    )
 
 
 def _write_qasper_run(run_dir, *, predictions):
@@ -109,13 +122,13 @@ def test_qasper_debug_contract_smoke_audits_6x3_observability(tmp_path):
     assert audit["status"] == "passed"
     assert audit["observability_coverage"]["complete"] is True
     covered = audit["observability_coverage"]["covered_counts"]
-    assert covered["candidate_verifier_audit"] == 15
-    assert covered["auditor_failed_safe_abstention"] == 3
+    assert covered["candidate_verifier_audit"] == 18
+    assert covered["auditor_failed_safe_abstention"] == 0
     assert audit["observability_coverage"]["auditor_outcome_coverage"] == 18
     assert all(
         value == 18
         for key, value in covered.items()
-        if key not in {"candidate_verifier_audit", "auditor_failed_safe_abstention"}
+        if key not in {"auditor_failed_safe_abstention"}
     )
     matrix = audit["structural_state_matrix"]
     assert matrix["contract_id"] == "qasper_candidate_bound_state_matrix.v1"

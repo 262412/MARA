@@ -65,6 +65,9 @@ def _candidate_selector(
             else semantic_content_token_set(text)
         ),
         "event_id": event_id,
+        "local_relation_state": (
+            "affirmative_assertion" if "predicate" in slot_hints else "unbound"
+        ),
     }
 
 

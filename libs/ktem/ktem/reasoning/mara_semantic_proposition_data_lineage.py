@@ -5,7 +5,19 @@ import json
 from collections.abc import Collection, Mapping
 from typing import Any
 
+from ktem.docqa.canonical_proposition_evidence_plan_contract import (
+    canonical_selector_sort_key,
+)
+from ktem.docqa.question_proposition import build_question_proposition
+from ktem.docqa.semantic_relation_clause_lexical import (
+    canonical_proposition_object_token_set,
+)
+
 from .mara_semantic_proposition_debug import response_text
+from .mara_semantic_proposition_lineage_packing import (
+    empty_source_packing_lineage,
+    source_packing_lineage,
+)
 from .mara_semantic_proposition_schema import semantic_proposition_response_format
 
 SEMANTIC_PROPOSITION_DATA_LINEAGE_CONTRACT = "semantic_proposition_data_lineage.v1"
@@ -19,16 +31,13 @@ def record_proposal_data_lineage(
     candidate: str,
     applicable_proposition_slots: Collection[str] | None,
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
-    allowed_proposition_evidence_plans: (Mapping[str, Mapping[str, Any]] | None),
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None,
 ) -> None:
     plan_mode = allowed_proposition_evidence_plans is not None
+    stage_value = stage.value if isinstance(stage.value, Mapping) else {}
+    selectors = _context_selectors(context)
     response_format = semantic_proposition_response_format(
-        [
-            str(selector.get("selector_id") or "")
-            for record in context.packed
-            for selector in record.get("selectors") or []
-            if str(selector.get("selector_id") or "")
-        ],
+        [str(selector.get("selector_id") or "") for selector in selectors],
         [str(slot.get("slot_id") or "") for slot in context.slots],
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots,
@@ -64,17 +73,29 @@ def record_proposal_data_lineage(
             "local_projection": {
                 "status": (
                     "passed"
-                    if plan_mode and stage.value is not None
+                    if plan_mode and stage_value
                     else "not_run"
                     if plan_mode
                     else "not_applicable"
                 ),
                 "selected_plan_id": str(
-                    (stage.value or {}).get("canonical_evidence_plan_id") or ""
+                    stage_value.get("canonical_evidence_plan_id") or ""
                 ),
             },
         }
     )
+    selector, construction = _plan_construction_lineage(
+        context=context,
+        selectors=selectors,
+        candidate=candidate,
+        applicable_proposition_slots=applicable_proposition_slots,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
+        selected_plan_id=str(stage_value.get("canonical_evidence_plan_id") or ""),
+    )
+    lineage["selector"] = selector
+    lineage["plan_construction"] = construction
+    lineage["source_packing"] = source_packing_lineage(context)
+    _record_early_plan_construction_failure(lineage, construction)
     _record_stage_first_inconsistency(
         lineage,
         stage,
@@ -83,10 +104,7 @@ def record_proposal_data_lineage(
     )
 
 
-def record_audit_data_lineage(
-    diagnostics: dict[str, Any],
-    stage: Any,
-) -> None:
+def record_audit_data_lineage(diagnostics: dict[str, Any], stage: Any) -> None:
     lineage = _lineage(diagnostics)
     lineage["audit"] = {
         "status": (
@@ -125,6 +143,20 @@ def finalize_semantic_data_lineage(
             "attempts": [],
         },
     )
+    construction = lineage.get("plan_construction")
+    plan_failed = (
+        isinstance(construction, Mapping)
+        and str(construction.get("semantic_plan_status") or "") == "failed"
+    )
+    transport_failed = (
+        isinstance(construction, Mapping)
+        and str(construction.get("transport_status") or "") == "failed"
+    )
+    if plan_failed or transport_failed:
+        lineage["status"] = "failed"
+        _record_plan_construction_inconsistency(lineage)
+        if status == "parsed" or lineage.get("first_inconsistency"):
+            return
     if status == "parsed" or lineage.get("first_inconsistency"):
         return
     stage = _diagnostic_failure_stage(diagnostics, reason)
@@ -149,6 +181,257 @@ def finalize_semantic_data_lineage(
     }
 
 
+def _plan_construction_lineage(
+    *,
+    context: Any,
+    selectors: list[dict[str, Any]],
+    candidate: str,
+    applicable_proposition_slots: Collection[str] | None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None,
+    selected_plan_id: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    trace = _trace_from_context(context)
+    if trace is None:
+        trace = {
+            "selector_count": len(selectors),
+            "candidate_count": len(selectors),
+            "event_ids": [
+                str(value.get("event_id") or "")
+                for value in selectors
+                if str(value.get("event_id") or "")
+            ],
+        }
+    selector = _selector_lineage(trace, selectors)
+    plans = _normalised_plans(allowed_proposition_evidence_plans)
+    selected = plans.get(selected_plan_id)
+    required_slots = _string_list(applicable_proposition_slots)
+    required_tokens = _question_object_tokens(context)
+    covered_slots, covered_tokens, event_ids = _plan_coverage(selected, selectors)
+    semantic_status, reason = _plan_status_and_reason(
+        trace,
+        plans=plans,
+        candidate=candidate,
+    )
+    transport_status = _plan_transport_status(
+        allowed_proposition_evidence_plans,
+        plans=plans,
+        selected_plan_id=selected_plan_id,
+    )
+    if transport_status == "failed":
+        reason = "selected_plan_not_allowed"
+    rejected = trace.get("best_rejected")
+    rejected = rejected if isinstance(rejected, Mapping) else {}
+    return selector, {
+        "status": (
+            "failed" if "failed" in {semantic_status, transport_status} else "passed"
+        ),
+        "transport_status": transport_status,
+        "semantic_plan_status": semantic_status,
+        "universe": selector["universe_refs"],
+        "universe_refs": selector["universe_refs"],
+        "candidate_count": int(
+            trace.get("candidate_count") or len(selector["universe_refs"])
+        ),
+        "legal_plan_count": len(plans),
+        "valid_candidate_counts": {
+            str(key): int(value)
+            for key, value in (trace.get("valid_candidate_counts") or {}).items()
+        },
+        "best_rejected_candidate": dict(next(iter(rejected.values()), {}))
+        if rejected
+        else None,
+        "best_rejected_candidates": {
+            str(key): dict(value)
+            for key, value in rejected.items()
+            if isinstance(value, Mapping)
+        },
+        "reason": reason,
+        "required_slots": required_slots,
+        "covered_slots": _ordered_subset(covered_slots, required_slots),
+        "required_tokens": required_tokens,
+        "covered_tokens": covered_tokens,
+        "required_object_tokens": required_tokens,
+        "covered_object_tokens": covered_tokens,
+        "event_ids": event_ids or selector["event_ids"],
+        "selected_plan_id": selected_plan_id,
+    }
+
+
+def _selector_lineage(
+    trace: Mapping[str, Any],
+    selectors: list[dict[str, Any]],
+) -> dict[str, Any]:
+    refs = _string_list(
+        trace.get("selector_universe_refs") or trace.get("universe_refs")
+    ) or [str(value.get("selector_id") or "") for value in selectors]
+    return {
+        "status": "passed" if refs else "failed",
+        "universe": refs,
+        "universe_refs": refs,
+        "universe_records": [dict(value) for value in selectors],
+        "candidate_count": int(trace.get("selector_count") or len(refs)),
+        "event_ids": _string_list(trace.get("event_ids"))
+        or sorted(
+            {
+                str(value.get("event_id") or "")
+                for value in selectors
+                if str(value.get("event_id") or "")
+            }
+        ),
+    }
+
+
+def _plan_status_and_reason(
+    trace: Mapping[str, Any],
+    *,
+    plans: Mapping[str, Mapping[str, Any]],
+    candidate: str,
+) -> tuple[str, str]:
+    state = str(trace.get("binding_state") or trace.get("state") or "")
+    ambiguous = trace.get("ambiguous") is True or state in {
+        "ambiguous",
+        "ambiguous_conflict",
+    }
+    if plans:
+        status = "passed"
+    elif str(candidate or "").casefold() in {"yes", "no"} and not ambiguous:
+        status = "failed"
+    else:
+        status = "not_applicable"
+    reason = str(trace.get("reason") or "")
+    if not reason:
+        reason = {
+            "failed": "no_legal_evidence_plan",
+            "not_applicable": "candidate_not_answerable",
+        }.get(status, "")
+    return status, reason
+
+
+def _plan_transport_status(
+    supplied_plans: Mapping[str, Mapping[str, Any]] | None,
+    *,
+    plans: Mapping[str, Mapping[str, Any]],
+    selected_plan_id: str,
+) -> str:
+    if supplied_plans is None:
+        return "not_applicable"
+    if not plans:
+        return "passed"
+    if not selected_plan_id:
+        return "not_run"
+    return "passed" if selected_plan_id in plans else "failed"
+
+
+def _context_selectors(context: Any) -> list[dict[str, Any]]:
+    selectors: list[dict[str, Any]] = []
+    for record in getattr(context, "packed", ()) or ():
+        if not isinstance(record, Mapping):
+            continue
+        for raw_selector in record.get("selectors") or ():
+            if not isinstance(raw_selector, Mapping):
+                continue
+            selector = dict(raw_selector)
+            selector.setdefault("evidence_id", str(record.get("evidence_id") or ""))
+            selector.setdefault(
+                "slot_hints",
+                list(selector.get("allowed_proposition_slots") or ()),
+            )
+            if selector.get("selector_id"):
+                selectors.append(selector)
+    return sorted(selectors, key=canonical_selector_sort_key)
+
+
+def _trace_from_context(context: Any) -> Mapping[str, Any] | None:
+    for value in (
+        getattr(context, "plan_construction_trace", None),
+        getattr(context, "construction_trace", None),
+        getattr(context, "selection_trace", None),
+    ):
+        if isinstance(value, Mapping):
+            return value
+    for record in getattr(context, "packed", ()) or ():
+        if not isinstance(record, Mapping):
+            continue
+        for key in ("plan_construction_trace", "construction_trace"):
+            value = record.get(key)
+            if isinstance(value, Mapping):
+                return value
+    return None
+
+
+def _normalised_plans(
+    plans: Mapping[str, Mapping[str, Any]] | None,
+) -> dict[str, Mapping[str, Any]]:
+    return {
+        str(plan_id): value
+        for plan_id, value in (plans or {}).items()
+        if str(plan_id) and isinstance(value, Mapping)
+    }
+
+
+def _plan_coverage(
+    plan: Mapping[str, Any] | None,
+    selectors: list[dict[str, Any]],
+) -> tuple[list[str], list[str], list[str]]:
+    if not isinstance(plan, Mapping):
+        return [], [], []
+    refs = set(_string_list(plan.get("span_refs")))
+    slot_refs = plan.get("slot_refs")
+    covered_slots = (
+        [str(slot) for slot, refs in slot_refs.items() if refs]
+        if isinstance(slot_refs, Mapping)
+        else []
+    )
+    covered_tokens = _string_list(plan.get("covered_object_tokens"))
+    event_ids = sorted(
+        {
+            str(selector.get("event_id") or "")
+            for selector in selectors
+            if str(selector.get("selector_id") or "") in refs
+            and str(selector.get("event_id") or "")
+        }
+    )
+    return covered_slots, covered_tokens, event_ids
+
+
+def _question_object_tokens(context: Any) -> list[str]:
+    question = str(getattr(context, "question", "") or "")
+    if not question:
+        return []
+    return sorted(
+        canonical_proposition_object_token_set(build_question_proposition(question))
+    )
+
+
+def _ordered_subset(values: list[str], order: list[str]) -> list[str]:
+    value_set = set(values)
+    ordered = [value for value in order if value in value_set]
+    return ordered + [value for value in values if value not in set(order)]
+
+
+def _record_plan_construction_inconsistency(lineage: dict[str, Any]) -> None:
+    if lineage.get("first_inconsistency"):
+        return
+    construction = lineage.get("plan_construction")
+    if not isinstance(construction, Mapping):
+        return
+    lineage["first_inconsistency"] = {
+        "stage": "plan_construction",
+        "reason": str(construction.get("reason") or "plan_construction_failed"),
+        "attempt": 1,
+        "raw_response_digest": _canonical_digest(construction),
+    }
+
+
+def _record_early_plan_construction_failure(
+    lineage: dict[str, Any],
+    construction: Mapping[str, Any],
+) -> None:
+    if construction.get("status") == "failed":
+        lineage["status"] = "failed"
+        _record_plan_construction_inconsistency(lineage)
+
+
 def _lineage(diagnostics: dict[str, Any]) -> dict[str, Any]:
     value = diagnostics.get("semantic_data_lineage")
     if isinstance(value, dict):
@@ -168,6 +451,36 @@ def _lineage(diagnostics: dict[str, Any]) -> dict[str, Any]:
         },
         "proposal_attempts": [],
         "local_projection": {"status": "not_run", "selected_plan_id": ""},
+        "source_packing": empty_source_packing_lineage(),
+        "selector": {
+            "status": "not_run",
+            "universe": [],
+            "universe_refs": [],
+            "universe_records": [],
+            "candidate_count": 0,
+            "event_ids": [],
+        },
+        "plan_construction": {
+            "status": "not_run",
+            "transport_status": "not_run",
+            "semantic_plan_status": "not_run",
+            "universe": [],
+            "universe_refs": [],
+            "candidate_count": 0,
+            "legal_plan_count": 0,
+            "valid_candidate_counts": {},
+            "best_rejected_candidate": None,
+            "best_rejected_candidates": {},
+            "reason": "",
+            "required_slots": [],
+            "covered_slots": [],
+            "required_tokens": [],
+            "covered_tokens": [],
+            "required_object_tokens": [],
+            "covered_object_tokens": [],
+            "event_ids": [],
+            "selected_plan_id": "",
+        },
         "audit": {"status": "not_run", "reason": "", "attempts": []},
         "first_inconsistency": {},
     }
@@ -227,10 +540,7 @@ def _proposal_parser_failure_stage(reason: str) -> str:
     return "proposal_parse"
 
 
-def _diagnostic_failure_stage(
-    diagnostics: Mapping[str, Any],
-    reason: str,
-) -> str:
+def _diagnostic_failure_stage(diagnostics: Mapping[str, Any], reason: str) -> str:
     if str(reason).startswith("release_"):
         return "transaction_preflight"
     if str(diagnostics.get("audit_execution_status") or "") == "provider_failed":
@@ -265,3 +575,9 @@ def _canonical_digest(value: Any) -> str:
         default=str,
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        return []
+    return list(dict.fromkeys(str(item) for item in value if str(item)))

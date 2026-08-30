@@ -8,12 +8,47 @@ from typing import Any
 
 from .question_proposition import QuestionProposition
 
-CANONICAL_PROPOSITION_EVIDENCE_PLAN_CONTRACT = "canonical_proposition_evidence_plan.v1"
+CANONICAL_PROPOSITION_EVIDENCE_PLAN_CONTRACT = "canonical_proposition_evidence_plan.v2"
+CANONICAL_EVENT_PROPOSITION_PLAN_CONTRACT = "canonical_event_proposition_plan.v1"
+CANONICAL_EVENT_COMPARISON_RELATION_CONTRACT = "canonical_event_comparison_relation.v1"
 
 RELATION_BOUND_SUPPORT = "relation_bound_support"
 RELATION_BOUND_CONTRADICTION = "relation_bound_contradiction"
 AMBIGUOUS_CONFLICT = "ambiguous_conflict"
 UNRESOLVED = "unresolved"
+
+
+@dataclass(frozen=True, slots=True)
+class CanonicalEventPropositionPlan:
+    event_id: str
+    event_binding_id: str
+    span_refs: tuple[str, ...]
+    slot_refs: tuple[tuple[str, tuple[str, ...]], ...]
+    required_object_tokens: tuple[str, ...]
+    covered_object_tokens: tuple[str, ...]
+    contract_id: str = CANONICAL_EVENT_PROPOSITION_PLAN_CONTRACT
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "contract_id": self.contract_id,
+            "event_id": self.event_id,
+            "event_binding_id": self.event_binding_id,
+            "span_refs": list(self.span_refs),
+            "slot_refs": {slot: list(refs) for slot, refs in self.slot_refs},
+            "required_object_tokens": list(self.required_object_tokens),
+            "covered_object_tokens": list(self.covered_object_tokens),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CanonicalEventComparisonRelation:
+    relation_type: str
+    contradicting_event_binding_id: str
+    reference_event_binding_id: str
+    contract_id: str = CANONICAL_EVENT_COMPARISON_RELATION_CONTRACT
+
+    def as_dict(self) -> dict[str, str]:
+        return asdict(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +60,8 @@ class CanonicalEvidenceSetPlan:
     slot_refs: tuple[tuple[str, tuple[str, ...]], ...]
     required_object_tokens: tuple[str, ...]
     covered_object_tokens: tuple[str, ...]
+    event_subplans: tuple[CanonicalEventPropositionPlan, ...]
+    comparison_relation: CanonicalEventComparisonRelation | None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -35,6 +72,12 @@ class CanonicalEvidenceSetPlan:
             "slot_refs": {slot: list(refs) for slot, refs in self.slot_refs},
             "required_object_tokens": list(self.required_object_tokens),
             "covered_object_tokens": list(self.covered_object_tokens),
+            "event_subplans": [value.as_dict() for value in self.event_subplans],
+            "comparison_relation": (
+                self.comparison_relation.as_dict()
+                if self.comparison_relation is not None
+                else None
+            ),
         }
 
 
@@ -92,6 +135,7 @@ class CanonicalPropositionEvidenceSelection:
     plan: CanonicalPropositionEvidencePlan
     support: tuple[dict[str, Any], ...] | None
     contradiction: tuple[dict[str, Any], ...] | None
+    construction_trace: dict[str, Any]
 
 
 def canonical_selector_sort_key(

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ktem.docqa.qasper_semantic_pack_contract import canonical_payload_digest
 from ktem.docqa.question_proposition import build_question_proposition
-from ktem.docqa.semantic_relation_clause_lexical import semantic_content_token_set
+from ktem.docqa.semantic_relation_clause_lexical import (
+    canonical_semantic_token,
+    semantic_content_token_set,
+)
 from ktem.reasoning.mara_qasper_candidate_evidence_sets import (  # type: ignore[attr-defined]
     candidate_span_set,
     enumerate_candidate_span_sets,
@@ -12,6 +16,29 @@ from ktem.reasoning.mara_qasper_candidate_evidence_sets import (  # type: ignore
 
 QUESTION = "Did the authors compare the two systems?"
 REQUIRED_SLOTS = ("actor", "predicate", "object", "quantifier")
+_SEMANTIC_TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)?")
+
+
+def _exact_semantic_matches(
+    text: str,
+    start: int,
+    required_tokens: set[str],
+) -> dict[str, list[dict[str, Any]]]:
+    matches: dict[str, list[dict[str, Any]]] = {}
+    for match in _SEMANTIC_TOKEN_RE.finditer(text):
+        token = canonical_semantic_token(match.group(0))
+        if token not in required_tokens or token in matches:
+            continue
+        matches[token] = [
+            {
+                "text": match.group(0),
+                "span_start": start + match.start(),
+                "span_end": start + match.end(),
+                "match_kind": "exact",
+                "rule_id": "exact_semantic_token",
+            }
+        ]
+    return matches
 
 
 def _selector(
@@ -25,6 +52,14 @@ def _selector(
     relation_state: str = "affirmative_assertion",
     alignment_status: str = "verified",
 ) -> dict[str, Any]:
+    required_object_tokens = semantic_content_token_set(
+        build_question_proposition(QUESTION).object_surface
+    )
+    semantic_matches = _exact_semantic_matches(
+        text,
+        start,
+        required_object_tokens,
+    )
     selector = {
         "evidence_id": "paper",
         "selector_id": selector_id,
@@ -49,17 +84,10 @@ def _selector(
         "text_digest": canonical_payload_digest(text),
         "event_id": event_id,
         "slot_refs": {slot: selector_id for slot in slots},
-        "required_object_tokens": sorted(
-            semantic_content_token_set(
-                build_question_proposition(QUESTION).object_surface
-            )
-        ),
-        "covered_object_tokens": sorted(
-            semantic_content_token_set(text)
-            & semantic_content_token_set(
-                build_question_proposition(QUESTION).object_surface
-            )
-        ),
+        "required_object_tokens": sorted(required_object_tokens),
+        "covered_object_tokens": sorted(semantic_matches),
+        "semantic_matches": semantic_matches,
+        "semantic_rule_ids": ["exact_semantic_token"] if semantic_matches else [],
         "predicate_concept": build_question_proposition(QUESTION).predicate,
         "predicate_match_kind": predicate_match_kind,
         "polarity_relation": "proposition_support",
@@ -112,13 +140,11 @@ def test_selector_enumerates_ranked_alternatives_and_preserves_span_identity() -
         )
         for alternative in alternatives
     }
-    assert {
-        ("paper", "A:S1", "event-a"),
-    } in identities
-    assert {
+    assert (("paper", "A:S1", "event-a"),) in identities
+    assert (
         ("paper", "Z:S1", "event-z"),
         ("paper", "Z:S2", "event-z"),
-    } in identities
+    ) in identities
 
     selected = candidate_span_set(
         QUESTION,
@@ -165,6 +191,28 @@ def test_unattested_predicate_paraphrase_cannot_be_promoted_to_authority() -> No
     )
 
 
+def test_unbound_predicate_cannot_be_promoted_by_missing_negation() -> None:
+    selector = _selector(
+        "U:S1",
+        "The authors compared the two systems",
+        0,
+        event_id="event-unbound",
+        slots=REQUIRED_SLOTS,
+        relation_state="unbound",
+    )
+    selector.pop("semantic_alignment")
+
+    assert (
+        candidate_span_set(
+            QUESTION,
+            [selector],
+            REQUIRED_SLOTS,
+            polarity="yes",
+        )
+        is None
+    )
+
+
 def test_audited_paraphrase_binds_exact_local_span_and_event() -> None:
     selector = _selector(
         "P:S1",
@@ -195,4 +243,30 @@ def test_audited_paraphrase_binds_exact_local_span_and_event() -> None:
     assert alignment["text_digest"] == canonical_payload_digest(selected[0]["text"])
     assert alignment["alignment_digest"] == canonical_payload_digest(
         {key: value for key, value in alignment.items() if key != "alignment_digest"}
+    )
+
+
+def test_semantic_alignment_without_local_matches_is_not_audited() -> None:
+    selector = _selector(
+        "P:S1",
+        "The study juxtaposed the two systems",
+        17,
+        event_id="event-paraphrase",
+        slots=REQUIRED_SLOTS,
+        predicate_match_kind="paraphrase",
+    )
+    alignment = selector["semantic_alignment"]
+    alignment.pop("semantic_matches")
+    alignment["alignment_digest"] = canonical_payload_digest(
+        {key: value for key, value in alignment.items() if key != "alignment_digest"}
+    )
+
+    assert (
+        candidate_span_set(
+            QUESTION,
+            [selector],
+            REQUIRED_SLOTS,
+            polarity="yes",
+        )
+        is None
     )

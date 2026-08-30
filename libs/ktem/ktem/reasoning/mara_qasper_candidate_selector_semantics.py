@@ -8,11 +8,30 @@ from ktem.docqa.question_proposition import (
     applicable_proposition_evidence_slots,
     build_question_proposition,
 )
-from ktem.docqa.semantic_relation_clause_lexical import semantic_content_token_set
+from ktem.docqa.semantic_relation_clause_lexical import (
+    canonical_proposition_object_token_set,
+    semantic_content_token_set,
+)
 from ktem.docqa.semantic_relation_clause_validation import (
     semantic_relation_clause_analysis,
     semantic_slot_evidence_projection,
 )
+
+from .mara_qasper_selector_semantic_alignment import (
+    attested_selector_slot_span,
+    auditable_target_relation_present,
+    build_local_selector_semantic_alignment,
+    predicate_surface_is_auditable,
+)
+from .mara_qasper_selector_semantic_alignment_contract import (
+    verified_selector_semantic_alignment,
+)
+
+__all__ = [
+    "auditable_target_relation_present",
+    "build_local_selector_semantic_alignment",
+    "verified_selector_semantic_alignment",
+]
 
 _PROPOSITION_SLOTS = ("actor", "predicate", "object", "quantifier")
 _TITLE_MARKER_RE = re.compile(r"(?:^\s*#|\s:::\s|@!START@|@!END@)", re.IGNORECASE)
@@ -20,7 +39,7 @@ _TITLE_MARKER_RE = re.compile(r"(?:^\s*#|\s:::\s|@!START@|@!END@)", re.IGNORECAS
 
 def candidate_polarity_signal(question: str, text: str) -> str:
     proposition = build_question_proposition(question)
-    required_object_tokens = semantic_content_token_set(proposition.object_surface)
+    required_object_tokens = canonical_proposition_object_token_set(proposition)
     if not required_object_tokens <= semantic_content_token_set(text):
         return "undetermined"
     semantics = revalidated_selector_semantics({}, question, text)
@@ -138,14 +157,51 @@ def revalidated_selector_semantics(
 ) -> dict[str, Any]:
     """Recompute proposition binding without trusting persisted declarations."""
 
+    direct = _direct_selector_semantics(selector, question, text)
+    alignment = verified_selector_semantic_alignment(question, selector)
+    if alignment is not None:
+        _apply_verified_alignment(direct, selector, alignment)
+    elif str(selector.get("predicate_match_kind") or "").strip() == "paraphrase":
+        direct.update(
+            slots=[],
+            slot_spans={},
+            relation_bearing=False,
+            local_relation_state="unbound",
+        )
+    local_state = str(direct["local_relation_state"])
+    polarity_signal = {
+        "affirmative_assertion": "support",
+        "explicit_contradiction": "explicit_contradiction",
+    }.get(local_state, "undetermined")
+    uncertainty_context = bool(direct.pop("uncertainty_context"))
+    direct.pop("applicable_slots")
+    return {
+        **direct,
+        "slot_spans": {slot: direct["slot_spans"][slot] for slot in direct["slots"]},
+        "candidate_relation_role": (
+            "uncertainty_context" if uncertainty_context else "polarity_evidence"
+        ),
+        "polarity_signal": polarity_signal,
+        "semantic_alignment": alignment,
+    }
+
+
+def _direct_selector_semantics(
+    selector: dict[str, Any],
+    question: str,
+    text: str,
+) -> dict[str, Any]:
     proposition = build_question_proposition(question)
     applicable = applicable_proposition_evidence_slots(proposition)
     analysis = semantic_relation_clause_analysis(
-        {"quote": text, "binds_proposition_slots": list(applicable)},
-        proposition,
+        {"quote": text, "binds_proposition_slots": list(applicable)}, proposition
     )
-    observed_spans = dict(analysis.get("slot_evidence") or {})
     title_like = bool(_TITLE_MARKER_RE.search(text))
+    observed_spans = dict(analysis.get("slot_evidence") or {})
+    target_relation_present = analysis.get("target_relation_present") is True
+    if not predicate_surface_is_auditable(proposition, text):
+        target_relation_present = False
+        observed_spans.pop("predicate", None)
     if title_like:
         observed_spans = {}
     slots = [slot for slot in applicable if slot in observed_spans]
@@ -153,29 +209,55 @@ def revalidated_selector_semantics(
     direct_negation = analysis.get("direct_relation_negated")
     direct_anchor = bool(
         relation_bearing
-        and analysis.get("target_relation_present") is True
+        and target_relation_present
         and analysis.get("meta_scope") is not True
         and isinstance(direct_negation, bool)
     )
     raw_state = str(analysis.get("status") or "unbound")
     uncertainty_context = bool(
-        not slots
-        and relation_bearing
-        and analysis.get("target_relation_present") is True
+        not slots and relation_bearing and target_relation_present
     )
-    local_state = (
-        raw_state
-        if uncertainty_context
-        else "explicit_contradiction"
-        if direct_anchor and direct_negation
-        else "affirmative_assertion"
-        if direct_anchor
-        else raw_state
+    local_state = _direct_local_state(
+        raw_state,
+        uncertainty_context=uncertainty_context,
+        direct_anchor=direct_anchor,
+        direct_negation=bool(direct_negation),
     )
-    span_base = selector.get("span_start")
+    return {
+        "slots": slots,
+        "slot_spans": _direct_slot_spans(selector, text, analysis),
+        "relation_bearing": relation_bearing,
+        "uncertainty_context": uncertainty_context,
+        "local_relation_state": local_state,
+        "local_relation_analysis_digest": str(analysis.get("analysis_digest") or ""),
+        "analysis": analysis,
+        "applicable_slots": applicable,
+    }
+
+
+def _direct_local_state(
+    raw_state: str,
+    *,
+    uncertainty_context: bool,
+    direct_anchor: bool,
+    direct_negation: bool,
+) -> str:
+    if uncertainty_context:
+        return raw_state
+    if direct_anchor:
+        return "explicit_contradiction" if direct_negation else "affirmative_assertion"
+    return raw_state
+
+
+def _direct_slot_spans(
+    selector: dict[str, Any],
+    text: str,
+    analysis: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    raw_span_base = selector.get("span_start")
     span_base = (
-        span_base
-        if isinstance(span_base, int) and not isinstance(span_base, bool)
+        raw_span_base
+        if isinstance(raw_span_base, int) and not isinstance(raw_span_base, bool)
         else 0
     )
     selector_id = str(selector.get("selector_id") or "")
@@ -192,19 +274,23 @@ def revalidated_selector_semantics(
             parent_text_digest=canonical_payload_digest(text),
             text_digest=canonical_payload_digest(str(child.get("text") or "")),
         )
-    polarity_signal = {
-        "affirmative_assertion": "support",
-        "explicit_contradiction": "explicit_contradiction",
-    }.get(local_state, "undetermined")
-    return {
-        "slots": slots,
-        "slot_spans": {slot: slot_spans[slot] for slot in slots},
-        "relation_bearing": relation_bearing,
-        "candidate_relation_role": (
-            "uncertainty_context" if uncertainty_context else "polarity_evidence"
-        ),
-        "local_relation_state": local_state,
-        "local_relation_analysis_digest": str(analysis.get("analysis_digest") or ""),
-        "polarity_signal": polarity_signal,
-        "analysis": analysis,
-    }
+    return slot_spans
+
+
+def _apply_verified_alignment(
+    direct: dict[str, Any],
+    selector: dict[str, Any],
+    alignment: dict[str, Any],
+) -> None:
+    aligned = set(dict(alignment.get("slot_refs") or {}))
+    slots = [slot for slot in direct["applicable_slots"] if slot in aligned]
+    direct["slots"] = slots
+    direct["uncertainty_context"] = False
+    direct["local_relation_state"] = str(alignment.get("local_relation_state") or "")
+    if "predicate" in slots:
+        direct["relation_bearing"] = True
+    for slot in slots:
+        direct["slot_spans"].setdefault(
+            slot,
+            attested_selector_slot_span(selector, slot),
+        )

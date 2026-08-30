@@ -127,6 +127,8 @@ def transaction_context(
     attempt_namespace: str,
     canonical_span_universe_digest: str,
     candidate_transaction_id: str,
+    plan_construction_trace: dict[str, Any] | None = None,
+    source_packing_observation: dict[str, Any] | None = None,
 ) -> SemanticPropositionTransactionContext:
     return SemanticPropositionTransactionContext(
         proposal_llm=proposal_llm,
@@ -148,4 +150,6 @@ def transaction_context(
         attempt_namespace=attempt_namespace,
         canonical_span_universe_digest=canonical_span_universe_digest,
         candidate_transaction_id=candidate_transaction_id,
+        plan_construction_trace=plan_construction_trace,
+        source_packing_observation=source_packing_observation,
     )

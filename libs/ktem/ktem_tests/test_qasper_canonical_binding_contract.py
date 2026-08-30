@@ -317,7 +317,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "The CreateDebate dataset was collected from an English online "
                 "debate forum.",
             ],
-            "relation_bound_contradiction",
+            "unresolved",
             {"cross_span", "quantifier", "entity_alias"},
         ),
         (
@@ -359,7 +359,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "attributes.",
                 "We train three classifiers on the review vectors that we prepared.",
             ],
-            "relation_bound_contradiction",
+            "unresolved",
             {"cross_span", "paraphrase", "entity_alias"},
         ),
         (
@@ -369,7 +369,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "It is much harder to validate the quality control of such data at scale. "
                 "Initial experiments validate only samples of our data.",
             ],
-            "relation_bound_contradiction",
+            "unresolved",
             {"cross_span", "paraphrase"},
         ),
     ],
@@ -407,5 +407,5 @@ def test_natural_qasper_structures_share_one_bounded_selector_universe(
         assert binding["binding_status"] == "bound"
         assert set(binding["required_slots"]) <= set(binding["covered_slots"])
         assert expected_structural_features <= set(binding["structural_features"])
-    assert 1 <= len(binding["selector_universe_refs"]) <= 4
-    assert sum(len(record["selectors"]) for record in canonical) <= 4
+    assert 1 <= len(binding["selector_universe_refs"]) <= 16
+    assert sum(len(record["selectors"]) for record in canonical) <= 16

@@ -34,3 +34,18 @@ def test_controlled_negative_safe_abstention_remains_exempt() -> None:
         candidate_audit,
         prediction,
     ) == (False, False)
+
+
+def test_unlabelled_safe_abstention_does_not_hide_auditor_rejection() -> None:
+    prediction = _qasper_debug_prediction("example-5", "controller_auto")
+    verifier = prediction["evidence_metadata"]["semantic_proposition_verifier"]
+    verifier["audit_status"] = "rejected"
+    candidate_audit = verifier["candidate_verification_audit"]
+
+    failed, rejected = audit._semantic_audit_failure_flags(
+        verifier,
+        candidate_audit,
+        prediction,
+    )
+
+    assert failed or rejected

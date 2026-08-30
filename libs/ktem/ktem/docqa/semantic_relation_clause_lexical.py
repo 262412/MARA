@@ -80,6 +80,12 @@ SEMANTIC_SCAFFOLD_TOKENS = {
     "when",
     "whether",
 }
+_REFERENTIAL_CONTEXT_RE = re.compile(
+    r"\bin\s+(?:their|our|its|the|this|that|a|an)\s+"
+    r"(?:[A-Za-z0-9-]+\s+){0,3}"
+    r"(?P<head>model|system|method|approach|framework|paper|study|work)\s*$",
+    re.IGNORECASE,
+)
 
 
 def clause_spans(value: str) -> list[tuple[int, int]]:
@@ -302,6 +308,23 @@ def semantic_content_token_set(value: str) -> set[str]:
         and normalized not in _STOPWORDS
         and normalized not in SEMANTIC_SCAFFOLD_TOKENS
     }
+
+
+def canonical_proposition_object_token_set(
+    proposition: QuestionProposition,
+) -> set[str]:
+    """Return the shared object-token contract for canonical plan authority.
+
+    A trailing possessive ``in their/our <qualified model>`` phrase identifies
+    the referent in which the relation occurs.  Its head noun remains required,
+    while descriptive modifiers are not silently promoted into relation
+    arguments.  Other prepositional complements remain untouched.
+    """
+
+    surface = str(proposition.object_surface or "").strip()
+    if match := _REFERENTIAL_CONTEXT_RE.search(surface):
+        surface = f"{surface[: match.start()]} {match.group('head')}"
+    return semantic_content_token_set(surface)
 
 
 def canonical_semantic_token(value: str) -> str:

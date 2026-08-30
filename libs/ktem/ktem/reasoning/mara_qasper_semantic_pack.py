@@ -19,7 +19,10 @@ from .mara_qasper_candidate_evidence import (
 )
 from .mara_qasper_candidate_evidence_projection import exact_selector_valid
 from .mara_qasper_candidate_plan_metadata import candidate_selector_plan_metadata
-from .mara_qasper_candidate_selector_semantics import revalidated_selector_semantics
+from .mara_qasper_candidate_selector_semantics import (
+    build_local_selector_semantic_alignment,
+    revalidated_selector_semantics,
+)
 from .mara_semantic_proposition_packing import (
     SemanticPropositionEvidencePacking,
     semantic_proposition_pack_digest,
@@ -68,8 +71,32 @@ def _canonical_selector(
     ):
         return None
     selector = deepcopy(raw_selector)
+    selector.pop("semantic_alignment", None)
+    selector.pop("predicate_match_kind", None)
     text = str(selector.get("text") or "")
     semantics = revalidated_selector_semantics(selector, question, text)
+    initial_metadata = candidate_selector_plan_metadata(
+        record,
+        selector,
+        question,
+        semantics,
+    )
+    selector.update(
+        evidence_id=str(record.get("evidence_id") or ""),
+        event_id=initial_metadata["event_id"],
+        predicate_match_kind=initial_metadata["predicate_match_kind"],
+        slot_hints=list(semantics["slots"]),
+        local_relation_state=str(semantics["local_relation_state"]),
+    )
+    alignment = build_local_selector_semantic_alignment(
+        question,
+        selector,
+        semantics,
+    )
+    if alignment is not None:
+        selector["semantic_alignment"] = alignment
+        selector["slot_hints"] = list(alignment["slot_refs"])
+        semantics = revalidated_selector_semantics(selector, question, text)
     allowed_slots = list(semantics["slots"])
     uncertainty_context = semantics["candidate_relation_role"] == (
         "uncertainty_context"
@@ -145,6 +172,7 @@ def freeze_qasper_canonical_semantic_pack(
     )
     packing = SemanticPropositionEvidencePacking(
         records=canonical_records,
+        source_records=deepcopy(source_packing.source_records),
         item_char_limit=source_packing.item_char_limit,
         input_token_budget=source_packing.input_token_budget,
         estimated_input_tokens=source_packing.estimated_input_tokens,
@@ -162,6 +190,10 @@ def freeze_qasper_canonical_semantic_pack(
         slots=canonical_slots,
         proposition_binding=authoritative_binding,
         candidate_transaction_id=candidate_transaction_id,
+    )
+    payload["source_packing_observation"] = _source_packing_observation(
+        source_packing,
+        canonical_semantic_pack_digest=packing.semantic_pack_digest,
     )
     payload["pack_identity_digest"] = canonical_payload_digest(payload)
     bundle.metadata[QASPER_CANONICAL_SEMANTIC_PACK_METADATA_KEY] = payload
@@ -216,6 +248,9 @@ def load_qasper_canonical_semantic_pack(
     if integer_fields is None:
         return None, "canonical_semantic_pack_identity_mismatch"
     item_char_limit = integer_fields.pop("item_char_limit")
+    source_records = _source_records_from_payload(payload)
+    if source_records is None:
+        return None, "canonical_semantic_pack_identity_mismatch"
     recomputed_pack_digest = semantic_proposition_pack_digest(
         build_question_proposition(question),
         slots,
@@ -226,6 +261,7 @@ def load_qasper_canonical_semantic_pack(
         return None, "canonical_semantic_pack_identity_mismatch"
     packing = SemanticPropositionEvidencePacking(
         records=records,
+        source_records=deepcopy(source_records),
         item_char_limit=item_char_limit,
         input_token_budget=integer_fields["input_token_budget"],
         estimated_input_tokens=integer_fields["estimated_input_tokens"],
@@ -355,8 +391,39 @@ def qasper_canonical_evidence_plans(
             "span_refs": span_refs,
             "slot_refs": deepcopy(selected.get("slot_refs") or {}),
             "event_binding_id": str(selected.get("event_binding_id") or ""),
+            "required_object_tokens": list(
+                selected.get("required_object_tokens") or []
+            ),
+            "covered_object_tokens": list(selected.get("covered_object_tokens") or []),
+            "event_subplans": deepcopy(selected.get("event_subplans") or []),
+            "comparison_relation": deepcopy(selected.get("comparison_relation")),
         }
     }
+
+
+def qasper_canonical_plan_construction_trace(
+    bundle: EvidenceBundle,
+) -> dict[str, Any] | None:
+    """Return the immutable planner trace stored with a frozen QASPER pack."""
+
+    raw_pack = bundle.metadata.get(QASPER_CANONICAL_SEMANTIC_PACK_METADATA_KEY)
+    if not isinstance(raw_pack, dict):
+        return None
+    binding = raw_pack.get("proposition_binding")
+    if not isinstance(binding, dict):
+        return None
+    trace = binding.get("plan_construction_trace")
+    return deepcopy(trace) if isinstance(trace, dict) else None
+
+
+def qasper_source_packing_observation(
+    bundle: EvidenceBundle,
+) -> dict[str, Any] | None:
+    raw_pack = bundle.metadata.get(QASPER_CANONICAL_SEMANTIC_PACK_METADATA_KEY)
+    if not isinstance(raw_pack, dict):
+        return None
+    observation = raw_pack.get("source_packing_observation")
+    return deepcopy(observation) if isinstance(observation, dict) else None
 
 
 def _pack_payload(
@@ -390,6 +457,64 @@ def _pack_payload(
         ),
         "immutable_after_candidate_generation": True,
     }
+
+
+def _source_packing_observation(
+    packing: SemanticPropositionEvidencePacking,
+    *,
+    canonical_semantic_pack_digest: str,
+) -> dict[str, Any]:
+    return {
+        "contract_id": "qasper_source_packing_observation.v1",
+        "semantic_pack_digest": canonical_semantic_pack_digest,
+        "source_semantic_pack_digest": packing.semantic_pack_digest,
+        "record_count": len(packing.records),
+        "selector_count": sum(
+            len(record.get("selectors") or []) for record in packing.records
+        ),
+        "estimated_input_tokens": packing.estimated_input_tokens,
+        "input_token_budget": packing.input_token_budget,
+        "item_char_limit": packing.item_char_limit,
+        "dropped_count": packing.dropped_count,
+        "truncated_count": packing.truncated_count,
+        "source_records": deepcopy(packing.source_records),
+        "records": [
+            {
+                "evidence_id": str(record.get("evidence_id") or ""),
+                "label": str(record.get("label") or ""),
+                "text_start": record.get("text_start"),
+                "window_index": record.get("window_index"),
+                "text_digest": canonical_payload_digest(str(record.get("text") or "")),
+                "selector_refs": [
+                    str(selector.get("selector_id") or "")
+                    for selector in record.get("selectors") or []
+                    if isinstance(selector, dict)
+                ],
+            }
+            for record in packing.records
+        ],
+    }
+
+
+def _source_records_from_payload(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]] | None:
+    observation = payload.get("source_packing_observation")
+    if not isinstance(observation, dict) or (
+        observation.get("contract_id") != "qasper_source_packing_observation.v1"
+        or observation.get("semantic_pack_digest")
+        != payload.get("semantic_pack_digest")
+        or not str(observation.get("source_semantic_pack_digest") or "")
+    ):
+        return None
+    records = (
+        observation.get("source_records") if isinstance(observation, dict) else None
+    )
+    if not isinstance(records, list) or not all(
+        isinstance(value, dict) for value in records
+    ):
+        return None
+    return records
 
 
 def _nonnegative_int(value: Any) -> int | None:

@@ -174,6 +174,7 @@ def test_local_plan_selection_projects_the_complete_semantic_proof(
             "predicate_match_kind": "exact",
             "local_relation_state": case["local_relation_state"],
             "proposition_slot_spans": {},
+            "semantic_alignment": {},
         }
     ]
 

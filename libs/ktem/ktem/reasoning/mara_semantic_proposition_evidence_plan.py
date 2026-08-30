@@ -125,4 +125,5 @@ def canonical_premise_metadata(selector: Mapping[str, Any]) -> dict[str, Any]:
         "predicate_match_kind": str(selector.get("predicate_match_kind") or ""),
         "local_relation_state": str(selector.get("local_relation_state") or ""),
         "proposition_slot_spans": dict(selector.get("proposition_slot_spans") or {}),
+        "semantic_alignment": dict(selector.get("semantic_alignment") or {}),
     }

@@ -51,6 +51,15 @@ def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint(
     assert result["schema_parser"]["schema_accepted"] is True
     assert result["schema_parser"]["parser_accepted"] is True
     assert result["schema_parser"]["downstream_status"] == "passed"
+    assert result["plan_construction_trace"]["candidate_count"] >= 1
+    assert result["plan_construction_trace"]["bounded_selector_refs"]
+    assert result["packing_observation"]["contract_id"] == (
+        "qasper_source_packing_observation.v1"
+    )
+    assert result["packing_observation"]["record_count"] >= 1
+    assert result["packing_observation"]["selector_count"] >= 1
+    assert result["packing_observation"]["source_records"]
+    assert result["packing_observation"]["source_records"][0]["stop_stage"]
     assert all(result["checks"].values())
 
 
@@ -128,3 +137,18 @@ def test_natural_probe_keeps_ambiguous_and_unambiguous_denominators_separate() -
         "ambiguous": 1,
         "unambiguous": 1,
     }
+    assert audit["hard_gates"]["ambiguity_denominator_complete"] is True
+
+
+def test_six_sample_probe_requires_the_frozen_four_two_denominator() -> None:
+    prediction = probe_prediction(_row(), code_sha="test-sha")
+    audit = probe.build_audit(
+        [deepcopy(prediction) for _index in range(6)],
+        code_sha="test-sha",
+        input_path=__import__("pathlib").Path(__file__),
+        expected_count=6,
+    )
+
+    assert audit["ambiguity_denominator"] == {"unambiguous": 6}
+    assert audit["hard_gates"]["six_sample_ambiguity_denominator_4_2"] is False
+    assert audit["status"] == "failed"

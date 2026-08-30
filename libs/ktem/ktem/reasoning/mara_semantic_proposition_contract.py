@@ -47,6 +47,8 @@ class SemanticPropositionTransactionContext:
     attempt_namespace: str = "initial"
     canonical_span_universe_digest: str = ""
     candidate_transaction_id: str = ""
+    plan_construction_trace: dict[str, Any] | None = None
+    source_packing_observation: dict[str, Any] | None = None
 
 
 def resolve_proposition_precondition(

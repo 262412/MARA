@@ -8,7 +8,9 @@ from ktem.docqa.semantic_evidence_set_authority import PropositionVerifier
 
 from .mara_qasper_semantic_pack import (
     qasper_canonical_evidence_plans,
+    qasper_canonical_plan_construction_trace,
     qasper_canonical_selector_bindings,
+    qasper_source_packing_observation,
 )
 from .mara_semantic_candidate_policy import candidate_bound_response
 from .mara_semantic_contract_probe import (
@@ -470,6 +472,8 @@ def _run_model_transaction(
             qasper_canonical_selector_bindings(packing.records) or None
         ),
         allowed_proposition_evidence_plans=qasper_canonical_evidence_plans(bundle),
+        plan_construction_trace=qasper_canonical_plan_construction_trace(bundle),
+        source_packing_observation=qasper_source_packing_observation(bundle),
         capture_debug_trace=verifier.debug_recorder.enabled,
         transaction_id=transaction_id,
         attempt_namespace="initial",

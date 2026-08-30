@@ -110,6 +110,7 @@ def candidate_evidence_set_binding(
         selection.plan,
         selection.support,
         selection.contradiction,
+        construction_trace=selection.construction_trace,
     )
     result["binding_digest"] = canonical_payload_digest(result)
     return result

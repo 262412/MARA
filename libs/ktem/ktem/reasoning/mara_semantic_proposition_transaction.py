@@ -86,6 +86,8 @@ def run_semantic_proposition_transaction(
     candidate_transaction_id: str = "",
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
     allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
+    plan_construction_trace: dict[str, Any] | None = None,
+    source_packing_observation: dict[str, Any] | None = None,
     capture_debug_trace: bool = False,
     transaction_id: str = "",
     attempt_namespace: str = "initial",
@@ -122,6 +124,8 @@ def run_semantic_proposition_transaction(
         attempt_namespace=attempt_namespace,
         canonical_span_universe_digest=canonical_span_universe_digest,
         candidate_transaction_id=candidate_transaction_id,
+        plan_construction_trace=plan_construction_trace,
+        source_packing_observation=source_packing_observation,
     )
     candidate = candidate_from_prompt(prompt)
     proposal = _transaction_proposal(

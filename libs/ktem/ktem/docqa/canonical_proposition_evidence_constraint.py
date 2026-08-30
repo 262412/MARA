@@ -9,7 +9,7 @@ from .question_proposition import (
     QuestionProposition,
     applicable_proposition_evidence_slots,
 )
-from .semantic_relation_clause_lexical import semantic_content_token_set
+from .semantic_relation_clause_lexical import canonical_proposition_object_token_set
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,9 +33,7 @@ def semantic_constraint_observation(
             and analysis.get("meta_scope") is not True
         }
     )
-    required_object_tokens = sorted(
-        semantic_content_token_set(proposition.object_surface)
-    )
+    required_object_tokens = sorted(canonical_proposition_object_token_set(proposition))
     covered_object_tokens = sorted(
         {
             str(token)
@@ -114,6 +112,7 @@ def _canonical_plan_selectors(
             "event_core_tokens": list(premise.get("event_core_tokens") or []),
             "predicate_match_kind": str(premise.get("predicate_match_kind") or ""),
             "local_relation_state": str(premise.get("local_relation_state") or ""),
+            "semantic_alignment": dict(premise.get("semantic_alignment") or {}),
         }
         for premise in premises
     )

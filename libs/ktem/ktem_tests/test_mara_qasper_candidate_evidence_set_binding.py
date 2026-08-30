@@ -110,13 +110,16 @@ def test_windowed_record_normalizes_source_relative_exact_offsets() -> None:
 def test_support_and_contradiction_are_separate_set_level_observations() -> None:
     record = {
         "evidence_id": "e1",
-        "text": "The authors compared the two systems. did not compare the two systems",
+        "text": (
+            "The authors compared the two systems. "
+            "The authors did not compare the two systems"
+        ),
         "selectors": [
             _selector("E1:S1", "The authors", 0),
             _selector("E1:S2", "compared", 12),
             _selector("E1:S3", "the two systems", 21),
-            _selector("E1:S4", "did not compare", 38),
-            _selector("E1:S5", "the two systems", 54),
+            _selector("E1:S4", "The authors did not compare", 38),
+            _selector("E1:S5", "the two systems", 66),
         ],
     }
 
@@ -129,7 +132,6 @@ def test_support_and_contradiction_are_separate_set_level_observations() -> None
     assert binding["polarity_signal"] == "undetermined"
     assert binding["support_evidence_refs"] == ["E1:S1", "E1:S2", "E1:S3"]
     assert binding["explicit_contradiction_evidence_refs"] == [
-        "E1:S1",
         "E1:S4",
         "E1:S5",
     ]
