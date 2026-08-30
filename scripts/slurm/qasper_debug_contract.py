@@ -37,6 +37,9 @@ from scripts.slurm.qasper_debug_contract_lanes import (  # noqa: F401
     qasper_debug_contract_metrics,
     qasper_debug_observability_coverage,
 )
+from scripts.slurm.qasper_debug_contract_lineage import (
+    semantic_data_lineage_complete as _semantic_data_lineage_complete,
+)
 from scripts.slurm.qasper_debug_contract_recovery import (  # noqa: F401
     _answerable_false_abstention,
     _changed_digest,
@@ -248,6 +251,11 @@ def _append_cross_stage_violations(
         violations,
         _semantic_debug_complete(verifier),
         f"semantic_verifier_debug_incomplete:{prefix}",
+    )
+    _require(
+        violations,
+        _semantic_data_lineage_complete(verifier),
+        f"semantic_data_lineage_incomplete:{prefix}",
     )
     _require(
         violations,

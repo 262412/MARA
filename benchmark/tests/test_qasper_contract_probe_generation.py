@@ -9,6 +9,8 @@ from typing import Any
 import pytest
 
 from benchmark.tests.qasper_contract_probe_provider_support import (  # noqa: F401
+    _assert_provider_call_and_span_evidence,
+    _assert_real_auditor_failure,
     _audit_entails_proposal,
     _audit_payload,
     _candidate_selector_refs,
@@ -119,11 +121,8 @@ class _Provider:
             proposal_judgment = str(controlled.get("candidate_judgment") or "")
             if proposal_judgment not in {"supported", "contradicted", "unknown"}:
                 raise RuntimeError("controlled verifier proposal candidate mismatch")
-            premises = controlled.get("premises")
-            if not isinstance(premises, list) or not premises:
-                raise RuntimeError("controlled verifier proposal premise missing")
-            if str((premises[0] or {}).get("span_selector") or "") != selector:
-                raise RuntimeError("controlled verifier proposal span mismatch")
+            if not str(controlled.get("canonical_evidence_plan_id") or ""):
+                raise RuntimeError("controlled verifier proposal plan missing")
             source = controlled
         else:
             source = {}
@@ -359,57 +358,13 @@ def _assert_controlled_candidate_identity(rows: list[dict[str, Any]]) -> None:
     ]
 
 
-def _assert_provider_call_and_span_evidence(rows: list[dict[str, Any]]) -> None:
-    for row in rows:
-        assert len(row["contract_probe_live_calls"]) >= 3
-        assert "probe:E1:S1" not in json.dumps(row)
-        verifier = row["evidence_metadata"]["semantic_proposition_verifier"]
-        assert verifier["audit_model_call_count"] > 0
-        events = verifier["debug_trace"]["events"]
-        assert events
-        assert any(
-            (event.get("transaction") or {}).get("audit", {}).get("attempts")
-            for event in events
-        )
-        packed = events[-1]["packed_evidence"]
-        source_text = row["evidence_bundle"]["items"][0]["text"]
-        assert packed[0]["selectors"][0]["text"] == source_text
-        assert packed[0]["selectors"][0]["span_end"] == len(source_text)
-
-
-def _assert_real_auditor_failure(rows: list[dict[str, Any]]) -> None:
-    auditor_fail = next(
-        row for row in rows if row["example_id"] == "contract-probe-auditor_fail"
-    )
-    assert (
-        auditor_fail["evidence_metadata"]["contract_probe_controlled_proposal"][
-            "contract_id"
-        ]
-        == "qasper_controlled_verifier_negative_probe.v1"
-    )
-    fail_event = auditor_fail["evidence_metadata"]["semantic_proposition_verifier"][
-        "debug_trace"
-    ]["events"][-1]
-    parsed_proposal = fail_event["transaction"]["proposal"]["attempts"][-1][
-        "parsed_value"
-    ]
-    assert parsed_proposal["candidate_judgment"] == "supported"
-    audit_attempts = fail_event["transaction"]["audit"]["attempts"]
-    assert audit_attempts
-    verifier = auditor_fail["engine_terminal_evidence_bundle"]["metadata"][
-        "semantic_proposition_verifier"
-    ]
-    assert verifier["audit_model_call_count"] >= 1
-    assert verifier["candidate_verification_audit"]["status"] == "failed"
-    assert auditor_fail["engine_terminal_answer"] == "unanswerable"
-    assert auditor_fail["engine_terminal_commit"]["outcome"] == "safe_abstention"
-
-
 def test_controlled_proposal_passes_exact_candidate_schema_and_parser() -> None:
     from dataclasses import replace
 
     from ktem.reasoning.mara_qasper_semantic_pack import (
+        freeze_qasper_canonical_semantic_pack,
         prepare_qasper_canonical_records,
+        qasper_canonical_required_slots,
     )
     from ktem.reasoning.mara_semantic_contract_probe import (
         controlled_contract_probe_proposal,
@@ -433,6 +388,15 @@ def test_controlled_proposal_passes_exact_candidate_schema_and_parser() -> None:
         packing,
         records=prepare_qasper_canonical_records(_QUESTION, packing.records),
     )
+    packing = freeze_qasper_canonical_semantic_pack(
+        bundle,
+        question=_QUESTION,
+        slots=slots,
+        source_packing=packing,
+        records=packing.records,
+        candidate_transaction_id="controlled-proposal-test",
+    )
+    slots = qasper_canonical_required_slots(bundle)
 
     controlled = controlled_contract_probe_proposal(
         "base prompt",
@@ -449,6 +413,8 @@ def test_controlled_proposal_passes_exact_candidate_schema_and_parser() -> None:
 
     assert "evidence_relation" not in payload
     assert "proof_mode" not in payload
+    assert "premises" not in payload
+    assert payload["canonical_evidence_plan_id"]
     identity = bundle.metadata["contract_probe_controlled_proposal"][
         "payload_identity_gate"
     ]
@@ -464,7 +430,9 @@ def test_controlled_proposal_identity_gate_rejects_schema_mismatch() -> None:
     from dataclasses import replace
 
     from ktem.reasoning.mara_qasper_semantic_pack import (
+        freeze_qasper_canonical_semantic_pack,
         prepare_qasper_canonical_records,
+        qasper_canonical_required_slots,
     )
     from ktem.reasoning.mara_semantic_contract_probe import (
         ControlledContractProbeIdentityError,
@@ -491,6 +459,15 @@ def test_controlled_proposal_identity_gate_rejects_schema_mismatch() -> None:
         packing,
         records=prepare_qasper_canonical_records(_QUESTION, packing.records),
     )
+    packing = freeze_qasper_canonical_semantic_pack(
+        bundle,
+        question=_QUESTION,
+        slots=slots,
+        source_packing=packing,
+        records=packing.records,
+        candidate_transaction_id="controlled-proposal-mismatch-test",
+    )
+    slots = qasper_canonical_required_slots(bundle)
 
     with pytest.raises(
         ControlledContractProbeIdentityError,

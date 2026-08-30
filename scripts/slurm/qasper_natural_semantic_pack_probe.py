@@ -250,21 +250,12 @@ def _schema_parser_probe(
     records: list[dict[str, Any]],
     slots: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    selectors = {
-        str(selector.get("selector_id") or ""): selector
-        for record in records
-        for selector in record.get("selectors") or []
-    }
     allowed_bindings = qasper_canonical_selector_bindings(records)
     allowed_plans = qasper_canonical_evidence_plans(bundle)
     applicable_slots = tuple(
         str(slot) for slot in binding.get("applicable_slots") or []
     )
-    payload, expected_plan_id = _schema_payload(
-        binding,
-        selectors=selectors,
-        slot_ids=[str(slot.get("slot_id") or "") for slot in slots],
-    )
+    payload, expected_plan_id = _schema_payload(binding)
     response_format = semantic_proposition_response_format(
         list(allowed_bindings),
         [str(slot.get("slot_id") or "") for slot in slots],
@@ -289,6 +280,13 @@ def _schema_parser_probe(
         candidate="yes",
         applicable_proposition_slots=applicable_slots,
         allowed_proposition_slot_bindings=allowed_bindings,
+        slot_evidence_refs={
+            str(slot.get("slot_id") or ""): tuple(
+                str(ref) for ref in slot.get("evidence_refs") or ()
+            )
+            for slot in slots
+            if str(slot.get("slot_id") or "")
+        },
         allowed_proposition_evidence_plans=allowed_plans,
     )
     downstream_status = "not_applicable"
@@ -320,33 +318,13 @@ def _schema_parser_probe(
 
 def _schema_payload(
     binding: dict[str, Any],
-    *,
-    selectors: dict[str, dict[str, Any]],
-    slot_ids: list[str],
 ) -> tuple[dict[str, Any], str]:
     state = str(binding.get("binding_state") or "")
     if state not in _BOUND_STATES:
-        reviewed = list(
-            dict.fromkeys(binding.get("selector_universe_refs") or selectors)
-        )[:12]
         return (
             {
                 "candidate_judgment": "unknown",
-                "support_mode": "evidence_set",
-                "jointly_complete": False,
-                "each_premise_required": False,
-                "premises": [],
-                "not_applicable_proposition_slots": list(
-                    binding.get("not_applicable_slots") or []
-                ),
-                "unknown_assessment": {
-                    "reviewed_span_selectors": reviewed,
-                    "unresolved_proposition_slots": "|".join(
-                        binding.get("applicable_slots") or []
-                    ),
-                    "support_gap": "No complete support plan was found.",
-                    "contradiction_gap": "No complete contradiction plan was found.",
-                },
+                "canonical_evidence_plan_id": "",
             },
             "",
         )
@@ -354,30 +332,12 @@ def _schema_payload(
         "support_plan" if state == "relation_bound_support" else "contradiction_plan"
     )
     plan = _mapping(_mapping(binding.get("canonical_evidence_plan")).get(plan_key))
-    refs = [str(ref) for ref in plan.get("span_refs") or []]
-    premises = [
-        {
-            "span_selector": ref,
-            "proposition_fragment": str(selectors[ref].get("text") or ""),
-            "supports_slot_ids": [slot_ids[0]],
-            "binds_proposition_slots": list(
-                selectors[ref].get("allowed_proposition_slots") or []
-            ),
-        }
-        for ref in refs
-    ]
     return (
         {
             "candidate_judgment": (
                 "supported" if state == "relation_bound_support" else "contradicted"
             ),
-            "support_mode": "evidence_set",
-            "jointly_complete": True,
-            "each_premise_required": True,
-            "premises": premises,
-            "not_applicable_proposition_slots": list(
-                binding.get("not_applicable_slots") or []
-            ),
+            "canonical_evidence_plan_id": str(plan.get("plan_id") or ""),
         },
         str(plan.get("plan_id") or ""),
     )

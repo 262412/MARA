@@ -6,8 +6,10 @@ from typing import Any
 
 from ktem.docqa.question_proposition import PROPOSITION_EVIDENCE_SLOTS
 
-from .mara_semantic_proposition_evidence_plan import (
-    normalized_proposition_evidence_plans,
+from .mara_semantic_proposition_plan_selection import (
+    canonical_plan_selection_contract,
+    normalized_proposition_evidence_plan_choices,
+    normalized_proposition_slot_bindings,
 )
 
 
@@ -21,6 +23,13 @@ def semantic_proposition_schema(
     allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     normalized_candidate = str(candidate or "").strip().casefold()
+    if allowed_proposition_evidence_plans is not None:
+        return canonical_plan_selection_contract(
+            normalized_candidate,
+            applicable_proposition_slots=applicable_proposition_slots,
+            allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+            allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
+        )
     include_not_applicable = applicable_proposition_slots is not None
     include_evidence_relation = normalized_candidate not in {"yes", "no"}
     requested_slots = (
@@ -32,11 +41,11 @@ def semantic_proposition_schema(
         slot for slot in PROPOSITION_EVIDENCE_SLOTS if slot in requested_slots
     )
     selectors = tuple(dict.fromkeys(str(value) for value in span_selectors if value))
-    allowed_bindings = _normalized_allowed_bindings(
+    allowed_bindings = normalized_proposition_slot_bindings(
         allowed_proposition_slot_bindings,
         proposition_slots,
     )
-    allowed_plans = _normalized_allowed_plans(
+    allowed_plans = normalized_proposition_evidence_plan_choices(
         allowed_proposition_evidence_plans,
         allowed_bindings,
     )
@@ -510,42 +519,6 @@ def _canonical_slot_sets(proposition_slots: tuple[str, ...]) -> list[str]:
         for count in range(1, len(proposition_slots) + 1)
         for selected in combinations(proposition_slots, count)
     ]
-
-
-def _normalized_allowed_bindings(
-    value: Mapping[str, Collection[str]] | None,
-    proposition_slots: tuple[str, ...],
-) -> dict[str, tuple[str, ...]] | None:
-    if value is None:
-        return None
-    allowed_slots = set(proposition_slots)
-    normalized: dict[str, tuple[str, ...]] = {}
-    for raw_selector, raw_slots in value.items():
-        selector = str(raw_selector or "").strip()
-        selected = tuple(
-            slot
-            for slot in PROPOSITION_EVIDENCE_SLOTS
-            if slot in {str(value) for value in raw_slots} and slot in allowed_slots
-        )
-        if selector and selected:
-            normalized[selector] = selected
-    return normalized
-
-
-def _normalized_allowed_plans(
-    value: Mapping[str, Mapping[str, Any]] | None,
-    allowed_bindings: dict[str, tuple[str, ...]] | None,
-) -> dict[str, dict[str, Any]] | None:
-    normalized = normalized_proposition_evidence_plans(value)
-    if normalized is None:
-        return None
-    if allowed_bindings is None:
-        return {}
-    return {
-        plan_id: plan
-        for plan_id, plan in normalized.items()
-        if set(plan["span_refs"]) <= set(allowed_bindings)
-    }
 
 
 def _candidate_judgment_relations(

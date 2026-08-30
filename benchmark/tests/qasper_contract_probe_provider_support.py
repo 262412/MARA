@@ -34,6 +34,69 @@ def _run_probe(
     )
 
 
+def _assert_provider_call_and_span_evidence(
+    rows: list[dict[str, Any]],
+) -> None:
+    for row in rows:
+        assert len(row["contract_probe_live_calls"]) >= 3
+        assert "probe:E1:S1" not in json.dumps(row)
+        verifier = row["evidence_metadata"]["semantic_proposition_verifier"]
+        assert verifier["audit_model_call_count"] > 0
+        events = verifier["debug_trace"]["events"]
+        assert events
+        assert any(
+            (event.get("transaction") or {}).get("audit", {}).get("attempts")
+            for event in events
+        )
+        packed = events[-1]["packed_evidence"]
+        source_text = row["evidence_bundle"]["items"][0]["text"]
+        assert packed[0]["selectors"][0]["text"] == source_text
+        assert packed[0]["selectors"][0]["span_end"] == len(source_text)
+        lineage = verifier["semantic_data_lineage"]
+        assert lineage["contract_id"] == "semantic_proposition_data_lineage.v1"
+        assert lineage["proposal_contract"]["mode"] == "canonical_plan_selection"
+        assert lineage["local_projection"]["status"] == "passed"
+        assert lineage["proposal_attempts"][0]["raw_response_digest"]
+        assert lineage["audit"]["attempts"][0]["raw_response_digest"]
+
+
+def _assert_real_auditor_failure(rows: list[dict[str, Any]]) -> None:
+    auditor_fail = next(
+        row for row in rows if row["example_id"] == "contract-probe-auditor_fail"
+    )
+    assert (
+        auditor_fail["evidence_metadata"]["contract_probe_controlled_proposal"][
+            "contract_id"
+        ]
+        == "qasper_controlled_verifier_negative_probe.v1"
+    )
+    fail_event = auditor_fail["evidence_metadata"]["semantic_proposition_verifier"][
+        "debug_trace"
+    ]["events"][-1]
+    parsed_proposal = fail_event["transaction"]["proposal"]["attempts"][-1][
+        "parsed_value"
+    ]
+    assert parsed_proposal["candidate_judgment"] == "supported"
+    assert fail_event["transaction"]["audit"]["attempts"]
+    verifier = auditor_fail["engine_terminal_evidence_bundle"]["metadata"][
+        "semantic_proposition_verifier"
+    ]
+    assert verifier["audit_model_call_count"] >= 1
+    assert verifier["candidate_verification_audit"]["status"] == "failed"
+    lineage = verifier["semantic_data_lineage"]
+    assert lineage["status"] == "failed"
+    assert lineage["first_inconsistency"] == {
+        "stage": "auditor_semantics",
+        "reason": "auditor_internal_inconsistency",
+        "attempt": 1,
+        "raw_response_digest": lineage["audit"]["attempts"][0]["raw_response_digest"],
+    }
+    assert verifier.get("proof_repair_count", 0) == 0
+    assert verifier.get("recovery_transitions", []) == []
+    assert auditor_fail["engine_terminal_answer"] == "unanswerable"
+    assert auditor_fail["engine_terminal_commit"]["outcome"] == "safe_abstention"
+
+
 def _normalize_text(value: object) -> str:
     return " ".join(str(value or "").casefold().split())
 
@@ -172,6 +235,36 @@ def _proposal_payload(
     signal: str,
     source: dict[str, Any],
 ) -> dict[str, object]:
+    branch = _schema_branch(schema, proposal_judgment)
+    plan_properties = branch.get("properties")
+    if isinstance(plan_properties, dict) and (
+        "canonical_evidence_plan_id" in plan_properties
+    ):
+        plan_ids = [
+            plan_id
+            for plan_id in _schema_enum(
+                plan_properties.get("canonical_evidence_plan_id")
+            )
+            if plan_id
+        ]
+        selected_plan_id = (
+            ""
+            if proposal_judgment == "unknown"
+            else (plan_ids[0] if len(plan_ids) == 1 else "")
+        )
+        return _schema_shape(
+            {
+                "candidate_judgment": proposal_judgment,
+                "canonical_evidence_plan_id": selected_plan_id,
+            },
+            plan_properties,
+            {
+                str(field)
+                for field in branch.get("required") or []
+                if isinstance(field, str)
+            },
+            "semantic plan selection",
+        )
     (
         properties,
         required_fields,

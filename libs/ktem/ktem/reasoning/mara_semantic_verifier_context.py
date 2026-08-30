@@ -184,6 +184,33 @@ def execution_identity_free_diagnostics(
     return cached
 
 
+def rebind_cached_semantic_diagnostics(
+    diagnostics: dict[str, Any],
+    *,
+    bundle: EvidenceBundle,
+    packing: Any,
+) -> dict[str, Any]:
+    """Attach the current frozen-pack identity to cached diagnostics."""
+
+    rebound = execution_identity_free_diagnostics(diagnostics)
+    lineage = rebound.get("semantic_data_lineage")
+    if not isinstance(lineage, dict):
+        return rebound
+    identities = lineage.get("identities")
+    if not isinstance(identities, dict):
+        identities = {}
+        lineage["identities"] = identities
+    identity = current_semantic_pack_identity(bundle, packing)
+    identities.update(
+        {
+            "semantic_pack_digest": identity["semantic_pack_digest"],
+            "canonical_span_universe_digest": identity["span_universe_digest"],
+            "candidate_transaction_id": identity["candidate_transaction_id"],
+        }
+    )
+    return rebound
+
+
 def rebind_cached_semantic_judgment(
     response: dict[str, Any] | None,
     *,

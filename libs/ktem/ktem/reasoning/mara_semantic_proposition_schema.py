@@ -15,14 +15,15 @@ from .mara_semantic_proposition_evidence_plan import (
 )
 from .mara_semantic_proposition_evidence_plan import canonical_premise_metadata
 from .mara_semantic_proposition_evidence_plan import (
-    projected_evidence_relation as _projected_evidence_relation,
+    premise_bound_slots as _premise_bound_slots,
 )
 from .mara_semantic_proposition_evidence_plan import (
-    selected_evidence_plan_id as _selected_evidence_plan_id,
+    projected_evidence_relation as _projected_evidence_relation,
 )
 from .mara_semantic_proposition_evidence_plan import (
     verdict_for_evidence_relation as _verdict_for_evidence_relation,
 )
+from .mara_semantic_proposition_plan_selection import project_canonical_plan_selection
 from .mara_semantic_proposition_schema_contract import (
     proposition_slot_scope,
     semantic_proposition_schema,
@@ -74,6 +75,7 @@ def parse_semantic_proposition_result(
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
+    slot_evidence_refs: Mapping[str, Collection[str]] | None = None,
     allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     return parse_semantic_proposition_response(
@@ -85,6 +87,7 @@ def parse_semantic_proposition_result(
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots,
         allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+        slot_evidence_refs=slot_evidence_refs,
         allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
     ).value
 
@@ -140,12 +143,50 @@ def parse_semantic_proposition_response(
     candidate: str = "",
     applicable_proposition_slots: Collection[str] | None = None,
     allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None = None,
+    slot_evidence_refs: Mapping[str, Collection[str]] | None = None,
     allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> SemanticPropositionParse:
     try:
         payload = json.loads(response_text)
     except (TypeError, json.JSONDecodeError):
         return SemanticPropositionParse(None, "json_decode_error")
+    if allowed_proposition_evidence_plans is not None:
+        value, reason = project_canonical_plan_selection(
+            payload,
+            packed=packed,
+            slot_ids=slot_ids,
+            model=model,
+            seed=seed,
+            candidate=candidate,
+            applicable_proposition_slots=applicable_proposition_slots,
+            allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+            slot_evidence_refs=slot_evidence_refs,
+            allowed_proposition_evidence_plans=(allowed_proposition_evidence_plans),
+        )
+        return SemanticPropositionParse(value, reason)
+    return _parse_model_proposition_payload(
+        payload,
+        packed=packed,
+        slot_ids=slot_ids,
+        model=model,
+        seed=seed,
+        candidate=candidate,
+        applicable_proposition_slots=applicable_proposition_slots,
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+    )
+
+
+def _parse_model_proposition_payload(
+    payload: Any,
+    *,
+    packed: list[dict[str, Any]],
+    slot_ids: set[str],
+    model: str,
+    seed: int,
+    candidate: str,
+    applicable_proposition_slots: Collection[str] | None,
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
+) -> SemanticPropositionParse:
     applicable_slots, not_applicable_slots, slot_reason = proposition_slot_scope(
         payload,
         applicable_proposition_slots,
@@ -180,13 +221,6 @@ def parse_semantic_proposition_response(
         candidate_judgment,
         verdict,
     )
-    evidence_plan_id, plan_reason = _selected_evidence_plan_id(
-        premises,
-        evidence_relation=evidence_relation,
-        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
-    )
-    if plan_reason:
-        return SemanticPropositionParse(None, plan_reason)
     if verdict in {"yes", "no"} and _premise_bound_slots(premises) != applicable_slots:
         return SemanticPropositionParse(None, "proposition_slot_coverage_incomplete")
     value = _semantic_proposition_value(
@@ -199,19 +233,11 @@ def parse_semantic_proposition_response(
         not_applicable_slots=not_applicable_slots,
         model=model,
         seed=seed,
-        canonical_evidence_plan_id=evidence_plan_id,
-        include_canonical_plan=allowed_proposition_evidence_plans is not None,
+        canonical_evidence_plan_id="",
+        include_canonical_plan=False,
         unknown_assessment=unknown_assessment,
     )
     return SemanticPropositionParse(value)
-
-
-def _premise_bound_slots(premises: list[dict[str, Any]]) -> set[str]:
-    return {
-        slot
-        for premise in premises
-        for slot in premise.get("binds_proposition_slots", [])
-    }
 
 
 def _semantic_proposition_value(

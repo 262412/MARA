@@ -11,6 +11,7 @@ from .mara_semantic_proposition_contract import (
     SemanticPropositionTransactionContext,
     SemanticPropositionTransactionResult,
 )
+from .mara_semantic_proposition_data_lineage import finalize_semantic_data_lineage
 from .mara_semantic_proposition_debug import semantic_transaction_debug
 from .mara_semantic_proposition_stages import ParsedSemanticStage
 
@@ -172,6 +173,11 @@ def transaction_result(
     audit_calls: int = 0,
     debug_trace: dict[str, Any] | None = None,
 ) -> SemanticPropositionTransactionResult:
+    finalize_semantic_data_lineage(
+        diagnostics,
+        status=status,
+        reason=reason,
+    )
     return SemanticPropositionTransactionResult(
         value=value,
         status=status,

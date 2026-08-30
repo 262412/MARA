@@ -20,6 +20,7 @@ from .mara_semantic_entailment_audit import (
     semantic_entailment_audit_prompt,
     semantic_entailment_rejection_reason,
 )
+from .mara_semantic_proposition_data_lineage import record_audit_data_lineage
 from .mara_semantic_proposition_stages import (
     ParsedSemanticStage,
     audit_diagnostics,
@@ -204,6 +205,7 @@ def _record_unknown_audit_diagnostics(
     if audit.call_count > 0:
         diagnostics["auditor_semantic_pack_identity"] = semantic_pack_identity(context)
     diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
+    record_audit_data_lineage(diagnostics, audit)
     diagnostics["audit_contract_id"] = "candidate_verifier_audit.v2"
 
 

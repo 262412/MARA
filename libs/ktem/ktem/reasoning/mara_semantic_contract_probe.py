@@ -50,39 +50,16 @@ def controlled_contract_probe_proposal(
         applicable.append("quantifier")
     allowed_bindings = qasper_canonical_selector_bindings(packing.records)
     allowed_plans = qasper_canonical_evidence_plans(bundle)
-    selector_id = str(selectors[0].get("selector_id") or "")
-    selector_bindings = list(allowed_bindings.get(selector_id, ()))
-    if set(selector_bindings) != set(applicable):
+    plan_ids = list(allowed_plans or {})
+    if len(plan_ids) != 1:
         raise ControlledContractProbeIdentityError(
-            "controlled_payload_selector_not_locally_complete"
+            "controlled_payload_local_plan_not_unique"
         )
     controlled_payload: dict[str, Any] = {
         "candidate_judgment": str(control.get("candidate_judgment") or ""),
-        "support_mode": "evidence_set",
-        "jointly_complete": True,
-        "each_premise_required": True,
-        "premises": [
-            {
-                "span_selector": selector_id,
-                "proposition_fragment": str(selectors[0].get("text") or ""),
-                "supports_slot_ids": [slot["slot_id"] for slot in slots],
-                "binds_proposition_slots": selector_bindings,
-            }
-        ],
-        "not_applicable_proposition_slots": [
-            slot
-            for slot in ("actor", "predicate", "object", "quantifier")
-            if slot not in applicable
-        ],
+        "canonical_evidence_plan_id": plan_ids[0],
     }
     normalized_candidate = str(candidate or "").strip().casefold()
-    if (
-        normalized_candidate == "unanswerable"
-        and controlled_payload["candidate_judgment"] == "contradicted"
-    ):
-        controlled_payload["evidence_relation"] = str(
-            control.get("evidence_relation") or ""
-        )
     control["payload_identity_gate"] = _validate_controlled_payload_identity(
         controlled_payload,
         packing=packing,
@@ -141,6 +118,13 @@ def _validate_controlled_payload_identity(
         candidate=candidate,
         applicable_proposition_slots=applicable_proposition_slots,
         allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+        slot_evidence_refs={
+            str(slot.get("slot_id") or ""): tuple(
+                str(ref) for ref in slot.get("evidence_refs") or ()
+            )
+            for slot in slots
+            if str(slot.get("slot_id") or "")
+        },
         allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
     )
     if parsed.value is None:

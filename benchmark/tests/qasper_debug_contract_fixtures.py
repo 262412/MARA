@@ -4,6 +4,10 @@ import json
 from typing import Any
 
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _prediction
+from benchmark.tests.qasper_debug_lineage_fixtures import (
+    _debug_semantic_chain_fixture,
+    _debug_verifier_state_fields,
+)
 from benchmark.tests.qasper_debug_semantic_pack_fixtures import (
     DEBUG_PACK_QUESTION,
     _debug_audited_premises,
@@ -369,7 +373,6 @@ def _debug_verifier_trace(
         audit_status,
         pack_identity,
     )
-    safe_terminal = relation != "supported"
     return {
         "contract_id": "semantic_proposition_verifier_runtime.v3",
         "status": "parsed",
@@ -388,18 +391,7 @@ def _debug_verifier_trace(
         "typed_conclusion": typed_conclusion,
         "conclusion_audit": conclusion_audit,
         "proposal_contract": "semantic_proposition_verdict.v4",
-        "audit_contract_id": (
-            "candidate_verifier_audit.v2"
-            if relation == "unknown"
-            else "semantic_entailment_audit.v3"
-        ),
-        "audit_status": (
-            "verified"
-            if audit_status == "passed" and not safe_terminal
-            else "candidate_bound"
-            if audit_status == "passed"
-            else "failed"
-        ),
+        **_debug_verifier_state_fields(relation, audit_status),
         "audit_reason": "fixture_audit",
         "evidence_label_map": {"E1": "span:paper:s1"},
         "unknown_assessment": _debug_unknown_assessment(relation),
@@ -408,18 +400,18 @@ def _debug_verifier_trace(
         "candidate_transaction_id": pack_identity["candidate_transaction_id"],
         "canonical_pack_continuity_status": "preserved",
         "auditor_semantic_pack_identity": pack_identity,
-        "required_slot_ids": ["support:boolean_proposition"]
-        if relation == "supported"
-        else [],
-        "verified_support_slot_ids": ["support:boolean_proposition"]
-        if relation == "supported"
-        else [],
         "raw_candidate_digest": _fixture_digest(candidate),
         "typed_candidate_digest": _fixture_digest(candidate),
         "verifier_input_candidate_digest": _fixture_digest(candidate),
         "candidate_raw_identity_preserved": True,
-        "debug_trace": _debug_semantic_trace(
-            candidate, relation, audit_status, typed_conclusion, conclusion_audit
+        **_debug_semantic_chain_fixture(
+            transaction_id,
+            candidate,
+            relation,
+            audit_status,
+            typed_conclusion,
+            conclusion_audit,
+            pack_identity,
         ),
         "trace_group_id": group_id,
         "transaction_id": transaction_id,
@@ -525,71 +517,4 @@ def _debug_unknown_assessment(relation: str) -> dict[str, Any]:
         "unresolved_proposition_slots": ["support:boolean_proposition"],
         "support_gap": "fixture_support_gap",
         "contradiction_gap": "fixture_contradiction_gap",
-    }
-
-
-def _debug_semantic_trace(
-    candidate: str,
-    relation: str,
-    audit_status: str,
-    typed_conclusion: dict[str, Any],
-    conclusion_audit: dict[str, Any],
-) -> dict[str, Any]:
-    return {
-        "contract_id": "semantic_proposition_debug_trace.v3",
-        "event_count": 1,
-        "dropped_event_count": 0,
-        "events": [
-            {
-                "event": "model_transaction",
-                "transaction": {
-                    "proposal": {
-                        "status": "parsed",
-                        "attempts": [
-                            {
-                                "attempt": 1,
-                                "attempt_id": "proposal-attempt",
-                                "raw_response": json.dumps(
-                                    {"verdict": candidate}, separators=(",", ":")
-                                ),
-                                "finish_reason": "stop",
-                                "parse_failure_reason": "",
-                                "provider_failure_reason": "",
-                                "parsed_value": {
-                                    "contract_id": "semantic_proposition_verdict.v4",
-                                    "verdict": candidate,
-                                },
-                            }
-                        ],
-                    },
-                    "audit": {
-                        "status": "parsed",
-                        "attempts": [
-                            {
-                                "attempt": 1,
-                                "attempt_id": "audit-attempt",
-                                "raw_response": '{"status":"verified"}',
-                                "finish_reason": "stop",
-                                "parse_failure_reason": "",
-                                "provider_failure_reason": "",
-                                "parsed_value": {"status": audit_status},
-                            }
-                        ],
-                    },
-                },
-                "outcome": {
-                    "status": "parsed",
-                    "reason": "fixture_audit",
-                    "verdict": candidate,
-                    "audit_status": "verified"
-                    if audit_status == "passed" and relation == "supported"
-                    else "candidate_bound"
-                    if audit_status == "passed"
-                    else "failed",
-                    "audit_reason": "fixture_audit",
-                    "typed_conclusion": typed_conclusion,
-                    "conclusion_audit": conclusion_audit,
-                },
-            }
-        ],
     }

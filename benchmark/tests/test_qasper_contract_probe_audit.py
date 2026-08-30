@@ -67,6 +67,26 @@ def test_provider_contract_probe_audit_fails_before_quality_run(tmp_path) -> Non
     )
 
 
+def test_provider_contract_probe_rejects_lineage_raw_digest_drift(tmp_path) -> None:
+    rows = _probe_rows()
+    verifier = rows[0]["evidence_metadata"]["semantic_proposition_verifier"]
+    verifier["semantic_data_lineage"]["proposal_attempts"][0]["raw_response_digest"] = (
+        "0" * 64
+    )
+    predictions = tmp_path / "contract_probe_predictions.jsonl"
+    output = tmp_path / "contract_probe_audit.json"
+    _write_rows(predictions, rows)
+
+    with pytest.raises(ValueError, match="provider contract probe failed"):
+        validate_contract_probe(predictions, output_path=output)
+
+    audit = json.loads(output.read_text())
+    assert (
+        "semantic_data_lineage_incomplete:example-1:controller_auto"
+        in audit["behavior_violations"]
+    )
+
+
 def test_auditor_parse_failure_does_not_satisfy_live_coverage() -> None:
     rows = probe.run_live_probes(
         "http://provider.invalid/v1",

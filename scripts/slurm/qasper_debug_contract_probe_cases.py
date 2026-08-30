@@ -109,7 +109,7 @@ _NATURAL_QUALITY_PRE_AUDIT_CASES: tuple[ProbeCase, ...] = (
         "not_started",
         expected_negative=True,
         payload_fixture="proposer_over_declares_actor_quantifier",
-        pre_audit_reasons=("premise_proposition_binding_invalid",),
+        pre_audit_reasons=("plan_selection_schema_invalid",),
     ),
     ProbeCase(
         "natural_title_only_relation_object_binding",
@@ -121,13 +121,7 @@ _NATURAL_QUALITY_PRE_AUDIT_CASES: tuple[ProbeCase, ...] = (
         controlled_candidate="yes",
         evidence_element_type="title",
         payload_fixture="title_only_span_binds_relation_object",
-        pre_audit_reasons=(
-            "premise_proposition_binding_invalid",
-            "premise_proposition_binding_not_allowed",
-            "local_semantic_relation_mention_only",
-            "local_semantic_slot_span_unbound",
-            "pre_audit_slot_evidence_mismatch",
-        ),
+        pre_audit_reasons=("plan_selection_schema_invalid",),
     ),
     ProbeCase(
         "natural_slot_expectation_evidence_mismatch",
@@ -138,13 +132,7 @@ _NATURAL_QUALITY_PRE_AUDIT_CASES: tuple[ProbeCase, ...] = (
         expected_negative=True,
         controlled_candidate="yes",
         payload_fixture="proposer_slot_expectations_differ_from_verified_slot_evidence",
-        pre_audit_reasons=(
-            "premise_proposition_binding_invalid",
-            "premise_proposition_binding_not_allowed",
-            "local_semantic_slot_span_unbound",
-            "local_semantic_slot_coverage_incomplete",
-            "pre_audit_slot_evidence_mismatch",
-        ),
+        pre_audit_reasons=("plan_selection_schema_invalid",),
     ),
     ProbeCase(
         "natural_duplicate_unknown_assessment_slots",
@@ -157,7 +145,7 @@ _NATURAL_QUALITY_PRE_AUDIT_CASES: tuple[ProbeCase, ...] = (
         "not_started",
         expected_negative=True,
         payload_fixture="unknown_assessment_duplicate_unresolved_slots",
-        pre_audit_reasons=("unknown_assessment_slot_invalid",),
+        pre_audit_reasons=("plan_selection_schema_invalid",),
     ),
 )
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from jsonschema import ValidationError, validate
+from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.question_proposition import (
     PROPOSITION_EVIDENCE_SLOTS,
     build_question_proposition,
@@ -18,6 +20,10 @@ from ktem.reasoning.mara_qasper_candidate_evidence_sets import candidate_span_se
 from ktem.reasoning.mara_semantic_proposition_schema import (
     parse_semantic_proposition_response,
     semantic_proposition_response_format,
+)
+from ktem.reasoning.mara_semantic_verifier_context import (
+    execution_identity_free_diagnostics,
+    rebind_cached_semantic_diagnostics,
 )
 
 QUESTION = "Did the authors compare the two systems?"
@@ -360,7 +366,19 @@ def test_schema_and_parser_select_the_same_complete_evidence_plan() -> None:
             "plan_id": plan_id,
             "polarity_relation": "proposition_support",
             "span_refs": list(plan["allowed_bindings"]),
+            "slot_refs": {
+                slot: [
+                    selector_id
+                    for selector_id, bound_slots in plan["allowed_bindings"].items()
+                    if slot in bound_slots
+                ]
+                for slot in plan["applicable_slots"]
+            },
         }
+    }
+    selection = {
+        "candidate_judgment": "supported",
+        "canonical_evidence_plan_id": plan_id,
     }
     response_format = semantic_proposition_response_format(
         list(plan["allowed_bindings"]),
@@ -371,12 +389,12 @@ def test_schema_and_parser_select_the_same_complete_evidence_plan() -> None:
         allowed_proposition_evidence_plans=allowed_plans,
     )
     validate(
-        instance=plan["payload"],
+        instance=selection,
         schema=response_format["json_schema"]["schema"],
     )
 
     parsed = parse_semantic_proposition_response(
-        json.dumps(plan["payload"]),
+        json.dumps(selection),
         packed=plan["packed"],
         slot_ids={SLOT_ID},
         model="characterization-model",
@@ -384,12 +402,51 @@ def test_schema_and_parser_select_the_same_complete_evidence_plan() -> None:
         candidate="yes",
         applicable_proposition_slots=plan["applicable_slots"],
         allowed_proposition_slot_bindings=plan["allowed_bindings"],
+        slot_evidence_refs={SLOT_ID: list(plan["allowed_bindings"])},
         allowed_proposition_evidence_plans=allowed_plans,
     )
 
     assert parsed.failure_reason == ""
     assert parsed.value is not None
     assert parsed.value["canonical_evidence_plan_id"] == plan_id
+    assert [premise["span_selector"] for premise in parsed.value["premises"]] == [
+        "E1:S1",
+        "E1:S2",
+    ]
+
+
+def test_cached_plan_lineage_rebinds_to_current_frozen_pack_identity() -> None:
+    diagnostics = execution_identity_free_diagnostics(
+        {
+            "semantic_data_lineage": {
+                "identities": {
+                    "semantic_pack_digest": "old-pack",
+                    "canonical_span_universe_digest": "old-spans",
+                    "candidate_transaction_id": "old-transaction",
+                }
+            }
+        }
+    )
+    bundle = EvidenceBundle(route="doc_text", items=[])
+    bundle.metadata["semantic_candidate_transaction_identity"] = {
+        "canonical_span_universe_digest": "current-spans",
+        "candidate_transaction_id": "current-transaction",
+    }
+
+    rebound = rebind_cached_semantic_diagnostics(
+        diagnostics,
+        bundle=bundle,
+        packing=SimpleNamespace(
+            semantic_pack_digest="current-pack",
+            records=[],
+        ),
+    )
+
+    assert rebound["semantic_data_lineage"]["identities"] == {
+        "semantic_pack_digest": "current-pack",
+        "canonical_span_universe_digest": "current-spans",
+        "candidate_transaction_id": "current-transaction",
+    }
 
 
 def test_downstream_constraint_reuses_canonical_event_predicate() -> None:

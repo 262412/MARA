@@ -4,10 +4,7 @@ from collections.abc import Collection, Mapping
 from dataclasses import replace
 from typing import Any
 
-from ktem.docqa.question_proposition import (
-    question_proposition_completeness_reason,
-    typed_conclusion,
-)
+from ktem.docqa.question_proposition import typed_conclusion
 from ktem.docqa.semantic_entailment_audit import semantic_entailment_audit_attestation
 from ktem.docqa.semantic_premise_proof_validation import (
     semantic_entailment_premise_validation_reason,
@@ -35,10 +32,12 @@ from .mara_semantic_proof_repair import (
 from .mara_semantic_proposition_contract import (
     SemanticPropositionTransactionContext,
     SemanticPropositionTransactionResult,
-    incomplete_proposition_result,
     insufficient_semantic_result,
     rejected_semantic_transaction,
-    resolve_proposition_precondition,
+)
+from .mara_semantic_proposition_data_lineage import (
+    record_audit_data_lineage,
+    record_proposal_data_lineage,
 )
 from .mara_semantic_proposition_stages import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
@@ -53,10 +52,10 @@ from .mara_semantic_proposition_transaction_repair import (
     stop_without_reverify,
 )
 from .mara_semantic_recovery_state import changed_binding_reaudit_transition
+from .mara_semantic_transaction_context import prepare_transaction
 from .mara_semantic_transaction_context import (
     transaction_context as _transaction_context,
 )
-from .mara_semantic_transaction_context import transaction_preflight
 from .mara_semantic_transaction_support import (
     applicable_proposition_slots,
     audit_prompt_failure,
@@ -91,28 +90,19 @@ def run_semantic_proposition_transaction(
     transaction_id: str = "",
     attempt_namespace: str = "initial",
 ) -> SemanticPropositionTransactionResult:
-    relationship, diagnostics, release_failure = transaction_preflight(
+    relationship, diagnostics, resolution, start_failure = prepare_transaction(
         proposal_llm,
         audit_llm,
+        question=question,
         proposal_model=proposal_model,
         audit_model=audit_model,
+        seed=seed,
         release_mode=release_mode,
         semantic_pack_digest=semantic_pack_digest,
     )
-    if release_failure is not None:
-        return release_failure
-    resolution = resolve_proposition_precondition(question, diagnostics)
-    if question_proposition_completeness_reason(resolution.proposition):
-        return incomplete_proposition_result(
-            resolution,
-            diagnostics,
-            proposal_model=proposal_model,
-            seed=seed,
-            question=question,
-            release_mode=release_mode,
-            relationship=relationship,
-            semantic_pack_digest=semantic_pack_digest,
-        )
+    if start_failure is not None:
+        return start_failure
+    assert resolution is not None
     context = _transaction_context(
         proposal_llm=proposal_llm,
         audit_llm=audit_llm,
@@ -146,7 +136,14 @@ def run_semantic_proposition_transaction(
         allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
         allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
     )
-    return _complete_proposal(context, proposal, diagnostics, candidate=candidate)
+    return _complete_proposal(
+        context,
+        proposal,
+        diagnostics,
+        candidate=candidate,
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
+    )
 
 
 def _transaction_proposal(
@@ -182,8 +179,19 @@ def _complete_proposal(
     diagnostics: dict[str, Any],
     *,
     candidate: str,
+    allowed_proposition_slot_bindings: Mapping[str, Collection[str]] | None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None,
 ) -> SemanticPropositionTransactionResult:
     diagnostics.update(proposal_diagnostics(proposal))
+    record_proposal_data_lineage(
+        diagnostics,
+        proposal,
+        context=context,
+        candidate=candidate,
+        applicable_proposition_slots=applicable_proposition_slots(context.proposition),
+        allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
+    )
     debug_trace = transaction_debug(context, proposal, None)
     if proposal.provider_failure_reason:
         return transaction_result(
@@ -236,6 +244,7 @@ def _audit_transaction(
         diagnostics["auditor_semantic_pack_identity"] = semantic_pack_identity(context)
     diagnostics["independent_semantic_constraint"] = local_constraint
     diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
+    record_audit_data_lineage(diagnostics, audit)
     local_consistency = record_local_premise_consistency(
         diagnostics,
         value.get("premises") or [],
@@ -272,6 +281,8 @@ def _audit_transaction(
             reason="polarity_contradiction_detected",
             source="runtime_contract",
         )
+    if str(value.get("canonical_evidence_plan_id") or ""):
+        return result
     repair_reason = str(diagnostics.get("audit_reason") or "")
     if not allow_proof_repair or not requires_proof_repair(
         audit,

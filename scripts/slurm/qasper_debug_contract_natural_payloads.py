@@ -90,9 +90,18 @@ def natural_quality_payload_fixture(
         assessment["unresolved_proposition_slots"] = f"{first}|{first}"
     elif fixture.mutation == "replace_bindings_with_applicable_slots":
         premise = _first_premise(payload)
-        branch = _schema_branch(schema, fixture.proposal_judgment)
-        applicable_slots, _ = _schema_proposition_scope(
-            _mapping(branch.get("properties"))
+        body_properties = _mapping(_mapping(schema.get("schema")).get("properties"))
+        properties = (
+            body_properties
+            if "canonical_evidence_plan_id" in body_properties
+            else _mapping(
+                _schema_branch(schema, fixture.proposal_judgment).get("properties")
+            )
+        )
+        applicable_slots = (
+            ["actor", "predicate", "object"]
+            if "canonical_evidence_plan_id" in properties
+            else _schema_proposition_scope(properties)[0]
         )
         premise["binds_proposition_slots"] = applicable_slots
     elif fixture.mutation != "none":
@@ -123,6 +132,34 @@ def _proposal_payload(
     support_slot_ids: list[str],
 ) -> dict[str, object]:
     del candidate
+    body_properties = _mapping(_mapping(schema.get("schema")).get("properties"))
+    if "canonical_evidence_plan_id" in body_properties:
+        return _expanded_model_payload(
+            proposal_judgment=proposal_judgment,
+            selector=selector,
+            evidence_text=evidence_text,
+            signal=signal,
+            support_slot_ids=support_slot_ids,
+        )
+    return _legacy_proposal_payload(
+        schema,
+        proposal_judgment=proposal_judgment,
+        selector=selector,
+        evidence_text=evidence_text,
+        signal=signal,
+        support_slot_ids=support_slot_ids,
+    )
+
+
+def _legacy_proposal_payload(
+    schema: dict[str, object],
+    *,
+    proposal_judgment: str,
+    selector: str,
+    evidence_text: str,
+    signal: str,
+    support_slot_ids: list[str],
+) -> dict[str, object]:
     branch = _schema_branch(schema, proposal_judgment)
     properties = _mapping(branch.get("properties"))
     required = _string_set(branch.get("required"))
@@ -183,6 +220,43 @@ def _proposal_payload(
         raise RuntimeError(
             f"natural-quality proposal schema fields missing: {sorted(missing)}"
         )
+    return payload
+
+
+def _expanded_model_payload(
+    *,
+    proposal_judgment: str,
+    selector: str,
+    evidence_text: str,
+    signal: str,
+    support_slot_ids: list[str],
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "candidate_judgment": proposal_judgment,
+        "support_mode": "evidence_set",
+        "jointly_complete": proposal_judgment != "unknown",
+        "each_premise_required": proposal_judgment != "unknown",
+        "premises": [],
+        "not_applicable_proposition_slots": ["quantifier"],
+    }
+    if proposal_judgment == "unknown":
+        payload["unknown_assessment"] = {
+            "reviewed_span_selectors": [selector],
+            "unresolved_proposition_slots": "actor|predicate|object",
+            "support_gap": "The evidence does not establish the proposition.",
+            "contradiction_gap": ("The evidence does not explicitly contradict it."),
+        }
+        return payload
+    payload["premises"] = [
+        {
+            "span_selector": selector,
+            "proposition_fragment": evidence_text[:320],
+            "supports_slot_ids": support_slot_ids[:1],
+            "binds_proposition_slots": ["actor", "predicate", "object"],
+        }
+    ]
+    if signal == "explicit_contradiction":
+        payload["evidence_relation"] = "explicit_contradiction"
     return payload
 
 

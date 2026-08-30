@@ -46,6 +46,9 @@ from .mara_semantic_verifier_context import (
 )
 from .mara_semantic_verifier_context import model_name as _model_name
 from .mara_semantic_verifier_context import (
+    rebind_cached_semantic_diagnostics as _rebind_cached_semantic_diagnostics,
+)
+from .mara_semantic_verifier_context import (
     rebind_cached_semantic_judgment as _rebind_cached_semantic_judgment,
 )
 
@@ -192,8 +195,10 @@ class _SemanticPropositionVerifier:
             bundle=bundle,
             packing=packing,
         )
-        diagnostics = _execution_identity_free_diagnostics(
-            self.cache_diagnostics.get(cache_key, {})
+        diagnostics = _rebind_cached_semantic_diagnostics(
+            self.cache_diagnostics.get(cache_key, {}),
+            bundle=bundle,
+            packing=packing,
         )
         auditor_pack_identity = _auditor_semantic_pack_identity(cached)
         if auditor_pack_identity:

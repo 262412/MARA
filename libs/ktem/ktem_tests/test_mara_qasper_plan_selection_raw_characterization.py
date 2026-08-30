@@ -17,9 +17,7 @@ from ktem.reasoning.mara_semantic_proposition_transaction import (
 )
 
 FIXTURE_PATH = (
-    Path(__file__).parent
-    / "fixtures"
-    / "qasper_provider_10384454_raw_responses.json"
+    Path(__file__).parent / "fixtures" / "qasper_provider_10384454_raw_responses.json"
 )
 QUESTION = "Did the authors release the code for the evaluated system?"
 SLOT_ID = "support:boolean_proposition"
@@ -31,8 +29,8 @@ def _fixtures() -> list[dict[str, str]]:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
-def _packed() -> list[dict[str, Any]]:
-    text = "The authors released the code for the evaluated system."
+def _packed(case: dict[str, str]) -> list[dict[str, Any]]:
+    text = case["evidence_text"]
     return [
         {
             "evidence_id": "provider-10384454-evidence",
@@ -47,7 +45,7 @@ def _packed() -> list[dict[str, Any]]:
                     "object_tokens": ["code", "component", "metric"],
                     "event_core_tokens": ["code", "component", "metric"],
                     "predicate_match_kind": "exact",
-                    "local_relation_state": "affirmative_assertion",
+                    "local_relation_state": case["local_relation_state"],
                     "proposition_slot_spans": {},
                 }
             ],
@@ -77,9 +75,9 @@ def test_live_raw_response_stops_at_plan_selection_boundary(
     case: dict[str, str],
 ) -> None:
     raw_response = case["raw_response"]
-    assert hashlib.sha256(raw_response.encode()).hexdigest() == case[
-        "raw_response_sha256"
-    ]
+    assert (
+        hashlib.sha256(raw_response.encode()).hexdigest() == case["raw_response_sha256"]
+    )
     response_format = semantic_proposition_response_format(
         [SELECTOR_ID],
         [SLOT_ID],
@@ -96,7 +94,7 @@ def test_live_raw_response_stops_at_plan_selection_boundary(
 
     parsed = parse_semantic_proposition_response(
         raw_response,
-        packed=_packed(),
+        packed=_packed(case),
         slot_ids={SLOT_ID},
         model="provider-10384454-characterization",
         seed=20260829,
@@ -138,13 +136,14 @@ def test_local_plan_selection_projects_the_complete_semantic_proof(
 
     parsed = parse_semantic_proposition_response(
         json.dumps(payload),
-        packed=_packed(),
+        packed=_packed(case),
         slot_ids={SLOT_ID},
         model="provider-10384454-characterization",
         seed=20260829,
         candidate=case["candidate"],
         applicable_proposition_slots=APPLICABLE_SLOTS,
         allowed_proposition_slot_bindings={SELECTOR_ID: APPLICABLE_SLOTS},
+        slot_evidence_refs={SLOT_ID: [SELECTOR_ID]},
         allowed_proposition_evidence_plans=_allowed_plan(case),
     )
 
@@ -161,21 +160,19 @@ def test_local_plan_selection_projects_the_complete_semantic_proof(
         {
             "evidence_id": "provider-10384454-evidence",
             "span_selector": SELECTOR_ID,
-            "quote": "The authors released the code for the evaluated system.",
+            "quote": case["evidence_text"],
             "span_start": 0,
-            "span_end": 55,
+            "span_end": len(case["evidence_text"]),
             "canonical_start": None,
             "canonical_end": None,
-            "proposition_fragment": (
-                "The authors released the code for the evaluated system."
-            ),
+            "proposition_fragment": case["evidence_text"],
             "supports_slot_ids": [SLOT_ID],
             "binds_proposition_slots": list(APPLICABLE_SLOTS),
             "event_id": "provider-10384454-event",
             "object_tokens": ["code", "component", "metric"],
             "event_core_tokens": ["code", "component", "metric"],
             "predicate_match_kind": "exact",
-            "local_relation_state": "affirmative_assertion",
+            "local_relation_state": case["local_relation_state"],
             "proposition_slot_spans": {},
         }
     ]
@@ -183,16 +180,6 @@ def test_local_plan_selection_projects_the_complete_semantic_proof(
 
 def test_plan_selection_rejects_alias_and_model_projected_fields() -> None:
     case = _fixtures()[0]
-    parser_kwargs = {
-        "packed": _packed(),
-        "slot_ids": {SLOT_ID},
-        "model": "provider-10384454-characterization",
-        "seed": 20260829,
-        "candidate": case["candidate"],
-        "applicable_proposition_slots": APPLICABLE_SLOTS,
-        "allowed_proposition_slot_bindings": {SELECTOR_ID: APPLICABLE_SLOTS},
-        "allowed_proposition_evidence_plans": _allowed_plan(case),
-    }
     payloads = [
         {
             "candidate_judgment": case["candidate_judgment"],
@@ -212,10 +199,94 @@ def test_plan_selection_rejects_alias_and_model_projected_fields() -> None:
     for payload in payloads:
         parsed = parse_semantic_proposition_response(
             json.dumps(payload),
-            **parser_kwargs,
+            packed=_packed(case),
+            slot_ids={SLOT_ID},
+            model="provider-10384454-characterization",
+            seed=20260829,
+            candidate=case["candidate"],
+            applicable_proposition_slots=APPLICABLE_SLOTS,
+            allowed_proposition_slot_bindings={SELECTOR_ID: APPLICABLE_SLOTS},
+            slot_evidence_refs={SLOT_ID: [SELECTOR_ID]},
+            allowed_proposition_evidence_plans=_allowed_plan(case),
         )
         assert parsed.value is None
         assert parsed.failure_reason == "plan_selection_schema_invalid"
+
+
+def test_bound_frozen_plan_cannot_be_bypassed_with_unknown() -> None:
+    case = _fixtures()[0]
+    payload = {
+        "candidate_judgment": "unknown",
+        "canonical_evidence_plan_id": "",
+    }
+    response_format = semantic_proposition_response_format(
+        [SELECTOR_ID],
+        [SLOT_ID],
+        candidate=case["candidate"],
+        applicable_proposition_slots=APPLICABLE_SLOTS,
+        allowed_proposition_slot_bindings={SELECTOR_ID: APPLICABLE_SLOTS},
+        allowed_proposition_evidence_plans=_allowed_plan(case),
+    )
+
+    with pytest.raises(ValidationError):
+        validate(
+            instance=payload,
+            schema=response_format["json_schema"]["schema"],
+        )
+    parsed = parse_semantic_proposition_response(
+        json.dumps(payload),
+        packed=_packed(case),
+        slot_ids={SLOT_ID},
+        model="provider-10384454-characterization",
+        seed=20260829,
+        candidate=case["candidate"],
+        applicable_proposition_slots=APPLICABLE_SLOTS,
+        allowed_proposition_slot_bindings={SELECTOR_ID: APPLICABLE_SLOTS},
+        slot_evidence_refs={SLOT_ID: [SELECTOR_ID]},
+        allowed_proposition_evidence_plans=_allowed_plan(case),
+    )
+
+    assert parsed.value is None
+    assert parsed.failure_reason == "candidate_judgment_plan_mismatch"
+
+
+def test_mismatched_frozen_plan_identity_is_not_a_legal_choice() -> None:
+    case = _fixtures()[0]
+    allowed_plans = _allowed_plan(case)
+    allowed_plans[case["plan_id"]]["plan_id"] = "different-local-plan"
+    payload = {
+        "candidate_judgment": case["candidate_judgment"],
+        "canonical_evidence_plan_id": case["plan_id"],
+    }
+    response_format = semantic_proposition_response_format(
+        [SELECTOR_ID],
+        [SLOT_ID],
+        candidate=case["candidate"],
+        applicable_proposition_slots=APPLICABLE_SLOTS,
+        allowed_proposition_slot_bindings={SELECTOR_ID: APPLICABLE_SLOTS},
+        allowed_proposition_evidence_plans=allowed_plans,
+    )
+
+    with pytest.raises(ValidationError):
+        validate(
+            instance=payload,
+            schema=response_format["json_schema"]["schema"],
+        )
+    parsed = parse_semantic_proposition_response(
+        json.dumps(payload),
+        packed=_packed(case),
+        slot_ids={SLOT_ID},
+        model="provider-10384454-characterization",
+        seed=20260829,
+        candidate=case["candidate"],
+        applicable_proposition_slots=APPLICABLE_SLOTS,
+        allowed_proposition_slot_bindings={SELECTOR_ID: APPLICABLE_SLOTS},
+        slot_evidence_refs={SLOT_ID: [SELECTOR_ID]},
+        allowed_proposition_evidence_plans=allowed_plans,
+    )
+
+    assert parsed.value is None
+    assert parsed.failure_reason == "canonical_evidence_plan_id_invalid"
 
 
 class _RawResponseLLM:
@@ -228,17 +299,25 @@ class _RawResponseLLM:
         return SimpleNamespace(text=self.response)
 
 
-def test_failed_transaction_records_first_data_lineage_inconsistency() -> None:
-    case = _fixtures()[0]
+@pytest.mark.parametrize("case", _fixtures(), ids=lambda case: case["case_id"])
+def test_failed_transaction_records_first_data_lineage_inconsistency(
+    case: dict[str, str],
+) -> None:
     llm = _RawResponseLLM(case["raw_response"])
 
     result = run_semantic_proposition_transaction(
         llm,
         llm,
-        "STRUCTURED CANDIDATE TO VERIFY:\nyes",
+        f"STRUCTURED CANDIDATE TO VERIFY:\n{case['candidate']}",
         question=QUESTION,
-        packed=_packed(),
-        slots=[{"slot_id": SLOT_ID, "description": "Boolean proposition"}],
+        packed=_packed(case),
+        slots=[
+            {
+                "slot_id": SLOT_ID,
+                "description": "Boolean proposition",
+                "evidence_refs": [SELECTOR_ID],  # type: ignore[dict-item]
+            }
+        ],
         proposal_model=llm.model_name,
         audit_model=llm.model_name,
         seed=20260829,
@@ -257,6 +336,12 @@ def test_failed_transaction_records_first_data_lineage_inconsistency() -> None:
     assert lineage["proposal_contract"]["allowed_plan_ids"] == [case["plan_id"]]
     assert len(lineage["proposal_contract"]["response_schema_digest"]) == 64
     assert lineage["local_projection"]["status"] == "not_run"
+    assert lineage["audit"]["status"] == "not_run"
+    assert len(lineage["proposal_attempts"]) == 2
+    assert {
+        attempt["raw_response_digest"] for attempt in lineage["proposal_attempts"]
+    } == {case["raw_response_sha256"]}
+    assert result.audit_call_count == 0
     assert lineage["first_inconsistency"] == {
         "stage": "proposal_parse",
         "reason": "plan_selection_schema_invalid",

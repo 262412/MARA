@@ -13,7 +13,11 @@ def normalized_proposition_evidence_plans(
     for raw_plan_id, raw_plan in value.items():
         if not isinstance(raw_plan, Mapping):
             continue
-        plan_id = str(raw_plan_id or raw_plan.get("plan_id") or "").strip()
+        mapping_plan_id = str(raw_plan_id or "").strip()
+        embedded_plan_id = str(raw_plan.get("plan_id") or "").strip()
+        if mapping_plan_id and embedded_plan_id not in {"", mapping_plan_id}:
+            continue
+        plan_id = mapping_plan_id or embedded_plan_id
         relation = str(raw_plan.get("polarity_relation") or "")
         refs = tuple(
             dict.fromkeys(
@@ -55,6 +59,14 @@ def selected_evidence_plan_id(
     if len(matches) != 1:
         return "", "premise_evidence_plan_not_allowed"
     return matches[0], ""
+
+
+def premise_bound_slots(premises: list[dict[str, Any]]) -> set[str]:
+    return {
+        slot
+        for premise in premises
+        for slot in premise.get("binds_proposition_slots", [])
+    }
 
 
 def candidate_projection(candidate: str, judgment: str) -> tuple[str, str]:

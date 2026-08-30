@@ -88,6 +88,13 @@ def proposal_stage(
             candidate=candidate,
             applicable_proposition_slots=applicable_proposition_slots,
             allowed_proposition_slot_bindings=allowed_proposition_slot_bindings,
+            slot_evidence_refs={
+                str(slot.get("slot_id") or ""): tuple(
+                    str(ref) for ref in slot.get("evidence_refs") or ()
+                )
+                for slot in slots
+                if str(slot.get("slot_id") or "")
+            },
             allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
         )
 

@@ -141,8 +141,8 @@ def test_natural_quality_payload_mutations_are_visible_in_proposal_trace() -> No
     duplicate = by_fixture["unknown_assessment_duplicate_unresolved_slots"]
     over_trace = overdeclared["evidence_metadata"]["semantic_proposition_verifier"]
     duplicate_trace = duplicate["evidence_metadata"]["semantic_proposition_verifier"]
-    assert over_trace["parse_failure_reason"] == "premise_proposition_binding_invalid"
-    assert duplicate_trace["parse_failure_reason"] == "unknown_assessment_slot_invalid"
+    assert over_trace["parse_failure_reason"] == "plan_selection_schema_invalid"
+    assert duplicate_trace["parse_failure_reason"] == "plan_selection_schema_invalid"
 
     def proposal_payload(row: dict[str, Any]) -> dict[str, Any]:
         verifier = row["evidence_metadata"]["semantic_proposition_verifier"]
@@ -172,6 +172,7 @@ def test_natural_quality_payload_mutations_are_visible_in_proposal_trace() -> No
         )
     }
     assert title_reasons & {
+        "plan_selection_schema_invalid",
         "pre_audit_slot_evidence_mismatch",
         "premise_proposition_binding_not_allowed",
         "local_semantic_relation_mention_only",
