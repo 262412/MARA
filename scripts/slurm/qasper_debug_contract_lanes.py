@@ -409,6 +409,7 @@ def _empty_metric_counts() -> dict[str, int]:
         "unambiguous_supported_slot_unverified": 0,
         "unambiguous_answerable_slot_unverified": 0,
         "unambiguous_required_slot_overlap": 0,
+        "missing_annotation_ambiguity": 0,
         "unexpected_unknown_assessment": 0,
         "canonical_pack_mismatches": 0,
     }
@@ -464,6 +465,8 @@ def _add_quality_metric_counts(
             counts["unambiguous_required_slot_overlap"] += int(
                 supported_missing and answerable_missing
             )
+        else:
+            counts["missing_annotation_ambiguity"] += 1
         # The legacy hard-gate field is now explicitly the unambiguous cohort.
         counts["false_abstentions"] += int(
             ambiguity == "unambiguous" and _answerable_false_abstention(prediction)

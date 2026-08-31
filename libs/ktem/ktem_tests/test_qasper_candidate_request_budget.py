@@ -380,10 +380,8 @@ def test_candidate_compaction_keeps_aligned_evidence_record() -> None:
     assert llm.calls
 
 
-def test_candidate_request_drop_updates_each_duplicate_occurrence_atomically() -> None:
-    tokenizer = _DuplicateDropTokenizer(message_tokens=0, text_tokens=0)
-    llm = _BudgetLLM(tokenizer)
-    records = [
+def _duplicate_occurrence_records() -> list[dict[str, Any]]:
+    return [
         {
             "label": "E1",
             "evidence_id": "aligned",
@@ -404,6 +402,42 @@ def test_candidate_request_drop_updates_each_duplicate_occurrence_atomically() -
         },
     ]
 
+
+def _duplicate_occurrence_selector_projection() -> dict[str, Any]:
+    projection = {
+        "contract_id": "qasper_canonical_selector_projection.v1",
+        "complete": True,
+        "input_record_count": 3,
+        "output_record_count": 3,
+        "input_selector_count": 6,
+        "selected_selector_count": 6,
+        "decision_count": 6,
+        "decisions": [
+            {
+                "record_index": record_index,
+                "source_selector_index": selector_index,
+                "evidence_id": evidence_id,
+                "selector_ref": f"E{record_index}:S{selector_index}",
+                "decision": "selected",
+                "reason": "selected_for_canonical_selector_universe",
+            }
+            for record_index, (evidence_id, selector_count) in enumerate(
+                (("aligned", 2), ("duplicate", 1), ("duplicate", 3)),
+                start=1,
+            )
+            for selector_index in range(1, selector_count + 1)
+        ],
+    }
+    projection["decisions_digest"] = candidate_digest(projection["decisions"])
+    return projection
+
+
+def test_candidate_request_drop_updates_each_duplicate_occurrence_atomically() -> None:
+    tokenizer = _DuplicateDropTokenizer(message_tokens=0, text_tokens=0)
+    llm = _BudgetLLM(tokenizer)
+    records = _duplicate_occurrence_records()
+    selector_projection = _duplicate_occurrence_selector_projection()
+
     (
         selected,
         diagnostics,
@@ -414,7 +448,10 @@ def test_candidate_request_drop_updates_each_duplicate_occurrence_atomically() -
         llm,
         "Did the authors compare the systems?",
         records,
-        {"pre_request_dropped_evidence_count": 0},
+        {
+            "pre_request_dropped_evidence_count": 0,
+            "canonical_selector_projection_trace": selector_projection,
+        },
         response_schema=qasper_candidate_response_format(),
         controlled_candidate="",
     )
@@ -435,6 +472,23 @@ def test_candidate_request_drop_updates_each_duplicate_occurrence_atomically() -
         True,
         False,
     ]
+    selector_projection = diagnostics["canonical_selector_projection_trace"]
+    assert selector_projection["output_record_count"] == 2
+    assert selector_projection["selected_selector_count"] == 3
+    assert [
+        (decision["record_index"], decision["decision"], decision["reason"])
+        for decision in selector_projection["decisions"]
+    ] == [
+        (1, "selected", "selected_for_canonical_selector_universe"),
+        (1, "selected", "selected_for_canonical_selector_universe"),
+        (2, "selected", "selected_for_canonical_selector_universe"),
+        (3, "rejected", "candidate_request_token_budget"),
+        (3, "rejected", "candidate_request_token_budget"),
+        (3, "rejected", "candidate_request_token_budget"),
+    ]
+    assert selector_projection["decisions_digest"] == candidate_digest(
+        selector_projection["decisions"]
+    )
     assert len(messages) == 2
     assert projection["final_message_stack"] == [
         {

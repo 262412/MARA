@@ -84,7 +84,7 @@ def _summary_metrics(
             expected_ambiguity_required_slot_unverified,
         ),
         "qasper_quality_answerable_denominator_missing_count": float(
-            counts["answerable_rows"] == 0
+            quality_counts["unambiguous_answerable_rows"] == 0
         ),
         "qasper_contract_probe_observed_state_cell_count": float(
             probe_observation.get("observed_state_cell_count", 0)
@@ -144,6 +144,9 @@ def _quality_cohort_metrics(
         ),
         "qasper_quality_unambiguous_answerable_row_count": float(
             quality_counts["unambiguous_answerable_rows"]
+        ),
+        "qasper_quality_annotation_ambiguity_missing_count": float(
+            quality_counts["missing_annotation_ambiguity"]
         ),
         "qasper_quality_expected_ambiguity_required_slot_unverified_count": float(
             expected_ambiguity_required_slot_unverified

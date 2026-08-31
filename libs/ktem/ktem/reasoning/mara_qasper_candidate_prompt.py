@@ -23,6 +23,9 @@ from .mara_qasper_candidate_evidence import (
     exact_candidate_slot_binding as _exact_candidate_slot_binding,
 )
 from .mara_qasper_candidate_identity import candidate_digest as _trace_digest
+from .mara_qasper_selector_trace_projection import (
+    project_qasper_canonical_selector_trace,
+)
 from .mara_qasper_semantic_pack import prepare_qasper_canonical_records_with_trace
 from .mara_semantic_proposition_packing import (
     SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
@@ -61,6 +64,7 @@ def _candidate_evidence(
         question,
         prioritized_records,
     )
+    canonical_record_count = len(records)
     semantic_filtered_count = len(prioritized_records) - len(records)
     (
         records,
@@ -75,6 +79,12 @@ def _candidate_evidence(
         proposition=packing.question_proposition,
         proposition_resolution=packing.question_proposition_resolution,
         candidate_transaction_id=candidate_transaction_id,
+    )
+    canonical_selector_projection_trace = project_qasper_canonical_selector_trace(
+        canonical_selector_projection_trace,
+        source_record_count=canonical_record_count,
+        selected_indices=list(range(len(records))),
+        rejection_reason="candidate_prompt_char_budget",
     )
     diagnostics = _candidate_evidence_diagnostics(
         bundle,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 HARD_GATES = {
     "identity_collision_count": ("eq", 0.0),
     "runtime_benchmark_roundtrip": ("eq", 1.0),
@@ -85,11 +84,14 @@ QASPER_HARD_GATES = {
     "citation_scope_violation_count": ("eq", 0.0),
     "citation_nonminimal_count": ("eq", 0.0),
     "qasper_canonical_semantic_pack_mismatch_count": ("eq", 0.0),
+    "qasper_quality_answerable_denominator_missing_count": ("eq", 0.0),
+    "qasper_quality_annotation_ambiguity_missing_count": ("eq", 0.0),
 }
 QASPER_DEBUG_HARD_GATES = {
     "terminal_outcome_contract_violation_count": ("eq", 0.0),
     "answerable_false_abstention_count": ("eq", 0.0),
     "qasper_quality_answerable_denominator_missing_count": ("eq", 0.0),
+    "qasper_quality_annotation_ambiguity_missing_count": ("eq", 0.0),
     "qasper_candidate_verifier_auditor_label_set_mismatch_count": ("eq", 0.0),
     "qasper_online_required_candidate_label_missing_count": ("eq", 0.0),
     "qasper_online_required_verifier_judgment_missing_count": ("eq", 0.0),
@@ -111,6 +113,20 @@ QASPER_DEBUG_HARD_GATES = {
     "qasper_unexpected_unknown_assessment_count": ("eq", 0.0),
     "qasper_contract_probe_unexpected_false_abstention_count": ("eq", 0.0),
 }
+_QASPER_AMBIGUITY_COHORT_METRICS = {
+    "answerable_false_abstention_count": (
+        "qasper_all_rows_answerable_false_abstention_count"
+    ),
+    "verifier_required_evidence_coverage": (
+        "qasper_all_rows_verifier_required_evidence_coverage"
+    ),
+    "qasper_required_slot_authority_empty_count": (
+        "qasper_all_rows_required_slot_authority_empty_count"
+    ),
+    "qasper_required_slot_authority_missing_count": (
+        "qasper_all_rows_required_slot_authority_missing_count"
+    ),
+}
 
 
 def contract_smoke_gate_state(
@@ -118,12 +134,7 @@ def contract_smoke_gate_state(
     *,
     suite_kind: str,
     contract_probe_predictions: list[dict[str, Any]],
-) -> tuple[
-    dict[str, Any],
-    dict[str, dict[str, Any]],
-    list[str],
-    list[str],
-]:
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]], list[str], list[str]]:
     from benchmark.contract_invariant_metrics import contract_invariant_summary
     from scripts.slurm.qasper_debug_contract import qasper_debug_contract_metrics
 
@@ -136,10 +147,12 @@ def contract_smoke_gate_state(
             )
         )
     elif suite_kind == "qasper":
-        qasper_metrics = qasper_debug_contract_metrics(predictions)
-        metrics["qasper_canonical_semantic_pack_mismatch_count"] = qasper_metrics[
-            "qasper_canonical_semantic_pack_mismatch_count"
-        ]
+        metrics = _qasper_full_gate_metrics(
+            predictions,
+            metrics,
+            contract_invariant_summary=contract_invariant_summary,
+            qasper_debug_contract_metrics=qasper_debug_contract_metrics,
+        )
     hard_gates = hard_gate_results(metrics, suite_kind=suite_kind)
     failed_gates = [
         metric for metric, result in hard_gates.items() if not result["passed"]
@@ -154,6 +167,34 @@ def contract_smoke_gate_state(
         ]
     )
     return metrics, hard_gates, failed_gates, contract_gate_failures
+
+
+def _qasper_full_gate_metrics(
+    predictions: list[dict[str, Any]],
+    metrics: dict[str, Any],
+    *,
+    contract_invariant_summary: Any,
+    qasper_debug_contract_metrics: Any,
+) -> dict[str, Any]:
+    qasper_metrics = qasper_debug_contract_metrics(predictions)
+    unambiguous = [
+        prediction
+        for prediction in predictions
+        if isinstance(prediction.get("qasper_annotation_diagnostics"), dict)
+        and prediction["qasper_annotation_diagnostics"].get("ambiguous") is False
+    ]
+    cohort_metrics = contract_invariant_summary(unambiguous)
+    for metric, all_rows_metric in _QASPER_AMBIGUITY_COHORT_METRICS.items():
+        metrics[all_rows_metric] = metrics.get(metric)
+        metrics[metric] = cohort_metrics.get(metric)
+    for metric in (
+        "answerable_false_abstention_count",
+        "qasper_quality_answerable_denominator_missing_count",
+        "qasper_quality_annotation_ambiguity_missing_count",
+        "qasper_canonical_semantic_pack_mismatch_count",
+    ):
+        metrics[metric] = qasper_metrics[metric]
+    return metrics
 
 
 def hard_gate_results(

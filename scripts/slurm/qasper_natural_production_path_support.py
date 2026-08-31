@@ -12,6 +12,7 @@ from ktem.docqa.frozen_canonical_proposition_projection import (
     frozen_slot_support_by_ref,
 )
 from ktem.docqa.fusion_stage import FUSION_STAGE_CONTRACT, fusion_stage_snapshot
+from ktem.docqa.query_plan_schema import initial_plan_from_payload
 from ktem.docqa.question_proposition import (
     applicable_proposition_evidence_slots,
     build_question_proposition,
@@ -24,6 +25,10 @@ from ktem.reasoning.mara_qasper_semantic_pack import (
     qasper_source_packing_observation,
 )
 from ktem.reasoning.mara_semantic_candidate_policy import candidate_bound_response
+
+from scripts.slurm.qasper_natural_terminal_lineage import (
+    typed_authority_terminal_observation,
+)
 
 BOUND_STATES = frozenset({"relation_bound_support", "relation_bound_contradiction"})
 PRODUCTION_CONTRACT = "qasper_natural_production_authority_probe.v2"
@@ -216,16 +221,25 @@ def finish_production_path(
     record_production_verifier_trace(
         metadata, context=context, outcome=outcome, response=response
     )
+    request = production_request(source_metadata, context, question)
+    authority_bundle = EvidenceBundle(
+        route=bundle.route,
+        items=deepcopy(bundle.items),
+        metadata=metadata,
+    )
     authority = semantic_evidence_set_claim_authority(
-        production_request(source_metadata, context, question),
+        request,
         question,
         candidate,
-        EvidenceBundle(
-            route=bundle.route,
-            items=deepcopy(bundle.items),
-            metadata=metadata,
-        ),
+        authority_bundle,
         lambda *_args: deepcopy(response) if response is not None else None,
+    )
+    terminal_authority = typed_authority_terminal_observation(
+        request,
+        authority,
+        authority_bundle,
+        question=question,
+        candidate=candidate,
     )
     return production_path_result(
         candidate,
@@ -233,6 +247,7 @@ def finish_production_path(
         projection=projection,
         outcome=outcome,
         authority=authority,
+        terminal_authority=terminal_authority,
         response=response,
         audit_response_source=audit_response_source,
     )
@@ -245,6 +260,12 @@ def production_request(
 ) -> Any:
     source_observation = _mapping(qasper_source_packing_observation(context.bundle))
     source_snapshot = _mapping(source_observation.get("source_input_snapshot"))
+    query_plan = initial_plan_from_payload(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+        payload=deepcopy(source_snapshot.get("query_plan")),
+    )
     return SimpleNamespace(
         origin="benchmark",
         verification_domain="qasper",
@@ -254,7 +275,9 @@ def production_request(
         verification_mode="strict",
         question=question,
         query=question,
-        query_plan=deepcopy(source_snapshot.get("query_plan")),
+        query_plan=query_plan,
+        query_plan_id=str(getattr(query_plan, "plan_id", "") or ""),
+        query_plan_state_version=0,
         trace_context={
             "trace_group_id": str(
                 context.candidate_generation.get("trace_group_id") or ""
@@ -273,6 +296,7 @@ def production_path_result(
     projection: dict[str, Any],
     outcome: Any,
     authority: Any,
+    terminal_authority: dict[str, Any],
     response: Mapping[str, Any] | None,
     audit_response_source: str,
 ) -> dict[str, Any]:
@@ -312,6 +336,7 @@ def production_path_result(
             candidate=candidate,
             items=response.get("premises") if isinstance(response, Mapping) else [],
         ),
+        "typed_authority_terminal_lineage": terminal_authority,
     }
 
 
@@ -395,6 +420,10 @@ def not_applicable_production_path(
             "evidence_ids_are_bound": False,
             "derivation_status": "not_applicable",
         },
+        "typed_authority_terminal_lineage": {
+            **not_applicable,
+            "citation_terminal_lineage_closed": False,
+        },
     }
 
 
@@ -428,6 +457,10 @@ def production_failure_path(
             "selected_derivation_id": "",
             "evidence_ids_are_bound": False,
             "derivation_status": "not_bound",
+        },
+        "typed_authority_terminal_lineage": {
+            **failure,
+            "citation_terminal_lineage_closed": False,
         },
     }
 

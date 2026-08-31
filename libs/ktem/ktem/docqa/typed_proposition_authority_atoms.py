@@ -18,8 +18,14 @@ def exact_boolean_atom(
     evidence_bundle: EvidenceBundle,
     *,
     question: str,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, Any] | None:
-    atoms = exact_boolean_atoms(decision, evidence_bundle, question=question)
+    atoms = exact_boolean_atoms(
+        decision,
+        evidence_bundle,
+        question=question,
+        canonical_plan_projection=canonical_plan_projection,
+    )
     return atoms[0] if atoms else None
 
 
@@ -28,6 +34,7 @@ def exact_boolean_atoms(
     evidence_bundle: EvidenceBundle,
     *,
     question: str,
+    canonical_plan_projection: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Return every independently grounded exact Boolean authority atom."""
 
@@ -96,6 +103,7 @@ def exact_boolean_atoms(
             decision,
             atoms,
             question=question,
+            canonical_plan_projection=canonical_plan_projection,
         )
         if len(derivations) != 1:
             return []
@@ -107,6 +115,7 @@ def bound_boolean_derivations(
     atoms: list[dict[str, Any]],
     *,
     question: str,
+    canonical_plan_projection: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Return the selected derivation only after independently binding every leaf."""
 
@@ -139,6 +148,7 @@ def bound_boolean_derivations(
         atoms,
         question=question,
         canonical_polarity=str(decision.canonical_answer_polarity or ""),
+        canonical_plan_projection=canonical_plan_projection,
     )
     return [deepcopy(selected)] if status == "bound" else []
 

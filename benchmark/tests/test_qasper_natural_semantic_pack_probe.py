@@ -60,6 +60,21 @@ def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint(
     assert result["checks"]["production_candidate_path_replayed"] is True
     assert result["checks"]["candidate_request_input_replayed"] is True
     assert result["checks"]["online_local_causal_prefix_matched"] is True
+    terminal_lineage = result["production_path"]["typed_authority_terminal_lineage"]
+    assert terminal_lineage["typed_authority_state"] == "verified_support"
+    assert terminal_lineage["verified_citations"]
+    assert (
+        terminal_lineage["verified_citations"]
+        == terminal_lineage["verified_evidence_ids"]
+    )
+    assert (
+        terminal_lineage["verified_citations"]
+        == terminal_lineage["terminal_authoritative_evidence_ids"]
+    )
+    assert (
+        terminal_lineage["verified_citations"] == terminal_lineage["terminal_citations"]
+    )
+    assert terminal_lineage["citation_terminal_lineage_closed"] is True
     causal_replay = result["causal_transaction_replay"]
     assert causal_replay["status"] == "matched"
     assert causal_replay["through_stage_index"] == 12

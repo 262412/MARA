@@ -13,6 +13,9 @@ from .mara_qasper_candidate_budget import (
 from .mara_qasper_candidate_evidence import candidate_evidence_set_binding
 from .mara_qasper_candidate_identity import candidate_digest
 from .mara_qasper_candidate_prompt import _bound_candidate_slots, _candidate_prompt
+from .mara_qasper_selector_trace_projection import (
+    project_qasper_canonical_selector_trace,
+)
 
 _CandidateRequestFit = tuple[
     list[dict[str, Any]],
@@ -261,6 +264,16 @@ def _record_candidate_request_projection(
         "final_message_stack": final_message_stack,
         "final_message_stack_digest": _digest(final_message_stack),
     }
+    selector_projection = diagnostics.get("canonical_selector_projection_trace")
+    if isinstance(selector_projection, dict):
+        diagnostics[
+            "canonical_selector_projection_trace"
+        ] = project_qasper_canonical_selector_trace(
+            selector_projection,
+            source_record_count=len(initial),
+            selected_indices=selected_indices,
+            rejection_reason="candidate_request_token_budget",
+        )
 
 
 def _serialized_messages(messages: list[Any]) -> list[dict[str, Any]]:

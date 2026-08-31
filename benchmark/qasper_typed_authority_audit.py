@@ -10,6 +10,10 @@ from ktem.docqa.boolean_authority_schema import (
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.evidence_schema import EvidenceBundle
+from ktem.docqa.semantic_evidence_set_plan_projection import (
+    semantic_authority_plan_projection_from_decision,
+)
 from ktem.docqa.typed_proposition_authority_schema import (
     TYPED_PROPOSITION_AUTHORITY_CONTRACT,
 )
@@ -39,6 +43,7 @@ def typed_authority_audit(
         decision,
         authority,
         atoms,
+        bundle=bundle,
         plan=plan,
     )
     complete, reason = _projection_complete(
@@ -300,24 +305,13 @@ def _derivation_diagnostics(
     authority: dict[str, Any],
     atoms: list[dict[str, Any]],
     *,
+    bundle: dict[str, Any],
     plan: dict[str, Any] | None,
 ) -> dict[str, Any]:
     derivations = _records(authority.get("authority_derivations"))
     selected_id = str(authority.get("selected_derivation_id") or "")
     if not derivations and not selected_id:
-        state = str(authority.get("state") or "")
-        return {
-            "status": "not_applicable",
-            "authority_kind": (
-                "none"
-                if state == "missing"
-                else "conflict" if state == "verified_conflict" else "single_span"
-            ),
-            "count": 0,
-            "selected_derivation_id": "",
-            "premise_refs": [],
-            "premise_evidence_ids": [],
-        }
+        return _not_applicable_derivation(authority)
     selected = [
         value
         for value in derivations
@@ -354,12 +348,25 @@ def _derivation_diagnostics(
             derivations,
             authority_kind=authority_kind,
         )
-    canonical_polarity = str(decision.get("canonical_answer_polarity") or "")
+    canonical_plan_projection = None
+    if authority_kind == "semantic_evidence_set":
+        canonical_plan_projection, projection_reason = _semantic_plan_projection(
+            decision,
+            authority,
+            bundle,
+        )
+        if projection_reason or canonical_plan_projection is None:
+            return _invalid_derivation(
+                projection_reason or "canonical_plan_projection_plan_missing",
+                derivations,
+                authority_kind=authority_kind,
+            )
     status = boolean_derivation_contract_status(
         selected[0],
         atoms,
         question=str(authority.get("question") or ""),
-        canonical_polarity=canonical_polarity,
+        canonical_polarity=str(decision.get("canonical_answer_polarity") or ""),
+        canonical_plan_projection=canonical_plan_projection,
     )
     if status == "bound" and plan is not None:
         status = _query_plan_derivation_status(plan, selected[0])
@@ -373,6 +380,42 @@ def _derivation_diagnostics(
         "premise_refs": premise_refs,
         "premise_evidence_ids": premise_ids,
     }
+
+
+def _not_applicable_derivation(authority: dict[str, Any]) -> dict[str, Any]:
+    state = str(authority.get("state") or "")
+    kind = (
+        "none"
+        if state == "missing"
+        else "conflict"
+        if state == "verified_conflict"
+        else "single_span"
+    )
+    return {
+        "status": "not_applicable",
+        "authority_kind": kind,
+        "count": 0,
+        "selected_derivation_id": "",
+        "premise_refs": [],
+        "premise_evidence_ids": [],
+    }
+
+
+def _semantic_plan_projection(
+    decision: dict[str, Any],
+    authority: dict[str, Any],
+    bundle: dict[str, Any],
+) -> tuple[Any | None, str]:
+    metadata = bundle.get("metadata")
+    return semantic_authority_plan_projection_from_decision(
+        str(authority.get("question") or ""),
+        EvidenceBundle(
+            route=str(bundle.get("route") or ""),
+            items=_records(bundle.get("items")),
+            metadata=dict(metadata) if isinstance(metadata, dict) else {},
+        ),
+        decision,
+    )
 
 
 def _query_plan_derivation_status(

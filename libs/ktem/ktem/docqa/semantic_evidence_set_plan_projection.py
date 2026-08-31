@@ -58,6 +58,62 @@ def semantic_authority_plan_projection(
     )
 
 
+def semantic_authority_plan_projection_from_decision(
+    question: str,
+    bundle: EvidenceBundle,
+    decision: Any,
+) -> tuple[FrozenCanonicalPropositionEvidencePlan | None, str]:
+    """Resolve the selected frozen plan from one semantic verifier decision."""
+
+    selected_id = str(_decision_value(decision, "selected_derivation_id", "") or "")
+    results = _decision_value(decision, "claim_results", ()) or ()
+    semantic_result = next(
+        (
+            value
+            for value in results
+            if isinstance(value, Mapping)
+            and str(value.get("authority_status") or "") == "semantic_evidence_set"
+        ),
+        None,
+    )
+    if semantic_result is None:
+        return None, ""
+    derivations = [
+        value
+        for value in semantic_result.get("authority_derivations") or ()
+        if isinstance(value, Mapping)
+        and str(value.get("derivation_id") or "") == selected_id
+    ]
+    if len(derivations) != 1:
+        return None, "canonical_plan_projection_plan_missing"
+    attestation = derivations[0].get("verifier_attestation")
+    if not isinstance(attestation, Mapping):
+        return None, "canonical_plan_projection_plan_missing"
+    response = {
+        "verdict": str(
+            attestation.get("verdict")
+            or _decision_value(decision, "canonical_answer_polarity", "")
+            or ""
+        ),
+        "canonical_evidence_plan_id": str(
+            attestation.get("canonical_evidence_plan_id") or ""
+        ),
+        "canonical_plan_digest": str(attestation.get("canonical_plan_digest") or ""),
+    }
+    return semantic_authority_plan_projection(
+        question,
+        bundle,
+        response,
+        required=True,
+    )
+
+
+def _decision_value(decision: Any, key: str, default: Any) -> Any:
+    if isinstance(decision, Mapping):
+        return decision.get(key, default)
+    return getattr(decision, key, default)
+
+
 def _selected_plan(
     raw_pack: Mapping[str, Any],
     plan_id: str,

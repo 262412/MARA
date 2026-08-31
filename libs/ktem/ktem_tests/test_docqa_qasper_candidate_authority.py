@@ -25,7 +25,10 @@ from ktem.docqa.verification import verify_decision
 from ktem.reasoning.mara_candidate_unknown_audit import (
     candidate_unknown_audit_attestation,
 )
-from ktem_tests.semantic_entailment_test_helpers import audited_verdict
+
+from benchmark.tests.qasper_semantic_test_fixtures import (
+    semantic_verdict as frozen_semantic_verdict,
+)
 
 QUESTION = "Did the authors compare cross-lingual and single-language evaluation?"
 
@@ -52,16 +55,22 @@ def _request() -> DocQARequest:
 def _items() -> list[dict[str, Any]]:
     return [
         {
-            "evidence_id": "cross-lingual",
+            "evidence_id": "comparison",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "We compared cross-lingual evaluation.",
+            "text": (
+                "We compared cross-lingual and single-language evaluation "
+                "in the same experiment."
+            ),
         },
         {
-            "evidence_id": "single-language",
+            "evidence_id": "context",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "The same comparison included single-language evaluation.",
+            "text": (
+                "The same experiment included single-language evaluation "
+                "for comparison."
+            ),
         },
     ]
 
@@ -72,47 +81,7 @@ def _yes_response(
     candidate: str,
     bundle: EvidenceBundle,
 ) -> dict[str, Any]:
-    slot_ids = [
-        slot.slot_id
-        for slot in request.query_plan.evidence_slots
-        if slot.required_for_verification
-    ]
-    value = audited_verdict(
-        {
-            "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
-            "verdict": "yes",
-            "support_mode": "evidence_set",
-            "proof_mode": "composite_conjunction",
-            "jointly_complete": True,
-            "each_premise_required": True,
-            "premises": [
-                {
-                    "evidence_id": identity_of(item).key,
-                    "quote": item["text"],
-                    "proposition_fragment": fragment,
-                    "supports_slot_ids": [
-                        slot_id
-                        for slot_id in slot_ids
-                        if slot_id == "support:proposition" or slot_id.endswith(side)
-                    ],
-                }
-                for item, fragment, side in zip(
-                    bundle.items,
-                    (
-                        "We compared cross-lingual evaluation.",
-                        "The same comparison included single-language evaluation.",
-                    ),
-                    ("left_subject", "right_subject"),
-                )
-            ],
-            "verifier": {
-                "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
-                "model": "candidate-verifier-test",
-                "seed": 7,
-            },
-        },
-        question,
-    )
+    value = frozen_semantic_verdict(request, question, candidate, bundle)
     value.update(
         candidate_verification_contract="candidate_proposition_verification.v2",
         verifier_input_candidate=candidate,
@@ -121,10 +90,11 @@ def _yes_response(
         ),
         replacement_candidate_allowed=False,
     )
-    bundle.metadata["semantic_proposition_verifier"] = {
-        "candidate_label": candidate,
-        "candidate_verification_status": value["candidate_verification_status"],
-    }
+    value["verifier"]["release_mode"] = False
+    bundle.metadata["semantic_proposition_verifier"].update(
+        candidate_label=candidate,
+        candidate_verification_status=value["candidate_verification_status"],
+    )
     return value
 
 

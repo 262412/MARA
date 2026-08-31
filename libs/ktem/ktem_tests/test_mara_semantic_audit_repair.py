@@ -192,6 +192,9 @@ def test_literal_premise_false_negative_stops_without_a_second_answer() -> None:
     result = verifier(_request(), QUESTION, "unanswerable", bundle)
 
     assert result is not None and result["verdict"] == "insufficient_evidence"
+    assert result["evidence_relation"] == "undetermined"
+    assert result["proof_mode"] == "none"
+    assert result["premises"] == []
     assert result["candidate_verification_audit"]["status"] == "failed"
     trace = bundle.metadata["semantic_proposition_verifier"]
     assert trace["auditor_internal_inconsistency_count"] == 1

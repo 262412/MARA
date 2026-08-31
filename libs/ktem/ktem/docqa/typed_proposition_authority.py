@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
@@ -16,6 +15,9 @@ from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_schema import EvidenceBundle
 from .qasper_answer_relation import resolve_qasper_answer_relation
 from .query_plan_schema import QueryPlan
+from .semantic_evidence_set_plan_projection import (
+    semantic_authority_plan_projection_from_decision,
+)
 from .typed_proposition_authority_atoms import (
     bound_boolean_derivations as _bound_boolean_derivations,
 )
@@ -28,9 +30,7 @@ from .typed_proposition_authority_atoms import (
 from .typed_proposition_authority_atoms import (
     free_text_claim_result as _free_text_claim_result,
 )
-from .typed_proposition_authority_atoms import (
-    unknown_claim_result as _unknown_claim_result,
-)
+from .typed_proposition_authority_failure import coherent_authority_failure
 from .typed_proposition_authority_missing import (
     with_missing_boolean_authority,
     with_qasper_missing_authority,
@@ -77,6 +77,16 @@ def resolve_typed_proposition_authority_transaction(
     required_slots = _required_support_slots(request)
     required_slot_ids = [slot.slot_id for slot in required_slots]
     if answer_type == "boolean":
+        if decision.status == "verified_conflict":
+            return _resolve_conflict_transaction(
+                request,
+                decision,
+                evidence_bundle,
+                question=question,
+                answer=answer,
+                required_slots=required_slots,
+                required_slot_ids=required_slot_ids,
+            )
         return _resolve_boolean_transaction(
             request,
             decision,
@@ -100,52 +110,6 @@ def resolve_typed_proposition_authority_transaction(
 resolve_qasper_authority_transaction = resolve_typed_proposition_authority_transaction
 
 
-def coherent_authority_failure(
-    decision: VerifyDecision,
-    reason: str,
-    *,
-    typed_authority: dict[str, Any] | None = None,
-) -> VerifyDecision:
-    """Downgrade every semantic projection together when authority fails."""
-
-    claim_results = [_unknown_claim_result(result) for result in decision.claim_results]
-    claims = list(decision.claims)
-    return replace(
-        decision,
-        status="unknown",
-        reason=f"Typed proposition authority was not established: {reason}.",
-        action="abstain",
-        unsupported_claims=[],
-        unknown_claims=claims,
-        verified_citations=[],
-        claim_results=claim_results,
-        input_answer_polarity="",
-        canonical_answer_polarity="",
-        semantic_correction_applied=False,
-        boolean_authority_status="missing",
-        authoritative_evidence_id="",
-        authoritative_evidence_ref="",
-        authoritative_span_id="",
-        authoritative_quote="",
-        authoritative_span_start=None,
-        authoritative_span_end=None,
-        authoritative_canonical_start=None,
-        authoritative_canonical_end=None,
-        actor="",
-        section_scope="",
-        relation="",
-        object="",
-        predicate_arguments=(),
-        qualifier="",
-        quantifier="",
-        verified_support_slot_ids=[],
-        authority_derivations=(),
-        selected_derivation_id="",
-        authoritative_conflict={},
-        typed_authority=deepcopy(typed_authority or {}),
-    )
-
-
 def _resolve_boolean_transaction(
     request: Any,
     decision: VerifyDecision,
@@ -156,21 +120,33 @@ def _resolve_boolean_transaction(
     required_slots: list[Any],
     required_slot_ids: list[str],
 ) -> VerifyDecision:
-    if decision.status == "verified_conflict":
-        return _resolve_conflict_transaction(
-            request,
+    (
+        canonical_plan_projection,
+        projection_reason,
+    ) = semantic_authority_plan_projection_from_decision(
+        question,
+        evidence_bundle,
+        decision,
+    )
+    if projection_reason:
+        return _boolean_failure(
             decision,
-            evidence_bundle,
-            question=question,
-            answer=answer,
-            required_slots=required_slots,
-            required_slot_ids=required_slot_ids,
+            question,
+            answer,
+            required_slot_ids,
+            projection_reason,
         )
-    atoms = _exact_boolean_atoms(decision, evidence_bundle, question=question)
+    atoms = _exact_boolean_atoms(
+        decision,
+        evidence_bundle,
+        question=question,
+        canonical_plan_projection=canonical_plan_projection,
+    )
     derivations = _bound_boolean_derivations(
         decision,
         atoms,
         question=question,
+        canonical_plan_projection=canonical_plan_projection,
     )
     composite_expected = _has_composite_boolean_authority(decision)
     if decision.status != "supported" or not atoms or not required_slots:
@@ -179,40 +155,20 @@ def _resolve_boolean_transaction(
             if not required_slots
             else "exact_boolean_authority_missing"
         )
-        authority = _missing_authority(
-            "boolean", question, answer, required_slot_ids, reason
-        )
-        return coherent_authority_failure(
-            decision,
-            reason,
-            typed_authority=authority,
-        )
+        return _boolean_failure(decision, question, answer, required_slot_ids, reason)
     if composite_expected and not derivations:
         reason = "boolean_authority_derivation_incomplete"
-        authority = _missing_authority(
-            "boolean", question, answer, required_slot_ids, reason
-        )
-        return coherent_authority_failure(
-            decision,
-            reason,
-            typed_authority=authority,
-        )
+        return _boolean_failure(decision, question, answer, required_slot_ids, reason)
     bindings, slot_ref_bindings, selected_atoms = _boolean_slot_bindings(
         request,
         required_slots,
         atoms,
         derivations,
+        canonical_plan_projection=canonical_plan_projection,
     )
     if bindings is None or slot_ref_bindings is None or selected_atoms is None:
         reason = "required_support_slot_binding_incomplete"
-        authority = _missing_authority(
-            "boolean", question, answer, required_slot_ids, reason
-        )
-        return coherent_authority_failure(
-            decision,
-            reason,
-            typed_authority=authority,
-        )
+        return _boolean_failure(decision, question, answer, required_slot_ids, reason)
     return _commit_boolean_transaction(
         request,
         decision,
@@ -445,7 +401,7 @@ def _resolve_conflict_transaction(
             for atom in atoms
         )
     ):
-        return _conflict_failure(
+        return _boolean_failure(
             decision,
             question,
             answer,
@@ -454,7 +410,7 @@ def _resolve_conflict_transaction(
         )
     bindings = _conflict_slot_bindings(required_slots, atoms)
     if set(bindings) != set(required_slot_ids):
-        return _conflict_failure(
+        return _boolean_failure(
             decision,
             question,
             answer,
@@ -528,7 +484,7 @@ def _commit_conflict_transaction(
     )
 
 
-def _conflict_failure(
+def _boolean_failure(
     decision: VerifyDecision,
     question: str,
     answer: str,

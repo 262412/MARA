@@ -17,7 +17,6 @@ from .mara_semantic_proposition_stages import (
     invalid_response_reason,
 )
 from .mara_semantic_transaction_support import (
-    bind_semantic_runtime_fields,
     pre_audit_transaction_failure,
     semantic_pack_identity,
     transaction_result,
@@ -82,6 +81,7 @@ def audit_failure_result(
     rejection_reason = (
         "auditor_internal_inconsistency"
         if local_consistency.get("status") == "auditor_internal_inconsistency"
+        and diagnostics.get("auditor_override_blocked") is not True
         else semantic_entailment_rejection_reason(audit.value)
     )
     if not rejection_reason and local_constraint.get("status") != "passed":
@@ -142,7 +142,6 @@ def audit_rejection_result(
         context.seed,
         context.question,
     )
-    bind_semantic_runtime_fields(value, context)
     value["rejected_transaction"] = dict(
         (diagnostics.get("rejected_transactions") or [{}])[-1]
     )

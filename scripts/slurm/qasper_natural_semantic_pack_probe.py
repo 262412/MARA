@@ -277,6 +277,9 @@ def _production_structural_checks(
     exempt = bool(ambiguity.get("ambiguous"))
     preflight = _mapping(production_path.get("audit_preflight"))
     authority = _mapping(production_path.get("boolean_authority"))
+    terminal_authority = _mapping(
+        production_path.get("typed_authority_terminal_lineage")
+    )
     transaction = _mapping(production_path.get("semantic_transaction"))
     projection = _mapping(production_path.get("frozen_plan_projection"))
     return {
@@ -289,6 +292,13 @@ def _production_structural_checks(
             authority.get("called") is True
             and authority.get("derivation_status") == "bound"
         ),
+        "production_typed_authority_derived": exempt
+        or (
+            terminal_authority.get("called") is True
+            and terminal_authority.get("typed_authority_state") == "verified_support"
+        ),
+        "production_terminal_citation_lineage_closed": exempt
+        or terminal_authority.get("citation_terminal_lineage_closed") is True,
         "production_semantic_transaction_completed": exempt
         or transaction.get("status") == "parsed",
         "frozen_plan_projection_valid": exempt or projection.get("status") == "passed",

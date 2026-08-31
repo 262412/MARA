@@ -18,11 +18,19 @@ from ktem.docqa.semantic_relation_clause_validation import (
 def audited_verdict(
     response: dict[str, Any],
     question: str,
+    *,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, Any]:
     """Attach a valid independent-audit attestation to a semantic test verdict."""
 
     proof_mode = (
-        "atomic_semantic" if len(response["premises"]) == 1 else "composite_conjunction"
+        canonical_plan_projection.proof_mode
+        if canonical_plan_projection is not None
+        else (
+            "atomic_semantic"
+            if len(response["premises"]) == 1
+            else "composite_conjunction"
+        )
     )
     response["proof_mode"] = proof_mode
     proposition = build_question_proposition(question)
@@ -37,22 +45,21 @@ def audited_verdict(
     response["evidence_relation"] = evidence_relation
     response["question_proposition"] = proposition.as_dict()
     response["typed_conclusion"] = conclusion.as_dict()
-    _bind_test_premises(
-        response["premises"],
-        proposition,
-        canonical_bindings,
-        evidence_relation,
-        applicable_slots=applicable_slots,
-    )
+    if canonical_plan_projection is None:
+        _bind_test_premises(
+            response["premises"],
+            proposition,
+            canonical_bindings,
+            evidence_relation,
+            applicable_slots=applicable_slots,
+        )
     verifier = response.setdefault("verifier", {})
     verifier.update(
-        {
-            "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
-            "release_mode": False,
-            "auditor_relationship": "distinct_model",
-            "semantic_pack_digest": "test-semantic-pack",
-        }
+        contract_id=GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+        release_mode=False,
+        auditor_relationship="distinct_model",
     )
+    verifier.setdefault("semantic_pack_digest", "test-semantic-pack")
     response["entailment_audit"] = semantic_entailment_audit_attestation(
         question,
         response["verdict"],
@@ -64,6 +71,7 @@ def audited_verdict(
         conclusion=conclusion,
         auditor_relationship="distinct_model",
         audit_result=_test_audit_result(response["premises"]),
+        canonical_plan_projection=canonical_plan_projection,
     )
     return response
 

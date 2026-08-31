@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from ktem.docqa.boolean_authority_schema import (
@@ -7,7 +8,23 @@ from ktem.docqa.boolean_authority_schema import (
     SEMANTIC_ENTAILMENT_AUDIT_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
-from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.frozen_canonical_proposition_projection import (
+    frozen_canonical_plan_projection_from_bundle,
+    frozen_slot_support_by_ref,
+)
+from ktem.docqa.question_proposition import (
+    applicable_proposition_evidence_slots,
+    build_question_proposition,
+)
+from ktem.reasoning.mara_qasper_semantic_pack import (
+    freeze_qasper_canonical_semantic_pack,
+    prepare_qasper_canonical_records,
+    qasper_canonical_evidence_plans,
+)
+from ktem.reasoning.mara_semantic_proposition_packing import (
+    pack_semantic_proposition_evidence,
+    required_semantic_proposition_slots,
+)
 from ktem_tests.semantic_entailment_test_helpers import audited_verdict
 
 
@@ -19,20 +36,25 @@ def semantic_verdict(
 ) -> dict[str, Any]:
     """Build one fully audited semantic-authority benchmark fixture."""
 
-    bundle.metadata["semantic_proposition_verifier"] = _runtime_trace()
-    slot_ids = [
-        slot.slot_id
-        for slot in request.query_plan.evidence_slots
-        if slot.required_for_verification
-    ]
-    premises = _premises(bundle.items, slot_ids)
+    projection, identity = _freeze_semantic_plan(request, question, bundle)
+    pack = bundle.metadata["qasper_canonical_semantic_pack"]
+    bundle.metadata["qasper_candidate_generation"] = {
+        "canonical_semantic_pack_digest": identity["semantic_pack_digest"],
+        "canonical_span_universe_digest": identity["span_universe_digest"],
+        "transaction_id": identity["candidate_transaction_id"],
+        "candidate_evidence_set_binding": deepcopy(pack["proposition_binding"]),
+        "required_slots": deepcopy(pack["slots"]),
+    }
+    bundle.metadata["semantic_proposition_verifier"] = _runtime_trace(identity)
     response: dict[str, Any] = {
         "contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
         "verdict": "yes",
         "support_mode": "evidence_set",
         "jointly_complete": True,
         "each_premise_required": True,
-        "premises": premises,
+        "premises": deepcopy(list(projection.premises)),
+        "canonical_evidence_plan_id": projection.plan_id,
+        "canonical_plan_digest": projection.plan_digest,
         "verifier_input_candidate": str(answer or "").strip().casefold(),
         "candidate_verification_status": "supported",
         "replacement_candidate_allowed": False,
@@ -40,14 +62,70 @@ def semantic_verdict(
             "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
             "model": "test-double",
             "seed": 7,
+            "semantic_pack_digest": identity["semantic_pack_digest"],
+            "canonical_span_universe_digest": identity["span_universe_digest"],
+            "candidate_transaction_id": identity["candidate_transaction_id"],
+            "canonical_plan_digest": projection.plan_digest,
+            "canonical_pack_continuity_status": "preserved",
         },
     }
-    response = audited_verdict(response, question)
+    response = audited_verdict(
+        response,
+        question,
+        canonical_plan_projection=projection,
+    )
     response["verifier"]["release_mode"] = True
+    response["entailment_audit"]["semantic_pack_identity"] = identity
     bundle.metadata["semantic_proposition_verifier"][
         "audit_proposal_digest"
     ] = response["entailment_audit"]["proposal_digest"]
     return response
+
+
+def _freeze_semantic_plan(
+    request: Any,
+    question: str,
+    bundle: Any,
+) -> tuple[Any, dict[str, str]]:
+    slots = required_semantic_proposition_slots(request)
+    source = pack_semantic_proposition_evidence(
+        request,
+        question,
+        slots,
+        bundle,
+        candidate_priority=True,
+    )
+    transaction_id = "semantic-authority-fixture"
+    frozen = freeze_qasper_canonical_semantic_pack(
+        bundle,
+        question=question,
+        slots=slots,
+        source_packing=source,
+        records=prepare_qasper_canonical_records(question, source.records),
+        candidate_transaction_id=transaction_id,
+    )
+    plans = qasper_canonical_evidence_plans(bundle)
+    assert plans is not None and len(plans) == 1
+    plan_id, plan = next(iter(plans.items()))
+    pack = bundle.metadata["qasper_canonical_semantic_pack"]
+    support_by_ref, reason = frozen_slot_support_by_ref(
+        plan["span_refs"], pack["slots"]
+    )
+    assert reason == "", reason
+    proposition = build_question_proposition(question)
+    projection, reason = frozen_canonical_plan_projection_from_bundle(
+        bundle,
+        plan_id=plan_id,
+        proposition=proposition,
+        expected_slots=applicable_proposition_evidence_slots(proposition),
+        slot_support_by_ref=support_by_ref,
+    )
+    assert projection is not None and reason == "", reason
+    return projection, {
+        "semantic_pack_digest": frozen.semantic_pack_digest,
+        "span_universe_digest": str(pack["span_universe_digest"]),
+        "candidate_transaction_id": transaction_id,
+    }
 
 
 def semantic_repair_diagnostics() -> dict[str, Any]:
@@ -87,7 +165,7 @@ def semantic_repair_diagnostics() -> dict[str, Any]:
     }
 
 
-def _runtime_trace() -> dict[str, Any]:
+def _runtime_trace(identity: dict[str, str]) -> dict[str, Any]:
     return {
         "contract_id": "semantic_proposition_verifier_runtime.v3",
         "status": "parsed",
@@ -129,30 +207,8 @@ def _runtime_trace() -> dict[str, Any]:
         "candidate_label": "yes",
         "candidate_verification_status": "supported",
         "replacement_candidate_allowed": False,
+        "semantic_pack_digest": identity["semantic_pack_digest"],
+        "canonical_span_universe_digest": identity["span_universe_digest"],
+        "candidate_transaction_id": identity["candidate_transaction_id"],
+        "canonical_pack_continuity_status": "preserved",
     }
-
-
-def _premises(
-    items: list[dict[str, Any]],
-    slot_ids: list[str],
-) -> list[dict[str, Any]]:
-    premises = []
-    for index, item in enumerate(items):
-        side = "left_subject" if index == 0 else "right_subject"
-        premises.append(
-            {
-                "evidence_id": identity_of(item).key,
-                "quote": item["text"],
-                "proposition_fragment": (
-                    "cross-language evaluation was performed"
-                    if index == 0
-                    else "single-language baselines were compared"
-                ),
-                "supports_slot_ids": [
-                    slot_id
-                    for slot_id in slot_ids
-                    if slot_id == "support:proposition" or slot_id.endswith(side)
-                ],
-            }
-        )
-    return premises

@@ -131,16 +131,22 @@ def _composite_prediction(
 def _semantic_evidence() -> list[dict[str, str]]:
     return [
         {
-            "evidence_id": "cross-lingual",
+            "evidence_id": "comparison",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "We evaluated transfer in the cross-lingual setting.",
+            "text": (
+                "We compared cross-lingual and single-language evaluation "
+                "in the same experiment."
+            ),
         },
         {
-            "evidence_id": "single-language",
+            "evidence_id": "context",
             "source_id": "paper",
             "section_id": "experiments",
-            "text": "The same experiment included single-language baselines for comparison.",
+            "text": (
+                "The same experiment included single-language evaluation "
+                "for comparison."
+            ),
         },
     ]
 
@@ -436,7 +442,7 @@ def _assert_semantic_trace(trace: dict, typed: dict) -> None:
         trace["runtime_typed_authority_slot_ref_bindings"] == typed["slot_ref_bindings"]
     )
     assert trace["runtime_semantic_proposition_authority_status"] == "verified"
-    assert trace["runtime_semantic_proposition_authority_premise_count"] == 2
+    assert trace["runtime_semantic_proposition_authority_premise_count"] == 1
     assert trace["runtime_semantic_proposition_verifier_model_call_count"] == 2
     assert trace["runtime_semantic_proposition_verifier_proposal_call_count"] == 1
     assert trace["runtime_semantic_entailment_audit_call_count"] == 1
@@ -473,7 +479,7 @@ def _assert_semantic_trace(trace: dict, typed: dict) -> None:
 
 
 def _assert_semantic_metrics(metrics: dict, cited: list[dict]) -> None:
-    assert len(cited) == 2
+    assert len(cited) == 1
     assert metrics["qasper_semantic_evidence_set_authority_count"] == 1.0
     assert metrics["qasper_semantic_evidence_set_authority_invalid_count"] == 0.0
     assert metrics["qasper_semantic_proposition_verifier_call_count"] == 2.0

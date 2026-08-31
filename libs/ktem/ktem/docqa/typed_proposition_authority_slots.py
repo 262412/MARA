@@ -27,6 +27,8 @@ def boolean_slot_bindings(
     required_slots: list[Any],
     atoms: list[dict[str, Any]],
     derivations: list[dict[str, Any]] | None = None,
+    *,
+    canonical_plan_projection: Any | None = None,
 ) -> tuple[
     dict[str, tuple[str, ...]] | None,
     dict[str, tuple[str, ...]] | None,
@@ -51,7 +53,7 @@ def boolean_slot_bindings(
         required_slots,
         derivations or [],
         atoms,
-        requires_distinct=requires_distinct,
+        requires_distinct=(requires_distinct and canonical_plan_projection is None),
     )
     if semantic is not None:
         return semantic

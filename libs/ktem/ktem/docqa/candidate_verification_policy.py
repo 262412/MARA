@@ -164,9 +164,7 @@ def _resolve_candidate_authority(
             if typed is not None and typed.status in {"supported", "verified_conflict"}
             else None
         )
-    if typed is None or (
-        typed.status not in {"supported", "verified_conflict"} and relation != "unknown"
-    ):
+    if typed is None or relation == "contradicted":
         return decision
     return replace(
         typed,

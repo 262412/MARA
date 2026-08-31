@@ -8,6 +8,7 @@ from benchmark.qasper_semantic_state_matrix import qasper_candidate_bound_state_
 from benchmark.tests.qasper_debug_contract_fixtures import _qasper_debug_prediction
 from scripts.slurm import qasper_debug_contract_audit as audit
 from scripts.slurm.qasper_debug_contract import qasper_debug_contract_metrics
+from scripts.slurm.validate_contract_smoke_gates import contract_smoke_gate_state
 
 
 def _row_with_terminal_answer(example_id: str, answer: str) -> dict[str, Any]:
@@ -45,6 +46,24 @@ def _mark_semantically_unresolved(row: dict[str, Any]) -> None:
     )
 
 
+def _mark_runtime_authority_complete(row: dict[str, Any]) -> None:
+    row["evidence_metadata"]["qasper_answerability"] = {
+        "contract_id": "qasper_runtime_authority_audit.v1",
+        "runtime_boolean_authority_applicable": True,
+        "runtime_typed_authority_applicable": True,
+        "runtime_typed_authority_complete": True,
+        "runtime_authority_failure_kind": "",
+        "contract_action": "pass_through",
+        "final_post_contract_answer": "yes",
+        "verifier_required_slot_ids": "support:boolean_proposition",
+        "verifier_required_slot_count": "1",
+        "verifier_required_evidence_ids": "span:paper:s1",
+        "verifier_missing_required_slot_ids": "",
+        "verifier_required_authority_status": "complete",
+        "verifier_required_evidence_coverage": "1.000000",
+    }
+
+
 def test_expected_ambiguity_unresolved_is_separate_from_unambiguous_gate_and_native_score() -> None:
     rows = [
         # The fixture's example-3 annotation is ambiguous and intentionally
@@ -80,6 +99,68 @@ def test_expected_ambiguity_unresolved_is_separate_from_unambiguous_gate_and_nat
     assert metrics["qasper_quality_answerable_row_count"] == 3.0
     assert native_before == (3, 1 / 3)
     assert native_after == native_before
+
+
+def test_full_and_debug_gates_use_the_same_unambiguous_quality_cohort() -> None:
+    ambiguous = _row_with_terminal_answer("example-3", "unanswerable")
+    _mark_semantically_unresolved(ambiguous)
+    ambiguous["evidence_metadata"]["qasper_answerability"] = {
+        "contract_id": "qasper_runtime_authority_audit.v1",
+        "runtime_boolean_authority_applicable": True,
+        "runtime_typed_authority_applicable": True,
+        "runtime_typed_authority_complete": False,
+        "runtime_authority_failure_kind": "authority_missing",
+        "contract_action": "hard_violation_missing_runtime_authority",
+        "final_post_contract_answer": "unanswerable",
+        "verifier_required_slot_ids": "support:boolean_proposition",
+        "verifier_required_slot_count": "1",
+        "verifier_required_evidence_ids": "",
+        "verifier_missing_required_slot_ids": "support:boolean_proposition",
+        "verifier_required_authority_status": "missing_required_evidence",
+        "verifier_required_evidence_coverage": "0.000000",
+    }
+    answered = _row_with_terminal_answer("example-1", "yes")
+    _mark_runtime_authority_complete(answered)
+
+    debug_metrics = qasper_debug_contract_metrics([ambiguous, answered])
+    full_metrics, full_gates, _failed, _contract_failures = contract_smoke_gate_state(
+        [ambiguous, answered],
+        suite_kind="qasper",
+        contract_probe_predictions=[],
+    )
+
+    assert debug_metrics["answerable_false_abstention_count"] == 0.0
+    assert debug_metrics["qasper_required_slot_unverified_count"] == 0.0
+    assert full_metrics["answerable_false_abstention_count"] == 0.0
+    assert full_metrics["verifier_required_evidence_coverage"] == 1.0
+    assert full_metrics["qasper_required_slot_authority_empty_count"] == 0.0
+    assert full_metrics["qasper_required_slot_authority_missing_count"] == 0.0
+    assert full_metrics["qasper_all_rows_verifier_required_evidence_coverage"] == 0.5
+    assert full_metrics["qasper_all_rows_required_slot_authority_empty_count"] == 1.0
+    assert full_metrics["qasper_all_rows_required_slot_authority_missing_count"] == 1.0
+    assert full_gates["answerable_false_abstention_count"]["passed"] is True
+    assert full_gates["verifier_required_evidence_coverage"]["passed"] is True
+    assert full_gates["qasper_required_slot_authority_empty_count"]["passed"] is True
+    assert full_gates["qasper_required_slot_authority_missing_count"]["passed"] is True
+
+
+def test_missing_ambiguity_annotation_fails_debug_and_full_cohort_gates() -> None:
+    row = _row_with_terminal_answer("example-1", "yes")
+    _mark_runtime_authority_complete(row)
+    row["qasper_annotation_diagnostics"].pop("ambiguous")
+
+    debug_metrics = qasper_debug_contract_metrics([row])
+    full_metrics, full_gates, failed, _contract_failures = contract_smoke_gate_state(
+        [row],
+        suite_kind="qasper",
+        contract_probe_predictions=[],
+    )
+
+    metric = "qasper_quality_annotation_ambiguity_missing_count"
+    assert debug_metrics[metric] == 1.0
+    assert full_metrics[metric] == 1.0
+    assert full_gates[metric]["passed"] is False
+    assert metric in failed
 
 
 def test_semantic_auditor_rejection_is_not_counted_as_execution_failure() -> None:

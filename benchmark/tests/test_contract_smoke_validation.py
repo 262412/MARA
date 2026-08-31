@@ -23,6 +23,45 @@ QASPER_REQUIREMENTS = (
 )
 
 
+def _annotation_diagnostics(
+    *,
+    ambiguous: bool,
+    reason: str = "",
+) -> dict[str, object]:
+    return {
+        "contract_id": "qasper_annotation_diagnostics.v1",
+        "ambiguous": ambiguous,
+        "ambiguity_reasons": [reason] if reason else [],
+    }
+
+
+def _complete_qasper_answerability() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "contract_action": "pass_through",
+        "contract_semantic_rewrite": False,
+        "engine_terminal_answer": "yes",
+        "engine_semantic_label": "yes",
+        "scored_semantic_label": "yes",
+        "runtime_projection_present": True,
+        "runtime_boolean_authority_applicable": True,
+        "runtime_authority_failure_kind": "",
+        "post_engine_answerability_llm_call_count": 0,
+        "raw_verifier_verdict": "yes_complete",
+        "final_post_contract_answer": "yes",
+        "boolean_scope_valid": "true",
+        "verifier_required_slot_ids": "support:boolean_proposition",
+        "verifier_required_slot_count": "1",
+        "verifier_required_slot_authority_count": "1",
+        "verifier_required_evidence_ids": "span:paper:s1",
+        "verifier_missing_required_slot_ids": "",
+        "verifier_missing_required_evidence_ids": "",
+        "verifier_required_authority_status": "complete",
+        "verifier_required_evidence_coverage": "1.000000",
+        "quote_ref_validation_status": "bound",
+    }
+
+
 def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
     run_dir = tmp_path / "run"
     requirements = list(QASPER_REQUIREMENTS)
@@ -44,39 +83,21 @@ def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
             "contract_action": "pass_through",
             "contract_semantic_rewrite": False,
             "post_engine_answerability_llm_call_count": 0,
+            "qasper_annotation_diagnostics": _annotation_diagnostics(ambiguous=False),
         }
     )
     _attach_terminal_commit(first)
     first["evidence_metadata"].update(
         {
-            "qasper_answerability": {
-                "status": "ok",
-                "contract_action": "pass_through",
-                "contract_semantic_rewrite": False,
-                "engine_terminal_answer": "yes",
-                "engine_semantic_label": "yes",
-                "scored_semantic_label": "yes",
-                "runtime_projection_present": True,
-                "runtime_boolean_authority_applicable": True,
-                "runtime_authority_failure_kind": "",
-                "post_engine_answerability_llm_call_count": 0,
-                "raw_verifier_verdict": "yes_complete",
-                "final_post_contract_answer": "yes",
-                "boolean_scope_valid": "true",
-                "verifier_required_slot_ids": "support:boolean_proposition",
-                "verifier_required_slot_count": "1",
-                "verifier_required_slot_authority_count": "1",
-                "verifier_required_evidence_ids": "span:paper:s1",
-                "verifier_missing_required_slot_ids": "",
-                "verifier_missing_required_evidence_ids": "",
-                "verifier_required_authority_status": "complete",
-                "verifier_required_evidence_coverage": "1.000000",
-                "quote_ref_validation_status": "bound",
-            },
+            "qasper_answerability": _complete_qasper_answerability(),
         }
     )
     second = _prediction([])
     second["example_id"] = "smoke-2"
+    second["qasper_annotation_diagnostics"] = _annotation_diagnostics(
+        ambiguous=True,
+        reason="fixture_expected_ambiguity",
+    )
     _write_run(run_dir, predictions=[first, second])
 
     result = subprocess.run(

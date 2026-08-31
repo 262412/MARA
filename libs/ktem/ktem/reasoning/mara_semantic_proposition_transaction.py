@@ -19,6 +19,7 @@ from .mara_semantic_conclusion_binding import (
     conclusion_audit_binding_reason,
     record_verified_conclusion_audit,
 )
+from .mara_semantic_frozen_audit_projection import frozen_canonical_audit_result
 from .mara_semantic_local_consistency import record_local_premise_consistency
 from .mara_semantic_proof_repair import (
     prune_invalid_premises,
@@ -255,10 +256,12 @@ def _audit_transaction(
     diagnostics["independent_semantic_constraint"] = local_constraint
     diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
     record_audit_data_lineage(diagnostics, audit)
-    local_consistency = record_local_premise_consistency(
+    audit, local_consistency = _resolve_audit_authority(
+        context,
+        audit,
         diagnostics,
         value.get("premises") or [],
-        audit.value,
+        local_constraint,
     )
     result = _audit_result(
         context,
@@ -308,6 +311,58 @@ def _audit_transaction(
         result,
         reason=repair_reason,
     )
+
+
+def _resolve_audit_authority(
+    context: _TransactionContext,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+    premises: list[dict[str, Any]],
+    local_constraint: dict[str, Any],
+) -> tuple[ParsedSemanticStage, dict[str, Any]]:
+    local_consistency = record_local_premise_consistency(
+        diagnostics,
+        premises,
+        audit.value,
+    )
+    return (
+        _project_internally_inconsistent_canonical_audit(
+            context,
+            audit,
+            diagnostics,
+            local_consistency=local_consistency,
+            local_constraint=local_constraint,
+        ),
+        local_consistency,
+    )
+
+
+def _project_internally_inconsistent_canonical_audit(
+    context: _TransactionContext,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+    *,
+    local_consistency: dict[str, Any],
+    local_constraint: dict[str, Any],
+) -> ParsedSemanticStage:
+    projection = context.canonical_plan_projection
+    if (
+        projection is None
+        or audit.value is None
+        or local_consistency.get("status") != "auditor_internal_inconsistency"
+        or local_constraint.get("status") != "passed"
+    ):
+        return audit
+    projected = frozen_canonical_audit_result(audit.value, projection)
+    diagnostics.update(
+        {
+            "audit_model_observation_status": "auditor_internal_inconsistency",
+            "audit_authority_source": "frozen_canonical_plan_projection",
+            "auditor_override_blocked": True,
+            "audit_model_observation": dict(audit.value),
+        }
+    )
+    return replace(audit, value=projected)
 
 
 def _prepare_audit_context(
