@@ -91,6 +91,17 @@ def test_lineage_records_selector_and_plan_construction_trace() -> None:
                     "object": ["E1:S1"],
                 },
                 "event_binding_id": "event-1",
+                "event_subplans": [
+                    {
+                        "event_id": "event-1",
+                        "span_refs": ["E1:S1"],
+                        "slot_refs": {
+                            "actor": ["E1:S1"],
+                            "predicate": ["E1:S1"],
+                            "object": ["E1:S1"],
+                        },
+                    }
+                ],
                 "required_object_tokens": ["systems", "two"],
                 "covered_object_tokens": ["systems", "two"],
             }
@@ -109,6 +120,8 @@ def test_lineage_records_selector_and_plan_construction_trace() -> None:
     assert construction["required_slots"] == ["actor", "predicate", "object"]
     assert construction["covered_slots"] == ["actor", "predicate", "object"]
     assert construction["event_ids"] == ["event-1"]
+    assert construction["authority_source"] == ("frozen_canonical_proposition_plan")
+    assert construction["event_subplans"][0]["event_id"] == "event-1"
     assert lineage["source_packing"]["status"] == "passed"
     assert lineage["source_packing"]["source_records"][0]["stop_stage"] == ("packed")
 

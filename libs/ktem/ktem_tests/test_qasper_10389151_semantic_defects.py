@@ -3,11 +3,15 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from ktem.docqa.canonical_proposition_evidence_plan import (
     canonical_evidence_set_analysis,
     canonical_proposition_evidence_selection,
+)
+from ktem.docqa.frozen_canonical_proposition_projection import (
+    frozen_canonical_plan_projection_checked,
 )
 from ktem.docqa.question_proposition import (
     applicable_proposition_evidence_slots,
@@ -16,6 +20,7 @@ from ktem.docqa.question_proposition import (
     typed_conclusion,
 )
 from ktem.docqa.semantic_relation_clause_validation import (
+    frozen_semantic_relation_analyses,
     premise_slot_evidence_for_audit,
     semantic_relation_evidence_set_constraint,
 )
@@ -195,3 +200,107 @@ def test_10389151_b_composite_plan_projects_local_auditor_contributions() -> Non
         for token in premise["semantic_alignment"]["covered_object_tokens"]
     }
     assert covered == set(case["expected"]["required_object_tokens"])
+
+
+def test_10389151_real_frozen_plan_rejects_quote_reprojection_inputs() -> None:
+    """The stored sample payload is not a substitute for frozen slot spans."""
+
+    case = _case(SAMPLE_B)
+    plan = {
+        "plan_id": case["observed_plan"]["plan_id"],
+        "polarity_relation": case["observed_plan"]["polarity"],
+        "span_refs": case["observed_plan"]["span_refs"],
+        "slot_refs": {
+            slot: list(case["observed_plan"]["span_refs"])
+            for slot in case["observed_plan"]["required_slots"]
+        },
+        "event_binding_id": "fixture-plan-event-binding",
+        "required_object_tokens": case["observed_plan"]["required_object_tokens"],
+        "covered_object_tokens": case["observed_plan"]["covered_object_tokens"],
+        "event_subplans": [],
+    }
+    records = [
+        {
+            "evidence_id": case["evidence_id"],
+            "selectors": _selectors(case),
+        }
+    ]
+
+    projection, reason = frozen_canonical_plan_projection_checked(
+        plan,
+        records,
+        proposition=build_question_proposition(case["question"]),
+        expected_slots=tuple(case["observed_plan"]["required_slots"]),
+    )
+
+    assert projection is None
+    assert reason == "canonical_plan_projection_frozen_records_invalid"
+
+
+def test_10389151_a_characterizes_old_downstream_acceptance_of_invalid_plan() -> None:
+    """Before the repair, local quote analysis accepted A despite its plan gap."""
+
+    case = _case(SAMPLE_A)
+    proposition = build_question_proposition(case["question"])
+    bindings = proposition_evidence_bindings(proposition)
+    premises = _premises(case)
+    for premise in premises:
+        premise["proposition_slot_bindings"] = {
+            slot: bindings[slot] for slot in premise["binds_proposition_slots"]
+        }
+        premise["evidence_relation"] = "proposition_support"
+    constraint = semantic_relation_evidence_set_constraint(
+        premises,
+        proposition,
+        "yes",
+        auditor_relationship="distinct_model",
+    )
+
+    assert case["observed_plan"]["candidate_plan_valid"] is False
+    assert case["observed_plan"]["rejection_reasons"] == [
+        "object_coverage_incomplete",
+        "event_subplan_incomplete",
+    ]
+    assert constraint["status"] == "passed"
+    assert "learn" not in constraint["required_object_tokens"]
+
+
+def test_frozen_relation_projection_accepts_verdict_and_relation_forms() -> None:
+    span = {
+        "text": "object",
+        "span_start": 0,
+        "span_end": 6,
+        "clause_ref": "C1",
+        "clause_start": 0,
+        "clause_end": 12,
+        "evidence_ref": "E1:S1#slot:object:0:6",
+    }
+    premise = {
+        "span_selector": "E1:S1",
+        "binds_proposition_slots": ["object"],
+        "quote": "object",
+        "local_relation_state": "unbound",
+        "relation_bearing": True,
+        "candidate_relation_role": "polarity_evidence",
+        "semantic_alignment": {"status": "verified"},
+    }
+    projection = SimpleNamespace(
+        plan_id="frozen-plan",
+        plan_digest="frozen-plan",
+        polarity_relation="proposition_support",
+        required_slots=("object",),
+        required_object_tokens=("object",),
+        covered_object_tokens=("object",),
+        premises=(premise,),
+        slot_evidence={"E1:S1": {"object": span}},
+        audit_slot_evidence={"P1": {"object": span}},
+        covered_tokens_by_ref={"E1:S1": ("object",)},
+        as_dict=lambda: {"plan_id": "frozen-plan"},
+    )
+
+    by_verdict = frozen_semantic_relation_analyses(projection, "yes")
+    by_relation = frozen_semantic_relation_analyses(projection, "proposition_support")
+
+    assert by_verdict == by_relation
+    assert by_verdict[0]["evidence_relation"] == "proposition_support"
+    assert by_verdict[0]["status"] == "unbound"

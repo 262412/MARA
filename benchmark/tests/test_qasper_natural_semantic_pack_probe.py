@@ -2,256 +2,26 @@ from __future__ import annotations
 
 import hashlib
 from copy import deepcopy
-from types import SimpleNamespace
 from typing import Any, cast
 
 from ktem.docqa.boolean_evidence_scope import evidence_item_text
 from ktem.docqa.evidence_identity import identity_of
-from ktem.docqa.evidence_schema import EvidenceBundle
-from ktem.reasoning.mara_qasper_candidate import (
-    _record_candidate_request,
-    _record_candidate_response,
-)
-from ktem.reasoning.mara_qasper_candidate_prompt import _candidate_evidence
-from ktem.reasoning.mara_qasper_candidate_request import fit_candidate_request
-from ktem.reasoning.mara_qasper_candidate_transport import (
-    qasper_candidate_response_format,
-)
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
-from benchmark.tests.qasper_terminal_projection_fixture import (
-    attach_valid_terminal_projection,
+from benchmark.tests.qasper_natural_semantic_pack_fixture import CODE_SHA as _CODE_SHA
+from benchmark.tests.qasper_natural_semantic_pack_fixture import (
+    attach_replay_context as _attach_replay_context,
 )
+from benchmark.tests.qasper_natural_semantic_pack_fixture import row as _row
 from benchmark.tests.test_qasper_causal_transaction import _run_context
 from scripts.slurm import qasper_natural_semantic_pack_probe as probe
+from scripts.slurm import qasper_natural_semantic_schema_probe as schema_probe
 from scripts.slurm.qasper_natural_causal_transaction import (
     _causal_transaction,
     causal_replay_run_context,
 )
 from scripts.slurm.qasper_natural_semantic_pack_probe import probe_prediction
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
-
-_CODE_SHA = "a" * 40
-
-
-def _row() -> dict[str, object]:
-    question = "Did the authors compare the two systems?"
-    text = "The authors compared the two systems."
-    return attach_valid_terminal_projection(
-        _attach_replay_context(
-            {
-                "example_id": "natural-probe-example",
-                "route": "text_rag",
-                "question": question,
-                "gold_answers": ["yes"],
-                "evidence_bundle": {
-                    "items": [
-                        {
-                            "evidence_id": "natural-probe-evidence",
-                            "source_id": "paper",
-                            "text": text,
-                        }
-                    ]
-                },
-                "evidence_metadata": {
-                    "query_plan": {
-                        "evidence_slots": [
-                            {
-                                "slot_id": "support:boolean_proposition",
-                                "description": "complete proposition support",
-                                "required_for_verification": True,
-                                "evidence_ids": [],
-                                "evidence_refs": [],
-                            }
-                        ]
-                    }
-                },
-                "qasper_annotation_diagnostics": {
-                    "ambiguity_reasons": [],
-                    "boolean_no_evidence_semantics": {},
-                },
-            }
-        )
-    )
-
-
-def _attach_replay_context(row: dict[str, Any]) -> dict[str, Any]:
-    bundle = cast(dict[str, Any], row["evidence_bundle"])
-    items = cast(list[dict[str, Any]], bundle["items"])
-    metadata = cast(dict[str, Any], row["evidence_metadata"])
-    query_plan = cast(dict[str, Any], metadata["query_plan"])
-    source_items = []
-    ranked = []
-    for index, item in enumerate(items, start=1):
-        text = evidence_item_text(item)
-        evidence_id = identity_of(item).key
-        source_items.append(
-            {
-                "source_item_index": index,
-                "evidence_id": evidence_id,
-                "text_digest": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                "text_chars": len(text),
-                "identity_decision": "eligible",
-                "identity_reason": "accepted_for_semantic_ranking",
-            }
-        )
-        ranked.append({"ranked_position": index - 1, "canonical_id": evidence_id})
-    snapshot = {
-        "contract_id": "semantic_source_input_snapshot.v1",
-        "complete": True,
-        "source_items": source_items,
-        "ranked_evidence_present": True,
-        "ranked_evidence": ranked,
-        "query_plan": deepcopy(query_plan),
-        "query_plan_digest": canonical_digest(query_plan),
-        "max_context_length": None,
-    }
-    snapshot["snapshot_digest"] = canonical_digest(snapshot)
-    metadata["qasper_canonical_semantic_pack"] = {
-        "source_packing_observation": {"source_input_snapshot": snapshot}
-    }
-    transaction_id = "c" * 64
-    metadata["qasper_candidate_generation"] = {
-        "trace_group_id": "natural-probe-fixture",
-        "benchmark_route_id": str(row.get("route") or ""),
-        "internal_route": str(row.get("route") or ""),
-        "transaction_id": transaction_id,
-        "attempt_id": f"{transaction_id}:candidate_generation:1",
-        "generation_sequence": 0,
-        "predecessor_transaction_id": "",
-        "effective_seed": 20260724,
-        "candidate_request_dropped_evidence_count": 0,
-    }
-    row["retrieved_hits"] = deepcopy(items)
-    _record_fixture_candidate_request(row)
-    replay = candidate_replay_context(row)
-    context = probe.freeze_natural_pack(
-        str(row.get("question") or ""),
-        route=str(row.get("route") or ""),
-        example_id=str(row.get("example_id") or ""),
-        replay=replay,
-        code_sha=_CODE_SHA,
-    )
-    metadata["qasper_candidate_generation"] = deepcopy(context.candidate_generation)
-    metadata["qasper_candidate_generation"]["model"] = "fixture-candidate-model"
-    metadata["qasper_canonical_semantic_pack"] = deepcopy(
-        context.bundle.metadata["qasper_canonical_semantic_pack"]
-    )
-    metadata["candidate_ranked_evidence"] = deepcopy(
-        context.bundle.metadata["candidate_ranked_evidence"]
-    )
-    metadata["semantic_proposition_verifier"] = _fixture_not_run_verifier(context)
-    return row
-
-
-def _fixture_not_run_verifier(context: Any) -> dict[str, Any]:
-    return {
-        "contract_id": "semantic_proposition_verifier_runtime.v3",
-        "status": "not_run_after_candidate_response_replay",
-        "reason": "stage_nine_not_replayed",
-        "candidate_verification_status": "not_started_in_replay",
-        "proposal_status": "not_started",
-        "audit_status": "not_started",
-        "semantic_data_lineage": {
-            "contract_id": "semantic_proposition_data_lineage.v1",
-            "source_packing": deepcopy(
-                context.bundle.metadata["qasper_canonical_semantic_pack"][
-                    "source_packing_observation"
-                ]
-            ),
-            "plan_construction": deepcopy(context.binding["plan_construction_trace"]),
-        },
-    }
-
-
-def _record_fixture_candidate_request(row: dict[str, Any]) -> None:
-    metadata = cast(dict[str, Any], row["evidence_metadata"])
-    initial = cast(dict[str, Any], metadata["qasper_candidate_generation"])
-    replay = candidate_replay_context(row)
-    question = str(row["question"])
-    transaction_id = str(initial["transaction_id"])
-    request = SimpleNamespace(
-        origin="benchmark",
-        verification_domain="qasper",
-        dataset_family="qasper",
-        answer_type="boolean",
-        question=question,
-        query=question,
-        query_plan=deepcopy(replay.query_plan),
-    )
-    bundle = EvidenceBundle(
-        route=str(row["route"]),
-        items=deepcopy(replay.items),
-        metadata=deepcopy(replay.bundle_metadata),
-    )
-    records, diagnostics, _source_packing = _candidate_evidence(
-        request,
-        question,
-        bundle,
-        candidate_transaction_id=transaction_id,
-    )
-    response_schema = qasper_candidate_response_format()
-    (
-        records,
-        diagnostics,
-        messages,
-        token_measurement,
-        dropped_count,
-    ) = fit_candidate_request(
-        None,
-        question,
-        records,
-        diagnostics,
-        response_schema=response_schema,
-        controlled_candidate="",
-        candidate_transaction_id=transaction_id,
-    )
-    identity = {
-        key: deepcopy(initial.get(key))
-        for key in (
-            "trace_group_id",
-            "benchmark_route_id",
-            "internal_route",
-            "transaction_id",
-            "attempt_id",
-            "generation_sequence",
-            "predecessor_transaction_id",
-        )
-    }
-    observation, _input_digest = _record_candidate_request(
-        bundle,
-        llm=None,
-        messages=messages,
-        response_schema=response_schema,
-        identity=identity,
-        route=str(row["route"]),
-        seed=int(initial["effective_seed"]),
-        evidence=records,
-        evidence_diagnostics=diagnostics,
-        controlled_candidate="",
-        token_measurement=token_measurement,
-        request_dropped_count=dropped_count,
-    )
-    _record_fixture_candidate_response(observation, identity)
-    metadata["qasper_candidate_generation"] = observation
-
-
-def _record_fixture_candidate_response(
-    observation: dict[str, Any],
-    identity: dict[str, Any],
-) -> None:
-    _record_candidate_response(
-        SimpleNamespace(
-            text='{\n\n\n    "candidate": "yes"\n}',
-            completion_tokens=10,
-            prompt_tokens=observation["estimated_input_tokens"],
-            finish_reason="stop",
-        ),
-        observation,
-        identity,
-        str(observation["input_digest"]),
-        "",
-    )
 
 
 def _probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
@@ -383,7 +153,7 @@ def test_natural_probe_rejects_a_plan_that_fails_the_audit_constraint(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        probe,
+        schema_probe,
         "semantic_relation_evidence_set_constraint",
         lambda *_args, **_kwargs: {
             "status": "rejected",

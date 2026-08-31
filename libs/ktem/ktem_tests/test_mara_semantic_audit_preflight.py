@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import ktem.reasoning.mara_semantic_proposition_stages as stages
+from ktem.docqa.question_proposition import build_question_proposition
+from ktem.reasoning.mara_semantic_audit_preflight import audit_preflight_failure_reason
+from ktem.reasoning.mara_semantic_entailment_audit import (
+    semantic_entailment_audit_response_format,
+)
 from ktem.reasoning.mara_semantic_proposition_stages import (
     audit_diagnostics,
     audit_stage,
+)
+from ktem.reasoning.mara_semantic_transaction_support import (
+    bind_semantic_runtime_fields,
 )
 
 
@@ -194,3 +202,128 @@ def test_audit_call_is_counted_after_provider_invocation_starts() -> None:
     assert stage.call_count == 1
     assert llm.calls == 1
     assert audit_diagnostics(stage, model=llm.model_name)["audit_status"] == ("parsed")
+
+
+def test_frozen_projection_slot_metadata_skips_legacy_span_schema() -> None:
+    frozen_span = {
+        "text": "actor",
+        "span_start": 0,
+        "span_end": 5,
+        "clause_ref": "C1",
+        "clause_start": 0,
+        "clause_end": 32,
+        "evidence_ref": "E1:S1#semantic-slot:actor:0:5",
+        "parent_selector_id": "E1:S1",
+        "parent_span_start": 0,
+        "parent_span_end": 32,
+        "parent_text_digest": "parent-digest",
+        "text_digest": "span-digest",
+    }
+    projection = SimpleNamespace(
+        premises=({"binds_proposition_slots": ["actor"]},),
+        audit_slot_evidence={"P1": {"actor": frozen_span}},
+    )
+
+    assert (
+        audit_preflight_failure_reason(
+            ("P1",),
+            premise_slot_expectations={"P1": ("actor",)},
+            premise_slot_evidence={"P1": {"actor": frozen_span}},
+            canonical_plan_projection=projection,
+        )
+        == ""
+    )
+
+
+def test_frozen_projection_audit_view_matches_schema_contract() -> None:
+    frozen_span = {
+        "text": "actor",
+        "span_start": 0,
+        "span_end": 5,
+        "clause_ref": "C1",
+        "clause_start": 0,
+        "clause_end": 32,
+        "evidence_ref": "E1:S1#semantic-slot:actor:0:5",
+        "parent_selector_id": "E1:S1",
+        "parent_span_start": 0,
+        "parent_span_end": 32,
+        "parent_text_digest": "parent-digest",
+        "text_digest": "span-digest",
+    }
+    audit_span = {
+        field: frozen_span[field]
+        for field in (
+            "text",
+            "span_start",
+            "span_end",
+            "clause_ref",
+            "clause_start",
+            "clause_end",
+        )
+    }
+    audit_span["evidence_ref"] = "P1:actor"
+
+    try:
+        semantic_entailment_audit_response_format(
+            ["P1"],
+            premise_slot_expectations={"P1": ("actor",)},
+            premise_slot_evidence={"P1": {"actor": frozen_span}},
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("full frozen identity must not enter the audit schema")
+
+    schema = semantic_entailment_audit_response_format(
+        ["P1"],
+        premise_slot_expectations={"P1": ("actor",)},
+        premise_slot_evidence={"P1": {"actor": audit_span}},
+    )
+    evidence_schema = schema["json_schema"]["schema"]["properties"]["premise_checks"][
+        "properties"
+    ]["P1"]["properties"]["proposition_slot_checks"]["properties"]["actor"]
+    assert evidence_schema["properties"]["evidence_ref"]["enum"] == ["P1:actor"]
+
+
+def test_frozen_projection_bindings_are_not_recomputed_from_question() -> None:
+    proposition = build_question_proposition("Does the model learn?")
+    frozen = {"object": "frozen-object-binding"}
+    projection = SimpleNamespace(
+        plan_id="frozen-plan",
+        plan_digest="frozen-plan",
+        proof_mode="atomic_semantic",
+        polarity_relation="proposition_support",
+        premises=(
+            {
+                "binds_proposition_slots": ["object"],
+                "proposition_slot_bindings": frozen,
+                "evidence_relation": "proposition_support",
+            },
+        ),
+        as_dict=lambda: {"plan_id": "frozen-plan"},
+    )
+    context = SimpleNamespace(
+        proposition=proposition,
+        proposition_resolution={},
+        release_mode=True,
+        auditor_relationship="distinct_model",
+        semantic_pack_digest="pack",
+        canonical_span_universe_digest="spans",
+        candidate_transaction_id="transaction",
+        canonical_plan_projection=projection,
+    )
+    value: dict[str, Any] = {
+        "premises": [
+            {
+                "binds_proposition_slots": ["object"],
+                "proposition_slot_bindings": {"object": "quote-derived"},
+                "evidence_relation": "explicit_contradiction",
+            }
+        ],
+        "verifier": {},
+    }
+
+    bind_semantic_runtime_fields(value, cast(Any, context))
+
+    assert value["premises"][0]["proposition_slot_bindings"] == frozen
+    assert value["premises"][0]["evidence_relation"] == "proposition_support"
