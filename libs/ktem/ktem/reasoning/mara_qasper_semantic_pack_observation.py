@@ -3,7 +3,11 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from ktem.docqa.qasper_semantic_pack_contract import canonical_payload_digest
+from ktem.docqa.qasper_semantic_pack_contract import (
+    QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
+    canonical_payload_digest,
+    qasper_canonical_span_universe_digest,
+)
 
 from .mara_qasper_selector_lineage import qasper_selector_crosswalk
 
@@ -53,6 +57,26 @@ def source_packing_observation(
             packing.records,
             canonical_records,
         ),
+    }
+
+
+def qasper_candidate_pack_identity_projection(
+    packing: Any,
+    *,
+    candidate_transaction_id: str,
+) -> dict[str, str]:
+    """Project one frozen pack identity into the candidate-stage trace."""
+
+    return {
+        "evidence_pack_digest": packing.semantic_pack_digest,
+        "canonical_semantic_pack_contract_id": (
+            QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT
+        ),
+        "canonical_semantic_pack_digest": packing.semantic_pack_digest,
+        "canonical_span_universe_digest": qasper_canonical_span_universe_digest(
+            packing.records
+        ),
+        "canonical_pack_candidate_transaction_id": str(candidate_transaction_id or ""),
     }
 
 

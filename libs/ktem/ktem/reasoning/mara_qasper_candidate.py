@@ -64,10 +64,9 @@ from .mara_qasper_candidate_transport import (  # noqa: F401 - compatibility re-
     parse_qasper_candidate,
     qasper_candidate_response_format,
 )
-from .mara_qasper_semantic_pack import (
-    QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
-    freeze_qasper_canonical_semantic_pack,
-    qasper_canonical_span_universe_digest,
+from .mara_qasper_semantic_pack import freeze_qasper_canonical_semantic_pack
+from .mara_qasper_semantic_pack_observation import (
+    qasper_candidate_pack_identity_projection,
 )
 from .mara_semantic_proposition_debug import provider_failure
 from .mara_semantic_proposition_packing import (
@@ -255,13 +254,10 @@ def _freeze_candidate_semantic_pack(
         candidate_required_slots=diagnostics.get("required_slots"),
     )
     diagnostics.update(
-        evidence_pack_digest=packing.semantic_pack_digest,
-        canonical_semantic_pack_contract_id=QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
-        canonical_semantic_pack_digest=packing.semantic_pack_digest,
-        canonical_span_universe_digest=qasper_canonical_span_universe_digest(
-            packing.records
-        ),
-        canonical_pack_candidate_transaction_id=transaction_id,
+        qasper_candidate_pack_identity_projection(
+            packing,
+            candidate_transaction_id=transaction_id,
+        )
     )
 
 

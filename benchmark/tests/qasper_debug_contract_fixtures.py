@@ -127,6 +127,8 @@ def _populate_debug_semantic_metadata(
         plan_candidate_decisions_digest=str(plan_trace["candidate_decisions_digest"]),
     )
     generator.update(
+        evidence_pack_digest=identity["semantic_pack_digest"],
+        canonical_semantic_pack_contract_id=semantic_pack["contract_id"],
         canonical_semantic_pack_digest=identity["semantic_pack_digest"],
         canonical_span_universe_digest=identity["span_universe_digest"],
         canonical_pack_candidate_transaction_id=identity["candidate_transaction_id"],

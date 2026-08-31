@@ -12,6 +12,7 @@ from ktem.reasoning.mara_qasper_candidate_evidence import (
     candidate_evidence_set_binding,
     candidate_required_slots_from_binding,
 )
+from ktem.reasoning.mara_qasper_selector_lineage import qasper_selector_crosswalk
 from ktem.reasoning.mara_qasper_semantic_pack import prepare_qasper_canonical_records
 from ktem.reasoning.mara_semantic_proposition_packing import (
     semantic_proposition_pack_digest,
@@ -91,6 +92,7 @@ def _debug_semantic_pack(
         "source_packing_observation": _debug_source_packing_observation(
             text,
             semantic_pack_digest,
+            records,
             route=route,
         ),
     }
@@ -101,9 +103,17 @@ def _debug_semantic_pack(
 def _debug_source_packing_observation(
     text: str,
     semantic_pack_digest: str,
+    canonical_records: list[dict[str, Any]],
     *,
     route: str,
 ) -> dict[str, Any]:
+    record_summary = {
+        "evidence_id": "span:paper:s1",
+        "label": "E1",
+        "text_start": 0,
+        "text_digest": canonical_payload_digest(text),
+        "selector_refs": ["E1:S1"],
+    }
     return {
         "contract_id": "qasper_source_packing_observation.v1",
         "semantic_pack_digest": semantic_pack_digest,
@@ -133,16 +143,12 @@ def _debug_source_packing_observation(
                 "stop_stage": "packed",
             }
         ],
-        "records": [
-            {
-                "evidence_id": "span:paper:s1",
-                "label": "E1",
-                "text_start": 0,
-                "window_index": None,
-                "text_digest": canonical_payload_digest(text),
-                "selector_refs": ["E1:S1"],
-            }
-        ],
+        "records": [{**record_summary, "window_index": None}],
+        "canonical_records": [record_summary],
+        "selector_crosswalk": qasper_selector_crosswalk(
+            canonical_records,
+            canonical_records,
+        ),
     }
 
 

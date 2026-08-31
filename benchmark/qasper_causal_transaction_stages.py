@@ -4,6 +4,11 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
+from ktem.docqa.qasper_semantic_pack_contract import (
+    QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
+    qasper_canonical_span_universe_digest,
+)
+
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest, is_sha256
 from benchmark.qasper_causal_transaction_runtime_stages import (
     runtime_transaction_stage_payloads,
@@ -18,7 +23,8 @@ def causal_transaction_stage_payloads(
     generator = _mapping(debug_row.get("main_candidate_generator"))
     verifier = _mapping(debug_row.get("semantic_verifier"))
     lineage = _mapping(verifier.get("semantic_data_lineage"))
-    source = _candidate_stage_source(prediction)
+    pack = _candidate_stage_pack(prediction)
+    source = _mapping(pack.get("source_packing_observation"))
     construction = _mapping(lineage.get("plan_construction"))
     event = _latest_model_transaction(verifier)
     transaction = _mapping(event.get("transaction"))
@@ -29,7 +35,7 @@ def causal_transaction_stage_payloads(
         "dataset_and_gold": _dataset_payload(prediction, debug_row),
         "retrieval_and_ranking": _retrieval_payload(prediction),
         "candidate_input": _candidate_input_payload(generator, source),
-        "proposition_spans_and_selector_universe": _selector_payload(generator, source),
+        "proposition_spans_and_selector_universe": _selector_payload(generator, pack),
         "candidate_plans": _candidate_plans_payload(construction),
         "selected_local_plan": _selected_plan_payload(
             generator, construction, proposal_value
@@ -233,40 +239,171 @@ def _selected_request_record_ids(projection: Mapping[str, Any]) -> list[str]:
 
 def _selector_payload(
     generator: Mapping[str, Any],
-    source: Mapping[str, Any],
+    pack: Mapping[str, Any],
 ) -> dict[str, Any]:
-    records = deepcopy(source.get("canonical_records") or source.get("records") or [])
-    selectors = [
-        deepcopy(selector)
-        for record in records
-        if isinstance(record, Mapping)
-        for selector in record.get("selectors") or []
-        if isinstance(selector, Mapping)
-    ]
+    source = _mapping(pack.get("source_packing_observation"))
+    raw_records = pack.get("records")
+    records = deepcopy(raw_records) if isinstance(raw_records, list) else []
+    records_valid = bool(records) and all(
+        isinstance(record, Mapping) for record in records
+    )
+    selectors = _canonical_selector_spans(records)
+    raw_summaries = source.get("canonical_records")
+    summaries = deepcopy(raw_summaries) if isinstance(raw_summaries, list) else []
     crosswalk = deepcopy(_mapping(source.get("selector_crosswalk")))
     projection = deepcopy(
         _mapping(generator.get("canonical_selector_projection_trace"))
     )
-    reasons = []
-    if not records:
-        reasons.append("canonical_records_missing")
-    if not crosswalk:
-        reasons.append("selector_crosswalk_missing")
-    if not projection:
-        reasons.append("canonical_selector_projection_missing")
+    pack_identity = {
+        "contract_id": str(pack.get("contract_id") or ""),
+        "semantic_pack_digest": str(pack.get("semantic_pack_digest") or ""),
+        "span_universe_digest": str(pack.get("span_universe_digest") or ""),
+        "candidate_transaction_id": str(pack.get("candidate_transaction_id") or ""),
+    }
+    generator_identity = {
+        "contract_id": str(generator.get("canonical_semantic_pack_contract_id") or ""),
+        "evidence_pack_digest": str(generator.get("evidence_pack_digest") or ""),
+        "semantic_pack_digest": str(
+            generator.get("canonical_semantic_pack_digest") or ""
+        ),
+        "span_universe_digest": str(
+            generator.get("canonical_span_universe_digest") or ""
+        ),
+        "candidate_transaction_id": str(
+            generator.get("canonical_pack_candidate_transaction_id") or ""
+        ),
+    }
+    recomputed_span_digest = (
+        qasper_canonical_span_universe_digest(records) if records_valid else ""
+    )
+    reasons = _selector_identity_reasons(
+        pack_identity,
+        generator_identity,
+        recomputed_span_digest=recomputed_span_digest,
+    )
+    reasons.extend(
+        _selector_structure_reasons(
+            records,
+            selectors,
+            summaries,
+            crosswalk,
+            projection,
+        )
+    )
     return _payload(
         reasons,
         canonical_records=records,
         canonical_records_digest=canonical_digest(records),
+        canonical_record_summaries=summaries,
+        canonical_record_summaries_digest=canonical_digest(summaries),
         proposition_bearing_spans=selectors,
         proposition_bearing_spans_digest=canonical_digest(selectors),
         selector_crosswalk=crosswalk,
         selector_crosswalk_digest=str(crosswalk.get("crosswalk_digest") or ""),
         canonical_selector_projection=projection,
-        selector_universe_digest=str(
-            generator.get("canonical_span_universe_digest") or ""
-        ),
+        canonical_semantic_pack_identity=pack_identity,
+        candidate_generator_pack_identity=generator_identity,
+        recomputed_selector_universe_digest=recomputed_span_digest,
+        selector_universe_digest=pack_identity["span_universe_digest"],
     )
+
+
+def _canonical_selector_spans(records: list[Any]) -> list[dict[str, Any]]:
+    return [
+        {"evidence_id": str(record.get("evidence_id") or ""), **deepcopy(selector)}
+        for record in records
+        if isinstance(record, Mapping)
+        for selector in record.get("selectors") or []
+        if isinstance(selector, Mapping)
+    ]
+
+
+def _selector_structure_reasons(
+    records: list[Any],
+    selectors: list[dict[str, Any]],
+    summaries: list[Any],
+    crosswalk: Mapping[str, Any],
+    projection: Mapping[str, Any],
+) -> list[str]:
+    reasons = []
+    if not records:
+        reasons.append("canonical_records_missing")
+    elif not all(isinstance(record, Mapping) for record in records):
+        reasons.append("canonical_records_invalid")
+    if not selectors:
+        reasons.append("proposition_bearing_spans_missing")
+    if not summaries:
+        reasons.append("canonical_record_summaries_missing")
+    elif len(summaries) != len(records):
+        reasons.append("canonical_record_summary_count_mismatch")
+    elif sum(
+        len(summary.get("selector_refs") or [])
+        for summary in summaries
+        if isinstance(summary, Mapping)
+    ) != len(selectors):
+        reasons.append("canonical_record_summary_selector_count_mismatch")
+    if not crosswalk:
+        reasons.append("selector_crosswalk_missing")
+    else:
+        if crosswalk.get("complete") is not True:
+            reasons.append("selector_crosswalk_incomplete")
+        if crosswalk.get("canonical_selector_count") != len(selectors):
+            reasons.append("selector_crosswalk_selector_count_mismatch")
+    if not projection:
+        reasons.append("canonical_selector_projection_missing")
+    else:
+        if projection.get("complete") is not True:
+            reasons.append("canonical_selector_projection_incomplete")
+        if projection.get("selected_selector_count") != len(selectors):
+            reasons.append("canonical_selector_projection_count_mismatch")
+    return reasons
+
+
+def _selector_identity_reasons(
+    pack: Mapping[str, str],
+    generator: Mapping[str, str],
+    *,
+    recomputed_span_digest: str,
+) -> list[str]:
+    reasons = []
+    if pack.get("contract_id") != QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT:
+        reasons.append("canonical_semantic_pack_contract_invalid")
+    for field in ("semantic_pack_digest", "span_universe_digest"):
+        if not pack.get(field):
+            reasons.append(f"canonical_{field}_missing")
+    if not pack.get("candidate_transaction_id"):
+        reasons.append("canonical_pack_candidate_transaction_id_missing")
+    generator_required = {
+        "contract_id": "generator_canonical_semantic_pack_contract_missing",
+        "evidence_pack_digest": "generator_evidence_pack_digest_missing",
+        "semantic_pack_digest": "generator_canonical_semantic_pack_digest_missing",
+        "span_universe_digest": "generator_canonical_span_universe_digest_missing",
+        "candidate_transaction_id": (
+            "generator_canonical_pack_candidate_transaction_id_missing"
+        ),
+    }
+    for field, reason in generator_required.items():
+        if not generator.get(field):
+            reasons.append(reason)
+    if pack.get("contract_id") and generator.get("contract_id") != pack.get(
+        "contract_id"
+    ):
+        reasons.append("generator_canonical_semantic_pack_contract_mismatch")
+    if pack.get("semantic_pack_digest"):
+        if generator.get("semantic_pack_digest") != pack.get("semantic_pack_digest"):
+            reasons.append("generator_canonical_semantic_pack_digest_mismatch")
+        if generator.get("evidence_pack_digest") != pack.get("semantic_pack_digest"):
+            reasons.append("generator_evidence_pack_digest_mismatch")
+    if pack.get("span_universe_digest"):
+        if generator.get("span_universe_digest") != pack.get("span_universe_digest"):
+            reasons.append("generator_canonical_span_universe_digest_mismatch")
+        if recomputed_span_digest != pack.get("span_universe_digest"):
+            reasons.append("canonical_span_universe_digest_mismatch")
+    if pack.get("candidate_transaction_id") and generator.get(
+        "candidate_transaction_id"
+    ) != pack.get("candidate_transaction_id"):
+        reasons.append("generator_canonical_pack_candidate_transaction_id_mismatch")
+    return reasons
 
 
 def _candidate_plans_payload(construction: Mapping[str, Any]) -> dict[str, Any]:
@@ -416,10 +553,9 @@ def _latest_parsed_value(stage: Mapping[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _candidate_stage_source(prediction: Mapping[str, Any]) -> dict[str, Any]:
+def _candidate_stage_pack(prediction: Mapping[str, Any]) -> dict[str, Any]:
     metadata = _mapping(prediction.get("evidence_metadata"))
-    pack = _mapping(metadata.get("qasper_canonical_semantic_pack"))
-    return _mapping(pack.get("source_packing_observation"))
+    return _mapping(metadata.get("qasper_canonical_semantic_pack"))
 
 
 def _payload(reasons: list[str], **values: Any) -> dict[str, Any]:

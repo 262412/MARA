@@ -151,6 +151,7 @@ def _canonical_selector_projection() -> dict[str, Any]:
         "contract_id": "qasper_canonical_selector_projection.v1",
         "complete": True,
         "input_selector_count": 1,
+        "selected_selector_count": 1,
         "decision_count": 1,
         "decisions_digest": canonical_digest(decisions),
         "decisions": decisions,

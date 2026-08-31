@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from ktem.docqa.qasper_semantic_pack_contract import (
+    QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
+    qasper_canonical_span_universe_digest,
+)
+
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
 from benchmark.qasper_causal_transaction import (
     QASPER_CAUSAL_TRANSACTION_STAGES,
@@ -13,6 +18,8 @@ from benchmark.tests.qasper_causal_evidence_chain_fixtures import causal_row
 
 _CODE_SHA = "a" * 40
 _MANIFEST_SHA = "b" * 64
+_PACK_DIGEST = "4" * 64
+_PACK_TRANSACTION_ID = "5" * 64
 
 
 def _prediction_and_debug_row() -> tuple[dict, dict]:
@@ -44,6 +51,7 @@ def _prediction_and_debug_row() -> tuple[dict, dict]:
 
 def _candidate_generator(debug_row: dict) -> dict:
     generator = debug_row["main_candidate_generator"]
+    span_digest = qasper_canonical_span_universe_digest(_canonical_pack_records())
     messages = [
         {"role": "system", "content": "Return one candidate label."},
         {"role": "user", "content": "Did the authors compare systems?"},
@@ -69,6 +77,13 @@ def _candidate_generator(debug_row: dict) -> dict:
             "token_headroom_tokens": 128,
             "candidate_request_dropped_evidence_count": 0,
             "request_dropped_evidence_count": 0,
+            "evidence_pack_digest": _PACK_DIGEST,
+            "canonical_semantic_pack_contract_id": (
+                QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT
+            ),
+            "canonical_semantic_pack_digest": _PACK_DIGEST,
+            "canonical_span_universe_digest": span_digest,
+            "canonical_pack_candidate_transaction_id": _PACK_TRANSACTION_ID,
             "candidate_request_projection_trace": _candidate_request_projection(),
             "raw_response": '{"candidate":"yes"}',
             "cleaned_response": '{"candidate":"yes"}',
@@ -262,6 +277,13 @@ def _prediction(generator: dict, debug_row: dict) -> dict:
             "candidate_ranked_evidence": [{"canonical_id": "evidence-1"}],
             "qasper_candidate_generation": generator,
             "qasper_canonical_semantic_pack": {
+                "contract_id": QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
+                "semantic_pack_digest": _PACK_DIGEST,
+                "span_universe_digest": qasper_canonical_span_universe_digest(
+                    _canonical_pack_records()
+                ),
+                "candidate_transaction_id": _PACK_TRANSACTION_ID,
+                "records": _canonical_pack_records(),
                 "source_packing_observation": deepcopy(source_packing),
             },
         },
@@ -276,6 +298,23 @@ def _prediction(generator: dict, debug_row: dict) -> dict:
         "qasper_annotation_diagnostics": {"ambiguous": False},
         "metrics": {"qasper_f1": 1.0, "native_score": 1.0},
     }
+
+
+def _canonical_pack_records() -> list[dict]:
+    return [
+        {
+            "evidence_id": "evidence-1",
+            "selectors": [
+                {
+                    "selector_id": "E1:S1",
+                    "text": "The authors compared systems.",
+                    "span_start": 0,
+                    "span_end": 29,
+                    "event_id": "event-1",
+                }
+            ],
+        }
+    ]
 
 
 def _recovery_transition() -> dict:

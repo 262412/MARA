@@ -108,3 +108,20 @@ def test_selector_stage_fails_closed_without_pack_records_or_identity() -> None:
     assert "generator_canonical_span_universe_digest_missing" in (
         stage["incompleteness_reasons"]
     )
+
+
+def test_selector_stage_fails_closed_on_generator_span_digest_mismatch() -> None:
+    prediction, debug_row = _prediction_and_debug_row()
+    debug_row["main_candidate_generator"]["canonical_span_universe_digest"] = "0" * 64
+
+    transaction = qasper_causal_transaction(
+        prediction,
+        debug_row,
+        run_context=_run_context(),
+    )
+    stage = transaction["stages"][3]
+
+    assert stage["status"] == "incomplete"
+    assert "generator_canonical_span_universe_digest_mismatch" in (
+        stage["incompleteness_reasons"]
+    )

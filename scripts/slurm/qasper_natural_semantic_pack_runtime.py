@@ -26,6 +26,9 @@ from ktem.reasoning.mara_qasper_semantic_pack import (
     freeze_qasper_canonical_semantic_pack,
     load_qasper_canonical_semantic_pack,
 )
+from ktem.reasoning.mara_qasper_semantic_pack_observation import (
+    qasper_candidate_pack_identity_projection,
+)
 from ktem.reasoning.mara_semantic_proposition_packing import (
     required_semantic_proposition_slots,
 )
@@ -88,17 +91,14 @@ def freeze_natural_pack(
         transaction_id=transaction_id,
         replay=replay,
     )
-    binding = _mapping(diagnostics.get("candidate_evidence_set_binding"))
-    bound_slots = _bound_slots(diagnostics)
-    frozen = freeze_qasper_canonical_semantic_pack(
+    binding, bound_slots, frozen = _freeze_replay_candidate_pack(
         bundle,
         question=question,
         slots=slots,
         source_packing=source_packing,
         records=records,
-        candidate_transaction_id=transaction_id,
-        candidate_binding=binding,
-        candidate_required_slots=bound_slots,
+        diagnostics=diagnostics,
+        transaction_id=transaction_id,
     )
     candidate_generation = _candidate_generation_observation(
         bundle=bundle,
@@ -129,6 +129,37 @@ def freeze_natural_pack(
         candidate_generation=candidate_generation,
         replay=replay,
     )
+
+
+def _freeze_replay_candidate_pack(
+    bundle: EvidenceBundle,
+    *,
+    question: str,
+    slots: list[dict[str, Any]],
+    source_packing: Any,
+    records: list[dict[str, Any]],
+    diagnostics: dict[str, Any],
+    transaction_id: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]], Any]:
+    binding = _mapping(diagnostics.get("candidate_evidence_set_binding"))
+    bound_slots = _bound_slots(diagnostics)
+    frozen = freeze_qasper_canonical_semantic_pack(
+        bundle,
+        question=question,
+        slots=slots,
+        source_packing=source_packing,
+        records=records,
+        candidate_transaction_id=transaction_id,
+        candidate_binding=binding,
+        candidate_required_slots=bound_slots,
+    )
+    diagnostics.update(
+        qasper_candidate_pack_identity_projection(
+            frozen,
+            candidate_transaction_id=transaction_id,
+        )
+    )
+    return binding, bound_slots, frozen
 
 
 def _bound_slots(diagnostics: dict[str, Any]) -> list[dict[str, Any]]:
