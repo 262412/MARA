@@ -7,6 +7,8 @@ from typing import Any
 from ktem.docqa.terminal_semantic_commit import terminal_commit_projection_present
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest, is_sha256
+from benchmark.qasper_causal_evidence_chain_utils import mapping as _mapping
+from benchmark.citation_stage_projection import citation_trace_projection_fields
 from benchmark.qasper_causal_transaction_recovery import recovery_stage_payload
 from benchmark.qasper_runtime_projection import runtime_projection_present
 from benchmark.terminal_outcome_contract import terminal_outcome_record
@@ -328,6 +330,7 @@ def _semantic_call_count(
 
 
 def _finalizer_scorer_payload(prediction: Mapping[str, Any]) -> dict[str, Any]:
+    citation_fields = citation_trace_projection_fields(prediction)
     finalizer = {
         "answer_finalization": deepcopy(prediction.get("answer_finalization") or {}),
         "terminal_semantic_commit": deepcopy(
@@ -341,6 +344,7 @@ def _finalizer_scorer_payload(prediction: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "terminal_outcome": str(prediction.get("terminal_outcome") or ""),
         "answer_status": str(prediction.get("answer_status") or ""),
+        **citation_fields,
     }
     scorer_input = {
         "example_id": str(prediction.get("example_id") or ""),
@@ -589,10 +593,6 @@ def _payload(reasons: list[str], **values: Any) -> dict[str, Any]:
         "incompleteness_reasons": unique,
         **values,
     }
-
-
-def _mapping(value: Any) -> dict[str, Any]:
-    return dict(value) if isinstance(value, Mapping) else {}
 
 
 def _git_sha(value: Any) -> bool:

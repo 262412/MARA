@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
 from typing import Any
+
+from .canonical_serialization import (
+    canonical_digest as _canonical_digest,
+    canonical_projection_digest_trace,
+)
 
 LOCAL_SEMANTIC_RELATION_CONSTRAINT = "local_semantic_relation_constraint.v1"
 
@@ -162,6 +165,10 @@ def _frozen_constraint_payload(
     auditor_relationship: str,
 ) -> dict[str, Any]:
     relation = str(getattr(projection, "polarity_relation", "") or "")
+    projection_trace = canonical_projection_digest_trace(
+        projection,
+        producer_digest=_producer_projection_digest(projection),
+    )
     payload = {
         "contract_id": LOCAL_SEMANTIC_RELATION_CONSTRAINT,
         "status": "passed" if polarity_valid else "rejected",
@@ -190,7 +197,8 @@ def _frozen_constraint_payload(
         "support_evidence_binding_complete": True,
         "canonical_evidence_plan_id": projection.plan_id,
         "canonical_plan_digest": projection.plan_digest,
-        "canonical_projection_digest": _digest(projection.as_dict()),
+        "canonical_projection_digest": projection_trace["validator_digest"],
+        "canonical_projection_digest_trace": projection_trace,
         "audit_slot_evidence": projection.audit_slot_evidence,
     }
     payload["constraint_digest"] = _digest(payload)
@@ -198,5 +206,13 @@ def _frozen_constraint_payload(
 
 
 def _digest(value: Any) -> str:
-    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return _canonical_digest(value)
+
+
+def _producer_projection_digest(projection: Any) -> str:
+    for premise in getattr(projection, "premises", ()) or ():
+        if isinstance(premise, Mapping):
+            digest = str(premise.get("canonical_projection_digest") or "")
+            if digest:
+                return digest
+    return ""

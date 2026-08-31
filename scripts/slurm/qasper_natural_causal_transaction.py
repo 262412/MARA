@@ -283,15 +283,6 @@ def _local_frozen_replay_prediction(
         candidate_metadata,
         question=str(prediction.get("question") or ""),
     )
-    request_replay = _mapping(
-        context.candidate_generation.get("frozen_candidate_request_replay")
-    )
-    if request_replay and request_replay.get("status") != "matched":
-        regenerated_stack = deepcopy(
-            list(request_replay.get("regenerated_message_stack") or [])
-        )
-        frozen_candidate["message_stack"] = regenerated_stack
-        frozen_candidate["message_stack_digest"] = canonical_digest(regenerated_stack)
     source = deepcopy(_mapping(frozen_pack.get("source_packing_observation")))
     frozen_binding = deepcopy(_mapping(frozen_pack.get("proposition_binding")))
     plan_construction = deepcopy(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -83,24 +84,24 @@ def build_evidence_bundle(
     metadata["schema_version"] = EVIDENCE_BUNDLE_SCHEMA_VERSION
     metadata["dedupe_trace"] = stages.dedupe_trace
     metadata["canonical_candidate_count"] = len(stages.canonical_candidates)
-    metadata["canonical_candidate_evidence"] = stages.canonical_candidates
-    metadata["candidate_evidence"] = stages.canonical_candidates
-    metadata["candidate_ranked_evidence"] = stages.ranked_candidates
+    metadata["canonical_candidate_evidence"] = deepcopy(stages.canonical_candidates)
+    metadata["candidate_evidence"] = deepcopy(stages.canonical_candidates)
+    metadata["candidate_ranked_evidence"] = deepcopy(stages.ranked_candidates)
     metadata["candidate_ranking_contract"] = "global_ranked_v1"
-    metadata[
-        "pre_rerank_required_slot_candidates_restored"
-    ] = stages.required_slot_restored
-    metadata["reranker_input_evidence"] = stages.reranker_input
+    metadata["pre_rerank_required_slot_candidates_restored"] = (
+        stages.required_slot_restored
+    )
+    metadata["reranker_input_evidence"] = deepcopy(stages.reranker_input)
     metadata["reranker_input_contract"] = "required_slot_restored.v1"
-    metadata["fused_evidence"] = stages.ranked_candidates
-    metadata["fusion_stage_snapshot"] = stages.fusion_stage
+    metadata["fused_evidence"] = deepcopy(stages.ranked_candidates)
+    metadata["fusion_stage_snapshot"] = deepcopy(stages.fusion_stage)
     if stages.reranked is not None:
         metadata["reranked_candidate_count"] = len(stages.reranked)
-        metadata["reranked_evidence"] = stages.reranked
+        metadata["reranked_evidence"] = deepcopy(stages.reranked)
     ranking_metadata = dict(stages.ranking_metadata)
     ranking_metadata["fusion_stage_contract_id"] = FUSION_STAGE_CONTRACT
     ranking_metadata["candidate_stage"] = stages.fusion_stage["candidate_stage"]
-    ranking_metadata["fusion_stage_snapshot"] = stages.fusion_stage
+    ranking_metadata["fusion_stage_snapshot"] = deepcopy(stages.fusion_stage)
     execution_traces = ranking_metadata.get("reranker_execution_traces")
     if isinstance(execution_traces, list):
         metadata["reranker_execution_traces"] = execution_traces
@@ -114,10 +115,10 @@ def build_evidence_bundle(
     metadata["reranker_aggregate_trace"] = ranking_metadata
     metadata.update(merged_locator_metadata(metadata, deduped))
     metadata["modality_counts"] = dict(Counter(item["modality"] for item in deduped))
-    metadata["evidence"] = deduped
-    metadata["selected_evidence"] = deduped
-    metadata["generation_context_evidence"] = deduped
-    metadata["used_evidence"] = deduped
+    metadata["evidence"] = deepcopy(deduped)
+    metadata["selected_evidence"] = deepcopy(deduped)
+    metadata["generation_context_evidence"] = deepcopy(deduped)
+    metadata["used_evidence"] = deepcopy(deduped)
     metadata["stage_aliases"] = {
         "used_evidence": "generation_context_evidence",
     }

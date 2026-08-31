@@ -44,6 +44,7 @@ def _audit_declared_stage(
     violations: list[str] = []
     if marker != FUSION_STAGE_CONTRACT:
         violations.append("fusion_stage_contract_marker_mismatch")
+    identities = _stage_identities(metadata)
     if not snapshot:
         violations.append("fusion_stage_snapshot_missing")
         if candidate_stage == "post_fusion" and not _records(
@@ -57,6 +58,7 @@ def _audit_declared_stage(
                 ranking=ranking,
                 violations=violations,
                 contract_marker=marker,
+                identities=identities,
             ),
             violations,
         )
@@ -85,6 +87,7 @@ def _audit_declared_stage(
             ranking=ranking,
             violations=violations,
             contract_marker=marker,
+            identities=identities,
         ),
         violations,
     )
@@ -164,7 +167,13 @@ def _audit_summary(
     ranking: Mapping[str, Any],
     violations: list[str],
     contract_marker: str,
+    identities: Mapping[str, list[str]],
 ) -> dict[str, Any]:
+    input_identities = list(snapshot.get("input_identities") or [])
+    output_identities = list(snapshot.get("output_identities") or [])
+    canonical_identities = list(identities.get("canonical") or [])
+    ranked_identities = list(identities.get("ranked") or [])
+    fused_identities = list(identities.get("fused") or [])
     return {
         "contract_id": FUSION_STAGE_CONTRACT,
         "applicable": True,
@@ -176,8 +185,29 @@ def _audit_summary(
         "candidate_stage": str(ranking.get("candidate_stage") or ""),
         "input_count": snapshot.get("input_count"),
         "output_count": snapshot.get("output_count"),
+        "input_identities": input_identities,
+        "output_identities": output_identities,
+        "canonical_identities": canonical_identities,
+        "ranked_identities": ranked_identities,
+        "fused_identities": fused_identities,
+        "identity_order_preserved": bool(
+            input_identities == canonical_identities
+            and output_identities == ranked_identities == fused_identities
+        ),
         "violations": list(violations),
     }
+
+
+def _stage_identities(metadata: Mapping[str, Any]) -> dict[str, list[str]]:
+    identities: dict[str, list[str]] = {}
+    for label, value in {
+        "canonical": metadata.get("canonical_candidate_evidence"),
+        "ranked": metadata.get("candidate_ranked_evidence"),
+        "fused": metadata.get("fused_evidence"),
+    }.items():
+        values, error = _identity_keys(_records(value))
+        identities[label] = [] if error else values
+    return identities
 
 
 def _metadata(prediction: Mapping[str, Any]) -> dict[str, Any]:

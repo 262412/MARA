@@ -223,20 +223,31 @@ def _stage_pair_failure(
         if reason:
             return _comparison_result(
                 "invalid",
-                _integrity_failure(index, stage_name, f"{label}_{reason}"),
+                _integrity_failure(
+                    index,
+                    stage_name,
+                    f"{label}_{reason}",
+                    payload=_mapping(stage.get("payload")),
+                ),
                 compared_stage_count=index - 1,
             )
     if expected.get("comparison_digest") == observed.get("comparison_digest"):
         return None
+    divergence = {
+        "stage_index": index,
+        "stage": stage_name,
+        "reason": "stage_comparison_digest_mismatch",
+        "reference_digest": str(expected.get("comparison_digest") or ""),
+        "replay_digest": str(observed.get("comparison_digest") or ""),
+    }
+    divergence.update(
+        _digest_trace_fields(
+            _mapping(expected.get("payload")) or _mapping(observed.get("payload"))
+        )
+    )
     return _comparison_result(
         "diverged",
-        {
-            "stage_index": index,
-            "stage": stage_name,
-            "reason": "stage_comparison_digest_mismatch",
-            "reference_digest": str(expected.get("comparison_digest") or ""),
-            "replay_digest": str(observed.get("comparison_digest") or ""),
-        },
+        divergence,
         compared_stage_count=index - 1,
     )
 
@@ -301,12 +312,18 @@ def _first_integrity_failure(
             stage, index=index, name=name, previous=previous
         )
         if reason:
-            return _integrity_failure(index, name, f"{label}_{reason}")
+            return _integrity_failure(
+                index,
+                name,
+                f"{label}_{reason}",
+                payload=_mapping(stage.get("payload")),
+            )
         if stage.get("status") != "complete":
             return _integrity_failure(
                 index,
                 name,
                 f"{label}_stage_incomplete",
+                payload=_mapping(stage.get("payload")),
             )
         previous = str(stage.get("chain_digest") or "")
     return _transaction_tail_failure(
@@ -416,8 +433,54 @@ def _comparison_result(
     }
 
 
-def _integrity_failure(index: int, stage: str, reason: str) -> dict[str, Any]:
-    return {"stage_index": index, "stage": stage, "reason": reason}
+def _integrity_failure(
+    index: int,
+    stage: str,
+    reason: str,
+    *,
+    payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    failure = {"stage_index": index, "stage": stage, "reason": reason}
+    failure.update(_digest_trace_fields(payload or {}))
+    return failure
+
+
+def _digest_trace_fields(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Carry canonical digest evidence into the first causal failure only."""
+
+    candidates = [value]
+    finalizer = value.get("finalizer_decision")
+    if isinstance(finalizer, Mapping):
+        candidates.append(finalizer)
+    for key in (
+        "canonical_projection_digest_trace",
+        "canonical_digest_trace",
+        "first_divergence",
+    ):
+        nested = value.get(key)
+        if isinstance(nested, Mapping):
+            candidates.append(nested)
+    for candidate in candidates:
+        fields = {
+            key: str(candidate.get(key) or "")
+            for key in ("producer_digest", "validator_digest", "serializer_identity")
+            if candidate.get(key)
+        }
+        citation_fields = {
+            key: deepcopy(candidate[key])
+            for key in (
+                "citation_stage_trace",
+                "frozen_citation_projection_trace",
+                "citation_projection_source",
+                "emitted_citation_evidence_identities",
+            )
+            if candidate.get(key)
+        }
+        if citation_fields:
+            fields.update(citation_fields)
+        if fields:
+            return fields
+    return {}
 
 
 def _stage_list(value: Mapping[str, Any]) -> list[dict[str, Any]]:

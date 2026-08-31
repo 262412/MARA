@@ -9,7 +9,7 @@ from .boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
-from .qasper_semantic_pack_contract import canonical_payload_digest
+from .canonical_serialization import canonical_projection_digest_trace
 from .question_proposition import (
     applicable_proposition_evidence_slots,
     build_question_proposition,
@@ -290,13 +290,13 @@ def _verifier_attestation(
         "entailment_audit": dict(response.get("entailment_audit") or {}),
     }
     if canonical_plan_projection is not None:
+        projection_trace = canonical_projection_digest_trace(canonical_plan_projection)
         payload.update(
             {
                 "canonical_evidence_plan_id": canonical_plan_projection.plan_id,
                 "canonical_plan_digest": canonical_plan_projection.plan_digest,
-                "canonical_projection_digest": canonical_payload_digest(
-                    canonical_plan_projection.as_dict()
-                ),
+                "canonical_projection_digest": projection_trace["validator_digest"],
+                "canonical_projection_digest_trace": projection_trace,
             }
         )
     return payload

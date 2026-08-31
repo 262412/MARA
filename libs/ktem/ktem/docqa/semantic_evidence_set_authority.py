@@ -11,16 +11,17 @@ from .boolean_authority_schema import (
     supported_boolean_claim,
 )
 from .boolean_candidate_authority import structured_boolean_candidate_label
+from .canonical_serialization import canonical_projection_digest_trace
 from .evidence_schema import EvidenceBundle
 from .frozen_canonical_proposition_projection import (
     FrozenCanonicalPropositionEvidencePlan,
 )
-from .qasper_semantic_pack_contract import (
-    canonical_payload_digest,
-    qasper_semantic_pack_continuity_reason,
-)
+from .qasper_semantic_pack_contract import qasper_semantic_pack_continuity_reason
 from .semantic_evidence_set_derivation import semantic_evidence_set_derivation
 from .semantic_evidence_set_plan_projection import semantic_authority_plan_projection
+from .semantic_evidence_set_authority_trace import (
+    canonical_projection_trace as _canonical_projection_trace,
+)
 from .semantic_evidence_set_validation import (
     semantic_proposition_binding_fields,
     validated_semantic_header,
@@ -285,7 +286,7 @@ def _authority_from_verified_response(
             "rejected",
             status,
             debug_trace=debug_trace,
-            **_rejected_transaction_fields(response),
+            **_rejected_transaction_fields(response, attestation=attestation),
         )
         return None
     return _commit_verified_authority(
@@ -410,6 +411,12 @@ def _verified_authority_trace_fields(
             attestation.get("canonical_evidence_plan_id") or ""
         ),
         "canonical_plan_digest": str(attestation.get("canonical_plan_digest") or ""),
+        "canonical_projection_digest": str(
+            attestation.get("canonical_projection_digest") or ""
+        ),
+        "canonical_projection_digest_trace": dict(
+            attestation.get("canonical_projection_digest_trace") or {}
+        ),
     }
 
 
@@ -426,6 +433,15 @@ def _enriched_attestation(
     canonical_plan_projection: FrozenCanonicalPropositionEvidencePlan | None = None,
 ) -> dict[str, Any]:
     verifier = response.get("verifier") or {}
+    projection_fields = {}
+    if canonical_plan_projection is not None:
+        projection_trace = canonical_projection_digest_trace(canonical_plan_projection)
+        projection_fields = {
+            "canonical_evidence_plan_id": canonical_plan_projection.plan_id,
+            "canonical_plan_digest": canonical_plan_projection.plan_digest,
+            "canonical_projection_digest": projection_trace["validator_digest"],
+            "canonical_projection_digest_trace": projection_trace,
+        }
     return {
         **attestation,
         "premise_count": premise_count,
@@ -449,27 +465,21 @@ def _enriched_attestation(
             premises,
             canonical_plan_projection=canonical_plan_projection,
         ),
-        **(
-            {
-                "canonical_evidence_plan_id": canonical_plan_projection.plan_id,
-                "canonical_plan_digest": canonical_plan_projection.plan_digest,
-                "canonical_projection_digest": canonical_payload_digest(
-                    canonical_plan_projection.as_dict()
-                ),
-            }
-            if canonical_plan_projection is not None
-            else {}
-        ),
+        **projection_fields,
     }
 
 
-def _rejected_transaction_fields(response: Mapping[str, Any]) -> dict[str, Any]:
+def _rejected_transaction_fields(
+    response: Mapping[str, Any],
+    *,
+    attestation: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     audit = response.get("entailment_audit")
     audit = audit if isinstance(audit, Mapping) else {}
     typed_conclusion = dict(response.get("typed_conclusion") or {})
     conclusion_audit = dict(audit.get("conclusion_audit") or {})
     polarity_check = dict(audit.get("polarity_contradiction_check") or {})
-    return {
+    fields = {
         "proof_mode": str(response.get("proof_mode") or ""),
         "typed_conclusion": typed_conclusion,
         "conclusion_audit": conclusion_audit,
@@ -488,6 +498,13 @@ def _rejected_transaction_fields(response: Mapping[str, Any]) -> dict[str, Any]:
         "unknown_assessment": dict(response.get("unknown_assessment") or {}),
         **_canonical_pack_trace_fields(response),
     }
+    projection_trace = _canonical_projection_trace(response, attestation=attestation)
+    if projection_trace:
+        fields["canonical_projection_digest_trace"] = projection_trace
+        for key in ("canonical_projection_digest",):
+            if projection_trace.get("validator_digest"):
+                fields[key] = projection_trace["validator_digest"]
+    return fields
 
 
 def _canonical_pack_trace_fields(response: Mapping[str, Any]) -> dict[str, Any]:

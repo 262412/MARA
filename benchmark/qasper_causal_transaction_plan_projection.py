@@ -21,6 +21,8 @@ def projected_plan_authority_stage_payload(
     pack: Mapping[str, Any],
     generator: Mapping[str, Any],
     proposal_value: Mapping[str, Any],
+    *,
+    authority: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     binding = _mapping(pack.get("proposition_binding"))
     records = _mapping_list(pack.get("records"))
@@ -45,24 +47,41 @@ def projected_plan_authority_stage_payload(
     selected_plan = deepcopy(_mapping(plans.get(selected_plan_id)))
     slot_bindings = deepcopy(_mapping(selected_plan.get("slot_refs")))
     reasons = [reason] if reason else []
-    return _payload(
-        reasons,
-        projection_authority_source="frozen_canonical_semantic_pack",
-        projection_status="projected" if projection is not None else "not_projected",
-        projection_reason=(
+    values = {
+        "projection_authority_source": "frozen_canonical_semantic_pack",
+        "projection_status": "projected" if projection is not None else "not_projected",
+        "projection_reason": (
             reason or ("" if projection is not None else "selected_plan_unavailable")
         ),
-        selection_input=selection,
-        selection_input_digest=canonical_digest(selection),
-        selected_plan_id=selected_plan_id,
-        selected_plan=selected_plan,
-        selected_plan_digest=canonical_digest(selected_plan),
-        premises=premises,
-        premises_digest=canonical_digest(premises),
-        slot_bindings=slot_bindings,
-        slot_bindings_digest=canonical_digest(slot_bindings),
-        proof_mode=str(_mapping(projection).get("proof_mode") or ""),
-        evidence_relation=str(_mapping(projection).get("evidence_relation") or ""),
+        "selection_input": selection,
+        "selection_input_digest": canonical_digest(selection),
+        "selected_plan_id": selected_plan_id,
+        "selected_plan": selected_plan,
+        "selected_plan_digest": canonical_digest(selected_plan),
+        "premises": premises,
+        "premises_digest": canonical_digest(premises),
+        "slot_bindings": slot_bindings,
+        "slot_bindings_digest": canonical_digest(slot_bindings),
+        "proof_mode": str(_mapping(projection).get("proof_mode") or ""),
+        "evidence_relation": str(_mapping(projection).get("evidence_relation") or ""),
+    }
+    projection_trace = _projection_digest_trace(authority, generator, proposal_value)
+    if projection_trace:
+        if projection_trace.get("status") == "mismatch":
+            reasons.append("canonical_projection_digest_mismatch")
+        values.update(
+            {
+                "canonical_projection_digest_trace": projection_trace,
+                "producer_digest": str(projection_trace.get("producer_digest") or ""),
+                "validator_digest": str(projection_trace.get("validator_digest") or ""),
+                "serializer_identity": str(
+                    projection_trace.get("serializer_identity") or ""
+                ),
+            }
+        )
+    return _payload(
+        reasons,
+        **values,
     )
 
 
@@ -149,3 +168,16 @@ def _mapping(value: Any) -> dict[str, Any]:
 
 def _mapping_list(value: Any) -> list[dict[str, Any]]:
     return [dict(item) for item in value or [] if isinstance(item, Mapping)]
+
+
+def _projection_digest_trace(*sources: Mapping[str, Any] | None) -> dict[str, Any]:
+    for source in sources:
+        value = _mapping(source)
+        trace = value.get("canonical_projection_digest_trace")
+        if isinstance(trace, Mapping):
+            return deepcopy(dict(trace))
+        constraint = _mapping(value.get("independent_semantic_constraint"))
+        trace = constraint.get("canonical_projection_digest_trace")
+        if isinstance(trace, Mapping):
+            return deepcopy(dict(trace))
+    return {}

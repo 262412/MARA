@@ -13,6 +13,10 @@ from .boolean_evidence_scope import (
     _section_role,
     evidence_item_text,
 )
+from .canonical_serialization import (
+    canonical_digest,
+    canonical_projection_digest_trace,
+)
 from .evidence_identity import identity_of
 from .polarity_contradiction_check import polarity_contradiction_check
 from .query_phrase_extraction import source_page_locator
@@ -410,20 +414,16 @@ def _frozen_plan_binding_fields(
             slot for slot in PROPOSITION_EVIDENCE_SLOTS if slot not in applicable_slots
         ],
     }
+    projection_trace = canonical_projection_digest_trace(projection)
     return {
         **payload,
         "required_proposition_slots": applicable_slots,
         "proposition_slot_evidence": premise_slot_evidence,
-        "proposition_evidence_set_digest": hashlib.sha256(
-            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest(),
+        "proposition_evidence_set_digest": canonical_digest(payload),
         "canonical_evidence_plan_id": projection.plan_id,
         "canonical_plan_digest": projection.plan_digest,
-        "canonical_projection_digest": hashlib.sha256(
-            json.dumps(
-                projection.as_dict(), sort_keys=True, separators=(",", ":")
-            ).encode("utf-8")
-        ).hexdigest(),
+        "canonical_projection_digest": projection_trace["validator_digest"],
+        "canonical_projection_digest_trace": projection_trace,
     }
 
 

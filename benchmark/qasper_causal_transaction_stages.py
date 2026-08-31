@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
+from ktem.docqa.canonical_serialization import canonical_digest_trace
 from ktem.docqa.qasper_semantic_pack_contract import (
     QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
     qasper_canonical_span_universe_digest,
@@ -31,6 +32,7 @@ def causal_transaction_stage_payloads(
 ) -> dict[str, dict[str, Any]]:
     generator = _mapping(debug_row.get("main_candidate_generator"))
     verifier = _mapping(debug_row.get("semantic_verifier"))
+    authority = _mapping(debug_row.get("semantic_authority"))
     pack = _candidate_stage_pack(prediction)
     source = _mapping(pack.get("source_packing_observation"))
     frozen_binding = _mapping(pack.get("proposition_binding"))
@@ -60,6 +62,7 @@ def causal_transaction_stage_payloads(
             pack,
             generator,
             proposal_value,
+            authority=authority,
         ),
     }
     stages.update(
@@ -186,7 +189,6 @@ def _candidate_input_payload(
     request_projection = deepcopy(
         _mapping(generator.get("candidate_request_projection_trace"))
     )
-    selected_record_ids = _selected_request_record_ids(request_projection)
     reasons = []
     if snapshot.get("contract_id") != "semantic_source_input_snapshot.v1":
         reasons.append("source_input_snapshot_missing")
@@ -196,6 +198,12 @@ def _candidate_input_payload(
         reasons.append("candidate_message_stack_missing")
     if not is_sha256(generator.get("input_digest")):
         reasons.append("candidate_input_digest_missing")
+    request_observation = _candidate_request_integrity_observation(
+        generator,
+        messages,
+        request_projection,
+    )
+    reasons.extend(request_observation["incompleteness_reasons"])
     return _payload(
         reasons,
         source_input_snapshot=snapshot,
@@ -210,12 +218,84 @@ def _candidate_input_payload(
         request_drop_count=int(generator.get("request_dropped_evidence_count") or 0),
         token_measurement=_candidate_token_measurement(generator),
         token_budget=_candidate_token_budget(generator),
-        selected_record_ids=selected_record_ids,
-        selected_record_ids_digest=canonical_digest(selected_record_ids),
+        selected_record_ids=request_observation["selected_record_ids"],
+        selected_record_ids_digest=canonical_digest(
+            request_observation["selected_record_ids"]
+        ),
+        selected_record_count=request_observation["selected_record_count"],
+        canonical_digest_trace=request_observation["canonical_digest_trace"],
         prompt_projection=deepcopy(
             generator.get("candidate_prompt_projection_trace") or {}
         ),
         request_projection=request_projection,
+    )
+
+
+def _candidate_request_integrity_observation(
+    generator: Mapping[str, Any],
+    messages: list[Any],
+    request_projection: Mapping[str, Any],
+) -> dict[str, Any]:
+    decision_selected_record_ids = _selected_request_record_ids(request_projection)
+    projected_selected_record_ids = request_projection.get("selected_record_ids")
+    selected_record_ids = (
+        list(projected_selected_record_ids)
+        if isinstance(projected_selected_record_ids, list)
+        else decision_selected_record_ids
+    )
+    reasons = []
+    if projected_selected_record_ids is not None and (
+        selected_record_ids != decision_selected_record_ids
+    ):
+        reasons.append("candidate_request_selected_record_ids_mismatch")
+    if request_projection.get("selected_record_count") != len(
+        decision_selected_record_ids
+    ):
+        reasons.append("candidate_request_selected_record_count_mismatch")
+    attempts = [
+        _mapping(attempt) for attempt in request_projection.get("attempts") or []
+    ]
+    final_accepted_attempt_ids: list[str] = []
+    if attempts:
+        final_attempt = attempts[-1]
+        if final_attempt.get("decision") == "accepted":
+            final_accepted_attempt_ids = list(final_attempt.get("record_ids") or [])
+            if final_accepted_attempt_ids != decision_selected_record_ids:
+                reasons.append("candidate_request_final_accepted_attempt_ids_mismatch")
+    final_message_stack = request_projection.get("final_message_stack")
+    if final_message_stack is not None and list(final_message_stack) != messages:
+        reasons.append("candidate_request_final_message_stack_mismatch")
+    if final_message_stack is not None and request_projection.get(
+        "final_message_stack_digest"
+    ) != canonical_digest(final_message_stack):
+        reasons.append("candidate_request_final_message_stack_digest_mismatch")
+    if generator.get("message_stack_digest") != canonical_digest(messages):
+        reasons.append("candidate_message_stack_digest_mismatch")
+    return {
+        "incompleteness_reasons": reasons,
+        "selected_record_ids": selected_record_ids,
+        "selected_record_count": request_projection.get("selected_record_count"),
+        "canonical_digest_trace": _candidate_request_digest_trace(
+            decision_selected_record_ids,
+            final_accepted_attempt_ids,
+            attempts,
+        ),
+    }
+
+
+def _candidate_request_digest_trace(
+    decision_selected_record_ids: list[str],
+    final_accepted_attempt_ids: list[str],
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return canonical_digest_trace(
+        decision_selected_record_ids,
+        producer_digest=(
+            canonical_digest(final_accepted_attempt_ids)
+            if attempts and attempts[-1].get("decision") == "accepted"
+            else None
+        ),
+        boundary="candidate_request_selected_records",
     )
 
 

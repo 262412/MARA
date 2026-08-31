@@ -13,6 +13,7 @@ from scripts.slurm.qasper_natural_candidate_response_replay import (
     candidate_response_snapshot,
 )
 from scripts.slurm.qasper_natural_semantic_projection import (
+    candidate_request_projection_complete as _candidate_request_projection_complete,
     frozen_projection_complete as _projection_complete,
 )
 
@@ -351,11 +352,9 @@ def candidate_request_replay_complete(
         and _trace_token_measurement(replay_trace) == token_measurement
         and _trace_budget(replay_trace) == budget
         and frozen_request_replay.get("status") == "matched"
-        and _projection_complete(
+        and _candidate_request_projection_complete(
             request_projection,
-            contract_id="qasper_candidate_request_projection.v1",
-            input_count_key="input_record_count",
-            attempts_required=True,
+            message_stack=messages,
         )
         and _projection_complete(
             prompt_projection,

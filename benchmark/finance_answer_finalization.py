@@ -21,6 +21,10 @@ def metadata_citations_allowed(
         and prediction.get("finance_citation_authority_status") == "invalid"
     ):
         return False
+    if "qasper" in dataset:
+        return bool(prediction.get("gold_evidence")) or _verified_qasper_plan(
+            prediction
+        )
     return bool(prediction.get("gold_evidence")) or any(
         family in dataset
         for family in (
@@ -29,6 +33,60 @@ def metadata_citations_allowed(
             "mmdocrag",
             "vidore",
             "ragtruth",
+        )
+    )
+
+
+def _verified_qasper_plan(prediction: dict[str, Any]) -> bool:
+    for metadata in _metadata_sources(prediction):
+        authority = metadata.get("semantic_proposition_authority")
+        pack = metadata.get("qasper_canonical_semantic_pack")
+        if not isinstance(authority, dict) or not isinstance(pack, dict):
+            continue
+        plan_id = str(authority.get("canonical_evidence_plan_id") or "").strip()
+        plan_digest = str(
+            authority.get("canonical_plan_digest")
+            or authority.get("canonical_evidence_plan_digest")
+            or ""
+        ).strip()
+        premise_count = authority.get("premise_count")
+        if (
+            authority.get("status") == "verified"
+            and plan_id
+            and plan_digest
+            and isinstance(premise_count, int)
+            and premise_count > 0
+            and _pack_contains_plan(pack, plan_id)
+        ):
+            return True
+    return False
+
+
+def _metadata_sources(prediction: dict[str, Any]) -> list[dict[str, Any]]:
+    values = [
+        prediction.get("evidence_metadata"),
+        _nested_metadata(prediction.get("evidence_bundle")),
+        _nested_metadata(prediction.get("engine_terminal_evidence_bundle")),
+    ]
+    return [value for value in values if isinstance(value, dict)]
+
+
+def _nested_metadata(value: Any) -> dict[str, Any] | None:
+    return value.get("metadata") if isinstance(value, dict) else None
+
+
+def _pack_contains_plan(pack: dict[str, Any], plan_id: str) -> bool:
+    binding = pack.get("proposition_binding")
+    canonical = (
+        binding.get("canonical_evidence_plan") if isinstance(binding, dict) else None
+    )
+    if not isinstance(canonical, dict):
+        return False
+    return any(
+        isinstance(plan, dict) and str(plan.get("plan_id") or "") == plan_id
+        for plan in (
+            canonical.get("support_plan"),
+            canonical.get("contradiction_plan"),
         )
     )
 

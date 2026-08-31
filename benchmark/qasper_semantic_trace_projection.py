@@ -229,6 +229,8 @@ def semantic_proposition_authority_trace_fields(
     metadata = metadata if isinstance(metadata, dict) else {}
     trace = metadata.get("semantic_proposition_authority")
     trace = trace if isinstance(trace, dict) else {}
+    projection_trace = trace.get("canonical_projection_digest_trace")
+    projection_trace = projection_trace if isinstance(projection_trace, dict) else {}
     return {
         "runtime_semantic_proposition_authority_contract_id": str(
             trace.get("contract_id") or ""
@@ -270,6 +272,18 @@ def semantic_proposition_authority_trace_fields(
         ),
         "runtime_semantic_proposition_authority_pack_digest": str(
             trace.get("semantic_pack_digest") or ""
+        ),
+        "runtime_semantic_proposition_authority_producer_digest": str(
+            projection_trace.get("producer_digest") or ""
+        ),
+        "runtime_semantic_proposition_authority_validator_digest": str(
+            projection_trace.get("validator_digest") or ""
+        ),
+        "runtime_semantic_proposition_authority_serializer_identity": str(
+            projection_trace.get("serializer_identity") or ""
+        ),
+        "runtime_semantic_proposition_authority_digest_first_divergence": deepcopy(
+            projection_trace.get("first_divergence") or {}
         ),
     }
 

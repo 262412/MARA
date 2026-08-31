@@ -9,6 +9,7 @@ from .boolean_authority_schema import (
     GROUNDED_SEMANTIC_AUDITOR_CONTRACT,
     SEMANTIC_ENTAILMENT_AUDIT_CONTRACT,
 )
+from .canonical_serialization import canonical_projection_digest_trace
 from .conclusion_audit import (
     conclusion_audit_attestation,
     conclusion_audit_validation_reason,
@@ -34,6 +35,7 @@ from .semantic_entailment_audit_result_validation import (
 from .semantic_entailment_audit_support import as_int as _as_int
 from .semantic_entailment_audit_support import mapping_digest as _mapping_digest
 from .semantic_entailment_audit_support import text_digest as _text_digest
+from .semantic_entailment_audit_support import validated_auditor as _validated_auditor
 from .semantic_premise_proof_validation import (
     local_proposition_slot_checks,
     semantic_premise_proof_span_reason,
@@ -208,13 +210,13 @@ def _semantic_audit_attestation_payload(
         ),
     }
     if canonical_plan_projection is not None:
+        projection_trace = canonical_projection_digest_trace(canonical_plan_projection)
         result.update(
             {
                 "canonical_evidence_plan_id": canonical_plan_projection.plan_id,
                 "canonical_plan_digest": canonical_plan_projection.plan_digest,
-                "canonical_projection_digest": _mapping_digest(
-                    canonical_plan_projection.as_dict()
-                ),
+                "canonical_projection_digest": projection_trace["validator_digest"],
+                "canonical_projection_digest_trace": projection_trace,
             }
         )
     return result
@@ -501,6 +503,7 @@ def _audit_binding_invalid(
         )
     )
     if canonical_plan_projection is not None:
+        projection_trace = canonical_projection_digest_trace(canonical_plan_projection)
         invalid = invalid or any(
             audit.get(field) != expected
             for field, expected in (
@@ -508,9 +511,13 @@ def _audit_binding_invalid(
                 ("canonical_plan_digest", canonical_plan_projection.plan_digest),
                 (
                     "canonical_projection_digest",
-                    _mapping_digest(canonical_plan_projection.as_dict()),
+                    projection_trace["validator_digest"],
                 ),
             )
+        )
+        invalid = invalid or (
+            isinstance(audit.get("canonical_projection_digest_trace"), Mapping)
+            and audit["canonical_projection_digest_trace"].get("status") == "mismatch"
         )
     return invalid
 
@@ -572,26 +579,3 @@ def _polarity_check_validation_reason(
     if value.get("status") == "contradiction_detected":
         return "polarity_contradiction_detected"
     return ""
-
-
-def _validated_auditor(
-    audit: Mapping[str, Any],
-    *,
-    release_mode: bool,
-) -> tuple[Mapping[str, Any], str]:
-    auditor = audit.get("auditor")
-    if not isinstance(auditor, Mapping) or (
-        auditor.get("contract_id") != GROUNDED_SEMANTIC_AUDITOR_CONTRACT
-        or not str(auditor.get("model") or "").strip()
-    ):
-        return {}, "semantic_entailment_auditor_attestation_invalid"
-    relationship = str(auditor.get("relationship") or "")
-    if relationship not in {
-        "same_instance",
-        "distinct_instance_same_model",
-        "distinct_model",
-    }:
-        return {}, "semantic_entailment_auditor_attestation_invalid"
-    if release_mode and relationship != "distinct_model":
-        return {}, "release_conclusion_auditor_not_independent"
-    return auditor, ""

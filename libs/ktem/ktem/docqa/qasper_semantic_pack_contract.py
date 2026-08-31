@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from typing import Any
 
+from .canonical_serialization import canonical_digest as _canonical_digest
 from .evidence_schema import EvidenceBundle
 
 QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT = "qasper_canonical_semantic_pack.v1"
@@ -15,14 +14,7 @@ _PROPOSITION_SLOTS = ("actor", "predicate", "object", "quantifier")
 
 
 def canonical_payload_digest(value: Any) -> str:
-    canonical = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return _canonical_digest(value)
 
 
 def qasper_canonical_span_universe_digest(

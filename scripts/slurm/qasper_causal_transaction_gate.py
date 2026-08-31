@@ -469,7 +469,14 @@ def _first_divergence(value: Any) -> dict[str, Any]:
     divergence = _mapping(value)
     return {
         key: divergence[key]
-        for key in ("stage_index", "stage", "reason")
+        for key in (
+            "stage_index",
+            "stage",
+            "reason",
+            "producer_digest",
+            "validator_digest",
+            "serializer_identity",
+        )
         if key in divergence
     }
 

@@ -4,6 +4,7 @@ from collections import Counter
 from copy import deepcopy
 from typing import Any, Iterable, Mapping
 
+from .citation_stage_projection import citation_trace_projection_fields
 from .qasper_candidate_input_state import candidate_input_state_observation
 from .qasper_causal_evidence_chain import qasper_causal_evidence_chain
 from .qasper_causal_transaction import qasper_causal_transaction
@@ -118,6 +119,10 @@ def _base_row(
         ),
         "semantic_verifier": deepcopy(verifier),
         "semantic_authority": deepcopy(authority),
+        **citation_trace_projection_fields(prediction),
+        "canonical_projection_digest_trace": deepcopy(
+            authority.get("canonical_projection_digest_trace") or {}
+        ),
         "question_proposition_resolution": deepcopy(
             verifier.get("question_proposition_resolution") or {}
         ),

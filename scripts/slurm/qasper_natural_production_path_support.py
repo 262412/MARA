@@ -19,7 +19,10 @@ from ktem.docqa.question_proposition import (
 from ktem.docqa.semantic_evidence_set_authority import (
     semantic_evidence_set_claim_authority,
 )
-from ktem.reasoning.mara_qasper_semantic_pack import qasper_canonical_evidence_plans
+from ktem.reasoning.mara_qasper_semantic_pack import (
+    qasper_canonical_evidence_plans,
+    qasper_source_packing_observation,
+)
 from ktem.reasoning.mara_semantic_candidate_policy import candidate_bound_response
 
 BOUND_STATES = frozenset({"relation_bound_support", "relation_bound_contradiction"})
@@ -240,6 +243,8 @@ def production_request(
     context: Any,
     question: str,
 ) -> Any:
+    source_observation = _mapping(qasper_source_packing_observation(context.bundle))
+    source_snapshot = _mapping(source_observation.get("source_input_snapshot"))
     return SimpleNamespace(
         origin="benchmark",
         verification_domain="qasper",
@@ -249,7 +254,7 @@ def production_request(
         verification_mode="strict",
         question=question,
         query=question,
-        query_plan=deepcopy(metadata.get("query_plan")),
+        query_plan=deepcopy(source_snapshot.get("query_plan")),
         trace_context={
             "trace_group_id": str(
                 context.candidate_generation.get("trace_group_id") or ""

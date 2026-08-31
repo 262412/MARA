@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from kotaemon.base import HumanMessage, SystemMessage
@@ -87,6 +88,7 @@ def fit_candidate_request(
 ) -> _CandidateRequestFit:
     initial = list(evidence)
     selected = list(evidence)
+    selected_indices = list(range(len(initial)))
     attempts: list[dict[str, Any]] = []
     dropped_count = 0
     pre_request_dropped_count = int(
@@ -122,7 +124,9 @@ def fit_candidate_request(
                 diagnostics,
                 initial=initial,
                 selected=selected,
+                selected_indices=selected_indices,
                 attempts=attempts,
+                messages=messages,
             )
             return (
                 selected,
@@ -132,6 +136,7 @@ def fit_candidate_request(
                 pre_request_dropped_count + dropped_count,
             )
         selected.pop(drop_index)
+        selected_indices.pop(drop_index)
         dropped_count += 1
 
 
@@ -219,33 +224,54 @@ def _record_candidate_request_projection(
     *,
     initial: list[dict[str, Any]],
     selected: list[dict[str, Any]],
+    selected_indices: list[int],
     attempts: list[dict[str, Any]],
+    messages: list[Any],
 ) -> None:
-    selected_ids = {str(record.get("evidence_id") or "") for record in selected}
+    selected_index_set = set(selected_indices)
+    selected_ids = [
+        str(initial[index].get("evidence_id") or "") for index in selected_indices
+    ]
     decisions = [
         {
             "evidence_id": str(record.get("evidence_id") or ""),
-            "selected": str(record.get("evidence_id") or "") in selected_ids,
+            "selected": index in selected_index_set,
             "decision": (
                 "selected_for_model_request"
-                if str(record.get("evidence_id") or "") in selected_ids
+                if index in selected_index_set
                 else "candidate_request_token_budget"
             ),
         }
-        for record in initial
+        for index, record in enumerate(initial)
     ]
+    final_message_stack = _serialized_messages(messages)
     diagnostics["candidate_request_projection_trace"] = {
         "contract_id": "qasper_candidate_request_projection.v1",
         "complete": True,
         "input_record_count": len(initial),
         "selected_record_count": len(selected),
+        "selected_record_ids": selected_ids,
+        "selected_record_ids_digest": _digest(selected_ids),
         "decision_count": len(decisions),
         "decisions_digest": _digest(decisions),
         "decisions": decisions,
         "attempt_count": len(attempts),
         "attempts_digest": _digest(attempts),
         "attempts": attempts,
+        "final_message_stack": final_message_stack,
+        "final_message_stack_digest": _digest(final_message_stack),
     }
+
+
+def _serialized_messages(messages: list[Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "index": index,
+            "role": "system" if isinstance(message, SystemMessage) else "user",
+            "content": deepcopy(message.content),
+        }
+        for index, message in enumerate(messages)
+    ]
 
 
 def candidate_request_diagnostics(

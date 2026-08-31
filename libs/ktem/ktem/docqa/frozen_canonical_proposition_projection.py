@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from typing import Any, NamedTuple
 
+from .canonical_serialization import canonical_projection_digest
 from .canonical_proposition_evidence_plan_contract import canonical_plan_digest
 from .frozen_canonical_projection_model import (
     FROZEN_CANONICAL_PROJECTION_CONTRACT,
@@ -33,7 +34,6 @@ from .frozen_canonical_projection_validation import (
 )
 from .qasper_semantic_pack_contract import (
     QASPER_CANONICAL_SEMANTIC_PACK_METADATA_KEY,
-    canonical_payload_digest,
     qasper_canonical_records_reason,
 )
 from .question_proposition import (
@@ -520,7 +520,7 @@ def _make_projection(
         },
         "semantic_alignment_by_ref": deepcopy(projected.semantic_alignment_by_ref),
     }
-    projection_digest = canonical_payload_digest(canonical)
+    projection_digest = canonical_projection_digest(canonical)
     premises = [deepcopy(premise) for premise in projected.premises]
     for premise in premises:
         premise["canonical_projection_digest"] = projection_digest

@@ -12,6 +12,7 @@ def findings_for_row(row: Mapping[str, Any]) -> list[dict[str, str]]:
         event for event in debug_trace.get("events", []) if isinstance(event, Mapping)
     ]
     candidate_analysis = _mapping(row.get("candidate_authority_analysis"))
+    findings.extend(_canonical_digest_findings(row))
     findings.extend(_candidate_findings(candidate_analysis))
     if (
         verifier.get("audit_status") == "verified"
@@ -38,6 +39,24 @@ def findings_for_row(row: Mapping[str, Any]) -> list[dict[str, str]]:
     findings.extend(_trace_integrity_findings(debug_trace))
     findings.extend(_benchmark_findings(row, events, authority))
     return findings
+
+
+def _canonical_digest_findings(row: Mapping[str, Any]) -> list[dict[str, str]]:
+    trace = _mapping(row.get("canonical_projection_digest_trace"))
+    if trace.get("status") != "mismatch":
+        return []
+    boundary = str(
+        _mapping(trace.get("first_divergence")).get("boundary")
+        or trace.get("boundary")
+        or "canonical_projection_digest"
+    )
+    return [
+        _finding(
+            "canonical_projection_digest_mismatch",
+            "inconsistency",
+            f"first semantic digest divergence at {boundary}",
+        )
+    ]
 
 
 def _candidate_findings(

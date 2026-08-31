@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from .canonical_serialization import canonical_digest as _canonical_digest
 from .question_proposition import QuestionProposition
 
 CANONICAL_PROPOSITION_EVIDENCE_PLAN_CONTRACT = "canonical_proposition_evidence_plan.v2"
@@ -197,14 +196,7 @@ def canonical_plan_evidence_sets(
 
 
 def canonical_plan_digest(value: Any) -> str:
-    canonical = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return _canonical_digest(value)
 
 
 def canonical_span_universe_digest(

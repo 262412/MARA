@@ -9,6 +9,15 @@ from typing import Any, cast
 
 from ktem.docqa.benchmark_evidence import benchmark_evidence_record
 
+_FROZEN_FUSION_STAGE_PROJECTIONS = frozenset(
+    {
+        "canonical_candidate_evidence",
+        "candidate_evidence",
+        "candidate_ranked_evidence",
+        "fused_evidence",
+    }
+)
+
 
 @dataclass(frozen=True)
 class CanonicalEvidenceIdentity:
@@ -168,8 +177,26 @@ def stabilize_qasper_evidence_projection(
     for key, value in list(normalized_metadata.items()):
         if not _is_evidence_projection_list(key, value):
             continue
+        if _is_frozen_fusion_stage_projection(key, normalized_metadata):
+            continue
         normalized_metadata[key] = _stable_evidence_order(value)
     return normalized_metadata, _stable_evidence_order(retrieved_hits)
+
+
+def _is_frozen_fusion_stage_projection(
+    key: str,
+    metadata: dict[str, Any],
+) -> bool:
+    if key not in _FROZEN_FUSION_STAGE_PROJECTIONS:
+        return False
+    snapshot = metadata.get("fusion_stage_snapshot")
+    ranking = metadata.get("ranking_trace")
+    return bool(
+        isinstance(snapshot, dict)
+        and snapshot.get("contract_id") == "fusion_stage_snapshot.v1"
+        and isinstance(ranking, dict)
+        and ranking.get("fusion_stage_contract_id") == "fusion_stage_snapshot.v1"
+    )
 
 
 def _is_evidence_projection_list(key: str, value: Any) -> bool:
