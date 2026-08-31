@@ -24,6 +24,7 @@ def debug_generator_trace(
         candidate,
         plan_candidate_decisions_digest,
     )
+    messages = _candidate_messages()
     canonical_decisions = _canonical_selector_decisions()
     output_digest = _generator_output_digest(
         candidate,
@@ -36,8 +37,14 @@ def debug_generator_trace(
             raw_response,
             raw_digest,
             candidate_digest,
+            messages,
         ),
-        **_generator_projections(context, canonical_decisions, raw_digest),
+        **_generator_projections(
+            context,
+            canonical_decisions,
+            raw_digest,
+            messages,
+        ),
         **_debug_generator_lineage(
             candidate,
             raw_response,
@@ -99,15 +106,14 @@ def _generator_header(
     raw_response: str,
     raw_digest: str,
     candidate_digest: str,
+    messages: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         "contract_id": "qasper_typed_candidate_generation.v2",
         "status": "parsed",
         "model": "Qwen/Qwen3-8B",
-        "message_stack": [
-            {"index": 0, "role": "system", "content": "verify"},
-            {"index": 1, "role": "user", "content": "question"},
-        ],
+        "message_stack": messages,
+        "message_stack_digest": _fixture_digest(messages),
         "raw_response": raw_response,
         "raw_response_digest": raw_digest,
         "provider_output_digest": raw_digest,
@@ -143,6 +149,7 @@ def _generator_projections(
     context: dict[str, Any],
     canonical_decisions: list[dict[str, Any]],
     raw_digest: str,
+    messages: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         "candidate_prompt_projection_trace": debug_record_projection(
@@ -152,6 +159,7 @@ def _generator_projections(
         "candidate_request_projection_trace": debug_record_projection(
             "qasper_candidate_request_projection.v1",
             decision="selected_for_model_request",
+            final_message_stack=messages,
         ),
         "canonical_selector_projection_trace": {
             "contract_id": "qasper_canonical_selector_projection.v1",
@@ -190,7 +198,12 @@ def _canonical_selector_decisions() -> list[dict[str, Any]]:
     ]
 
 
-def debug_record_projection(contract_id: str, *, decision: str) -> dict[str, Any]:
+def debug_record_projection(
+    contract_id: str,
+    *,
+    decision: str,
+    final_message_stack: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     decisions = [
         {
             "evidence_id": "span:paper:s1",
@@ -204,11 +217,13 @@ def debug_record_projection(contract_id: str, *, decision: str) -> dict[str, Any
             "decision": "accepted",
         }
     ]
-    return {
+    projection = {
         "contract_id": contract_id,
         "complete": True,
         "input_record_count": 1,
         "selected_record_count": 1,
+        "selected_record_ids": ["span:paper:s1"],
+        "selected_record_ids_digest": _fixture_digest(["span:paper:s1"]),
         "decision_count": 1,
         "decisions_digest": _fixture_digest(decisions),
         "decisions": decisions,
@@ -216,6 +231,19 @@ def debug_record_projection(contract_id: str, *, decision: str) -> dict[str, Any
         "attempts_digest": _fixture_digest(attempts),
         "attempts": attempts,
     }
+    if final_message_stack is not None:
+        projection.update(
+            final_message_stack=final_message_stack,
+            final_message_stack_digest=_fixture_digest(final_message_stack),
+        )
+    return projection
+
+
+def _candidate_messages() -> list[dict[str, Any]]:
+    return [
+        {"index": 0, "role": "system", "content": "verify"},
+        {"index": 1, "role": "user", "content": "question"},
+    ]
 
 
 def _debug_generator_lineage(

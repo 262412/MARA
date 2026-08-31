@@ -92,8 +92,14 @@ def test_natural_probe_fails_closed_on_a_tampered_trace_digest(monkeypatch) -> N
     assert result["status"] == "failed"
 
 
-def test_natural_probe_reports_only_the_first_online_local_path_divergence() -> None:
+def test_natural_probe_rejects_the_first_inconsistent_online_candidate_stage() -> None:
     row = _row()
+    reference = _causal_transaction(
+        row,
+        origin="fixture_online_reference",
+        run_context=_run_context(),
+    )
+    replay_run_context = causal_replay_run_context(row, reference)
     generator = cast(
         dict[str, Any],
         cast(dict[str, Any], row["evidence_metadata"])["qasper_candidate_generation"],
@@ -117,12 +123,17 @@ def test_natural_probe_reports_only_the_first_online_local_path_divergence() -> 
     )
     terminal_metadata["qasper_candidate_generation"] = deepcopy(generator)
 
-    result = _probe_prediction(row, code_sha=_CODE_SHA)
+    result = probe.probe_prediction(
+        row,
+        code_sha=_CODE_SHA,
+        run_context=replay_run_context,
+    )
 
     comparison = result["causal_transaction_replay"]["comparison"]
-    assert comparison["status"] == "diverged"
+    assert comparison["status"] == "invalid"
     assert comparison["first_divergence"]["stage_index"] == 3
     assert comparison["first_divergence"]["stage"] == "candidate_input"
+    assert comparison["first_divergence"]["reason"] == "reference_stage_incomplete"
     assert comparison["later_stages_evaluated"] is False
     assert "later_divergences" not in comparison
 
