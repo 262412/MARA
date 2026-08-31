@@ -4,9 +4,7 @@ from typing import Any
 
 from benchmark.dataset_native_scores import native_metrics_for_prediction
 from benchmark.metrics import safe_mean
-from benchmark.qasper_semantic_state_matrix import (
-    qasper_candidate_bound_state_matrix,
-)
+from benchmark.qasper_semantic_state_matrix import qasper_candidate_bound_state_matrix
 from benchmark.tests.qasper_debug_contract_fixtures import _qasper_debug_prediction
 from scripts.slurm import qasper_debug_contract_audit as audit
 from scripts.slurm.qasper_debug_contract import qasper_debug_contract_metrics
@@ -28,9 +26,7 @@ def _row_with_terminal_answer(example_id: str, answer: str) -> dict[str, Any]:
 
 def _native_snapshot(rows: list[dict[str, Any]]) -> tuple[int, float | None]:
     scores = [
-        native_metrics_for_prediction(row, dataset_name="qasper-dev")[0][
-            "native_score"
-        ]
+        native_metrics_for_prediction(row, dataset_name="qasper-dev")[0]["native_score"]
         for row in rows
     ]
     return len(scores), safe_mean(scores)
@@ -71,15 +67,11 @@ def test_expected_ambiguity_unresolved_is_separate_from_unambiguous_gate_and_nat
     assert metrics["qasper_quality_expected_ambiguity_row_count"] == 1.0
     assert metrics["qasper_quality_unambiguous_answerable_row_count"] == 2.0
     assert (
-        metrics[
-            "qasper_quality_expected_ambiguity_required_slot_unverified_count"
-        ]
+        metrics["qasper_quality_expected_ambiguity_required_slot_unverified_count"]
         == 1.0
     )
     assert (
-        metrics[
-            "qasper_quality_unambiguous_answerable_required_slot_unverified_count"
-        ]
+        metrics["qasper_quality_unambiguous_answerable_required_slot_unverified_count"]
         == 1.0
     )
     # Compatibility hard-gate metrics are explicitly the unambiguous cohort.
