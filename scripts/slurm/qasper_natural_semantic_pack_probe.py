@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ from benchmark.qasper_causal_evidence_chain import (
     qasper_causal_evidence_chain_prefix_complete,
 )
 from scripts.slurm.qasper_natural_causal_transaction import (
+    causal_replay_run_context,
     natural_causal_transaction_replay,
 )
 from scripts.slurm.qasper_natural_semantic_pack_audit import build_audit
@@ -65,7 +67,59 @@ def load_probe_inputs(path: Path, *, route: str) -> list[dict[str, Any]]:
     return list(selected.values())
 
 
-def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
+def load_probe_run_contexts(
+    predictions_path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    semantic_debug_path: Path | None = None,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    trace_path = semantic_debug_path or predictions_path.with_name(
+        "semantic_debug_traces.jsonl"
+    )
+    if not trace_path.is_file():
+        raise ValueError(f"semantic debug trace missing: {trace_path}")
+    transactions: dict[tuple[str, str], dict[str, Any]] = {}
+    for line_number, raw_line in enumerate(
+        trace_path.read_text().splitlines(), start=1
+    ):
+        if not raw_line.strip():
+            continue
+        try:
+            trace = json.loads(raw_line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"invalid semantic debug JSONL row {line_number}: {exc}"
+            ) from exc
+        if not isinstance(trace, dict):
+            raise ValueError(
+                f"invalid semantic debug JSONL row {line_number}: object required"
+            )
+        key = _prediction_key(trace)
+        transaction = _mapping(trace.get("causal_transaction"))
+        if not all(key) or not transaction:
+            raise ValueError(
+                f"invalid semantic debug JSONL row {line_number}: "
+                "causal transaction identity missing"
+            )
+        if key in transactions:
+            raise ValueError(f"duplicate semantic debug causal transaction: {key}")
+        transactions[key] = transaction
+    contexts: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = _prediction_key(row)
+        reference_transaction = transactions.get(key)
+        if reference_transaction is None:
+            raise ValueError(f"semantic debug causal transaction missing: {key}")
+        contexts[key] = causal_replay_run_context(row, reference_transaction)
+    return contexts
+
+
+def probe_prediction(
+    row: dict[str, Any],
+    *,
+    code_sha: str,
+    run_context: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     question = str(row.get("question") or "").strip()
     route = str(row.get("route") or "").strip()
     example_id = str(row.get("example_id") or "").strip()
@@ -90,7 +144,11 @@ def probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
         slots=context.slots,
     )
     ambiguity = _ambiguity_observation(row, context.binding)
-    causal_transaction_replay = natural_causal_transaction_replay(row, context)
+    causal_transaction_replay = natural_causal_transaction_replay(
+        row,
+        context,
+        run_context=run_context,
+    )
     canonical_plan_count = int(schema_parser.get("canonical_plan_count") or 0)
     checks = _structural_checks(
         context.bundle,
@@ -429,6 +487,13 @@ def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _prediction_key(value: Mapping[str, Any]) -> tuple[str, str]:
+    return (
+        str(value.get("example_id") or ""),
+        str(value.get("route") or ""),
+    )
+
+
 def _string_list(value: Any) -> list[str]:
     if not isinstance(value, (list, tuple, set, frozenset)):
         return []
@@ -444,10 +509,23 @@ def main() -> int:
     parser.add_argument("--code-sha", required=True)
     parser.add_argument("--route", default="text_rag")
     parser.add_argument("--expected-count", type=int, default=6)
+    parser.add_argument("--semantic-debug-input", type=Path)
     args = parser.parse_args()
 
     rows = load_probe_inputs(args.input, route=args.route)
-    predictions = [probe_prediction(row, code_sha=args.code_sha) for row in rows]
+    run_contexts = load_probe_run_contexts(
+        args.input,
+        rows,
+        semantic_debug_path=args.semantic_debug_input,
+    )
+    predictions = [
+        probe_prediction(
+            row,
+            code_sha=args.code_sha,
+            run_context=run_contexts[_prediction_key(row)],
+        )
+        for row in rows
+    ]
     runtime_code_sha, runtime_worktree_clean = _runtime_code_identity()
     audit = build_audit(
         predictions,

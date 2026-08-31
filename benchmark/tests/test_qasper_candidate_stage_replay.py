@@ -7,9 +7,12 @@ from unittest.mock import patch
 import pytest
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
-from benchmark.tests.test_qasper_natural_semantic_pack_probe import _CODE_SHA, _row
+from benchmark.tests.test_qasper_natural_semantic_pack_probe import (
+    _CODE_SHA,
+    _probe_prediction,
+    _row,
+)
 from scripts.slurm import qasper_natural_semantic_pack_probe as probe
-from scripts.slurm.qasper_natural_semantic_pack_probe import probe_prediction
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
 
 
@@ -38,7 +41,7 @@ def test_candidate_input_uses_frozen_pack_when_verifier_lineage_is_empty() -> No
         )["source_input_snapshot"],
     )
 
-    result = probe_prediction(row, code_sha=_CODE_SHA)
+    result = _probe_prediction(row, code_sha=_CODE_SHA)
 
     reference = next(
         stage
@@ -108,7 +111,7 @@ def test_candidate_replay_does_not_require_a_terminal_query_plan() -> None:
     metadata = cast(dict[str, Any], row["evidence_metadata"])
     metadata.pop("query_plan")
 
-    result = probe_prediction(row, code_sha=_CODE_SHA)
+    result = _probe_prediction(row, code_sha=_CODE_SHA)
 
     assert result["status"] == "passed"
     replay = result["candidate_path_replay"]

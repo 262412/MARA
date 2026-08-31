@@ -462,21 +462,27 @@ def _provenance_payload(
     service = deepcopy(_mapping(run.get("service")))
     route = str(prediction.get("route") or "")
     backends = _mapping(run_context.get("backend_metadata"))
-    provider_model = {
-        "route_backend": deepcopy(_mapping(backends.get(route))),
-        "candidate_model": str(generator.get("model") or ""),
-        "candidate_tokenizer": str(generator.get("tokenizer_identity") or ""),
-        "candidate_tokenizer_endpoint": str(generator.get("tokenizer_endpoint") or ""),
-        "verifier_model": str(verifier.get("model") or ""),
-        "auditor_model": str(verifier.get("audit_model") or ""),
-        "service": service,
-    }
+    observed_provider_model = _observed_provider_model(
+        generator,
+        verifier,
+        route_backend=_mapping(backends.get(route)),
+        service=service,
+    )
+    (
+        provider_model,
+        source_prediction_digest,
+        replay_reasons,
+    ) = _replay_provenance_values(
+        prediction,
+        observed_provider_model,
+        run_context,
+    )
     code_identity = {
         "sha": str(git.get("commit") or ""),
         "worktree_path": str(run_context.get("worktree_path") or ""),
         "worktree_clean": git.get("dirty") is False,
     }
-    reasons = []
+    reasons = list(replay_reasons)
     if not _git_sha(code_identity["sha"]):
         reasons.append("code_sha_missing")
     if not code_identity["worktree_path"]:
@@ -493,7 +499,7 @@ def _provenance_payload(
     ):
         reasons.append("provider_model_identity_missing")
     artifact = {
-        "source_prediction_digest": canonical_digest(prediction),
+        "source_prediction_digest": source_prediction_digest,
         "artifact_kind": "per_route_prediction_and_semantic_trace",
     }
     return _payload(
@@ -511,6 +517,44 @@ def _provenance_payload(
         artifact_binding=artifact,
         artifact_binding_digest=canonical_digest(artifact),
     )
+
+
+def _observed_provider_model(
+    generator: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+    *,
+    route_backend: Mapping[str, Any],
+    service: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "route_backend": deepcopy(dict(route_backend)),
+        "candidate_model": str(generator.get("model") or ""),
+        "candidate_tokenizer": str(generator.get("tokenizer_identity") or ""),
+        "candidate_tokenizer_endpoint": str(generator.get("tokenizer_endpoint") or ""),
+        "verifier_model": str(verifier.get("model") or ""),
+        "auditor_model": str(verifier.get("audit_model") or ""),
+        "service": deepcopy(dict(service)),
+    }
+
+
+def _replay_provenance_values(
+    prediction: Mapping[str, Any],
+    observed_provider_model: dict[str, Any],
+    run_context: Mapping[str, Any],
+) -> tuple[dict[str, Any], str, list[str]]:
+    replay = _mapping(run_context.get("causal_replay_provenance"))
+    if not replay:
+        return observed_provider_model, canonical_digest(prediction), []
+    provider_model = deepcopy(_mapping(replay.get("provider_model_identity")))
+    source_digest = str(replay.get("source_prediction_digest") or "")
+    reasons = []
+    if replay.get("contract_id") != "qasper_causal_replay_provenance.v1":
+        reasons.append("causal_replay_provenance_contract_invalid")
+    if not is_sha256(source_digest):
+        reasons.append("causal_replay_source_prediction_digest_missing")
+    if canonical_digest(provider_model) != replay.get("provider_model_identity_digest"):
+        reasons.append("causal_replay_provider_model_identity_digest_mismatch")
+    return provider_model, source_digest, reasons
 
 
 def _attempt_response_reasons(
@@ -553,6 +597,4 @@ def _mapping(value: Any) -> dict[str, Any]:
 
 def _git_sha(value: Any) -> bool:
     text = str(value or "")
-    return len(text) == 40 and all(
-        character in "0123456789abcdef" for character in text
-    )
+    return len(text) == 40 and all(char in "0123456789abcdef" for char in text)

@@ -11,8 +11,8 @@ from ktem.reasoning.mara_semantic_proposition_causal_lineage import (
     record_candidate_bound_decisive_transition,
 )
 
-from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _write_run
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
+from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _write_run
 from benchmark.tests.qasper_debug_contract_fixtures import (
     _debug_candidate_audit,
     _debug_unknown_assessment,
@@ -22,6 +22,9 @@ from benchmark.tests.qasper_debug_contract_fixtures import (
     _qasper_debug_prediction as _base_qasper_debug_prediction,
 )
 from benchmark.tests.qasper_debug_semantic_pack_fixtures import _debug_semantic_pack
+from benchmark.tests.qasper_terminal_projection_fixture import (
+    attach_valid_terminal_projection,
+)
 from scripts.slurm.qasper_debug_contract_pre_audit_provider import (
     controlled_pre_audit_model_factory,
 )
@@ -43,6 +46,11 @@ def _qasper_debug_prediction(example_id: str, route: str):
 
 
 def _write_qasper_run(run_dir, *, predictions):
+    for prediction in predictions:
+        attach_valid_terminal_projection(
+            prediction,
+            answer=str(prediction.get("answer_for_scoring") or "unanswerable"),
+        )
     _write_run(run_dir, predictions=predictions)
     semantic_rows = qasper_semantic_debug_rows(
         predictions,

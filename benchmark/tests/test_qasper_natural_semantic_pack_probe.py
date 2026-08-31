@@ -22,7 +22,12 @@ from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
 from benchmark.tests.qasper_terminal_projection_fixture import (
     attach_valid_terminal_projection,
 )
+from benchmark.tests.test_qasper_causal_transaction import _run_context
 from scripts.slurm import qasper_natural_semantic_pack_probe as probe
+from scripts.slurm.qasper_natural_causal_transaction import (
+    _causal_transaction,
+    causal_replay_run_context,
+)
 from scripts.slurm.qasper_natural_semantic_pack_probe import probe_prediction
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
 
@@ -128,6 +133,7 @@ def _attach_replay_context(row: dict[str, Any]) -> dict[str, Any]:
         code_sha=_CODE_SHA,
     )
     metadata["qasper_candidate_generation"] = deepcopy(context.candidate_generation)
+    metadata["qasper_candidate_generation"]["model"] = "fixture-candidate-model"
     metadata["qasper_canonical_semantic_pack"] = deepcopy(
         context.bundle.metadata["qasper_canonical_semantic_pack"]
     )
@@ -248,10 +254,23 @@ def _record_fixture_candidate_response(
     )
 
 
+def _probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
+    reference = _causal_transaction(
+        row,
+        origin="fixture_online_reference",
+        run_context=_run_context(),
+    )
+    return probe_prediction(
+        row,
+        code_sha=code_sha,
+        run_context=causal_replay_run_context(row, reference),
+    )
+
+
 def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint() -> (
     None
 ):
-    result = probe_prediction(_row(), code_sha=_CODE_SHA)
+    result = _probe_prediction(_row(), code_sha=_CODE_SHA)
 
     assert result["status"] == "passed"
     assert result["binding_state"] == "relation_bound_support"
@@ -273,10 +292,10 @@ def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint(
     assert result["checks"]["online_local_causal_prefix_matched"] is True
     causal_replay = result["causal_transaction_replay"]
     assert causal_replay["status"] == "matched"
-    assert causal_replay["through_stage_index"] == 11
-    assert causal_replay["through_stage"] == "finalizer_and_scorer"
-    assert causal_replay["comparison"]["status"] == "matched_prefix"
-    assert causal_replay["comparison"]["later_stages_evaluated"] is False
+    assert causal_replay["through_stage_index"] == 12
+    assert causal_replay["through_stage"] == "run_provenance_and_artifact"
+    assert causal_replay["comparison"]["status"] == "matched"
+    assert causal_replay["comparison"]["later_stages_evaluated"] is True
     assert result["candidate_path_replay"]["stage_sequence"][-1] == (
         "canonical_pack_freeze"
     )
@@ -297,7 +316,7 @@ def test_natural_probe_fails_closed_on_a_tampered_trace_digest(monkeypatch) -> N
         tampered_prefix,
     )
 
-    result = probe_prediction(_row(), code_sha=_CODE_SHA)
+    result = _probe_prediction(_row(), code_sha=_CODE_SHA)
 
     assert result["checks"]["causal_trace_prefix_complete"] is False
     assert result["status"] == "failed"
@@ -328,7 +347,7 @@ def test_natural_probe_reports_only_the_first_online_local_path_divergence() -> 
     )
     terminal_metadata["qasper_candidate_generation"] = deepcopy(generator)
 
-    result = probe_prediction(row, code_sha=_CODE_SHA)
+    result = _probe_prediction(row, code_sha=_CODE_SHA)
 
     comparison = result["causal_transaction_replay"]["comparison"]
     assert comparison["status"] == "diverged"
@@ -351,7 +370,7 @@ def test_natural_probe_rejects_unambiguous_unresolved_zero_plan() -> None:
     }
     _attach_replay_context(row)
 
-    result = probe_prediction(row, code_sha=_CODE_SHA)
+    result = _probe_prediction(row, code_sha=_CODE_SHA)
 
     assert result["binding_state"] == "unresolved"
     assert result["canonical_plan_count"] == 0
@@ -372,7 +391,7 @@ def test_natural_probe_rejects_a_plan_that_fails_the_audit_constraint(
         },
     )
 
-    result = probe_prediction(deepcopy(_row()), code_sha=_CODE_SHA)
+    result = _probe_prediction(deepcopy(_row()), code_sha=_CODE_SHA)
 
     assert result["schema_parser"]["downstream_status"] == "rejected"
     assert result["checks"]["canonical_plan_audit_valid"] is False
@@ -402,8 +421,8 @@ def test_natural_probe_keeps_ambiguous_and_unambiguous_denominators_separate() -
 
     audit = probe.build_audit(
         [
-            probe_prediction(_row(), code_sha=_CODE_SHA),
-            probe_prediction(ambiguous, code_sha=_CODE_SHA),
+            _probe_prediction(_row(), code_sha=_CODE_SHA),
+            _probe_prediction(ambiguous, code_sha=_CODE_SHA),
         ],
         code_sha=_CODE_SHA,
         input_path=__import__("pathlib").Path(__file__),
@@ -418,7 +437,7 @@ def test_natural_probe_keeps_ambiguous_and_unambiguous_denominators_separate() -
 
 
 def test_six_sample_probe_requires_the_frozen_four_two_denominator() -> None:
-    prediction = probe_prediction(_row(), code_sha=_CODE_SHA)
+    prediction = _probe_prediction(_row(), code_sha=_CODE_SHA)
     audit = probe.build_audit(
         [deepcopy(prediction) for _index in range(6)],
         code_sha=_CODE_SHA,
@@ -432,7 +451,7 @@ def test_six_sample_probe_requires_the_frozen_four_two_denominator() -> None:
 
 
 def test_six_sample_probe_accepts_four_ambiguous_two_unambiguous() -> None:
-    prediction = probe_prediction(_row(), code_sha=_CODE_SHA)
+    prediction = _probe_prediction(_row(), code_sha=_CODE_SHA)
     predictions = [deepcopy(prediction) for _index in range(6)]
     for value in predictions[:4]:
         value["ambiguity"] = {
@@ -455,7 +474,7 @@ def test_six_sample_probe_accepts_four_ambiguous_two_unambiguous() -> None:
 
 
 def test_probe_code_identity_gate_rejects_dirty_or_non_sha_runs() -> None:
-    prediction = probe_prediction(_row(), code_sha=_CODE_SHA)
+    prediction = _probe_prediction(_row(), code_sha=_CODE_SHA)
     dirty = probe.build_audit(
         [prediction],
         code_sha=_CODE_SHA,

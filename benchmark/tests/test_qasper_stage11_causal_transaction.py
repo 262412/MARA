@@ -78,7 +78,7 @@ def test_stage_eleven_preserves_the_frozen_terminal_projection_during_replay() -
 def test_stage_eleven_replays_finalizer_and_scorer_input() -> None:
     prediction, context = _terminal_projection_fixture()
 
-    replay = natural_causal_transaction_replay(prediction, context)
+    replay = natural_causal_transaction_replay(prediction, context, through_stage=11)
 
     assert replay["status"] == "matched"
     assert replay["through_stage_index"] == 11
@@ -109,6 +109,4 @@ def test_stage_eleven_rejects_a_scoring_answer_outside_the_terminal_commit() -> 
     stage = transaction["stages"][10]
 
     assert stage["status"] == "incomplete"
-    assert stage["incompleteness_reasons"] == [
-        "scorer_input_terminal_answer_mismatch"
-    ]
+    assert stage["incompleteness_reasons"] == ["scorer_input_terminal_answer_mismatch"]
