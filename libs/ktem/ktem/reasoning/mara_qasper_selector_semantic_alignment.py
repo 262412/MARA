@@ -85,18 +85,6 @@ def build_local_selector_semantic_alignment(
         matches,
     )
     predicate_kind = _predicate_match_kind(proposition, semantics, slots)
-    direct_covered = {
-        str(token)
-        for token in dict(semantics.get("analysis") or {}).get(
-            "covered_object_tokens", ()
-        )
-    } & required
-    if (
-        not (set(matches) - direct_covered)
-        and not actor_attested
-        and (predicate_kind != "paraphrase")
-    ):
-        return None
     local_state = _alignment_local_state(semantics, slots)
     if local_state is None:
         return None

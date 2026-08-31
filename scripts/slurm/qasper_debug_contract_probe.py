@@ -59,6 +59,14 @@ from scripts.slurm.qasper_debug_contract_probe_runtime import (  # noqa: F401
 )
 
 
+class ContractProbeCaseExecutionError(RuntimeError):
+    """One production-shaped probe row failed its per-case execution gate."""
+
+    def __init__(self, message: str, row: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.row = row
+
+
 def _run_case(
     case: ProbeCase,
     index: int,
@@ -92,15 +100,21 @@ def _run_case(
     generator = generator if isinstance(generator, dict) else {}
     if generator.get("failure_reason") == "candidate_transport_failed":
         if len(live_calls) != 1:
-            raise RuntimeError(
-                f"{case.case_id}: candidate_transport_failed must stop after "
-                f"one candidate call; observed {len(live_calls)}"
+            raise ContractProbeCaseExecutionError(
+                (
+                    f"{case.case_id}: candidate_transport_failed must stop after "
+                    f"one candidate call; observed {len(live_calls)}"
+                ),
+                row,
             )
         return row
     if len(live_calls) < 3:
-        raise RuntimeError(
-            f"{case.case_id}: expected candidate, proposal, and auditor calls; "
-            f"observed {len(live_calls)}"
+        raise ContractProbeCaseExecutionError(
+            (
+                f"{case.case_id}: expected candidate, proposal, and auditor calls; "
+                f"observed {len(live_calls)}"
+            ),
+            row,
         )
     return row
 
@@ -160,8 +174,8 @@ def run_live_probes(
             auditor_model=auditor_model,
         )
         for index, case in enumerate(_PROBE_CASES):
-            rows.append(
-                _run_case(
+            try:
+                row = _run_case(
                     case,
                     index,
                     base_url=base_url,
@@ -171,7 +185,10 @@ def run_live_probes(
                     timeout_seconds=timeout_seconds,
                     model_factory=factory,
                 )
-            )
+            except ContractProbeCaseExecutionError as exc:
+                rows.append(exc.row)
+                raise
+            rows.append(row)
     except Exception as exc:
         if output_path is not None:
             _write_rows(output_path, rows)
