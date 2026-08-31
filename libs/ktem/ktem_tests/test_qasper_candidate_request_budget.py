@@ -21,6 +21,8 @@ from ktem.reasoning.mara_qasper_candidate_evidence import (
     candidate_evidence_set_binding,
     candidate_selector_options,
 )
+from ktem.reasoning.mara_qasper_candidate_identity import candidate_digest
+from ktem.reasoning.mara_qasper_candidate_request import fit_candidate_request
 from ktem.reasoning.mara_qasper_candidate_prompt import (
     _compact_candidate_evidence_set_binding,
     _compact_candidate_selector_options,
@@ -80,6 +82,17 @@ class _CompactingTokenizer(_ProviderTokenizer):
         return (
             QASPER_CANDIDATE_INPUT_TOKEN_BUDGET + 1
             if "[E2]" in user_content
+            else QASPER_CANDIDATE_INPUT_TOKEN_BUDGET
+        )
+
+
+class _DuplicateDropTokenizer(_ProviderTokenizer):
+    def get_num_tokens_from_messages(self, messages: Any) -> int:
+        self.messages = messages
+        user_content = str(messages[-1].content)
+        return (
+            QASPER_CANDIDATE_INPUT_TOKEN_BUDGET + 1
+            if user_content.count("[E2]") > 1
             else QASPER_CANDIDATE_INPUT_TOKEN_BUDGET
         )
 
@@ -365,6 +378,71 @@ def test_candidate_compaction_keeps_aligned_evidence_record() -> None:
         "[E2] evidence_id=evidence:paper:e2" not in trace["message_stack"][1]["content"]
     )
     assert llm.calls
+
+
+def test_candidate_request_drop_updates_each_duplicate_occurrence_atomically() -> None:
+    tokenizer = _DuplicateDropTokenizer(message_tokens=0, text_tokens=0)
+    llm = _BudgetLLM(tokenizer)
+    records = [
+        {
+            "label": "E1",
+            "evidence_id": "aligned",
+            "text": "The aligned relation evidence.",
+            "proposition_alignment_score": 1.0,
+        },
+        {
+            "label": "E2",
+            "evidence_id": "duplicate",
+            "text": "An optional relation observation.",
+            "proposition_alignment_score": 0.0,
+        },
+        {
+            "label": "E2",
+            "evidence_id": "duplicate",
+            "text": "A second optional relation observation.",
+            "proposition_alignment_score": 0.0,
+        },
+    ]
+
+    selected, diagnostics, messages, _measurement, dropped_count = (
+        fit_candidate_request(
+            llm,
+            "Did the authors compare the systems?",
+            records,
+            {"pre_request_dropped_evidence_count": 0},
+            response_schema=qasper_candidate_response_format(),
+            controlled_candidate="",
+        )
+    )
+
+    projection = diagnostics["candidate_request_projection_trace"]
+    assert dropped_count == 1
+    assert [record["evidence_id"] for record in selected] == [
+        "aligned",
+        "duplicate",
+    ]
+    assert projection["selected_record_count"] == 2
+    assert projection["selected_record_ids"] == ["aligned", "duplicate"]
+    assert projection["selected_record_ids_digest"] == candidate_digest(
+        ["aligned", "duplicate"]
+    )
+    assert [decision["selected"] for decision in projection["decisions"]] == [
+        True,
+        True,
+        False,
+    ]
+    assert len(messages) == 2
+    assert projection["final_message_stack"] == [
+        {
+            "index": index,
+            "role": "system" if index == 0 else "user",
+            "content": message.content,
+        }
+        for index, message in enumerate(messages)
+    ]
+    assert projection["final_message_stack_digest"] == candidate_digest(
+        projection["final_message_stack"]
+    )
 
 
 def test_identified_provider_tokenizer_failure_is_terminal(monkeypatch) -> None:

@@ -7,8 +7,10 @@ from types import SimpleNamespace
 from typing import Any
 
 from ktem.docqa.evidence import build_evidence_bundle
+from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.fusion_stage import FUSION_STAGE_CONTRACT, fusion_stage_snapshot
 
+from benchmark.docqa_response_projection import response_evidence_outputs
 from benchmark.fusion_stage_contract import fusion_stage_audit
 from scripts.slurm.validate_contract_smoke import _stage_audit
 
@@ -182,6 +184,123 @@ def test_evidence_bundle_producer_writes_versioned_snapshot_for_routes() -> None
         assert snapshot["state"] == "passthrough"
         assert audit["status"] == "passed"
         assert violations == []
+
+
+def test_fusion_stage_projection_preserves_frozen_producer_order() -> None:
+    first = {
+        "evidence_id": "runtime-a",
+        "source_id": "runtime-source-a",
+        "evaluation_source_id": "paper-1",
+        "document_id": "paper-1",
+        "normalized_text_hash": "hash-a",
+        "canonical_start": 10,
+        "canonical_end": 31,
+        "text": "First canonical span.",
+    }
+    second = {
+        "evidence_id": "runtime-b",
+        "source_id": "runtime-source-b",
+        "evaluation_source_id": "paper-1",
+        "document_id": "paper-1",
+        "normalized_text_hash": "hash-b",
+        "canonical_start": 40,
+        "canonical_end": 62,
+        "text": "Second canonical span.",
+    }
+    producer_order = [second, first]
+    snapshot = fusion_stage_snapshot(
+        "hybrid",
+        producer_order,
+        producer_order,
+        fusion_trace={"status": "executed"},
+    )
+    metadata = {
+        "query_plan": {"constraints": {"verification_domain": "qasper"}},
+        "canonical_candidate_evidence": deepcopy(producer_order),
+        "candidate_evidence": deepcopy(producer_order),
+        "candidate_ranked_evidence": deepcopy(producer_order),
+        "fused_evidence": deepcopy(producer_order),
+        "fusion_stage_snapshot": deepcopy(snapshot),
+        "hybrid_fusion_trace": {"status": "executed"},
+        "ranking_trace": {
+            "fusion_stage_contract_id": FUSION_STAGE_CONTRACT,
+            "candidate_stage": "post_fusion",
+            "fusion_stage_snapshot": deepcopy(snapshot),
+        },
+    }
+    response = SimpleNamespace(
+        answer="",
+        references_text="",
+        evidence_bundle={
+            "items": deepcopy(producer_order),
+            "metadata": deepcopy(metadata),
+        },
+        evidence_metadata=metadata,
+    )
+
+    evidence_metadata, _retrieved_hits, *_ = response_evidence_outputs(
+        response=response,
+        documents=[],
+        selected_file_ids=[],
+    )
+
+    expected = [
+        "evidence:runtime-source-b:runtime-b",
+        "evidence:runtime-source-a:runtime-a",
+    ]
+    assert [
+        identity_of(item).key
+        for item in evidence_metadata["canonical_candidate_evidence"]
+    ] == expected
+    assert [
+        identity_of(item).key for item in evidence_metadata["candidate_ranked_evidence"]
+    ] == expected
+    assert [
+        identity_of(item).key for item in evidence_metadata["fused_evidence"]
+    ] == expected
+    assert evidence_metadata["fusion_stage_snapshot"]["output_identities"] == expected
+    audit, violations = fusion_stage_audit(
+        {"example_id": "frozen-order", "evidence_metadata": evidence_metadata}
+    )
+    assert audit["status"] == "passed"
+    assert violations == []
+
+
+def test_evidence_bundle_stage_records_are_independent_snapshots() -> None:
+    request = SimpleNamespace(
+        question="Did the paper report the result?",
+        query="Did the paper report the result?",
+        verification_domain="qasper",
+        query_plan=None,
+    )
+    bundle = build_evidence_bundle(
+        "text_rag",
+        request,
+        {
+            "evidence": [
+                {
+                    "source_id": "paper",
+                    "span_id": "s1",
+                    "evidence_level": "span",
+                    "text": "The paper reports the result.",
+                }
+            ]
+        },
+    )
+    metadata = bundle.metadata
+    canonical = metadata["canonical_candidate_evidence"]
+    ranked = metadata["candidate_ranked_evidence"]
+    snapshot = metadata["fusion_stage_snapshot"]
+    ranking_snapshot = metadata["ranking_trace"]["fusion_stage_snapshot"]
+
+    assert canonical is not ranked
+    assert canonical[0] is not ranked[0]
+    assert snapshot is not ranking_snapshot
+
+    canonical[0]["span_id"] = "mutated-after-freeze"
+    snapshot["output_identities"].reverse()
+    assert identity_of(ranked[0]).key == "span:paper:s1"
+    assert ranking_snapshot["output_identities"] == ["span:paper:s1"]
 
 
 def test_expected_ambiguity_safe_abstention_allows_only_empty_terminal_stages() -> None:

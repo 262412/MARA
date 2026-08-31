@@ -23,7 +23,10 @@ def test_candidate_input_uses_frozen_pack_when_verifier_lineage_is_empty() -> No
     row = _row()
     metadata = cast(dict[str, Any], row["evidence_metadata"])
     verifier = cast(dict[str, Any], metadata["semantic_proposition_verifier"])
-    lineage = cast(dict[str, Any], verifier["semantic_data_lineage"])
+    lineage = cast(
+        dict[str, Any],
+        verifier.setdefault("semantic_data_lineage", {}),
+    )
     lineage["source_packing"] = {
         "status": "not_run",
         "contract_id": "",
@@ -172,6 +175,57 @@ def test_complete_frozen_request_bypasses_fallback_token_budget_decision() -> No
     assert selected_ids == [record["evidence_id"] for record in context.frozen.records]
 
 
+def test_candidate_replay_accepts_legacy_request_projection_without_atomic_fields() -> (
+    None
+):
+    row = _row()
+    metadata = cast(dict[str, Any], row["evidence_metadata"])
+    online = cast(dict[str, Any], metadata["qasper_candidate_generation"])
+    candidates = [
+        online,
+        cast(
+            dict[str, Any],
+            cast(dict[str, Any], row["engine_terminal_evidence_bundle"])["metadata"][
+                "qasper_candidate_generation"
+            ],
+        ),
+    ]
+    for candidate in candidates:
+        projection = cast(
+            dict[str, Any], candidate["candidate_request_projection_trace"]
+        )
+        for field in (
+            "selected_record_ids",
+            "selected_record_ids_digest",
+            "final_message_stack",
+            "final_message_stack_digest",
+        ):
+            projection.pop(field, None)
+
+    replay = candidate_replay_context(row)
+
+    assert replay.observation["complete"] is True
+    context = probe.freeze_natural_pack(
+        str(row["question"]),
+        route=str(row["route"]),
+        example_id=str(row["example_id"]),
+        replay=replay,
+        code_sha=_CODE_SHA,
+    )
+
+    assert context.candidate_generation["message_stack"] == online["message_stack"]
+    assert (
+        context.candidate_generation["message_stack_digest"]
+        == online["message_stack_digest"]
+    )
+    result = _probe_prediction(row, code_sha=_CODE_SHA)
+    assert result["checks"]["candidate_request_input_replayed"] is True
+    assert (
+        result["causal_transaction_replay"]["comparison"]["first_divergence"]["stage"]
+        != "candidate_input"
+    )
+
+
 def test_candidate_replay_uses_frozen_messages_when_renderer_changes() -> None:
     row = _row()
     metadata = cast(dict[str, Any], row["evidence_metadata"])
@@ -236,7 +290,7 @@ def test_causal_replay_uses_frozen_online_candidate_stage() -> None:
     )
     context.bundle.metadata["qasper_canonical_semantic_pack"][
         "semantic_pack_digest"
-    ] = ("0" * 64)
+    ] = "0" * 64
     context.candidate_generation["message_stack"] = [
         {"role": "system", "content": "current semantic projection"}
     ]
@@ -255,6 +309,45 @@ def test_causal_replay_uses_frozen_online_candidate_stage() -> None:
             "message_stack"
         ]
         == online_candidate["message_stack"]
+    )
+
+
+def test_causal_replay_does_not_rehash_a_regenerated_candidate_request() -> None:
+    row = _row()
+    online_metadata = cast(dict[str, Any], row["evidence_metadata"])
+    online_candidate = deepcopy(online_metadata["qasper_candidate_generation"])
+    replay = candidate_replay_context(row)
+    context = probe.freeze_natural_pack(
+        str(row["question"]),
+        route=str(row["route"]),
+        example_id=str(row["example_id"]),
+        replay=replay,
+        code_sha=_CODE_SHA,
+    )
+    context.candidate_generation["frozen_candidate_request_replay"] = {
+        "status": "failed",
+        "regenerated_message_stack": [
+            {"index": 0, "role": "system", "content": "redo"}
+        ],
+    }
+
+    prediction = _local_replay_prediction(
+        row,
+        context,
+        preserve_frozen_semantic_projection=True,
+    )
+
+    assert (
+        prediction["_qasper_causal_replay_metadata"]["qasper_candidate_generation"][
+            "message_stack"
+        ]
+        == online_candidate["message_stack"]
+    )
+    assert (
+        prediction["_qasper_causal_replay_metadata"]["qasper_candidate_generation"][
+            "message_stack_digest"
+        ]
+        == online_candidate["message_stack_digest"]
     )
 
 
@@ -403,17 +496,21 @@ def test_candidate_replay_records_the_frozen_canonical_pack_identity() -> None:
     )
 
     pack = context.bundle.metadata["qasper_canonical_semantic_pack"]
-    assert context.candidate_generation["evidence_pack_digest"] == (
-        pack["semantic_pack_digest"]
+    assert (
+        context.candidate_generation["evidence_pack_digest"]
+        == (pack["semantic_pack_digest"])
     )
-    assert context.candidate_generation["canonical_semantic_pack_contract_id"] == (
-        pack["contract_id"]
+    assert (
+        context.candidate_generation["canonical_semantic_pack_contract_id"]
+        == (pack["contract_id"])
     )
-    assert context.candidate_generation["canonical_semantic_pack_digest"] == (
-        pack["semantic_pack_digest"]
+    assert (
+        context.candidate_generation["canonical_semantic_pack_digest"]
+        == (pack["semantic_pack_digest"])
     )
-    assert context.candidate_generation["canonical_span_universe_digest"] == (
-        pack["span_universe_digest"]
+    assert (
+        context.candidate_generation["canonical_span_universe_digest"]
+        == (pack["span_universe_digest"])
     )
     assert (
         context.candidate_generation["canonical_pack_candidate_transaction_id"]

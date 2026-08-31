@@ -7,7 +7,13 @@ from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.execution_models import GuardrailDecision
 from ktem.docqa.verification import VerifyDecision
 
-from benchmark.qasper_causal_transaction import qasper_causal_transaction
+from benchmark.qasper_causal_transaction import (
+    _digest_trace_fields,
+    qasper_causal_transaction,
+)
+from benchmark.qasper_causal_transaction_runtime_stages import (
+    _finalizer_scorer_payload,
+)
 from benchmark.qasper_runtime_projection import runtime_projection_present
 from benchmark.tests.test_qasper_causal_transaction import _run_context
 from benchmark.tests.test_qasper_stage9_causal_transaction import (
@@ -67,11 +73,13 @@ def test_stage_eleven_preserves_the_frozen_terminal_projection_during_replay() -
 
     assert runtime_projection_present(prediction) is True
     assert runtime_projection_present(local) is True
-    assert local["engine_terminal_evidence_bundle"] == (
-        prediction["engine_terminal_evidence_bundle"]
+    assert (
+        local["engine_terminal_evidence_bundle"]
+        == (prediction["engine_terminal_evidence_bundle"])
     )
-    assert local["engine_terminal_projection_hash"] == (
-        prediction["engine_terminal_projection_hash"]
+    assert (
+        local["engine_terminal_projection_hash"]
+        == (prediction["engine_terminal_projection_hash"])
     )
 
 
@@ -87,6 +95,41 @@ def test_stage_eleven_replays_finalizer_and_scorer_input() -> None:
     assert reference["status"] == "complete"
     assert local["status"] == "complete"
     assert local["comparison_digest"] == reference["comparison_digest"]
+
+
+def test_stage_eleven_formally_projects_citation_trace_fields() -> None:
+    prediction, _context = _terminal_projection_fixture()
+    prediction["evidence_metadata"].update(
+        {
+            "citation_stage_trace": {
+                "contract_id": "emitted_citation_evidence.v1",
+                "status": "emitted",
+                "projection_source": "frozen_canonical_plan",
+                "emitted_evidence_identities": ["evidence:paper:claim"],
+            },
+            "frozen_citation_projection_trace": {
+                "contract_id": "frozen_canonical_plan_citation.v1",
+                "status": "verified",
+                "premise_evidence_identities": ["evidence:paper:claim"],
+            },
+            "citation_projection_source": "frozen_canonical_plan",
+        }
+    )
+
+    payload = _finalizer_scorer_payload(prediction)
+    finalizer = payload["finalizer_decision"]
+
+    assert finalizer["citation_stage_trace"]["status"] == "emitted"
+    assert finalizer["frozen_citation_projection_trace"]["status"] == "verified"
+    assert finalizer["citation_projection_source"] == "frozen_canonical_plan"
+    assert finalizer["emitted_citation_evidence_identities"] == ["evidence:paper:claim"]
+    first_divergence_fields = _digest_trace_fields({"finalizer_decision": finalizer})
+    assert first_divergence_fields["citation_projection_source"] == (
+        "frozen_canonical_plan"
+    )
+    assert first_divergence_fields["emitted_citation_evidence_identities"] == [
+        "evidence:paper:claim"
+    ]
 
 
 def test_stage_eleven_rejects_a_scoring_answer_outside_the_terminal_commit() -> None:
