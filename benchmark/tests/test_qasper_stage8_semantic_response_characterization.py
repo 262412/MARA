@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ktem.reasoning.mara_candidate_unknown_audit import parse_candidate_unknown_audit
+
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
 
 FIXTURE = (
@@ -60,3 +62,19 @@ def test_stage_eight_requires_local_reparse_not_frozen_parsed_authority() -> Non
         "semantic_proposal_and_audit_raw_responses_are_reparsed_against_"
         "local_frozen_authority"
     )
+
+
+def test_job_10385302_freezes_the_candidate_unknown_audit_variant() -> None:
+    audit = _fixture()["unknown_audit"]
+
+    parsed = parse_candidate_unknown_audit(
+        audit["raw_response"],
+        candidate="yes",
+        verifier_judgment="unknown",
+    )
+
+    assert audit["example_id"] == "e330e162ec29722f5ec9f83853d129c9e0693d65"
+    assert canonical_digest(audit["raw_response"]) == audit["raw_response_digest"]
+    assert parsed.failure_reason == ""
+    assert parsed.value is not None
+    assert canonical_digest(parsed.value) == audit["parsed_value_digest"]

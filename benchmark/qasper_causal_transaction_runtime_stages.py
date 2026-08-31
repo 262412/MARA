@@ -61,6 +61,9 @@ def _model_response_payload(
     response_replay = _mapping(generator.get("candidate_response_replay"))
     if response_replay and response_replay.get("status") != "matched":
         reasons.extend(str(reason) for reason in response_replay.get("reasons") or [])
+    semantic_replay = _mapping(verifier.get("semantic_response_replay"))
+    if semantic_replay and semantic_replay.get("status") != "matched":
+        reasons.extend(str(reason) for reason in semantic_replay.get("reasons") or [])
     reasons.extend(
         _attempt_response_reasons(
             "proposal",

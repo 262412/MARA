@@ -67,6 +67,7 @@ def test_local_replay_keeps_retrieval_envelope_separate_from_candidate_snapshot(
         ),
         binding={"plan_construction_trace": {"status": "passed"}},
         candidate_generation={"status": "parsed"},
+        slots=[],
     )
     original_bundle = deepcopy(row["evidence_bundle"])
 

@@ -10,6 +10,9 @@ from benchmark.qasper_causal_transaction import (
     compare_qasper_causal_transaction_prefix,
 )
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
+from scripts.slurm.qasper_natural_semantic_response_replay import (
+    replay_frozen_semantic_verifier,
+)
 
 _REPLAY_THROUGH_STAGE = 8
 
@@ -71,6 +74,20 @@ def _local_replay_prediction(
     plan_construction = deepcopy(
         _mapping(context.binding).get("plan_construction_trace") or {}
     )
+    local_lineage = {
+        "contract_id": "semantic_proposition_data_lineage.v1",
+        "source_packing": source,
+        "plan_construction": plan_construction,
+    }
+    verifier = replay_frozen_semantic_verifier(
+        _mapping(metadata.get("semantic_proposition_verifier")),
+        question=str(prediction.get("question") or ""),
+        bundle=context.bundle,
+        slots=list(context.slots),
+        binding=context.binding,
+        candidate_generation=context.candidate_generation,
+        local_lineage=local_lineage,
+    )
     metadata.update(
         {
             "candidate_ranked_evidence": deepcopy(
@@ -78,19 +95,7 @@ def _local_replay_prediction(
             ),
             "qasper_canonical_semantic_pack": local_pack,
             "qasper_candidate_generation": deepcopy(context.candidate_generation),
-            "semantic_proposition_verifier": {
-                "contract_id": "semantic_proposition_verifier_runtime.v3",
-                "status": "not_run_after_candidate_response_replay",
-                "reason": "stage_nine_not_replayed",
-                "candidate_verification_status": "not_started_in_replay",
-                "proposal_status": "not_started",
-                "audit_status": "not_started",
-                "semantic_data_lineage": {
-                    "contract_id": "semantic_proposition_data_lineage.v1",
-                    "source_packing": source,
-                    "plan_construction": plan_construction,
-                },
-            },
+            "semantic_proposition_verifier": verifier,
         }
     )
     _replace_terminal_metadata(prediction, metadata)

@@ -196,6 +196,9 @@ def _semantic_response_replay_fixture() -> tuple[dict[str, Any], Any]:
     transaction = debug_row["semantic_verifier"]["debug_trace"]["events"][0][
         "transaction"
     ]
+    debug_row["semantic_verifier"]["debug_trace"]["events"][0][
+        "auditor_relationship"
+    ] = "distinct_model"
     proposal_raw = json.dumps(
         {
             "candidate_judgment": "supported",
@@ -324,3 +327,19 @@ def test_stage_eight_replays_semantic_proposal_and_audit_raw_responses() -> None
     reference = replay["reference_transaction"]["stages"][7]
     local = replay["local_replay_transaction"]["stages"][7]
     assert local["comparison_digest"] == reference["comparison_digest"]
+
+
+def test_stage_eight_rejects_a_forged_frozen_semantic_parse() -> None:
+    prediction, context = _semantic_response_replay_fixture()
+    verifier = prediction["evidence_metadata"]["semantic_proposition_verifier"]
+    transaction = verifier["debug_trace"]["events"][0]["transaction"]
+    transaction["proposal"]["attempts"][0]["parsed_value"]["verifier"]["seed"] = 999
+
+    replay = natural_causal_transaction_replay(prediction, context)
+
+    assert replay["status"] == "failed"
+    comparison = replay["comparison"]
+    assert comparison["first_divergence"]["stage_index"] == 8
+    assert comparison["later_stages_evaluated"] is False
+    local = replay["local_replay_transaction"]["stages"][7]
+    assert "semantic_proposal_parser_replay_mismatch" in local["incompleteness_reasons"]

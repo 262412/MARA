@@ -23,5 +23,12 @@
     "raw_response_digest": "e13df050f41a6f3d2aae44278f5cbc58d753950b3caae0224dea779c2b53ee0b",
     "status": "parsed"
   },
+  "unknown_audit": {
+    "example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65",
+    "parsed_value_digest": "512992e4fa4c33a877ce05b68476502caa017048e15f01e72e6e9d55366d8c25",
+    "raw_response": "{\n  \"audit_scope\": \"original_candidate_and_verifier_unknown_only\",\n  \"audited_candidate\": \"yes\",\n  \"audited_verdict\": \"insufficient_evidence\",\n  \"audited_judgment\": \"unknown\",\n  \"typed_conclusion_present\": true,\n  \"reviewed_evidence_present\": true,\n  \"support_gap_valid\": true,\n  \"contradiction_gap_valid\": true,\n  \"relationship_consistent\": true,\n  \"replacement_candidate_allowed\": false,\n  \"replacement_candidate\": \"\"\n}",
+    "raw_response_digest": "8ff857481b03ad6626936f88aa8282a088503a0fe32b6ea77023f57c12af7e1e",
+    "status": "parsed"
+  },
   "invariant": "semantic_proposal_and_audit_raw_responses_are_reparsed_against_local_frozen_authority"
 }
