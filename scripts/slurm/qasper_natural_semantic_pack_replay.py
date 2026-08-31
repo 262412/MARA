@@ -14,6 +14,8 @@ from scripts.slurm.qasper_natural_candidate_response_replay import (
 )
 from scripts.slurm.qasper_natural_semantic_projection import (
     candidate_request_projection_complete as _candidate_request_projection_complete,
+)
+from scripts.slurm.qasper_natural_semantic_projection import (
     frozen_projection_complete as _projection_complete,
 )
 

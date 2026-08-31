@@ -12,8 +12,8 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from typing import Any, NamedTuple
 
-from .canonical_serialization import canonical_projection_digest
 from .canonical_proposition_evidence_plan_contract import canonical_plan_digest
+from .canonical_serialization import canonical_projection_digest
 from .frozen_canonical_projection_model import (
     FROZEN_CANONICAL_PROJECTION_CONTRACT,
     FrozenCanonicalPropositionEvidencePlan,

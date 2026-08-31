@@ -88,9 +88,9 @@ def build_evidence_bundle(
     metadata["candidate_evidence"] = deepcopy(stages.canonical_candidates)
     metadata["candidate_ranked_evidence"] = deepcopy(stages.ranked_candidates)
     metadata["candidate_ranking_contract"] = "global_ranked_v1"
-    metadata["pre_rerank_required_slot_candidates_restored"] = (
-        stages.required_slot_restored
-    )
+    metadata[
+        "pre_rerank_required_slot_candidates_restored"
+    ] = stages.required_slot_restored
     metadata["reranker_input_evidence"] = deepcopy(stages.reranker_input)
     metadata["reranker_input_contract"] = "required_slot_restored.v1"
     metadata["fused_evidence"] = deepcopy(stages.ranked_candidates)

@@ -11,9 +11,7 @@ from benchmark.qasper_causal_transaction import (
     _digest_trace_fields,
     qasper_causal_transaction,
 )
-from benchmark.qasper_causal_transaction_runtime_stages import (
-    _finalizer_scorer_payload,
-)
+from benchmark.qasper_causal_transaction_runtime_stages import _finalizer_scorer_payload
 from benchmark.qasper_runtime_projection import runtime_projection_present
 from benchmark.tests.test_qasper_causal_transaction import _run_context
 from benchmark.tests.test_qasper_stage9_causal_transaction import (
@@ -73,13 +71,11 @@ def test_stage_eleven_preserves_the_frozen_terminal_projection_during_replay() -
 
     assert runtime_projection_present(prediction) is True
     assert runtime_projection_present(local) is True
-    assert (
-        local["engine_terminal_evidence_bundle"]
-        == (prediction["engine_terminal_evidence_bundle"])
+    assert local["engine_terminal_evidence_bundle"] == (
+        prediction["engine_terminal_evidence_bundle"]
     )
-    assert (
-        local["engine_terminal_projection_hash"]
-        == (prediction["engine_terminal_projection_hash"])
+    assert local["engine_terminal_projection_hash"] == (
+        prediction["engine_terminal_projection_hash"]
     )
 
 

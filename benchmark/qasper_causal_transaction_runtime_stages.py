@@ -6,9 +6,9 @@ from typing import Any
 
 from ktem.docqa.terminal_semantic_commit import terminal_commit_projection_present
 
+from benchmark.citation_stage_projection import citation_trace_projection_fields
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest, is_sha256
 from benchmark.qasper_causal_evidence_chain_utils import mapping as _mapping
-from benchmark.citation_stage_projection import citation_trace_projection_fields
 from benchmark.qasper_causal_transaction_recovery import recovery_stage_payload
 from benchmark.qasper_runtime_projection import runtime_projection_present
 from benchmark.terminal_outcome_contract import terminal_outcome_record

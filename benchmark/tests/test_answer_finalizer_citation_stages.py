@@ -1,12 +1,13 @@
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from ktem.docqa.evidence_identity import identity_of
 
 from benchmark.answer_finalizer import finalize_prediction_answer
 from benchmark.citation_stage_projection import _resolve_frozen_premises
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
 from benchmark.tests.qasper_natural_semantic_pack_fixture import row as natural_row
-from ktem.docqa.evidence_identity import identity_of
 
 
 def test_cited_evidence_comes_from_emitted_citations():
@@ -157,8 +158,8 @@ def test_citation_source_page_pair_cannot_cross_join():
 
 
 def test_verified_frozen_plan_premises_reach_emitted_citation_evidence():
-    prediction = natural_row()
-    metadata = prediction["evidence_metadata"]
+    prediction = cast(dict[str, Any], natural_row())
+    metadata = cast(dict[str, Any], prediction["evidence_metadata"])
     plan = metadata["qasper_canonical_semantic_pack"]["proposition_binding"][
         "canonical_evidence_plan"
     ]["support_plan"]

@@ -13,10 +13,7 @@ from .boolean_evidence_scope import (
     _section_role,
     evidence_item_text,
 )
-from .canonical_serialization import (
-    canonical_digest,
-    canonical_projection_digest_trace,
-)
+from .canonical_serialization import canonical_digest, canonical_projection_digest_trace
 from .evidence_identity import identity_of
 from .polarity_contradiction_check import polarity_contradiction_check
 from .query_phrase_extraction import source_page_locator

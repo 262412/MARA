@@ -3,10 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from .canonical_serialization import (
-    canonical_digest as _canonical_digest,
-    canonical_projection_digest_trace,
-)
+from .canonical_serialization import canonical_digest as _canonical_digest
+from .canonical_serialization import canonical_projection_digest_trace
 
 LOCAL_SEMANTIC_RELATION_CONSTRAINT = "local_semantic_relation_constraint.v1"
 

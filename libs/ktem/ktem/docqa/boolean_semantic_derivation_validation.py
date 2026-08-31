@@ -9,8 +9,8 @@ from .boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
-from .canonical_serialization import canonical_projection_digest_trace
 from .boolean_semantic_premise_projection import semantic_premise_projection
+from .canonical_serialization import canonical_projection_digest_trace
 from .question_proposition import (
     PROPOSITION_EVIDENCE_SLOTS,
     applicable_proposition_evidence_slots,

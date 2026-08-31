@@ -17,11 +17,11 @@ from .frozen_canonical_proposition_projection import (
     FrozenCanonicalPropositionEvidencePlan,
 )
 from .qasper_semantic_pack_contract import qasper_semantic_pack_continuity_reason
-from .semantic_evidence_set_derivation import semantic_evidence_set_derivation
-from .semantic_evidence_set_plan_projection import semantic_authority_plan_projection
 from .semantic_evidence_set_authority_trace import (
     canonical_projection_trace as _canonical_projection_trace,
 )
+from .semantic_evidence_set_derivation import semantic_evidence_set_derivation
+from .semantic_evidence_set_plan_projection import semantic_authority_plan_projection
 from .semantic_evidence_set_validation import (
     semantic_proposition_binding_fields,
     validated_semantic_header,

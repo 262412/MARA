@@ -22,11 +22,11 @@ from ktem.reasoning.mara_qasper_candidate_evidence import (
     candidate_selector_options,
 )
 from ktem.reasoning.mara_qasper_candidate_identity import candidate_digest
-from ktem.reasoning.mara_qasper_candidate_request import fit_candidate_request
 from ktem.reasoning.mara_qasper_candidate_prompt import (
     _compact_candidate_evidence_set_binding,
     _compact_candidate_selector_options,
 )
+from ktem.reasoning.mara_qasper_candidate_request import fit_candidate_request
 from ktem.reasoning.mara_qasper_semantic_pack import prepare_qasper_canonical_records
 from ktem.reasoning.mara_semantic_proposition_packing import compact_json
 
@@ -404,15 +404,19 @@ def test_candidate_request_drop_updates_each_duplicate_occurrence_atomically() -
         },
     ]
 
-    selected, diagnostics, messages, _measurement, dropped_count = (
-        fit_candidate_request(
-            llm,
-            "Did the authors compare the systems?",
-            records,
-            {"pre_request_dropped_evidence_count": 0},
-            response_schema=qasper_candidate_response_format(),
-            controlled_candidate="",
-        )
+    (
+        selected,
+        diagnostics,
+        messages,
+        _measurement,
+        dropped_count,
+    ) = fit_candidate_request(
+        llm,
+        "Did the authors compare the systems?",
+        records,
+        {"pre_request_dropped_evidence_count": 0},
+        response_schema=qasper_candidate_response_format(),
+        controlled_candidate="",
     )
 
     projection = diagnostics["candidate_request_projection_trace"]

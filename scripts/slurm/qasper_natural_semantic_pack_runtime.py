@@ -343,13 +343,13 @@ def _replay_frozen_candidate_request(
     regenerated_stack = _serialized_messages(regenerated_messages)
     messages = _frozen_message_objects(frozen_request)
     serialized_messages = _serialized_messages(messages)
-    replay_diagnostics["frozen_candidate_request_replay"] = (
-        _candidate_request_replay_observation(
-            selected,
-            frozen_request=frozen_request,
-            regenerated_stack=regenerated_stack,
-            frozen_stack=serialized_messages,
-        )
+    replay_diagnostics[
+        "frozen_candidate_request_replay"
+    ] = _candidate_request_replay_observation(
+        selected,
+        frozen_request=frozen_request,
+        regenerated_stack=regenerated_stack,
+        frozen_stack=serialized_messages,
     )
     return (
         selected,

@@ -6,12 +6,24 @@ from typing import Any
 
 from .answer_citation_projection import (
     canonical_source_alias_map as _canonical_source_alias_map,
+)
+from .answer_citation_projection import (
     canonical_source_backrefs as _canonical_source_backrefs,
-    canonical_source_refs as _canonical_source_refs,
+)
+from .answer_citation_projection import canonical_source_refs as _canonical_source_refs
+from .answer_citation_projection import (
     citation_candidate_items as _citation_candidate_items,
+)
+from .answer_citation_projection import (
     citation_projection_source as _citation_projection_source,
+)
+from .answer_citation_projection import (
     record_frozen_citation_trace as _record_frozen_citation_trace,
+)
+from .answer_citation_projection import (
     set_citation_projection_source as _set_citation_projection_source,
+)
+from .answer_citation_projection import (
     terminal_commit_citations as _terminal_commit_citations,
 )
 from .answer_modes import normalize_benchmark_answer_mode

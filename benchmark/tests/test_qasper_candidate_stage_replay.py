@@ -290,7 +290,7 @@ def test_causal_replay_uses_frozen_online_candidate_stage() -> None:
     )
     context.bundle.metadata["qasper_canonical_semantic_pack"][
         "semantic_pack_digest"
-    ] = "0" * 64
+    ] = ("0" * 64)
     context.candidate_generation["message_stack"] = [
         {"role": "system", "content": "current semantic projection"}
     ]
@@ -496,21 +496,17 @@ def test_candidate_replay_records_the_frozen_canonical_pack_identity() -> None:
     )
 
     pack = context.bundle.metadata["qasper_canonical_semantic_pack"]
-    assert (
-        context.candidate_generation["evidence_pack_digest"]
-        == (pack["semantic_pack_digest"])
+    assert context.candidate_generation["evidence_pack_digest"] == (
+        pack["semantic_pack_digest"]
     )
-    assert (
-        context.candidate_generation["canonical_semantic_pack_contract_id"]
-        == (pack["contract_id"])
+    assert context.candidate_generation["canonical_semantic_pack_contract_id"] == (
+        pack["contract_id"]
     )
-    assert (
-        context.candidate_generation["canonical_semantic_pack_digest"]
-        == (pack["semantic_pack_digest"])
+    assert context.candidate_generation["canonical_semantic_pack_digest"] == (
+        pack["semantic_pack_digest"]
     )
-    assert (
-        context.candidate_generation["canonical_span_universe_digest"]
-        == (pack["span_universe_digest"])
+    assert context.candidate_generation["canonical_span_universe_digest"] == (
+        pack["span_universe_digest"]
     )
     assert (
         context.candidate_generation["canonical_pack_candidate_transaction_id"]

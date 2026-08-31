@@ -5,14 +5,6 @@ import json
 from copy import deepcopy
 from types import SimpleNamespace
 
-from benchmark.qasper_causal_transaction import (
-    QASPER_CAUSAL_TRANSACTION_STAGES,
-    _stage_record,
-    qasper_causal_transaction_first_failure,
-)
-from benchmark.qasper_causal_transaction_plan_projection import (
-    projected_plan_authority_stage_payload,
-)
 from ktem.docqa.canonical_serialization import (
     CANONICAL_SERIALIZER_IDENTITY,
     canonical_digest,
@@ -23,6 +15,15 @@ from ktem.docqa.frozen_semantic_relation_projection import (
     frozen_semantic_relation_evidence_set_constraint,
 )
 from ktem.docqa.qasper_semantic_pack_contract import canonical_payload_digest
+
+from benchmark.qasper_causal_transaction import (
+    QASPER_CAUSAL_TRANSACTION_STAGES,
+    _stage_record,
+    qasper_causal_transaction_first_failure,
+)
+from benchmark.qasper_causal_transaction_plan_projection import (
+    projected_plan_authority_stage_payload,
+)
 from scripts.slurm.qasper_causal_transaction_gate import _first_divergence
 
 
