@@ -96,7 +96,7 @@ def _record_replayed_response(
     raw_response: str,
 ) -> None:
     identity = {
-        key: deepcopy(observation.get(key))
+        key: str(observation.get(key) or "")
         for key in (
             "trace_group_id",
             "benchmark_route_id",

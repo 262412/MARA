@@ -41,7 +41,7 @@ def _row_with_real_raw_response() -> dict[str, Any]:
     metadata = cast(dict[str, Any], row["evidence_metadata"])
     generation = cast(dict[str, Any], metadata["qasper_candidate_generation"])
     identity = {
-        key: deepcopy(generation.get(key))
+        key: str(generation.get(key) or "")
         for key in (
             "trace_group_id",
             "benchmark_route_id",
@@ -320,7 +320,7 @@ def _audit_raw_response(expectations: dict[str, tuple[str, ...]]) -> str:
 def test_stage_eight_replays_semantic_proposal_and_audit_raw_responses() -> None:
     prediction, context = _semantic_response_replay_fixture()
 
-    replay = natural_causal_transaction_replay(prediction, context)
+    replay = natural_causal_transaction_replay(prediction, context, through_stage=8)
 
     assert replay["status"] == "matched"
     assert replay["through_stage_index"] == 8

@@ -169,9 +169,56 @@ def candidate_bound_insufficient_result(
     audit = _run_candidate_unknown_audit(
         context, audit_prompt, candidate, verifier_judgment
     )
+    audit_input = _candidate_unknown_audit_input(
+        context,
+        proposal,
+        prompt=audit_prompt,
+        typed_conclusion_value=audited_conclusion,
+        assessment=assessment,
+    )
+    return _candidate_unknown_audit_result(
+        context,
+        proposal,
+        audit,
+        diagnostics,
+        candidate=candidate,
+        audited_conclusion=audited_conclusion,
+        assessment=assessment,
+        audit_input=audit_input,
+    )
+
+
+def _record_unknown_audit_diagnostics(
+    context: Any,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+) -> None:
+    if audit.call_count > 0:
+        diagnostics["auditor_semantic_pack_identity"] = semantic_pack_identity(context)
+    diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
+    record_audit_data_lineage(diagnostics, audit)
+    diagnostics["audit_contract_id"] = "candidate_verifier_audit.v2"
+
+
+def _candidate_unknown_audit_result(
+    context: Any,
+    proposal: ParsedSemanticStage,
+    audit: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+    *,
+    candidate: str,
+    audited_conclusion: dict[str, Any],
+    assessment: dict[str, Any],
+    audit_input: dict[str, Any],
+) -> Any:
     _record_unknown_audit_diagnostics(context, audit, diagnostics)
     rejection_reason = candidate_unknown_audit_stage_rejection_reason(audit)
-    debug_trace = transaction_debug(context, proposal, audit)
+    debug_trace = transaction_debug(
+        context,
+        proposal,
+        audit,
+        audit_input=audit_input,
+    )
     if rejection_reason:
         diagnostics.update(
             {"audit_status": "rejected", "audit_reason": rejection_reason}
@@ -197,18 +244,6 @@ def candidate_bound_insufficient_result(
     )
 
 
-def _record_unknown_audit_diagnostics(
-    context: Any,
-    audit: ParsedSemanticStage,
-    diagnostics: dict[str, Any],
-) -> None:
-    if audit.call_count > 0:
-        diagnostics["auditor_semantic_pack_identity"] = semantic_pack_identity(context)
-    diagnostics.update(audit_diagnostics(audit, model=context.audit_model))
-    record_audit_data_lineage(diagnostics, audit)
-    diagnostics["audit_contract_id"] = "candidate_verifier_audit.v2"
-
-
 def _run_candidate_unknown_audit(
     context: Any,
     audit_prompt: str,
@@ -222,6 +257,24 @@ def _run_candidate_unknown_audit(
         verifier_judgment=verifier_judgment,
         seed=context.seed + 1,
     )
+
+
+def _candidate_unknown_audit_input(
+    context: Any,
+    proposal: ParsedSemanticStage,
+    *,
+    prompt: str,
+    typed_conclusion_value: dict[str, Any],
+    assessment: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "prompt": prompt,
+        "question": str(context.question or ""),
+        "candidate_proposal": deepcopy(proposal.value or {}),
+        "typed_conclusion": deepcopy(typed_conclusion_value),
+        "unknown_assessment": deepcopy(assessment),
+        "semantic_pack_identity": semantic_pack_identity(context),
+    }
 
 
 def _candidate_unknown_inputs(

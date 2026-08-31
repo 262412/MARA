@@ -22,6 +22,9 @@ from ktem.reasoning.mara_semantic_proposition_schema import (
 )
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
+from scripts.slurm.qasper_natural_semantic_io_replay import (
+    semantic_io_replay_observation,
+)
 
 _VERIFIER_FIELDS = (
     "contract_id",
@@ -34,6 +37,9 @@ _VERIFIER_FIELDS = (
     "model",
     "audit_model",
     "auditor_relationship",
+    "proposal_model_call_count",
+    "audit_model_call_count",
+    "actual_model_call_count",
 )
 
 
@@ -70,6 +76,13 @@ def replay_frozen_semantic_verifier(
         "events": [replayed_event],
     }
     verifier["semantic_response_replay"] = observation
+    verifier["semantic_io_replay"] = semantic_io_replay_observation(
+        replayed_event,
+        question=question,
+        bundle=bundle,
+        slots=slots,
+        candidate_generation=candidate_generation,
+    )
     return verifier
 
 
@@ -313,6 +326,7 @@ def _reparse_audit_attempt(
     raw = str(frozen.get("raw_response") or "")
     if not raw:
         return replayed, _missing_attempt_reasons("audit", frozen)
+    parsed: Any
     if proposal_value.get("verdict") == "insufficient_evidence":
         parsed = parse_candidate_unknown_audit(
             raw,

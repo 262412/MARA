@@ -14,12 +14,14 @@ from scripts.slurm.qasper_natural_semantic_response_replay import (
     replay_frozen_semantic_verifier,
 )
 
-_REPLAY_THROUGH_STAGE = 8
+_REPLAY_THROUGH_STAGE = 9
 
 
 def natural_causal_transaction_replay(
     row: dict[str, Any],
     context: Any,
+    *,
+    through_stage: int = _REPLAY_THROUGH_STAGE,
 ) -> dict[str, Any]:
     reference = _causal_transaction(row, origin="online_reference")
     replay_prediction = _local_replay_prediction(row, context)
@@ -27,16 +29,19 @@ def natural_causal_transaction_replay(
     comparison = compare_qasper_causal_transaction_prefix(
         reference,
         replay,
-        through_stage=_REPLAY_THROUGH_STAGE,
+        through_stage=through_stage,
     )
     return {
         "contract_id": "qasper_natural_causal_transaction_replay.v1",
         "status": (
             "matched" if comparison.get("status") == "matched_prefix" else "failed"
         ),
-        "comparison_scope": "causal_replay_through_model_response_and_parser",
-        "through_stage_index": _REPLAY_THROUGH_STAGE,
-        "through_stage": QASPER_CAUSAL_TRANSACTION_STAGES[_REPLAY_THROUGH_STAGE - 1],
+        "comparison_scope": (
+            "causal_replay_through_"
+            f"{QASPER_CAUSAL_TRANSACTION_STAGES[through_stage - 1]}"
+        ),
+        "through_stage_index": through_stage,
+        "through_stage": QASPER_CAUSAL_TRANSACTION_STAGES[through_stage - 1],
         "hard_rule": "stop_at_first_divergence",
         "reference_transaction": reference,
         "local_replay_transaction": replay,

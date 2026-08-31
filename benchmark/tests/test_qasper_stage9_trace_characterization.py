@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 FIXTURE = (
     Path(__file__).parent / "fixtures" / "qasper_trace_canary_10388470_stage9.json"
 )

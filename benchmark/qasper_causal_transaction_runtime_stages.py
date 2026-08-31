@@ -191,11 +191,13 @@ def _verifier_auditor_payload(
     audit_input = deepcopy(_mapping(transaction.get("audit_input")))
     proposal_output = deepcopy(_mapping(transaction.get("proposal")))
     audit_output = deepcopy(_mapping(transaction.get("audit")))
+    typed_pre_audit_stop = _typed_proposal_not_run(verifier, event, transaction)
     reasons = []
-    if not proposal_input:
+    if not proposal_input and not typed_pre_audit_stop:
         reasons.append("verifier_input_missing")
     elif canonical_digest(proposal_input) != transaction.get("proposal_input_digest"):
-        reasons.append("verifier_input_digest_mismatch")
+        if proposal_input:
+            reasons.append("verifier_input_digest_mismatch")
     audit_ran = bool(audit_output.get("attempts"))
     if audit_ran and not audit_input:
         reasons.append("auditor_input_missing")
@@ -203,13 +205,41 @@ def _verifier_auditor_payload(
         "audit_input_digest"
     ):
         reasons.append("auditor_input_digest_mismatch")
+    semantic_io_replay = _mapping(verifier.get("semantic_io_replay"))
+    if semantic_io_replay and semantic_io_replay.get("status") != "matched":
+        reasons.extend(
+            str(reason) for reason in semantic_io_replay.get("reasons") or []
+        )
+    relationship = str(
+        transaction.get("auditor_relationship")
+        or event.get("auditor_relationship")
+        or verifier.get("auditor_relationship")
+        or ""
+    )
+    auditor_model = str(
+        transaction.get("audit_model") or verifier.get("audit_model") or ""
+    )
+    if not auditor_model and relationship in {
+        "same_instance",
+        "distinct_instance_same_model",
+    }:
+        auditor_model = str(
+            transaction.get("proposal_model") or verifier.get("model") or ""
+        )
     return _payload(
         reasons,
         verifier_model=str(
             transaction.get("proposal_model") or verifier.get("model") or ""
         ),
-        auditor_model=str(
-            transaction.get("audit_model") or verifier.get("audit_model") or ""
+        auditor_model=auditor_model,
+        execution_state=_semantic_execution_state(
+            event,
+            transaction,
+            verifier,
+            proposal_output=proposal_output,
+            audit_output=audit_output,
+            typed_pre_audit_stop=typed_pre_audit_stop,
+            auditor_relationship=relationship,
         ),
         event_input={
             "question": str(event.get("question") or ""),
@@ -225,6 +255,71 @@ def _verifier_auditor_payload(
         audit_output=audit_output,
         runtime_outcome=deepcopy(event.get("outcome") or {}),
     )
+
+
+def _semantic_execution_state(
+    event: Mapping[str, Any],
+    transaction: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+    *,
+    proposal_output: Mapping[str, Any],
+    audit_output: Mapping[str, Any],
+    typed_pre_audit_stop: bool,
+    auditor_relationship: str,
+) -> dict[str, Any]:
+    proposal_count = _semantic_call_count(
+        verifier.get("proposal_model_call_count"),
+        transaction.get("proposal_call_count"),
+        proposal_output,
+    )
+    audit_count = _semantic_call_count(
+        verifier.get("audit_model_call_count"),
+        transaction.get("audit_call_count"),
+        audit_output,
+    )
+    return {
+        "disposition": (
+            "typed_pre_audit_stop" if typed_pre_audit_stop else "model_transaction"
+        ),
+        "stop_reason": (
+            str(_mapping(event.get("outcome")).get("reason") or "")
+            if typed_pre_audit_stop
+            else ""
+        ),
+        "auditor_relationship": auditor_relationship,
+        "proposal_status": (
+            "not_started"
+            if typed_pre_audit_stop
+            else str(
+                verifier.get("proposal_status")
+                or proposal_output.get("status")
+                or "not_started"
+            )
+        ),
+        "audit_status": (
+            "not_started"
+            if typed_pre_audit_stop
+            else str(
+                verifier.get("audit_status")
+                or audit_output.get("status")
+                or "not_started"
+            )
+        ),
+        "proposal_model_call_count": proposal_count,
+        "audit_model_call_count": audit_count,
+        "actual_model_call_count": proposal_count + audit_count,
+    }
+
+
+def _semantic_call_count(
+    verifier_value: Any,
+    transaction_value: Any,
+    stage: Mapping[str, Any],
+) -> int:
+    for value in (verifier_value, transaction_value, stage.get("call_count")):
+        if isinstance(value, int) and value >= 0:
+            return value
+    return len(stage.get("attempts") or [])
 
 
 def _recovery_payload(
