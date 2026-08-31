@@ -5,6 +5,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
+from kotaemon.base import SystemMessage
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
 from benchmark.tests.test_qasper_natural_semantic_pack_probe import (
@@ -13,7 +14,13 @@ from benchmark.tests.test_qasper_natural_semantic_pack_probe import (
     _row,
 )
 from scripts.slurm import qasper_natural_semantic_pack_probe as probe
+from scripts.slurm.qasper_natural_causal_transaction import (
+    _local_replay_prediction,
+)
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
+from scripts.slurm.qasper_natural_semantic_pack_runtime import (
+    _frozen_selected_records,
+)
 
 
 def test_candidate_input_uses_frozen_pack_when_verifier_lineage_is_empty() -> None:
@@ -167,6 +174,83 @@ def test_complete_frozen_request_bypasses_fallback_token_budget_decision() -> No
         if decision["selected"] is True
     ]
     assert selected_ids == [record["evidence_id"] for record in context.frozen.records]
+
+
+def test_candidate_replay_uses_frozen_messages_when_renderer_changes() -> None:
+    row = _row()
+    metadata = cast(dict[str, Any], row["evidence_metadata"])
+    online = cast(dict[str, Any], metadata["qasper_candidate_generation"])
+    replay = candidate_replay_context(row)
+
+    with patch(
+        "scripts.slurm.qasper_natural_semantic_pack_runtime.candidate_messages",
+        return_value=[SystemMessage(content="changed renderer output")],
+    ):
+        context = probe.freeze_natural_pack(
+            str(row["question"]),
+            route=str(row["route"]),
+            example_id=str(row["example_id"]),
+            replay=replay,
+            code_sha=_CODE_SHA,
+        )
+
+    assert context.candidate_generation["message_stack"] == online["message_stack"]
+    assert context.candidate_generation["message_stack_digest"] == online[
+        "message_stack_digest"
+    ]
+    assert context.candidate_generation["candidate_prompt_projection_trace"] == online[
+        "candidate_prompt_projection_trace"
+    ]
+
+
+def test_frozen_request_preserves_duplicate_evidence_occurrences() -> None:
+    records = [
+        {"evidence_id": "duplicate", "occurrence": 1},
+        {"evidence_id": "duplicate", "occurrence": 2},
+        {"evidence_id": "other", "occurrence": 1},
+    ]
+    projection = {
+        "selected_record_count": 2,
+        "decisions": [
+            {"evidence_id": "duplicate", "selected": True},
+            {"evidence_id": "duplicate", "selected": False},
+            {"evidence_id": "other", "selected": True},
+        ],
+    }
+
+    selected = _frozen_selected_records(records, projection)
+
+    assert selected == [records[0], records[2]]
+
+
+def test_causal_replay_uses_frozen_online_candidate_stage() -> None:
+    row = _row()
+    online_metadata = cast(dict[str, Any], row["evidence_metadata"])
+    online_pack = deepcopy(online_metadata["qasper_canonical_semantic_pack"])
+    online_candidate = deepcopy(online_metadata["qasper_candidate_generation"])
+    replay = candidate_replay_context(row)
+    context = probe.freeze_natural_pack(
+        str(row["question"]),
+        route=str(row["route"]),
+        example_id=str(row["example_id"]),
+        replay=replay,
+        code_sha=_CODE_SHA,
+    )
+    context.bundle.metadata["qasper_canonical_semantic_pack"][
+        "semantic_pack_digest"
+    ] = "0" * 64
+    context.candidate_generation["message_stack"] = [
+        {"role": "system", "content": "current semantic projection"}
+    ]
+
+    prediction = _local_replay_prediction(row, context)
+
+    assert prediction["evidence_metadata"]["qasper_canonical_semantic_pack"] == (
+        online_pack
+    )
+    assert prediction["_qasper_causal_replay_metadata"][
+        "qasper_candidate_generation"
+    ]["message_stack"] == online_candidate["message_stack"]
 
 
 def test_incomplete_frozen_request_fails_closed_without_refitting() -> None:
