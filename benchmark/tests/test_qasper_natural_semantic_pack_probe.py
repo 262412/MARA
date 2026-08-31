@@ -8,7 +8,10 @@ from typing import Any, cast
 from ktem.docqa.boolean_evidence_scope import evidence_item_text
 from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.evidence_schema import EvidenceBundle
-from ktem.reasoning.mara_qasper_candidate import _record_candidate_request
+from ktem.reasoning.mara_qasper_candidate import (
+    _record_candidate_request,
+    _record_candidate_response,
+)
 from ktem.reasoning.mara_qasper_candidate_prompt import _candidate_evidence
 from ktem.reasoning.mara_qasper_candidate_request import fit_candidate_request
 from ktem.reasoning.mara_qasper_candidate_transport import (
@@ -126,9 +129,18 @@ def _attach_replay_context(row: dict[str, Any]) -> dict[str, Any]:
     metadata["candidate_ranked_evidence"] = deepcopy(
         context.bundle.metadata["candidate_ranked_evidence"]
     )
-    metadata["semantic_proposition_verifier"] = {
+    metadata["semantic_proposition_verifier"] = _fixture_not_run_verifier(context)
+    return row
+
+
+def _fixture_not_run_verifier(context: Any) -> dict[str, Any]:
+    return {
         "contract_id": "semantic_proposition_verifier_runtime.v3",
-        "status": "not_run_in_fixture_reference",
+        "status": "not_run_after_candidate_response_replay",
+        "reason": "stage_nine_not_replayed",
+        "candidate_verification_status": "not_started_in_replay",
+        "proposal_status": "not_started",
+        "audit_status": "not_started",
         "semantic_data_lineage": {
             "contract_id": "semantic_proposition_data_lineage.v1",
             "source_packing": deepcopy(
@@ -139,7 +151,6 @@ def _attach_replay_context(row: dict[str, Any]) -> dict[str, Any]:
             "plan_construction": deepcopy(context.binding["plan_construction_trace"]),
         },
     }
-    return row
 
 
 def _record_fixture_candidate_request(row: dict[str, Any]) -> None:
@@ -210,7 +221,26 @@ def _record_fixture_candidate_request(row: dict[str, Any]) -> None:
         token_measurement=token_measurement,
         request_dropped_count=dropped_count,
     )
+    _record_fixture_candidate_response(observation, identity)
     metadata["qasper_candidate_generation"] = observation
+
+
+def _record_fixture_candidate_response(
+    observation: dict[str, Any],
+    identity: dict[str, Any],
+) -> None:
+    _record_candidate_response(
+        SimpleNamespace(
+            text='{\n\n\n    "candidate": "yes"\n}',
+            completion_tokens=10,
+            prompt_tokens=observation["estimated_input_tokens"],
+            finish_reason="stop",
+        ),
+        observation,
+        identity,
+        str(observation["input_digest"]),
+        "",
+    )
 
 
 def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint() -> (
@@ -238,8 +268,8 @@ def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint(
     assert result["checks"]["online_local_causal_prefix_matched"] is True
     causal_replay = result["causal_transaction_replay"]
     assert causal_replay["status"] == "matched"
-    assert causal_replay["through_stage_index"] == 7
-    assert causal_replay["through_stage"] == "projected_plan_authority"
+    assert causal_replay["through_stage_index"] == 8
+    assert causal_replay["through_stage"] == "model_response_and_parser"
     assert causal_replay["comparison"]["status"] == "matched_prefix"
     assert causal_replay["comparison"]["later_stages_evaluated"] is False
     assert result["candidate_path_replay"]["stage_sequence"][-1] == (

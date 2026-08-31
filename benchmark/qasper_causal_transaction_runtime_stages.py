@@ -19,7 +19,12 @@ def runtime_transaction_stage_payloads(
 ) -> dict[str, dict[str, Any]]:
     return {
         "model_response_and_parser": _model_response_payload(
-            generator, proposal, audit
+            generator,
+            verifier,
+            event,
+            transaction,
+            proposal,
+            audit,
         ),
         "verifier_and_auditor": _verifier_auditor_payload(event, transaction, verifier),
         "recovery_state": _recovery_payload(prediction, verifier),
@@ -32,6 +37,9 @@ def runtime_transaction_stage_payloads(
 
 def _model_response_payload(
     generator: Mapping[str, Any],
+    verifier: Mapping[str, Any],
+    event: Mapping[str, Any],
+    transaction: Mapping[str, Any],
     proposal: Mapping[str, Any],
     audit: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -43,20 +51,131 @@ def _model_response_payload(
         "cleaned_response": str(generator.get("cleaned_response") or ""),
         "typed_candidate": str(generator.get("typed_candidate") or ""),
         "parse_failure_reason": str(generator.get("failure_reason") or ""),
-        "attempts": deepcopy(generator.get("attempts") or []),
+        "attempts": _candidate_response_attempts(generator),
     }
     reasons = []
     if not candidate["raw_response"] and not candidate["parse_failure_reason"]:
         reasons.append("candidate_raw_response_missing")
     if candidate["raw_response_truncated"]:
         reasons.append("candidate_raw_response_truncated")
-    reasons.extend(_attempt_response_reasons("proposal", proposal))
+    response_replay = _mapping(generator.get("candidate_response_replay"))
+    if response_replay and response_replay.get("status") != "matched":
+        reasons.extend(str(reason) for reason in response_replay.get("reasons") or [])
+    reasons.extend(
+        _attempt_response_reasons(
+            "proposal",
+            proposal,
+            allow_not_run=_typed_proposal_not_run(
+                verifier,
+                event,
+                transaction,
+            ),
+        )
+    )
     reasons.extend(_attempt_response_reasons("audit", audit, allow_not_run=True))
     return _payload(
         reasons,
         candidate_generation=candidate,
         semantic_proposal=deepcopy(dict(proposal)),
         semantic_audit=deepcopy(dict(audit)),
+    )
+
+
+def _candidate_response_attempts(
+    generator: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    attempts = [
+        _mapping(attempt)
+        for attempt in generator.get("attempts") or []
+        if isinstance(attempt, Mapping)
+    ]
+    return [
+        {
+            "attempt_id": str(attempt.get("attempt_id") or ""),
+            "status": str(attempt.get("status") or ""),
+            "failure_reason": str(attempt.get("failure_reason") or ""),
+            "failure_detail": str(attempt.get("failure_detail") or ""),
+            "provider_failure_reason": str(
+                attempt.get("provider_failure_reason") or ""
+            ),
+            "provider_failure_detail": str(
+                attempt.get("provider_failure_detail") or ""
+            ),
+            "parse_failure_reason": str(attempt.get("parse_failure_reason") or ""),
+            "raw_response": str(attempt.get("raw_response") or ""),
+            "raw_response_truncated": (attempt.get("raw_response_truncated") is True),
+            "cleaned_response": str(attempt.get("cleaned_response") or ""),
+            "raw_candidate": str(attempt.get("raw_candidate") or ""),
+            "raw_candidate_digest": str(attempt.get("raw_candidate_digest") or ""),
+            "typed_candidate": str(attempt.get("typed_candidate") or ""),
+            "typed_candidate_digest": str(attempt.get("typed_candidate_digest") or ""),
+            "parsed_value": deepcopy(attempt.get("parsed_value")),
+            "raw_candidate_identity_preserved": (
+                attempt.get("raw_candidate_identity_preserved") is True
+            ),
+            "requested_controlled_candidate": str(
+                attempt.get("requested_controlled_candidate") or ""
+            ),
+            "provider_raw_candidate": str(attempt.get("provider_raw_candidate") or ""),
+            "cleaned_candidate": str(attempt.get("cleaned_candidate") or ""),
+            "verifier_input_candidate": str(
+                attempt.get("verifier_input_candidate") or ""
+            ),
+            "verifier_input_candidate_digest": str(
+                attempt.get("verifier_input_candidate_digest") or ""
+            ),
+            "candidate_transport_identity_preserved": (
+                attempt.get("candidate_transport_identity_preserved") is True
+            ),
+            "candidate_transport_status": str(
+                attempt.get("candidate_transport_status") or ""
+            ),
+            "verifier_execution_status": str(
+                attempt.get("verifier_execution_status") or ""
+            ),
+            "auditor_execution_status": str(
+                attempt.get("auditor_execution_status") or ""
+            ),
+            "verifier_transport_status": str(
+                attempt.get("verifier_transport_status") or ""
+            ),
+            "auditor_transport_status": str(
+                attempt.get("auditor_transport_status") or ""
+            ),
+            "finish_reason": str(attempt.get("finish_reason") or ""),
+            "completion_tokens": attempt.get("completion_tokens"),
+            "actual_input_tokens": attempt.get("actual_input_tokens"),
+            "actual_input_token_count": attempt.get("actual_input_token_count"),
+            "output_digest": str(attempt.get("output_digest") or ""),
+            "input_digest": str(attempt.get("input_digest") or ""),
+        }
+        for attempt in attempts
+    ]
+
+
+def _typed_proposal_not_run(
+    verifier: Mapping[str, Any],
+    event: Mapping[str, Any],
+    transaction: Mapping[str, Any],
+) -> bool:
+    if transaction:
+        return False
+    verifier_status = str(verifier.get("status") or "")
+    proposal_status = str(verifier.get("proposal_status") or "")
+    if (
+        verifier_status == "not_run_after_candidate_response_replay"
+        and proposal_status == "not_started"
+    ):
+        return True
+    outcome = _mapping(event.get("outcome"))
+    reason = str(verifier.get("reason") or "")
+    return bool(
+        verifier_status == "failed"
+        and verifier.get("candidate_verification_status") == "pre_audit_failed"
+        and verifier.get("audit_status") == "not_started"
+        and reason
+        and outcome.get("status") == "failed"
+        and outcome.get("reason") == reason
     )
 
 

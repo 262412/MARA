@@ -11,7 +11,7 @@ from benchmark.qasper_causal_transaction import (
 )
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
 
-_REPLAY_THROUGH_STAGE = 7
+_REPLAY_THROUGH_STAGE = 8
 
 
 def natural_causal_transaction_replay(
@@ -31,7 +31,7 @@ def natural_causal_transaction_replay(
         "status": (
             "matched" if comparison.get("status") == "matched_prefix" else "failed"
         ),
-        "comparison_scope": "causal_replay_through_projected_plan_authority",
+        "comparison_scope": "causal_replay_through_model_response_and_parser",
         "through_stage_index": _REPLAY_THROUGH_STAGE,
         "through_stage": QASPER_CAUSAL_TRANSACTION_STAGES[_REPLAY_THROUGH_STAGE - 1],
         "hard_rule": "stop_at_first_divergence",
@@ -80,7 +80,11 @@ def _local_replay_prediction(
             "qasper_candidate_generation": deepcopy(context.candidate_generation),
             "semantic_proposition_verifier": {
                 "contract_id": "semantic_proposition_verifier_runtime.v3",
-                "status": "not_run_in_premodel_replay",
+                "status": "not_run_after_candidate_response_replay",
+                "reason": "stage_nine_not_replayed",
+                "candidate_verification_status": "not_started_in_replay",
+                "proposal_status": "not_started",
+                "audit_status": "not_started",
                 "semantic_data_lineage": {
                     "contract_id": "semantic_proposition_data_lineage.v1",
                     "source_packing": source,

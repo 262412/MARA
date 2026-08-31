@@ -34,6 +34,9 @@ from ktem.reasoning.mara_semantic_proposition_packing import (
 )
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
+from scripts.slurm.qasper_natural_candidate_response_replay import (
+    replay_frozen_candidate_response,
+)
 from scripts.slurm.qasper_natural_semantic_pack_replay import CandidateReplayContext
 
 
@@ -111,6 +114,9 @@ def freeze_natural_pack(
         diagnostics=diagnostics,
         token_measurement=token_measurement,
         dropped_count=dropped_count,
+    )
+    candidate_generation = replay_frozen_candidate_response(
+        candidate_generation, replay.online_candidate_response
     )
     loaded, load_reason = load_qasper_canonical_semantic_pack(
         bundle,

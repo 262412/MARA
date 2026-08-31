@@ -54,9 +54,7 @@ def test_stage_eight_replays_and_reparses_the_frozen_candidate_response() -> Non
     row = _row_with_real_raw_response()
     online = cast(
         dict[str, Any],
-        cast(dict[str, Any], row["evidence_metadata"])[
-            "qasper_candidate_generation"
-        ],
+        cast(dict[str, Any], row["evidence_metadata"])["qasper_candidate_generation"],
     )
     replay = candidate_replay_context(row)
 
@@ -88,9 +86,7 @@ def test_stage_eight_rejects_a_tampered_frozen_raw_response_digest() -> None:
     row = _row_with_real_raw_response()
     generation = cast(
         dict[str, Any],
-        cast(dict[str, Any], row["evidence_metadata"])[
-            "qasper_candidate_generation"
-        ],
+        cast(dict[str, Any], row["evidence_metadata"])["qasper_candidate_generation"],
     )
     generation["raw_response"] = '{"candidate":"no"}'
     replay = candidate_replay_context(row)

@@ -9,6 +9,9 @@ from ktem.docqa.boolean_evidence_scope import evidence_item_text
 from ktem.docqa.evidence_identity import identity_of
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
+from scripts.slurm.qasper_natural_candidate_response_replay import (
+    candidate_response_snapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,7 @@ class CandidateReplayContext:
     candidate_identity: dict[str, Any]
     candidate_seed: int
     online_candidate_request: dict[str, Any]
+    online_candidate_response: dict[str, Any]
     observation: dict[str, Any]
 
 
@@ -46,6 +50,7 @@ def candidate_replay_context(row: Mapping[str, Any]) -> CandidateReplayContext:
         online_candidate_request,
         request_drop,
     ) = _candidate_replay_inputs(candidate, reasons)
+    online_candidate_response = candidate_response_snapshot(candidate)
     if not query_plan:
         reasons.append("query_plan_missing")
     ranked_metadata = (
@@ -91,6 +96,7 @@ def candidate_replay_context(row: Mapping[str, Any]) -> CandidateReplayContext:
         candidate_identity=candidate_identity,
         candidate_seed=candidate_seed,
         online_candidate_request=online_candidate_request,
+        online_candidate_response=online_candidate_response,
         observation=observation,
     )
 

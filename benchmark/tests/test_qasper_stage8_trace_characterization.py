@@ -41,9 +41,7 @@ def test_job_10388470_freezes_the_two_independent_trace_defects() -> None:
     failure = payload["observed_stage8_failure"]
 
     assert failure["stage_index"] == 8
-    assert failure["reference_incompleteness_reasons"] == [
-        "proposal_attempt_missing"
-    ]
+    assert failure["reference_incompleteness_reasons"] == ["proposal_attempt_missing"]
     assert failure["local_incompleteness_reasons"] == [
         "candidate_raw_response_missing",
         "proposal_attempt_missing",
