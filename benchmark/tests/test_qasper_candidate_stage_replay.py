@@ -296,3 +296,34 @@ def test_candidate_replay_keeps_internal_and_benchmark_routes_distinct() -> None
     assert context.candidate_generation["input_digest"] == online["input_digest"]
     assert local_snapshot["route"] == "doc_text"
     assert local_snapshot["snapshot_digest"] == snapshot["snapshot_digest"]
+
+
+def test_candidate_replay_records_the_frozen_canonical_pack_identity() -> None:
+    row = _row()
+    replay = candidate_replay_context(row)
+
+    context = probe.freeze_natural_pack(
+        str(row["question"]),
+        route=str(row["route"]),
+        example_id=str(row["example_id"]),
+        replay=replay,
+        code_sha=_CODE_SHA,
+    )
+
+    pack = context.bundle.metadata["qasper_canonical_semantic_pack"]
+    assert context.candidate_generation["evidence_pack_digest"] == (
+        pack["semantic_pack_digest"]
+    )
+    assert context.candidate_generation["canonical_semantic_pack_contract_id"] == (
+        pack["contract_id"]
+    )
+    assert context.candidate_generation["canonical_semantic_pack_digest"] == (
+        pack["semantic_pack_digest"]
+    )
+    assert context.candidate_generation["canonical_span_universe_digest"] == (
+        pack["span_universe_digest"]
+    )
+    assert (
+        context.candidate_generation["canonical_pack_candidate_transaction_id"]
+        == pack["candidate_transaction_id"]
+    )
