@@ -206,8 +206,8 @@
         }
       },
       "expected": {
-        "invalid_span_refs": ["E2:S27", "E2:S28"],
-        "invalid_event_ids": ["4793df7e5489c8cdc7a341ecc68213a74e63330e70c857e07e2c0d7f6ff35e91"],
+        "support_span_refs": ["E2:S27", "E2:S28"],
+        "support_event_ids": ["4793df7e5489c8cdc7a341ecc68213a74e63330e70c857e07e2c0d7f6ff35e91"],
         "required_slots": ["actor", "predicate", "object", "quantifier"],
         "required_object_tokens": ["each", "language", "latent", "model", "one", "pair", "variable"]
       }

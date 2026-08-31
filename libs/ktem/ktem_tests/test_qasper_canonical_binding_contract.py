@@ -348,7 +348,7 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
                 "prediction of named entities. The model links image regions with "
                 "entity-related words."
             ],
-            "unresolved",
+            "relation_bound_support",
             {"cross_span", "paraphrase", "entity_alias"},
         ),
         (

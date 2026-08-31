@@ -153,10 +153,49 @@ def _semantic_audit_failure_flags(
         verifier, prediction
     ):
         return False, False
+    semantic_statuses, semantic_reasons = _semantic_audit_signals(verifier)
+    candidate_statuses, candidate_reasons = _candidate_audit_signals(audit, verifier)
+    rejection_count = verifier.get("audit_call_rejection_count")
+
+    semantic_rejected = (
+        _contains_semantic_rejection(semantic_statuses, semantic_reasons)
+        or verifier.get("audit_semantic_rejection") is True
+        or (isinstance(rejection_count, (int, float)) and rejection_count > 0)
+    )
+    candidate_rejected = _contains_semantic_rejection(
+        candidate_statuses, candidate_reasons
+    )
+    rejected = semantic_rejected or candidate_rejected
+
+    semantic_failed = verifier.get(
+        "audit_parser_accepted"
+    ) is False or _contains_semantic_execution_failure(
+        semantic_statuses, semantic_reasons
+    )
+    candidate_reason_failed = any(
+        _semantic_execution_failure_reason(reason) for reason in candidate_reasons
+    )
+    candidate_status_failed = any(
+        _semantic_execution_failure_status(status) for status in candidate_statuses
+    )
+    # A wrapper failure accompanying an accepted semantic rejection is not a
+    # second execution failure.  Preserve explicit provider/schema/parse
+    # failures even when a rejection marker is present.
+    candidate_failed = candidate_reason_failed or (
+        candidate_status_failed and not semantic_rejected and not candidate_rejected
+    )
+    failed = semantic_failed or candidate_failed
+    return failed, rejected
+
+
+def _semantic_audit_signals(
+    verifier: dict[str, Any],
+) -> tuple[list[str], list[str]]:
     statuses: list[str] = []
     reasons: list[str] = []
     for field in (
         "audit_status",
+        "audit_execution_status",
         "runtime_semantic_entailment_audit_status",
         "semantic_entailment_audit_status",
     ):
@@ -165,6 +204,7 @@ def _semantic_audit_failure_flags(
             statuses.append(value)
     for field in (
         "audit_reason",
+        "audit_rejection_reason",
         "audit_parse_failure_reason",
         "audit_provider_failure_reason",
         "runtime_semantic_entailment_audit_reason",
@@ -175,13 +215,6 @@ def _semantic_audit_failure_flags(
             reasons.append(value)
     for field in ("entailment_audit", "semantic_entailment_audit"):
         nested = _mapping(verifier.get(field))
-        status = str(nested.get("status") or "").strip().casefold()
-        reason = str(nested.get("reason") or "").strip().casefold()
-        if status:
-            statuses.append(status)
-        if reason:
-            reasons.append(reason)
-    for nested in (audit, _mapping(verifier.get("candidate_verification_audit"))):
         status = str(nested.get("status") or "").strip().casefold()
         reason = str(nested.get("reason") or "").strip().casefold()
         if status:
@@ -201,26 +234,82 @@ def _semantic_audit_failure_flags(
             statuses.append(status)
         if reason:
             reasons.append(reason)
-    rejected = any(
+        transaction = _mapping(event.get("transaction"))
+        transaction_audit = _mapping(transaction.get("audit"))
+        transaction_status = (
+            str(transaction_audit.get("status") or "").strip().casefold()
+        )
+        transaction_failure_reason = (
+            str(transaction_audit.get("failure_reason") or "").strip().casefold()
+        )
+        if transaction_status:
+            statuses.append(transaction_status)
+        if transaction_failure_reason:
+            reasons.append(transaction_failure_reason)
+        for attempt in transaction_audit.get("attempts") or []:
+            if not isinstance(attempt, dict):
+                continue
+            for field in ("parse_failure_reason", "provider_failure_reason"):
+                attempt_reason = str(attempt.get(field) or "").strip().casefold()
+                if attempt_reason:
+                    reasons.append(attempt_reason)
+    return statuses, reasons
+
+
+def _candidate_audit_signals(
+    audit: dict[str, Any],
+    verifier: dict[str, Any],
+) -> tuple[list[str], list[str]]:
+    statuses: list[str] = []
+    reasons: list[str] = []
+    for nested in (audit, _mapping(verifier.get("candidate_verification_audit"))):
+        status = str(nested.get("status") or "").strip().casefold()
+        reason = str(nested.get("reason") or "").strip().casefold()
+        if status:
+            statuses.append(status)
+        if reason:
+            reasons.append(reason)
+    return statuses, reasons
+
+
+def _contains_semantic_rejection(
+    statuses: list[str],
+    reasons: list[str],
+) -> bool:
+    return any(
         status in {"rejected", "audit_rejected", "semantic_rejected"}
         or "rejected" in status
         or "rejection" in status
-        or "rejected" in reason
-        or "rejection" in reason
         for status in statuses
-        for reason in reasons or [""]
+    ) or any("rejected" in reason or "rejection" in reason for reason in reasons)
+
+
+def _semantic_execution_failure_status(status: str) -> bool:
+    return status in {"failed", "provider_failed", "parse_failed", "audit_failed"} or (
+        "failed" in status or "failure" in status
     )
-    failed = any(
-        status in {"failed", "provider_failed", "parse_failed", "audit_failed"}
-        or "failed" in status
-        or "failure" in status
-        or "provider" in reason
-        or "invalid" in reason
-        or "truncated" in reason
-        for status in statuses
-        for reason in reasons or [""]
+
+
+def _semantic_execution_failure_reason(reason: str) -> bool:
+    return any(
+        marker in reason
+        for marker in (
+            "provider",
+            "invalid",
+            "truncated",
+            "parse_failure",
+            "schema",
+        )
     )
-    return failed, rejected
+
+
+def _contains_semantic_execution_failure(
+    statuses: list[str],
+    reasons: list[str],
+) -> bool:
+    return any(
+        _semantic_execution_failure_status(status) for status in statuses
+    ) or any(_semantic_execution_failure_reason(reason) for reason in reasons)
 
 
 def _supported_row_required_slot_unverified(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from benchmark.qasper_semantic_state_matrix import (
+    _ambiguity_label,
     qasper_candidate_bound_state_matrix,
     split_qasper_debug_predictions,
 )
@@ -327,24 +328,7 @@ def _metric_counts(
     all_predictions: list[dict[str, Any]],
     quality: list[dict[str, Any]],
 ) -> dict[str, int]:
-    counts = {
-        "raw_identity_mismatches": 0,
-        "controlled_transport_mismatches": 0,
-        "empty_audits": 0,
-        "empty_typed_conclusions": 0,
-        "entailment_failures": 0,
-        "entailment_rejections": 0,
-        "supported_slot_unverified": 0,
-        "answerable_slot_unverified": 0,
-        "false_abstentions": 0,
-        "reverify_without_state_change": 0,
-        "auditor_attempt_missing": 0,
-        "verifier_missing": 0,
-        "answerable_rows": 0,
-        "required_slot_overlap": 0,
-        "unexpected_unknown_assessment": 0,
-        "canonical_pack_mismatches": 0,
-    }
+    counts = _empty_metric_counts()
     for prediction in all_predictions:
         metadata = terminal_metadata(prediction)
         canonical_pack = _mapping(metadata.get("qasper_canonical_semantic_pack"))
@@ -399,6 +383,37 @@ def _metric_counts(
     return counts
 
 
+def _empty_metric_counts() -> dict[str, int]:
+    return {
+        "raw_identity_mismatches": 0,
+        "controlled_transport_mismatches": 0,
+        "empty_audits": 0,
+        "empty_typed_conclusions": 0,
+        "entailment_failures": 0,
+        "entailment_rejections": 0,
+        "supported_slot_unverified": 0,
+        "answerable_slot_unverified": 0,
+        "false_abstentions": 0,
+        "reverify_without_state_change": 0,
+        "auditor_attempt_missing": 0,
+        "verifier_missing": 0,
+        "answerable_rows": 0,
+        "required_slot_overlap": 0,
+        "expected_ambiguity_rows": 0,
+        "expected_ambiguity_unresolved": 0,
+        "expected_ambiguity_supported_slot_unverified": 0,
+        "expected_ambiguity_answerable_slot_unverified": 0,
+        "expected_ambiguity_required_slot_overlap": 0,
+        "unambiguous_answerable_rows": 0,
+        "unambiguous_false_abstentions": 0,
+        "unambiguous_supported_slot_unverified": 0,
+        "unambiguous_answerable_slot_unverified": 0,
+        "unambiguous_required_slot_overlap": 0,
+        "unexpected_unknown_assessment": 0,
+        "canonical_pack_mismatches": 0,
+    }
+
+
 def _add_quality_metric_counts(
     counts: dict[str, int],
     quality: list[dict[str, Any]],
@@ -422,7 +437,37 @@ def _add_quality_metric_counts(
         counts["answerable_rows"] += int(answerable)
         counts["answerable_slot_unverified"] += int(answerable_missing)
         counts["required_slot_overlap"] += int(supported_missing and answerable_missing)
-        counts["false_abstentions"] += int(_answerable_false_abstention(prediction))
+        ambiguity = _ambiguity_label(
+            _mapping(prediction.get("qasper_annotation_diagnostics"))
+        )
+        if ambiguity == "ambiguous":
+            counts["expected_ambiguity_rows"] += int(answerable)
+            counts["expected_ambiguity_unresolved"] += int(
+                _answerable_false_abstention(prediction)
+            )
+            counts["expected_ambiguity_supported_slot_unverified"] += int(
+                supported_missing
+            )
+            counts["expected_ambiguity_answerable_slot_unverified"] += int(
+                answerable_missing
+            )
+            counts["expected_ambiguity_required_slot_overlap"] += int(
+                supported_missing and answerable_missing
+            )
+        elif ambiguity == "unambiguous":
+            counts["unambiguous_answerable_rows"] += int(answerable)
+            counts["unambiguous_false_abstentions"] += int(
+                _answerable_false_abstention(prediction)
+            )
+            counts["unambiguous_supported_slot_unverified"] += int(supported_missing)
+            counts["unambiguous_answerable_slot_unverified"] += int(answerable_missing)
+            counts["unambiguous_required_slot_overlap"] += int(
+                supported_missing and answerable_missing
+            )
+        # The legacy hard-gate field is now explicitly the unambiguous cohort.
+        counts["false_abstentions"] += int(
+            ambiguity == "unambiguous" and _answerable_false_abstention(prediction)
+        )
 
 
 def _metric_label_observations(

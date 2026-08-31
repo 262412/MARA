@@ -18,6 +18,7 @@ from ktem.docqa.semantic_relation_clause_validation import (
 )
 
 from .mara_qasper_selector_semantic_alignment import (
+    attested_selector_alignment_slot_span,
     attested_selector_slot_span,
     auditable_target_relation_present,
     build_local_selector_semantic_alignment,
@@ -290,7 +291,15 @@ def _apply_verified_alignment(
     if "predicate" in slots:
         direct["relation_bearing"] = True
     for slot in slots:
-        direct["slot_spans"].setdefault(
-            slot,
-            attested_selector_slot_span(selector, slot),
-        )
+        if slot == "object":
+            direct["slot_spans"][slot] = attested_selector_alignment_slot_span(
+                selector,
+                alignment,
+                slot,
+                base_span=direct["slot_spans"].get(slot),
+            )
+        else:
+            direct["slot_spans"].setdefault(
+                slot,
+                attested_selector_slot_span(selector, slot),
+            )

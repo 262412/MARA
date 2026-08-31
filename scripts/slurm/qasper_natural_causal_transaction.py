@@ -4,7 +4,13 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
-from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
+from ktem.docqa.evidence_schema import EvidenceBundle
+from ktem.docqa.qasper_semantic_pack_contract import (
+    QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
+    qasper_canonical_span_universe_digest,
+)
+
+from benchmark.qasper_causal_evidence_chain_utils import canonical_digest, is_sha256
 from benchmark.qasper_causal_transaction import (
     QASPER_CAUSAL_TRANSACTION_STAGES,
     compare_qasper_causal_transaction_prefix,
@@ -146,13 +152,18 @@ def natural_causal_transaction_replay(
     *,
     through_stage: int = _REPLAY_THROUGH_STAGE,
     run_context: Mapping[str, Any] | None = None,
+    preserve_frozen_semantic_projection: bool = False,
 ) -> dict[str, Any]:
     reference = _causal_transaction(
         row,
         origin="online_reference",
         run_context=run_context,
     )
-    replay_prediction = _local_replay_prediction(row, context)
+    replay_prediction = _local_replay_prediction(
+        row,
+        context,
+        preserve_frozen_semantic_projection=preserve_frozen_semantic_projection,
+    )
     replay = _causal_transaction(
         replay_prediction,
         origin="local_replay",
@@ -212,6 +223,17 @@ def _causal_transaction(
 def _local_replay_prediction(
     row: dict[str, Any],
     context: Any,
+    *,
+    preserve_frozen_semantic_projection: bool = False,
+) -> dict[str, Any]:
+    if preserve_frozen_semantic_projection:
+        return _local_frozen_replay_prediction(row, context)
+    return _local_current_replay_prediction(row, context)
+
+
+def _local_current_replay_prediction(
+    row: dict[str, Any],
+    context: Any,
 ) -> dict[str, Any]:
     prediction = deepcopy(row)
     metadata = _terminal_metadata(prediction)
@@ -248,6 +270,107 @@ def _local_replay_prediction(
     )
     _replace_terminal_metadata(prediction, metadata)
     return prediction
+
+
+def _local_frozen_replay_prediction(
+    row: dict[str, Any],
+    context: Any,
+) -> dict[str, Any]:
+    prediction = deepcopy(row)
+    terminal_metadata = _terminal_metadata(prediction)
+    candidate_metadata = deepcopy(_mapping(prediction.get("evidence_metadata")))
+    frozen_pack, frozen_candidate = _validated_frozen_candidate_stage(
+        candidate_metadata,
+        question=str(prediction.get("question") or ""),
+    )
+    request_replay = _mapping(
+        context.candidate_generation.get("frozen_candidate_request_replay")
+    )
+    if request_replay and request_replay.get("status") != "matched":
+        regenerated_stack = deepcopy(
+            list(request_replay.get("regenerated_message_stack") or [])
+        )
+        frozen_candidate["message_stack"] = regenerated_stack
+        frozen_candidate["message_stack_digest"] = canonical_digest(regenerated_stack)
+    source = deepcopy(_mapping(frozen_pack.get("source_packing_observation")))
+    frozen_binding = deepcopy(_mapping(frozen_pack.get("proposition_binding")))
+    plan_construction = deepcopy(
+        _mapping(frozen_binding).get("plan_construction_trace") or {}
+    )
+    local_lineage = {
+        "contract_id": "semantic_proposition_data_lineage.v1",
+        "source_packing": source,
+        "plan_construction": plan_construction,
+    }
+    bundle_value = _mapping(prediction.get("evidence_bundle"))
+    frozen_bundle = EvidenceBundle(
+        route=str(bundle_value.get("route") or prediction.get("route") or ""),
+        items=deepcopy(list(bundle_value.get("items") or [])),
+        metadata={"qasper_canonical_semantic_pack": deepcopy(frozen_pack)},
+    )
+    verifier = replay_frozen_semantic_verifier(
+        _mapping(terminal_metadata.get("semantic_proposition_verifier")),
+        question=str(prediction.get("question") or ""),
+        bundle=frozen_bundle,
+        slots=deepcopy(list(frozen_pack.get("slots") or [])),
+        binding=frozen_binding,
+        candidate_generation=frozen_candidate,
+        local_lineage=local_lineage,
+        preserve_frozen_projection=True,
+    )
+    metadata = candidate_metadata
+    metadata.update(
+        {
+            "qasper_canonical_semantic_pack": frozen_pack,
+            "qasper_candidate_generation": frozen_candidate,
+            "semantic_proposition_verifier": verifier,
+        }
+    )
+    _replace_terminal_metadata(prediction, metadata)
+    return prediction
+
+
+def _validated_frozen_candidate_stage(
+    metadata: Mapping[str, Any],
+    *,
+    question: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    pack = deepcopy(_mapping(metadata.get("qasper_canonical_semantic_pack")))
+    candidate = deepcopy(_mapping(metadata.get("qasper_candidate_generation")))
+    identity_digest = str(pack.pop("pack_identity_digest", "") or "")
+    if (
+        pack.get("contract_id") != QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT
+        or not is_sha256(identity_digest)
+        or canonical_digest(pack) != identity_digest
+        or pack.get("question_digest") != canonical_digest(question.strip())
+    ):
+        raise ValueError("frozen candidate semantic pack identity mismatch")
+    pack["pack_identity_digest"] = identity_digest
+    records = pack.get("records")
+    slots = pack.get("slots")
+    binding = pack.get("proposition_binding")
+    if (
+        not isinstance(records, list)
+        or not isinstance(slots, list)
+        or not isinstance(binding, Mapping)
+        or qasper_canonical_span_universe_digest(records)
+        != pack.get("span_universe_digest")
+    ):
+        raise ValueError("frozen candidate semantic pack structure mismatch")
+    transaction_id = str(candidate.get("transaction_id") or "")
+    if (
+        not transaction_id
+        or pack.get("candidate_transaction_id") != transaction_id
+        or candidate.get("canonical_semantic_pack_contract_id")
+        != pack.get("contract_id")
+        or candidate.get("canonical_semantic_pack_digest")
+        != pack.get("semantic_pack_digest")
+        or candidate.get("canonical_span_universe_digest")
+        != pack.get("span_universe_digest")
+        or candidate.get("canonical_pack_candidate_transaction_id") != transaction_id
+    ):
+        raise ValueError("frozen candidate semantic pack continuity mismatch")
+    return pack, candidate
 
 
 def _replace_terminal_metadata(

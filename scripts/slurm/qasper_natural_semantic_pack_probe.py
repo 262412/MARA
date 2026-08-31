@@ -148,6 +148,7 @@ def probe_prediction(
         row,
         context,
         run_context=run_context,
+        preserve_frozen_semantic_projection=True,
     )
     canonical_plan_count = int(schema_parser.get("canonical_plan_count") or 0)
     checks = _structural_checks(

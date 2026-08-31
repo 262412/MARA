@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+from collections import Counter
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from benchmark.qasper_causal_transaction import (
+    QASPER_CAUSAL_TRANSACTION_STAGES,
+    compare_qasper_causal_transactions,
+)
+
 AUDIT_CONTRACT = "qasper_natural_semantic_pack_probe_audit.v1"
+REPLAY_AUDIT_CONTRACT = "qasper_natural_causal_replay_audit.v1"
+REPLAY_CONTRACT = "qasper_natural_causal_transaction_replay.v1"
 _REQUIRED_NO_COHORTS = {
     "auditable_no",
     "closed_world_no",
@@ -27,6 +36,16 @@ def build_audit(
     runtime_worktree_clean: bool | None = None,
 ) -> dict[str, Any]:
     causal_replay_observations = _causal_replay_observations(predictions)
+    causal_replay_violations = _causal_replay_violations(
+        predictions,
+        causal_replay_observations,
+        expected_count=expected_count,
+    )
+    causal_replay_audit = _causal_replay_audit(
+        causal_replay_observations,
+        causal_replay_violations,
+        expected_count=expected_count,
+    )
     observed_cohorts = {
         cohort for row in predictions for cohort in row.get("no_policy_cohorts") or []
     }
@@ -39,6 +58,7 @@ def build_audit(
         "prediction_count_complete": len(predictions) == expected_count,
         "all_structural_checks_passed": not failed,
         "online_local_causal_prefix_matched": bool(predictions)
+        and not causal_replay_violations
         and all(
             observation["status"] == "matched"
             for observation in causal_replay_observations
@@ -77,12 +97,28 @@ def build_audit(
         ),
         "ambiguity_denominator": ambiguity_denominator,
         "failed_examples": failed,
-        "causal_transaction_replay_audit": {
-            "contract_id": "qasper_natural_causal_replay_audit.v1",
-            "hard_rule": "stop_at_first_divergence",
-            "observations": causal_replay_observations,
-        },
+        "causal_transaction_replay_audit": causal_replay_audit,
         "hard_gates": gates,
+    }
+
+
+def _causal_replay_audit(
+    observations: list[dict[str, Any]],
+    violations: list[str],
+    *,
+    expected_count: int,
+) -> dict[str, Any]:
+    return {
+        "contract_id": REPLAY_AUDIT_CONTRACT,
+        "replay_contract_id": REPLAY_CONTRACT,
+        "hard_rule": "stop_at_first_divergence",
+        "expected_observation_count": expected_count,
+        "observed_observation_count": len(observations),
+        "matched_observation_count": sum(
+            observation["status"] == "matched" for observation in observations
+        ),
+        "observations": observations,
+        "violations": violations,
     }
 
 
@@ -92,20 +128,142 @@ def _causal_replay_observations(
     observations = []
     for prediction in predictions:
         replay = _mapping(prediction.get("causal_transaction_replay"))
-        comparison = _mapping(replay.get("comparison"))
+        reference = _mapping(replay.get("reference_transaction"))
+        local = _mapping(replay.get("local_replay_transaction"))
+        computed = compare_qasper_causal_transactions(reference, local)
+        expected_status = "matched" if computed.get("status") == "matched" else "failed"
+        declared_contract = str(replay.get("contract_id") or "")
+        declared_through_stage = replay.get("through_stage_index")
+        declared_stage = replay.get("through_stage")
+        identity = _prediction_key(prediction)
+        identity_ok = (
+            _transaction_key(reference) == identity
+            and _transaction_key(local) == identity
+        )
+        valid = bool(
+            declared_contract == REPLAY_CONTRACT
+            and replay.get("status") == expected_status
+            and declared_through_stage == len(QASPER_CAUSAL_TRANSACTION_STAGES)
+            and declared_stage == QASPER_CAUSAL_TRANSACTION_STAGES[-1]
+            and replay.get("comparison_scope")
+            == (f"causal_replay_through_{QASPER_CAUSAL_TRANSACTION_STAGES[-1]}")
+            and replay.get("hard_rule") == "stop_at_first_divergence"
+            and _declared_comparison_matches(replay, computed)
+            and identity_ok
+        )
+        first_divergence = _first_divergence(computed.get("first_divergence"))
+        if not valid and not first_divergence:
+            first_divergence = _replay_validation_failure(
+                replay,
+                identity=identity,
+            )
         observations.append(
             {
-                "example_id": str(prediction.get("example_id") or ""),
-                "route": str(prediction.get("route") or ""),
-                "status": str(replay.get("status") or "missing"),
-                "compared_stage_count": int(
-                    comparison.get("compared_stage_count") or 0
-                ),
-                "first_divergence": dict(_mapping(comparison.get("first_divergence"))),
-                "later_stages_evaluated": comparison.get("later_stages_evaluated"),
+                "example_id": identity[0],
+                "route": identity[1],
+                "status": expected_status if valid else "failed",
+                "replay_status": str(replay.get("status") or "missing"),
+                "replay_contract_id": declared_contract,
+                "through_stage_index": declared_through_stage,
+                "through_stage": declared_stage,
+                "compared_stage_count": int(computed.get("compared_stage_count") or 0),
+                "first_divergence": first_divergence,
+                "later_stages_evaluated": computed.get("later_stages_evaluated")
+                is True,
             }
         )
     return observations
+
+
+def _causal_replay_violations(
+    predictions: list[dict[str, Any]],
+    observations: list[dict[str, Any]],
+    *,
+    expected_count: int,
+) -> list[str]:
+    keys = [_prediction_key(prediction) for prediction in predictions]
+    counts = Counter(keys)
+    violations = []
+    if len(predictions) != expected_count:
+        violations.append(
+            "qasper_natural_causal_replay_observation_count_mismatch:"
+            f"{len(predictions)}/{expected_count}"
+        )
+    for key in sorted(counts):
+        if not key[0] or not key[1] or counts[key] != 1:
+            violations.append(
+                "qasper_natural_causal_replay_key_count_mismatch:"
+                f"{key[0]}:{key[1]}:{counts[key]}"
+            )
+    if len(observations) != expected_count:
+        violations.append(
+            "qasper_natural_causal_replay_observation_count_mismatch:"
+            f"{len(observations)}/{expected_count}"
+        )
+    for observation in observations:
+        key = (observation["example_id"], observation["route"])
+        if observation["status"] != "matched":
+            first = _mapping(observation.get("first_divergence"))
+            violations.append(
+                "qasper_natural_causal_transaction_replay_failure:"
+                f"{key[0]}:{key[1]}:stage_{first.get('stage_index', 0)}:"
+                f"{first.get('stage', 'causal_transaction_replay')}:"
+                f"{first.get('reason', 'replay_not_matched')}"
+            )
+    return list(dict.fromkeys(violations))
+
+
+def _replay_validation_failure(
+    replay: Mapping[str, Any],
+    *,
+    identity: tuple[str, str],
+) -> dict[str, Any]:
+    if str(replay.get("contract_id") or "") != REPLAY_CONTRACT:
+        return {
+            "stage_index": 0,
+            "stage": "replay_contract",
+            "reason": "replay_contract_invalid",
+        }
+    if replay.get("through_stage_index") != len(QASPER_CAUSAL_TRANSACTION_STAGES):
+        return {
+            "stage_index": int(replay.get("through_stage_index") or 0),
+            "stage": str(replay.get("through_stage") or ""),
+            "reason": "replay_not_through_stage12",
+        }
+    if replay.get("through_stage") != QASPER_CAUSAL_TRANSACTION_STAGES[-1]:
+        return {
+            "stage_index": len(QASPER_CAUSAL_TRANSACTION_STAGES),
+            "stage": str(replay.get("through_stage") or ""),
+            "reason": "replay_stage12_identity_mismatch",
+        }
+    return {
+        "stage_index": 0,
+        "stage": "transaction_identity",
+        "reason": f"replay_transaction_key_mismatch:{identity[0]}:{identity[1]}",
+    }
+
+
+def _declared_comparison_matches(
+    replay: Mapping[str, Any],
+    computed: Mapping[str, Any],
+) -> bool:
+    declared = _mapping(replay.get("comparison"))
+    return declared.get(
+        "contract_id"
+    ) == "qasper_causal_transaction_comparison.v1" and declared.get(
+        "status"
+    ) == computed.get(
+        "status"
+    )
+
+
+def _first_divergence(value: Any) -> dict[str, Any]:
+    divergence = _mapping(value)
+    return {
+        key: divergence[key]
+        for key in ("stage_index", "stage", "reason")
+        if key in divergence
+    }
 
 
 def runtime_code_identity() -> tuple[str, bool]:
@@ -144,3 +302,11 @@ def _git_sha(value: Any) -> bool:
 
 def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
+
+
+def _prediction_key(value: Mapping[str, Any]) -> tuple[str, str]:
+    return str(value.get("example_id") or ""), str(value.get("route") or "")
+
+
+def _transaction_key(value: Mapping[str, Any]) -> tuple[str, str]:
+    return _prediction_key(_mapping(value.get("transaction_key")))

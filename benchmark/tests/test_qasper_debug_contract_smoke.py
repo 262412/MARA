@@ -11,6 +11,10 @@ from ktem.reasoning.mara_semantic_proposition_causal_lineage import (
     record_candidate_bound_decisive_transition,
 )
 
+from benchmark.qasper_causal_transaction import (
+    QASPER_CAUSAL_TRANSACTION_STAGES,
+    compare_qasper_causal_transactions,
+)
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _write_run
 from benchmark.tests.qasper_debug_contract_fixtures import (
@@ -51,7 +55,6 @@ def _write_qasper_run(run_dir, *, predictions):
             prediction,
             answer=str(prediction.get("answer_for_scoring") or "unanswerable"),
         )
-    _write_run(run_dir, predictions=predictions)
     semantic_rows = qasper_semantic_debug_rows(
         predictions,
         include_missing=True,
@@ -71,6 +74,8 @@ def _write_qasper_run(run_dir, *, predictions):
             },
         },
     )
+    _attach_valid_replays(predictions, semantic_rows)
+    _write_run(run_dir, predictions=predictions)
     (run_dir / "semantic_debug_traces.jsonl").write_text(
         "".join(f"{json.dumps(row, ensure_ascii=False)}\n" for row in semantic_rows),
         encoding="utf-8",
@@ -97,6 +102,28 @@ def _write_qasper_run(run_dir, *, predictions):
         output_path=run_dir / "contract_probe_audit.json",
         pre_audit_predictions_path=pre_audit_path,
     )
+
+
+def _attach_valid_replays(predictions, semantic_rows):
+    for prediction, trace in zip(predictions, semantic_rows):
+        reference = deepcopy(trace["causal_transaction"])
+        local = deepcopy(reference)
+        comparison = compare_qasper_causal_transactions(reference, local)
+        replay = {
+            "contract_id": "qasper_natural_causal_transaction_replay.v1",
+            "status": "matched",
+            "comparison_scope": (
+                f"causal_replay_through_{QASPER_CAUSAL_TRANSACTION_STAGES[-1]}"
+            ),
+            "through_stage_index": len(QASPER_CAUSAL_TRANSACTION_STAGES),
+            "through_stage": QASPER_CAUSAL_TRANSACTION_STAGES[-1],
+            "hard_rule": "stop_at_first_divergence",
+            "reference_transaction": reference,
+            "local_replay_transaction": local,
+            "comparison": comparison,
+        }
+        trace["causal_transaction_replay"] = deepcopy(replay)
+        prediction["causal_transaction_replay"] = replay
 
 
 def test_qasper_debug_contract_declares_special_hard_gates():

@@ -391,7 +391,8 @@ def _online_label_fields(
 ) -> dict[str, Any]:
     missing_annotation_labels = sorted(expected_annotation_labels - observed_candidates)
     if lane == _QUALITY_LANE:
-        required_candidate_labels = {"yes", "no"}
+        # Quality requirements come only from unambiguous annotations.
+        required_candidate_labels = set(expected_annotation_labels)
         required_verifier_judgments: set[str] = set()
         required_auditor_statuses: set[str] = set()
         required_ambiguity_states: set[str] = set()

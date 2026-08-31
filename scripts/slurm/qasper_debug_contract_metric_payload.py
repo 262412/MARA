@@ -17,9 +17,14 @@ def metric_payload(
     structural_matrix_complete: bool,
 ) -> dict[str, float]:
     required_slot_unverified = (
-        counts["supported_slot_unverified"]
-        + counts["answerable_slot_unverified"]
-        - counts["required_slot_overlap"]
+        quality_counts["unambiguous_supported_slot_unverified"]
+        + quality_counts["unambiguous_answerable_slot_unverified"]
+        - quality_counts["unambiguous_required_slot_overlap"]
+    )
+    expected_ambiguity_required_slot_unverified = (
+        quality_counts["expected_ambiguity_supported_slot_unverified"]
+        + quality_counts["expected_ambiguity_answerable_slot_unverified"]
+        - quality_counts["expected_ambiguity_required_slot_overlap"]
     )
     required_probe_states_complete = bool(
         probe_count
@@ -36,7 +41,11 @@ def metric_payload(
             probe_observation=probe_observation,
             structural_matrix_complete=structural_matrix_complete,
             required_slot_unverified=required_slot_unverified,
+            expected_ambiguity_required_slot_unverified=(
+                expected_ambiguity_required_slot_unverified
+            ),
             required_probe_states_complete=required_probe_states_complete,
+            quality_counts=quality_counts,
         ),
         **_online_metrics(counts, flags),
         **_lane_metrics(
@@ -56,15 +65,23 @@ def _summary_metrics(
     probe_observation: dict[str, Any],
     structural_matrix_complete: bool,
     required_slot_unverified: int,
+    expected_ambiguity_required_slot_unverified: int,
     required_probe_states_complete: bool,
+    quality_counts: dict[str, int],
 ) -> dict[str, float]:
     return {
-        "answerable_false_abstention_count": float(counts["false_abstentions"]),
+        "answerable_false_abstention_count": float(
+            quality_counts["unambiguous_false_abstentions"]
+        ),
         "qasper_quality_prediction_count": float(quality_count),
         "qasper_contract_probe_prediction_count": float(probe_count),
         "qasper_quality_answerable_row_count": float(counts["answerable_rows"]),
         "qasper_quality_answerable_required_slot_unverified_count": float(
-            counts["answerable_slot_unverified"]
+            quality_counts["unambiguous_answerable_slot_unverified"]
+        ),
+        **_quality_cohort_metrics(
+            quality_counts,
+            expected_ambiguity_required_slot_unverified,
         ),
         "qasper_quality_answerable_denominator_missing_count": float(
             counts["answerable_rows"] == 0
@@ -107,6 +124,32 @@ def _summary_metrics(
         ),
         "qasper_canonical_semantic_pack_mismatch_count": float(
             counts["canonical_pack_mismatches"]
+        ),
+    }
+
+
+def _quality_cohort_metrics(
+    quality_counts: dict[str, int],
+    expected_ambiguity_required_slot_unverified: int,
+) -> dict[str, float]:
+    return {
+        "qasper_quality_expected_ambiguity_unresolved_count": float(
+            quality_counts["expected_ambiguity_unresolved"]
+        ),
+        "qasper_quality_expected_ambiguity_row_count": float(
+            quality_counts["expected_ambiguity_rows"]
+        ),
+        "qasper_quality_unambiguous_false_abstention_count": float(
+            quality_counts["unambiguous_false_abstentions"]
+        ),
+        "qasper_quality_unambiguous_answerable_row_count": float(
+            quality_counts["unambiguous_answerable_rows"]
+        ),
+        "qasper_quality_expected_ambiguity_required_slot_unverified_count": float(
+            expected_ambiguity_required_slot_unverified
+        ),
+        "qasper_quality_unambiguous_answerable_required_slot_unverified_count": float(
+            quality_counts["unambiguous_answerable_slot_unverified"]
         ),
     }
 

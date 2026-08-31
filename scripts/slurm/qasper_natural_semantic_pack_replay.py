@@ -12,6 +12,9 @@ from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
 from scripts.slurm.qasper_natural_candidate_response_replay import (
     candidate_response_snapshot,
 )
+from scripts.slurm.qasper_natural_semantic_projection import (
+    frozen_projection_complete as _projection_complete,
+)
 
 
 @dataclass(frozen=True)
@@ -163,6 +166,14 @@ def _candidate_replay_inputs(
         attempts_required=True,
     ):
         reasons.append("candidate_request_projection_incomplete")
+    prompt_projection = _mapping(request.get("candidate_prompt_projection_trace"))
+    if not _projection_complete(
+        prompt_projection,
+        contract_id="qasper_candidate_prompt_projection.v1",
+        input_count_key="input_record_count",
+        attempts_required=bool(prompt_projection.get("input_record_count")),
+    ):
+        reasons.append("candidate_prompt_projection_incomplete")
     token_measurement = _mapping(request.get("token_measurement"))
     token_measurement_complete = _frozen_token_measurement_complete(token_measurement)
     if not token_measurement_complete:
@@ -224,6 +235,9 @@ def _online_candidate_request(candidate: Mapping[str, Any]) -> dict[str, Any]:
         "input_digest": str(candidate.get("input_digest") or ""),
         "candidate_request_projection_trace": deepcopy(
             candidate.get("candidate_request_projection_trace") or {}
+        ),
+        "candidate_prompt_projection_trace": deepcopy(
+            candidate.get("candidate_prompt_projection_trace") or {}
         ),
         "candidate_request_dropped_evidence_count": candidate.get(
             "candidate_request_dropped_evidence_count"
@@ -287,7 +301,7 @@ def candidate_path_replay_complete(
             prompt_projection,
             contract_id="qasper_candidate_prompt_projection.v1",
             input_count_key="input_record_count",
-            attempts_required=True,
+            attempts_required=bool(prompt_projection.get("input_record_count")),
         )
         and _projection_complete(
             canonical_projection,
@@ -307,11 +321,18 @@ def candidate_request_replay_complete(
     request_projection = _mapping(
         replay_trace.get("candidate_request_projection_trace")
     )
+    prompt_projection = _mapping(replay_trace.get("candidate_prompt_projection_trace"))
     online_projection = _mapping(
         online_request.get("candidate_request_projection_trace")
     )
+    online_prompt_projection = _mapping(
+        online_request.get("candidate_prompt_projection_trace")
+    )
     token_measurement = _mapping(online_request.get("token_measurement"))
     budget = _mapping(online_request.get("budget"))
+    frozen_request_replay = _mapping(
+        replay_trace.get("frozen_candidate_request_replay")
+    )
     return bool(
         messages
         and messages == online_messages
@@ -322,17 +343,25 @@ def candidate_request_replay_complete(
         == online_request.get("response_schema_digest")
         and replay_trace.get("input_digest") == online_request.get("input_digest")
         and request_projection == online_projection
+        and prompt_projection == online_prompt_projection
         and replay_trace.get("candidate_request_dropped_evidence_count")
         == online_request.get("candidate_request_dropped_evidence_count")
         and replay_trace.get("request_dropped_evidence_count")
         == online_request.get("request_dropped_evidence_count")
         and _trace_token_measurement(replay_trace) == token_measurement
         and _trace_budget(replay_trace) == budget
+        and frozen_request_replay.get("status") == "matched"
         and _projection_complete(
             request_projection,
             contract_id="qasper_candidate_request_projection.v1",
             input_count_key="input_record_count",
             attempts_required=True,
+        )
+        and _projection_complete(
+            prompt_projection,
+            contract_id="qasper_candidate_prompt_projection.v1",
+            input_count_key="input_record_count",
+            attempts_required=bool(prompt_projection.get("input_record_count")),
         )
     )
 
@@ -548,34 +577,6 @@ def _ranked_rows(value: Any) -> list[dict[str, Any]]:
     return [
         {"canonical_id": str(_mapping(row).get("canonical_id") or "")} for row in values
     ]
-
-
-def _projection_complete(
-    value: Mapping[str, Any],
-    *,
-    contract_id: str,
-    input_count_key: str,
-    attempts_required: bool,
-) -> bool:
-    trace = _mapping(value)
-    decisions = list(trace.get("decisions") or [])
-    attempts = list(trace.get("attempts") or [])
-    attempts_complete = bool(
-        not attempts_required
-        or (
-            attempts
-            and int(trace.get("attempt_count") or 0) == len(attempts)
-            and canonical_digest(attempts) == trace.get("attempts_digest")
-        )
-    )
-    return bool(
-        trace.get("contract_id") == contract_id
-        and trace.get("complete") is True
-        and int(trace.get(input_count_key) or 0) == len(decisions)
-        and int(trace.get("decision_count") or 0) == len(decisions)
-        and canonical_digest(decisions) == trace.get("decisions_digest")
-        and attempts_complete
-    )
 
 
 def _non_negative_int(value: Any) -> int | None:

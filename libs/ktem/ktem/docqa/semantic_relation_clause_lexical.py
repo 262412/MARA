@@ -86,6 +86,10 @@ _REFERENTIAL_CONTEXT_RE = re.compile(
     r"(?P<head>model|system|method|approach|framework|paper|study|work)\s*$",
     re.IGNORECASE,
 )
+_INSPECTION_LEARNING_COMPLEMENT_RE = re.compile(
+    r"\blearn(?:s|ed|t|ing)?\s+to\s+[A-Za-z]",
+    re.IGNORECASE,
+)
 
 
 def clause_spans(value: str) -> list[tuple[int, int]]:
@@ -324,7 +328,17 @@ def canonical_proposition_object_token_set(
     surface = str(proposition.object_surface or "").strip()
     if match := _REFERENTIAL_CONTEXT_RE.search(surface):
         surface = f"{surface[: match.start()]} {match.group('head')}"
-    return semantic_content_token_set(surface)
+    tokens = semantic_content_token_set(surface)
+    if (
+        proposition.predicate == "inspect"
+        and _INSPECTION_LEARNING_COMPLEMENT_RE.search(surface)
+    ):
+        # In "inspect ... to see whether the model learned to associate X",
+        # ``learned to`` scopes the inspected proposition; it is not a second
+        # object that evidence must repeat verbatim.  The governed relation and
+        # its arguments remain mandatory.
+        tokens.discard("learn")
+    return tokens
 
 
 def canonical_semantic_token(value: str) -> str:

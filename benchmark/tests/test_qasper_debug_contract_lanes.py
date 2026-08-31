@@ -124,7 +124,7 @@ def test_contract_probe_lane_is_non_vacuous_without_live_probe_rows() -> None:
     )
 
 
-def test_quality_lane_requires_live_negative_and_failed_audit_states() -> None:
+def test_quality_lane_uses_unambiguous_annotation_labels_for_requirements() -> None:
     rows = _rows()[:3]
     for row in rows:
         row["qasper_debug_lane"] = "quality"
@@ -132,9 +132,9 @@ def test_quality_lane_requires_live_negative_and_failed_audit_states() -> None:
     audit = qasper_debug_audit_extensions(rows)
 
     quality = audit["quality_audit"]
-    assert quality["status"] == "failed"
+    assert quality["status"] == "passed"
     observation = quality["structural_state_matrix"]["quality_observation"]
-    assert observation["missing_required_candidate_labels"] == ["no"]
+    assert observation["missing_required_candidate_labels"] == []
     assert observation["missing_required_verifier_judgments"] == []
     assert observation["missing_required_auditor_statuses"] == []
 

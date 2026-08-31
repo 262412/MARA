@@ -137,6 +137,61 @@ def attested_selector_slot_span(
     }
 
 
+def attested_selector_alignment_slot_span(
+    selector: Mapping[str, Any],
+    alignment: Mapping[str, Any],
+    slot: str,
+    *,
+    base_span: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Project one verified alignment to an exact source-bound slot span."""
+
+    if slot != "object":
+        return attested_selector_slot_span(selector, slot)
+    matches = [
+        match
+        for raw_matches in dict(alignment.get("semantic_matches") or {}).values()
+        if isinstance(raw_matches, (list, tuple))
+        for match in raw_matches
+        if isinstance(match, Mapping)
+    ]
+    if not matches:
+        return attested_selector_slot_span(selector, slot)
+    start = min(int(match["span_start"]) for match in matches)
+    end = max(int(match["span_end"]) for match in matches)
+    selector_start = int(selector.get("span_start") or 0)
+    selector_end = int(selector.get("span_end") or 0)
+    text = str(selector.get("text") or "")
+    local_start = start - selector_start
+    local_end = end - selector_start
+    if not (
+        selector_start <= start < end <= selector_end
+        and 0 <= local_start < local_end <= len(text)
+    ):
+        return attested_selector_slot_span(selector, slot)
+    selector_id = str(selector.get("selector_id") or "")
+    child_text = text[local_start:local_end]
+    clause_ref = str((base_span or {}).get("clause_ref") or "")
+    clause_start = (base_span or {}).get("clause_start")
+    clause_end = (base_span or {}).get("clause_end")
+    return {
+        "evidence_ref": f"{selector_id}#semantic-slot:{slot}:{start}:{end}",
+        "text": child_text,
+        "span_start": start,
+        "span_end": end,
+        "clause_ref": clause_ref or f"{selector_id}#semantic-clause",
+        "clause_start": (
+            clause_start if isinstance(clause_start, int) else selector_start
+        ),
+        "clause_end": clause_end if isinstance(clause_end, int) else selector_end,
+        "parent_selector_id": selector_id,
+        "parent_span_start": selector_start,
+        "parent_span_end": selector_end,
+        "parent_text_digest": canonical_payload_digest(text),
+        "text_digest": canonical_payload_digest(child_text),
+    }
+
+
 def _selector_identity(selector: Mapping[str, Any]) -> dict[str, Any] | None:
     text = str(selector.get("text") or "")
     identity = {

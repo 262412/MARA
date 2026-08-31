@@ -5,7 +5,6 @@ from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
-from kotaemon.base import SystemMessage
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
 from benchmark.tests.test_qasper_natural_semantic_pack_probe import (
@@ -13,14 +12,11 @@ from benchmark.tests.test_qasper_natural_semantic_pack_probe import (
     _probe_prediction,
     _row,
 )
+from kotaemon.base import SystemMessage
 from scripts.slurm import qasper_natural_semantic_pack_probe as probe
-from scripts.slurm.qasper_natural_causal_transaction import (
-    _local_replay_prediction,
-)
+from scripts.slurm.qasper_natural_causal_transaction import _local_replay_prediction
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
-from scripts.slurm.qasper_natural_semantic_pack_runtime import (
-    _frozen_selected_records,
-)
+from scripts.slurm.qasper_natural_semantic_pack_runtime import _frozen_selected_records
 
 
 def test_candidate_input_uses_frozen_pack_when_verifier_lineage_is_empty() -> None:
@@ -195,12 +191,14 @@ def test_candidate_replay_uses_frozen_messages_when_renderer_changes() -> None:
         )
 
     assert context.candidate_generation["message_stack"] == online["message_stack"]
-    assert context.candidate_generation["message_stack_digest"] == online[
-        "message_stack_digest"
-    ]
-    assert context.candidate_generation["candidate_prompt_projection_trace"] == online[
-        "candidate_prompt_projection_trace"
-    ]
+    assert (
+        context.candidate_generation["message_stack_digest"]
+        == online["message_stack_digest"]
+    )
+    assert (
+        context.candidate_generation["candidate_prompt_projection_trace"]
+        == online["candidate_prompt_projection_trace"]
+    )
 
 
 def test_frozen_request_preserves_duplicate_evidence_occurrences() -> None:
@@ -238,19 +236,26 @@ def test_causal_replay_uses_frozen_online_candidate_stage() -> None:
     )
     context.bundle.metadata["qasper_canonical_semantic_pack"][
         "semantic_pack_digest"
-    ] = "0" * 64
+    ] = ("0" * 64)
     context.candidate_generation["message_stack"] = [
         {"role": "system", "content": "current semantic projection"}
     ]
 
-    prediction = _local_replay_prediction(row, context)
+    prediction = _local_replay_prediction(
+        row,
+        context,
+        preserve_frozen_semantic_projection=True,
+    )
 
     assert prediction["evidence_metadata"]["qasper_canonical_semantic_pack"] == (
         online_pack
     )
-    assert prediction["_qasper_causal_replay_metadata"][
-        "qasper_candidate_generation"
-    ]["message_stack"] == online_candidate["message_stack"]
+    assert (
+        prediction["_qasper_causal_replay_metadata"]["qasper_candidate_generation"][
+            "message_stack"
+        ]
+        == online_candidate["message_stack"]
+    )
 
 
 def test_incomplete_frozen_request_fails_closed_without_refitting() -> None:

@@ -53,6 +53,7 @@ def replay_frozen_semantic_verifier(
     binding: Mapping[str, Any],
     candidate_generation: Mapping[str, Any],
     local_lineage: Mapping[str, Any],
+    preserve_frozen_projection: bool = False,
 ) -> dict[str, Any]:
     verifier = {
         field: deepcopy(online_verifier.get(field)) for field in _VERIFIER_FIELDS
@@ -62,6 +63,14 @@ def replay_frozen_semantic_verifier(
     if not event:
         verifier["semantic_response_replay"] = _no_event_observation(online_verifier)
         return verifier
+    if preserve_frozen_projection:
+        return _preserved_frozen_verifier(
+            verifier,
+            event,
+            question=question,
+            bundle=bundle,
+            slots=slots,
+        )
     replayed_event, observation = _replay_event(
         event,
         question=question,
@@ -85,6 +94,103 @@ def replay_frozen_semantic_verifier(
         candidate_generation=candidate_generation,
     )
     return verifier
+
+
+def _preserved_frozen_verifier(
+    verifier: dict[str, Any],
+    event: dict[str, Any],
+    *,
+    question: str,
+    bundle: Any,
+    slots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    transaction = _mapping(event.get("transaction"))
+    reasons = _frozen_event_integrity_reasons(
+        event,
+        transaction=transaction,
+        question=question,
+        bundle=bundle,
+        slots=slots,
+    )
+    observation = _observation(reasons, frozen=transaction, replayed=transaction)
+    verifier["debug_trace"] = {
+        "contract_id": "semantic_proposition_debug_trace.v3",
+        "event_count": 1,
+        "dropped_event_count": 0,
+        "events": [deepcopy(event)],
+    }
+    verifier["semantic_response_replay"] = observation
+    verifier["semantic_io_replay"] = {
+        **observation,
+        "contract_id": "qasper_frozen_semantic_io_replay.v1",
+    }
+    return verifier
+
+
+def _frozen_event_integrity_reasons(
+    event: Mapping[str, Any],
+    *,
+    transaction: Mapping[str, Any],
+    question: str,
+    bundle: Any,
+    slots: list[dict[str, Any]],
+) -> list[str]:
+    pack = _mapping(
+        getattr(bundle, "metadata", {}).get("qasper_canonical_semantic_pack")
+    )
+    reasons = []
+    if str(event.get("question") or "") != question:
+        reasons.append("semantic_event_question_mismatch")
+    if event.get("packed_evidence") != list(pack.get("records") or []):
+        reasons.append("semantic_event_packed_evidence_mismatch")
+    if event.get("required_slots") != slots:
+        reasons.append("semantic_event_required_slots_mismatch")
+    if not transaction:
+        reasons.extend(_typed_empty_transaction_reasons(event))
+        return reasons
+    reasons.extend(_frozen_transaction_input_reasons(transaction))
+    for stage in ("proposal", "audit"):
+        reasons.extend(
+            _frozen_attempt_integrity_reasons(
+                stage,
+                _mapping(transaction.get(stage)),
+            )
+        )
+    return reasons
+
+
+def _frozen_transaction_input_reasons(
+    transaction: Mapping[str, Any],
+) -> list[str]:
+    reasons = []
+    for stage in ("proposal", "audit"):
+        value = _mapping(transaction.get(f"{stage}_input"))
+        recorded = str(transaction.get(f"{stage}_input_digest") or "")
+        attempts = list(_mapping(transaction.get(stage)).get("attempts") or [])
+        if not value and (stage == "proposal" or attempts):
+            reasons.append(f"semantic_{stage}_input_missing")
+        elif value and canonical_digest(value) != recorded:
+            reasons.append(f"semantic_{stage}_input_digest_mismatch")
+    return reasons
+
+
+def _frozen_attempt_integrity_reasons(
+    stage: str,
+    output: Mapping[str, Any],
+) -> list[str]:
+    reasons = []
+    attempts = [_mapping(value) for value in output.get("attempts") or []]
+    for index, attempt in enumerate(attempts, start=1):
+        raw = str(attempt.get("raw_response") or "")
+        if not raw and not attempt.get("provider_failure_reason"):
+            reasons.append(f"semantic_{stage}_attempt_{index}_raw_missing")
+        snapshot = _mapping(attempt.get("request_snapshot"))
+        if not snapshot:
+            reasons.append(f"semantic_{stage}_attempt_{index}_request_missing")
+        elif canonical_digest(snapshot) != attempt.get("request_snapshot_digest"):
+            reasons.append(f"semantic_{stage}_attempt_{index}_request_digest_mismatch")
+    reasons.extend(_stage_shape_reasons(stage, output, output))
+    return reasons
 
 
 def _latest_model_event(verifier: Mapping[str, Any]) -> dict[str, Any]:

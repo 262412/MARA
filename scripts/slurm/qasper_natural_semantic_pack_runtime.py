@@ -34,6 +34,7 @@ from ktem.reasoning.mara_semantic_proposition_packing import (
 )
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
+from kotaemon.base import HumanMessage, SystemMessage
 from scripts.slurm.qasper_natural_candidate_response_replay import (
     replay_frozen_candidate_response,
 )
@@ -293,6 +294,13 @@ def _replay_frozen_candidate_request(
     frozen_request: dict[str, Any],
 ) -> tuple[Any, ...]:
     projection = _mapping(frozen_request.get("candidate_request_projection_trace"))
+    prompt_projection = _mapping(
+        frozen_request.get("candidate_prompt_projection_trace")
+    )
+    prompt_selected_ids = _selected_projection_record_ids(prompt_projection)
+    record_ids = [str(record.get("evidence_id") or "") for record in records]
+    if prompt_selected_ids != record_ids:
+        raise ValueError("frozen candidate prompt record identity mismatch")
     selected = _frozen_selected_records(records, projection)
     candidate_dropped = int(
         frozen_request.get("candidate_request_dropped_evidence_count") or 0
@@ -322,32 +330,27 @@ def _replay_frozen_candidate_request(
         dropped_count=candidate_dropped,
         pre_request_dropped_count=pre_request_dropped,
     )
+    replay_diagnostics["candidate_prompt_projection_trace"] = deepcopy(
+        prompt_projection
+    )
     replay_diagnostics["candidate_request_projection_trace"] = deepcopy(projection)
-    messages = candidate_messages(
+    regenerated_messages = candidate_messages(
         question,
         selected,
         replay_diagnostics,
         controlled_candidate="",
     )
+    regenerated_stack = _serialized_messages(regenerated_messages)
+    messages = _frozen_message_objects(frozen_request)
     serialized_messages = _serialized_messages(messages)
-    replay_diagnostics["frozen_candidate_request_replay"] = {
-        "contract_id": "qasper_frozen_candidate_request_replay.v1",
-        "status": (
-            "matched"
-            if serialized_messages == frozen_request.get("message_stack")
-            else "diverged"
-        ),
-        "selected_record_ids": [
-            str(record.get("evidence_id") or "") for record in selected
-        ],
-        "selected_record_ids_digest": canonical_digest(
-            [str(record.get("evidence_id") or "") for record in selected]
-        ),
-        "message_stack_digest": canonical_digest(serialized_messages),
-        "frozen_message_stack_digest": str(
-            frozen_request.get("message_stack_digest") or ""
-        ),
-    }
+    replay_diagnostics[
+        "frozen_candidate_request_replay"
+    ] = _candidate_request_replay_observation(
+        selected,
+        frozen_request=frozen_request,
+        regenerated_stack=regenerated_stack,
+        frozen_stack=serialized_messages,
+    )
     return (
         selected,
         replay_diagnostics,
@@ -357,6 +360,41 @@ def _replay_frozen_candidate_request(
     )
 
 
+def _candidate_request_replay_observation(
+    selected: list[dict[str, Any]],
+    *,
+    frozen_request: dict[str, Any],
+    regenerated_stack: list[dict[str, Any]],
+    frozen_stack: list[dict[str, Any]],
+) -> dict[str, Any]:
+    frozen_prompt_consistent = _frozen_prompt_stack_matches_projection(frozen_request)
+    selected_ids = [str(record.get("evidence_id") or "") for record in selected]
+    observation: dict[str, Any] = {
+        "contract_id": "qasper_frozen_candidate_request_replay.v1",
+        "status": "matched" if frozen_prompt_consistent else "failed",
+        "reasons": (
+            []
+            if frozen_prompt_consistent
+            else ["candidate_prompt_message_stack_mismatch"]
+        ),
+        "selected_record_ids": selected_ids,
+        "selected_record_ids_digest": canonical_digest(selected_ids),
+        "message_stack_digest": canonical_digest(frozen_stack),
+        "frozen_message_stack_digest": str(
+            frozen_request.get("message_stack_digest") or ""
+        ),
+        "regenerated_message_stack_digest": canonical_digest(regenerated_stack),
+        "regenerated_status": (
+            "matched"
+            if regenerated_stack == frozen_stack
+            else "diverged_from_frozen_stage"
+        ),
+    }
+    if not frozen_prompt_consistent:
+        observation["regenerated_message_stack"] = regenerated_stack
+    return observation
+
+
 def _frozen_selected_records(
     records: list[dict[str, Any]],
     projection: dict[str, Any],
@@ -364,21 +402,66 @@ def _frozen_selected_records(
     record_ids = [str(record.get("evidence_id") or "") for record in records]
     decisions = [_mapping(decision) for decision in projection.get("decisions") or []]
     decision_ids = [str(decision.get("evidence_id") or "") for decision in decisions]
-    if decision_ids != record_ids or len(set(record_ids)) != len(record_ids):
+    if decision_ids != record_ids:
         raise ValueError("frozen candidate request record identity mismatch")
-    selected_ids = {
-        str(decision.get("evidence_id") or "")
-        for decision in decisions
-        if decision.get("selected") is True
-    }
     selected = [
         deepcopy(record)
-        for record in records
-        if str(record.get("evidence_id") or "") in selected_ids
+        for record, decision in zip(records, decisions)
+        if decision.get("selected") is True
     ]
     if len(selected) != int(projection.get("selected_record_count") or 0):
         raise ValueError("frozen candidate request selected count mismatch")
     return selected
+
+
+def _selected_projection_record_ids(projection: dict[str, Any]) -> list[str]:
+    return [
+        str(_mapping(decision).get("evidence_id") or "")
+        for decision in projection.get("decisions") or []
+        if _mapping(decision).get("selected") is True
+    ]
+
+
+def _frozen_message_objects(frozen_request: dict[str, Any]) -> list[Any]:
+    frozen_stack = list(frozen_request.get("message_stack") or [])
+    messages: list[Any] = []
+    for index, raw_message in enumerate(frozen_stack):
+        message = _mapping(raw_message)
+        role = str(message.get("role") or "")
+        content = message.get("content")
+        if message.get("index") != index or not isinstance(content, str):
+            raise ValueError("frozen candidate message stack invalid")
+        if role == "system":
+            messages.append(SystemMessage(content=content))
+        elif role == "user":
+            messages.append(HumanMessage(content=content))
+        else:
+            raise ValueError("frozen candidate message stack invalid")
+    if _serialized_messages(messages) != frozen_stack:
+        raise ValueError("frozen candidate message stack invalid")
+    return messages
+
+
+def _frozen_prompt_stack_matches_projection(
+    frozen_request: dict[str, Any],
+) -> bool:
+    prompt_projection = _mapping(
+        frozen_request.get("candidate_prompt_projection_trace")
+    )
+    attempts = [_mapping(value) for value in prompt_projection.get("attempts") or []]
+    if not attempts:
+        return not prompt_projection.get("input_record_count")
+    accepted = attempts[-1]
+    messages = [_mapping(value) for value in frozen_request.get("message_stack") or []]
+    user_messages = [message for message in messages if message.get("role") == "user"]
+    selected_ids = _selected_projection_record_ids(prompt_projection)
+    return bool(
+        accepted.get("decision") == "accepted"
+        and len(user_messages) == 1
+        and accepted.get("prompt_chars")
+        == len(str(user_messages[0].get("content") or ""))
+        and list(accepted.get("record_ids") or []) == selected_ids
+    )
 
 
 def _natural_request(question: str, replay: CandidateReplayContext) -> Any:

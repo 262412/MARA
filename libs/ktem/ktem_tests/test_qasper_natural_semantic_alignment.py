@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.question_proposition import build_question_proposition
+from ktem.docqa.semantic_relation_clause_validation import (
+    semantic_relation_clause_analysis,
+)
 from ktem.reasoning.mara_qasper_candidate_evidence import candidate_evidence_set_binding
 from ktem.reasoning.mara_qasper_semantic_pack import prepare_qasper_canonical_records
 from ktem.reasoning.mara_semantic_proposition_span_selectors import (
@@ -69,6 +73,33 @@ def test_local_semantic_alignment_builds_one_complete_paragraph_event_plan() -> 
                 end = match["span_end"]
                 assert text[start:end] == match["text"]
 
+    second = next(
+        selector
+        for record in canonical
+        for selector in record["selectors"]
+        if "a CLV as a parent" in selector["text"]
+    )
+    premise = {
+        "evidence_id": second["evidence_id"],
+        "span_selector": second["selector_id"],
+        "quote": second["text"],
+        "span_start": second["span_start"],
+        "span_end": second["span_end"],
+        "binds_proposition_slots": second["allowed_proposition_slots"],
+        "event_id": second["event_id"],
+        "local_relation_state": second["local_relation_state"],
+        "predicate_match_kind": second["predicate_match_kind"],
+        "semantic_alignment": second["semantic_alignment"],
+        "proposition_slot_spans": second["proposition_slot_spans"],
+    }
+    analysis = semantic_relation_clause_analysis(
+        premise,
+        build_question_proposition(question),
+    )
+    assert analysis["slot_evidence"]["object"]["text"] == (
+        "a CLV as a parent of the two corresponding role variables"
+    )
+
 
 def test_object_companion_semantics_remain_local_to_analysis_event() -> None:
     question = (
@@ -104,7 +135,8 @@ def test_object_companion_semantics_remain_local_to_analysis_event() -> None:
     )
     assert companion["local_relation_state"] == "unbound"
     assert companion["semantic_alignment"]["polarity_relation"] == "undetermined"
-    assert {"learn", "word"} <= set(companion["object_tokens"])
+    assert "word" in set(companion["object_tokens"])
+    assert "learn" not in set(companion["object_tokens"])
 
 
 def test_frozen_selector_universe_retains_multiple_proposition_spans() -> None:

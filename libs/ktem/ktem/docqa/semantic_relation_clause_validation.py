@@ -17,6 +17,7 @@ from .qasper_boolean_no_evidence import (
     qasper_no_evidence_set_analysis,
     qasper_support_evidence_binding_complete,
 )
+from .qasper_frozen_slot_evidence import verified_frozen_object_span
 from .question_proposition import (
     QuestionProposition,
     applicable_proposition_evidence_slots,
@@ -80,6 +81,12 @@ def semantic_relation_clause_analysis(
         for slot, span in selected.get("slot_evidence", {}).items()
         if slot in declared_slots and binding_validity.get(slot) is True
     }
+    if frozen_object_span := verified_frozen_object_span(
+        premise,
+        proposition,
+        declared_slots=declared_slots,
+    ):
+        slot_evidence["object"] = frozen_object_span
     fully_bound = bool(
         declared_slots
         and set(slot_evidence) == set(declared_slots)

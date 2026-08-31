@@ -5,7 +5,11 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from ktem.docqa.question_proposition import QuestionProposition, TypedConclusion
+from ktem.docqa.question_proposition import (
+    QuestionProposition,
+    TypedConclusion,
+    proposition_evidence_bindings,
+)
 
 SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS = 512
 SEMANTIC_ENTAILMENT_AUDIT_MAX_PROMPT_CHARS = 8000
@@ -21,9 +25,15 @@ SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT = (
     "Judge each local fragment independently from the final conclusion: when a "
     "normalized fragment is literally contained in its quote, do not mark that "
     "local fragment false merely because scope or joint entailment later fails. "
-    "Also verify every declared actor/predicate/object/quantifier binding and the "
-    "declared proposition-support or explicit-contradiction relation; keyword "
-    "overlap alone is not a binding. Every applicable slot has a required "
+    "Also verify every declared actor/predicate/object/quantifier contribution "
+    "and the declared proposition-support or explicit-contradiction relation; "
+    "keyword overlap alone is not a binding. The target slot bindings are "
+    "plan-level. For composite_conjunction, each premise needs to establish only "
+    "its declared exact local contribution; the premises together must establish "
+    "the complete target. Do not reject a necessary premise merely because it "
+    "does not repeat contributions supplied by another premise. A supplied "
+    "semantic_alignment is a frozen, source-bound local claim to audit, not a "
+    "license to infer outside its exact source spans. Every applicable slot has a required "
     "controlled evidence_ref in the response schema. Return its binding_valid "
     "decision without copying, rewriting, or inventing evidence text; runtime "
     "projects the exact source span from that controlled ref. Do not return a "
@@ -63,6 +73,7 @@ def semantic_entailment_audit_prompt(
         "typed_conclusion": conclusion.as_dict(),
         "semantic_pack_identity": dict(semantic_pack_identity or {}),
         "proof_mode": proof_mode,
+        "target_proposition_slot_bindings": proposition_evidence_bindings(proposition),
         "premises": [
             {
                 "premise_ref": f"P{index}",
@@ -71,13 +82,13 @@ def semantic_entailment_audit_prompt(
                 "binds_proposition_slots": list(
                     premise.get("binds_proposition_slots") or []
                 ),
-                "proposition_slot_bindings": dict(
-                    premise.get("proposition_slot_bindings") or {}
-                ),
-                "proposition_slot_evidence_refs": _prompt_slot_evidence(
+                "local_proposition_slot_contributions": _prompt_slot_evidence(
                     f"P{index}",
                     premise.get("binds_proposition_slots") or [],
                     premise_slot_evidence=premise_slot_evidence,
+                ),
+                "semantic_alignment": _audit_alignment_projection(
+                    premise.get("semantic_alignment")
                 ),
                 "evidence_relation": str(premise.get("evidence_relation") or ""),
             }
@@ -92,6 +103,22 @@ def semantic_entailment_audit_prompt(
     if len(prompt) > SEMANTIC_ENTAILMENT_AUDIT_MAX_PROMPT_CHARS:
         raise ValueError("Semantic entailment audit prompt exceeded its bound.")
     return prompt
+
+
+def _audit_alignment_projection(value: Any) -> dict[str, Any]:
+    alignment = dict(value) if isinstance(value, Mapping) else {}
+    return {
+        key: alignment.get(key)
+        for key in (
+            "contract_id",
+            "status",
+            "alignment_digest",
+            "covered_object_tokens",
+            "semantic_matches",
+            "semantic_rule_ids",
+        )
+        if key in alignment
+    }
 
 
 def _prompt_slot_evidence(

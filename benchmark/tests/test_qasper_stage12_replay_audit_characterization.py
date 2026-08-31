@@ -13,15 +13,14 @@ from benchmark.qasper_causal_transaction import (
 )
 from benchmark.qasper_causal_transaction_stages import stage_comparison_payload
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
-from benchmark.tests.qasper_debug_contract_fixtures import _qasper_debug_prediction
 from benchmark.tests.qasper_terminal_projection_fixture import (
     attach_valid_terminal_projection,
 )
+from benchmark.tests.test_qasper_natural_semantic_pack_probe import _row
 from scripts.slurm.qasper_causal_transaction_gate import (
     qasper_causal_transaction_artifact_audit,
 )
 from scripts.slurm.qasper_natural_semantic_pack_audit import build_audit
-
 
 # These are the six sample IDs and three routes in the focused 6x3 quality run
 # that motivated this gate.  The run had complete online transactions but no
@@ -43,8 +42,10 @@ def _quality_predictions() -> list[dict[str, Any]]:
     predictions = []
     for index, example_id in enumerate(_LATEST_SAMPLE_IDS, start=1):
         for route in _LATEST_ROUTES:
-            prediction = _qasper_debug_prediction(f"example-{index}", route)
+            prediction: dict[str, Any] = dict(_row())
             prediction["example_id"] = example_id
+            prediction["route"] = route
+            prediction["evidence_bundle"]["route"] = route
             attach_valid_terminal_projection(
                 prediction,
                 answer=str(prediction.get("answer_for_scoring") or "unanswerable"),
@@ -328,9 +329,7 @@ def test_stage12_gate_does_not_reconstruct_replay_from_a_legacy_snapshot(
     predictions = _quality_predictions()
     traces = _semantic_traces(predictions)
     metadata = predictions[0]["evidence_metadata"]
-    source = metadata["qasper_canonical_semantic_pack"][
-        "source_packing_observation"
-    ]
+    source = metadata["qasper_canonical_semantic_pack"]["source_packing_observation"]
     source.pop("source_input_snapshot", None)
     _write_traces(tmp_path, traces)
 
