@@ -10,6 +10,9 @@ from ktem.docqa.qasper_semantic_pack_contract import (
 )
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest, is_sha256
+from benchmark.qasper_causal_transaction_candidate_plans import (
+    candidate_plans_stage_payload,
+)
 from benchmark.qasper_causal_transaction_runtime_stages import (
     runtime_transaction_stage_payloads,
 )
@@ -25,6 +28,10 @@ def causal_transaction_stage_payloads(
     lineage = _mapping(verifier.get("semantic_data_lineage"))
     pack = _candidate_stage_pack(prediction)
     source = _mapping(pack.get("source_packing_observation"))
+    frozen_binding = _mapping(pack.get("proposition_binding"))
+    frozen_construction = _mapping(frozen_binding.get("plan_construction_trace"))
+    generator_binding = _mapping(generator.get("candidate_evidence_set_binding"))
+    generator_construction = _mapping(generator_binding.get("plan_construction_trace"))
     construction = _mapping(lineage.get("plan_construction"))
     event = _latest_model_transaction(verifier)
     transaction = _mapping(event.get("transaction"))
@@ -36,7 +43,10 @@ def causal_transaction_stage_payloads(
         "retrieval_and_ranking": _retrieval_payload(prediction),
         "candidate_input": _candidate_input_payload(generator, source),
         "proposition_spans_and_selector_universe": _selector_payload(generator, pack),
-        "candidate_plans": _candidate_plans_payload(construction),
+        "candidate_plans": candidate_plans_stage_payload(
+            frozen_construction,
+            generator_construction,
+        ),
         "selected_local_plan": _selected_plan_payload(
             generator, construction, proposal_value
         ),
@@ -404,45 +414,6 @@ def _selector_identity_reasons(
     ) != pack.get("candidate_transaction_id"):
         reasons.append("generator_canonical_pack_candidate_transaction_id_mismatch")
     return reasons
-
-
-def _candidate_plans_payload(construction: Mapping[str, Any]) -> dict[str, Any]:
-    decisions = deepcopy(construction.get("candidate_decisions") or [])
-    reasons = []
-    if construction.get("candidate_decisions_complete") is not True:
-        reasons.append("candidate_plan_enumeration_incomplete")
-    if int(construction.get("candidate_decision_count") or 0) != len(decisions):
-        reasons.append("candidate_plan_count_mismatch")
-    for decision in decisions:
-        value = _mapping(decision)
-        if value.get("decision") == "rejected" and not value.get("rejection_reasons"):
-            reasons.append("rejected_plan_typed_reason_missing")
-            break
-    return _payload(
-        reasons,
-        enumeration_policy=deepcopy(construction.get("enumeration_policy") or {}),
-        enumeration_policy_digest=str(
-            construction.get("enumeration_policy_digest") or ""
-        ),
-        selector_pool_decisions=deepcopy(
-            construction.get("selector_pool_decisions") or []
-        ),
-        selector_pool_decisions_digest=str(
-            construction.get("selector_pool_decisions_digest") or ""
-        ),
-        candidate_plan_count=int(construction.get("candidate_count") or 0),
-        legal_plan_count=int(construction.get("legal_plan_count") or 0),
-        candidate_plans=decisions,
-        candidate_plans_digest=str(
-            construction.get("candidate_decisions_digest") or ""
-        ),
-        selected_candidate_ids=deepcopy(
-            construction.get("selected_candidate_ids") or {}
-        ),
-        best_rejected_candidates=deepcopy(
-            construction.get("best_rejected_candidates") or {}
-        ),
-    )
 
 
 def _selected_plan_payload(

@@ -134,6 +134,7 @@ def _candidate_binding(
 ) -> dict[str, Any]:
     return {
         "binding_state": "relation_bound_support" if legal_plan_count else "unresolved",
+        "plan_construction_trace": _plan_construction(legal_plan_count),
         "canonical_evidence_plan": {
             "contract_id": "canonical_proposition_evidence_plan.v2",
             "plan_id": "7" * 64,
@@ -382,6 +383,7 @@ def _plan_construction(legal_plan_count: int) -> dict[str, Any]:
         {"selector_ref": "E1:S1", "decision": "selected_for_candidate_enumeration"}
     ]
     return {
+        "contract_id": "canonical_plan_construction_trace.v1",
         "status": "passed",
         "transport_status": "passed",
         "semantic_plan_status": "passed" if legal_plan_count else "not_applicable",
@@ -415,6 +417,10 @@ def _plan_construction(legal_plan_count: int) -> dict[str, Any]:
         "selector_pool_decisions": selector_decisions,
         "candidate_decisions_digest": canonical_digest(decisions),
         "candidate_decisions": decisions,
+        "selected_candidate_ids": {
+            "proposition_support": "support" if legal_plan_count else "",
+            "explicit_contradiction": "",
+        },
         "selected_plan_id": "",
     }
 

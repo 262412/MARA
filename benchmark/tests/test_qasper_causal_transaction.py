@@ -284,6 +284,9 @@ def _prediction(generator: dict, debug_row: dict) -> dict:
                 ),
                 "candidate_transaction_id": _PACK_TRANSACTION_ID,
                 "records": _canonical_pack_records(),
+                "proposition_binding": deepcopy(
+                    generator["candidate_evidence_set_binding"]
+                ),
                 "source_packing_observation": deepcopy(source_packing),
             },
         },
