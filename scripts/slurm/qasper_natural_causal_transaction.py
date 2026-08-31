@@ -14,7 +14,7 @@ from scripts.slurm.qasper_natural_semantic_response_replay import (
     replay_frozen_semantic_verifier,
 )
 
-_REPLAY_THROUGH_STAGE = 9
+_REPLAY_THROUGH_STAGE = 10
 
 
 def natural_causal_transaction_replay(

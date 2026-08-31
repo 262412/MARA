@@ -234,7 +234,7 @@ def test_stage_nine_accepts_an_explicit_zero_call_typed_pre_audit_stop() -> None
 def test_stage_nine_replays_the_frozen_verifier_and_auditor_io() -> None:
     prediction, context = _current_semantic_io_fixture()
 
-    replay = natural_causal_transaction_replay(prediction, context)
+    replay = natural_causal_transaction_replay(prediction, context, through_stage=9)
 
     assert replay["status"] == "matched"
     assert replay["through_stage_index"] == 9

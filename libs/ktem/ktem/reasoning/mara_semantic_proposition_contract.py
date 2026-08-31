@@ -73,6 +73,8 @@ def resolve_proposition_precondition(
                 "to": "proposition_repair",
                 "reason": resolution.reason,
                 "outcome": resolution.status,
+                "question_proposition_before": resolution.initial.as_dict(),
+                "question_proposition_after": resolution.proposition.as_dict(),
             }
         )
     return resolution

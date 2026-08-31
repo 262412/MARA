@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ktem.reasoning.mara_semantic_transaction_context import prepare_transaction
+
 from benchmark.qasper_causal_transaction import qasper_causal_transaction
 from benchmark.tests.test_qasper_causal_transaction import (
     _prediction_and_debug_row,
@@ -8,13 +10,9 @@ from benchmark.tests.test_qasper_causal_transaction import (
 from benchmark.tests.test_qasper_stage9_causal_transaction import (
     _current_semantic_io_fixture,
 )
-from ktem.reasoning.mara_semantic_transaction_context import (
-    prepare_transaction,
-)
 from scripts.slurm.qasper_natural_causal_transaction import (
     natural_causal_transaction_replay,
 )
-
 
 QUESTION = "Does the model have attention?"
 REPAIR = {
@@ -52,7 +50,11 @@ def test_stage_ten_projects_typed_proposition_repair_before_and_after() -> None:
     stage = _stage_ten(prediction, debug_row)
 
     assert stage["status"] == "complete"
-    [transition] = stage["payload"]["transitions"]
+    transition = next(
+        value
+        for value in stage["payload"]["transitions"]
+        if value["source"] == "semantic_verifier"
+    )
     assert transition["source"] == "semantic_verifier"
     assert transition["state_dimensions"] == ["question_proposition"]
     assert transition["before"]["question_proposition"]["predicate"] == "unspecified"
@@ -96,7 +98,7 @@ def test_stage_ten_rejects_a_false_changed_marker() -> None:
 
     assert stage["status"] == "incomplete"
     assert stage["incompleteness_reasons"] == [
-        "recovery_transition_1_changed_flag_mismatch"
+        "recovery_transition_1_evidence_ids_changed_flag_mismatch"
     ]
 
 

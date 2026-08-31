@@ -40,6 +40,7 @@ _VERIFIER_FIELDS = (
     "proposal_model_call_count",
     "audit_model_call_count",
     "actual_model_call_count",
+    "recovery_transitions",
 )
 
 

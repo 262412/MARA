@@ -3,10 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
-FIXTURE = (
-    Path(__file__).parent / "fixtures" / "qasper_quality_10385302_stage10.json"
-)
+FIXTURE = Path(__file__).parent / "fixtures" / "qasper_quality_10385302_stage10.json"
 
 
 def _fixture() -> dict:

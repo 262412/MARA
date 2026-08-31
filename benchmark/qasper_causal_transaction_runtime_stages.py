@@ -5,6 +5,7 @@ from copy import deepcopy
 from typing import Any
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest, is_sha256
+from benchmark.qasper_causal_transaction_recovery import recovery_stage_payload
 
 
 def runtime_transaction_stage_payloads(
@@ -27,7 +28,7 @@ def runtime_transaction_stage_payloads(
             audit,
         ),
         "verifier_and_auditor": _verifier_auditor_payload(event, transaction, verifier),
-        "recovery_state": _recovery_payload(prediction, verifier),
+        "recovery_state": recovery_stage_payload(prediction, verifier),
         "finalizer_and_scorer": _finalizer_scorer_payload(prediction),
         "run_provenance_and_artifact": _provenance_payload(
             prediction, generator, verifier, run_context
@@ -322,45 +323,6 @@ def _semantic_call_count(
     return len(stage.get("attempts") or [])
 
 
-def _recovery_payload(
-    prediction: Mapping[str, Any],
-    verifier: Mapping[str, Any],
-) -> dict[str, Any]:
-    controller = [
-        deepcopy(event)
-        for event in prediction.get("controller_trace") or []
-        if isinstance(event, Mapping)
-        and str(event.get("stage") or "")
-        in {
-            "evidence_rebind",
-            "focused_retrieval",
-            "reverify",
-            "targeted_retrieval",
-            "typed_boolean_generation_recovery",
-        }
-    ]
-    semantic = [
-        deepcopy(event)
-        for event in verifier.get("recovery_transitions") or []
-        if isinstance(event, Mapping)
-    ]
-    observations = [
-        _recovery_observation(event, source="controller") for event in controller
-    ] + [_recovery_observation(event, source="semantic_verifier") for event in semantic]
-    reasons = [
-        f"recovery_transition_{index}_state_diff_missing"
-        for index, value in enumerate(observations, start=1)
-        if not value["state_dimensions"]
-    ]
-    return _payload(
-        reasons,
-        recovery_status="observed" if observations else "not_run",
-        transition_count=len(observations),
-        transitions=observations,
-        transitions_digest=canonical_digest(observations),
-    )
-
-
 def _finalizer_scorer_payload(prediction: Mapping[str, Any]) -> dict[str, Any]:
     finalizer = {
         "answer_finalization": deepcopy(prediction.get("answer_finalization") or {}),
@@ -523,36 +485,6 @@ def _attempt_response_reasons(
         ):
             reasons.append(f"{stage}_raw_response_missing")
     return reasons
-
-
-def _recovery_observation(
-    event: Mapping[str, Any],
-    *,
-    source: str,
-) -> dict[str, Any]:
-    before: dict[str, Any] = {}
-    after: dict[str, Any] = {}
-    for key, value in event.items():
-        if key.endswith("_before"):
-            before[key.removesuffix("_before")] = deepcopy(value)
-        elif key.endswith("_after"):
-            after[key.removesuffix("_after")] = deepcopy(value)
-    dimensions = sorted(set(before) & set(after))
-    before_state = {key: before[key] for key in dimensions}
-    after_state = {key: after[key] for key in dimensions}
-    return {
-        "source": source,
-        "stage": str(event.get("stage") or event.get("to") or ""),
-        "action": str(event.get("recovery_action") or ""),
-        "outcome": str(event.get("recovery_outcome") or event.get("outcome") or ""),
-        "state_dimensions": dimensions,
-        "before": before_state,
-        "after": after_state,
-        "before_digest": canonical_digest(before_state),
-        "after_digest": canonical_digest(after_state),
-        "changed": any(before[key] != after[key] for key in dimensions),
-        "recorded_event": deepcopy(dict(event)),
-    }
 
 
 def _payload(reasons: list[str], **values: Any) -> dict[str, Any]:
