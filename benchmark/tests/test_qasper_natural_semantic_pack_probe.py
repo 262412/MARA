@@ -238,7 +238,8 @@ def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint(
     assert result["checks"]["online_local_causal_prefix_matched"] is True
     causal_replay = result["causal_transaction_replay"]
     assert causal_replay["status"] == "matched"
-    assert causal_replay["through_stage"] == "candidate_plans"
+    assert causal_replay["through_stage_index"] == 6
+    assert causal_replay["through_stage"] == "selected_local_plan"
     assert causal_replay["comparison"]["status"] == "matched_prefix"
     assert causal_replay["comparison"]["later_stages_evaluated"] is False
     assert result["candidate_path_replay"]["stage_sequence"][-1] == (

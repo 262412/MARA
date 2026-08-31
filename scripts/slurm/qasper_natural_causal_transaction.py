@@ -5,10 +5,13 @@ from copy import deepcopy
 from typing import Any
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
-from benchmark.qasper_causal_transaction import compare_qasper_causal_transaction_prefix
+from benchmark.qasper_causal_transaction import (
+    QASPER_CAUSAL_TRANSACTION_STAGES,
+    compare_qasper_causal_transaction_prefix,
+)
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
 
-_PREMODEL_THROUGH_STAGE = 5
+_REPLAY_THROUGH_STAGE = 6
 
 
 def natural_causal_transaction_replay(
@@ -21,16 +24,16 @@ def natural_causal_transaction_replay(
     comparison = compare_qasper_causal_transaction_prefix(
         reference,
         replay,
-        through_stage=_PREMODEL_THROUGH_STAGE,
+        through_stage=_REPLAY_THROUGH_STAGE,
     )
     return {
         "contract_id": "qasper_natural_causal_transaction_replay.v1",
         "status": (
             "matched" if comparison.get("status") == "matched_prefix" else "failed"
         ),
-        "comparison_scope": "deterministic_premodel_through_candidate_plans",
-        "through_stage_index": _PREMODEL_THROUGH_STAGE,
-        "through_stage": "candidate_plans",
+        "comparison_scope": "causal_replay_through_selected_local_plan",
+        "through_stage_index": _REPLAY_THROUGH_STAGE,
+        "through_stage": QASPER_CAUSAL_TRANSACTION_STAGES[_REPLAY_THROUGH_STAGE - 1],
         "hard_rule": "stop_at_first_divergence",
         "reference_transaction": reference,
         "local_replay_transaction": replay,

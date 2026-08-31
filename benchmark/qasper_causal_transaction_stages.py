@@ -16,6 +16,9 @@ from benchmark.qasper_causal_transaction_candidate_plans import (
 from benchmark.qasper_causal_transaction_runtime_stages import (
     runtime_transaction_stage_payloads,
 )
+from benchmark.qasper_causal_transaction_selected_plan import (
+    selected_plan_stage_payload,
+)
 
 
 def causal_transaction_stage_payloads(
@@ -47,8 +50,10 @@ def causal_transaction_stage_payloads(
             frozen_construction,
             generator_construction,
         ),
-        "selected_local_plan": _selected_plan_payload(
-            generator, construction, proposal_value
+        "selected_local_plan": selected_plan_stage_payload(
+            frozen_binding,
+            generator_binding,
+            proposal_value,
         ),
         "projected_plan_authority": _projection_payload(
             construction, proposal_value, verifier
@@ -414,35 +419,6 @@ def _selector_identity_reasons(
     ) != pack.get("candidate_transaction_id"):
         reasons.append("generator_canonical_pack_candidate_transaction_id_mismatch")
     return reasons
-
-
-def _selected_plan_payload(
-    generator: Mapping[str, Any],
-    construction: Mapping[str, Any],
-    proposal_value: Mapping[str, Any],
-) -> dict[str, Any]:
-    selected = str(
-        proposal_value.get("canonical_evidence_plan_id")
-        or construction.get("selected_plan_id")
-        or ""
-    )
-    legal_count = int(construction.get("legal_plan_count") or 0)
-    binding = _mapping(generator.get("candidate_evidence_set_binding"))
-    reason = str(construction.get("reason") or "")
-    status = "selected" if selected else "not_selected"
-    if not selected and not reason:
-        reason = "no_legal_plan" if legal_count == 0 else "model_did_not_select_plan"
-    return _payload(
-        [],
-        selection_status=status,
-        selection_reason=reason,
-        selected_plan_id=selected,
-        legal_plan_count=legal_count,
-        selected_candidate_ids=deepcopy(
-            construction.get("selected_candidate_ids") or {}
-        ),
-        canonical_evidence_plan=deepcopy(binding.get("canonical_evidence_plan") or {}),
-    )
 
 
 def _projection_payload(
