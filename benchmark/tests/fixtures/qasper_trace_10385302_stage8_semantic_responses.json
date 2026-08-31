@@ -1,0 +1,27 @@
+{
+  "contract_id": "qasper_stage8_semantic_response_characterization.v1",
+  "source": {
+    "artifact": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_quality_d8b3fbc8f9bd5bb1447b96fa004f02376521d658_20260830/quality/debug/qasper/20260830_090039_focused-d8b3fbc-qasper-semantic-quality-10385302/predictions.jsonl",
+    "example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e",
+    "job_id": "10385302",
+    "route": "text_rag",
+    "sha": "d8b3fbc8f9bd5bb1447b96fa004f02376521d658"
+  },
+  "proposal": {
+    "attempt_count": 1,
+    "parse_failure_reason": "",
+    "parsed_value_digest": "1f985ced8e7dea6916da6ce220e0c1ec1c515273fc8a89d529ae8e10e76228a2",
+    "raw_response": "{\n\n\n  \"candidate_judgment\": \"supported\",\n  \"canonical_evidence_plan_id\": \"dfb3d3bf990951ac0e9e16a5bbb569ad53846042a9256e03db69cf8a6f8fe03d\"\n}",
+    "raw_response_digest": "2910dd8cc99cded12a007e65970536db79e8d2638c8c38457da8076f4e4f0d4f",
+    "status": "parsed"
+  },
+  "audit": {
+    "attempt_count": 1,
+    "parse_failure_reason": "",
+    "parsed_value_digest": "b85767ff23ed2de1d24c78079f5a12ff176e1377752036f90b93eea776d540a1",
+    "raw_response": "{\n  \"premise_checks\": {\n    \"P1\": {\n      \"fragment_entailed\": true,\n      \"scope_consistent\": true,\n      \"evidence_relation_valid\": true,\n      \"proposition_slot_checks\": {\n        \"actor\": {\n          \"binding_valid\": true,\n          \"evidence_ref\": \"P1:actor\"\n        },\n        \"predicate\": {\n          \"binding_valid\": true,\n          \"evidence_ref\": \"P1:predicate\"\n        },\n        \"object\": {\n          \"binding_valid\": false,\n          \"evidence_ref\": \"P1:object\"\n        },\n        \"quantifier\": {\n          \"binding_valid\": true,\n          \"evidence_ref\": \"P1:quantifier\"\n        }\n      }\n    },\n    \"P2\": {\n      \"fragment_entailed\": true,\n      \"scope_consistent\": true,\n      \"evidence_relation_valid\": true,\n      \"proposition_slot_checks\": {\n        \"actor\": {\n          \"binding_valid\": true,\n          \"evidence_ref\": \"P2:actor\"\n        },\n        \"predicate\": {\n          \"binding_valid\": true,\n          \"evidence_ref\": \"P2:predicate\"\n        },\n        \"object\": {\n          \"binding_valid\": false,\n          \"evidence_ref\": \"P2:object\"\n        }\n      }\n    }\n  },\n  \"jointly_entails\": false,\n  \"each_premise_required\": true,\n  \"contradiction_free\": true,\n  \"conclusion_check\": {\n    \"conclusion_entailed\": false,\n    \"actor_consistent\": true,\n    \"predicate_consistent\": true,\n    \"object_consistent\": false,\n    \"polarity_consistent\": true,\n    \"quantifier_consistent\": false,\n    \"scope_consistent\": true\n  }\n}",
+    "raw_response_digest": "e13df050f41a6f3d2aae44278f5cbc58d753950b3caae0224dea779c2b53ee0b",
+    "status": "parsed"
+  },
+  "invariant": "semantic_proposal_and_audit_raw_responses_are_reparsed_against_local_frozen_authority"
+}

@@ -1,10 +1,23 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from types import SimpleNamespace
 from typing import Any, cast
 
+from ktem.docqa.question_proposition import build_question_proposition
+from ktem.docqa.semantic_relation_clause_validation import (
+    premise_slot_evidence_for_audit,
+    semantic_relation_evidence_set_constraint,
+)
 from ktem.reasoning.mara_qasper_candidate import _record_candidate_response
+from ktem.reasoning.mara_qasper_semantic_pack import qasper_canonical_selector_bindings
+from ktem.reasoning.mara_semantic_entailment_audit import (
+    parse_semantic_entailment_audit,
+)
+from ktem.reasoning.mara_semantic_proposition_schema import (
+    parse_semantic_proposition_response,
+)
 
 from benchmark.qasper_causal_transaction import qasper_causal_transaction
 from benchmark.qasper_causal_transaction_runtime_stages import (
@@ -15,7 +28,11 @@ from benchmark.tests.test_qasper_causal_transaction import (
     _run_context,
 )
 from benchmark.tests.test_qasper_natural_semantic_pack_probe import _CODE_SHA, _row
+from benchmark.tests.test_qasper_stage7_causal_transaction import _projection_fixture
 from scripts.slurm import qasper_natural_semantic_pack_probe as probe
+from scripts.slurm.qasper_natural_causal_transaction import (
+    natural_causal_transaction_replay,
+)
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
 
 
@@ -171,3 +188,139 @@ def test_stage_eight_attempt_digest_ignores_empty_normalization_fields() -> None
     )["model_response_and_parser"]
 
     assert normalized == reference
+
+
+def _semantic_response_replay_fixture() -> tuple[dict[str, Any], Any]:
+    prediction, debug_row, plan = _projection_fixture()
+    pack = prediction["evidence_metadata"]["qasper_canonical_semantic_pack"]
+    transaction = debug_row["semantic_verifier"]["debug_trace"]["events"][0][
+        "transaction"
+    ]
+    proposal_raw = json.dumps(
+        {
+            "candidate_judgment": "supported",
+            "canonical_evidence_plan_id": plan["plan_id"],
+        },
+        separators=(",", ":"),
+    )
+    proposal = _parse_local_proposal(prediction, pack, plan, proposal_raw)
+    transaction["proposal"]["attempts"][0].update(
+        raw_response=proposal_raw,
+        parsed_value=proposal,
+    )
+    audit_raw, audit_value = _local_audit_response(prediction, proposal)
+    transaction["audit"]["attempts"][0].update(
+        raw_response=audit_raw,
+        parsed_value=audit_value,
+    )
+    prediction["evidence_metadata"]["semantic_proposition_verifier"] = deepcopy(
+        debug_row["semantic_verifier"]
+    )
+    context = SimpleNamespace(
+        bundle=SimpleNamespace(metadata=prediction["evidence_metadata"]),
+        binding=pack["proposition_binding"],
+        candidate_generation=debug_row["main_candidate_generator"],
+        slots=pack["slots"],
+    )
+    return prediction, context
+
+
+def _parse_local_proposal(
+    prediction: dict[str, Any],
+    pack: dict[str, Any],
+    plan: dict[str, Any],
+    raw_response: str,
+) -> dict[str, Any]:
+    parsed = parse_semantic_proposition_response(
+        raw_response,
+        packed=pack["records"],
+        slot_ids={slot["slot_id"] for slot in pack["slots"]},
+        model="verifier-model:v2",
+        seed=0,
+        candidate="yes",
+        applicable_proposition_slots=pack["proposition_binding"]["applicable_slots"],
+        allowed_proposition_slot_bindings=qasper_canonical_selector_bindings(
+            pack["records"]
+        ),
+        slot_evidence_refs={
+            slot["slot_id"]: tuple(slot["evidence_refs"]) for slot in pack["slots"]
+        },
+        allowed_proposition_evidence_plans={plan["plan_id"]: plan},
+    )
+    assert parsed.failure_reason == ""
+    assert parsed.value is not None
+    return parsed.value
+
+
+def _local_audit_response(
+    prediction: dict[str, Any],
+    proposal: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    premises = proposal["premises"]
+    expectations = {
+        f"P{index}": tuple(premise["binds_proposition_slots"])
+        for index, premise in enumerate(premises, start=1)
+    }
+    constraint = semantic_relation_evidence_set_constraint(
+        premises,
+        build_question_proposition(prediction["question"]),
+        proposal["verdict"],
+        auditor_relationship="distinct_model",
+    )
+    slot_evidence = premise_slot_evidence_for_audit(constraint)
+    raw_response = _audit_raw_response(expectations)
+    parsed = parse_semantic_entailment_audit(
+        raw_response,
+        premise_labels=list(expectations),
+        premise_slot_expectations=expectations,
+        premise_slot_evidence=slot_evidence,
+    )
+    assert parsed.failure_reason == ""
+    assert parsed.value is not None
+    return raw_response, parsed.value
+
+
+def _audit_raw_response(expectations: dict[str, tuple[str, ...]]) -> str:
+    flags = {
+        "conclusion_entailed": True,
+        "actor_consistent": True,
+        "predicate_consistent": True,
+        "object_consistent": True,
+        "polarity_consistent": True,
+        "quantifier_consistent": True,
+        "scope_consistent": True,
+    }
+    payload = {
+        "premise_checks": {
+            label: {
+                "fragment_entailed": True,
+                "scope_consistent": True,
+                "evidence_relation_valid": True,
+                "proposition_slot_checks": {
+                    slot: {
+                        "binding_valid": True,
+                        "evidence_ref": f"{label}:{slot}",
+                    }
+                    for slot in slots
+                },
+            }
+            for label, slots in expectations.items()
+        },
+        "jointly_entails": True,
+        "each_premise_required": True,
+        "contradiction_free": True,
+        "conclusion_check": flags,
+    }
+    return json.dumps(payload, separators=(",", ":"))
+
+
+def test_stage_eight_replays_semantic_proposal_and_audit_raw_responses() -> None:
+    prediction, context = _semantic_response_replay_fixture()
+
+    replay = natural_causal_transaction_replay(prediction, context)
+
+    assert replay["status"] == "matched"
+    assert replay["through_stage_index"] == 8
+    reference = replay["reference_transaction"]["stages"][7]
+    local = replay["local_replay_transaction"]["stages"][7]
+    assert local["comparison_digest"] == reference["comparison_digest"]
