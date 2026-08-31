@@ -23,6 +23,9 @@ from benchmark.qasper_causal_transaction import qasper_causal_transaction
 from benchmark.qasper_causal_transaction_runtime_stages import (
     runtime_transaction_stage_payloads,
 )
+from benchmark.tests.qasper_terminal_projection_fixture import (
+    attach_valid_terminal_projection,
+)
 from benchmark.tests.test_qasper_causal_transaction import (
     _prediction_and_debug_row,
     _run_context,
@@ -219,6 +222,7 @@ def _semantic_response_replay_fixture() -> tuple[dict[str, Any], Any]:
     prediction["evidence_metadata"]["semantic_proposition_verifier"] = deepcopy(
         debug_row["semantic_verifier"]
     )
+    attach_valid_terminal_projection(prediction)
     context = SimpleNamespace(
         bundle=SimpleNamespace(metadata=prediction["evidence_metadata"]),
         binding=pack["proposition_binding"],
@@ -334,6 +338,7 @@ def test_stage_eight_rejects_a_forged_frozen_semantic_parse() -> None:
     verifier = prediction["evidence_metadata"]["semantic_proposition_verifier"]
     transaction = verifier["debug_trace"]["events"][0]["transaction"]
     transaction["proposal"]["attempts"][0]["parsed_value"]["verifier"]["seed"] = 999
+    attach_valid_terminal_projection(prediction)
 
     replay = natural_causal_transaction_replay(prediction, context)
 

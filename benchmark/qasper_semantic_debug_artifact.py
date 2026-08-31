@@ -211,6 +211,9 @@ def qasper_semantic_debug_summary(rows: Iterable[dict[str, Any]]) -> dict[str, A
 
 
 def _terminal_metadata(prediction: Mapping[str, Any]) -> dict[str, Any]:
+    replay = _mapping(prediction.get("_qasper_causal_replay_metadata"))
+    if replay:
+        return replay
     bundle = _mapping(prediction.get("engine_terminal_evidence_bundle"))
     metadata = _mapping(bundle.get("metadata"))
     return metadata or _mapping(prediction.get("evidence_metadata"))

@@ -3,6 +3,9 @@ from __future__ import annotations
 from ktem.reasoning.mara_semantic_transaction_context import prepare_transaction
 
 from benchmark.qasper_causal_transaction import qasper_causal_transaction
+from benchmark.tests.qasper_terminal_projection_fixture import (
+    attach_valid_terminal_projection,
+)
 from benchmark.tests.test_qasper_causal_transaction import (
     _prediction_and_debug_row,
     _run_context,
@@ -106,8 +109,9 @@ def test_stage_ten_replays_semantic_recovery_from_local_question_state() -> None
     prediction, context = _current_semantic_io_fixture()
     verifier = prediction["evidence_metadata"]["semantic_proposition_verifier"]
     verifier["recovery_transitions"] = [dict(SEMANTIC_STOP)]
+    attach_valid_terminal_projection(prediction)
 
-    replay = natural_causal_transaction_replay(prediction, context)
+    replay = natural_causal_transaction_replay(prediction, context, through_stage=10)
 
     assert replay["status"] == "matched"
     assert replay["through_stage_index"] == 10

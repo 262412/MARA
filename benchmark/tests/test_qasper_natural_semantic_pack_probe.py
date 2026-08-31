@@ -19,6 +19,9 @@ from ktem.reasoning.mara_qasper_candidate_transport import (
 )
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
+from benchmark.tests.qasper_terminal_projection_fixture import (
+    attach_valid_terminal_projection,
+)
 from scripts.slurm import qasper_natural_semantic_pack_probe as probe
 from scripts.slurm.qasper_natural_semantic_pack_probe import probe_prediction
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
@@ -29,39 +32,41 @@ _CODE_SHA = "a" * 40
 def _row() -> dict[str, object]:
     question = "Did the authors compare the two systems?"
     text = "The authors compared the two systems."
-    return _attach_replay_context(
-        {
-            "example_id": "natural-probe-example",
-            "route": "text_rag",
-            "question": question,
-            "gold_answers": ["yes"],
-            "evidence_bundle": {
-                "items": [
-                    {
-                        "evidence_id": "natural-probe-evidence",
-                        "source_id": "paper",
-                        "text": text,
-                    }
-                ]
-            },
-            "evidence_metadata": {
-                "query_plan": {
-                    "evidence_slots": [
+    return attach_valid_terminal_projection(
+        _attach_replay_context(
+            {
+                "example_id": "natural-probe-example",
+                "route": "text_rag",
+                "question": question,
+                "gold_answers": ["yes"],
+                "evidence_bundle": {
+                    "items": [
                         {
-                            "slot_id": "support:boolean_proposition",
-                            "description": "complete proposition support",
-                            "required_for_verification": True,
-                            "evidence_ids": [],
-                            "evidence_refs": [],
+                            "evidence_id": "natural-probe-evidence",
+                            "source_id": "paper",
+                            "text": text,
                         }
                     ]
-                }
-            },
-            "qasper_annotation_diagnostics": {
-                "ambiguity_reasons": [],
-                "boolean_no_evidence_semantics": {},
-            },
-        }
+                },
+                "evidence_metadata": {
+                    "query_plan": {
+                        "evidence_slots": [
+                            {
+                                "slot_id": "support:boolean_proposition",
+                                "description": "complete proposition support",
+                                "required_for_verification": True,
+                                "evidence_ids": [],
+                                "evidence_refs": [],
+                            }
+                        ]
+                    }
+                },
+                "qasper_annotation_diagnostics": {
+                    "ambiguity_reasons": [],
+                    "boolean_no_evidence_semantics": {},
+                },
+            }
+        )
     )
 
 
@@ -268,8 +273,8 @@ def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint(
     assert result["checks"]["online_local_causal_prefix_matched"] is True
     causal_replay = result["causal_transaction_replay"]
     assert causal_replay["status"] == "matched"
-    assert causal_replay["through_stage_index"] == 10
-    assert causal_replay["through_stage"] == "recovery_state"
+    assert causal_replay["through_stage_index"] == 11
+    assert causal_replay["through_stage"] == "finalizer_and_scorer"
     assert causal_replay["comparison"]["status"] == "matched_prefix"
     assert causal_replay["comparison"]["later_stages_evaluated"] is False
     assert result["candidate_path_replay"]["stage_sequence"][-1] == (
@@ -317,6 +322,11 @@ def test_natural_probe_reports_only_the_first_online_local_path_divergence() -> 
             "benchmark_route_id": generator["benchmark_route_id"],
         }
     )
+    terminal_metadata = cast(
+        dict[str, Any],
+        cast(dict[str, Any], row["engine_terminal_evidence_bundle"])["metadata"],
+    )
+    terminal_metadata["qasper_candidate_generation"] = deepcopy(generator)
 
     result = probe_prediction(row, code_sha=_CODE_SHA)
 

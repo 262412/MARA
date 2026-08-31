@@ -14,7 +14,7 @@ from scripts.slurm.qasper_natural_semantic_response_replay import (
     replay_frozen_semantic_verifier,
 )
 
-_REPLAY_THROUGH_STAGE = 10
+_REPLAY_THROUGH_STAGE = 11
 
 
 def natural_causal_transaction_replay(
@@ -112,10 +112,7 @@ def _replace_terminal_metadata(
     metadata: dict[str, Any],
 ) -> None:
     prediction["evidence_metadata"] = deepcopy(metadata)
-    terminal = _mapping(prediction.get("engine_terminal_evidence_bundle"))
-    if terminal:
-        terminal["metadata"] = deepcopy(metadata)
-        prediction["engine_terminal_evidence_bundle"] = terminal
+    prediction["_qasper_causal_replay_metadata"] = deepcopy(metadata)
 
 
 def _terminal_metadata(prediction: Mapping[str, Any]) -> dict[str, Any]:

@@ -4,8 +4,12 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
+from ktem.docqa.terminal_semantic_commit import terminal_commit_projection_present
+
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest, is_sha256
 from benchmark.qasper_causal_transaction_recovery import recovery_stage_payload
+from benchmark.qasper_runtime_projection import runtime_projection_present
+from benchmark.terminal_outcome_contract import terminal_outcome_record
 
 
 def runtime_transaction_stage_payloads(
@@ -382,13 +386,12 @@ def _finalizer_scorer_payload(prediction: Mapping[str, Any]) -> dict[str, Any]:
             prediction.get("external_adapter_metrics") or {}
         ),
     }
-    reasons = []
-    if not finalizer["terminal_semantic_commit"]:
-        reasons.append("terminal_semantic_commit_missing")
+    reasons, validation = _finalizer_scorer_reasons(prediction, finalizer)
     if prediction.get("answer_for_scoring") is None:
         reasons.append("scorer_input_answer_missing")
     return _payload(
         reasons,
+        terminal_validation=validation,
         finalizer_decision=finalizer,
         finalizer_decision_digest=canonical_digest(finalizer),
         scorer_input=scorer_input,
@@ -396,6 +399,54 @@ def _finalizer_scorer_payload(prediction: Mapping[str, Any]) -> dict[str, Any]:
         scorer_output=scorer_output,
         scorer_output_digest=canonical_digest(scorer_output),
     )
+
+
+def _finalizer_scorer_reasons(
+    prediction: Mapping[str, Any],
+    finalizer: Mapping[str, Any],
+) -> tuple[list[str], dict[str, Any]]:
+    commit = _mapping(finalizer.get("terminal_semantic_commit"))
+    if not commit:
+        return ["terminal_semantic_commit_missing"], {
+            "terminal_commit_projection_present": False,
+            "runtime_projection_present": False,
+            "terminal_aliases_consistent": False,
+            "scoring_answer_matches_commit": False,
+        }
+    outcome = terminal_outcome_record(dict(prediction))
+    commit_valid = terminal_commit_projection_present(commit)
+    runtime_valid = runtime_projection_present(dict(prediction))
+    aliases_valid = not outcome["contract_violation"]
+    scoring_valid = prediction.get("answer_for_scoring") == commit.get(
+        "semantic_answer"
+    )
+    predicted_valid = prediction.get("predicted_answer") == commit.get(
+        "semantic_answer"
+    )
+    status_valid = finalizer.get("answer_status") == commit.get("answer_status")
+    outcome_valid = finalizer.get("terminal_outcome") == commit.get("outcome")
+    checks = {
+        "terminal_commit_projection_present": commit_valid,
+        "runtime_projection_present": runtime_valid,
+        "terminal_aliases_consistent": aliases_valid,
+        "scoring_answer_matches_commit": scoring_valid,
+        "predicted_answer_matches_commit": predicted_valid,
+        "answer_status_matches_commit": status_valid,
+        "terminal_outcome_matches_commit": outcome_valid,
+    }
+    reasons = []
+    for valid, reason in (
+        (commit_valid, "terminal_semantic_commit_projection_invalid"),
+        (runtime_valid, "runtime_terminal_projection_invalid"),
+        (aliases_valid, "terminal_commit_alias_mismatch"),
+        (scoring_valid, "scorer_input_terminal_answer_mismatch"),
+        (predicted_valid, "predicted_answer_terminal_commit_mismatch"),
+        (status_valid, "answer_status_terminal_commit_mismatch"),
+        (outcome_valid, "terminal_outcome_terminal_commit_mismatch"),
+    ):
+        if not valid:
+            reasons.append(reason)
+    return reasons, checks
 
 
 def _provenance_payload(

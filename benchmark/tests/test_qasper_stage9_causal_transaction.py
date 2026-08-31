@@ -21,6 +21,9 @@ from ktem.reasoning.mara_semantic_proposition_packing import (
 
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
 from benchmark.qasper_causal_transaction import qasper_causal_transaction
+from benchmark.tests.qasper_terminal_projection_fixture import (
+    attach_valid_terminal_projection,
+)
 from benchmark.tests.test_qasper_causal_transaction import (
     _prediction_and_debug_row,
     _run_context,
@@ -101,6 +104,7 @@ def _current_semantic_io_fixture() -> tuple[dict, object]:
         packed_evidence=deepcopy(records),
         required_slots=deepcopy(slots),
     )
+    attach_valid_terminal_projection(prediction)
     return prediction, context
 
 
@@ -253,6 +257,7 @@ def test_stage_nine_rejects_a_self_consistent_but_nonlocal_proposal_input() -> N
     forged["question"] = "A forged verifier question"
     transaction["proposal_input"] = forged
     transaction["proposal_input_digest"] = canonical_digest(forged)
+    attach_valid_terminal_projection(prediction)
 
     replay = natural_causal_transaction_replay(prediction, context)
 

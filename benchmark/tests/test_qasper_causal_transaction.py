@@ -15,6 +15,9 @@ from benchmark.qasper_causal_transaction import (
     qasper_causal_transaction,
 )
 from benchmark.tests.qasper_causal_evidence_chain_fixtures import causal_row
+from benchmark.tests.qasper_terminal_projection_fixture import (
+    attach_valid_terminal_projection,
+)
 
 _CODE_SHA = "a" * 40
 _MANIFEST_SHA = "b" * 64
@@ -246,7 +249,7 @@ def _prediction(generator: dict, debug_row: dict) -> dict:
     source_packing = debug_row["semantic_verifier"]["semantic_data_lineage"][
         "source_packing"
     ]
-    return {
+    prediction = {
         "example_id": "example-1",
         "route": "text_rag",
         "question": "Did the authors compare systems?",
@@ -307,6 +310,7 @@ def _prediction(generator: dict, debug_row: dict) -> dict:
         "qasper_annotation_diagnostics": {"ambiguous": False},
         "metrics": {"qasper_f1": 1.0, "native_score": 1.0},
     }
+    return attach_valid_terminal_projection(prediction)
 
 
 def _canonical_pack_records() -> list[dict]:
