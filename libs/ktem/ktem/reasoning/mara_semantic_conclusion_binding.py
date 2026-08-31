@@ -14,6 +14,7 @@ def conclusion_audit_binding_reason(
     proposition: QuestionProposition,
     *,
     release_mode: bool,
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     return semantic_entailment_audit_validation_reason(
         question,
@@ -24,6 +25,7 @@ def conclusion_audit_binding_reason(
         proposition=proposition,
         conclusion=typed_conclusion(proposition, str(value["verdict"])),
         release_mode=release_mode,
+        canonical_plan_projection=canonical_plan_projection,
     )
 
 

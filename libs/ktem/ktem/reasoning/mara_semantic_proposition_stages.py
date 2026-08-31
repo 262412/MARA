@@ -39,12 +39,12 @@ from .mara_semantic_proposition_schema import (
     parse_semantic_proposition_response,
     semantic_proposition_response_format,
 )
-from .mara_semantic_request_snapshot import model_request_snapshot
 from .mara_semantic_proposition_stage_runtime import (
     ParsedSemanticStage,
     StageCallResult,
 )
 from .mara_semantic_proposition_stage_runtime import parsed_stage as _parsed_stage
+from .mara_semantic_request_snapshot import model_request_snapshot
 
 SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS = 768
 SEMANTIC_PROPOSITION_VERIFIER_MAX_PARSE_RETRIES = 1
@@ -115,6 +115,7 @@ def audit_stage(
     premise_slot_expectations: dict[str, Collection[str]] | None = None,
     premise_slot_evidence: dict[str, dict[str, Any]] | None = None,
     semantic_identity: dict[str, Any] | None = None,
+    canonical_plan_projection: Any | None = None,
 ) -> ParsedSemanticStage:
     labels = [f"P{index}" for index in range(1, premise_count + 1)]
 
@@ -122,6 +123,7 @@ def audit_stage(
         labels,
         premise_slot_expectations=premise_slot_expectations,
         premise_slot_evidence=premise_slot_evidence,
+        canonical_plan_projection=canonical_plan_projection,
     )
     if preflight_reason:
         return _pre_audit_failure_stage(preflight_reason)

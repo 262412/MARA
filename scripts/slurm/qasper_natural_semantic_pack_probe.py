@@ -6,27 +6,19 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from jsonschema import ValidationError, validate
 from ktem.docqa.evidence_schema import EvidenceBundle
-from ktem.docqa.question_proposition import build_question_proposition
-from ktem.docqa.semantic_relation_clause_validation import (
-    semantic_relation_evidence_set_constraint,
-)
-from ktem.reasoning.mara_qasper_semantic_pack import (
-    qasper_canonical_evidence_plans,
-    qasper_canonical_selector_bindings,
-)
-from ktem.reasoning.mara_semantic_proposition_schema import (
-    parse_semantic_proposition_response,
-    semantic_proposition_response_format,
-)
 
+from benchmark.fusion_stage_contract import fusion_stage_audit
 from benchmark.qasper_causal_evidence_chain import (
     qasper_causal_evidence_chain_prefix_complete,
 )
 from scripts.slurm.qasper_natural_causal_transaction import (
     causal_replay_run_context,
     natural_causal_transaction_replay,
+)
+from scripts.slurm.qasper_natural_production_path_probe import (
+    fusion_replay_prediction,
+    production_authority_probe,
 )
 from scripts.slurm.qasper_natural_semantic_pack_audit import build_audit
 from scripts.slurm.qasper_natural_semantic_pack_audit import (
@@ -39,6 +31,7 @@ from scripts.slurm.qasper_natural_semantic_pack_replay import (
     candidate_request_replay_complete,
 )
 from scripts.slurm.qasper_natural_semantic_pack_runtime import freeze_natural_pack
+from scripts.slurm.qasper_natural_semantic_schema_probe import schema_parser_probe
 
 CONTRACT = "qasper_natural_semantic_pack_probe.v1"
 _BOUND_STATES = {
@@ -136,7 +129,7 @@ def probe_prediction(
         replay=replay,
         code_sha=code_sha,
     )
-    schema_parser = _schema_parser_probe(
+    schema_parser = schema_parser_probe(
         context.bundle,
         question=question,
         binding=context.binding,
@@ -149,6 +142,14 @@ def probe_prediction(
         context,
         run_context=run_context,
         preserve_frozen_semantic_projection=True,
+    )
+    fusion_replay = fusion_replay_prediction(row, context.bundle)
+    fusion_stage, _fusion_violations = fusion_stage_audit(fusion_replay)
+    production_path = production_authority_probe(
+        row,
+        context,
+        question=question,
+        candidate_generation=context.candidate_generation,
     )
     canonical_plan_count = int(schema_parser.get("canonical_plan_count") or 0)
     checks = _structural_checks(
@@ -165,6 +166,8 @@ def probe_prediction(
         candidate_generation=context.candidate_generation,
         candidate_path_replay=context.candidate_path_replay,
         causal_transaction_replay=causal_transaction_replay,
+        fusion_stage=fusion_stage,
+        production_path=production_path,
     )
     return build_probe_result(
         contract_id=CONTRACT,
@@ -178,110 +181,10 @@ def probe_prediction(
         ambiguity=ambiguity,
         schema_parser=schema_parser,
         causal_transaction_replay=causal_transaction_replay,
+        fusion_stage=fusion_stage,
+        production_path=production_path,
         no_policy_cohorts=_no_policy_cohorts(row, context.binding),
         checks=checks,
-    )
-
-
-def _schema_parser_probe(
-    bundle: EvidenceBundle,
-    *,
-    question: str,
-    binding: dict[str, Any],
-    records: list[dict[str, Any]],
-    slots: list[dict[str, Any]],
-) -> dict[str, Any]:
-    allowed_bindings = qasper_canonical_selector_bindings(records)
-    allowed_plans = qasper_canonical_evidence_plans(bundle)
-    applicable_slots = tuple(
-        str(slot) for slot in binding.get("applicable_slots") or []
-    )
-    payload, expected_plan_id = _schema_payload(binding)
-    response_format = semantic_proposition_response_format(
-        list(allowed_bindings),
-        [str(slot.get("slot_id") or "") for slot in slots],
-        candidate="yes",
-        applicable_proposition_slots=applicable_slots,
-        allowed_proposition_slot_bindings=allowed_bindings,
-        allowed_proposition_evidence_plans=allowed_plans,
-    )
-    schema_accepted = True
-    schema_reason = ""
-    try:
-        validate(instance=payload, schema=response_format["json_schema"]["schema"])
-    except ValidationError as exc:
-        schema_accepted = False
-        schema_reason = str(exc.message)
-    parsed = parse_semantic_proposition_response(
-        json.dumps(payload),
-        packed=records,
-        slot_ids={str(slot.get("slot_id") or "") for slot in slots},
-        model="natural-semantic-pack-probe",
-        seed=0,
-        candidate="yes",
-        applicable_proposition_slots=applicable_slots,
-        allowed_proposition_slot_bindings=allowed_bindings,
-        slot_evidence_refs={
-            str(slot.get("slot_id") or ""): tuple(
-                str(ref) for ref in slot.get("evidence_refs") or ()
-            )
-            for slot in slots
-            if str(slot.get("slot_id") or "")
-        },
-        allowed_proposition_evidence_plans=allowed_plans,
-    )
-    downstream_status = "not_applicable"
-    downstream_reason = ""
-    if parsed.value is not None and binding.get("binding_state") in _BOUND_STATES:
-        constraint = semantic_relation_evidence_set_constraint(
-            parsed.value["premises"],
-            build_question_proposition(question),
-            str(parsed.value["verdict"]),
-            auditor_relationship="distinct_model",
-        )
-        downstream_status = str(constraint.get("status") or "")
-        downstream_reason = str(constraint.get("reason") or "")
-    return {
-        "schema_accepted": schema_accepted,
-        "schema_reason": schema_reason,
-        "parser_accepted": parsed.value is not None,
-        "parser_reason": parsed.failure_reason,
-        "expected_plan_id": expected_plan_id,
-        "canonical_plan_count": len(allowed_plans or {}),
-        "parsed_plan_id": (
-            str(parsed.value.get("canonical_evidence_plan_id") or "")
-            if parsed.value is not None
-            else ""
-        ),
-        "downstream_status": downstream_status,
-        "downstream_reason": downstream_reason,
-    }
-
-
-def _schema_payload(
-    binding: dict[str, Any],
-) -> tuple[dict[str, Any], str]:
-    state = str(binding.get("binding_state") or "")
-    if state not in _BOUND_STATES:
-        return (
-            {
-                "candidate_judgment": "unknown",
-                "canonical_evidence_plan_id": "",
-            },
-            "",
-        )
-    plan_key = (
-        "support_plan" if state == "relation_bound_support" else "contradiction_plan"
-    )
-    plan = _mapping(_mapping(binding.get("canonical_evidence_plan")).get(plan_key))
-    return (
-        {
-            "candidate_judgment": (
-                "supported" if state == "relation_bound_support" else "contradicted"
-            ),
-            "canonical_evidence_plan_id": str(plan.get("plan_id") or ""),
-        },
-        str(plan.get("plan_id") or ""),
     )
 
 
@@ -300,68 +203,110 @@ def _structural_checks(
     candidate_generation: dict[str, Any],
     candidate_path_replay: dict[str, Any],
     causal_transaction_replay: dict[str, Any],
+    fusion_stage: dict[str, Any],
+    production_path: dict[str, Any],
 ) -> dict[str, bool]:
     state = str(binding.get("binding_state") or "")
-    expected_flags = {
+    expected = {
         "relation_bound_support": (True, False, "bound"),
         "relation_bound_contradiction": (False, True, "bound"),
         "ambiguous_conflict": (True, True, "missing"),
         "unresolved": (False, False, "missing"),
     }.get(state)
-    flags = (
-        bool(binding.get("support")),
-        bool(binding.get("explicit_contradiction")),
-        str(binding.get("binding_status") or ""),
-    )
-    plan_id_matches = (
-        schema_parser["expected_plan_id"] == schema_parser["parsed_plan_id"]
-    )
-    downstream_matches = schema_parser["downstream_status"] in {
-        "passed",
-        "not_applicable",
-    }
     stored = _mapping(bundle.metadata.get("qasper_canonical_semantic_pack"))
-    source_observation = _mapping(stored.get("source_packing_observation"))
-    trace_prefix = _causal_trace_prefix(
-        stored,
-        binding=binding,
-        canonical_selector_projection=canonical_selector_projection,
-    )
-    return {
+    source = _mapping(stored.get("source_packing_observation"))
+    checks = {
         "pack_round_trip": loaded is not None and not load_reason,
-        "pack_digest_stable": (
-            loaded is not None
-            and loaded.semantic_pack_digest == frozen_digest
-            and stored.get("semantic_pack_digest") == frozen_digest
-        ),
+        "pack_digest_stable": loaded is not None
+        and loaded.semantic_pack_digest == frozen_digest
+        and stored.get("semantic_pack_digest") == frozen_digest,
         "candidate_pack_binding_identical": stored.get("proposition_binding")
         == binding,
-        "binding_state_consistent": expected_flags is not None
-        and flags == expected_flags,
+        "binding_state_consistent": expected is not None
+        and (
+            bool(binding.get("support")),
+            bool(binding.get("explicit_contradiction")),
+            str(binding.get("binding_status") or ""),
+        )
+        == expected,
         "schema_accepts": bool(schema_parser["schema_accepted"]),
         "parser_accepts": bool(schema_parser["parser_accepted"]),
-        "schema_parser_plan_identical": plan_id_matches,
-        "downstream_reuses_plan_predicate": downstream_matches,
+        "schema_parser_plan_identical": schema_parser["expected_plan_id"]
+        == schema_parser["parsed_plan_id"],
+        "downstream_reuses_plan_predicate": schema_parser["downstream_status"]
+        in {"passed", "not_applicable"},
         "canonical_plan_audit_valid": _canonical_plan_audit_valid(
-            binding,
-            schema_parser,
-            canonical_plan_count=canonical_plan_count,
+            binding, schema_parser, canonical_plan_count=canonical_plan_count
         ),
-        "causal_trace_prefix_complete": (
-            qasper_causal_evidence_chain_prefix_complete(trace_prefix)
+        "causal_trace_prefix_complete": qasper_causal_evidence_chain_prefix_complete(
+            _causal_trace_prefix(
+                stored,
+                binding=binding,
+                canonical_selector_projection=canonical_selector_projection,
+            )
         ),
-        **_candidate_replay_checks(
-            source_observation=source_observation,
+    }
+    checks.update(
+        _candidate_replay_checks(
+            source_observation=source,
             canonical_selector_projection=canonical_selector_projection,
             candidate_prompt_projection=candidate_prompt_projection,
             candidate_generation=candidate_generation,
             candidate_path_replay=candidate_path_replay,
             causal_transaction_replay=causal_transaction_replay,
+        )
+    )
+    checks.update(
+        _production_structural_checks(
+            ambiguity=ambiguity,
+            canonical_plan_count=canonical_plan_count,
+            fusion_stage=fusion_stage,
+            production_path=production_path,
+        )
+    )
+    return checks
+
+
+def _production_structural_checks(
+    *,
+    ambiguity: dict[str, Any],
+    canonical_plan_count: int,
+    fusion_stage: dict[str, Any],
+    production_path: dict[str, Any],
+) -> dict[str, bool]:
+    exempt = bool(ambiguity.get("ambiguous"))
+    preflight = _mapping(production_path.get("audit_preflight"))
+    authority = _mapping(production_path.get("boolean_authority"))
+    transaction = _mapping(production_path.get("semantic_transaction"))
+    projection = _mapping(production_path.get("frozen_plan_projection"))
+    return {
+        "fusion_stage_contract": fusion_stage.get("status")
+        in {"passed", "not_applicable"},
+        "production_audit_preflight_called": exempt
+        or (preflight.get("called") is True and preflight.get("status") == "passed"),
+        "production_boolean_authority_derived": exempt
+        or (
+            authority.get("called") is True
+            and authority.get("derivation_status") == "bound"
         ),
-        "unambiguous_zero_plan_rejected": (
-            bool(ambiguity.get("ambiguous")) or canonical_plan_count > 0
-        ),
+        "production_semantic_transaction_completed": exempt
+        or transaction.get("status") == "parsed",
+        "frozen_plan_projection_valid": exempt or projection.get("status") == "passed",
+        "unambiguous_authority_bound": exempt or _authority_is_bound(authority),
+        "unambiguous_zero_plan_rejected": exempt or canonical_plan_count > 0,
     }
+
+
+def _authority_is_bound(authority: Mapping[str, Any]) -> bool:
+    return (
+        authority.get("status") == "supported"
+        and authority.get("canonical_answer_polarity")
+        == authority.get("input_answer_polarity")
+        and bool(authority.get("supporting_evidence_ids"))
+        and int(authority.get("authority_derivation_count") or 0) > 0
+        and bool(authority.get("selected_derivation_id"))
+        and authority.get("evidence_ids_are_bound") is True
+    )
 
 
 def _candidate_replay_checks(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from ktem.docqa.question_proposition import question_proposition_completeness_reason
@@ -129,6 +130,7 @@ def transaction_context(
     candidate_transaction_id: str,
     plan_construction_trace: dict[str, Any] | None = None,
     source_packing_observation: dict[str, Any] | None = None,
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> SemanticPropositionTransactionContext:
     return SemanticPropositionTransactionContext(
         proposal_llm=proposal_llm,
@@ -152,4 +154,5 @@ def transaction_context(
         candidate_transaction_id=candidate_transaction_id,
         plan_construction_trace=plan_construction_trace,
         source_packing_observation=source_packing_observation,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
     )

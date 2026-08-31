@@ -13,6 +13,7 @@ def attach_verified_entailment_audit(
     context: Any,
     audit_result: dict[str, Any],
     local_constraint: dict[str, Any],
+    canonical_plan_projection: Any | None = None,
 ) -> None:
     value["entailment_audit"] = semantic_entailment_audit_attestation(
         context.question,
@@ -26,6 +27,7 @@ def attach_verified_entailment_audit(
         auditor_relationship=context.auditor_relationship,
         audit_result=audit_result,
         independent_semantic_constraint=local_constraint,
+        canonical_plan_projection=canonical_plan_projection,
     )
     value["entailment_audit"]["semantic_pack_identity"] = semantic_pack_identity(
         context

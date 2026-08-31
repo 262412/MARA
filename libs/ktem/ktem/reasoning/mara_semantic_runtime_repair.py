@@ -2,11 +2,23 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
 from ktem.docqa.evidence_schema import EvidenceBundle
+from ktem.docqa.frozen_canonical_proposition_projection import (
+    frozen_canonical_plan_projection_from_bundle,
+    frozen_slot_support_by_ref,
+)
+from ktem.docqa.qasper_semantic_pack_contract import (
+    QASPER_CANONICAL_SEMANTIC_PACK_METADATA_KEY,
+)
+from ktem.docqa.question_proposition import (
+    applicable_proposition_evidence_slots,
+    build_question_proposition,
+)
 from ktem.docqa.recovery_progress import semantic_raw_evidence_digest
 from ktem.docqa.semantic_evidence_set_validation import (
     semantic_evidence_set_runtime_validation_reason,
@@ -18,6 +30,7 @@ from .mara_semantic_proposition_contract import (
     insufficient_semantic_result,
     rejected_semantic_transaction,
 )
+from .mara_semantic_proposition_data_lineage import record_runtime_authority_rejection
 from .mara_semantic_proposition_packing import SemanticPropositionEvidencePacking
 
 
@@ -36,6 +49,8 @@ def reject_runtime_contract_without_reverify(
         request=request,
         question=question,
         bundle=bundle,
+        slots=slots,
+        packing=packing,
         release_mode=release_mode,
     )
     if not reason:
@@ -102,6 +117,23 @@ def _runtime_rejection_diagnostics(
     diagnostics.setdefault("rejected_transactions", []).append(
         _rejected_transaction(outcome.value or {}, reason, packing.semantic_pack_digest)
     )
+    value = outcome.value or {}
+    verifier = value.get("verifier")
+    verifier = verifier if isinstance(verifier, Mapping) else {}
+    record_runtime_authority_rejection(
+        diagnostics,
+        reason=reason,
+        outcome_status=outcome.status,
+        evidence_digest=evidence_digest,
+        semantic_pack_digest=packing.semantic_pack_digest,
+        slot_state_digest=slot_digest,
+        proposition_binding_digest=binding_digest,
+        canonical_plan_id=str(value.get("canonical_evidence_plan_id") or ""),
+        canonical_plan_digest=str(value.get("canonical_plan_digest") or ""),
+        canonical_projection_digest=str(
+            verifier.get("canonical_projection_digest") or ""
+        ),
+    )
     return diagnostics
 
 
@@ -111,16 +143,94 @@ def _runtime_validation_reason(
     request: Any,
     question: str,
     bundle: EvidenceBundle,
+    slots: list[dict[str, str]],
+    packing: SemanticPropositionEvidencePacking,
     release_mode: bool,
 ) -> str:
     if not value or value.get("verdict") == "insufficient_evidence":
         return ""
+    projection, projection_reason = _runtime_plan_projection(
+        value,
+        question=question,
+        bundle=bundle,
+        slots=slots,
+        packing=packing,
+    )
+    if projection_reason:
+        return projection_reason
     return semantic_evidence_set_runtime_validation_reason(
         request,
         question,
         value,
         bundle.items,
         release_mode=release_mode,
+        canonical_plan_projection=projection,
+    )
+
+
+def _runtime_plan_projection(
+    value: Mapping[str, Any],
+    *,
+    question: str,
+    bundle: EvidenceBundle,
+    slots: list[dict[str, str]],
+    packing: SemanticPropositionEvidencePacking,
+) -> tuple[Any | None, str]:
+    """Resolve runtime authority from the immutable plan, when one exists."""
+
+    raw_pack = bundle.metadata.get(QASPER_CANONICAL_SEMANTIC_PACK_METADATA_KEY)
+    if not isinstance(raw_pack, Mapping):
+        return None, ""
+    plan_id = str(value.get("canonical_evidence_plan_id") or "").strip()
+    if not plan_id:
+        return None, "canonical_plan_projection_plan_missing"
+    binding = raw_pack.get("proposition_binding")
+    binding = binding if isinstance(binding, Mapping) else {}
+    canonical = binding.get("canonical_evidence_plan")
+    canonical = canonical if isinstance(canonical, Mapping) else {}
+    selected = next(
+        (
+            candidate
+            for candidate in (
+                canonical.get("support_plan"),
+                canonical.get("contradiction_plan"),
+            )
+            if isinstance(candidate, Mapping)
+            and str(candidate.get("plan_id") or "") == plan_id
+        ),
+        None,
+    )
+    if selected is None:
+        return None, "canonical_plan_projection_plan_missing"
+    frozen_slots = raw_pack.get("slots")
+    frozen_records = raw_pack.get("records")
+    if not isinstance(frozen_slots, list) or not isinstance(frozen_records, list):
+        return None, "canonical_plan_projection_pack_invalid"
+    support_by_ref, support_reason = frozen_slot_support_by_ref(
+        selected.get("span_refs") or (),
+        frozen_slots,
+    )
+    if support_reason:
+        return None, support_reason
+    proposition = build_question_proposition(question)
+    verifier = value.get("verifier")
+    verifier = verifier if isinstance(verifier, Mapping) else {}
+    expected_plan_digest = str(
+        value.get("canonical_plan_digest")
+        or verifier.get("canonical_plan_digest")
+        or ""
+    )
+    if not expected_plan_digest:
+        return None, "canonical_plan_projection_digest_mismatch"
+    if list(getattr(packing, "records", ()) or ()) != frozen_records:
+        return None, "canonical_plan_projection_frozen_records_invalid"
+    return frozen_canonical_plan_projection_from_bundle(
+        bundle,
+        plan_id=plan_id,
+        proposition=proposition,
+        expected_slots=applicable_proposition_evidence_slots(proposition),
+        expected_plan_digest=expected_plan_digest,
+        slot_support_by_ref=support_by_ref,
     )
 
 

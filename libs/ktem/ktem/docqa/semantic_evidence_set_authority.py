@@ -12,8 +12,15 @@ from .boolean_authority_schema import (
 )
 from .boolean_candidate_authority import structured_boolean_candidate_label
 from .evidence_schema import EvidenceBundle
-from .qasper_semantic_pack_contract import qasper_semantic_pack_continuity_reason
+from .frozen_canonical_proposition_projection import (
+    FrozenCanonicalPropositionEvidencePlan,
+)
+from .qasper_semantic_pack_contract import (
+    canonical_payload_digest,
+    qasper_semantic_pack_continuity_reason,
+)
 from .semantic_evidence_set_derivation import semantic_evidence_set_derivation
+from .semantic_evidence_set_plan_projection import semantic_authority_plan_projection
 from .semantic_evidence_set_validation import (
     semantic_proposition_binding_fields,
     validated_semantic_header,
@@ -71,10 +78,52 @@ def semantic_evidence_set_claim_authority(
         debug_trace,
     ):
         return None
+    return _authority_from_response(
+        request,
+        prompt,
+        answer,
+        bundle,
+        response,
+        debug_trace,
+    )
+
+
+def _authority_from_response(
+    request: Any,
+    prompt: str,
+    answer: str,
+    bundle: EvidenceBundle,
+    response: Mapping[str, Any],
+    debug_trace: dict[str, Any] | None,
+) -> BooleanClaimAuthority | None:
+    canonical_plan_projection, projection_reason = semantic_authority_plan_projection(
+        prompt,
+        bundle,
+        response,
+        required=_qasper_semantic_pack_required(request, bundle),
+    )
+    if projection_reason:
+        _append_debug_stage(
+            debug_trace,
+            "canonical_plan_projection",
+            "rejected",
+            projection_reason,
+        )
+        _record_trace(
+            bundle,
+            "rejected",
+            projection_reason,
+            debug_trace=debug_trace,
+            **_rejected_transaction_fields(response),
+        )
+        return None
+    if canonical_plan_projection is not None:
+        _append_debug_stage(debug_trace, "canonical_plan_projection", "accepted", "")
     header, header_reason = validated_semantic_header(
         response,
         prompt,
         release_mode=_semantic_release_mode(request),
+        canonical_plan_projection=canonical_plan_projection,
     )
     if header is None:
         _append_debug_stage(debug_trace, "header", "rejected", header_reason)
@@ -100,6 +149,7 @@ def semantic_evidence_set_claim_authority(
         verdict,
         attestation,
         debug_trace,
+        canonical_plan_projection=canonical_plan_projection,
     )
 
 
@@ -180,6 +230,7 @@ def _authority_from_verified_response(
     verdict: str,
     attestation: dict[str, Any],
     debug_trace: dict[str, Any] | None,
+    canonical_plan_projection: FrozenCanonicalPropositionEvidencePlan | None = None,
 ) -> BooleanClaimAuthority | None:
     premises, slot_support, scope_basis, premise_reason = validated_semantic_premises(
         request,
@@ -188,6 +239,7 @@ def _authority_from_verified_response(
         response.get("premises"),
         bundle.items,
         proof_mode=str(response.get("proof_mode") or ""),
+        canonical_plan_projection=canonical_plan_projection,
     )
     if premises is None:
         _append_debug_stage(debug_trace, "premises", "rejected", premise_reason)
@@ -209,6 +261,7 @@ def _authority_from_verified_response(
         premise_count=len(premises),
         scope_basis=scope_basis,
         slot_support=slot_support,
+        canonical_plan_projection=canonical_plan_projection,
     )
     derivation = semantic_evidence_set_derivation(
         prompt,
@@ -216,12 +269,14 @@ def _authority_from_verified_response(
         premises,
         attestation,
         slot_support=slot_support,
+        canonical_plan_projection=canonical_plan_projection,
     )
     status = boolean_derivation_contract_status(
         derivation.as_dict(),
         [premise.as_dict() for premise in premises],
         question=prompt,
         canonical_polarity=verdict,
+        canonical_plan_projection=canonical_plan_projection,
     )
     if status != "bound":
         _append_debug_stage(debug_trace, "derivation", "rejected", status)
@@ -351,6 +406,10 @@ def _verified_authority_trace_fields(
             response.get("candidate_verification_status") or "unknown"
         ),
         "replacement_candidate_allowed": False,
+        "canonical_evidence_plan_id": str(
+            attestation.get("canonical_evidence_plan_id") or ""
+        ),
+        "canonical_plan_digest": str(attestation.get("canonical_plan_digest") or ""),
     }
 
 
@@ -364,6 +423,7 @@ def _enriched_attestation(
     premise_count: int,
     scope_basis: str,
     slot_support: dict[str, tuple[str, ...]],
+    canonical_plan_projection: FrozenCanonicalPropositionEvidencePlan | None = None,
 ) -> dict[str, Any]:
     verifier = response.get("verifier") or {}
     return {
@@ -371,7 +431,11 @@ def _enriched_attestation(
         "premise_count": premise_count,
         "complete_proposition": True,
         "scope_basis": scope_basis,
-        "proof_mode": str(response.get("proof_mode") or ""),
+        "proof_mode": (
+            canonical_plan_projection.proof_mode
+            if canonical_plan_projection is not None
+            else str(response.get("proof_mode") or "")
+        ),
         "question_proposition": dict(response.get("question_proposition") or {}),
         "typed_conclusion": dict(response.get("typed_conclusion") or {}),
         "semantic_pack_digest": str(verifier.get("semantic_pack_digest") or ""),
@@ -383,6 +447,18 @@ def _enriched_attestation(
             question,
             verdict,
             premises,
+            canonical_plan_projection=canonical_plan_projection,
+        ),
+        **(
+            {
+                "canonical_evidence_plan_id": canonical_plan_projection.plan_id,
+                "canonical_plan_digest": canonical_plan_projection.plan_digest,
+                "canonical_projection_digest": canonical_payload_digest(
+                    canonical_plan_projection.as_dict()
+                ),
+            }
+            if canonical_plan_projection is not None
+            else {}
         ),
     }
 

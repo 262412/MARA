@@ -9,6 +9,7 @@ from .boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
+from .qasper_semantic_pack_contract import canonical_payload_digest
 from .question_proposition import (
     applicable_proposition_evidence_slots,
     build_question_proposition,
@@ -25,10 +26,18 @@ def validated_semantic_header(
     question: str,
     *,
     release_mode: bool,
+    canonical_plan_projection: Any | None = None,
 ) -> tuple[tuple[str, dict[str, Any]] | None, str]:
     verdict, proof_mode, premises, shape_reason = _semantic_response_shape(response)
     if shape_reason:
         return None, shape_reason
+    projection_reason = _canonical_projection_header_reason(
+        response,
+        proof_mode=proof_mode,
+        projection=canonical_plan_projection,
+    )
+    if projection_reason:
+        return None, projection_reason
     proposition = build_question_proposition(question)
     question_reason = validate_question_proposition(
         response.get("question_proposition"), question
@@ -68,6 +77,7 @@ def validated_semantic_header(
             proposition=proposition,
             conclusion=conclusion,
             release_mode=release_mode,
+            canonical_plan_projection=canonical_plan_projection,
         )
         if audit_reason:
             return None, audit_reason
@@ -84,8 +94,30 @@ def validated_semantic_header(
             proposition=proposition.as_dict(),
             conclusion=conclusion.as_dict() if conclusion is not None else {},
             release_mode=release_mode,
+            canonical_plan_projection=canonical_plan_projection,
         ),
     ), ""
+
+
+def _canonical_projection_header_reason(
+    response: Mapping[str, Any],
+    *,
+    proof_mode: str,
+    projection: Any | None,
+) -> str:
+    if projection is None:
+        return ""
+    if proof_mode != projection.proof_mode:
+        return "canonical_plan_projection_proof_mode_mismatch"
+    if str(response.get("canonical_evidence_plan_id") or "") != projection.plan_id:
+        return "canonical_plan_projection_plan_mismatch"
+    if str(response.get("canonical_plan_digest") or "") != projection.plan_digest:
+        return "canonical_plan_projection_digest_mismatch"
+    verifier = response.get("verifier")
+    verifier = verifier if isinstance(verifier, Mapping) else {}
+    if str(verifier.get("canonical_plan_digest") or "") != projection.plan_digest:
+        return "canonical_plan_projection_digest_mismatch"
+    return ""
 
 
 def _semantic_response_shape(
@@ -239,8 +271,9 @@ def _verifier_attestation(
     proposition: dict[str, Any],
     conclusion: dict[str, Any],
     release_mode: bool,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "contract_id": GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
         "verdict_contract_id": SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
         "model": str(verifier.get("model") or "").strip(),
@@ -256,3 +289,14 @@ def _verifier_attestation(
         "release_mode": release_mode,
         "entailment_audit": dict(response.get("entailment_audit") or {}),
     }
+    if canonical_plan_projection is not None:
+        payload.update(
+            {
+                "canonical_evidence_plan_id": canonical_plan_projection.plan_id,
+                "canonical_plan_digest": canonical_plan_projection.plan_digest,
+                "canonical_projection_digest": canonical_payload_digest(
+                    canonical_plan_projection.as_dict()
+                ),
+            }
+        )
+    return payload

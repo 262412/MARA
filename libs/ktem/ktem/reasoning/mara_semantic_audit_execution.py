@@ -25,8 +25,12 @@ def execute_semantic_entailment_audit(
         context.proposition,
         str(value.get("verdict") or ""),
         auditor_relationship=context.auditor_relationship,
+        canonical_plan_projection=context.canonical_plan_projection,
     )
-    slot_evidence = premise_slot_evidence_for_audit(constraint)
+    slot_evidence = premise_slot_evidence_for_audit(
+        constraint,
+        canonical_plan_projection=context.canonical_plan_projection,
+    )
     prompt = candidate_bound_semantic_audit_prompt(
         context,
         conclusion,
@@ -48,6 +52,7 @@ def execute_semantic_entailment_audit(
         },
         premise_slot_evidence=slot_evidence,
         semantic_identity=semantic_audit_input_identity(context, value, conclusion),
+        canonical_plan_projection=context.canonical_plan_projection,
     )
     audit_input = {
         "prompt": prompt,

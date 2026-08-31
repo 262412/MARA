@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
+from ktem.docqa.frozen_canonical_proposition_projection import (
+    FrozenCanonicalPropositionEvidencePlan,
+    frozen_canonical_plan_projection_checked,
+    frozen_slot_support_by_ref,
+)
+from ktem.docqa.qasper_semantic_pack_contract import canonical_payload_digest
 from ktem.docqa.question_proposition import (
     PROPOSITION_EVIDENCE_SLOTS,
     proposition_evidence_bindings,
@@ -72,18 +79,27 @@ def bind_semantic_runtime_fields(
 ) -> None:
     value["question_proposition"] = context.proposition.as_dict()
     value["question_proposition_resolution"] = dict(context.proposition_resolution)
-    canonical_bindings = proposition_evidence_bindings(context.proposition)
     evidence_relation = str(value.get("evidence_relation") or "")
-    for premise in value.get("premises") or []:
-        if not isinstance(premise, dict):
-            continue
-        bound_slots = premise.get("binds_proposition_slots") or []
-        premise["proposition_slot_bindings"] = {
-            slot: canonical_bindings[slot]
-            for slot in bound_slots
-            if slot in canonical_bindings
-        }
-        premise["evidence_relation"] = evidence_relation
+    projection = getattr(context, "canonical_plan_projection", None)
+    if projection is not None:
+        evidence_relation = projection.polarity_relation
+        value["canonical_evidence_plan_id"] = projection.plan_id
+        value["canonical_plan_digest"] = projection.plan_digest
+        value["proof_mode"] = projection.proof_mode
+        value["evidence_relation"] = evidence_relation
+        value["premises"] = deepcopy(list(projection.premises))
+    else:
+        canonical_bindings = proposition_evidence_bindings(context.proposition)
+        for premise in value.get("premises") or []:
+            if not isinstance(premise, dict):
+                continue
+            bound_slots = premise.get("binds_proposition_slots") or []
+            premise["proposition_slot_bindings"] = {
+                slot: canonical_bindings[slot]
+                for slot in bound_slots
+                if slot in canonical_bindings
+            }
+            premise["evidence_relation"] = evidence_relation
     value["verifier"].update(
         {
             "release_mode": context.release_mode,
@@ -92,8 +108,58 @@ def bind_semantic_runtime_fields(
             "canonical_span_universe_digest": (context.canonical_span_universe_digest),
             "candidate_transaction_id": context.candidate_transaction_id,
             "canonical_pack_continuity_status": "preserved",
+            **(
+                {
+                    "canonical_plan_digest": projection.plan_digest,
+                    "canonical_projection_digest": canonical_plan_projection_digest(
+                        projection
+                    ),
+                }
+                if projection is not None
+                else {}
+            ),
         }
     )
+
+
+def canonical_plan_projection_for_context(
+    context: SemanticPropositionTransactionContext,
+    value: Mapping[str, Any],
+) -> tuple[FrozenCanonicalPropositionEvidencePlan | None, str]:
+    """Validate and project the plan selected by the proposal transaction."""
+
+    plans = context.allowed_proposition_evidence_plans
+    plan_id = str(value.get("canonical_evidence_plan_id") or "").strip()
+    if not plan_id:
+        return (
+            (None, "canonical_plan_projection_plan_missing")
+            if plans is not None
+            else (None, "")
+        )
+    if not isinstance(plans, Mapping):
+        return None, "canonical_plan_projection_plan_missing"
+    plan = plans.get(plan_id)
+    if not isinstance(plan, Mapping):
+        return None, "canonical_plan_projection_plan_missing"
+    support_by_ref, support_reason = frozen_slot_support_by_ref(
+        plan.get("span_refs") or (),
+        context.slots,
+    )
+    if support_reason:
+        return None, support_reason
+    return frozen_canonical_plan_projection_checked(
+        plan,
+        context.packed,
+        proposition=context.proposition,
+        expected_slots=applicable_proposition_slots(context.proposition),
+        slot_support_by_ref=support_by_ref,
+    )
+
+
+def canonical_plan_projection_digest(
+    projection: FrozenCanonicalPropositionEvidencePlan,
+) -> str:
+    return canonical_payload_digest(projection.as_dict())
 
 
 def semantic_audit_input_identity(

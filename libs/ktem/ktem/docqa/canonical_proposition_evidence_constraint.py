@@ -54,7 +54,18 @@ def canonical_evidence_constraint_projection(
     *,
     required_slots: Sequence[str],
     required_object_tokens: Sequence[str],
+    canonical_plan_projection: Any | None = None,
 ) -> CanonicalEvidenceConstraintProjection | None:
+    if canonical_plan_projection is not None:
+        if verdict not in {"yes", "no"}:
+            return None
+        return CanonicalEvidenceConstraintProjection(
+            bound_slots=tuple(canonical_plan_projection.required_slots),
+            covered_object_tokens=tuple(
+                canonical_plan_projection.covered_object_tokens
+            ),
+            reason="",
+        )
     selectors = _canonical_plan_selectors(premises)
     if selectors is None or verdict not in {"yes", "no"}:
         return None

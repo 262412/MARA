@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from .boolean_authority_derivation import (
@@ -16,6 +17,7 @@ from .boolean_relations import primary_boolean_relation
 from .boolean_scope_quantifiers import _closed_quantifier
 from .question_proposition import build_question_proposition
 from .semantic_relation_clause_validation import (
+    frozen_semantic_relation_analyses,
     semantic_relation_clause_analysis,
     semantic_required_argument_tokens,
     semantic_slot_evidence_projection,
@@ -30,9 +32,14 @@ def semantic_evidence_set_derivation(
     attestation: dict[str, Any],
     *,
     slot_support: dict[str, tuple[str, ...]],
+    canonical_plan_projection: Any | None = None,
 ) -> BooleanAuthorityDerivation:
     relation = primary_boolean_relation(question) or "entails"
-    required = semantic_required_argument_tokens(question)
+    required = (
+        tuple(canonical_plan_projection.required_object_tokens)
+        if canonical_plan_projection is not None
+        else semantic_required_argument_tokens(question)
+    )
     conclusion = _typed_derivation_conclusion(
         question,
         verdict,
@@ -46,6 +53,8 @@ def semantic_evidence_set_derivation(
         premises,
         slot_support,
         required=required,
+        canonical_plan_projection=canonical_plan_projection,
+        evidence_relation=str(attestation.get("verdict") or verdict),
     )
     covered = tuple(
         sorted(
@@ -130,16 +139,82 @@ def _premise_contributions(
     slot_support: dict[str, tuple[str, ...]],
     *,
     required: tuple[str, ...],
+    canonical_plan_projection: Any | None = None,
+    evidence_relation: str = "",
+) -> tuple[dict[str, Any], ...]:
+    if canonical_plan_projection is not None:
+        return _frozen_premise_contributions(
+            premises,
+            slot_support,
+            projection=canonical_plan_projection,
+            evidence_relation=evidence_relation,
+        )
+    return _legacy_premise_contributions(
+        question,
+        premises,
+        slot_support,
+        required=required,
+    )
+
+
+def _frozen_premise_contributions(
+    premises: tuple[BooleanEvidenceAuthority, ...],
+    slot_support: dict[str, tuple[str, ...]],
+    *,
+    projection: Any,
+    evidence_relation: str,
+) -> tuple[dict[str, Any], ...]:
+    analyses = frozen_semantic_relation_analyses(projection, evidence_relation)
+    contributions = []
+    for index, premise in enumerate(premises, start=1):
+        expected = _frozen_authority_premise(premise, projection)
+        if expected is None or index > len(analyses):
+            continue
+        selector = str(expected.get("span_selector") or "")
+        slot_evidence = {
+            slot: {
+                **dict(span),
+                "evidence_ref": (
+                    f"{premise.evidence_ref}#slot:{slot}:"
+                    f"{span.get('span_start')}:{span.get('span_end')}"
+                ),
+            }
+            for slot, span in projection.slot_evidence.get(selector, {}).items()
+        }
+        contributions.append(
+            _premise_contribution(
+                premise,
+                index=index,
+                slot_support=slot_support,
+                analysis=analyses[index - 1],
+                argument_tokens=list(
+                    projection.covered_tokens_by_ref.get(selector, ())
+                ),
+                binds_slots=list(expected.get("binds_proposition_slots") or []),
+                proposition_bindings=dict(
+                    expected.get("proposition_slot_bindings") or {}
+                ),
+                slot_evidence=slot_evidence,
+            )
+        )
+    return tuple(contributions)
+
+
+def _legacy_premise_contributions(
+    question: str,
+    premises: tuple[BooleanEvidenceAuthority, ...],
+    slot_support: dict[str, tuple[str, ...]],
+    *,
+    required: tuple[str, ...],
 ) -> tuple[dict[str, Any], ...]:
     proposition = build_question_proposition(question)
     contributions = []
     for index, premise in enumerate(premises, start=1):
+        binds_slots = [slot for slot, _value in premise.proposition_slot_bindings]
         analysis = semantic_relation_clause_analysis(
             {
                 "quote": premise.quote,
-                "binds_proposition_slots": [
-                    slot for slot, _value in premise.proposition_slot_bindings
-                ],
+                "binds_proposition_slots": binds_slots,
                 "proposition_slot_bindings": dict(premise.proposition_slot_bindings),
                 "evidence_relation": premise.evidence_relation,
             },
@@ -150,37 +225,69 @@ def _premise_contributions(
             if premise.canonical_start is not None
             else premise.span_start
         )
-        slot_evidence = semantic_slot_evidence_projection(
-            analysis,
-            premise_ref=premise.evidence_ref,
-            span_base=span_base,
-        )
         contributions.append(
-            {
-                "evidence_id": premise.evidence_id,
-                "evidence_ref": premise.evidence_ref,
-                "role": f"semantic_premise:{index}",
-                "order": index,
-                "argument_tokens": list(
+            _premise_contribution(
+                premise,
+                index=index,
+                slot_support=slot_support,
+                analysis=analysis,
+                argument_tokens=list(
                     validated_argument_tokens(question, analysis, required)
                 ),
-                "proposition_fragment": premise.object,
-                "supports_slot_ids": list(slot_support[premise.evidence_ref]),
-                "binds_proposition_slots": [
-                    slot for slot, _value in premise.proposition_slot_bindings
-                ],
-                "proposition_slot_bindings": dict(premise.proposition_slot_bindings),
-                "proposition_slot_evidence": slot_evidence,
-                "local_semantic_relation": {
-                    "contract_id": analysis["contract_id"],
-                    "status": analysis["status"],
-                    "evidence_relation": analysis["evidence_relation"],
-                    "joint_relation_clause_bound": analysis[
-                        "joint_relation_clause_bound"
-                    ],
-                    "analysis_digest": analysis["analysis_digest"],
-                },
-                "evidence_relation": premise.evidence_relation,
-            }
+                binds_slots=binds_slots,
+                proposition_bindings=dict(premise.proposition_slot_bindings),
+                slot_evidence=semantic_slot_evidence_projection(
+                    analysis,
+                    premise_ref=premise.evidence_ref,
+                    span_base=span_base,
+                ),
+            )
         )
     return tuple(contributions)
+
+
+def _premise_contribution(
+    premise: BooleanEvidenceAuthority,
+    *,
+    index: int,
+    slot_support: dict[str, tuple[str, ...]],
+    analysis: Mapping[str, Any],
+    argument_tokens: list[str],
+    binds_slots: list[str],
+    proposition_bindings: dict[str, Any],
+    slot_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "evidence_id": premise.evidence_id,
+        "evidence_ref": premise.evidence_ref,
+        "role": f"semantic_premise:{index}",
+        "order": index,
+        "argument_tokens": argument_tokens,
+        "proposition_fragment": premise.object,
+        "supports_slot_ids": list(slot_support[premise.evidence_ref]),
+        "binds_proposition_slots": binds_slots,
+        "proposition_slot_bindings": proposition_bindings,
+        "proposition_slot_evidence": slot_evidence,
+        "local_semantic_relation": {
+            "contract_id": analysis["contract_id"],
+            "status": analysis["status"],
+            "evidence_relation": analysis["evidence_relation"],
+            "joint_relation_clause_bound": analysis["joint_relation_clause_bound"],
+            "analysis_digest": analysis["analysis_digest"],
+        },
+        "evidence_relation": premise.evidence_relation,
+    }
+
+
+def _frozen_authority_premise(
+    premise: BooleanEvidenceAuthority,
+    projection: Any,
+) -> Mapping[str, Any] | None:
+    for expected in projection.premises:
+        if (
+            expected.get("evidence_id") == premise.evidence_id
+            and expected.get("span_start") == premise.span_start
+            and expected.get("span_end") == premise.span_end
+        ):
+            return expected
+    return None

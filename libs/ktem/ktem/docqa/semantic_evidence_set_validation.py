@@ -27,6 +27,7 @@ def semantic_evidence_set_runtime_validation_reason(
     items: list[dict[str, Any]],
     *,
     release_mode: bool,
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     """Run the final deterministic authority contract before cache commit."""
 
@@ -34,6 +35,7 @@ def semantic_evidence_set_runtime_validation_reason(
         response,
         question,
         release_mode=release_mode,
+        canonical_plan_projection=canonical_plan_projection,
     )
     if header is None:
         return header_reason
@@ -47,6 +49,7 @@ def semantic_evidence_set_runtime_validation_reason(
         response.get("premises"),
         items,
         proof_mode=str(response.get("proof_mode") or ""),
+        canonical_plan_projection=canonical_plan_projection,
     )
     if premises is None:
         return premise_reason
@@ -58,7 +61,12 @@ def semantic_evidence_set_runtime_validation_reason(
         "required_slot_ids": sorted(
             {slot_id for values in slot_support.values() for slot_id in values}
         ),
-        **semantic_proposition_binding_fields(question, verdict, premises),
+        **semantic_proposition_binding_fields(
+            question,
+            verdict,
+            premises,
+            canonical_plan_projection=canonical_plan_projection,
+        ),
     }
     derivation = semantic_evidence_set_derivation(
         question,
@@ -66,11 +74,13 @@ def semantic_evidence_set_runtime_validation_reason(
         premises,
         attestation,
         slot_support=slot_support,
+        canonical_plan_projection=canonical_plan_projection,
     )
     status = boolean_derivation_contract_status(
         derivation.as_dict(),
         [premise.as_dict() for premise in premises],
         question=question,
         canonical_polarity=verdict,
+        canonical_plan_projection=canonical_plan_projection,
     )
     return "" if status == "bound" else status

@@ -9,6 +9,7 @@ from .question_proposition import (
     QuestionProposition,
     proposition_evidence_bindings,
 )
+from .semantic_entailment_audit_support import text_digest as _text_digest
 from .semantic_relation_clause_validation import semantic_relation_clause_analysis
 
 
@@ -17,7 +18,14 @@ def semantic_premise_proof_span_reason(
     proposition: QuestionProposition,
     *,
     audit_result: Mapping[str, Any] | None = None,
+    canonical_plan_projection: Any | None = None,
 ) -> str:
+    if canonical_plan_projection is not None:
+        return _frozen_plan_premise_reason(
+            premises,
+            audit_result=audit_result,
+            canonical_plan_projection=canonical_plan_projection,
+        )
     canonical_bindings = proposition_evidence_bindings(proposition)
     for premise_index, premise in enumerate(premises):
         quote = " ".join(str(premise.get("quote") or "").split())
@@ -52,6 +60,7 @@ def semantic_entailment_premise_validation_reason(
     proposition: QuestionProposition,
     *,
     audit_result: Mapping[str, Any] | None = None,
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     """Validate exact proof spans and model slot evidence before attestation."""
 
@@ -59,13 +68,34 @@ def semantic_entailment_premise_validation_reason(
         premises,
         proposition,
         audit_result=audit_result,
+        canonical_plan_projection=canonical_plan_projection,
     )
 
 
 def local_proposition_slot_checks(
     premise: Mapping[str, Any],
     proposition: QuestionProposition,
+    *,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, bool]:
+    if canonical_plan_projection is not None:
+        expected = next(
+            (
+                value
+                for value in canonical_plan_projection.premises
+                if value.get("evidence_id") == premise.get("evidence_id")
+                and value.get("span_selector") == premise.get("span_selector")
+            ),
+            None,
+        )
+        if expected is None:
+            return {}
+        expected_slots = list(expected.get("binds_proposition_slots") or [])
+        if list(premise.get("binds_proposition_slots") or []) != expected_slots or dict(
+            premise.get("proposition_slot_bindings") or {}
+        ) != dict(expected.get("proposition_slot_bindings") or {}):
+            return {slot: False for slot in expected_slots}
+        return {slot: True for slot in expected_slots}
     raw_slots = premise.get("binds_proposition_slots")
     if not isinstance(raw_slots, list) or any(
         not isinstance(slot, str) for slot in raw_slots
@@ -122,6 +152,7 @@ def _audit_slot_evidence_reason(
     *,
     premise: Mapping[str, Any],
     proposition: QuestionProposition,
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     if audit_result is None:
         return ""
@@ -141,8 +172,15 @@ def _audit_slot_evidence_reason(
     }
     if set(by_slot) != set(raw_slots):
         return "semantic_entailment_premise_audit_invalid"
-    local_analysis = semantic_relation_clause_analysis(premise, proposition)
-    expected_by_slot = dict(local_analysis.get("slot_evidence") or {})
+    if canonical_plan_projection is not None:
+        expected_by_slot = canonical_plan_projection.audit_slot_evidence.get(
+            f"P{premise_index + 1}", {}
+        )
+        local_bound = True
+    else:
+        local_analysis = semantic_relation_clause_analysis(premise, proposition)
+        expected_by_slot = dict(local_analysis.get("slot_evidence") or {})
+        local_bound = local_analysis.get("joint_relation_clause_bound") is True
     for slot in raw_slots:
         if by_slot[slot].get("binding_valid") is not True:
             return "semantic_entailment_proposition_binding_unbound"
@@ -150,7 +188,7 @@ def _audit_slot_evidence_reason(
         evidence_text = str(by_slot[slot].get("evidence_text") or "")
         if (
             not isinstance(expected, Mapping)
-            or local_analysis.get("joint_relation_clause_bound") is not True
+            or not local_bound
             or evidence_text != str(expected.get("text") or "")
             or by_slot[slot].get("evidence_ref") != f"P{premise_index + 1}:{slot}"
             or _optional_int(by_slot[slot].get("span_start"))
@@ -200,3 +238,115 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _frozen_plan_premise_reason(
+    premises: Sequence[Mapping[str, Any]],
+    *,
+    audit_result: Mapping[str, Any] | None,
+    canonical_plan_projection: Any,
+) -> str:
+    expected = canonical_plan_projection.premises
+    if len(premises) != len(expected):
+        return "semantic_entailment_premise_count_invalid"
+    checks: list[Any] | None = None
+    if audit_result is not None:
+        raw_checks = audit_result.get("premise_checks")
+        if not isinstance(raw_checks, list) or len(raw_checks) != len(expected):
+            return "semantic_entailment_premise_audit_invalid"
+        checks = raw_checks
+    for index, (premise, frozen) in enumerate(zip(premises, expected), start=1):
+        if (
+            not isinstance(premise, Mapping)
+            or premise.get("evidence_id") != frozen.get("evidence_id")
+            or premise.get("span_selector") != frozen.get("span_selector")
+            or premise.get("quote") != frozen.get("quote")
+            or premise.get("span_start") != frozen.get("span_start")
+            or premise.get("span_end") != frozen.get("span_end")
+            or premise.get("canonical_start") != frozen.get("canonical_start")
+            or premise.get("canonical_end") != frozen.get("canonical_end")
+            or list(premise.get("binds_proposition_slots") or [])
+            != list(frozen.get("binds_proposition_slots") or [])
+            or dict(premise.get("proposition_slot_bindings") or {})
+            != dict(frozen.get("proposition_slot_bindings") or {})
+            or premise.get("evidence_relation") != frozen.get("evidence_relation")
+            or premise.get("canonical_evidence_plan_id")
+            != frozen.get("canonical_evidence_plan_id")
+            or premise.get("canonical_plan_digest")
+            != frozen.get("canonical_plan_digest")
+        ):
+            return "semantic_entailment_proposition_binding_unbound"
+        if checks is not None:
+            check = checks[index - 1]
+            if not isinstance(check, Mapping) or not _frozen_audit_check_valid(
+                check,
+                index=index,
+                premise=frozen,
+                expected_slots=canonical_plan_projection.audit_slot_evidence[
+                    f"P{index}"
+                ],
+            ):
+                return "semantic_entailment_proposition_binding_unbound"
+    return ""
+
+
+def _frozen_audit_check_valid(
+    check: Mapping[str, Any],
+    *,
+    index: int,
+    premise: Mapping[str, Any],
+    expected_slots: Mapping[str, Mapping[str, Any]],
+) -> bool:
+    if not all(
+        check.get(field) is True
+        for field in (
+            "fragment_entailed",
+            "scope_consistent",
+            "evidence_relation_valid",
+        )
+    ):
+        return False
+    expected_declared_slots = list(premise.get("binds_proposition_slots") or [])
+    if check.get("declared_proposition_slots") != expected_declared_slots:
+        return False
+    if "premise_ref" in check:
+        if (
+            check.get("premise_ref") != f"P{index}"
+            or check.get("proposition_bindings_valid") is not True
+        ):
+            return False
+    elif (
+        check.get("premise_index") != index
+        or check.get("evidence_id") != premise.get("evidence_id")
+        or check.get("quote_digest") != _text_digest(str(premise.get("quote") or ""))
+        or check.get("fragment_digest")
+        != _text_digest(str(premise.get("proposition_fragment") or ""))
+        or check.get("proposition_bindings_valid") is not True
+        or check.get("evidence_relation") != premise.get("evidence_relation")
+    ):
+        return False
+    slot_checks = check.get("proposition_slot_checks")
+    if not isinstance(slot_checks, list) or len(slot_checks) != len(expected_slots):
+        return False
+    for slot_check in slot_checks:
+        if not isinstance(slot_check, Mapping):
+            return False
+        slot = str(slot_check.get("slot") or "")
+        expected = expected_slots.get(slot)
+        if (
+            not isinstance(expected, Mapping)
+            or slot_check.get("binding_valid") is not True
+            or slot_check.get("evidence_ref") != f"P{index}:{slot}"
+            or slot_check.get("evidence_text") != expected.get("text")
+            or _optional_int(slot_check.get("span_start"))
+            != _optional_int(expected.get("span_start"))
+            or _optional_int(slot_check.get("span_end"))
+            != _optional_int(expected.get("span_end"))
+            or slot_check.get("clause_ref") != expected.get("clause_ref")
+            or _optional_int(slot_check.get("clause_start"))
+            != _optional_int(expected.get("clause_start"))
+            or _optional_int(slot_check.get("clause_end"))
+            != _optional_int(expected.get("clause_end"))
+        ):
+            return False
+    return True

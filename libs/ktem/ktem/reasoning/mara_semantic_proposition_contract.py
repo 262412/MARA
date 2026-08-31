@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -49,6 +50,8 @@ class SemanticPropositionTransactionContext:
     candidate_transaction_id: str = ""
     plan_construction_trace: dict[str, Any] | None = None
     source_packing_observation: dict[str, Any] | None = None
+    allowed_proposition_evidence_plans: Mapping[str, Mapping[str, Any]] | None = None
+    canonical_plan_projection: Any | None = None
 
 
 def resolve_proposition_precondition(

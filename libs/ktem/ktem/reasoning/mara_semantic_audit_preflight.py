@@ -26,12 +26,33 @@ def audit_preflight_failure_reason(
     *,
     premise_slot_expectations: Mapping[str, Collection[str]] | None,
     premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None,
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     """Validate the audit's local per-premise slot contract before schema build."""
 
     if premise_slot_expectations is None:
         return ""
     labels = tuple(str(label) for label in premise_labels)
+    if canonical_plan_projection is not None:
+        expected_labels = tuple(
+            f"P{index}"
+            for index, _premise in enumerate(
+                canonical_plan_projection.premises, start=1
+            )
+        )
+        if labels != expected_labels:
+            return PRE_AUDIT_SLOT_EVIDENCE_MISMATCH
+        if premise_slot_expectations is None or premise_slot_evidence is None:
+            return PRE_AUDIT_SLOT_EVIDENCE_MISMATCH
+        expected = {
+            f"P{index}": tuple(premise.get("binds_proposition_slots") or [])
+            for index, premise in enumerate(canonical_plan_projection.premises, start=1)
+        }
+        if dict(premise_slot_expectations) != expected:
+            return PRE_AUDIT_SLOT_EVIDENCE_MISMATCH
+        if dict(premise_slot_evidence) != canonical_plan_projection.audit_slot_evidence:
+            return PRE_AUDIT_SLOT_EVIDENCE_MISMATCH
+        return ""
     if premise_slot_evidence is None:
         return PRE_AUDIT_SLOT_EVIDENCE_MISMATCH
     if set(premise_slot_expectations) != set(labels) or set(
@@ -40,17 +61,19 @@ def audit_preflight_failure_reason(
         return PRE_AUDIT_SLOT_EVIDENCE_MISMATCH
     allowed_slots = set(PROPOSITION_EVIDENCE_SLOTS)
     for label in labels:
-        expected = tuple(str(slot) for slot in premise_slot_expectations.get(label, ()))
+        expected_slots = tuple(
+            str(slot) for slot in premise_slot_expectations.get(label, ())
+        )
         evidence = premise_slot_evidence.get(label)
         if (
-            not expected
-            or len(set(expected)) != len(expected)
-            or not set(expected) <= allowed_slots
+            not expected_slots
+            or len(set(expected_slots)) != len(expected_slots)
+            or not set(expected_slots) <= allowed_slots
             or not isinstance(evidence, Mapping)
-            or set(evidence) != set(expected)
+            or set(evidence) != set(expected_slots)
             or any(
                 not _exact_span_evidence_valid(label, slot, evidence.get(slot))
-                for slot in expected
+                for slot in expected_slots
             )
         ):
             return PRE_AUDIT_SLOT_EVIDENCE_MISMATCH

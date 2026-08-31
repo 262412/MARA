@@ -9,13 +9,16 @@ from .boolean_proposition_arguments import _question_argument_tokens
 from .boolean_proposition_context import normalized_object_tokens
 from .boolean_proposition_tokens import _relation_surface_tokens
 from .boolean_relations import primary_boolean_relation
-from .canonical_proposition_evidence_constraint import (
-    canonical_evidence_constraint_projection,
-    semantic_constraint_observation,
+from .canonical_proposition_evidence_constraint import semantic_constraint_observation
+from .frozen_semantic_relation_projection import (  # noqa: F401 - compatibility re-export
+    LOCAL_SEMANTIC_RELATION_CONSTRAINT,
+    frozen_semantic_relation_analyses,
 )
-from .qasper_boolean_no_evidence import (
-    qasper_no_evidence_set_analysis,
-    qasper_support_evidence_binding_complete,
+from .frozen_semantic_relation_projection import (
+    frozen_semantic_relation_evidence_set_constraint as _frozen_semantic_relation_evidence_set_constraint,
+)
+from .frozen_semantic_relation_projection import (  # noqa: F401 - compatibility re-export
+    premise_slot_evidence_for_audit,
 )
 from .qasper_frozen_slot_evidence import verified_frozen_object_span
 from .question_proposition import (
@@ -44,8 +47,9 @@ from .semantic_relation_clause_lexical import predicate_spans as _predicate_span
 from .semantic_relation_clause_lexical import (
     semantic_content_token_set as _semantic_content_token_set,
 )
-
-LOCAL_SEMANTIC_RELATION_CONSTRAINT = "local_semantic_relation_constraint.v1"
+from .semantic_relation_constraint_projection import (
+    legacy_constraint_projection as _legacy_constraint_projection,
+)
 
 
 def semantic_relation_clause_analysis(
@@ -162,7 +166,14 @@ def semantic_relation_evidence_set_constraint(
     verdict: str,
     *,
     auditor_relationship: str,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, Any]:
+    if canonical_plan_projection is not None:
+        return _frozen_semantic_relation_evidence_set_constraint(
+            canonical_plan_projection,
+            verdict,
+            auditor_relationship=auditor_relationship,
+        )
     analyses = [
         semantic_relation_clause_analysis(premise, proposition) for premise in premises
     ]
@@ -176,31 +187,21 @@ def semantic_relation_evidence_set_constraint(
         proposition,
     )
     (
+        bound_slots,
+        covered_object_tokens,
+        reason,
         no_evidence_semantics,
         support_evidence_binding_complete,
-    ) = _qasper_evidence_semantics(proposition, premises)
-    canonical = canonical_evidence_constraint_projection(
+    ) = _legacy_constraint_projection(
         premises,
         proposition,
         verdict,
+        analyses=analyses,
         required_slots=required_slots,
+        bound_slots=bound_slots,
         required_object_tokens=required_object_tokens,
+        covered_object_tokens=covered_object_tokens,
     )
-    if canonical is not None:
-        bound_slots = list(canonical.bound_slots)
-        covered_object_tokens = list(canonical.covered_object_tokens)
-        reason = canonical.reason
-    else:
-        reason = _evidence_set_reason(
-            analyses,
-            verdict,
-            required_slots=required_slots,
-            bound_slots=bound_slots,
-            required_object_tokens=required_object_tokens,
-            covered_object_tokens=covered_object_tokens,
-            no_evidence_semantics=no_evidence_semantics,
-            support_evidence_binding_complete=support_evidence_binding_complete,
-        )
     payload = {
         "contract_id": LOCAL_SEMANTIC_RELATION_CONSTRAINT,
         "status": "passed" if not reason else "rejected",
@@ -231,34 +232,6 @@ def semantic_relation_evidence_set_constraint(
     }
     payload["constraint_digest"] = _digest(payload)
     return payload
-
-
-def _qasper_evidence_semantics(
-    proposition: QuestionProposition,
-    premises: Sequence[Mapping[str, Any]],
-) -> tuple[dict[str, Any], bool]:
-    return (
-        qasper_no_evidence_set_analysis(proposition.surface, premises),
-        qasper_support_evidence_binding_complete(proposition.surface, premises),
-    )
-
-
-def premise_slot_evidence_for_audit(
-    constraint: Mapping[str, Any],
-) -> dict[str, dict[str, dict[str, Any]]]:
-    output: dict[str, dict[str, dict[str, Any]]] = {}
-    for index, analysis in enumerate(constraint.get("premise_analyses") or [], start=1):
-        if not isinstance(analysis, Mapping):
-            continue
-        output[f"P{index}"] = {
-            str(slot): {
-                **dict(span),
-                "evidence_ref": f"P{index}:{slot}",
-            }
-            for slot, span in dict(analysis.get("slot_evidence") or {}).items()
-            if isinstance(span, Mapping)
-        }
-    return output
 
 
 def validated_argument_tokens(
@@ -333,62 +306,6 @@ def semantic_slot_evidence_projection(
             "clause_end": clause_end,
         }
     return output
-
-
-def _evidence_set_reason(
-    analyses: list[dict[str, Any]],
-    verdict: str,
-    *,
-    required_slots: list[str],
-    bound_slots: list[str],
-    required_object_tokens: list[str],
-    covered_object_tokens: list[str],
-    no_evidence_semantics: Mapping[str, Any],
-    support_evidence_binding_complete: bool,
-) -> str:
-    if not analyses:
-        return "local_semantic_relation_missing"
-    if any(value.get("status") == "mention_only" for value in analyses):
-        return "local_semantic_relation_mention_only"
-    if (
-        verdict == "no"
-        and no_evidence_semantics.get("admissible_as_explicit_contradiction")
-        is not True
-    ):
-        return "local_semantic_explicit_contradiction_missing"
-    if set(bound_slots) != set(required_slots):
-        return "local_semantic_slot_coverage_incomplete"
-    if set(covered_object_tokens) != set(required_object_tokens):
-        return "local_semantic_object_coverage_incomplete"
-    if verdict == "yes":
-        if not support_evidence_binding_complete:
-            return "local_semantic_required_role_binding_incomplete"
-        if any(
-            value.get("direct_relation_negated") is True
-            and value.get("target_relation_present") is True
-            and value.get("meta_scope") is not True
-            for value in analyses
-        ):
-            return "local_semantic_relation_explicit_contradiction"
-        if not any(
-            value.get("direct_relation_negated") is False
-            and value.get("target_relation_present") is True
-            and value.get("meta_scope") is not True
-            for value in analyses
-        ):
-            return "local_semantic_relation_unresolved"
-        return ""
-    if verdict == "no":
-        if no_evidence_semantics.get("classification") == "explicit_negation" and any(
-            value.get("direct_relation_negated") is False
-            and value.get("target_relation_present") is True
-            and value.get("meta_scope") is not True
-            and "predicate" in (value.get("declared_proposition_slots") or [])
-            for value in analyses
-        ):
-            return "local_semantic_relation_conflict"
-        return ""
-    return "local_semantic_relation_verdict_invalid"
 
 
 def _clause_analysis(

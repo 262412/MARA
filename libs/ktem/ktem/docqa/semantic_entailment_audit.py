@@ -25,6 +25,12 @@ from .question_proposition import (
     validate_question_proposition,
     validate_typed_conclusion,
 )
+from .semantic_entailment_audit_result_validation import (
+    premise_audit_validation_reason as _premise_audit_validation_reason,
+)
+from .semantic_entailment_audit_result_validation import (
+    verified_audit_result as _verified_audit_result,
+)
 from .semantic_entailment_audit_support import as_int as _as_int
 from .semantic_entailment_audit_support import mapping_digest as _mapping_digest
 from .semantic_entailment_audit_support import text_digest as _text_digest
@@ -95,6 +101,7 @@ def semantic_entailment_audit_attestation(
     auditor_relationship: str = "same_instance",
     audit_result: Mapping[str, Any],
     independent_semantic_constraint: Mapping[str, Any] | None = None,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, Any]:
     """Create the verified audit record after every audit check passed."""
 
@@ -102,8 +109,11 @@ def semantic_entailment_audit_attestation(
     conclusion = conclusion or typed_conclusion(proposition, verdict)
     audit_result = _verified_audit_result(audit_result, len(premises))
     conclusion_check = dict(audit_result.get("conclusion_check") or {})
-    resolved_proof_mode = proof_mode or (
-        "atomic_semantic" if len(premises) == 1 else "composite_conjunction"
+    resolved_proof_mode = (
+        canonical_plan_projection.proof_mode
+        if canonical_plan_projection is not None
+        else proof_mode
+        or ("atomic_semantic" if len(premises) == 1 else "composite_conjunction")
     )
     question_payload = proposition.as_dict()
     conclusion_payload = conclusion.as_dict()
@@ -114,35 +124,73 @@ def semantic_entailment_audit_attestation(
             proposition,
             verdict,
             auditor_relationship=auditor_relationship,
+            canonical_plan_projection=canonical_plan_projection,
         )
     )
-    return {
+    return _semantic_audit_attestation_payload(
+        question,
+        verdict,
+        premises,
+        model=model,
+        seed=seed,
+        proof_mode=resolved_proof_mode,
+        proposition_payload=question_payload,
+        conclusion_payload=conclusion_payload,
+        premise_checks=_audited_premise_checks(
+            premises,
+            audit_result=audit_result,
+            proposition=proposition,
+            canonical_plan_projection=canonical_plan_projection,
+        ),
+        conclusion=conclusion,
+        conclusion_check=conclusion_check,
+        auditor_relationship=auditor_relationship,
+        constraint=constraint,
+        canonical_plan_projection=canonical_plan_projection,
+    )
+
+
+def _semantic_audit_attestation_payload(
+    question: str,
+    verdict: str,
+    premises: Sequence[Mapping[str, Any]],
+    *,
+    model: str,
+    seed: int,
+    proof_mode: str,
+    proposition_payload: Mapping[str, Any],
+    conclusion_payload: Mapping[str, Any],
+    premise_checks: list[dict[str, Any]],
+    conclusion: TypedConclusion,
+    conclusion_check: Mapping[str, Any],
+    auditor_relationship: str,
+    constraint: Mapping[str, Any],
+    canonical_plan_projection: Any | None,
+) -> dict[str, Any]:
+    result = {
         "contract_id": SEMANTIC_ENTAILMENT_AUDIT_CONTRACT,
         "status": "verified",
         "proposal_digest": semantic_entailment_proposal_digest(
             question,
             verdict,
             premises,
-            proof_mode=resolved_proof_mode,
-            question_proposition=question_payload,
+            proof_mode=proof_mode,
+            question_proposition=proposition_payload,
             typed_conclusion_value=conclusion_payload,
         ),
         "verdict": verdict,
-        "proof_mode": resolved_proof_mode,
-        "question_proposition": question_payload,
+        "proof_mode": proof_mode,
+        "question_proposition": proposition_payload,
         "typed_conclusion": conclusion_payload,
         "premise_count": len(premises),
-        "premise_checks": _audited_premise_checks(
-            premises,
-            audit_result=audit_result,
-            proposition=proposition,
-        ),
+        "premise_checks": premise_checks,
         "jointly_entails": True,
         "each_premise_required": True,
         "contradiction_free": True,
-        "polarity_contradiction_check": polarity_contradiction_check(
+        "polarity_contradiction_check": _polarity_check(
             conclusion,
             premises,
+            canonical_plan_projection=canonical_plan_projection,
         ),
         "independent_semantic_constraint": constraint,
         "auditor": {
@@ -159,6 +207,17 @@ def semantic_entailment_audit_attestation(
             seed=seed,
         ),
     }
+    if canonical_plan_projection is not None:
+        result.update(
+            {
+                "canonical_evidence_plan_id": canonical_plan_projection.plan_id,
+                "canonical_plan_digest": canonical_plan_projection.plan_digest,
+                "canonical_projection_digest": _mapping_digest(
+                    canonical_plan_projection.as_dict()
+                ),
+            }
+        )
+    return result
 
 
 def _audited_premise_checks(
@@ -166,9 +225,14 @@ def _audited_premise_checks(
     *,
     audit_result: Mapping[str, Any],
     proposition: QuestionProposition,
+    canonical_plan_projection: Any | None = None,
 ) -> list[dict[str, Any]]:
     model_checks = audit_result.get("premise_checks") or []
-    local_reason = semantic_premise_proof_span_reason(premises, proposition)
+    local_reason = semantic_premise_proof_span_reason(
+        premises,
+        proposition,
+        canonical_plan_projection=canonical_plan_projection,
+    )
     return [
         _audited_premise_check(
             premise_index=index,
@@ -181,6 +245,7 @@ def _audited_premise_checks(
             ),
             proposition=proposition,
             local_reason=local_reason,
+            canonical_plan_projection=canonical_plan_projection,
         )
         for index, premise in enumerate(premises, start=1)
     ]
@@ -193,13 +258,23 @@ def _audited_premise_check(
     model_check: Mapping[str, Any],
     proposition: QuestionProposition,
     local_reason: str,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, Any]:
     declared_slots = [
         str(slot) for slot in premise.get("binds_proposition_slots") or []
     ]
-    local_slots = local_proposition_slot_checks(premise, proposition)
-    local_analysis = semantic_relation_clause_analysis(premise, proposition)
-    local_evidence = dict(local_analysis.get("slot_evidence") or {})
+    local_slots = local_proposition_slot_checks(
+        premise,
+        proposition,
+        canonical_plan_projection=canonical_plan_projection,
+    )
+    if canonical_plan_projection is not None:
+        local_evidence = dict(
+            canonical_plan_projection.audit_slot_evidence.get(f"P{premise_index}", {})
+        )
+    else:
+        local_analysis = semantic_relation_clause_analysis(premise, proposition)
+        local_evidence = dict(local_analysis.get("slot_evidence") or {})
     model_slots = {
         str(slot_check.get("slot")): slot_check
         for slot_check in model_check.get("proposition_slot_checks") or []
@@ -261,6 +336,7 @@ def semantic_entailment_audit_validation_reason(
     proposition: QuestionProposition | None = None,
     conclusion: TypedConclusion | None = None,
     release_mode: bool = False,
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     """Return an empty reason only for a complete, proposal-bound audit."""
 
@@ -275,6 +351,7 @@ def semantic_entailment_audit_validation_reason(
         premises,
         proposition,
         audit_result=audit,
+        canonical_plan_projection=canonical_plan_projection,
     )
     if premise_reason:
         return premise_reason
@@ -286,6 +363,7 @@ def semantic_entailment_audit_validation_reason(
         proof_mode=expected_proof_mode,
         proposition=proposition,
         conclusion=conclusion,
+        canonical_plan_projection=canonical_plan_projection,
     ):
         return "semantic_entailment_audit_binding_invalid"
     if (
@@ -299,7 +377,12 @@ def semantic_entailment_audit_validation_reason(
         return auditor_reason
     relationship = str(auditor.get("relationship") or "")
     expected_constraint, constraint_reason = _validated_semantic_constraint(
-        audit, premises, proposition, verdict, relationship
+        audit,
+        premises,
+        proposition,
+        verdict,
+        relationship,
+        canonical_plan_projection=canonical_plan_projection,
     )
     if constraint_reason:
         return constraint_reason
@@ -313,6 +396,7 @@ def semantic_entailment_audit_validation_reason(
         conclusion=conclusion,
         relationship=relationship,
         release_mode=release_mode,
+        canonical_plan_projection=canonical_plan_projection,
     )
     if conclusion_reason:
         return conclusion_reason
@@ -330,12 +414,14 @@ def _validated_semantic_constraint(
     proposition: QuestionProposition,
     verdict: str,
     relationship: str,
+    canonical_plan_projection: Any | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     expected = semantic_relation_evidence_set_constraint(
         premises,
         proposition,
         verdict,
         auditor_relationship=relationship,
+        canonical_plan_projection=canonical_plan_projection,
     )
     recorded = audit.get("independent_semantic_constraint")
     if not isinstance(recorded, Mapping) or dict(recorded) != expected:
@@ -358,6 +444,7 @@ def _bound_conclusion_audit_reason(
     conclusion: TypedConclusion,
     relationship: str,
     release_mode: bool,
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     conclusion_audit = audit.get("conclusion_audit")
     conclusion_audit = conclusion_audit if isinstance(conclusion_audit, Mapping) else {}
@@ -377,10 +464,11 @@ def _bound_conclusion_audit_reason(
             conclusion,
             release_mode=release_mode,
         )
-        or polarity_contradiction_check_validation_reason(
+        or _polarity_check_validation_reason(
             audit.get("polarity_contradiction_check"),
             conclusion,
             premises,
+            canonical_plan_projection=canonical_plan_projection,
         )
     )
 
@@ -394,8 +482,9 @@ def _audit_binding_invalid(
     proof_mode: str,
     proposition: QuestionProposition,
     conclusion: TypedConclusion,
+    canonical_plan_projection: Any | None = None,
 ) -> bool:
-    return bool(
+    invalid = bool(
         audit.get("contract_id") != SEMANTIC_ENTAILMENT_AUDIT_CONTRACT
         or audit.get("status") != "verified"
         or audit.get("verdict") != verdict
@@ -411,6 +500,78 @@ def _audit_binding_invalid(
             typed_conclusion_value=conclusion.as_dict(),
         )
     )
+    if canonical_plan_projection is not None:
+        invalid = invalid or any(
+            audit.get(field) != expected
+            for field, expected in (
+                ("canonical_evidence_plan_id", canonical_plan_projection.plan_id),
+                ("canonical_plan_digest", canonical_plan_projection.plan_digest),
+                (
+                    "canonical_projection_digest",
+                    _mapping_digest(canonical_plan_projection.as_dict()),
+                ),
+            )
+        )
+    return invalid
+
+
+def _polarity_check(
+    conclusion: TypedConclusion,
+    premises: Sequence[Mapping[str, Any]],
+    *,
+    canonical_plan_projection: Any | None = None,
+) -> dict[str, Any]:
+    if canonical_plan_projection is None:
+        return polarity_contradiction_check(conclusion, premises)
+    observed_polarity = (
+        "yes"
+        if canonical_plan_projection.polarity_relation == "proposition_support"
+        else "no"
+    )
+    opposite = "no" if conclusion.polarity == "yes" else "yes"
+    status = (
+        "contradiction_detected"
+        if observed_polarity == opposite
+        else "aligned"
+        if observed_polarity == conclusion.polarity
+        else "no_explicit_contradiction"
+    )
+    return {
+        "contract_id": "polarity_contradiction_check.v1",
+        "conclusion_id": conclusion.conclusion_id,
+        "status": status,
+        "observed_polarities": [observed_polarity] * len(premises),
+        "quote_digests": [
+            _text_digest(str(premise.get("quote") or "")) for premise in premises
+        ],
+        "method": "frozen_canonical_proposition_plan_projection",
+        "independent_from_models": True,
+    }
+
+
+def _polarity_check_validation_reason(
+    value: Any,
+    conclusion: TypedConclusion,
+    premises: Sequence[Mapping[str, Any]],
+    *,
+    canonical_plan_projection: Any | None = None,
+) -> str:
+    if canonical_plan_projection is None:
+        return polarity_contradiction_check_validation_reason(
+            value,
+            conclusion,
+            premises,
+        )
+    expected = _polarity_check(
+        conclusion,
+        premises,
+        canonical_plan_projection=canonical_plan_projection,
+    )
+    if not isinstance(value, Mapping) or dict(value) != expected:
+        return "polarity_contradiction_check_binding_invalid"
+    if value.get("status") == "contradiction_detected":
+        return "polarity_contradiction_detected"
+    return ""
 
 
 def _validated_auditor(
@@ -434,159 +595,3 @@ def _validated_auditor(
     if release_mode and relationship != "distinct_model":
         return {}, "release_conclusion_auditor_not_independent"
     return auditor, ""
-
-
-def _premise_audit_validation_reason(
-    audit: Mapping[str, Any],
-    premises: Sequence[Mapping[str, Any]],
-    *,
-    expected_constraint: Mapping[str, Any],
-) -> str:
-    raw_checks = audit.get("premise_checks")
-    if not isinstance(raw_checks, list) or len(raw_checks) != len(premises):
-        return "semantic_entailment_premise_audit_incomplete"
-    analyses = list(expected_constraint.get("premise_analyses") or [])
-    for index, (check, premise) in enumerate(zip(raw_checks, premises), start=1):
-        if not isinstance(check, Mapping) or (
-            _as_int(check.get("premise_index")) != index
-            or check.get("evidence_id") != str(premise.get("evidence_id") or "")
-            or check.get("quote_digest")
-            != _text_digest(str(premise.get("quote") or ""))
-            or check.get("fragment_digest")
-            != _text_digest(str(premise.get("proposition_fragment") or ""))
-            or check.get("fragment_entailed") is not True
-            or check.get("scope_consistent") is not True
-            or check.get("proposition_bindings_valid") is not True
-            or check.get("evidence_relation_valid") is not True
-            or check.get("proposition_binding_digest")
-            != _mapping_digest(
-                {
-                    str(slot): str(binding)
-                    for slot, binding in dict(
-                        premise.get("proposition_slot_bindings") or {}
-                    ).items()
-                }
-            )
-            or check.get("evidence_relation")
-            != str(premise.get("evidence_relation") or "")
-        ):
-            return "semantic_entailment_premise_audit_invalid"
-        declared_slots = [
-            str(slot) for slot in premise.get("binds_proposition_slots") or []
-        ]
-        raw_declared = check.get("declared_proposition_slots")
-        raw_slot_checks = check.get("proposition_slot_checks")
-        analysis = analyses[index - 1] if index <= len(analyses) else {}
-        expected_slot_evidence = (
-            dict(analysis.get("slot_evidence") or {})
-            if isinstance(analysis, Mapping)
-            else {}
-        )
-        if (
-            raw_declared != declared_slots
-            or not isinstance(raw_slot_checks, list)
-            or [
-                str(slot_check.get("slot"))
-                for slot_check in raw_slot_checks
-                if isinstance(slot_check, Mapping)
-            ]
-            != declared_slots
-            or any(
-                not isinstance(slot_check, Mapping)
-                or set(slot_check)
-                != {
-                    "slot",
-                    "binding_valid",
-                    "evidence_ref",
-                    "evidence_text",
-                    "span_start",
-                    "span_end",
-                    "clause_ref",
-                    "clause_start",
-                    "clause_end",
-                }
-                or slot_check.get("binding_valid") is not True
-                or not _slot_check_matches_local_span(
-                    slot_check,
-                    expected_slot_evidence.get(str(slot_check.get("slot") or "")),
-                    premise_index=index,
-                )
-                for slot_check in raw_slot_checks
-            )
-        ):
-            return "semantic_entailment_premise_audit_invalid"
-    return ""
-
-
-def _slot_check_matches_local_span(
-    slot_check: Mapping[str, Any],
-    expected: Any,
-    *,
-    premise_index: int,
-) -> bool:
-    if not isinstance(expected, Mapping):
-        return False
-    slot = str(slot_check.get("slot") or "")
-    return bool(
-        slot_check.get("evidence_ref") == f"P{premise_index}:{slot}"
-        and slot_check.get("evidence_text") == expected.get("text")
-        and _as_int(slot_check.get("span_start")) == _as_int(expected.get("span_start"))
-        and _as_int(slot_check.get("span_end")) == _as_int(expected.get("span_end"))
-        and slot_check.get("clause_ref") == expected.get("clause_ref")
-        and _as_int(slot_check.get("clause_start"))
-        == _as_int(expected.get("clause_start"))
-        and _as_int(slot_check.get("clause_end")) == _as_int(expected.get("clause_end"))
-        and str(slot_check.get("evidence_text") or "").strip()
-    )
-
-
-def _verified_audit_result(
-    audit_result: Mapping[str, Any],
-    premise_count: int,
-) -> dict[str, Any]:
-    value = dict(audit_result)
-    checks = value.get("premise_checks")
-    conclusion = value.get("conclusion_check")
-    if (
-        not isinstance(checks, list)
-        or len(checks) != premise_count
-        or any(
-            not isinstance(check, Mapping)
-            or check.get("fragment_entailed") is not True
-            or check.get("scope_consistent") is not True
-            or check.get("proposition_bindings_valid") is not True
-            or check.get("evidence_relation_valid") is not True
-            or not isinstance(check.get("declared_proposition_slots"), list)
-            or not check.get("declared_proposition_slots")
-            or not isinstance(check.get("proposition_slot_checks"), list)
-            or len(check.get("proposition_slot_checks") or [])
-            != len(check.get("declared_proposition_slots") or [])
-            or any(
-                not isinstance(slot_check, Mapping)
-                or slot_check.get("binding_valid") is not True
-                or not str(slot_check.get("evidence_text") or "").strip()
-                for slot_check in check.get("proposition_slot_checks") or []
-            )
-            for check in checks
-        )
-        or value.get("jointly_entails") is not True
-        or value.get("each_premise_required") is not True
-        or value.get("contradiction_free") is not True
-        or not isinstance(conclusion, Mapping)
-        or any(
-            conclusion.get(field) is not True
-            for field in (
-                "conclusion_entailed",
-                "actor_consistent",
-                "predicate_consistent",
-                "object_consistent",
-                "polarity_consistent",
-                "quantifier_consistent",
-                "scope_consistent",
-            )
-        )
-    ):
-        raise ValueError(
-            "A verified attestation requires a fully passing audit result."
-        )
-    return value

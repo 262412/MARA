@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any, TypeAlias
 
 from .boolean_authority_schema import BooleanEvidenceAuthority
@@ -16,11 +17,18 @@ from .evidence_identity import identity_of
 from .polarity_contradiction_check import polarity_contradiction_check
 from .query_phrase_extraction import source_page_locator
 from .question_proposition import (
+    PROPOSITION_EVIDENCE_SLOTS,
     applicable_proposition_evidence_slots,
     build_question_proposition,
     not_applicable_proposition_evidence_slots,
     proposition_evidence_bindings,
     typed_conclusion,
+)
+from .semantic_evidence_set_frozen_premises import validated_frozen_plan_premises
+from .semantic_evidence_set_premise_support import optional_int as _optional_int
+from .semantic_evidence_set_premise_support import premises_overlap as _premises_overlap
+from .semantic_evidence_set_premise_support import (
+    required_slot_ids as _required_slot_ids,
 )
 from .semantic_evidence_set_scope import semantic_scope_basis
 from .semantic_relation_clause_validation import (
@@ -44,6 +52,7 @@ def validated_semantic_premises(
     items: list[dict[str, Any]],
     *,
     proof_mode: str,
+    canonical_plan_projection: Any | None = None,
 ) -> ValidatedPremises:
     if not isinstance(raw_premises, list) or any(
         not isinstance(value, Mapping) for value in raw_premises
@@ -51,6 +60,16 @@ def validated_semantic_premises(
         return None, {}, "", "semantic_premise_schema_invalid"
     if not _premise_count_valid(proof_mode, len(raw_premises)):
         return None, {}, "", "semantic_premise_count_invalid"
+    if canonical_plan_projection is not None:
+        return validated_frozen_plan_premises(
+            request,
+            question,
+            verdict,
+            raw_premises,
+            items,
+            proof_mode=proof_mode,
+            canonical_plan_projection=canonical_plan_projection,
+        )
     required_slots = _required_slot_ids(request)
     if not required_slots:
         return None, {}, "", "semantic_required_slots_missing"
@@ -260,7 +279,15 @@ def semantic_proposition_binding_fields(
     question: str,
     verdict: str,
     premises: tuple[BooleanEvidenceAuthority, ...],
+    *,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, Any]:
+    if canonical_plan_projection is not None:
+        return _frozen_plan_binding_fields(
+            verdict,
+            canonical_plan_projection,
+            premises,
+        )
     proposition = build_question_proposition(question)
     applicable_slots = applicable_proposition_evidence_slots(proposition)
     not_applicable_slots = not_applicable_proposition_evidence_slots(proposition)
@@ -309,7 +336,22 @@ def semantic_proposition_binding_fields(
 def _semantic_premise_slot_evidence(
     premise: BooleanEvidenceAuthority,
     proposition: Any,
+    *,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, dict[str, Any]]:
+    if canonical_plan_projection is not None:
+        for index, projected in enumerate(canonical_plan_projection.premises, start=1):
+            if (
+                projected.get("evidence_id") == premise.evidence_id
+                and projected.get("span_selector")
+                == str(premise.evidence_ref).split("#quote:", 1)[0]
+            ):
+                return deepcopy(
+                    canonical_plan_projection.slot_evidence.get(
+                        str(projected.get("span_selector") or ""), {}
+                    )
+                )
+        return {}
     analysis = semantic_relation_clause_analysis(
         {
             "quote": premise.quote,
@@ -331,6 +373,86 @@ def _semantic_premise_slot_evidence(
         premise_ref=premise.evidence_ref,
         span_base=span_base,
     )
+
+
+def _frozen_plan_binding_fields(
+    verdict: str,
+    projection: Any,
+    premises: tuple[BooleanEvidenceAuthority, ...],
+) -> dict[str, Any]:
+    premise_slot_evidence = {
+        premise.evidence_ref: _frozen_plan_authority_slot_evidence(
+            premise,
+            projection,
+        )
+        for premise in premises
+    }
+    applicable_slots = list(projection.required_slots)
+    slot_refs = {
+        slot: sorted(
+            premise_slot_evidence[premise.evidence_ref][slot]["evidence_ref"]
+            for premise in premises
+            if slot in dict(premise.proposition_slot_bindings)
+        )
+        for slot in applicable_slots
+    }
+    bindings = {
+        slot: str(projection.proposition_slot_bindings.get(slot) or "")
+        for slot in applicable_slots
+    }
+    evidence_refs = sorted(premise.evidence_ref for premise in premises)
+    payload = {
+        "evidence_relation": projection.polarity_relation,
+        "proposition_slot_bindings": bindings,
+        "proposition_slot_evidence_refs": slot_refs,
+        "proposition_binding_evidence_set_refs": evidence_refs,
+        "not_applicable_proposition_slots": [
+            slot for slot in PROPOSITION_EVIDENCE_SLOTS if slot not in applicable_slots
+        ],
+    }
+    return {
+        **payload,
+        "required_proposition_slots": applicable_slots,
+        "proposition_slot_evidence": premise_slot_evidence,
+        "proposition_evidence_set_digest": hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+        "canonical_evidence_plan_id": projection.plan_id,
+        "canonical_plan_digest": projection.plan_digest,
+        "canonical_projection_digest": hashlib.sha256(
+            json.dumps(
+                projection.as_dict(), sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+def _frozen_plan_authority_slot_evidence(
+    premise: BooleanEvidenceAuthority,
+    projection: Any,
+) -> dict[str, dict[str, Any]]:
+    selector = ""
+    for projected in projection.premises:
+        if (
+            projected.get("evidence_id") == premise.evidence_id
+            and projected.get("span_start") == premise.span_start
+            and projected.get("span_end") == premise.span_end
+        ):
+            selector = str(projected.get("span_selector") or "")
+            break
+    if not selector:
+        return {}
+    output: dict[str, dict[str, Any]] = {}
+    for slot, span in projection.slot_evidence.get(selector, {}).items():
+        start = _optional_int(span.get("span_start"))
+        end = _optional_int(span.get("span_end"))
+        if start is None or end is None:
+            continue
+        output[str(slot)] = {
+            **dict(span),
+            "evidence_ref": f"{premise.evidence_ref}#slot:{slot}:{start}:{end}",
+        }
+    return output
 
 
 def _evidence_relation(verdict: str) -> str:
@@ -392,47 +514,3 @@ def _semantic_scope_rejected(
             )
         )
     )
-
-
-def _premises_overlap(premises: list[BooleanEvidenceAuthority]) -> bool:
-    for index, left in enumerate(premises):
-        for right in premises[index + 1 :]:
-            if left.evidence_id == right.evidence_id and max(
-                left.span_start, right.span_start
-            ) < min(left.span_end, right.span_end):
-                return True
-    return False
-
-
-def _required_slot_ids(request: Any) -> set[str]:
-    plan = getattr(request, "query_plan", None)
-    slots = (
-        plan.get("evidence_slots", [])
-        if isinstance(plan, Mapping)
-        else getattr(plan, "evidence_slots", ()) or ()
-    )
-    return {
-        _slot_value(slot, "slot_id")
-        for slot in slots
-        if _slot_required(slot) and _slot_value(slot, "slot_id")
-    }
-
-
-def _slot_value(slot: Any, key: str) -> str:
-    raw = slot.get(key) if isinstance(slot, Mapping) else getattr(slot, key, "")
-    return str(raw or "").strip()
-
-
-def _slot_required(slot: Any) -> bool:
-    return bool(
-        slot.get("required_for_verification", False)
-        if isinstance(slot, Mapping)
-        else getattr(slot, "required_for_verification", False)
-    )
-
-
-def _optional_int(value: Any) -> int | None:
-    try:
-        return int(value) if value is not None and str(value).strip() else None
-    except (TypeError, ValueError):
-        return None

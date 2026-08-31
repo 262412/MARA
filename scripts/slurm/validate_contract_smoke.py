@@ -16,21 +16,21 @@ from benchmark.jsonl import read_jsonl  # noqa: E402
 from benchmark.terminal_outcome_contract import (  # noqa: E402
     terminal_outcome_summary_fields,
 )
+from scripts.slurm import validate_contract_smoke_gates as _gate_contract  # noqa: E402
+from scripts.slurm import (  # noqa: E402
+    validate_contract_smoke_stages as _stage_contract,
+)
 from scripts.slurm.contract_smoke_behavior import (  # noqa: E402
     finance_behavior_violations,
+)
+from scripts.slurm.qasper_causal_transaction_gate import (  # noqa: E402
+    qasper_causal_transaction_artifact_audit,
 )
 from scripts.slurm.qasper_debug_contract import (  # noqa: E402
     qasper_debug_audit_extensions,
     qasper_debug_behavior_violations,
 )
-from scripts.slurm.qasper_causal_transaction_gate import (  # noqa: E402
-    qasper_causal_transaction_artifact_audit,
-)
 from scripts.slurm.validate_contract_smoke_gates import (  # noqa: E402
-    FINANCE_HARD_GATES as FINANCE_HARD_GATES,
-    HARD_GATES as HARD_GATES,
-    QASPER_DEBUG_HARD_GATES as QASPER_DEBUG_HARD_GATES,
-    QASPER_HARD_GATES as QASPER_HARD_GATES,
     contract_smoke_gate_state,
 )
 from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
@@ -41,26 +41,14 @@ from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
 )
 
 CONTRACT = "contract_smoke_audit.v2"
-STAGES = (
-    "canonical_candidate_evidence",
-    "fused_evidence",
-    "reranker_input_evidence",
-    "reranked_evidence",
-    "selected_evidence",
-    "generation_context_evidence",
-    "execution_operand_evidence",
-    "verified_claim_support_evidence",
-    "emitted_citation_evidence",
-)
-CORE_STAGES = {
-    "canonical_candidate_evidence",
-    "fused_evidence",
-    "reranker_input_evidence",
-    "selected_evidence",
-    "generation_context_evidence",
-    "verified_claim_support_evidence",
-    "emitted_citation_evidence",
-}
+HARD_GATES = _gate_contract.HARD_GATES
+FINANCE_HARD_GATES = _gate_contract.FINANCE_HARD_GATES
+QASPER_HARD_GATES = _gate_contract.QASPER_HARD_GATES
+QASPER_DEBUG_HARD_GATES = _gate_contract.QASPER_DEBUG_HARD_GATES
+STAGES = _stage_contract.STAGES
+CORE_STAGES = _stage_contract.CORE_STAGES
+_stage_audit = _stage_contract.stage_audit
+
 REQUIREMENTS: dict[str, set[str]] = {
     "finance": {
         "same_parent_distinct_year_cells",
@@ -105,82 +93,6 @@ def _load_contract_probe_predictions(
     return _load_predictions(path)
 
 
-def _records(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    return [dict(item) for item in value if isinstance(item, dict)]
-
-
-def _stage_audit(
-    prediction: dict[str, Any],
-    *,
-    suite_kind: str,
-) -> tuple[dict[str, Any], list[str]]:
-    metadata = dict(prediction.get("evidence_metadata") or {})
-    audit: dict[str, Any] = {"example_id": str(prediction.get("example_id") or "")}
-    missing: list[str] = []
-    ranking_trace = dict(metadata.get("ranking_trace") or {})
-    query_plan = dict(metadata.get("query_plan") or {})
-    slots = [
-        dict(item)
-        for item in query_plan.get("evidence_slots") or []
-        if isinstance(item, dict)
-    ]
-    missing_execution = any(
-        bool(slot.get("required_for_execution"))
-        and str(slot.get("status") or "missing") != "filled"
-        for slot in slots
-    )
-    answerable = any(
-        str(answer or "").strip().lower()
-        not in {
-            "",
-            "unanswerable",
-            "insufficient evidence",
-        }
-        for answer in prediction.get("gold_answers") or []
-    )
-    for stage in STAGES:
-        records = _records(metadata.get(stage))
-        if stage in CORE_STAGES and answerable and stage in metadata and not records:
-            status = "empty_required"
-        elif stage in metadata:
-            status = "recorded"
-        elif stage == "reranked_evidence" and not (
-            ranking_trace.get("executed")
-            if "executed" in ranking_trace
-            else ranking_trace.get("backend_execution")
-        ):
-            status = "truthfully_not_executed"
-        elif stage == "execution_operand_evidence" and suite_kind in {
-            "qasper",
-            "qasper_debug",
-        }:
-            status = "not_applicable"
-        elif stage == "execution_operand_evidence" and missing_execution:
-            status = "blocked_missing_requirements"
-        else:
-            status = "missing"
-        audit[stage] = {"status": status, "count": len(records)}
-        if stage in CORE_STAGES and status in {"missing", "empty_required"}:
-            missing.append(stage)
-        if (
-            stage == "reranked_evidence"
-            and (
-                ranking_trace.get("executed")
-                if "executed" in ranking_trace
-                else ranking_trace.get("backend_execution")
-            )
-            and status == "missing"
-        ):
-            missing.append(stage)
-    if ranking_trace.get("executed") and int(
-        ranking_trace.get("output_count") or 0
-    ) != len(_records(metadata.get("reranked_evidence"))):
-        missing.append("reranker_output_count_mismatch")
-    return audit, missing
-
-
 def _requirements(predictions: list[dict[str, Any]]) -> set[str]:
     values: set[str] = set()
     for prediction in predictions:
@@ -220,11 +132,17 @@ def _all_stage_audits(
     for prediction in predictions:
         audit, missing = _stage_audit(prediction, suite_kind=suite_kind)
         audits.append(audit)
-        if missing:
+        fusion_violations = list(audit.get("fusion_stage", {}).get("violations") or [])
+        if missing or fusion_violations:
             violations.append(
                 {
                     "example_id": audit["example_id"],
                     "missing_stages": sorted(set(missing)),
+                    **(
+                        {"fusion_stage_violations": fusion_violations}
+                        if fusion_violations
+                        else {}
+                    ),
                 }
             )
     return audits, violations
@@ -290,12 +208,13 @@ def _complete_audit(
     observed_requirements: set[str],
     contract_probe_predictions: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    causal_transaction_audit, causal_transaction_violations = (
-        qasper_causal_transaction_artifact_audit(
-            run_dir,
-            predictions,
-            suite_kind=suite_kind,
-        )
+    (
+        causal_transaction_audit,
+        causal_transaction_violations,
+    ) = qasper_causal_transaction_artifact_audit(
+        run_dir,
+        predictions,
+        suite_kind=suite_kind,
     )
     behavior_violations = _behavior_violations(
         predictions,
@@ -319,20 +238,21 @@ def _complete_audit(
     stage_audits, stage_violations = _all_stage_audits(
         predictions, suite_kind=suite_kind
     )
-    metrics, hard_gates, failed_gates, contract_gate_failures = (
-        contract_smoke_gate_state(
-            predictions,
-            suite_kind=suite_kind,
-            contract_probe_predictions=contract_probe_predictions,
-        )
+    (
+        metrics,
+        hard_gates,
+        failed_gates,
+        contract_gate_failures,
+    ) = contract_smoke_gate_state(
+        predictions,
+        suite_kind=suite_kind,
+        contract_probe_predictions=contract_probe_predictions,
     )
-    status = (
-        "passed"
-        if not stage_violations
-        and not behavior_violations
-        and not failed_gates
-        and not contract_gate_failures
-        else "failed"
+    status = _audit_status(
+        stage_violations,
+        behavior_violations,
+        failed_gates,
+        contract_gate_failures,
     )
     audit = {
         "contract": CONTRACT,
@@ -358,6 +278,10 @@ def _complete_audit(
         "status": status,
     }
     return audit
+
+
+def _audit_status(*violation_groups: Any) -> str:
+    return "failed" if any(violation_groups) else "passed"
 
 
 def _debug_extensions(

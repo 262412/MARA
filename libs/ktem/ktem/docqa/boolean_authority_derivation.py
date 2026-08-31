@@ -80,6 +80,7 @@ def boolean_derivation_contract_status(
     *,
     question: str,
     canonical_polarity: str,
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     """Validate one all-premises-required derivation without trusting its producer."""
 
@@ -129,6 +130,7 @@ def boolean_derivation_contract_status(
         conclusion=conclusion,
         contributions=contributions,
         atom_by_ref=atom_by_ref,
+        canonical_plan_projection=canonical_plan_projection,
     )
 
 
@@ -260,6 +262,7 @@ def _rule_contract_status(
     conclusion: dict[str, Any],
     contributions: list[dict[str, Any]],
     atom_by_ref: dict[str, dict[str, Any]],
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     if rule_id == ARGUMENT_CONJUNCTION_RULE:
         spec = boolean_conjunction_spec(question)
@@ -286,6 +289,7 @@ def _rule_contract_status(
             conclusion=conclusion,
             question=question,
             required=required,
+            canonical_plan_projection=canonical_plan_projection,
         )
     return (
         "bound"

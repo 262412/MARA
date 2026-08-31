@@ -9,8 +9,8 @@ from ktem.docqa.semantic_premise_proof_validation import (
     semantic_entailment_premise_validation_reason,
 )
 
-from .mara_semantic_audit_execution import execute_semantic_entailment_audit
 from .mara_semantic_audit_attestation import attach_verified_entailment_audit
+from .mara_semantic_audit_execution import execute_semantic_entailment_audit
 from .mara_semantic_candidate_policy import (
     candidate_bound_insufficient_result,
     candidate_from_prompt,
@@ -18,10 +18,6 @@ from .mara_semantic_candidate_policy import (
 from .mara_semantic_conclusion_binding import (
     conclusion_audit_binding_reason,
     record_verified_conclusion_audit,
-)
-from .mara_semantic_entailment_audit import (
-    SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-    semantic_entailment_rejection_reason,
 )
 from .mara_semantic_local_consistency import record_local_premise_consistency
 from .mara_semantic_proof_repair import (
@@ -32,12 +28,11 @@ from .mara_semantic_proof_repair import (
 from .mara_semantic_proposition_contract import (
     SemanticPropositionTransactionContext,
     SemanticPropositionTransactionResult,
-    insufficient_semantic_result,
-    rejected_semantic_transaction,
 )
 from .mara_semantic_proposition_data_lineage import (
     record_audit_data_lineage,
     record_proposal_data_lineage,
+    record_validated_plan_projection_lineage,
 )
 from .mara_semantic_proposition_stages import (
     SEMANTIC_PROPOSITION_VERIFIER_MAX_TOKENS,
@@ -46,6 +41,12 @@ from .mara_semantic_proposition_stages import (
     invalid_response_reason,
     proposal_diagnostics,
     proposal_stage,
+)
+from .mara_semantic_proposition_transaction_audit import (
+    audit_failure_result as _audit_failure_result,
+)
+from .mara_semantic_proposition_transaction_audit import (
+    audit_rejection_result as _audit_rejection_result,
 )
 from .mara_semantic_proposition_transaction_repair import (
     finalize_repair_result,
@@ -60,7 +61,8 @@ from .mara_semantic_transaction_support import (
     applicable_proposition_slots,
     audit_prompt_failure,
     bind_semantic_runtime_fields,
-    pre_audit_transaction_failure,
+    canonical_plan_projection_digest,
+    canonical_plan_projection_for_context,
     semantic_pack_identity,
     transaction_debug,
     transaction_result,
@@ -126,6 +128,7 @@ def run_semantic_proposition_transaction(
         candidate_transaction_id=candidate_transaction_id,
         plan_construction_trace=plan_construction_trace,
         source_packing_observation=source_packing_observation,
+        allowed_proposition_evidence_plans=allowed_proposition_evidence_plans,
     )
     candidate = candidate_from_prompt(prompt)
     proposal = _transaction_proposal(
@@ -235,6 +238,9 @@ def _audit_transaction(
     allow_proof_repair: bool = True,
 ) -> SemanticPropositionTransactionResult:
     value = proposal.value or {}
+    context, early_result = _prepare_audit_context(context, proposal, diagnostics)
+    if early_result is not None:
+        return early_result
     bind_semantic_runtime_fields(value, context)
     conclusion = typed_conclusion(context.proposition, str(value.get("verdict") or ""))
     value["typed_conclusion"] = conclusion.as_dict()
@@ -304,6 +310,44 @@ def _audit_transaction(
     )
 
 
+def _prepare_audit_context(
+    context: _TransactionContext,
+    proposal: ParsedSemanticStage,
+    diagnostics: dict[str, Any],
+) -> tuple[_TransactionContext, SemanticPropositionTransactionResult | None]:
+    projection, projection_reason = canonical_plan_projection_for_context(
+        context,
+        proposal.value or {},
+    )
+    if projection_reason:
+        diagnostics.update(
+            {
+                "audit_status": "not_started",
+                "audit_execution_status": "not_started",
+                "audit_reason": projection_reason,
+                "canonical_plan_projection_status": "rejected",
+            }
+        )
+        return context, transaction_result(
+            None,
+            "failed",
+            projection_reason,
+            diagnostics,
+            proposal_calls=proposal.call_count,
+            debug_trace=transaction_debug(context, proposal, None),
+        )
+    if projection is None:
+        return context, None
+    context = replace(context, canonical_plan_projection=projection)
+    record_validated_plan_projection_lineage(diagnostics, projection)
+    diagnostics["canonical_plan_projection_status"] = "validated"
+    diagnostics["canonical_plan_digest"] = projection.plan_digest
+    diagnostics["canonical_projection_digest"] = canonical_plan_projection_digest(
+        projection
+    )
+    return context, None
+
+
 def _audit_result(
     context: _TransactionContext,
     proposal: ParsedSemanticStage,
@@ -332,6 +376,7 @@ def _audit_result(
         value.get("premises") or [],
         context.proposition,
         audit_result=audit.value,
+        canonical_plan_projection=context.canonical_plan_projection,
     )
     if premise_reason:
         diagnostics["audit_reason"] = premise_reason
@@ -348,12 +393,14 @@ def _audit_result(
         context,
         audit.value,
         local_constraint,
+        canonical_plan_projection=context.canonical_plan_projection,
     )
     binding_reason = conclusion_audit_binding_reason(
         context.question,
         value,
         context.proposition,
         release_mode=context.release_mode,
+        canonical_plan_projection=context.canonical_plan_projection,
     )
     if binding_reason:
         diagnostics["audit_reason"] = binding_reason
@@ -370,137 +417,6 @@ def _audit_result(
         value,
         "parsed",
         "strict_schema_and_entailment_audit",
-        diagnostics,
-        proposal_calls=proposal.call_count,
-        audit_calls=audit.call_count,
-        debug_trace=debug_trace,
-    )
-
-
-def _audit_failure_result(
-    context: _TransactionContext,
-    proposal: ParsedSemanticStage,
-    audit: ParsedSemanticStage,
-    diagnostics: dict[str, Any],
-    debug_trace: dict[str, Any] | None,
-    *,
-    local_consistency: dict[str, Any],
-    local_constraint: dict[str, Any],
-) -> SemanticPropositionTransactionResult | None:
-    if audit.provider_failure_reason:
-        return transaction_result(
-            None,
-            "failed",
-            audit.provider_failure_reason,
-            diagnostics,
-            proposal_calls=proposal.call_count,
-            audit_calls=audit.call_count,
-            debug_trace=debug_trace,
-        )
-    if audit.value is None:
-        if audit.call_count == 0 and diagnostics.get("audit_status") == "not_started":
-            return pre_audit_transaction_failure(
-                proposal,
-                audit,
-                diagnostics,
-                debug_trace,
-            )
-        if audit.failure_reason == "audit_retry_semantic_identity_changed":
-            reason = audit.failure_reason
-            diagnostics["audit_reason"] = reason
-            return transaction_result(
-                None,
-                "failed",
-                reason,
-                diagnostics,
-                proposal_calls=proposal.call_count,
-                audit_calls=audit.call_count,
-                debug_trace=debug_trace,
-            )
-        reason = invalid_response_reason(
-            audit.response,
-            max_tokens=SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-            invalid_reason="invalid_entailment_audit_json",
-        )
-        diagnostics["audit_reason"] = reason
-        return transaction_result(
-            None,
-            "failed",
-            reason,
-            diagnostics,
-            proposal_calls=proposal.call_count,
-            audit_calls=audit.call_count,
-            debug_trace=debug_trace,
-        )
-    rejection_reason = (
-        "auditor_internal_inconsistency"
-        if local_consistency.get("status") == "auditor_internal_inconsistency"
-        else semantic_entailment_rejection_reason(audit.value)
-    )
-    if not rejection_reason and local_constraint.get("status") != "passed":
-        rejection_reason = str(
-            local_constraint.get("reason") or "local_semantic_relation_rejected"
-        )
-    if not rejection_reason:
-        return None
-    diagnostics["audit_reason"] = rejection_reason
-    return _audit_rejection_result(
-        context,
-        proposal,
-        audit,
-        diagnostics,
-        debug_trace,
-        "semantic_entailment_audit_rejected",
-    )
-
-
-def _audit_rejection_result(
-    context: _TransactionContext,
-    proposal: ParsedSemanticStage,
-    audit: ParsedSemanticStage,
-    diagnostics: dict[str, Any],
-    debug_trace: dict[str, Any] | None,
-    reason: str,
-) -> SemanticPropositionTransactionResult:
-    rejection_reason = str(diagnostics.get("audit_reason") or reason)
-    diagnostics["audit_call_rejection_count"] = (
-        int(diagnostics.get("audit_call_rejection_count") or 0) + 1
-    )
-    diagnostics.update(
-        {
-            "audit_status": "rejected",
-            "audit_execution_status": "parsed",
-            "audit_parser_accepted": audit.value is not None,
-            "audit_semantic_rejection": audit.value is not None,
-            "audit_rejection_reason": rejection_reason,
-        }
-    )
-    diagnostics.setdefault("rejected_transactions", []).append(
-        rejected_semantic_transaction(
-            proposal.value or {},
-            reason=rejection_reason,
-            semantic_pack_digest=str(diagnostics.get("semantic_pack_digest") or ""),
-            raw_audit_result=audit.value or {},
-            local_premise_consistency=dict(
-                diagnostics.get("local_premise_consistency") or {}
-            ),
-            independent_semantic_constraint=dict(
-                diagnostics.get("independent_semantic_constraint") or {}
-            ),
-            semantic_pack_identity=semantic_pack_identity(context),
-        )
-    )
-    value = insufficient_semantic_result(
-        context.proposal_model, context.seed, context.question
-    )
-    bind_semantic_runtime_fields(value, context)
-    value["rejected_transaction"] = dict(
-        (diagnostics.get("rejected_transactions") or [{}])[-1]
-    )
-    return transaction_result(
-        value,
-        "audit_rejected",
-        reason,
         diagnostics,
         proposal_calls=proposal.call_count,
         audit_calls=audit.call_count,

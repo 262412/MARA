@@ -9,6 +9,8 @@ from .boolean_authority_schema import (
     GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
     SEMANTIC_PROPOSITION_VERDICT_CONTRACT,
 )
+from .boolean_semantic_premise_projection import semantic_premise_projection
+from .qasper_semantic_pack_contract import canonical_payload_digest
 from .question_proposition import (
     PROPOSITION_EVIDENCE_SLOTS,
     applicable_proposition_evidence_slots,
@@ -18,12 +20,7 @@ from .question_proposition import (
     typed_conclusion,
 )
 from .semantic_entailment_audit import semantic_entailment_audit_validation_reason
-from .semantic_relation_clause_validation import (
-    semantic_relation_clause_analysis,
-    semantic_required_argument_tokens,
-    semantic_slot_evidence_projection,
-    validated_argument_tokens,
-)
+from .semantic_relation_clause_validation import semantic_required_argument_tokens
 
 
 def _semantic_header_complete(derivation: dict[str, Any]) -> bool:
@@ -75,17 +72,32 @@ def _semantic_evidence_set_status(
     conclusion: dict[str, Any],
     question: str,
     required: list[str],
+    canonical_plan_projection: Any | None = None,
 ) -> str:
     attestation = derivation.get("verifier_attestation")
     attestation = attestation if isinstance(attestation, dict) else {}
-    if not _semantic_required_tokens_match(question, required):
+    projection_reason = _canonical_attestation_projection_reason(
+        attestation, canonical_plan_projection
+    )
+    if projection_reason:
+        return projection_reason
+    if not _semantic_required_tokens_match(
+        question,
+        required,
+        canonical_plan_projection=canonical_plan_projection,
+    ):
         return "semantic_required_argument_tokens_mismatch"
     premise_refs = _strings(derivation.get("premise_refs"))
     if not _semantic_attestation_matches_premises(
         attestation, premise_refs, conclusion
     ):
         return "semantic_attestation_mismatch"
-    bound_context = _semantic_bound_context(attestation, conclusion, question)
+    bound_context = _semantic_bound_context(
+        attestation,
+        conclusion,
+        question,
+        canonical_plan_projection=canonical_plan_projection,
+    )
     if bound_context is None:
         return "semantic_proposition_binding_attestation_mismatch"
     (
@@ -109,6 +121,7 @@ def _semantic_evidence_set_status(
         question=question,
         proposition=proposition,
         required=required,
+        canonical_plan_projection=canonical_plan_projection,
     )
     if projection_reason:
         return projection_reason
@@ -123,18 +136,32 @@ def _semantic_evidence_set_status(
     )
     if projection_reason:
         return projection_reason
-    audit_reason = semantic_entailment_audit_validation_reason(
+    return _semantic_projection_result(
+        attestation,
+        conclusion,
         question,
-        str(conclusion.get("polarity") or ""),
-        projection_state["audit_premises"],
-        attestation.get("entailment_audit"),
-        proof_mode=str(attestation.get("proof_mode") or ""),
-        proposition=proposition,
-        conclusion=typed_conclusion(
-            proposition,
-            str(conclusion.get("polarity") or ""),
-        ),
-        release_mode=bool(attestation.get("release_mode")),
+        proposition,
+        projection_state,
+        canonical_plan_projection=canonical_plan_projection,
+    )
+
+
+def _semantic_projection_result(
+    attestation: dict[str, Any],
+    conclusion: dict[str, Any],
+    question: str,
+    proposition: Any,
+    projection_state: dict[str, Any],
+    *,
+    canonical_plan_projection: Any | None,
+) -> str:
+    audit_reason = _semantic_projection_audit_reason(
+        attestation,
+        conclusion,
+        question,
+        proposition,
+        projection_state,
+        canonical_plan_projection=canonical_plan_projection,
     )
     if audit_reason:
         return audit_reason
@@ -146,8 +173,65 @@ def _semantic_evidence_set_status(
     )
 
 
-def _semantic_required_tokens_match(question: str, required: list[str]) -> bool:
-    return required == list(semantic_required_argument_tokens(question))
+def _canonical_attestation_projection_reason(
+    attestation: dict[str, Any], projection: Any | None
+) -> str:
+    if projection is None:
+        return ""
+    if (
+        attestation.get("canonical_evidence_plan_id") != projection.plan_id
+        or attestation.get("canonical_plan_digest") != projection.plan_digest
+        or attestation.get("canonical_projection_digest")
+        != canonical_payload_digest(projection.as_dict())
+        or attestation.get("proof_mode") != projection.proof_mode
+        or attestation.get("evidence_relation") != projection.polarity_relation
+    ):
+        return "semantic_canonical_plan_projection_mismatch"
+    return ""
+
+
+def _semantic_projection_audit_reason(
+    attestation: dict[str, Any],
+    conclusion: dict[str, Any],
+    question: str,
+    proposition: Any,
+    projection_state: dict[str, Any],
+    *,
+    canonical_plan_projection: Any | None,
+) -> str:
+    premises = (
+        list(canonical_plan_projection.premises)
+        if canonical_plan_projection is not None
+        else projection_state["audit_premises"]
+    )
+    return semantic_entailment_audit_validation_reason(
+        question,
+        str(conclusion.get("polarity") or ""),
+        premises,
+        attestation.get("entailment_audit"),
+        proof_mode=str(attestation.get("proof_mode") or ""),
+        proposition=proposition,
+        conclusion=typed_conclusion(
+            proposition,
+            str(conclusion.get("polarity") or ""),
+        ),
+        release_mode=bool(attestation.get("release_mode")),
+        canonical_plan_projection=canonical_plan_projection,
+    )
+
+
+def _semantic_required_tokens_match(
+    question: str,
+    required: list[str],
+    *,
+    canonical_plan_projection: Any | None = None,
+) -> bool:
+    expected = (
+        canonical_plan_projection.required_object_tokens
+        if canonical_plan_projection is not None
+        else semantic_required_argument_tokens(question)
+    )
+    return required == list(expected)
 
 
 def _semantic_attestation_matches_premises(
@@ -184,14 +268,21 @@ def _semantic_bound_context(
     attestation: dict[str, Any],
     conclusion: dict[str, Any],
     question: str,
+    *,
+    canonical_plan_projection: Any | None = None,
 ) -> tuple[Any, tuple[str, ...], tuple[str, ...], dict[str, str], str] | None:
     proposition, applicable, not_applicable, bindings = _semantic_status_context(
-        question
+        question,
+        canonical_plan_projection=canonical_plan_projection,
     )
     relation = (
-        "proposition_support"
-        if str(conclusion.get("polarity") or "") == "yes"
-        else "explicit_contradiction"
+        canonical_plan_projection.polarity_relation
+        if canonical_plan_projection is not None
+        else (
+            "proposition_support"
+            if str(conclusion.get("polarity") or "") == "yes"
+            else "explicit_contradiction"
+        )
     )
     if not _semantic_attestation_bindings_match(
         attestation,
@@ -206,12 +297,27 @@ def _semantic_bound_context(
 
 def _semantic_status_context(
     question: str,
+    *,
+    canonical_plan_projection: Any | None = None,
 ) -> tuple[Any, tuple[str, ...], tuple[str, ...], dict[str, str]]:
     proposition = build_question_proposition(question)
-    applicable_slots = applicable_proposition_evidence_slots(proposition)
+    applicable_slots = (
+        tuple(canonical_plan_projection.required_slots)
+        if canonical_plan_projection is not None
+        else applicable_proposition_evidence_slots(proposition)
+    )
     not_applicable_slots = not_applicable_proposition_evidence_slots(proposition)
     all_bindings = proposition_evidence_bindings(proposition)
-    canonical_bindings = {slot: all_bindings[slot] for slot in applicable_slots}
+    canonical_bindings = (
+        {
+            slot: str(
+                canonical_plan_projection.proposition_slot_bindings.get(slot) or ""
+            )
+            for slot in applicable_slots
+        }
+        if canonical_plan_projection is not None
+        else {slot: all_bindings[slot] for slot in applicable_slots}
+    )
     return proposition, applicable_slots, not_applicable_slots, canonical_bindings
 
 
@@ -227,10 +333,11 @@ def _semantic_premise_projections(
     question: str,
     proposition: Any,
     required: list[str],
+    canonical_plan_projection: Any | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
     projections: list[dict[str, Any]] = []
     for index, reference in enumerate(premise_refs, start=1):
-        projection, reason = _semantic_premise_projection(
+        projection, reason = semantic_premise_projection(
             index,
             contribution_by_ref[reference],
             atom_by_ref[reference],
@@ -241,127 +348,12 @@ def _semantic_premise_projections(
             question=question,
             proposition=proposition,
             required=required,
+            canonical_plan_projection=canonical_plan_projection,
         )
         if projection is None:
             return [], reason
         projections.append(projection)
     return projections, ""
-
-
-def _semantic_premise_projection(
-    index: int,
-    contribution: dict[str, Any],
-    atom: dict[str, Any],
-    *,
-    conclusion: dict[str, Any],
-    canonical_bindings: dict[str, str],
-    applicable_slots: set[str],
-    evidence_relation: str,
-    question: str,
-    proposition: Any,
-    required: list[str],
-) -> tuple[dict[str, Any] | None, str]:
-    slot_ids = set(_strings(contribution.get("supports_slot_ids")))
-    declared_proposition_slots = _strings(contribution.get("binds_proposition_slots"))
-    proposition_slots = set(declared_proposition_slots)
-    bindings = dict(contribution.get("proposition_slot_bindings") or {})
-    expected = {slot: canonical_bindings[slot] for slot in proposition_slots}
-    fragment = str(contribution.get("proposition_fragment") or "").strip()
-    (
-        local_analysis,
-        expected_slot_evidence,
-        expected_argument_tokens,
-        expected_local_relation,
-    ) = _expected_premise_semantics(
-        atom,
-        contribution,
-        declared_proposition_slots,
-        bindings,
-        evidence_relation=evidence_relation,
-        question=question,
-        proposition=proposition,
-        required=required,
-    )
-    invalid = bool(
-        contribution.get("role") != f"semantic_premise:{index}"
-        or int(contribution.get("order") or 0) != index
-        or str(atom.get("relation") or atom.get("predicate") or "")
-        != "semantic_premise"
-        or not fragment
-        or str(atom.get("object") or "") != fragment
-        or str(atom.get("polarity") or "") != str(conclusion.get("polarity") or "")
-        or str(atom.get("reason") or "") != "semantic_evidence_set_premise"
-        or not slot_ids
-        or not proposition_slots
-        or not proposition_slots <= applicable_slots
-        or bindings != expected
-        or dict(atom.get("proposition_slot_bindings") or {}) != expected
-        or contribution.get("evidence_relation") != evidence_relation
-        or atom.get("evidence_relation") != evidence_relation
-        or contribution.get("argument_tokens") != expected_argument_tokens
-        or contribution.get("proposition_slot_evidence") != expected_slot_evidence
-        or contribution.get("local_semantic_relation") != expected_local_relation
-        or local_analysis.get("joint_relation_clause_bound") is not True
-    )
-    if invalid:
-        return None, "semantic_premise_projection_mismatch"
-    return {
-        "reference": str(contribution.get("evidence_ref") or ""),
-        "supported_slots": slot_ids,
-        "proposition_slots": proposition_slots,
-        "normalized_fragment": " ".join(fragment.casefold().split()),
-        "slot_evidence": expected_slot_evidence,
-        "audit_premise": {
-            "evidence_id": str(atom.get("evidence_id") or ""),
-            "quote": str(atom.get("quote") or ""),
-            "proposition_fragment": fragment,
-            "supports_slot_ids": sorted(slot_ids),
-            "binds_proposition_slots": declared_proposition_slots,
-            "proposition_slot_bindings": bindings,
-            "evidence_relation": evidence_relation,
-        },
-    }, ""
-
-
-def _expected_premise_semantics(
-    atom: dict[str, Any],
-    contribution: dict[str, Any],
-    declared_slots: list[str],
-    bindings: dict[str, Any],
-    *,
-    evidence_relation: str,
-    question: str,
-    proposition: Any,
-    required: list[str],
-) -> tuple[dict[str, Any], dict[str, Any], list[str], dict[str, Any]]:
-    analysis = semantic_relation_clause_analysis(
-        {
-            "quote": str(atom.get("quote") or ""),
-            "binds_proposition_slots": declared_slots,
-            "proposition_slot_bindings": bindings,
-            "evidence_relation": evidence_relation,
-        },
-        proposition,
-    )
-    span_base = (
-        int(atom["canonical_start"])
-        if atom.get("canonical_start") is not None
-        else int(atom.get("span_start") or 0)
-    )
-    slot_evidence = semantic_slot_evidence_projection(
-        analysis,
-        premise_ref=str(contribution.get("evidence_ref") or ""),
-        span_base=span_base,
-    )
-    tokens = list(validated_argument_tokens(question, analysis, required))
-    relation = {
-        "contract_id": analysis["contract_id"],
-        "status": analysis["status"],
-        "evidence_relation": analysis["evidence_relation"],
-        "joint_relation_clause_bound": analysis["joint_relation_clause_bound"],
-        "analysis_digest": analysis["analysis_digest"],
-    }
-    return analysis, slot_evidence, tokens, relation
 
 
 def _semantic_projection_state(
