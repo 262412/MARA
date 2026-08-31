@@ -7,6 +7,9 @@ from typing import Any, cast
 from ktem.reasoning.mara_qasper_candidate import _record_candidate_response
 
 from benchmark.qasper_causal_transaction import qasper_causal_transaction
+from benchmark.qasper_causal_transaction_runtime_stages import (
+    runtime_transaction_stage_payloads,
+)
 from benchmark.tests.test_qasper_causal_transaction import (
     _prediction_and_debug_row,
     _run_context,
@@ -136,3 +139,39 @@ def test_stage_eight_accepts_a_typed_pre_audit_stop_without_a_proposal() -> None
     assert stage["incompleteness_reasons"] == []
     assert stage["payload"]["semantic_proposal"] == {}
     assert stage["payload"]["semantic_audit"] == {}
+
+
+def test_stage_eight_attempt_digest_ignores_empty_normalization_fields() -> None:
+    prediction, debug_row = _prediction_and_debug_row()
+    generator = debug_row["main_candidate_generator"]
+    normalized_generator = deepcopy(generator)
+    normalized_generator["attempts"][0].update(
+        provider_failure_reason="",
+        provider_failure_detail="",
+    )
+    verifier = debug_row["semantic_verifier"]
+    event = verifier["debug_trace"]["events"][0]
+    transaction = event["transaction"]
+
+    reference = runtime_transaction_stage_payloads(
+        prediction,
+        generator,
+        verifier,
+        event,
+        transaction,
+        transaction["proposal"],
+        transaction["audit"],
+        _run_context(),
+    )["model_response_and_parser"]
+    normalized = runtime_transaction_stage_payloads(
+        prediction,
+        normalized_generator,
+        verifier,
+        event,
+        transaction,
+        transaction["proposal"],
+        transaction["audit"],
+        _run_context(),
+    )["model_response_and_parser"]
+
+    assert normalized == reference
