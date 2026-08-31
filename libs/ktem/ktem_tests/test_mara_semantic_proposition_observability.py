@@ -120,6 +120,32 @@ def test_debug_trace_records_proposal_and_audit_without_changing_result() -> Non
     )
 
 
+def test_debug_trace_records_candidate_unknown_auditor_input() -> None:
+    llm = _SequenceLLM(
+        [_response(_insufficient_proposal()), _response(_unknown_audit())]
+    )
+    verifier = _verifier(llm, debug=True)
+    bundle = EvidenceBundle(route="doc_text", items=_items())
+
+    result = verifier(_request(), QUESTION, "yes", bundle)
+
+    assert result is not None and result["verdict"] == "insufficient_evidence"
+    debug = bundle.metadata["semantic_proposition_verifier"]["debug_trace"]
+    [event] = debug["events"]
+    transaction = event["transaction"]
+    audit_input = transaction["audit_input"]
+    assert audit_input["prompt"] == llm.calls[1][0][1].content
+    assert audit_input["question"] == QUESTION
+    assert audit_input["candidate_proposal"]["verdict"] == "insufficient_evidence"
+    assert audit_input["typed_conclusion"] == result["audited_typed_conclusion"]
+    assert audit_input["unknown_assessment"] == result["unknown_assessment"]
+    assert audit_input["model_requests"][0]["messages"] == [
+        {"role": "system", "content": llm.calls[1][0][0].content},
+        {"role": "user", "content": llm.calls[1][0][1].content},
+    ]
+    assert transaction["audit_input_digest"] == _canonical_digest(audit_input)
+
+
 def _canonical_digest(value: Any) -> str:
     payload = json.dumps(
         value,
