@@ -163,3 +163,24 @@ def test_frozen_selector_universe_retains_multiple_proposition_spans() -> None:
         ]
         == selector_refs
     )
+
+
+def test_exact_lexical_selector_freezes_semantic_alignment() -> None:
+    question = "Did the authors release the code for the evaluated system?"
+    text = "The authors released the code for the evaluated system."
+
+    canonical = prepare_qasper_canonical_records(question, _sentence_records(text))
+    selector = canonical[0]["selectors"][0]
+
+    alignment = selector["semantic_alignment"]
+    assert alignment["status"] == "verified"
+    assert alignment["selector_id"] == selector["selector_id"]
+    assert alignment["evidence_id"] == selector["evidence_id"]
+    assert alignment["predicate_match_kind"] == "exact"
+    assert alignment["polarity_relation"] == "proposition_support"
+    assert set(alignment["slot_refs"]) == {"actor", "predicate", "object"}
+    assert set(alignment["covered_object_tokens"]) == {
+        "code",
+        "component",
+        "metric",
+    }
