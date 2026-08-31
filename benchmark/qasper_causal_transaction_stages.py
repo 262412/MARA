@@ -13,6 +13,9 @@ from benchmark.qasper_causal_evidence_chain_utils import canonical_digest, is_sh
 from benchmark.qasper_causal_transaction_candidate_plans import (
     candidate_plans_stage_payload,
 )
+from benchmark.qasper_causal_transaction_plan_projection import (
+    projected_plan_authority_stage_payload,
+)
 from benchmark.qasper_causal_transaction_runtime_stages import (
     runtime_transaction_stage_payloads,
 )
@@ -28,14 +31,12 @@ def causal_transaction_stage_payloads(
 ) -> dict[str, dict[str, Any]]:
     generator = _mapping(debug_row.get("main_candidate_generator"))
     verifier = _mapping(debug_row.get("semantic_verifier"))
-    lineage = _mapping(verifier.get("semantic_data_lineage"))
     pack = _candidate_stage_pack(prediction)
     source = _mapping(pack.get("source_packing_observation"))
     frozen_binding = _mapping(pack.get("proposition_binding"))
     frozen_construction = _mapping(frozen_binding.get("plan_construction_trace"))
     generator_binding = _mapping(generator.get("candidate_evidence_set_binding"))
     generator_construction = _mapping(generator_binding.get("plan_construction_trace"))
-    construction = _mapping(lineage.get("plan_construction"))
     event = _latest_model_transaction(verifier)
     transaction = _mapping(event.get("transaction"))
     proposal_output = _mapping(transaction.get("proposal"))
@@ -55,8 +56,10 @@ def causal_transaction_stage_payloads(
             generator_binding,
             proposal_value,
         ),
-        "projected_plan_authority": _projection_payload(
-            construction, proposal_value, verifier
+        "projected_plan_authority": projected_plan_authority_stage_payload(
+            pack,
+            generator,
+            proposal_value,
         ),
     }
     stages.update(
@@ -419,43 +422,6 @@ def _selector_identity_reasons(
     ) != pack.get("candidate_transaction_id"):
         reasons.append("generator_canonical_pack_candidate_transaction_id_mismatch")
     return reasons
-
-
-def _projection_payload(
-    construction: Mapping[str, Any],
-    proposal_value: Mapping[str, Any],
-    verifier: Mapping[str, Any],
-) -> dict[str, Any]:
-    premises = deepcopy(proposal_value.get("premises") or [])
-    slot_bindings = {
-        str(premise.get("premise_ref") or f"P{index}"): deepcopy(
-            premise.get("proposition_slot_bindings") or {}
-        )
-        for index, premise in enumerate(premises, start=1)
-        if isinstance(premise, Mapping)
-    }
-    selected = str(
-        proposal_value.get("canonical_evidence_plan_id")
-        or construction.get("selected_plan_id")
-        or ""
-    )
-    projection_status = "projected" if selected and premises else "not_projected"
-    return _payload(
-        [],
-        projection_status=projection_status,
-        projection_reason=(
-            "" if projection_status == "projected" else "selected_plan_unavailable"
-        ),
-        selected_plan_id=selected,
-        premises=premises,
-        premises_digest=canonical_digest(premises),
-        slot_bindings=slot_bindings,
-        slot_bindings_digest=canonical_digest(slot_bindings),
-        proof_mode=str(
-            proposal_value.get("proof_mode") or verifier.get("proof_mode") or ""
-        ),
-        evidence_relation=str(proposal_value.get("evidence_relation") or ""),
-    )
 
 
 def _ranking_identity(records: list[Any]) -> list[dict[str, Any]]:

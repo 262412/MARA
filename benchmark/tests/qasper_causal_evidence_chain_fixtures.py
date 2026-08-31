@@ -134,11 +134,30 @@ def _candidate_binding(
 ) -> dict[str, Any]:
     return {
         "binding_state": "relation_bound_support" if legal_plan_count else "unresolved",
+        "applicable_slots": ["actor", "predicate", "object"],
         "plan_construction_trace": _plan_construction(legal_plan_count),
         "canonical_evidence_plan": {
             "contract_id": "canonical_proposition_evidence_plan.v2",
             "plan_id": "7" * 64,
-            "support_plan": {"plan_id": legal_plan_id} if legal_plan_count else None,
+            "support_plan": (
+                {
+                    "plan_id": legal_plan_id,
+                    "polarity_relation": "proposition_support",
+                    "span_refs": ["E1:S1"],
+                    "slot_refs": {
+                        "actor": ["E1:S1"],
+                        "predicate": ["E1:S1"],
+                        "object": ["E1:S1"],
+                    },
+                    "event_binding_id": "fixture-event-binding",
+                    "required_object_tokens": ["method"],
+                    "covered_object_tokens": ["method"],
+                    "event_subplans": [],
+                    "comparison_relation": None,
+                }
+                if legal_plan_count
+                else None
+            ),
             "contradiction_plan": None,
         },
     }

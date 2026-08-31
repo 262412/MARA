@@ -284,6 +284,12 @@ def _prediction(generator: dict, debug_row: dict) -> dict:
                 ),
                 "candidate_transaction_id": _PACK_TRANSACTION_ID,
                 "records": _canonical_pack_records(),
+                "slots": [
+                    {
+                        "slot_id": "support:boolean_proposition",
+                        "evidence_refs": ["E1:S1"],
+                    }
+                ],
                 "proposition_binding": deepcopy(
                     generator["candidate_evidence_set_binding"]
                 ),
@@ -314,6 +320,11 @@ def _canonical_pack_records() -> list[dict]:
                     "span_start": 0,
                     "span_end": 29,
                     "event_id": "event-1",
+                    "allowed_proposition_slots": [
+                        "actor",
+                        "predicate",
+                        "object",
+                    ],
                 }
             ],
         }
