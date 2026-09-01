@@ -410,7 +410,7 @@ def _element_modality(metadata: dict[str, Any]) -> str:
 
 
 def _visual_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    return {
+    visual = {
         key: metadata[key]
         for key in (
             "rendered_page_image",
@@ -424,6 +424,20 @@ def _visual_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         )
         if key in metadata
     }
+    for key in (
+        "visual_extractions",
+        "structured_visual_evidence",
+        "table_cells",
+        "ocr_cells",
+        "vlm_cells",
+        "extracted_elements",
+        "visual_elements",
+        "ocr_table",
+        "vlm_table",
+    ):
+        if key in metadata:
+            visual[key] = metadata[key]
+    return visual
 
 
 def _is_pdf_record(file_record: dict[str, Any]) -> bool:

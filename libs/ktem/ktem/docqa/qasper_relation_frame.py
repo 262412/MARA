@@ -10,6 +10,7 @@ _NUMBER_RE = re.compile(
     re.IGNORECASE,
 )
 _PREDICATE_PATTERNS = {
+    "account_for": r"\baccount(?:s|ed|ing)?\s+for\b",
     "leverage": r"\bleverag(?:e|es|ed|ing)\b",
     "rely_on": r"\brel(?:y|ies|ied|ying)\s+on\b",
     "use": r"\b(?:use|uses|used|using)\b",
@@ -20,9 +21,15 @@ _PREDICATE_PATTERNS = {
     "describe": r"\bdescrib(?:e|es|ed|ing)\b",
     "identify": r"\bidentif(?:y|ies|ied|ying)\b",
     "recruit": r"\brecruit(?:s|ed|ing)?\b",
-    "evaluate": r"\b(?:evaluat(?:e|es|ed|ing)|assess(?:es|ed|ing)?)\b",
+    "evaluate": (
+        r"\b(?:evaluat(?:e|es|ed|ing)|assess(?:es|ed|ing)?|"
+        r"experiment(?:ed|ing)|experiment\s+with)\b"
+    ),
     "train": r"\btrain(?:s|ed|ing)?\b",
-    "improve": r"\bimprov(?:e|es|ed|ing)\b",
+    "improve": r"\b(?:improv(?:e|es|ed|ing|ement)|better|outperform(?:s|ed|ing)?|"
+    r"increase(?:s|d|ing)?)\b",
+    "novel": r"\b(?:novel(?:ty)?|new(?:ly)?|innovative|introduc(?:e|es|ed|ing))\b",
+    "baseline": r"\b(?:baseline|prior|previous|compared\s+(?:with|to))\b",
     "calculate": r"\bcalculat(?:e|es|ed|ing)\b",
     "compute": r"\bcomput(?:e|es|ed|ing)\b",
     "derive": r"\bderiv(?:e|es|ed|ing)\b",
@@ -56,8 +63,7 @@ def question_relation_frame(question: str) -> QuestionRelationFrame:
     lowered = str(question or "").lower()
     actor = "current_paper" if _requires_current_paper_actor(question) else "unknown"
     qualifier = _qualifier(question)
-    quantifiers = _numbers(question)
-    quantifier = sorted(quantifiers)[0] if quantifiers else "none"
+    quantifier = _question_quantifier(question)
     object_type = _expected_object_type(question)
     scope = _question_scope(question)
     qualification = _qualification_frame(
@@ -69,16 +75,17 @@ def question_relation_frame(question: str) -> QuestionRelationFrame:
     )
     if qualification is not None:
         return qualification
-    account_for = _account_for_frame(
-        lowered,
-        actor=actor,
-        object_type=object_type,
-        scope=scope,
-        qualifier=qualifier,
-        quantifier=quantifier,
-    )
-    if account_for is not None:
-        return account_for
+    for relation_builder in (_account_for_frame, _typed_relation_frame):
+        relation = relation_builder(
+            lowered,
+            actor=actor,
+            object_type=object_type,
+            scope=scope,
+            qualifier=qualifier,
+            quantifier=quantifier,
+        )
+        if relation is not None:
+            return relation
     if re.search(r"\bhow\s+(?:many|much)\b|\b(?:number|count)\s+of\b", lowered):
         return _frame(
             actor,
@@ -244,7 +251,7 @@ def _account_for_frame(
     qualifier: str,
     quantifier: str,
 ) -> QuestionRelationFrame | None:
-    if not re.search(r"\baccount(?:s|ed|ing)?\s+for\b", question):
+    if _lexical_predicate(question) != "account_for":
         return None
     return _frame(
         actor,
@@ -255,6 +262,50 @@ def _account_for_frame(
         qualifier,
         quantifier,
     )
+
+
+def _typed_relation_frame(
+    question: str,
+    *,
+    actor: str,
+    object_type: str,
+    scope: str,
+    qualifier: str,
+    quantifier: str,
+) -> QuestionRelationFrame | None:
+    if _lexical_predicate(question) == "improve":
+        return _frame(
+            actor,
+            "improve",
+            "change",
+            object_type,
+            scope,
+            qualifier,
+            quantifier,
+            "comparison",
+        )
+    if _lexical_predicate(question) == "novel":
+        return _frame(
+            actor,
+            "novel",
+            "property",
+            object_type,
+            scope,
+            qualifier,
+            quantifier,
+        )
+    if _lexical_predicate(question) == "baseline":
+        return _frame(
+            actor,
+            "baseline",
+            "reference",
+            object_type,
+            scope,
+            qualifier,
+            quantifier,
+            "comparison",
+        )
+    return None
 
 
 def _definition_frame(
@@ -299,14 +350,12 @@ def _account_for_is_explicit(quote: str) -> bool:
 
 def _lexical_predicate(question: str) -> str:
     lowered = str(question or "").lower()
-    return next(
-        (
-            predicate
-            for predicate, pattern in _PREDICATE_PATTERNS.items()
-            if re.search(pattern, lowered, re.IGNORECASE)
-        ),
-        "",
-    )
+    matches = [
+        (match.start(), -(match.end() - match.start()), predicate)
+        for predicate, pattern in _PREDICATE_PATTERNS.items()
+        if (match := re.search(pattern, lowered, re.IGNORECASE)) is not None
+    ]
+    return min(matches)[2] if matches else ""
 
 
 def _predicate_is_explicit(predicate: str, quote: str) -> bool:
@@ -320,6 +369,18 @@ def _predicate_is_explicit(predicate: str, quote: str) -> bool:
             _PREDICATE_PATTERNS["rely_on"],
             _PREDICATE_PATTERNS["leverage"],
             _PREDICATE_PATTERNS["use"],
+        ),
+        "novel": (
+            _PREDICATE_PATTERNS["novel"],
+            r"\b(?:first|newly\s+introduced|innovation)\b",
+        ),
+        "baseline": (
+            _PREDICATE_PATTERNS["baseline"],
+            r"\b(?:reference\s+method|comparison\s+method|prior\s+work)\b",
+        ),
+        "improve": (
+            _PREDICATE_PATTERNS["improve"],
+            r"\b(?:gain|improvement|higher|lower|better|outperform)\w*\b",
         ),
     }
     if predicate in semantic_patterns:
@@ -391,10 +452,28 @@ def _numbers(value: str) -> set[str]:
     return {match.group(0).lower() for match in _NUMBER_RE.finditer(str(value or ""))}
 
 
+def _question_quantifier(value: str) -> str:
+    text = str(value or "")
+    explicit = re.search(
+        r"\b(?:at\s+least|at\s+most|more\s+than|less\s+than|both|all|each|"
+        r"every|either|neither|only|any)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if explicit is not None:
+        return " ".join(explicit.group(0).casefold().split())
+    for match in _NUMBER_RE.finditer(text):
+        value = match.group(0).casefold()
+        if value.isdigit() and len(value) == 4 and value.startswith(("19", "20")):
+            continue
+        return value
+    return "none"
+
+
 def _qualifier(value: str) -> str:
     match = re.search(
         r"\b(?:at\s+least|at\s+most|more\s+than|less\s+than|only|approximately|"
-        r"about|now)\b",
+        r"now)\b",
         str(value or "").lower(),
     )
     return match.group(0) if match else "none"

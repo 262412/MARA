@@ -10,35 +10,46 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from benchmark.contract_invariant_metrics import (  # noqa: E402
-    contract_invariant_summary,
-)
+from benchmark.artifact_publication import publish_contract_smoke_audit  # noqa: E402
+from benchmark.artifact_requirements import required_artifact_violations  # noqa: E402
+from benchmark.jsonl import read_jsonl  # noqa: E402
 from benchmark.terminal_outcome_contract import (  # noqa: E402
     terminal_outcome_summary_fields,
 )
-
-CONTRACT = "contract_smoke_audit.v1"
-STAGES = (
-    "canonical_candidate_evidence",
-    "fused_evidence",
-    "reranker_input_evidence",
-    "reranked_evidence",
-    "selected_evidence",
-    "generation_context_evidence",
-    "execution_operand_evidence",
-    "verified_claim_support_evidence",
-    "emitted_citation_evidence",
+from scripts.slurm import validate_contract_smoke_gates as _gate_contract  # noqa: E402
+from scripts.slurm import (  # noqa: E402
+    validate_contract_smoke_stages as _stage_contract,
 )
-CORE_STAGES = {
-    "canonical_candidate_evidence",
-    "fused_evidence",
-    "reranker_input_evidence",
-    "selected_evidence",
-    "generation_context_evidence",
-    "verified_claim_support_evidence",
-    "emitted_citation_evidence",
-}
-REQUIREMENTS = {
+from scripts.slurm.contract_smoke_behavior import (  # noqa: E402
+    finance_behavior_violations,
+)
+from scripts.slurm.qasper_causal_transaction_gate import (  # noqa: E402
+    qasper_causal_transaction_artifact_audit,
+)
+from scripts.slurm.qasper_debug_contract import (  # noqa: E402
+    qasper_debug_audit_extensions,
+    qasper_debug_behavior_violations,
+)
+from scripts.slurm.validate_contract_smoke_gates import (  # noqa: E402
+    contract_smoke_gate_state,
+)
+from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
+    contract_probe_preflight_audit as _contract_probe_preflight_audit,
+)
+from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
+    contract_probe_preflight_violations as _contract_probe_preflight_violations,
+)
+
+CONTRACT = "contract_smoke_audit.v2"
+HARD_GATES = _gate_contract.HARD_GATES
+FINANCE_HARD_GATES = _gate_contract.FINANCE_HARD_GATES
+QASPER_HARD_GATES = _gate_contract.QASPER_HARD_GATES
+QASPER_DEBUG_HARD_GATES = _gate_contract.QASPER_DEBUG_HARD_GATES
+STAGES = _stage_contract.STAGES
+CORE_STAGES = _stage_contract.CORE_STAGES
+_stage_audit = _stage_contract.stage_audit
+
+REQUIREMENTS: dict[str, set[str]] = {
     "finance": {
         "same_parent_distinct_year_cells",
         "materialized_parent_operand",
@@ -53,85 +64,7 @@ REQUIREMENTS = {
         "cross_page_required_slots",
         "runtime_authority_pass_through",
     },
-}
-HARD_GATES = {
-    "identity_collision_count": ("eq", 0.0),
-    "runtime_benchmark_roundtrip": ("eq", 1.0),
-    "atomic_field_roundtrip_rate": ("eq", 1.0),
-    "exact_atomic_identity_roundtrip": ("eq", 1.0),
-    "exact_numeric_field_roundtrip": ("eq", 1.0),
-    "normalized_label_roundtrip": ("eq", 1.0),
-    "raw_representation_preservation": ("eq", 1.0),
-    "reranker_lineage_violation_count": ("eq", 0.0),
-    "citation_provenance_violation_count": ("eq", 0.0),
-    "missing_execution_slot_answer_count": ("eq", 0.0),
-    "required_slot_false_fill_count": ("eq", 0.0),
-    "slot_semantic_false_fill_count": ("eq", 0.0),
-    "slot_unresolved_reference_count": ("eq", 0.0),
-    "plan_evidence_reference_resolution_rate": ("eq", 1.0),
-    "source_page_cross_join_count": ("eq", 0.0),
-    "calculation_render_mismatch_count": ("eq", 0.0),
-    "heuristic_veto_after_verified_execution_count": ("eq", 0.0),
-    "rounding_verification_failure_count": ("eq", 0.0),
-    "qasper_stale_verifier_state_count": ("eq", 0.0),
-    "gold_runtime_source_join_rate": ("eq", 1.0),
-    "gold_source_schema_valid": ("eq", 1.0),
-    "unresolved_gold_source_count": ("eq", 0.0),
-    "ambiguous_source_alias_count": ("eq", 0.0),
-    "gold_source_alias_resolution_rate": ("eq", 1.0),
-    "gold_page_alias_resolution_rate": ("eq", 1.0),
-    "gold_source_page_crosswalk_rate": ("eq", 1.0),
-    "required_candidate_nonempty_rate": ("eq", 1.0),
-    "required_selected_nonempty_rate": ("eq", 1.0),
-    "required_generation_context_nonempty_rate": ("eq", 1.0),
-    "citation_emission_coverage": ("eq", 1.0),
-    "accepted_answer_citation_emission": ("eq", 1.0),
-    "verified_claim_support_coverage": ("eq", 1.0),
-    "final_answer_citation_emission": ("eq", 1.0),
-    "terminal_outcome_contract_violation_count": ("eq", 0.0),
-}
-FINANCE_HARD_GATES = {
-    "execution_slot_atomicity_rate": ("eq", 1.0),
-    "execution_slot_materialization_rate": ("eq", 1.0),
-    "execution_slot_binding_rate": ("eq", 1.0),
-    "execution_operand_resolution_rate": ("eq", 1.0),
-    "execution_slot_atomicity_violation_count": ("eq", 0.0),
-    "parent_table_false_fill_count": ("eq", 0.0),
-    "header_as_value_violation_count": ("eq", 0.0),
-    "dimension_binding_rate": ("eq", 1.0),
-    "dimension_scope_rate": ("eq", 1.0),
-    "dimension_binding_violation_count": ("eq", 0.0),
-    "dimension_scope_violation_count": ("eq", 0.0),
-    "execution_operand_provenance_coverage": ("eq", 1.0),
-    "reranker_execution_query_coverage": ("eq", 1.0),
-    "reranker_unique_output_artifact_mismatch_count": ("eq", 0.0),
-}
-QASPER_HARD_GATES = {
-    "abstention_candidate_sent_as_semantic_answer_count": ("eq", 0.0),
-    "verifier_required_evidence_coverage": ("eq", 1.0),
-    "qasper_required_slot_empty_state_count": ("eq", 0.0),
-    "qasper_required_evidence_coverage_missing_count": ("eq", 0.0),
-    "qasper_required_slot_authority_empty_count": ("eq", 0.0),
-    "qasper_required_slot_authority_missing_count": ("eq", 0.0),
-    "qasper_complete_to_unanswerable_empty_authority_count": ("eq", 0.0),
-    "qasper_complete_to_unanswerable_identity_count": ("eq", 0.0),
-    "qasper_complete_to_unanswerable_ref_mismatch_count": ("eq", 0.0),
-    "qasper_semantic_veto_audit_violation_count": ("eq", 0.0),
-    "contract_semantic_rewrite_count": ("eq", 0.0),
-    "engine_scored_semantic_label_mismatch_count": ("eq", 0.0),
-    "qasper_invalid_typed_label_count": ("eq", 0.0),
-    "qasper_terminal_state_missing_count": ("eq", 0.0),
-    "qasper_post_engine_answerability_llm_call_count": ("eq", 0.0),
-    "qasper_runtime_authority_missing_count": ("eq", 0.0),
-    "qasper_runtime_semantic_verifier_failure_count": ("eq", 0.0),
-    "qasper_runtime_scope_failure_count": ("eq", 0.0),
-    "qasper_quote_validation_ref_mismatch_count": ("eq", 0.0),
-    "answerable_false_abstention_count": ("eq", 0.0),
-    "boolean_scope_violation_count": ("eq", 0.0),
-    "wrong_polarity_count": ("eq", 0.0),
-    "citation_claim_support_violation_count": ("eq", 0.0),
-    "citation_scope_violation_count": ("eq", 0.0),
-    "citation_nonminimal_count": ("eq", 0.0),
+    "qasper_debug": set(),
 }
 
 
@@ -143,86 +76,21 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _load_predictions(path: Path) -> list[dict[str, Any]]:
-    return [
-        value
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-        for value in [json.loads(line)]
-        if isinstance(value, dict)
-    ]
+    return [value for value in read_jsonl(path) if isinstance(value, dict)]
 
 
-def _records(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    return [dict(item) for item in value if isinstance(item, dict)]
-
-
-def _stage_audit(
-    prediction: dict[str, Any],
+def _load_contract_probe_predictions(
+    run_dir: Path,
     *,
     suite_kind: str,
-) -> tuple[dict[str, Any], list[str]]:
-    metadata = dict(prediction.get("evidence_metadata") or {})
-    audit: dict[str, Any] = {"example_id": str(prediction.get("example_id") or "")}
-    missing: list[str] = []
-    ranking_trace = dict(metadata.get("ranking_trace") or {})
-    query_plan = dict(metadata.get("query_plan") or {})
-    slots = [
-        dict(item)
-        for item in query_plan.get("evidence_slots") or []
-        if isinstance(item, dict)
-    ]
-    missing_execution = any(
-        bool(slot.get("required_for_execution"))
-        and str(slot.get("status") or "missing") != "filled"
-        for slot in slots
-    )
-    answerable = any(
-        str(answer or "").strip().lower()
-        not in {
-            "",
-            "unanswerable",
-            "insufficient evidence",
-        }
-        for answer in prediction.get("gold_answers") or []
-    )
-    for stage in STAGES:
-        records = _records(metadata.get(stage))
-        if stage in CORE_STAGES and answerable and stage in metadata and not records:
-            status = "empty_required"
-        elif stage in metadata:
-            status = "recorded"
-        elif stage == "reranked_evidence" and not (
-            ranking_trace.get("executed")
-            if "executed" in ranking_trace
-            else ranking_trace.get("backend_execution")
-        ):
-            status = "truthfully_not_executed"
-        elif stage == "execution_operand_evidence" and suite_kind == "qasper":
-            status = "not_applicable"
-        elif stage == "execution_operand_evidence" and missing_execution:
-            status = "blocked_missing_requirements"
-        else:
-            status = "missing"
-        audit[stage] = {"status": status, "count": len(records)}
-        if stage in CORE_STAGES and status in {"missing", "empty_required"}:
-            missing.append(stage)
-        if (
-            stage == "reranked_evidence"
-            and (
-                ranking_trace.get("executed")
-                if "executed" in ranking_trace
-                else ranking_trace.get("backend_execution")
-            )
-            and status == "missing"
-        ):
-            missing.append(stage)
-    if ranking_trace.get("executed") and int(
-        ranking_trace.get("output_count") or 0
-    ) != len(_records(metadata.get("reranked_evidence"))):
-        missing.append("reranker_output_count_mismatch")
-    return audit, missing
+    contract_probe_path: Path | None,
+) -> list[dict[str, Any]]:
+    if suite_kind != "qasper_debug":
+        return []
+    path = contract_probe_path or run_dir / "contract_probe_predictions.jsonl"
+    if not path.is_file():
+        return []
+    return _load_predictions(path)
 
 
 def _requirements(predictions: list[dict[str, Any]]) -> set[str]:
@@ -235,31 +103,6 @@ def _requirements(predictions: list[dict[str, Any]]) -> set[str]:
             if str(value).strip()
         )
     return values
-
-
-def _hard_gate_results(
-    metrics: dict[str, Any],
-    *,
-    suite_kind: str,
-) -> dict[str, dict[str, Any]]:
-    results: dict[str, dict[str, Any]] = {}
-    gates = {
-        **HARD_GATES,
-        **(FINANCE_HARD_GATES if suite_kind == "finance" else {}),
-        **(QASPER_HARD_GATES if suite_kind == "qasper" else {}),
-    }
-    for metric, (comparison, expected) in gates.items():
-        value = metrics.get(metric)
-        passed = value is not None and (
-            float(value) == expected if comparison == "eq" else False
-        )
-        results[metric] = {
-            "value": value,
-            "comparison": comparison,
-            "expected": expected,
-            "passed": passed,
-        }
-    return results
 
 
 def _observed_qasper_runtime_pass_through(prediction: dict[str, Any]) -> bool:
@@ -289,66 +132,191 @@ def _all_stage_audits(
     for prediction in predictions:
         audit, missing = _stage_audit(prediction, suite_kind=suite_kind)
         audits.append(audit)
-        if missing:
+        fusion_violations = list(audit.get("fusion_stage", {}).get("violations") or [])
+        if missing or fusion_violations:
             violations.append(
                 {
                     "example_id": audit["example_id"],
                     "missing_stages": sorted(set(missing)),
+                    **(
+                        {"fusion_stage_violations": fusion_violations}
+                        if fusion_violations
+                        else {}
+                    ),
                 }
             )
     return audits, violations
 
 
-def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
+def validate(
+    run_dir: Path,
+    *,
+    suite_kind: str,
+    contract_probe_path: Path | None = None,
+    retrieval_index_artifact_path: Path | None = None,
+    retrieval_index_restore_audit_path: Path | None = None,
+) -> dict[str, Any]:
     summary = _load_json(run_dir / "summary.json")
     predictions = _load_predictions(run_dir / "predictions.jsonl")
-    if summary.get("artifact_detail") != "full":
-        raise ValueError("artifact_detail must be full for contract smoke")
-    if not 2 <= len(predictions) <= 5:
-        raise ValueError(
-            "contract smoke must contain between 2 and 5 predictions; "
-            f"found {len(predictions)}"
-        )
-
+    contract_probe_predictions = _load_contract_probe_predictions(
+        run_dir,
+        suite_kind=suite_kind,
+        contract_probe_path=contract_probe_path,
+    )
+    expected_count = (18, 18) if suite_kind == "qasper_debug" else (2, 5)
     observed_requirements = _requirements(predictions)
-    missing_requirements = REQUIREMENTS[suite_kind] - observed_requirements
-    if missing_requirements:
-        raise ValueError(
-            "missing contract smoke requirements: "
-            + ", ".join(sorted(missing_requirements))
+    if suite_kind == "qasper_debug":
+        retrieval_index_artifact_path = (
+            retrieval_index_artifact_path
+            or run_dir / "retrieval_index_artifact.json"
         )
+        retrieval_index_restore_audit_path = (
+            retrieval_index_restore_audit_path
+            or run_dir / "retrieval_index_restore_audit.json"
+        )
+    precondition_violations = _precondition_violations(
+        run_dir,
+        summary,
+        predictions,
+        suite_kind=suite_kind,
+        expected_count=expected_count,
+        observed_requirements=observed_requirements,
+    )
+    if precondition_violations:
+        audit = _precondition_failure_audit(
+            summary,
+            predictions,
+            suite_kind=suite_kind,
+            expected_count=expected_count,
+            observed_requirements=observed_requirements,
+            violations=precondition_violations,
+            contract_probe_predictions=contract_probe_predictions,
+        )
+        publish_contract_smoke_audit(run_dir, audit)
+        raise ValueError("; ".join(precondition_violations))
+    audit = _complete_audit(
+        run_dir,
+        summary,
+        predictions,
+        suite_kind=suite_kind,
+        expected_count=expected_count,
+        observed_requirements=observed_requirements,
+        contract_probe_predictions=contract_probe_predictions,
+        retrieval_index_artifact_path=retrieval_index_artifact_path,
+        retrieval_index_restore_audit_path=retrieval_index_restore_audit_path,
+    )
+    publish_contract_smoke_audit(run_dir, audit)
+    if audit["status"] != "passed":
+        raise ValueError("contract smoke failed: " + _failure_details(audit))
+    return audit
+
+
+def _complete_audit(
+    run_dir: Path,
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    expected_count: tuple[int, int],
+    observed_requirements: set[str],
+    contract_probe_predictions: list[dict[str, Any]],
+    retrieval_index_artifact_path: Path | None,
+    retrieval_index_restore_audit_path: Path | None,
+) -> dict[str, Any]:
+    (
+        causal_transaction_audit,
+        causal_transaction_violations,
+    ) = _causal_transaction_audit(
+        run_dir,
+        summary,
+        predictions,
+        suite_kind=suite_kind,
+        retrieval_index_artifact_path=retrieval_index_artifact_path,
+        retrieval_index_restore_audit_path=retrieval_index_restore_audit_path,
+    )
     behavior_violations = _behavior_violations(
         predictions,
         suite_kind=suite_kind,
+        contract_probe_predictions=contract_probe_predictions,
     )
-
+    behavior_violations.extend(causal_transaction_violations)
+    behavior_violations.extend(
+        _contract_probe_preflight_violations(
+            run_dir,
+            suite_kind=suite_kind,
+            prediction_count=len(contract_probe_predictions),
+        )
+    )
+    debug_extensions, debug_violations = _debug_extensions(
+        predictions,
+        suite_kind=suite_kind,
+        contract_probe_predictions=contract_probe_predictions,
+    )
+    behavior_violations.extend(debug_violations)
     stage_audits, stage_violations = _all_stage_audits(
         predictions, suite_kind=suite_kind
     )
-
-    metrics = contract_invariant_summary(predictions)
-    hard_gates = _hard_gate_results(metrics, suite_kind=suite_kind)
-    failed_gates = [
-        metric for metric, result in hard_gates.items() if not result["passed"]
-    ]
-    contract_gate_failures = [
-        name
-        for name, gate in dict(metrics.get("contract_gates") or {}).items()
-        if isinstance(gate, dict) and gate.get("status") == "failed"
-    ]
-    status = (
-        "passed"
-        if not stage_violations
-        and not behavior_violations
-        and not failed_gates
-        and not contract_gate_failures
-        else "failed"
+    (
+        metrics,
+        hard_gates,
+        failed_gates,
+        contract_gate_failures,
+    ) = contract_smoke_gate_state(
+        predictions,
+        suite_kind=suite_kind,
+        contract_probe_predictions=contract_probe_predictions,
     )
-    audit = {
+    status = _audit_status(
+        stage_violations,
+        behavior_violations,
+        failed_gates,
+        contract_gate_failures,
+    )
+    return _complete_audit_payload(
+        run_dir,
+        summary,
+        predictions,
+        suite_kind=suite_kind,
+        expected_count=expected_count,
+        observed_requirements=observed_requirements,
+        stage_audits=stage_audits,
+        stage_violations=stage_violations,
+        behavior_violations=behavior_violations,
+        metrics=metrics,
+        hard_gates=hard_gates,
+        failed_gates=failed_gates,
+        contract_gate_failures=contract_gate_failures,
+        causal_transaction_audit=causal_transaction_audit,
+        debug_extensions=debug_extensions,
+        status=status,
+    )
+
+
+def _complete_audit_payload(
+    run_dir: Path,
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    expected_count: tuple[int, int],
+    observed_requirements: set[str],
+    stage_audits: list[dict[str, Any]],
+    stage_violations: list[dict[str, Any]],
+    behavior_violations: list[str],
+    metrics: dict[str, Any],
+    hard_gates: dict[str, Any],
+    failed_gates: list[str],
+    contract_gate_failures: list[str],
+    causal_transaction_audit: dict[str, Any],
+    debug_extensions: dict[str, Any],
+    status: str,
+) -> dict[str, Any]:
+    return {
         "contract": CONTRACT,
         "suite_kind": suite_kind,
         "artifact_detail": summary.get("artifact_detail"),
         "prediction_count": len(predictions),
+        "expected_prediction_count": list(expected_count),
         "observed_requirements": sorted(observed_requirements),
         "stage_audits": stage_audits,
         "stage_violations": stage_violations,
@@ -358,33 +326,167 @@ def validate(run_dir: Path, *, suite_kind: str) -> dict[str, Any]:
         "contract_gates": metrics.get("contract_gates"),
         "contract_gate_failures": contract_gate_failures,
         "terminal_outcome_summary": terminal_outcome_summary_fields(predictions),
+        "provider_contract_probe_audit": _contract_probe_preflight_audit(
+            run_dir,
+            suite_kind=suite_kind,
+        ),
+        "causal_transaction_audit": causal_transaction_audit,
+        **debug_extensions,
         "status": status,
     }
-    (run_dir / "contract_smoke_audit.json").write_text(
-        json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
+
+
+def _causal_transaction_audit(
+    run_dir: Path,
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    retrieval_index_artifact_path: Path | None,
+    retrieval_index_restore_audit_path: Path | None,
+) -> tuple[dict[str, Any], list[str]]:
+    provenance = summary.get("run_provenance")
+    provenance = provenance if isinstance(provenance, dict) else {}
+    git = provenance.get("git")
+    git = git if isinstance(git, dict) else {}
+    return qasper_causal_transaction_artifact_audit(
+        run_dir,
+        predictions,
+        suite_kind=suite_kind,
+        retrieval_index_artifact_path=retrieval_index_artifact_path,
+        retrieval_index_restore_audit_path=retrieval_index_restore_audit_path,
+        expected_code_sha=str(git.get("commit") or ""),
+        expected_index_contract=str(provenance.get("index_contract") or ""),
+        expected_embedding_contract=str(
+            provenance.get("embedding_contract") or ""
+        ),
+        require_retrieval_index_binding=True,
     )
-    if status != "passed":
-        details = []
-        if stage_violations:
-            details.append(f"stage_violations={len(stage_violations)}")
-        if behavior_violations:
-            details.append("behavior_violations=" + ",".join(behavior_violations))
-        if failed_gates:
-            details.append("failed_gates=" + ",".join(failed_gates))
-        if contract_gate_failures:
-            details.append("contract_gate_failures=" + ",".join(contract_gate_failures))
-        raise ValueError("contract smoke failed: " + " ".join(details))
-    return audit
+
+
+def _audit_status(*violation_groups: Any) -> str:
+    return "failed" if any(violation_groups) else "passed"
+
+
+def _debug_extensions(
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    contract_probe_predictions: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[str]]:
+    if suite_kind != "qasper_debug":
+        return {"observability_coverage": {}, "structural_state_matrix": {}}, []
+    extensions = qasper_debug_audit_extensions(
+        predictions,
+        contract_probe_predictions=contract_probe_predictions,
+    )
+    violations = []
+    if extensions["structural_state_matrix"].get("complete") is not True:
+        violations.append("structural_state_matrix_incomplete")
+    return extensions, violations
+
+
+def _precondition_violations(
+    run_dir: Path,
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    expected_count: tuple[int, int],
+    observed_requirements: set[str],
+) -> list[str]:
+    violations: list[str] = []
+    if summary.get("artifact_detail") != "full":
+        violations.append("artifact_detail must be full for contract smoke")
+    if not expected_count[0] <= len(predictions) <= expected_count[1]:
+        violations.append(
+            "contract smoke must contain between "
+            f"{expected_count[0]} and {expected_count[1]} predictions; "
+            f"found {len(predictions)}"
+        )
+    missing_requirements = REQUIREMENTS[suite_kind] - observed_requirements
+    if missing_requirements:
+        violations.append(
+            "missing contract smoke requirements: "
+            + ", ".join(sorted(missing_requirements))
+        )
+    violations.extend(required_artifact_violations(run_dir, predictions))
+    return violations
+
+
+def _precondition_failure_audit(
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    expected_count: tuple[int, int],
+    observed_requirements: set[str],
+    violations: list[str],
+    contract_probe_predictions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "contract": CONTRACT,
+        "suite_kind": suite_kind,
+        "artifact_detail": summary.get("artifact_detail"),
+        "prediction_count": len(predictions),
+        "expected_prediction_count": list(expected_count),
+        "observed_requirements": sorted(observed_requirements),
+        "precondition_violations": violations,
+        "stage_audits": [],
+        "stage_violations": [],
+        "behavior_violations": [],
+        "hard_gates": {},
+        "failed_gates": ["preconditions"],
+        "contract_gates": {},
+        "contract_gate_failures": [],
+        "causal_transaction_audit": {
+            "contract_id": "qasper_causal_transaction_artifact_audit.v1",
+            "applicable": suite_kind == "qasper_debug",
+            "status": "not_evaluated",
+            "hard_rule": "stop_at_first_divergence",
+            "observations": [],
+            "violations": [],
+        },
+        **(
+            qasper_debug_audit_extensions(
+                predictions,
+                contract_probe_predictions=contract_probe_predictions,
+            )
+            if suite_kind == "qasper_debug"
+            else {"observability_coverage": {}, "structural_state_matrix": {}}
+        ),
+        "status": "failed",
+    }
+
+
+def _failure_details(audit: dict[str, Any]) -> str:
+    details: list[str] = []
+    if audit["stage_violations"]:
+        details.append(f"stage_violations={len(audit['stage_violations'])}")
+    if audit["behavior_violations"]:
+        details.append("behavior_violations=" + ",".join(audit["behavior_violations"]))
+    if audit["failed_gates"]:
+        details.append("failed_gates=" + ",".join(audit["failed_gates"]))
+    if audit["contract_gate_failures"]:
+        details.append(
+            "contract_gate_failures=" + ",".join(audit["contract_gate_failures"])
+        )
+    return " ".join(details)
 
 
 def _behavior_violations(
     predictions: list[dict[str, Any]],
     *,
     suite_kind: str,
+    contract_probe_predictions: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     if suite_kind == "finance":
-        return _finance_behavior_violations(predictions)
+        return finance_behavior_violations(predictions)
+    if suite_kind == "qasper_debug":
+        return qasper_debug_behavior_violations(
+            predictions,
+            contract_probe_predictions=contract_probe_predictions,
+        )
     violations: list[str] = []
     if not any(
         _observed_qasper_runtime_pass_through(prediction) for prediction in predictions
@@ -414,48 +516,6 @@ def _behavior_violations(
     return violations
 
 
-def _finance_behavior_violations(
-    predictions: list[dict[str, Any]],
-) -> list[str]:
-    violations: list[str] = []
-    answerable = [
-        prediction
-        for prediction in predictions
-        if any(
-            str(answer or "").strip().lower()
-            not in {"", "unanswerable", "insufficient evidence"}
-            for answer in prediction.get("gold_answers") or []
-        )
-    ]
-    expected_abstentions = [
-        prediction for prediction in predictions if prediction not in answerable
-    ]
-    for prediction in answerable:
-        metadata = dict(prediction.get("evidence_metadata") or {})
-        trace = dict(metadata.get("finance_numeric_trace") or {})
-        verification = dict(trace.get("calculation_verification") or {})
-        execution = dict(trace.get("calculation_execution") or {})
-        if not verification.get("valid") or execution.get("status") != "ok":
-            violations.append(
-                f"answerable_typed_execution_failed:{prediction.get('example_id')}"
-            )
-        if str(prediction.get("answer_status") or "") != "answered":
-            violations.append(
-                f"answerable_typed_execution_not_accepted:{prediction.get('example_id')}"
-            )
-    for prediction in expected_abstentions:
-        if str(prediction.get("answer_status") or "") != "abstained":
-            violations.append(
-                f"expected_safe_abstention_not_observed:{prediction.get('example_id')}"
-            )
-        metadata = dict(prediction.get("evidence_metadata") or {})
-        if _records(metadata.get("emitted_citation_evidence")):
-            violations.append(
-                f"abstention_emitted_answer_citation:{prediction.get('example_id')}"
-            )
-    return violations
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Validate a full-detail FinanceBench or QASPER contract smoke."
@@ -466,9 +526,47 @@ def main() -> None:
         choices=tuple(sorted(REQUIREMENTS)),
         required=True,
     )
+    parser.add_argument(
+        "--retrieval-index-artifact",
+        type=Path,
+        help=(
+            "Frozen real QASPER Stage 2 artifact required by formal debug runs."
+        ),
+    )
+    parser.add_argument(
+        "--retrieval-index-restore-audit",
+        type=Path,
+        help="Job-owned proof that the frozen QASPER index tree was restored.",
+    )
+    parser.add_argument(
+        "--contract-probe-predictions",
+        type=Path,
+        help=(
+            "Separate live QASPER contract-probe JSONL artifact. "
+            "Required for qasper_debug validation."
+        ),
+    )
     args = parser.parse_args()
     try:
-        audit = validate(args.run_dir.resolve(), suite_kind=args.suite_kind)
+        audit = validate(
+            args.run_dir.resolve(),
+            suite_kind=args.suite_kind,
+            contract_probe_path=(
+                args.contract_probe_predictions.resolve()
+                if args.contract_probe_predictions
+                else None
+            ),
+            retrieval_index_artifact_path=(
+                args.retrieval_index_artifact.resolve()
+                if args.retrieval_index_artifact
+                else None
+            ),
+            retrieval_index_restore_audit_path=(
+                args.retrieval_index_restore_audit.resolve()
+                if args.retrieval_index_restore_audit
+                else None
+            ),
+        )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise SystemExit(str(exc)) from exc
     print(f"contract_smoke_status={audit['status']}")

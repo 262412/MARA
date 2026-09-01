@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from .qasper_golden_projection import REQUIRED_ROW_FIELDS, ROW_CONTRACT_ID
 from .qasper_golden_projection import project_prediction as _project_prediction
+from .jsonl import read_jsonl
 
 CONTRACT_ID = "qasper_golden_replay.v1"
 ANCHOR_REPLAY_SHA256 = (
@@ -62,16 +63,13 @@ def project_prediction_file(
     digest = hashlib.sha256()
     digest.update(b"[")
     first = True
-    with source.open(encoding="utf-8") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            prediction = cast(dict[str, Any], json.loads(line))
-            if not first:
-                digest.update(b",")
-            digest.update(_canonical_json(_legacy_projection(prediction)))
-            first = False
-            rows.append(project_prediction(prediction, run_label=run_label))
+    for value in read_jsonl(source):
+        prediction = cast(dict[str, Any], value)
+        if not first:
+            digest.update(b",")
+        digest.update(_canonical_json(_legacy_projection(prediction)))
+        first = False
+        rows.append(project_prediction(prediction, run_label=run_label))
     digest.update(b"]")
     return ProjectedPredictionRun(run_label, rows, digest.hexdigest())
 
@@ -209,12 +207,7 @@ def legacy_prediction_projection_hash(
 
 
 def read_projection_jsonl(path: str | Path) -> list[dict[str, Any]]:
-    rows = []
-    with Path(path).open(encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                rows.append(cast(dict[str, Any], json.loads(line)))
-    return rows
+    return [cast(dict[str, Any], value) for value in read_jsonl(path)]
 
 
 def _validated_run_indexes(

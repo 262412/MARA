@@ -1,0 +1,50 @@
+{
+  "contract_id": "qasper_stage7_projection_characterization.v1",
+  "source": {
+    "artifact": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_quality_d8b3fbc8f9bd5bb1447b96fa004f02376521d658_20260830/quality/debug/qasper/20260830_090039_focused-d8b3fbc-qasper-semantic-quality-10385302/predictions.jsonl",
+    "code_sha": "d8b3fbc8f9bd5bb1447b96fa004f02376521d658",
+    "example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e",
+    "job_id": "10385302",
+    "route": "text_rag"
+  },
+  "model_response_payload": {
+    "candidate_judgment": "supported",
+    "canonical_evidence_plan_id": "dfb3d3bf990951ac0e9e16a5bbb569ad53846042a9256e03db69cf8a6f8fe03d"
+  },
+  "frozen_local_plan": {
+    "evidence_relation": "proposition_support",
+    "plan_id": "dfb3d3bf990951ac0e9e16a5bbb569ad53846042a9256e03db69cf8a6f8fe03d",
+    "slot_bindings": {
+      "actor": [
+        "E2:S27",
+        "E2:S28"
+      ],
+      "object": [
+        "E2:S27",
+        "E2:S28"
+      ],
+      "predicate": [
+        "E2:S27",
+        "E2:S28"
+      ],
+      "quantifier": [
+        "E2:S27"
+      ]
+    },
+    "slot_bindings_digest": "fb9597b3b6a261a4e5fe06271541211a2c80eac2df3cef8e4c5ab56ebf2681cb",
+    "span_refs": [
+      "E2:S27",
+      "E2:S28"
+    ]
+  },
+  "local_projection": {
+    "premise_count": 2,
+    "premise_selectors": [
+      "E2:S27",
+      "E2:S28"
+    ],
+    "premises_digest": "03549f054496ddae45437422fd09c8450acbab3233f8aa22da0cd5b29d5dca6b",
+    "proof_mode": "composite_conjunction"
+  },
+  "invariant": "model_selects_only_judgment_and_local_plan_id_all_authority_fields_are_local_projections"
+}

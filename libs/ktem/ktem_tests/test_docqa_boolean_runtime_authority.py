@@ -62,8 +62,7 @@ def test_111_runtime_commits_exact_qualifier_aware_no_authority(
         "from parallel data in both languages."
     )
     decisive = (
-        "Comparing with Line 2, we get non-significant improvements in both "
-        "languages."
+        "Comparing with Line 2, we get non-significant improvements in both languages."
     )
     item = _evidence(
         "parallel-result",
@@ -200,8 +199,7 @@ def test_b065_runtime_resolves_exclusive_requirement_to_no(
     route_policy: str,
 ) -> None:
     question = (
-        "Is fine-tuning required to incorporate these embeddings into existing "
-        "models?"
+        "Is fine-tuning required to incorporate these embeddings into existing models?"
     )
     decisive = (
         "The only requirement is that the model accepts as input, an embedding "
@@ -420,7 +418,7 @@ def test_generated_abstention_without_exact_authority_remains_fail_closed() -> N
     assert result.guardrail_decision.action == "abstain"
 
 
-def test_truncated_generation_recovers_unique_exact_boolean_authority() -> None:
+def test_truncated_generation_cannot_bypass_candidate_authority() -> None:
     question = "Did the authors evaluate the model on clinical tasks?"
     item = _evidence(
         "exact-authority",
@@ -429,17 +427,19 @@ def test_truncated_generation_recovers_unique_exact_boolean_authority() -> None:
 
     result = _run_boolean(question, r"$$ \text{", [item])
 
-    assert result.answer == "yes"
-    assert result.verify_decision.status == "supported"
-    assert result.verify_decision.canonical_answer_polarity == "yes"
-    assert result.verify_decision.typed_authority["state"] == "verified_support"
-    assert result.verify_decision.authoritative_evidence_id == identity_of(item).key
-    assert result.guardrail_decision.action == "return"
-    assert result.engine_terminal_commit["semantic_answer"] == "yes"
-    assert result.engine_terminal_commit["citations"] == [identity_of(item).key]
+    assert result.answer == ABSTAIN_MESSAGE
+    assert result.verify_decision.status == "not_enough_evidence"
+    assert result.verify_decision.canonical_answer_polarity == ""
+    assert result.verify_decision.typed_authority == {}
+    assert result.verify_decision.authoritative_evidence_id == ""
+    assert result.guardrail_decision.action == "abstain"
+    assert result.engine_terminal_commit["semantic_answer"] == "unanswerable"
+    assert result.evidence_bundle.metadata["typed_boolean_generation_recovery"] == (
+        "empty_generation_rejected_without_verifier_call"
+    )
 
 
-def test_truncated_generation_with_lexical_candidate_remains_fail_closed() -> None:
+def test_truncated_generation_with_lexical_evidence_remains_fail_closed() -> None:
     question = "Did the authors release source code?"
     item = _evidence(
         "lexical-only",
@@ -449,15 +449,14 @@ def test_truncated_generation_with_lexical_candidate_remains_fail_closed() -> No
     result = _run_boolean(question, r"$$ \text{", [item])
 
     assert result.answer == ABSTAIN_MESSAGE
-    assert result.verify_decision.status == "unknown"
+    assert result.verify_decision.status == "not_enough_evidence"
     assert result.verify_decision.canonical_answer_polarity == ""
-    assert result.verify_decision.typed_authority["state"] == "missing"
-    assert result.verify_decision.typed_authority["reason"] == (
-        "exact_boolean_authority_missing"
-    )
+    assert result.verify_decision.typed_authority == {}
     assert result.guardrail_decision.action == "abstain"
     assert result.engine_terminal_commit["semantic_answer"] == "unanswerable"
-    assert result.engine_terminal_commit["citations"] == []
+    assert result.evidence_bundle.metadata["typed_boolean_generation_recovery"] == (
+        "empty_generation_rejected_without_verifier_call"
+    )
 
 
 def test_requirement_negative_qualifier_overrides_exclusive_requirement_match() -> None:
@@ -482,8 +481,7 @@ def test_requirement_negative_qualifier_overrides_exclusive_requirement_match() 
 
 def test_requirement_without_qualifier_is_negative_authority() -> None:
     question = (
-        "Is fine-tuning required to incorporate these embeddings into existing "
-        "models?"
+        "Is fine-tuning required to incorporate these embeddings into existing models?"
     )
     evidence = _evidence(
         "requirement-without",
@@ -545,8 +543,7 @@ def test_boolean_authority_expands_to_nonadjacent_same_experiment_frame() -> Non
     )
     bridge = "All systems use the same evaluation corpus split."
     decisive = (
-        "Comparing with Line 2, we get non-significant improvements in both "
-        "languages."
+        "Comparing with Line 2, we get non-significant improvements in both languages."
     )
     unrelated = "Prior work reports a different monolingual benchmark."
     text = " ".join((subject, bridge, decisive, unrelated))
@@ -565,8 +562,7 @@ def test_boolean_authority_expands_to_nonadjacent_same_experiment_frame() -> Non
 
 def test_27cf_unanswerable_question_stays_abstained_without_evidence() -> None:
     question = (
-        "Are humans and machine learning systems fooled by the same kinds of "
-        "illusions?"
+        "Are humans and machine learning systems fooled by the same kinds of illusions?"
     )
 
     result = _run_boolean(

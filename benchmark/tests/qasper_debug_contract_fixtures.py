@@ -1,0 +1,433 @@
+from __future__ import annotations
+
+from typing import Any
+
+from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _prediction
+from benchmark.tests.qasper_debug_contract_trace_helpers import (
+    debug_generator_trace as _debug_generator_trace,
+)
+from benchmark.tests.qasper_debug_lineage_fixtures import (
+    _debug_plan_construction,
+    _debug_semantic_chain_fixture,
+    _debug_verifier_state_fields,
+)
+from benchmark.tests.qasper_debug_semantic_pack_fixtures import (
+    DEBUG_PACK_QUESTION,
+    _debug_audited_premises,
+    _debug_semantic_authority,
+    _debug_semantic_pack,
+    _debug_semantic_pack_identity,
+)
+
+
+def _qasper_debug_prediction(
+    example_id: str,
+    route: str,
+    *,
+    state: tuple[str, str, bool] | None = None,
+    candidate: str | None = None,
+) -> dict[str, Any]:
+    prediction = _prediction([])
+    group_id = f"group:{example_id}"
+    example_index = int(example_id.rsplit("-", 1)[-1])
+    case = _debug_case_fields(example_index) if state is None else _state_case(state)
+    if candidate is not None:
+        case = {**case, "candidate": candidate}
+    candidate = str(case["candidate"])
+    relation = str(case["relation"])
+    audit_status = str(case["audit_status"])
+    terminal_answer = str(case["terminal_answer"])
+    terminal_outcome = str(case["terminal_outcome"])
+    gold = case["gold"]
+    ambiguous = case["ambiguous"]
+    metadata = prediction["evidence_metadata"]
+    _populate_debug_semantic_metadata(
+        metadata,
+        example_id,
+        route,
+        group_id,
+        candidate,
+        relation,
+        audit_status,
+    )
+    retrieved_record = dict(metadata["canonical_candidate_evidence"][0])
+    prediction.update(
+        {
+            "example_id": example_id,
+            "question": DEBUG_PACK_QUESTION,
+            "route": route,
+            "answer_type": "boolean",
+            "gold_answers": gold,
+            "retrieved_hits": [retrieved_record],
+            "evidence_bundle": {
+                "items": [retrieved_record],
+                "metadata": metadata,
+            },
+            "predicted_answer": terminal_answer,
+            "answer_for_scoring": terminal_answer,
+            "controller_trace": [
+                {
+                    "stage": "claim_aggregation",
+                    "input_text": "yes",
+                    "output_text": "yes",
+                    "input_digest": "claim-input",
+                    "output_digest": "claim-output",
+                }
+            ],
+            **_debug_annotation_fields(
+                example_id, candidate, terminal_answer, ambiguous
+            ),
+            "terminal_outcome": terminal_outcome,
+            "answer_status": (
+                "answered" if terminal_outcome == "answered" else "abstained"
+            ),
+            "terminal_outcome_reason": "",
+            "terminal_outcome_contract_violation": False,
+            "terminal_semantic_commit": {
+                "contract_id": "terminal_semantic_commit.v3",
+                "semantic_answer": terminal_answer,
+                "outcome": terminal_outcome,
+                "answer_status": (
+                    "answered" if terminal_outcome == "answered" else "abstained"
+                ),
+                "projection_hash": _fixture_digest(
+                    {"example_id": example_id, "terminal_outcome": terminal_outcome}
+                ),
+            },
+        }
+    )
+    return prediction
+
+
+def _populate_debug_semantic_metadata(
+    metadata: dict[str, Any],
+    example_id: str,
+    route: str,
+    group_id: str,
+    candidate: str,
+    relation: str,
+    audit_status: str,
+) -> None:
+    transaction_id = f"generator:{example_id}:{route}"
+    semantic_pack = _debug_semantic_pack(transaction_id)
+    identity = _debug_semantic_pack_identity(semantic_pack)
+    canonical_plan = semantic_pack["proposition_binding"]["canonical_evidence_plan"]
+    canonical_plan_id = str(canonical_plan["support_plan"]["plan_id"])
+    plan_trace = _debug_plan_construction(
+        canonical_plan_id,
+        selected_plan_id=canonical_plan_id,
+        selector_ref="E1:S1",
+        event_id="fixture-event",
+    )
+    generator = _debug_generator_trace(
+        example_id,
+        route,
+        group_id,
+        candidate,
+        plan_candidate_decisions_digest=str(plan_trace["candidate_decisions_digest"]),
+    )
+    generator.update(
+        evidence_pack_digest=identity["semantic_pack_digest"],
+        canonical_semantic_pack_contract_id=semantic_pack["contract_id"],
+        canonical_semantic_pack_digest=identity["semantic_pack_digest"],
+        canonical_span_universe_digest=identity["span_universe_digest"],
+        canonical_pack_candidate_transaction_id=identity["candidate_transaction_id"],
+        candidate_evidence_set_binding=semantic_pack["proposition_binding"],
+        required_slots=semantic_pack["slots"],
+    )
+    metadata.update(
+        qasper_canonical_semantic_pack=semantic_pack,
+        candidate_ranked_evidence=[{"canonical_id": "span:paper:s1"}],
+        qasper_candidate_generation=generator,
+        semantic_proposition_verifier=_debug_verifier_trace(
+            example_id,
+            route,
+            group_id,
+            candidate,
+            relation,
+            audit_status,
+            identity,
+            canonical_plan_id,
+        ),
+    )
+    if relation in {"supported", "contradicted"} and audit_status == "passed":
+        metadata["semantic_proposition_authority"] = _debug_semantic_authority(
+            _debug_verifier_verdict(candidate, relation),
+            identity,
+        )
+
+
+def _qasper_contract_probe_predictions() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    states = [
+        (judgment, auditor_status, ambiguous)
+        for judgment in ("supported", "contradicted", "unknown")
+        for auditor_status in ("passed", "failed")
+        for ambiguous in (False, True)
+    ]
+    for index, state in enumerate(states, start=1):
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag"):
+            row = _qasper_debug_prediction(
+                f"probe-{index}",
+                route,
+                state=state,
+                candidate="no" if index == 1 else "yes",
+            )
+            row["qasper_debug_lane"] = "contract_probe"
+            rows.append(row)
+    return rows
+
+
+def _debug_annotation_fields(
+    example_id: str,
+    candidate: str,
+    terminal_answer: str,
+    ambiguous: bool,
+) -> dict[str, Any]:
+    annotation_id = f"annotation:{example_id}"
+    return {
+        "example_metadata": {
+            "qasper_answer_annotations": [
+                {"annotation_id": annotation_id, "yes_no": candidate == "yes"}
+            ]
+        },
+        "qasper_annotation_scores": [
+            {
+                "contract_id": "qasper_annotation_score.v1",
+                "annotation_index": 1,
+                "annotation_id": annotation_id,
+                "answer_f1": 1.0 if terminal_answer == "yes" else 0.0,
+                "typed_accuracy": 1.0,
+                "evidence_f1": 1.0,
+                "ambiguity_marker": "ambiguous" if ambiguous else "",
+            }
+        ],
+        "qasper_annotation_diagnostics": {
+            "contract_id": "qasper_annotation_diagnostics.v1",
+            "annotation_count": 1,
+            "ambiguous": ambiguous,
+            "ambiguity_reasons": ["fixture_ambiguous"] if ambiguous else [],
+            "canonical_answer_classes": [[candidate if not ambiguous else "yes"]],
+        },
+    }
+
+
+def _debug_case_fields(example_index: int) -> dict[str, Any]:
+    if example_index in {1, 2, 6}:
+        return {
+            "candidate": "yes",
+            "relation": "supported",
+            "audit_status": "passed",
+            "terminal_answer": "yes",
+            "terminal_outcome": "answered",
+            "gold": ["yes"],
+            "ambiguous": False,
+        }
+    if example_index == 3:
+        relation = "contradicted"
+    elif example_index == 4:
+        relation = "unknown"
+    else:
+        relation = "unknown"
+    return {
+        "candidate": "no" if example_index in {3, 5} else "yes",
+        "relation": relation,
+        "audit_status": "failed" if example_index == 5 else "passed",
+        "terminal_answer": "unanswerable",
+        "terminal_outcome": "safe_abstention",
+        "gold": ["unanswerable"],
+        "ambiguous": True,
+    }
+
+
+def _state_case(state: tuple[str, str, bool]) -> dict[str, Any]:
+    relation, audit_status, ambiguous = state
+    candidate = "no" if relation == "supported" and not ambiguous else "yes"
+    terminal_answer = (
+        candidate
+        if relation == "supported" and audit_status == "passed"
+        else "unanswerable"
+    )
+    return {
+        "candidate": candidate,
+        "relation": relation,
+        "audit_status": audit_status,
+        "terminal_answer": terminal_answer,
+        "terminal_outcome": "answered"
+        if terminal_answer != "unanswerable"
+        else "safe_abstention",
+        "gold": [terminal_answer],
+        "ambiguous": ambiguous,
+    }
+
+
+def _debug_verifier_trace(
+    example_id: str,
+    route: str,
+    group_id: str,
+    candidate: str,
+    relation: str,
+    audit_status: str,
+    pack_identity: dict[str, str],
+    canonical_plan_id: str,
+) -> dict[str, Any]:
+    transaction_id = f"verifier:{example_id}:{route}"
+    verdict = _debug_verifier_verdict(candidate, relation)
+    typed_conclusion, conclusion_audit, candidate_audit = _debug_verifier_payload(
+        example_id,
+        candidate,
+        relation,
+        audit_status,
+        pack_identity,
+    )
+    return {
+        "contract_id": "semantic_proposition_verifier_runtime.v3",
+        "status": "parsed",
+        "model": "Qwen/Qwen3-8B",
+        "candidate_label": candidate,
+        "candidate_verification_status": relation,
+        "verdict": verdict,
+        "replacement_candidate_allowed": False,
+        "explicit_contradiction": verdict == "no",
+        "candidate_verifier_disagreement": relation == "contradicted",
+        "unknown": relation == "unknown",
+        "proposal_model_call_count": 1,
+        "audit_model_call_count": 1,
+        "candidate_verification_audit": candidate_audit,
+        "question_proposition": {"quantifier": "none"},
+        "typed_conclusion": typed_conclusion,
+        "conclusion_audit": conclusion_audit,
+        "proposal_contract": "semantic_proposition_verdict.v4",
+        **_debug_verifier_state_fields(relation, audit_status),
+        "audit_reason": "fixture_audit",
+        "evidence_label_map": {"E1": "span:paper:s1"},
+        "unknown_assessment": _debug_unknown_assessment(relation),
+        "rejected_transactions": (
+            [{"canonical_evidence_plan_id": canonical_plan_id}]
+            if audit_status == "failed" and relation != "unknown"
+            else []
+        ),
+        "semantic_pack_digest": pack_identity["semantic_pack_digest"],
+        "canonical_span_universe_digest": pack_identity["span_universe_digest"],
+        "candidate_transaction_id": pack_identity["candidate_transaction_id"],
+        "canonical_pack_continuity_status": "preserved",
+        "auditor_semantic_pack_identity": pack_identity,
+        "raw_candidate_digest": _fixture_digest(candidate),
+        "typed_candidate_digest": _fixture_digest(candidate),
+        "verifier_input_candidate_digest": _fixture_digest(candidate),
+        "candidate_raw_identity_preserved": True,
+        **_debug_semantic_chain_fixture(
+            transaction_id,
+            candidate,
+            relation,
+            audit_status,
+            typed_conclusion,
+            conclusion_audit,
+            pack_identity,
+            canonical_plan_id,
+        ),
+        "trace_group_id": group_id,
+        "transaction_id": transaction_id,
+        "attempt_id": f"{transaction_id}:proposal:1",
+        "auditor_attempt_id": f"{transaction_id}:auditor:1",
+        "effective_seed": 20260724,
+        "input_digest": f"verifier-input:{route}",
+        "output_digest": f"verifier-output:{route}",
+    }
+
+
+def _debug_verifier_payload(
+    example_id: str,
+    candidate: str,
+    relation: str,
+    audit_status: str,
+    pack_identity: dict[str, str],
+) -> tuple[dict[str, Any], dict[str, str], dict[str, Any]]:
+    typed_conclusion = {
+        "contract_id": "typed_conclusion.v1",
+        "conclusion_id": f"conclusion:{example_id}",
+        "polarity": candidate,
+    }
+    conclusion_audit = {"contract_id": "conclusion_audit.v2"}
+    candidate_audit = _debug_candidate_audit(
+        candidate,
+        relation,
+        audit_status,
+        typed_conclusion,
+        semantic_pack_identity=pack_identity,
+    )
+    return typed_conclusion, conclusion_audit, candidate_audit
+
+
+def _debug_verifier_verdict(candidate: str, relation: str) -> str:
+    if relation == "unknown":
+        return "insufficient_evidence"
+    if candidate == "unanswerable":
+        return "yes"
+    if relation == "supported":
+        return candidate
+    return "no" if candidate == "yes" else "yes"
+
+
+def _debug_candidate_audit(
+    candidate: str,
+    relation: str,
+    audit_status: str,
+    typed_conclusion: dict[str, Any],
+    *,
+    semantic_pack_identity: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    audit = {
+        "contract_id": "candidate_verifier_audit.v2",
+        "status": audit_status,
+        "mode": "candidate_bound_audit",
+        "audited_candidate": candidate,
+        "audited_judgment": relation,
+        "reason": "fixture_audit",
+        "replacement_candidate_allowed": False,
+        "semantic_pack_identity": dict(semantic_pack_identity or {}),
+    }
+    if relation == "supported":
+        audit.update(
+            {
+                "classification": "supported",
+                "audited_verdict": candidate,
+            }
+        )
+    elif relation == "contradicted":
+        audit.update(
+            {
+                "classification": "explicit_contradiction",
+                "audited_verdict": "no" if candidate == "yes" else "yes",
+            }
+        )
+    else:
+        premises = _debug_audited_premises()
+        audit.update(
+            {
+                "mode": "candidate_bound_unknown_audit",
+                "reason": "unknown_gap_audited",
+                "classification": "unknown",
+                "audit_scope": "original_candidate_and_verifier_unknown_only",
+                "audited_verdict": "insufficient_evidence",
+                "audited_typed_conclusion": typed_conclusion,
+                "audited_premises": premises,
+                "audited_premise_digest": _fixture_digest(premises),
+                "reviewed_evidence_ids": ["span:paper:s1"],
+                "unresolved_proposition_slots": ["support:boolean_proposition"],
+                "support_gap": "fixture_support_gap",
+                "contradiction_gap": "fixture_contradiction_gap",
+            }
+        )
+    return audit
+
+
+def _debug_unknown_assessment(relation: str) -> dict[str, Any]:
+    if relation != "unknown":
+        return {}
+    return {
+        "reviewed_evidence": _debug_audited_premises(),
+        "unresolved_proposition_slots": ["support:boolean_proposition"],
+        "support_gap": "fixture_support_gap",
+        "contradiction_gap": "fixture_contradiction_gap",
+    }

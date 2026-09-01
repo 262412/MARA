@@ -1,0 +1,30 @@
+{
+  "contract_id": "qasper_stage11_finalizer_scorer_characterization.v1",
+  "source": {
+    "artifact": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_trace_canary_0ef20e45_20260830/quality/debug/qasper/20260830_225837_qasper-trace-canary-0ef20e4-10388470/predictions.jsonl",
+    "example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65",
+    "job_id": "10388470",
+    "route": "text_rag",
+    "sha": "0ef20e45f18bb580541cf3e53ec4d7548210bbe3"
+  },
+  "observed_stage11": {
+    "comparison_digest": "4c8e547d73185a74ec5c07c4b3128542ff1c161c9c28564644c9cf18ad7bbdf0",
+    "incompleteness_reasons": [],
+    "status": "complete"
+  },
+  "terminal_projection": {
+    "engine_terminal_projection_hash": "ea1ff6bb8d8ca5df2d5f0b25d4d4bbc47374fe217ef0f68f47c84f1017e3f750",
+    "local_runtime_projection_present": false,
+    "local_terminal_bundle_metadata_digest": "6fbb8c4b24cca6817311f31a43622028240978c5d9af3d6369bd04db547f2a76",
+    "online_runtime_projection_present": true,
+    "online_terminal_bundle_metadata_digest": "e50b33c8a7fcad6afb9512778c3a1a1f2c9a844814b31d8dd0dfdd7f546cd7c4",
+    "state_bundle_metadata_digest": "e50b33c8a7fcad6afb9512778c3a1a1f2c9a844814b31d8dd0dfdd7f546cd7c4"
+  },
+  "real_quality_rows": {
+    "row_count": 18,
+    "runtime_projection_valid": 18,
+    "scoring_answer_matches_commit": 18,
+    "terminal_aliases_valid": 18
+  },
+  "root_cause": "local_replay_mutated_the_terminal_evidence_envelope_while_stage_eleven_checked_only_field_presence"
+}

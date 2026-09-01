@@ -9,6 +9,8 @@ from ktem.docqa.evidence_locators import normalized_source_page_locators
 from .metrics import is_abstention_answer
 from .qasper_boolean_scope import scope_valid_support_items
 from .qasper_deterministic_support import deterministic_support_ids
+from .qasper_semantic_authority_metrics import semantic_evidence_set_authority_invalid
+from .qasper_semantic_verifier_metrics import semantic_verifier_failure_metrics
 
 
 def qasper_contract_metric_values(
@@ -135,6 +137,27 @@ def _runtime_audit_failure_metrics(
         "qasper_runtime_authority_frame_incomplete_count": float(
             trace.get("runtime_typed_authority_frame_status") == "incomplete"
         ),
+        "qasper_composite_authority_count": float(
+            trace.get("runtime_typed_authority_kind") == "composite"
+            and trace.get("runtime_typed_authority_derivation_status") == "bound"
+            and bool(trace.get("runtime_typed_authority_complete"))
+        ),
+        "qasper_composite_authority_invalid_count": float(
+            trace.get("runtime_typed_authority_kind") == "composite"
+            and trace.get("runtime_typed_authority_derivation_status") != "bound"
+        ),
+        "qasper_semantic_evidence_set_authority_count": float(
+            trace.get("runtime_typed_authority_kind") == "semantic_evidence_set"
+            and trace.get("runtime_typed_authority_derivation_status") == "bound"
+            and bool(trace.get("runtime_typed_authority_complete"))
+        ),
+        "qasper_semantic_evidence_set_authority_invalid_count": float(
+            semantic_evidence_set_authority_invalid(trace)
+        ),
+        "qasper_semantic_proposition_verifier_call_count": float(
+            trace.get("runtime_semantic_proposition_verifier_model_call_count") or 0
+        ),
+        **semantic_verifier_failure_metrics(trace),
     }
 
 
@@ -258,9 +281,7 @@ def _authority_metric_values(
         "qasper_required_slot_authority_empty_count": float(
             1
             if empty_slot_state
-            else slot_count
-            if authority_missing and not required_ids
-            else 0
+            else slot_count if authority_missing and not required_ids else 0
         ),
         "qasper_required_slot_authority_missing_count": float(missing_count),
         "qasper_complete_to_unanswerable_empty_authority_count": float(
@@ -370,8 +391,13 @@ def _citation_support_metrics(
     scope_violations = sum(
         identity_of(item).key not in valid_scope_ids for item in cited
     )
+    minimum_citations = _required_boolean_citation_count(
+        prediction,
+        metadata,
+        answer,
+    )
     nonminimal = (
-        max(0, len(cited) - 1)
+        max(0, len(cited) - minimum_citations)
         if _answer_type(prediction) == "boolean" and not is_abstention_answer(answer)
         else 0
     )
@@ -380,6 +406,24 @@ def _citation_support_metrics(
         "citation_scope_violation_count": float(scope_violations),
         "citation_nonminimal_count": float(nonminimal),
     }
+
+
+def _required_boolean_citation_count(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+    answer: str,
+) -> int:
+    if _answer_type(prediction) != "boolean" or is_abstention_answer(answer):
+        return 0
+    trace = metadata.get("qasper_answerability")
+    trace = trace if isinstance(trace, dict) else {}
+    if (
+        trace.get("runtime_typed_authority_kind")
+        in {"composite", "semantic_evidence_set"}
+        and trace.get("runtime_typed_authority_derivation_status") == "bound"
+    ):
+        return max(1, len(_trace_ids(trace.get("verifier_required_evidence_ids"))))
+    return 1
 
 
 def _citation_lacks_claim_support(
@@ -453,6 +497,23 @@ def _empty_answerability_metrics() -> dict[str, float | None]:
         "qasper_runtime_canonical_identity_mismatch_count": 0.0,
         "qasper_runtime_quote_grounding_failure_count": 0.0,
         "qasper_runtime_authority_frame_incomplete_count": 0.0,
+        "qasper_composite_authority_count": 0.0,
+        "qasper_composite_authority_invalid_count": 0.0,
+        "qasper_semantic_evidence_set_authority_count": 0.0,
+        "qasper_semantic_evidence_set_authority_invalid_count": 0.0,
+        "qasper_semantic_proposition_verifier_call_count": 0.0,
+        "qasper_semantic_proposition_verifier_failure_count": 0.0,
+        "qasper_semantic_proposition_verifier_context_overflow_count": 0.0,
+        "qasper_semantic_proposition_verifier_schema_unsupported_count": 0.0,
+        "qasper_semantic_proposition_output_truncation_count": 0.0,
+        "qasper_semantic_proposition_json_decode_failure_count": 0.0,
+        "qasper_semantic_proposition_parse_contract_rejection_count": 0.0,
+        "qasper_semantic_entailment_audit_call_count": 0.0,
+        "qasper_semantic_entailment_audit_failure_count": 0.0,
+        "qasper_semantic_entailment_audit_rejection_count": 0.0,
+        "qasper_semantic_auditor_internal_inconsistency_count": 0.0,
+        "qasper_semantic_proposition_verifier_audit_rejection_count": 0.0,
+        "qasper_semantic_audit_verified_but_runtime_rejected_count": 0.0,
         "qasper_required_verification_applicable_count": 0.0,
         "qasper_required_slot_nonempty_state_count": 0.0,
         "qasper_required_slot_empty_state_count": 0.0,

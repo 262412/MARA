@@ -4,6 +4,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from .boolean_conjunction import with_boolean_support_group
 from .boolean_evidence_scope import boolean_retrieval_query
 from .finance_agreement_identity import agreement_date
 from .finance_evidence_dimensions import requested_scale
@@ -16,7 +17,7 @@ from .finance_query_planning import (
 )
 from .finance_retrieval_focus import finance_retrieval_focus_terms
 from .financial_statement_identity import required_financial_identity
-from .heuristic_query_slots import heuristic_slots
+from .heuristic_query_slots import heuristic_slots, mmdoc_visual_time_series_slots
 from .query_classification import (
     has_causal_intent,
     normalized_answer_type,
@@ -28,6 +29,7 @@ from .query_evidence_binding import score_evidence_for_slot as _score_evidence_f
 from .query_evidence_constraints import period_kind_in_question
 from .query_phrase_extraction import metric_phrase, periods_in_question
 from .query_plan_constraints import query_plan_constraints
+from .query_plan_retrieval import retrieval_budget as _retrieval_budget
 from .query_plan_retrieval import slot_needs_second_round
 from .query_plan_schema import (
     EvidenceLocator,
@@ -82,7 +84,7 @@ def build_query_plan(
         and planned.answer_type == "numeric"
         and registry_status in {"supported", "unsupported"}
     ):
-        return planned
+        return with_boolean_support_group(planned, question)
     return _build_heuristic_query_plan(
         question,
         answer_type=answer_type,
@@ -114,12 +116,15 @@ def _build_heuristic_query_plan(
         tokens,
         boolean_question=normalized_type == "boolean",
     )
+    if str(verification_domain or "").strip().lower() == "slidevqa":
+        capabilities["requires_visual"] = True
     planned_question_type = question_type(
         tokens,
         normalized_type,
         periods,
         causal_intent=causal_intent,
         requires_multiple_evidence=bool(capabilities["requires_multiple_evidence"]),
+        requires_visual=bool(capabilities["requires_visual"]),
     )
     slots, finance_domain, segment_comparison = _heuristic_evidence_slots(
         text,
@@ -132,6 +137,8 @@ def _build_heuristic_query_plan(
         verification_domain=verification_domain,
         causal_intent=causal_intent,
     )
+    if any(slot.statement_kind == "visual_time_series_cell" for slot in slots):
+        planned_question_type = "visual_time_series"
     if segment_comparison:
         planned_question_type = "comparison_argmax"
         slots = _segment_comparison_slots(slots)
@@ -143,6 +150,7 @@ def _build_heuristic_query_plan(
         verification_domain=verification_domain,
         segment_comparison=segment_comparison,
         capabilities=capabilities,
+        answer_type=normalized_type,
     )
     _add_finance_formula_constraint(
         constraints,
@@ -173,6 +181,11 @@ def _heuristic_evidence_slots(
     verification_domain: str,
     causal_intent: bool,
 ) -> tuple[tuple[EvidenceSlot, ...], bool, bool]:
+    visual_slots = mmdoc_visual_time_series_slots(
+        text, normalized_type, periods, metric, verification_domain, causal_intent
+    )
+    if visual_slots:
+        return visual_slots, False, False
     inferred_finance_specs = (
         finance_operand_specs(text, periods) if normalized_type == "numeric" else ()
     )
@@ -191,23 +204,25 @@ def _heuristic_evidence_slots(
     slots: tuple[EvidenceSlot, ...] = (
         ()
         if formula_status == "unsupported"
-        else _finance_slots(
-            finance_specs or finance_support_specs,
-            require_scale=bool(finance_specs and requested_scale(text)),
-            role="operand" if finance_specs else "support",
-            period_kind=period_kind,
-            page_labels=_explicit_page_labels(capabilities),
-            query_context=text,
-        )
-        if finance_specs or finance_support_specs
-        else heuristic_slots(
-            text,
-            normalized_type,
-            planned_question_type,
-            periods,
-            metric,
-            capabilities,
-            verification_domain,
+        else (
+            _finance_slots(
+                finance_specs or finance_support_specs,
+                require_scale=bool(finance_specs and requested_scale(text)),
+                role="operand" if finance_specs else "support",
+                period_kind=period_kind,
+                page_labels=_explicit_page_labels(capabilities),
+                query_context=text,
+            )
+            if finance_specs or finance_support_specs
+            else heuristic_slots(
+                text,
+                normalized_type,
+                planned_question_type,
+                periods,
+                metric,
+                capabilities,
+                verification_domain,
+            )
         )
     )
     if "total" in text.lower() and any(
@@ -215,14 +230,16 @@ def _heuristic_evidence_slots(
     ):
         active_date = agreement_date(text)
         slots = tuple(
-            replace(
-                slot,
-                cardinality=2,
-                operator_role="collection",
-                entity=f"active_at:{active_date}" if active_date else "active",
+            (
+                replace(
+                    slot,
+                    cardinality=2,
+                    operator_role="collection",
+                    entity=f"active_at:{active_date}" if active_date else "active",
+                )
+                if slot.metric == "revolving credit capacity"
+                else slot
             )
-            if slot.metric == "revolving credit capacity"
-            else slot
             for slot in slots
         )
     slots = _apply_fiscal_quarter_qualifiers(text, slots)
@@ -244,13 +261,15 @@ def _apply_fiscal_quarter_qualifiers(
     if not qualifiers:
         return slots
     return tuple(
-        replace(
-            slot,
-            period_kind="quarter",
-            entity=f"fiscal_quarter:{qualifiers[slot.period]}",
+        (
+            replace(
+                slot,
+                period_kind="quarter",
+                entity=f"fiscal_quarter:{qualifiers[slot.period]}",
+            )
+            if slot.period in qualifiers
+            else slot
         )
-        if slot.period in qualifiers
-        else slot
         for slot in slots
     )
 
@@ -406,16 +425,7 @@ def slot_coverage(plan: QueryPlan) -> float | None:
 
 
 def retrieval_budget(plan: QueryPlan) -> dict[str, int]:
-    if plan.question_type in {"multi_period_numeric", "numeric", "cross_page"}:
-        required_count = sum(
-            slot.required_for_retrieval for slot in plan.evidence_slots
-        )
-        return {"max_items": max(16, 2 * required_count), "max_pages": 6}
-    if plan.question_type == "visual":
-        return {"max_items": 8, "max_pages": 6}
-    if plan.question_type == "long_form":
-        return {"max_items": 12, "max_pages": 5}
-    return {"max_items": 8, "max_pages": 3}
+    return _retrieval_budget(plan)
 
 
 def _finance_slots(

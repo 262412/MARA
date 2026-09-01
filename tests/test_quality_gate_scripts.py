@@ -172,6 +172,51 @@ def test_coverage_policy_captures_python_subprocesses(tmp_path):
     assert "relative_files = True" in config
 
 
+def test_qasper_local_gate_covers_provider_generation_and_audit():
+    qasper_gate = _load_script("run_qasper_local_gate.py")
+
+    required_tests = {
+        "benchmark/tests/test_qasper_contract_probe_assertion_scope.py",
+        "benchmark/tests/test_qasper_contract_probe_generation.py",
+        "benchmark/tests/test_qasper_contract_probe_audit.py",
+        "libs/ktem/ktem_tests/test_qasper_assertion_scope_contract.py",
+        "libs/ktem/ktem_tests/test_mara_semantic_local_consistency.py",
+        "libs/ktem/ktem_tests/test_qasper_frozen_audit_authority.py",
+        "libs/ktem/ktem_tests/test_mara_semantic_audit_repair.py",
+        "libs/ktem/ktem_tests/test_qasper_stage9_10397107_auditor_serialization.py",
+        "benchmark/tests/test_qasper_stage9_causal_transaction.py",
+    }
+
+    assert required_tests <= set(qasper_gate.QASPER_LOCAL_GATE_TESTS)
+    assert all(
+        (REPO_ROOT / path).is_file() for path in qasper_gate.QASPER_LOCAL_GATE_TESTS
+    )
+
+
+def test_qasper_local_gate_builds_an_explicit_pytest_command():
+    qasper_gate = _load_script("run_qasper_local_gate.py")
+
+    command = qasper_gate.pytest_command("--maxfail=1")
+
+    assert command[:4] == [sys.executable, "-m", "pytest", "-q"]
+    assert command[-1] == "--maxfail=1"
+    assert (
+        command.count("benchmark/tests/test_qasper_contract_probe_generation.py") == 1
+    )
+    assert command.count("benchmark/tests/test_qasper_contract_probe_audit.py") == 1
+
+
+def test_qasper_local_gate_is_mandatory_before_provider_backed_runs():
+    contract = (
+        REPO_ROOT / "docs" / "development" / "codebase-hygiene-contract.md"
+    ).read_text(encoding="utf-8")
+
+    assert "Before any QASPER Provider probe, natural probe, or 6x3 submission" in (
+        contract
+    )
+    assert "scripts/run_qasper_local_gate.py" in contract
+
+
 def test_diff_coverage_uses_only_changed_production_statements(tmp_path):
     diff_gate = _load_script("check_diff_coverage.py")
     payload = {

@@ -68,6 +68,10 @@ def _locator_sources(item: dict[str, object]) -> set[str]:
 
 def _locator_pages(item: dict[str, object]) -> set[str]:
     pages = {item.get("page"), item.get("page_label"), item.get("page_number")}
+    pages.update(_iter_list_values(item.get("page_aliases")))
+    metadata = item.get("metadata")
+    if isinstance(metadata, dict):
+        pages.update(_iter_list_values(metadata.get("page_aliases")))
     citation = str(item.get("citation") or "")
     if "#page:" in citation:
         pages.add(citation.rsplit("#page:", 1)[-1])
@@ -80,6 +84,9 @@ def _locator_pages(item: dict[str, object]) -> set[str]:
 def _locator_element_ids(item: dict[str, object]) -> set[str]:
     values = [item.get("element_id"), item.get("element")]
     values.extend(_iter_list_values(item.get("element_id_aliases")))
+    metadata = item.get("metadata")
+    if isinstance(metadata, dict):
+        values.extend(_iter_list_values(metadata.get("element_id_aliases")))
     return {str(value or "").strip() for value in values if str(value or "").strip()}
 
 

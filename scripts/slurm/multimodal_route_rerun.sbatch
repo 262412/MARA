@@ -74,7 +74,7 @@ require_path() {
 
 http_ok() {
   local url="$1"
-  curl -fsS --max-time 3 "$url" >/dev/null
+  curl -fsS --max-time 3 "$url" >/dev/null 2>&1
 }
 
 wait_http() {
@@ -103,12 +103,18 @@ start_service() {
 }
 
 cleanup() {
+  local trapped_status=$?
+  local producer_status="${1:-$trapped_status}"
   local pid
   for pid in "${SERVICE_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
     fi
   done
+  if [[ "${MARA_BENCHMARK_COMPLETION_RECORDED:-0}" != "1" ]]; then
+    mara_reconcile_benchmark_completion "$producer_status" ||
+      log "producer completion reconciliation failed; preserving runtime for audit"
+  fi
 }
 trap cleanup EXIT
 
@@ -144,6 +150,7 @@ if [[ -n "$GIT_STATUS" && "${MARA_ALLOW_DIRTY_BENCHMARK:-0}" != "1" ]]; then
   exit 2
 fi
 export MARA_BENCHMARK_GIT_COMMIT="$GIT_COMMIT"
+export MARA_BENCHMARK_GIT_DIRTY="$GIT_DIRTY"
 mara_bootstrap_benchmark_runtime
 export MARA_BENCHMARK_INDEX_CONTRACT="$(
   "$MARA_BENCHMARK_PYTHON" \
@@ -263,6 +270,7 @@ ROUTE="${MARA_MULTIMODAL_ROUTE:-${MARA_PHASE3_ROUTE:-all}}"
 LIMIT="${MARA_MULTIMODAL_LIMIT:-${MARA_PHASE3_LIMIT:-20}}"
 SAMPLE_SEED="${MARA_MULTIMODAL_SAMPLE_SEED:-${MARA_PHASE3_SAMPLE_SEED:-0}}"
 ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-240}}"
+EXECUTION_CONTRACT="${MARA_EXECUTION_JOB_CONTRACT:-}"
 
 # python -m benchmark run executes through the job-owned interpreter below.
 "$MARA_BENCHMARK_PYTHON" -m benchmark run \
@@ -290,7 +298,25 @@ if [[ -z "$RUN_DIR" || ! -f "$RUN_DIR/summary.json" || ! -f "$RUN_DIR/prediction
   exit 1
 fi
 
-VALIDATION_ARGS=(--require-all-usable --manifest "$MANIFEST")
+test -f "$RUN_DIR/artifact_manifest.json"
+test -f "$RUN_DIR/artifact_complete.json"
+export MARA_BENCHMARK_ARTIFACT_DIR="$RUN_DIR"
+if [[ -n "$EXECUTION_CONTRACT" ]]; then
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --expected-keys-file "$EXECUTION_CONTRACT"
+  )
+else
+  # Manual unsharded runs keep the full-manifest validator contract.
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --manifest "$MANIFEST"
+  )
+fi
 if [[ "$REQUIRE_HYBRID_ELIGIBLE" == "1" ]]; then
   VALIDATION_ARGS+=(--require-hybrid-eligible)
 fi
@@ -318,4 +344,5 @@ print("element=", phase3.get("element"))
 print("hybrid=", phase3.get("hybrid"))
 PY
 
+mara_reconcile_benchmark_completion 0
 mara_cleanup_benchmark_runtime

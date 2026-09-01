@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .boolean_empirical_actions import empirical_action_present
 from .boolean_evidence_scope import (
     _actor,
     _prior_work_scope_question,
@@ -14,10 +15,52 @@ from .boolean_proposition_tokens import (
     _relation_surface_tokens,
 )
 from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
+from .boolean_scope_language import named_language_pair_present
 
 _MAX_CONTEXT_SENTENCES = 5
 _MAX_CONTEXT_DISTANCE = 3
 _MAX_CONTEXT_CHARS = 1400
+_MAX_QUALIFIED_EMPIRICAL_SENTENCES = 6
+_MAX_QUALIFIED_EMPIRICAL_DISTANCE = 5
+_EXPLICIT_CLASSIFICATION_RE = re.compile(
+    r"\b(?:is|are|was|were|can\s+be)\s+"
+    r"(?:(?:explicitly|commonly|generally)\s+)?"
+    r"(?:treated|classified|considered|regarded)(?:\s+as)?\b",
+    flags=re.IGNORECASE,
+)
+_QUALIFIED_CATEGORY_TOKENS = {"corpus", "dataset", "language", "task"}
+_GENERIC_EMPIRICAL_BRIDGE_TOKENS = {
+    "approach",
+    "baseline",
+    "component",
+    "data",
+    "dataset",
+    "experiment",
+    "language",
+    "method",
+    "model",
+    "performance",
+    "result",
+    "system",
+    "task",
+    "toolkit",
+}
+_DOCUMENT_CONTENT_QUESTION_RE = re.compile(
+    r"^\s*(?:does|did|has|have|is|was|were)\s+"
+    r"(?:the|this)\s+(?:paper|article|work)\b\s+"
+    r"(?:(?:also|further|explicitly|directly|primarily|mainly|itself)\s+)*"
+    r"(?:explore(?:s|d)?|exploring|discuss(?:es|ed|ing)?|review(?:s|ed|ing)?|"
+    r"survey(?:s|ed|ing)?|cover(?:s|ed|ing)?|describe(?:s|d)?|describing)\b",
+    flags=re.IGNORECASE,
+)
+_CURRENT_DOCUMENT_CONTENT_FRAME_RE = re.compile(
+    r"\b(?:this|the\s+present)\s+(?:paper|article|work)\s+"
+    r"(?:provide(?:s|d)?|providing|present(?:s|ed|ing)?|offer(?:s|ed|ing)?|"
+    r"give(?:s|n)?|giving|explore(?:s|d)?|exploring|discuss(?:es|ed|ing)?|"
+    r"review(?:s|ed|ing)?|survey(?:s|ed|ing)?|cover(?:s|ed|ing)?|"
+    r"describe(?:s|d)?|describing|aim(?:s|ed|ing)?\s+to)\b",
+    flags=re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -38,12 +81,25 @@ class PropositionContextWindow:
         }
 
 
-def contextual_actor(span: str, context: str, section_role: str) -> str:
+def contextual_actor(
+    span: str,
+    context: str,
+    section_role: str,
+    *,
+    question: str = "",
+    document_text: str = "",
+) -> str:
     actor = _actor(span, section_role)
     if actor != "unknown" or section_role in {"related_work", "future_work"}:
         return actor
     contextual = _actor(context, section_role)
-    return "current_paper" if contextual == "current_paper" else actor
+    if contextual == "current_paper":
+        return "current_paper"
+    if _DOCUMENT_CONTENT_QUESTION_RE.search(
+        question
+    ) and _CURRENT_DOCUMENT_CONTENT_FRAME_RE.search(document_text):
+        return "current_paper"
+    return actor
 
 
 def semantic_resolution_text(question: str, span: str, context: str) -> str:
@@ -128,7 +184,7 @@ def _semantic_window_indices(
         question,
         _statement_window_text(text, statements, first, last),
     )
-    for distance in range(1, _MAX_CONTEXT_DISTANCE + 1):
+    for distance in range(1, _MAX_QUALIFIED_EMPIRICAL_DISTANCE + 1):
         candidates = []
         if target_index - distance >= 0:
             candidates.append((target_index - distance, last))
@@ -137,13 +193,18 @@ def _semantic_window_indices(
         for candidate_first, candidate_last in candidates:
             candidate_first = min(first, candidate_first)
             candidate_last = max(last, candidate_last)
-            if candidate_last - candidate_first + 1 > _MAX_CONTEXT_SENTENCES:
+            sentence_count = candidate_last - candidate_first + 1
+            if sentence_count > _MAX_QUALIFIED_EMPIRICAL_SENTENCES:
                 continue
             candidate_text = _statement_window_text(
                 text,
                 statements,
                 candidate_first,
                 candidate_last,
+            )
+            extended = bool(
+                distance > _MAX_CONTEXT_DISTANCE
+                or sentence_count > _MAX_CONTEXT_SENTENCES
             )
             if (
                 len(candidate_text) > _MAX_CONTEXT_CHARS
@@ -154,12 +215,75 @@ def _semantic_window_indices(
                     candidate_first,
                     candidate_last,
                 )
+                or (
+                    extended
+                    and not qualified_empirical_context(question, candidate_text)
+                )
             ):
                 continue
             score = _semantic_frame_score(question, candidate_text)
             if score > best_score:
                 first, last, best_score = candidate_first, candidate_last, score
     return first, last
+
+
+def qualified_empirical_context(question: str, value: str) -> bool:
+    """Allow a longer window only for an explicit empirical category bridge."""
+
+    if primary_boolean_relation(question) != "evaluate":
+        return False
+    relation_tokens = _relation_surface_tokens("evaluate")
+    clauses = re.split(
+        r"(?:\r?\n)+|(?<=[.!?;])\s+|\s+(?:but|however|whereas)\s+",
+        str(value or ""),
+        flags=re.IGNORECASE,
+    )
+    empirical_clauses = [
+        clause for clause in clauses if empirical_action_present(clause)
+    ]
+    for empirical_clause in empirical_clauses:
+        empirical_tokens = normalized_object_tokens(empirical_clause, relation_tokens)
+        for context_clause in clauses:
+            if context_clause == empirical_clause:
+                continue
+            context_tokens = normalized_object_tokens(context_clause, relation_tokens)
+            if qualified_category_bridge(
+                question,
+                empirical_tokens,
+                context_tokens,
+                context_clause,
+                relation_tokens,
+            ):
+                return True
+    return False
+
+
+def specific_empirical_bridge_tokens(
+    empirical_tokens: set[str],
+    context_tokens: set[str],
+) -> set[str]:
+    return (empirical_tokens & context_tokens) - _GENERIC_EMPIRICAL_BRIDGE_TOKENS
+
+
+def qualified_category_bridge(
+    question: str,
+    empirical_tokens: set[str],
+    context_tokens: set[str],
+    context_clause: str,
+    relation_tokens: set[str],
+) -> bool:
+    question_tokens = normalized_object_tokens(question, relation_tokens)
+    category = (
+        question_tokens & empirical_tokens & context_tokens & _QUALIFIED_CATEGORY_TOKENS
+    )
+    qualifiers = (
+        (question_tokens & context_tokens)
+        - empirical_tokens
+        - _GENERIC_EMPIRICAL_BRIDGE_TOKENS
+    )
+    return bool(
+        category and qualifiers and _EXPLICIT_CLASSIFICATION_RE.search(context_clause)
+    )
 
 
 def _semantic_frame_score(
@@ -251,9 +375,10 @@ def _crosses_actor_boundary(
 
 
 def _sentence_offsets(text: str) -> list[tuple[int, int]]:
+    protected = re.sub(r"(?<=\d)\.(?=\d)", "\x00", str(text or ""))
     return [
         (candidate.start(), candidate.end())
-        for candidate in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", str(text or ""))
+        for candidate in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", protected)
         if candidate.group(0).strip()
     ]
 
@@ -304,6 +429,8 @@ def normalized_object_tokens(value: str, relation_tokens: set[str]) -> set[str]:
         normalized.discard("parallel")
         normalized -= {_object_token(token) for token in parallel_resources}
         normalized.add("parallel_data")
+    if named_language_pair_present(value):
+        normalized.update({"language", "pair"})
     return normalized
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .metrics import page_hit_score
+from .mmdoc_locator_crosswalk import audited_mmdoc_page_coverage, audited_mmdoc_page_hit
 from .page_alignment import evidence_aligned_page_hit_score
 
 
@@ -10,13 +11,20 @@ def page_metric_contract(prediction: dict[str, Any]) -> dict[str, Any]:
     official = _official_gold_pages(prediction)
     canonical = _canonical_gold_pages(prediction)
     strict = page_hit_score(prediction["predicted_pages"], official)
-    equivalent = evidence_aligned_page_hit_score(
-        prediction["predicted_pages"],
-        canonical,
-        gold_evidence=list(prediction.get("gold_evidence") or []),
-        evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
-        retrieved_hits=list(prediction.get("retrieved_hits") or []),
-    )
+    audited_mmdoc = audited_mmdoc_page_hit(prediction)
+    equivalent: float | None
+    if strict == 1.0:
+        equivalent = strict
+    elif audited_mmdoc is not None:
+        equivalent = audited_mmdoc
+    else:
+        equivalent = evidence_aligned_page_hit_score(
+            prediction["predicted_pages"],
+            canonical,
+            gold_evidence=list(prediction.get("gold_evidence") or []),
+            evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
+            retrieved_hits=list(prediction.get("retrieved_hits") or []),
+        )
     legacy_page_hit = strict if strict != 0.0 else equivalent
     return {
         "legacy_page_hit": legacy_page_hit,
@@ -63,6 +71,9 @@ def _equivalent_coverage(
     ]
     if not gold_records:
         return fallback
+    audited_mmdoc = audited_mmdoc_page_coverage(prediction)
+    if audited_mmdoc is not None:
+        return audited_mmdoc
     hits = 0
     for record in gold_records:
         page = record.get("page", record.get("page_label"))

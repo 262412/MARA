@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from .boolean_authoritative_conflict import conflict_sides_are_complete
-from .boolean_claim_verification import boolean_claim_authority
+from .boolean_verification_projection import (
+    boolean_verification as _boolean_verification,
+)
 from .calculation_claim_verification import calculation_claim_result
 from .claim_clauses import split_claim_clauses
 from .claim_filtering import answer_claims
@@ -427,6 +429,8 @@ def _claim_decision_metadata(results: list[VerifiedClaim]) -> dict[str, Any]:
         "predicate_arguments": typed.predicate_arguments,
         "qualifier": typed.qualifier,
         "quantifier": typed.quantifier,
+        "authority_derivations": typed.authority_derivations,
+        "selected_derivation_id": typed.selected_derivation_id,
         "authoritative_conflict": typed.authoritative_conflict,
     }
 
@@ -508,75 +512,6 @@ def _supported_reason(mode: str, retrieve_status: str) -> str:
         f"{mode.title()} verification used available evidence despite "
         f"{retrieve_status} retrieval status."
     )
-
-
-def _boolean_verification(
-    prompt: str,
-    answer: str,
-    evidence_items: list[dict[str, Any]],
-    *,
-    allow_missing_polarity: bool = False,
-) -> tuple[list[str], list[VerifiedClaim]] | None:
-    assessment = boolean_claim_authority(
-        prompt,
-        answer,
-        evidence_items,
-        allow_missing_polarity=allow_missing_polarity,
-    )
-    if assessment is None:
-        return None
-    supporting = tuple(value.evidence_id for value in assessment.supporting)
-    contradicting = tuple(value.evidence_id for value in assessment.contradicting)
-    conflict = assessment.authoritative_conflict or {}
-    authority = (
-        assessment.supporting[0]
-        if assessment.status == "supported" and assessment.supporting
-        else None
-    )
-    result = VerifiedClaim(
-        claim_id="claim:1",
-        claim=assessment.claim,
-        status=assessment.status,
-        supporting_evidence_ids=supporting,
-        contradicting_evidence_ids=contradicting,
-        input_answer_polarity=assessment.input_answer_polarity,
-        canonical_answer_polarity=assessment.canonical_answer_polarity,
-        semantic_correction_applied=assessment.semantic_correction_applied,
-        authority_status=(
-            "exact_conflict"
-            if conflict
-            else "exact"
-            if authority is not None
-            else "missing"
-        ),
-        authoritative_evidence_id=(authority.evidence_id if authority else ""),
-        authoritative_evidence_ref=(authority.evidence_ref if authority else ""),
-        authoritative_span_id=(authority.span_id if authority else ""),
-        authoritative_quote=(authority.quote if authority else ""),
-        authoritative_span_start=(authority.span_start if authority else None),
-        authoritative_span_end=(authority.span_end if authority else None),
-        authoritative_canonical_start=(
-            authority.canonical_start if authority else None
-        ),
-        authoritative_canonical_end=(authority.canonical_end if authority else None),
-        actor=(authority.actor if authority else ""),
-        section_scope=(authority.section_scope if authority else ""),
-        relation=(authority.relation if authority else ""),
-        object=(authority.object if authority else ""),
-        predicate_arguments=(
-            (authority.object,) if authority and authority.object else ()
-        ),
-        qualifier=(authority.qualifier if authority else ""),
-        quantifier=(authority.quantifier if authority else ""),
-        supporting_evidence_spans=tuple(
-            value.as_dict() for value in assessment.supporting
-        ),
-        contradicting_evidence_spans=tuple(
-            value.as_dict() for value in assessment.contradicting
-        ),
-        authoritative_conflict=conflict,
-    )
-    return [assessment.claim], [result]
 
 
 __all__ = [

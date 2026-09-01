@@ -4,10 +4,30 @@ import json
 import re
 from typing import Any
 
-from .answer_abstention import apply_abstention_projection
+from .answer_citation_projection import (
+    canonical_source_alias_map as _canonical_source_alias_map,
+)
+from .answer_citation_projection import (
+    canonical_source_backrefs as _canonical_source_backrefs,
+)
+from .answer_citation_projection import canonical_source_refs as _canonical_source_refs
+from .answer_citation_projection import (
+    citation_candidate_items as _citation_candidate_items,
+)
+from .answer_citation_projection import (
+    citation_projection_source as _citation_projection_source,
+)
+from .answer_citation_projection import (
+    record_frozen_citation_trace as _record_frozen_citation_trace,
+)
+from .answer_citation_projection import (
+    set_citation_projection_source as _set_citation_projection_source,
+)
+from .answer_citation_projection import (
+    terminal_commit_citations as _terminal_commit_citations,
+)
 from .answer_modes import normalize_benchmark_answer_mode
 from .answer_repetition import deduplicate_final_answer as _deduplicate_final_answer
-from .answer_scoring_adapter import select_scoring_answer
 from .calculation_citation_projection import calculation_citation_items
 from .citation_claim_selection import minimum_verified_claim_support_items
 from .citation_rendering import citation_from_item as _citation_from_item
@@ -16,9 +36,9 @@ from .citation_rendering import (
     matching_canonical_source_ref as _matching_canonical_source_ref,
 )
 from .citation_stage_projection import (
+    frozen_canonical_plan_citation_items,
     is_uuid_like_source_id,
     record_emitted_citation_evidence,
-    source_ref_uses_uuid_like_source,
 )
 from .finance_answer_finalization import (
     enforce_finance_citation_authority,
@@ -31,14 +51,12 @@ from .finance_citation_contract import (
 )
 from .qasper_answer_normalization import is_unanswerable_text as _is_unanswerable_text
 from .qasper_answer_normalization import (
-    normalize_qasper_contract_answer as _normalize_qasper_contract_answer,
-)
-from .qasper_answer_normalization import (
     record_qasper_metadata as _record_qasper_metadata,
 )
 from .qasper_terminal_commit import qasper_terminal_scoring_commit
 from .ragtruth_answer_contract import ragtruth_finalization_metadata
-from .ragtruth_answer_finalizer import finalize_ragtruth_if_requested
+from .ragtruth_answer_finalizer import finalize_ragtruth_prediction
+from .standard_answer_finalizer import finalize_standard_prediction
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 _TRUNCATED_JSON_ANSWER_RE = re.compile(
@@ -61,70 +79,28 @@ def finalize_prediction_answer(
         prediction,
         dataset_name=dataset_name,
     )
-    if finalize_ragtruth_if_requested(
-        prediction, raw_answer, dataset_name, normalized_mode
-    ):
+    if _is_ragtruth_dataset(dataset_name):
+        finalize_ragtruth_prediction(
+            prediction,
+            raw_answer=raw_answer,
+            dataset_name=dataset_name,
+            mode=normalized_mode,
+            presentation_answer=presentation_answer,
+            preserve_semantic_answer=preserve_semantic_answer,
+        )
         return
-    raw_answer, repetition_removed, repetition_kind = _finalization_answer_source(
-        raw_answer,
-        prediction=prediction,
-        dataset_name=dataset_name,
-        preserve_semantic_answer=preserve_semantic_answer,
-    )
-    raw_answer, qasper_contract_normalized = _normalize_qasper_contract_answer(
-        raw_answer,
-        prediction=prediction,
-        dataset_name=dataset_name,
-    )
-    _prepare_finalization_evidence(prediction, dataset_name=dataset_name)
-    (
-        answer_for_user,
-        answer_text_for_user,
-        answer_for_scoring_source,
-        structured_answer,
-        truncated_answer,
-    ) = _prepare_standard_answer(
-        raw_answer,
-        prediction=prediction,
-        dataset_name=dataset_name,
-        mode=normalized_mode,
-    )
-    answer_for_scoring, source = select_scoring_answer(
-        answer_for_user=answer_for_user,
-        answer_for_scoring_source=answer_for_scoring_source,
-        structured_answer=structured_answer,
-        truncated_answer=truncated_answer,
-        dataset_name=dataset_name,
-        mode=normalized_mode,
-        preserve_semantic_answer=preserve_semantic_answer,
-    )
-    answer_for_user, answer_for_scoring, source = apply_abstention_projection(
-        prediction,
-        answer_for_user=answer_for_user,
-        answer_for_scoring=answer_for_scoring,
-        answer_text_for_user=answer_text_for_user,
-        presentation_answer=presentation_answer,
-        source=source,
-        preserve_semantic_answer=preserve_semantic_answer,
-    )
-    _store_finalized_answers(
-        prediction,
-        answer_for_user=answer_for_user,
-        answer_for_scoring=answer_for_scoring,
-        answer_text_for_user=answer_text_for_user,
-        dataset_name=dataset_name,
-        mode=normalized_mode,
-        source=source,
-        repetition_removed=repetition_removed,
-        repetition_kind=repetition_kind,
-    )
-    _record_standard_finalization(
+    finalize_standard_prediction(
         prediction,
         raw_answer=raw_answer,
-        answer_text_for_user=answer_text_for_user,
         dataset_name=dataset_name,
-        qasper_contract_normalized=qasper_contract_normalized,
+        mode=normalized_mode,
+        presentation_answer=presentation_answer,
+        preserve_semantic_answer=preserve_semantic_answer,
     )
+
+
+def _is_ragtruth_dataset(dataset_name: str) -> bool:
+    return "ragtruth" in str(dataset_name or "").strip().lower()
 
 
 def _prepare_finalization_evidence(
@@ -173,6 +149,7 @@ def _record_standard_finalization(
             span=answer_text_for_user,
         ),
         candidates=_citation_candidate_items(prediction),
+        projection_source=_citation_projection_source(prediction),
     )
 
 
@@ -211,6 +188,23 @@ def _prepare_standard_answer(
                 answer_for_user = _render_structured_answer_for_user(
                     {"answer": answer_for_user, "citations": citations}
                 )
+    if (
+        structured_answer is not None
+        and mode != "product"
+        and metadata_citations_allowed(dataset_name, prediction)
+        and not prediction.get("predicted_citations")
+        and not prediction.get("structured_citations")
+    ):
+        citations = attach_structured_citations_from_evidence(
+            prediction,
+            span=answer_text_for_user,
+        )
+        if citations:
+            prediction["structured_citations"] = citations
+            prediction["predicted_citations"] = _citation_texts(citations)
+            answer_for_user = _render_structured_answer_for_user(
+                {"answer": answer_text_for_user, "citations": citations}
+            )
     if mode != "product" and metadata_citations_allowed(dataset_name, prediction):
         citations = _canonicalized_existing_citations(
             prediction,
@@ -286,6 +280,23 @@ def attach_structured_citations_from_evidence(
             )
         )
     ]
+    frozen_items, frozen_trace = frozen_canonical_plan_citation_items(
+        prediction,
+        all_candidates,
+    )
+    _record_frozen_citation_trace(prediction, frozen_trace)
+    frozen_citations = [
+        citation
+        for item in frozen_items
+        if (
+            citation := _citation_from_item(
+                item,
+                span=span,
+                canonical_sources=canonical_sources,
+                source_backrefs=_canonical_source_backrefs(item),
+            )
+        )
+    ]
     verified_citations = []
     verified_items = minimum_verified_claim_support_items(
         prediction,
@@ -296,6 +307,7 @@ def attach_structured_citations_from_evidence(
         prediction,
         [
             *[match.item for match in calculation_matches],
+            *frozen_items,
             *verified_items,
         ],
     )
@@ -308,7 +320,15 @@ def attach_structured_citations_from_evidence(
         )
         if citation:
             verified_citations.append(citation)
-    return _unique_citations([*calculation_citations, *verified_citations])
+    if frozen_items:
+        _set_citation_projection_source(prediction, "frozen_canonical_plan")
+    elif calculation_matches:
+        _set_citation_projection_source(prediction, "verified_calculation")
+    elif verified_items:
+        _set_citation_projection_source(prediction, "verified_claim_support")
+    return _unique_citations(
+        [*calculation_citations, *frozen_citations, *verified_citations]
+    )
 
 
 def _canonicalized_existing_citations(
@@ -346,7 +366,7 @@ def _existing_structured_citations(
     ]
     if citations:
         return citations
-    return [
+    citations = [
         citation
         for citation in (
             _citation_from_source_ref(str(item), span=span)
@@ -354,6 +374,9 @@ def _existing_structured_citations(
         )
         if citation
     ]
+    if citations:
+        return citations
+    return _terminal_commit_citations(prediction, span=span)
 
 
 def _canonicalized_citation_item(
@@ -447,94 +470,6 @@ def _normalize_structured_citation(item: Any) -> dict[str, str]:
         if page:
             citation["page_label"] = page
     return citation
-
-
-def _citation_candidate_items(prediction: dict[str, Any]) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    evidence_bundle = prediction.get("evidence_bundle")
-    if isinstance(evidence_bundle, dict):
-        items.extend(
-            item
-            for item in evidence_bundle.get("items") or []
-            if isinstance(item, dict)
-        )
-    evidence_metadata = prediction.get("evidence_metadata")
-    if isinstance(evidence_metadata, dict):
-        items.extend(
-            item
-            for item in evidence_metadata.get("execution_operand_evidence") or []
-            if isinstance(item, dict)
-        )
-        items.extend(
-            item
-            for item in evidence_metadata.get("evidence") or []
-            if isinstance(item, dict)
-        )
-    items.extend(
-        item
-        for item in prediction.get("retrieved_hits") or []
-        if isinstance(item, dict)
-    )
-    return items
-
-
-def _canonical_source_refs(prediction: dict[str, Any]) -> list[str]:
-    refs: list[str] = []
-    for item in _citation_candidate_items(prediction):
-        for source in _canonical_source_backrefs(item):
-            value = str(source or "").strip()
-            if value and value not in refs:
-                refs.append(value)
-    for key in ("scored_predicted_sources", "predicted_sources"):
-        for source in prediction.get(key) or []:
-            value = str(source or "").strip()
-            if (
-                value
-                and not source_ref_uses_uuid_like_source(value)
-                and value not in refs
-            ):
-                refs.append(value)
-    return refs
-
-
-def _canonical_source_alias_map(
-    prediction: dict[str, Any],
-    canonical_sources: list[str],
-) -> dict[str, tuple[str, ...]]:
-    canonical_ids = {
-        str(source).split("#", 1)[0]
-        for source in canonical_sources
-        if str(source or "").strip()
-    }
-    aliases: dict[str, list[str]] = {}
-    for item in _citation_candidate_items(prediction):
-        runtime_ids = [
-            str(item.get(key) or "").strip()
-            for key in ("source_id", "document_id", "file_id", "runtime_source_id")
-            if str(item.get(key) or "").strip()
-        ]
-        explicit = [
-            str(value or "").strip().split("#", 1)[0]
-            for value in (
-                *list(item.get("source_aliases") or []),
-                *list(item.get("source_backrefs") or []),
-            )
-            if str(value or "").strip()
-        ]
-        matched = [value for value in explicit if value in canonical_ids]
-        for runtime_id in runtime_ids:
-            values = aliases.setdefault(runtime_id, [])
-            values.extend(value for value in matched if value not in values)
-    return {key: tuple(values) for key, values in aliases.items()}
-
-
-def _canonical_source_backrefs(item: dict[str, Any]) -> list[str]:
-    refs: list[str] = []
-    for source in item.get("source_backrefs") or []:
-        value = str(source or "").strip()
-        if value and not source_ref_uses_uuid_like_source(value):
-            refs.append(value)
-    return refs
 
 
 def _render_structured_answer_for_user(structured: dict[str, Any]) -> str:

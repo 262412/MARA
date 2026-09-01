@@ -6,6 +6,11 @@ _RELATION_SURFACES = {
     "attribute": {"are", "is", "was", "were"},
     "annotate": {
         "annotate",
+        "annotated",
+        "annotation",
+        "annotations",
+        "annotator",
+        "annotators",
         "construct",
         "crowdsource",
         "crowdsourced",

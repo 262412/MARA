@@ -98,11 +98,19 @@ def test_paired_input_hash_allows_code_change_but_requires_frozen_index(
 ):
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps({"dataset_name": "frozen"}), encoding="utf-8")
-    commits = iter((("baseline", False), ("candidate", False), ("candidate", False)))
+    commits = iter(
+        (
+            ("baseline", False),
+            ("candidate", False),
+            ("candidate", False),
+            ("candidate", False),
+        )
+    )
     monkeypatch.setattr(provenance, "_git_state", lambda _root: next(commits))
     environment = {
         "MARA_BENCHMARK_SERVICE_CONTRACT": "service-contract",
         "MARA_BENCHMARK_INDEX_CONTRACT": f"sha256:{'a' * 64}",
+        "MARA_BENCHMARK_EMBEDDING_CONTRACT": "embedding-contract-a",
     }
 
     baseline = provenance.benchmark_run_provenance(
@@ -126,6 +134,15 @@ def test_paired_input_hash_allows_code_change_but_requires_frozen_index(
             "MARA_BENCHMARK_INDEX_CONTRACT": f"sha256:{'b' * 64}",
         },
     )
+    changed_embedding = provenance.benchmark_run_provenance(
+        manifest_path=manifest,
+        config={"route": "all", "sample_seed": 7},
+        repo_root=tmp_path,
+        environ={
+            **environment,
+            "MARA_BENCHMARK_EMBEDDING_CONTRACT": "embedding-contract-b",
+        },
+    )
 
     assert baseline["contract_hash"] != candidate["contract_hash"]
     assert baseline["paired_input_hash"] == candidate["paired_input_hash"]
@@ -138,6 +155,8 @@ def test_paired_input_hash_allows_code_change_but_requires_frozen_index(
             {"run_provenance": baseline},
             {"run_provenance": changed_index},
         )
+    assert baseline["embedding_contract"] == "embedding-contract-a"
+    assert baseline["paired_input_hash"] != changed_embedding["paired_input_hash"]
 
 
 def test_paired_input_check_requires_recorded_index_contract():

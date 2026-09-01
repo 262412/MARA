@@ -53,6 +53,7 @@ def build_turn_request(
         qa_scope=request.qa_scope,
         page_number=request.page_number,
         selected_text=request.selected_text,
+        selected_source_title=request.selected_source_title,
         graph_context=deepcopy(request.graph_context),
         graph_source_ids=deepcopy(request.graph_source_ids),
         settings=deepcopy(request.settings or load_settings(resolved_user_id)),

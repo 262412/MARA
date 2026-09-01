@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .boolean_scope_alternatives import expanded_alternative_quote
+
 
 def _normalized(value: str) -> str:
     return " ".join(str(value or "").lower().split())
@@ -14,6 +16,10 @@ def evidence_item_text(item: dict[str, Any]) -> str:
         for field in ("text", "ocr_text", "vlm_text", "caption")
         if str(item.get(field) or "").strip()
     )
+
+
+def _scope_quote(question: str, item: dict[str, Any], quote: str) -> str:
+    return expanded_alternative_quote(question, evidence_item_text(item), quote)
 
 
 def _matching_item(

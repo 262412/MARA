@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import copy
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from ktem.docqa.element_record_contract import element_record_from_mapping
 from ktem.docqa.evidence_record_identity import unique_evidence_records
 
+from .ocr_layout_sidecars import build_pdf_ocr_layout_sidecar
 from .schemas import BenchmarkDocument
 
 IMAGE_FORMAT_TYPES = {"bmp", "gif", "jpeg", "jpg", "png", "tif", "tiff", "webp"}
@@ -39,9 +43,36 @@ def page_image_records_from_documents(
 def element_index_records_from_documents(
     documents: list[BenchmarkDocument],
 ) -> list[dict[str, Any]]:
+    return _element_index_records_from_documents(
+        documents,
+        produce_pdf_ocr_layout=False,
+    )
+
+
+def mmdoc_element_index_records_from_documents(
+    documents: list[BenchmarkDocument],
+) -> list[dict[str, Any]]:
+    return _element_index_records_from_documents(
+        documents,
+        produce_pdf_ocr_layout=True,
+    )
+
+
+def _element_index_records_from_documents(
+    documents: list[BenchmarkDocument],
+    *,
+    produce_pdf_ocr_layout: bool,
+) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for document in documents:
-        records.extend(_offline_element_records(document))
+        offline_records = _offline_element_records(document)
+        records.extend(offline_records)
+        if (
+            produce_pdf_ocr_layout
+            and not offline_records
+            and document.path.suffix.lower() == ".pdf"
+        ):
+            records.extend(_pdf_ocr_element_records(document))
         for payload in _document_element_payloads(document):
             record = _element_index_record_from_payload(
                 document, payload, len(records) + 1
@@ -49,6 +80,45 @@ def element_index_records_from_documents(
             if record is not None:
                 records.append(record)
     return unique_evidence_records(records)
+
+
+def _pdf_ocr_element_records(document: BenchmarkDocument) -> list[dict[str, Any]]:
+    path = Path(document.path)
+    file_stat = path.stat()
+    resolved_path = str(path.resolve())
+    payloads = _cached_pdf_ocr_layout_elements(
+        resolved_path,
+        int(file_stat.st_size),
+        int(file_stat.st_mtime_ns),
+        str(document.document_id),
+    )
+    records: list[dict[str, Any]] = []
+    for index, payload in enumerate(payloads, start=1):
+        record = _element_index_record_from_payload(
+            document, copy.deepcopy(payload), index
+        )
+        if record is not None:
+            records.append(record)
+    return records
+
+
+@lru_cache(maxsize=8)
+def _cached_pdf_ocr_layout_elements(
+    resolved_path: str,
+    file_size: int,
+    modified_ns: int,
+    document_id: str,
+) -> tuple[dict[str, Any], ...]:
+    del file_size, modified_ns
+    sidecar = build_pdf_ocr_layout_sidecar(
+        resolved_path,
+        document_id=document_id,
+    )
+    return tuple(
+        copy.deepcopy(payload)
+        for payload in sidecar.get("layout_elements") or []
+        if isinstance(payload, dict)
+    )
 
 
 def page_image_record_from_document(document: BenchmarkDocument) -> dict[str, Any]:
@@ -125,8 +195,19 @@ def _element_index_record_from_payload(
     evidence_id = str(
         payload.get("evidence_id") or f"element:{file_id}:{page_label}:{element_id}"
     )
+    metadata = dict(payload.get("metadata") or {})
+    for key in (
+        "visual_extractions",
+        "structured_visual_evidence",
+        "table_cells",
+        "ocr_cells",
+        "vlm_cells",
+    ):
+        if key in payload and key not in metadata:
+            metadata[key] = payload[key]
+    normalized_payload = {**payload, "metadata": metadata}
     return element_record_from_mapping(
-        payload,
+        normalized_payload,
         default_file_id=file_id,
         default_file_name=file_name,
         default_page_label=page_label,

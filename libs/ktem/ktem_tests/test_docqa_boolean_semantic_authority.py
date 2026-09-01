@@ -5,6 +5,9 @@ from ktem.docqa.boolean_claim_verification import boolean_claim_authority
 from ktem.docqa.boolean_proposition_candidates import (
     boolean_proposition_candidate_score,
 )
+from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.query_evidence_binding import bind_evidence_slots
+from ktem.docqa.query_planning import build_query_plan
 
 
 def _item(text: str, *, section_id: str = "results") -> dict[str, object]:
@@ -369,3 +372,123 @@ def test_deictic_dataset_cannot_bind_to_multiple_distinct_objects() -> None:
     assert authority.canonical_answer_polarity == ""
     assert authority.supporting == ()
     assert authority.reason == "ambiguous_deictic_object_binding"
+
+
+@pytest.mark.parametrize(
+    ("question", "evidence"),
+    (
+        (
+            "Are the answers double annotated?",
+            "Each answer was annotated independently by two annotators.",
+        ),
+    ),
+)
+def test_annotation_count_synonyms_bind_to_a_typed_count_atom(
+    question: str,
+    evidence: str,
+) -> None:
+    item = _item(evidence, section_id="results")
+
+    authority = boolean_claim_authority(
+        question,
+        "unanswerable",
+        [item],
+        allow_missing_polarity=True,
+    )
+
+    assert boolean_proposition_candidate_score(question, item) > 0.0
+    assert authority is not None
+    assert authority.status == "supported"
+    assert authority.canonical_answer_polarity == "yes"
+    [support] = authority.supporting
+    assert support.evidence_id == identity_of(item).key
+    assert support.quote == evidence
+    assert support.evidence_ref == support.span_id
+    assert support.actor == "current_paper"
+    assert support.relation == "annotate"
+    assert support.object == "annotation count"
+    assert support.quantifier == "count:2"
+    assert support.polarity == "yes"
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    (
+        "Every question in the test set is answered by at least two additional experts.",
+        "Each answer was labeled independently by two additional experts.",
+    ),
+)
+def test_annotation_count_lower_bound_is_candidate_but_not_exact_authority(
+    evidence: str,
+) -> None:
+    question = "Are the answers double (and not triple) annotated?"
+    item = _item(evidence, section_id="results")
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+
+    [slot] = bind_evidence_slots(plan, [item]).evidence_slots
+    authority = boolean_claim_authority(
+        question,
+        "unanswerable",
+        [item],
+        allow_missing_polarity=True,
+    )
+
+    assert boolean_proposition_candidate_score(question, item) > 0.0
+    assert slot.status == "retrieved_unverified"
+    assert slot.evidence_ids == (identity_of(item).key,)
+    assert authority is not None
+    assert authority.status == "unknown"
+    assert authority.canonical_answer_polarity == ""
+    assert authority.supporting == ()
+
+
+def test_annotation_count_binding_keeps_retrieval_unverified_until_exact_authority() -> None:
+    question = "Are the answers double annotated?"
+    item = _item(
+        "Each answer was labeled independently by two annotators.",
+        section_id="results",
+    )
+    plan = build_query_plan(
+        question,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+
+    [slot] = bind_evidence_slots(plan, [item]).evidence_slots
+
+    assert slot.slot_id == "support:boolean_proposition"
+    assert slot.status == "retrieved_unverified"
+    assert slot.evidence_ids == (identity_of(item).key,)
+
+
+def test_annotation_count_without_target_specific_negative_stays_unknown() -> None:
+    question = "Are the answers double (and not triple) annotated?"
+    evidence = _item("Each answer was annotated independently.", section_id="methods")
+
+    authority = boolean_claim_authority(question, "no", [evidence])
+
+    assert authority is not None
+    assert authority.status == "unknown"
+    assert authority.canonical_answer_polarity == ""
+    assert authority.supporting == ()
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    (
+        "The answers were annotated, but the number of annotators is not stated.",
+        "The answers were not triple annotated.",
+    ),
+)
+def test_annotation_count_no_requires_explicit_target_negative(evidence: str) -> None:
+    question = "Are the answers double (and not triple) annotated?"
+
+    authority = boolean_claim_authority(question, "no", [_item(evidence)])
+
+    assert authority is not None
+    assert authority.status == "unknown"
+    assert authority.canonical_answer_polarity == ""

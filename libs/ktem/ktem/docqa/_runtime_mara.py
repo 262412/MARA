@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from copy import deepcopy
+import os
+from copy import copy, deepcopy
 from time import monotonic
 from typing import Any
 
@@ -269,8 +270,14 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
     pipeline.retrieval_query = str(
         getattr(request, "retrieval_query", "") or ""
     ).strip()
+    pipeline.selected_file_ids = list(getattr(request, "selected_file_ids", None) or [])
+    pipeline.selected_source_title = " ".join(
+        str(getattr(request, "selected_source_title", "") or "").split()
+    )
     pipeline.dataset_family = str(getattr(request, "dataset_family", "") or "").strip()
     pipeline.task_type = request.task_type or ""
+    pipeline.answer_type = request.answer_type or pipeline.task_type
+    pipeline.modality = str(getattr(request, "modality", "") or "").strip()
     pipeline.agent_mode = request.agent_mode or getattr(pipeline, "agent_mode", "auto")
     pipeline.artifact_type = request.artifact_type or ""
     pipeline.controller_mode = request.controller_mode or "off"
@@ -302,7 +309,52 @@ def apply_request_context(pipeline: Any, request: Any, graph_context: dict) -> N
         None,
     )
     _apply_visual_backends(pipeline, request)
+    configure_semantic_proposition_runtime(pipeline, request)
     pipeline.docqa_request = request
+
+
+def configure_semantic_proposition_runtime(pipeline: Any, request: Any) -> None:
+    """Give strict QASPER benchmark runs an independent audit instance."""
+
+    release_mode = (
+        str(getattr(request, "origin", "") or "").strip().casefold() == "benchmark"
+        and str(getattr(request, "verification_domain", "") or "").strip().casefold()
+        == "qasper"
+        and str(getattr(request, "verification_mode", "") or "").strip().casefold()
+        == "strict"
+    )
+    pipeline.semantic_proposition_release_mode = release_mode
+    if not release_mode:
+        return
+    configured = getattr(pipeline, "semantic_entailment_auditor_llm", None)
+    answering = getattr(getattr(pipeline, "answering_pipeline", None), "llm", None)
+    if callable(configured) and configured is not answering:
+        return
+    auditor = _configured_qasper_auditor() or copy(answering)
+    if callable(auditor) and auditor is not answering:
+        pipeline.semantic_entailment_auditor_llm = auditor
+
+
+def _configured_qasper_auditor() -> Any | None:
+    base_url = os.environ.get("MARA_QASPER_CONTRACT_AUDITOR_BASE_URL", "").strip()
+    model = os.environ.get("MARA_QASPER_CONTRACT_AUDITOR_MODEL", "").strip()
+    if not base_url and not model:
+        return None
+    if not base_url or not model:
+        raise ValueError(
+            "QASPER auditor configuration requires both base URL and model"
+        )
+
+    from kotaemon.llms import ChatOpenAI
+
+    return ChatOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY") or "local",
+        base_url=base_url,
+        model=model,
+        temperature=0,
+        timeout=float(os.environ.get("MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS", "60")),
+        max_retries=0,
+    )
 
 
 def build_visual_retriever_backend(backend_name: str):
@@ -374,12 +426,15 @@ def _backend_metadata(
 def copy_request_fields(target: Any, source: Any) -> None:
     target.controller_question = getattr(source, "controller_question", "")
     target.retrieval_query = getattr(source, "retrieval_query", "")
+    target.selected_source_title = getattr(source, "selected_source_title", "")
     target.dataset_family = getattr(source, "dataset_family", "")
     target.source_identity_crosswalk = getattr(
         source, "source_identity_crosswalk", None
     )
     target.reranker_name = getattr(source, "reranker_name", None)
     target.task_type = source.task_type
+    target.answer_type = source.answer_type
+    target.modality = source.modality
     target.agent_mode = source.agent_mode
     target.artifact_type = source.artifact_type
     target.note_ids = source.note_ids
@@ -402,6 +457,7 @@ def copy_request_fields(target: Any, source: Any) -> None:
     target.generation_temperature = source.generation_temperature
     target.generation_top_p = source.generation_top_p
     target.generation_seed = source.generation_seed
+    target.trace_context = dict(getattr(source, "trace_context", {}) or {})
 
 
 def selected_ids(runtime: Any, user_id: Any, selected_inputs: dict[int, Any]):

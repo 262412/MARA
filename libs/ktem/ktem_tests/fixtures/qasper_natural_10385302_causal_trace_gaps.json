@@ -1,0 +1,94 @@
+{
+  "contract": "qasper_causal_trace_gap_fixture.v1",
+  "source": {
+    "job_id": "10385302",
+    "code_sha": "d8b3fbc8f9bd5bb1447b96fa004f02376521d658",
+    "semantic_trace_sha256": "418d29630b5a9afc5ce560d47fac849e9a3215a75b80c0c8cfb0e6d079fa6977"
+  },
+  "trace_gaps": [
+    "candidate_stage_input_snapshot_missing",
+    "source_to_canonical_selector_crosswalk_missing",
+    "pre_limit_selector_decisions_missing",
+    "all_plan_candidate_decisions_missing",
+    "first_decisive_transition_missing"
+  ],
+  "candidate_path_divergence": {
+    "example_id": "7cd22ca9e107d2b13a7cc94252aaa9007976b338",
+    "route_count": 3,
+    "first_divergence_stage": "candidate_ranked_evidence_input",
+    "cause": "candidate_stage_ranking_was_overwritten_by_later_pipeline_state",
+    "candidate_stage_ranked_chunk_ids": [
+      "475ae2be92b4c4811b84074161da521c6c2d4780694fc64f4cc674166e8dcbc6",
+      "13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+      "825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+      "7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793"
+    ],
+    "late_bundle_ranked_chunk_ids": [
+      "3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+      "825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+      "7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+      "475ae2be92b4c4811b84074161da521c6c2d4780694fc64f4cc674166e8dcbc6"
+    ],
+    "candidate_stage_canonical_selector_refs": [
+      "E1:S1",
+      "E1:S5",
+      "E1:S8",
+      "E1:S16"
+    ],
+    "late_state_probe_canonical_selector_refs": [
+      "E4:S2",
+      "E4:S3",
+      "E4:S4"
+    ],
+    "candidate_stage_legal_plan_count": 0,
+    "late_state_probe_legal_plan_count": 1,
+    "candidate_request_token_budget_drop_count": 0
+  },
+  "observed_rejection_reason_union": [
+    "event_subplan_incomplete",
+    "explicit_contradiction_missing",
+    "object_coverage_incomplete",
+    "predicate_argument_binding_incomplete",
+    "quantifier_attachment_invalid",
+    "slot_coverage_incomplete",
+    "support_conflicts_with_explicit_contradiction",
+    "support_role_binding_incomplete"
+  ],
+  "auditor_rejection_observation": {
+    "example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e",
+    "route_count": 3,
+    "local_projection_status": "passed",
+    "selected_plan_id": "dfb3d3bf990951ac0e9e16a5bbb569ad53846042a9256e03db69cf8a6f8fe03d",
+    "audit_status": "rejected",
+    "audit_reason": "premise_proposition_binding_rejected",
+    "provider_or_parser_failure_count": 0
+  },
+  "summary_observation": {
+    "semantic_verifier_failure_count": 0,
+    "entailment_audit_failure_count": 0,
+    "entailment_audit_rejection_count": 3,
+    "verifier_audit_rejection_count": 3,
+    "recovery_stopped_without_state_change": 12
+  },
+  "instance_count": 18,
+  "instances": [
+    {"example_id":"e330e162ec29722f5ec9f83853d129c9e0693d65","route":"text_rag","annotation_ambiguous":true,"candidate":"yes","source_selector_count":24,"canonical_selector_count":12,"candidate_count":14,"relation_analysis_count":28,"legal_plan_count":0,"first_inconsistency_stage":"plan_construction","audit_status":"candidate_bound"},
+    {"example_id":"6568a31241167f618ef5ede939053feaa2fb0d7e","route":"text_rag","annotation_ambiguous":false,"candidate":"yes","source_selector_count":20,"canonical_selector_count":6,"candidate_count":12,"relation_analysis_count":21,"legal_plan_count":1,"first_inconsistency_stage":"auditor_semantics","audit_status":"rejected"},
+    {"example_id":"f2155dc4aeab86bf31a838c8ff388c85440fce6e","route":"text_rag","annotation_ambiguous":true,"candidate":"unanswerable","source_selector_count":28,"canonical_selector_count":15,"candidate_count":69,"relation_analysis_count":138,"legal_plan_count":0,"first_inconsistency_stage":"","audit_status":"candidate_bound"},
+    {"example_id":"7cd22ca9e107d2b13a7cc94252aaa9007976b338","route":"text_rag","annotation_ambiguous":false,"candidate":"unanswerable","source_selector_count":16,"canonical_selector_count":4,"candidate_count":5,"relation_analysis_count":10,"legal_plan_count":0,"first_inconsistency_stage":"","audit_status":"candidate_bound"},
+    {"example_id":"25c1c4a91f5dedd4e06d14121af3b5921db125e9","route":"text_rag","annotation_ambiguous":true,"candidate":"yes","source_selector_count":28,"canonical_selector_count":16,"candidate_count":33,"relation_analysis_count":66,"legal_plan_count":0,"first_inconsistency_stage":"plan_construction","audit_status":"candidate_bound"},
+    {"example_id":"e97186c51d4af490dba6faaf833d269c8256426c","route":"text_rag","annotation_ambiguous":true,"candidate":"yes","source_selector_count":16,"canonical_selector_count":8,"candidate_count":11,"relation_analysis_count":22,"legal_plan_count":0,"first_inconsistency_stage":"plan_construction","audit_status":"candidate_bound"},
+    {"example_id":"e330e162ec29722f5ec9f83853d129c9e0693d65","route":"controller_auto","annotation_ambiguous":true,"candidate":"yes","source_selector_count":24,"canonical_selector_count":12,"candidate_count":14,"relation_analysis_count":28,"legal_plan_count":0,"first_inconsistency_stage":"plan_construction","audit_status":"candidate_bound"},
+    {"example_id":"6568a31241167f618ef5ede939053feaa2fb0d7e","route":"controller_auto","annotation_ambiguous":false,"candidate":"yes","source_selector_count":20,"canonical_selector_count":6,"candidate_count":12,"relation_analysis_count":21,"legal_plan_count":1,"first_inconsistency_stage":"auditor_semantics","audit_status":"rejected"},
+    {"example_id":"f2155dc4aeab86bf31a838c8ff388c85440fce6e","route":"controller_auto","annotation_ambiguous":true,"candidate":"unanswerable","source_selector_count":31,"canonical_selector_count":15,"candidate_count":69,"relation_analysis_count":138,"legal_plan_count":0,"first_inconsistency_stage":"","audit_status":"candidate_bound"},
+    {"example_id":"7cd22ca9e107d2b13a7cc94252aaa9007976b338","route":"controller_auto","annotation_ambiguous":false,"candidate":"unanswerable","source_selector_count":16,"canonical_selector_count":4,"candidate_count":5,"relation_analysis_count":10,"legal_plan_count":0,"first_inconsistency_stage":"","audit_status":"candidate_bound"},
+    {"example_id":"25c1c4a91f5dedd4e06d14121af3b5921db125e9","route":"controller_auto","annotation_ambiguous":true,"candidate":"yes","source_selector_count":32,"canonical_selector_count":16,"candidate_count":31,"relation_analysis_count":62,"legal_plan_count":0,"first_inconsistency_stage":"plan_construction","audit_status":"candidate_bound"},
+    {"example_id":"e97186c51d4af490dba6faaf833d269c8256426c","route":"controller_auto","annotation_ambiguous":true,"candidate":"yes","source_selector_count":18,"canonical_selector_count":9,"candidate_count":12,"relation_analysis_count":24,"legal_plan_count":0,"first_inconsistency_stage":"plan_construction","audit_status":"candidate_bound"},
+    {"example_id":"e330e162ec29722f5ec9f83853d129c9e0693d65","route":"crag_guarded","annotation_ambiguous":true,"candidate":"yes","source_selector_count":24,"canonical_selector_count":12,"candidate_count":14,"relation_analysis_count":28,"legal_plan_count":0,"first_inconsistency_stage":"plan_construction","audit_status":"candidate_bound"},
+    {"example_id":"6568a31241167f618ef5ede939053feaa2fb0d7e","route":"crag_guarded","annotation_ambiguous":false,"candidate":"yes","source_selector_count":20,"canonical_selector_count":6,"candidate_count":12,"relation_analysis_count":21,"legal_plan_count":1,"first_inconsistency_stage":"auditor_semantics","audit_status":"rejected"},
+    {"example_id":"f2155dc4aeab86bf31a838c8ff388c85440fce6e","route":"crag_guarded","annotation_ambiguous":true,"candidate":"unanswerable","source_selector_count":28,"canonical_selector_count":15,"candidate_count":69,"relation_analysis_count":138,"legal_plan_count":0,"first_inconsistency_stage":"","audit_status":"candidate_bound"},
+    {"example_id":"7cd22ca9e107d2b13a7cc94252aaa9007976b338","route":"crag_guarded","annotation_ambiguous":false,"candidate":"unanswerable","source_selector_count":16,"canonical_selector_count":4,"candidate_count":5,"relation_analysis_count":10,"legal_plan_count":0,"first_inconsistency_stage":"","audit_status":"candidate_bound"},
+    {"example_id":"25c1c4a91f5dedd4e06d14121af3b5921db125e9","route":"crag_guarded","annotation_ambiguous":true,"candidate":"yes","source_selector_count":28,"canonical_selector_count":16,"candidate_count":33,"relation_analysis_count":66,"legal_plan_count":0,"first_inconsistency_stage":"plan_construction","audit_status":"candidate_bound"},
+    {"example_id":"e97186c51d4af490dba6faaf833d269c8256426c","route":"crag_guarded","annotation_ambiguous":true,"candidate":"yes","source_selector_count":16,"canonical_selector_count":8,"candidate_count":11,"relation_analysis_count":22,"legal_plan_count":0,"first_inconsistency_stage":"plan_construction","audit_status":"candidate_bound"}
+  ]
+}

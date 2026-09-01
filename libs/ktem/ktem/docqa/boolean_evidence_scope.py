@@ -6,18 +6,20 @@ from typing import Any
 
 from . import boolean_current_experiment as current_experiment
 from . import boolean_evidence_text as evidence_text
+from .boolean_annotation_count import annotation_count_scope_complete_for_quantifier
 from .boolean_evidence_text import evidence_item_text
 from .boolean_ownership_provenance import own_data_provenance_rejection
 from .boolean_retrieval_queries import boolean_retrieval_query  # noqa: F401
+from .boolean_scope_language import _english_closed_scope  # noqa: F401
 from .boolean_scope_quantifiers import (
     _closed_quantifier,
-    _english_closed_scope,
     _has_closed_quantifier,
     _language_data_question,
     _non_english_counterexample,
     _quantified_object_scope_complete,
     _scope_excerpt,
 )
+from .boolean_scope_relation_binding import english_scope_matches_target_relation
 from .boolean_structured_attributes import (
     derogatory_label_analysis_scope_span,
     structured_scope_barrier,
@@ -82,11 +84,12 @@ def validate_boolean_scope(
     evidence_items: list[dict[str, Any]] | None = None,
 ) -> BooleanScopeDecision:
     matching_item = evidence_text._matching_item(quote, evidence_items or [])
-    section_role = _section_role(matching_item, quote)
+    scope_quote = evidence_text._scope_quote(question, matching_item, quote)
+    section_role = _section_role(matching_item, scope_quote)
     context = (
-        str(quote or "")
+        scope_quote
         if current_experiment.is_current_experiment_question(question)
-        else evidence_text._bound_local_context(matching_item, quote)
+        else evidence_text._bound_local_context(matching_item, scope_quote)
     )
     actor = _actor(context, section_role)
     quantifier = _closed_quantifier(question)
@@ -95,7 +98,7 @@ def validate_boolean_scope(
         actor=actor,
         section_role=section_role,
         structured_scope_available=bool(matching_item),
-        quote=quote,
+        quote=scope_quote,
     )
     if scope_rejection:
         return BooleanScopeDecision(
@@ -126,17 +129,18 @@ def validate_boolean_scope(
     if not _language_data_question(question):
         return _quantified_scope_decision(
             question,
-            quote,
+            scope_quote,
             actor=actor,
             section_role=section_role,
             quantifier=quantifier,
             verdict=verdict,
         )
     return _language_scope_decision(
+        question,
         actor,
         section_role,
         quantifier,
-        quote,
+        scope_quote,
         verdict,
     )
 
@@ -150,6 +154,10 @@ def _quantified_scope_decision(
     quantifier: str,
     verdict: str,
 ) -> BooleanScopeDecision:
+    if actor == "unknown" and annotation_count_scope_complete_for_quantifier(
+        question, quote, quantifier
+    ):
+        actor = "current_paper"
     complete = _quantified_object_scope_complete(
         question,
         quote,
@@ -182,6 +190,7 @@ def _quantified_scope_decision(
 
 
 def _language_scope_decision(
+    question: str,
     actor: str,
     section_role: str,
     quantifier: str,
@@ -208,7 +217,10 @@ def _language_scope_decision(
             else "no_non_english_counterexample"
         )
     elif verdict == "yes":
-        valid = _english_closed_scope(quote)
+        valid = english_scope_matches_target_relation(
+            question,
+            quote,
+        )
         reason = "current_closed_english_scope" if valid else "english_scope_not_closed"
     else:
         valid = False

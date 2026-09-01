@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any
 
@@ -88,9 +89,16 @@ def aggregate_answer_claims(answer: str) -> tuple[str, dict[str, Any]]:
         "citation_union_count": 0,
         "claim_key_contract": CLAIM_KEY_CONTRACT,
         "bypassed": False,
+        "input_text": text,
+        "input_digest": _text_digest(text),
+        "output_text": text,
+        "output_digest": _text_digest(text),
+        "changed": False,
+        "change_reason": "",
     }
     if not text or _structured_output(text):
         trace["bypassed"] = True
+        trace["change_reason"] = "structured_output_bypassed"
         return text, trace
 
     claims = [_claim_record(chunk) for chunk in _claim_chunks(text)]
@@ -118,7 +126,20 @@ def aggregate_answer_claims(answer: str) -> tuple[str, dict[str, Any]]:
         selected.append(claim)
 
     trace["output_claim_count"] = len(selected)
-    return "\n".join(_render_claim(claim) for claim in selected), trace
+    output = "\n".join(_render_claim(claim) for claim in selected)
+    trace.update(
+        output_text=output,
+        output_digest=_text_digest(output),
+        changed=output != text,
+        change_reason=(
+            "claims_deduplicated_or_normalized" if output != text else "unchanged"
+        ),
+    )
+    return output, trace
+
+
+def _text_digest(text: str) -> str:
+    return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
 
 
 def _claim_chunks(answer: str) -> list[str]:

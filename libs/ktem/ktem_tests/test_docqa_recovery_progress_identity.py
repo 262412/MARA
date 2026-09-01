@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.evidence_identity import identity_of
@@ -11,7 +12,10 @@ from ktem.docqa.execution_recovery_events import (
     recovery_has_progress,
     recovery_trace_fields,
 )
-from ktem.docqa.typed_retrieval_recovery import typed_retrieval_recovery_trace
+from ktem.docqa.typed_retrieval_recovery import (
+    typed_retrieval_recovery_has_progress,
+    typed_retrieval_recovery_trace,
+)
 from ktem.docqa.verification import VerifyDecision
 
 QUESTION = "Do the authors conduct experiments on the dataset?"
@@ -86,9 +90,9 @@ def test_typed_retrieval_no_progress_ignores_runtime_uuid_churn() -> None:
     )
 
     assert trace["evidence_ids_before"] != trace["evidence_ids_after"]
-    assert trace["semantic_evidence_ids_before"] == (
-        trace["semantic_evidence_ids_after"]
-    )
+    semantic_ids_before = trace["semantic_evidence_ids_before"]
+    semantic_ids_after = trace["semantic_evidence_ids_after"]
+    assert semantic_ids_before == semantic_ids_after
     assert trace["new_semantic_evidence_ids"] == []
     assert trace["semantic_slot_state_changed"] is False
     assert trace["recovery_outcome"] == "no_progress"
@@ -117,8 +121,206 @@ def test_verifier_recovery_progress_ignores_runtime_uuid_churn() -> None:
     assert fields["new_evidence_ids"]
     assert fields["new_semantic_evidence_ids"] == []
     assert fields["semantic_slot_state_changed"] is False
+    assert fields["evidence_digest_changed"] is False
+    assert fields["normalized_slot_state_digest_changed"] is False
+    assert fields["canonical_proposition_binding_digest_changed"] is False
     assert fields["proposition_binding_changed"] is False
     assert recovery_has_progress(fields) is False
+
+
+def test_authority_and_candidate_changes_alone_are_not_recovery_progress() -> None:
+    assert (
+        recovery_has_progress(
+            {
+                "authority_changed": True,
+                "candidate_changed": True,
+                "evidence_ids_before": ["runtime-a"],
+                "evidence_ids_after": ["runtime-b"],
+            }
+        )
+        is False
+    )
+
+
+def test_raw_evidence_digest_change_alone_is_not_recovery_progress() -> None:
+    assert (
+        recovery_has_progress(
+            {
+                "raw_evidence_digest_applicable": True,
+                "raw_evidence_digest_changed": True,
+                "evidence_digest_applicable": True,
+                "evidence_digest_changed": True,
+            }
+        )
+        is False
+    )
+
+
+def test_unselected_retrieval_record_does_not_trigger_reverification() -> None:
+    base = _bundle("stable-source", "stable-evidence-1")
+    initial = EvidenceBundle(
+        route=base.route,
+        items=[
+            _evidence(
+                "stable-source",
+                f"stable-evidence-{index}",
+                f"We conduct experiments on the dataset and report result {index}.",
+            )
+            for index in range(1, 13)
+        ],
+        metadata=base.metadata,
+    )
+    recovered = EvidenceBundle(
+        route=initial.route,
+        items=[
+            *initial.items,
+            _evidence(
+                "stable-source",
+                "raw-only-extra",
+                "The acknowledgements list the project sponsors.",
+            ),
+        ],
+        metadata=initial.metadata,
+    )
+
+    fields = recovery_trace_fields(
+        _request(),
+        VerifyDecision(
+            mode="strict",
+            status="unknown",
+            reason="authority missing",
+            typed_authority={"reason": "exact_boolean_authority_missing"},
+        ),
+        initial,
+        recovered,
+    )
+
+    assert fields["raw_evidence_digest_changed"] is True
+    assert fields["semantic_pack_digest_changed"] is False
+    assert fields["normalized_slot_state_digest_changed"] is False
+    assert fields["canonical_proposition_binding_digest_changed"] is False
+    assert recovery_has_progress(fields) is False
+    assert (
+        typed_retrieval_recovery_has_progress(
+            initial,
+            recovered,
+            request=_request(),
+        )
+        is False
+    )
+
+
+def test_first_semantic_pack_is_a_real_recovery_change() -> None:
+    fields = recovery_trace_fields(
+        _request(),
+        VerifyDecision(
+            mode="strict",
+            status="unknown",
+            reason="authority missing",
+            typed_authority={"reason": "exact_boolean_authority_missing"},
+        ),
+        None,
+        _bundle("stable-source", "stable-evidence"),
+    )
+
+    assert fields["semantic_pack_digest_before"] == ""
+    assert fields["semantic_pack_digest_after"]
+    assert fields["semantic_pack_digest_applicable"] is True
+    assert fields["semantic_pack_digest_changed"] is True
+    assert recovery_has_progress(fields) is True
+
+
+@pytest.mark.parametrize(
+    ("recovery_kind", "change_semantic_pack"),
+    (
+        ("proposition_repair", False),
+        ("proof_repair", False),
+        ("quote_rebind", False),
+        ("evidence_retrieval", True),
+    ),
+)
+def test_recovery_kind_reverifies_only_after_semantic_pack_digest_changes(
+    recovery_kind: str,
+    change_semantic_pack: bool,
+) -> None:
+    initial = _bundle("stable-source", "stable-evidence")
+    recovered = _bundle("stable-source", "stable-evidence")
+    initial.metadata["semantic_proposition_verifier"] = {
+        "reason": recovery_kind,
+        "recovery_transitions": (
+            [{"to": recovery_kind}]
+            if recovery_kind in {"proof_repair", "proposition_repair"}
+            else []
+        ),
+    }
+    if change_semantic_pack:
+        recovered.items[0]["text"] = EXACT_AUTHORITY
+
+    fields = recovery_trace_fields(
+        _request(),
+        VerifyDecision(
+            mode="strict",
+            status="unknown",
+            reason="authority missing",
+            typed_authority={"reason": "exact_boolean_authority_missing"},
+        ),
+        initial,
+        recovered,
+    )
+
+    assert fields["recovery_transition"]["to"] == recovery_kind
+    assert fields["semantic_pack_digest_changed"] is change_semantic_pack
+    assert fields["recovery_transition"]["status"] == (
+        "pack_changed" if change_semantic_pack else "no_pack_change"
+    )
+    assert recovery_has_progress(fields) is change_semantic_pack
+
+
+@pytest.mark.parametrize(
+    ("current_reason", "change_semantic_pack", "expected_kind"),
+    (
+        ("joint_entailment_rejected", False, "proof_repair"),
+        ("typed_conclusion_quantifier_rejected", False, "proof_repair"),
+        ("semantic_premise_quote_unbound", False, "quote_rebind"),
+        ("joint_entailment_rejected", True, "evidence_retrieval"),
+    ),
+)
+def test_current_rejection_outranks_historical_proposition_repair(
+    current_reason: str,
+    change_semantic_pack: bool,
+    expected_kind: str,
+) -> None:
+    initial = _bundle("stable-source", "stable-evidence")
+    recovered = _bundle("stable-source", "stable-evidence")
+    initial.metadata["semantic_proposition_verifier"] = {
+        "reason": "semantic_entailment_audit_rejected",
+        "audit_reason": current_reason,
+        "recovery_transitions": [
+            {
+                "from": "question_proposition",
+                "to": "proposition_repair",
+                "reason": "question_proposition_predicate_unspecified",
+            }
+        ],
+        "rejected_transactions": [{"runtime_rejection_reason": current_reason}],
+    }
+    if change_semantic_pack:
+        recovered.items[0]["text"] = EXACT_AUTHORITY
+
+    fields = recovery_trace_fields(
+        _request(),
+        VerifyDecision(
+            mode="strict",
+            status="unknown",
+            reason="authority missing",
+            typed_authority={"reason": "exact_boolean_authority_missing"},
+        ),
+        initial,
+        recovered,
+    )
+
+    assert fields["recovery_transition"]["to"] == expected_kind
+    assert fields["proposition_binding_changed"] is change_semantic_pack
 
 
 def test_retrieval_no_progress_stops_before_route_switch() -> None:

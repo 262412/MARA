@@ -1,0 +1,53 @@
+{
+  "contract_id": "qasper_stage4_divergence_characterization.v1",
+  "source": {
+    "artifact": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_trace_canary_0ef20e45_20260830/quality/debug/qasper/20260830_225837_qasper-trace-canary-0ef20e4-10388470/predictions.jsonl",
+    "code_sha": "0ef20e45f18bb580541cf3e53ec4d7548210bbe3",
+    "example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65",
+    "job_id": "10388470",
+    "route": "text_rag"
+  },
+  "first_divergence": {
+    "differing_field_count": 1,
+    "field": "$.selector_universe_digest",
+    "local_value": "",
+    "online_value": "606d514611d748ed71ecd9ce046f7fc87476028c1fc8bdf98543cc480e9690ab",
+    "stage": "proposition_spans_and_selector_universe",
+    "stage_index": 4
+  },
+  "online_candidate_identity": {
+    "canonical_pack_candidate_transaction_id": "9f0f3a6a3f0a7b6f0f6de95448400ff3a5c25c993778d232d6e01a0fecf50d37",
+    "canonical_semantic_pack_contract_id": "qasper_canonical_semantic_pack.v1",
+    "canonical_semantic_pack_digest": "4ea43886c7f52ea447fd179d01266cea3bdb2eb2026e60814e1a7e9c28aeb4e0",
+    "canonical_span_universe_digest": "606d514611d748ed71ecd9ce046f7fc87476028c1fc8bdf98543cc480e9690ab",
+    "evidence_pack_digest": "4ea43886c7f52ea447fd179d01266cea3bdb2eb2026e60814e1a7e9c28aeb4e0"
+  },
+  "local_candidate_identity_before_repair": {
+    "canonical_pack_candidate_transaction_id": "",
+    "canonical_semantic_pack_contract_id": "",
+    "canonical_semantic_pack_digest": "",
+    "canonical_span_universe_digest": "",
+    "evidence_pack_digest": "16934e59b782a4a59544ac139cf22fad6caacb6c4a867ef814297a8cdd807494"
+  },
+  "frozen_pack_identity": {
+    "candidate_transaction_id": "9f0f3a6a3f0a7b6f0f6de95448400ff3a5c25c993778d232d6e01a0fecf50d37",
+    "contract_id": "qasper_canonical_semantic_pack.v1",
+    "semantic_pack_digest": "4ea43886c7f52ea447fd179d01266cea3bdb2eb2026e60814e1a7e9c28aeb4e0",
+    "span_universe_digest": "606d514611d748ed71ecd9ce046f7fc87476028c1fc8bdf98543cc480e9690ab"
+  },
+  "selector_observation": {
+    "canonical_record_count": 3,
+    "canonical_selector_projection_digest": "e8e5ab73df5eacd16e67de70b36c3118e5f0393b83c355f29ec4bd30b076f766",
+    "frozen_selector_count": 12,
+    "projected_selector_digest": "061b4f9fc04a6fa14be2ac568d489e45d0a0c0cd50723adb2fcf2796ca102d28",
+    "recorded_proposition_bearing_span_count": 0,
+    "source_canonical_record_keys": [
+      "candidate_selector_projection_trace",
+      "evidence_id",
+      "label",
+      "selector_refs",
+      "text_digest",
+      "text_start"
+    ]
+  }
+}

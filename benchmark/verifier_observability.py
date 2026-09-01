@@ -5,6 +5,7 @@ from typing import Any, Callable
 from ktem.docqa.evidence_text import extract_final_answer_text
 
 from .metrics import is_abstention_answer, round_metric
+from .terminal_outcome_contract import terminal_outcome_record
 
 OBSERVABILITY_COUNT_FIELDS = (
     "abstained",
@@ -20,8 +21,15 @@ OBSERVABILITY_COUNT_FIELDS = (
 
 def prediction_verifier_observability(prediction: dict[str, Any]) -> dict[str, int]:
     metrics = dict(prediction.get("metrics") or {})
-    abstained = _prediction_abstained(prediction, metrics)
-    false_abstention = int(_metric_positive(metrics, "false_abstention"))
+    operational_failure = terminal_outcome_record(prediction)["outcome"] in {
+        "execution_failed",
+        "timeout",
+        "cancelled",
+    }
+    abstained = 0 if operational_failure else _prediction_abstained(prediction, metrics)
+    false_abstention = (
+        0 if operational_failure else int(_metric_positive(metrics, "false_abstention"))
+    )
     unsupported_claim_count = _unsupported_claim_count(prediction, metrics)
     observations = {
         "abstained": abstained,

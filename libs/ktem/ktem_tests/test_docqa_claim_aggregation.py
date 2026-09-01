@@ -11,11 +11,15 @@ def test_claim_aggregation_merges_duplicate_fact_and_unions_citations():
     assert "[1]" in answer
     assert "[2]" in answer
     assert trace["duplicate_claim_count"] == 1
+    assert trace["input_text"]
+    assert trace["output_text"] == answer
+    assert trace["input_digest"] != trace["output_digest"]
+    assert trace["changed"] is True
 
 
 def test_claim_aggregation_keeps_conflicting_values_for_verifier():
     answer, trace = aggregate_answer_claims(
-        "Revenue was $10 million in 2022. [1]\n" "Revenue was $12 million in 2022. [2]"
+        "Revenue was $10 million in 2022. [1]\nRevenue was $12 million in 2022. [2]"
     )
 
     assert "$10 million" in answer

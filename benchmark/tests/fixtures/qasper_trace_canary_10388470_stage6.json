@@ -1,0 +1,47 @@
+{
+  "contract_id": "qasper_stage6_divergence_characterization.v1",
+  "source": {
+    "artifact": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_trace_canary_0ef20e45_20260830/quality/debug/qasper/20260830_225837_qasper-trace-canary-0ef20e4-10388470/predictions.jsonl",
+    "code_sha": "0ef20e45f18bb580541cf3e53ec4d7548210bbe3",
+    "example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65",
+    "job_id": "10388470",
+    "route": "text_rag"
+  },
+  "first_divergence": {
+    "differing_field_count": 1,
+    "field": "$.selected_candidate_ids",
+    "local_value": {
+      "explicit_contradiction": "",
+      "proposition_support": ""
+    },
+    "online_value": {},
+    "stage": "selected_local_plan",
+    "stage_index": 6
+  },
+  "frozen_candidate_stage_selection": {
+    "canonical_evidence_plan_digest": "511415d2408ae99ddb642c67a60b151a9005cf72b4a7207eac2147dee230c971",
+    "canonical_evidence_plan_id": "511415d2408ae99ddb642c67a60b151a9005cf72b4a7207eac2147dee230c971",
+    "candidate_transaction_id": "9f0f3a6a3f0a7b6f0f6de95448400ff3a5c25c993778d232d6e01a0fecf50d37",
+    "selected_candidate_ids": {
+      "explicit_contradiction": "",
+      "proposition_support": ""
+    },
+    "source_path": "evidence_metadata.qasper_canonical_semantic_pack.proposition_binding"
+  },
+  "post_verifier_selection": {
+    "selected_candidate_ids": {},
+    "source_path": "evidence_metadata.semantic_proposition_verifier.semantic_data_lineage.plan_construction",
+    "status": "not_run"
+  },
+  "shared_selection_outcome": {
+    "legal_plan_count": 0,
+    "selected_plan_id": "",
+    "selection_reason": "no_legal_plan",
+    "selection_status": "not_selected"
+  },
+  "comparison_digests": {
+    "local_replay": "e3d82edb7c5553da2b5aa99f07761deaed164717df2d225ac9c1ae000ecc734c",
+    "online_reference": "1889572a8d07ef9c9fce9f7a3ecaeb1446fd0586aa547f2ee9608b8eb9f65166"
+  },
+  "root_cause": "stage6_mixed_frozen_binding_with_post_verifier_plan_construction"
+}

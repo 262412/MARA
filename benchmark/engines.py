@@ -13,10 +13,11 @@ from .alce_answer_grounding import (
     alce_grounding_stage_event,
     apply_alce_answer_grounding,
 )
-from .docqa_controller_context import docqa_request_kwargs
+from .docqa_controller_context import controller_dataset_family, docqa_request_kwargs
 from .docqa_evidence_projection import evidence_element_ids
 from .docqa_image_documents import (
     element_index_records_from_documents,
+    mmdoc_element_index_records_from_documents,
     page_image_records_from_documents,
 )
 from .docqa_index_cache import DocQAIndexCache
@@ -249,6 +250,13 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
         selected_file_ids: list[str],
         active_record: Any,
     ) -> dict[str, Any]:
+        config = self._benchmark_config()
+        produce_pdf_ocr_layout = controller_dataset_family(
+            example, config
+        ) == "mmdocrag" and any(
+            document.path.suffix.lower() == ".pdf" for document in documents
+        )
+
         return docqa_request_kwargs(
             self,
             example=example,
@@ -256,7 +264,11 @@ class DocQARuntimeEngine(BaseBenchmarkEngine):
             selected_file_ids=selected_file_ids,
             active_record=active_record,
             page_image_builder=page_image_records_from_documents,
-            element_index_builder=element_index_records_from_documents,
+            element_index_builder=(
+                mmdoc_element_index_records_from_documents
+                if produce_pdf_ocr_layout
+                else element_index_records_from_documents
+            ),
         )
 
     def run(

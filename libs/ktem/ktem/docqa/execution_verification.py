@@ -10,6 +10,12 @@ from .controller import RetrieveDecision, VerifyDecision
 from .evidence_identity import identity_of
 from .evidence_schema import EvidenceBundle
 from .evidence_text import extract_final_answer_text
+from .execution_pre_audit import (
+    qasper_pre_audit_failure_result as _qasper_pre_audit_failure_result,
+    qasper_pre_audit_failure_reason,
+    qasper_pre_audit_verify_decision,
+    qasper_typed_candidate_request as _qasper_typed_candidate_request,
+)
 from .pipeline_stage_timings import PipelineStageTimings
 from .qasper_answer_revision import (
     ANSWER_REVISION_CONTRACT,
@@ -18,6 +24,7 @@ from .qasper_answer_revision import (
     proposal_matches_verified_authority,
 )
 from .route_budget import run_blocking_route_stage
+from .visual_time_series import revise_visual_time_series_answer
 
 GuardrailFactory = Callable[[str, str, str], Any]
 RewriteFn = Callable[[Any, Any, EvidenceBundle, str], str]
@@ -39,6 +46,15 @@ def verify_generated_answer(
     abstain_message: str,
     ragtruth_empty_answer: str,
 ) -> tuple[str, VerifyDecision, Any, list[dict[str, Any]]]:
+    pre_audit_reason = qasper_pre_audit_failure_reason(request, bundle)
+    if pre_audit_reason:
+        return _qasper_pre_audit_failure_result(
+            request,
+            trace_prefix,
+            pre_audit_reason,
+            guardrail_factory=guardrail_factory,
+            abstain_message=abstain_message,
+        )
     if bundle.metadata.get("generation_backend") == "evidence_only_without_vlm":
         verify_decision = timings.measure(
             "verification_seconds",
@@ -75,21 +91,15 @@ def verify_generated_answer(
                 },
             ]
         else:
-            verify_decision = timings.measure(
-                "verification_seconds",
-                _empty_answer_verify_decision,
+            return _handle_empty_generated_answer(
                 request,
                 bundle,
-            )
-            return (
-                abstain_message,
-                verify_decision,
-                verification_guardrail(
-                    verify_decision,
-                    request,
-                    guardrail_factory=guardrail_factory,
-                ),
-                list(trace_prefix or []),
+                answer,
+                trace_prefix,
+                timings,
+                verify=verify,
+                guardrail_factory=guardrail_factory,
+                abstain_message=abstain_message,
             )
     return _verify_nonempty_answer(
         request,
@@ -106,18 +116,21 @@ def verify_generated_answer(
     )
 
 
-def _typed_qasper_boolean_request(request: Any) -> bool:
-    domain = str(getattr(request, "verification_domain", "") or "").casefold()
-    if not (domain == "qasper" or domain.startswith("qasper_")):
-        return False
+def _typed_boolean_request(request: Any, verify: VerifyFn) -> bool:
     plan = getattr(request, "query_plan", None)
     answer_type = (
         plan.get("answer_type")
         if isinstance(plan, dict)
         else getattr(plan, "answer_type", "")
     )
-    return str(answer_type or getattr(request, "task_type", "")).casefold() == (
-        "boolean"
+    boolean_request = (
+        str(answer_type or getattr(request, "task_type", "")).casefold() == "boolean"
+    )
+    domain = str(getattr(request, "verification_domain", "") or "").casefold()
+    return boolean_request and (
+        domain == "qasper"
+        or domain.startswith("qasper_")
+        or bool(getattr(verify, "_semantic_proposition_preflight", False))
     )
 
 
@@ -155,7 +168,12 @@ def _verify_nonempty_answer(
     )
     if revision_trace:
         trace.append(revision_trace)
-    if verify_decision.action == "revise" and rewrite is not None:
+    candidate_bound = _qasper_typed_candidate_request(request)
+    if (
+        verify_decision.action == "revise"
+        and rewrite is not None
+        and not candidate_bound
+    ):
         answer, verify_decision = _rewrite_and_verify(
             request,
             decision,
@@ -167,7 +185,7 @@ def _verify_nonempty_answer(
             timings,
             trace,
         )
-    if verify_decision.action == "revise":
+    if verify_decision.action == "revise" and not candidate_bound:
         answer, verify_decision, revision_trace = timings.measure(
             "verification_seconds",
             revise_to_supported_claims,
@@ -180,6 +198,76 @@ def _verify_nonempty_answer(
         )
         if revision_trace:
             trace.append(revision_trace)
+    answer, guardrail = _finalize_nonempty_answer(
+        request,
+        bundle,
+        answer,
+        verify_decision,
+        timings,
+        guardrail_factory=guardrail_factory,
+        abstain_message=abstain_message,
+    )
+    return (
+        answer,
+        verify_decision,
+        guardrail,
+        trace,
+    )
+
+
+def _handle_empty_generated_answer(
+    request: Any,
+    bundle: EvidenceBundle,
+    answer: str,
+    trace_prefix: list[dict[str, Any]] | None,
+    timings: PipelineStageTimings,
+    *,
+    verify: VerifyFn,
+    guardrail_factory: GuardrailFactory,
+    abstain_message: str,
+) -> tuple[str, VerifyDecision, Any, list[dict[str, Any]]]:
+    verify_decision = timings.measure(
+        "verification_seconds",
+        _empty_answer_verify_decision,
+        request,
+        bundle,
+    )
+    trace = list(trace_prefix or [])
+    if _typed_boolean_request(request, verify):
+        bundle.metadata["typed_boolean_generation_recovery"] = (
+            "empty_generation_rejected_without_verifier_call"
+        )
+        trace.append(
+            {
+                "stage": "typed_boolean_generation_recovery",
+                "candidate_before": extract_final_answer_text(answer).strip(),
+                "candidate_after": "",
+                "reason": "empty_generation_rejected_without_verifier_call",
+                "action": "fail_closed_abstention",
+            }
+        )
+    return (
+        abstain_message,
+        verify_decision,
+        verification_guardrail(
+            verify_decision,
+            request,
+            guardrail_factory=guardrail_factory,
+        ),
+        trace,
+    )
+
+
+def _finalize_nonempty_answer(
+    request: Any,
+    bundle: EvidenceBundle,
+    answer: str,
+    verify_decision: VerifyDecision,
+    timings: PipelineStageTimings,
+    *,
+    guardrail_factory: GuardrailFactory,
+    abstain_message: str,
+) -> tuple[str, Any]:
     answer = _verified_boolean_answer(answer, verify_decision)
     guardrail = timings.measure(
         "finalization_seconds",
@@ -189,16 +277,13 @@ def _verify_nonempty_answer(
         guardrail_factory=guardrail_factory,
     )
     bundle.metadata["pre_guardrail_answer"] = answer
-    if verify_decision.status == "verified_conflict":
+    if verify_decision.status == "execution_failed":
+        answer = abstain_message
+    elif verify_decision.status == "verified_conflict":
         answer = "unanswerable"
     elif guardrail.action == "abstain":
         answer = abstain_message
-    return (
-        answer,
-        verify_decision,
-        guardrail,
-        trace,
-    )
+    return answer, guardrail
 
 
 def _verify_with_answer_revision(
@@ -209,6 +294,11 @@ def _verify_with_answer_revision(
     verify: VerifyFn,
     timings: PipelineStageTimings,
 ) -> tuple[str, VerifyDecision, dict[str, Any] | None]:
+    answer, visual_revision_trace = revise_visual_time_series_answer(
+        request,
+        bundle,
+        answer,
+    )
     verify_decision = _timed_verify(
         timings,
         verify,
@@ -217,7 +307,14 @@ def _verify_with_answer_revision(
         bundle,
         answer,
     )
-    return _revise_qasper_answer_relation(
+    verify_decision = qasper_pre_audit_verify_decision(
+        request,
+        bundle,
+        verify_decision,
+    )
+    if _qasper_typed_candidate_request(request):
+        return answer, verify_decision, visual_revision_trace
+    answer, verify_decision, qasper_revision_trace = _revise_qasper_answer_relation(
         request,
         retrieve_decision,
         bundle,
@@ -225,6 +322,11 @@ def _verify_with_answer_revision(
         verify_decision,
         verify,
         timings,
+    )
+    return (
+        answer,
+        verify_decision,
+        qasper_revision_trace or visual_revision_trace,
     )
 
 

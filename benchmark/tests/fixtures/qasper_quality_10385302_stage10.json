@@ -1,0 +1,33 @@
+{
+  "contract_id": "qasper_stage10_recovery_characterization.v1",
+  "source": {
+    "artifact": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_quality_d8b3fbc8f9bd5bb1447b96fa004f02376521d658_20260830/quality/debug/qasper/20260830_090039_focused-d8b3fbc-qasper-semantic-quality-10385302/predictions.jsonl",
+    "example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e",
+    "job_id": "10385302",
+    "route": "text_rag",
+    "sha": "d8b3fbc8f9bd5bb1447b96fa004f02376521d658"
+  },
+  "observed_run": {
+    "complete_stage10_rows": 3,
+    "row_count": 18,
+    "semantic_recovery_rows": 15
+  },
+  "sample_stage10": {
+    "comparison_digest": "300586560cf3068c636c7a6c36da6f38cfd6ef2a1e4401495eb3993270f3f5f5",
+    "incompleteness_reasons": [
+      "recovery_transition_2_state_diff_missing"
+    ],
+    "payload_digest": "300586560cf3068c636c7a6c36da6f38cfd6ef2a1e4401495eb3993270f3f5f5",
+    "recovery_status": "observed",
+    "status": "incomplete",
+    "transition_count": 2,
+    "transitions_digest": "749438616e0b7bbb1b95a333cf8e755d5017b375ec8259c83cf8e289ae9ad9c3"
+  },
+  "semantic_repair_transition": {
+    "from": "question_proposition",
+    "outcome": "repaired",
+    "reason": "question_proposition_predicate_unspecified",
+    "to": "proposition_repair"
+  },
+  "root_cause": "typed_question_proposition_repair_recorded_no_before_or_after_state_and_local_replay_dropped_semantic_recovery_transitions"
+}

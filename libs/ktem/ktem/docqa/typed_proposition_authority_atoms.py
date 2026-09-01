@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from .boolean_authority_derivation import boolean_derivation_contract_status
 from .boolean_evidence_scope import evidence_item_text
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_identity import identity_of
@@ -17,18 +18,40 @@ def exact_boolean_atom(
     evidence_bundle: EvidenceBundle,
     *,
     question: str,
+    canonical_plan_projection: Any | None = None,
 ) -> dict[str, Any] | None:
+    atoms = exact_boolean_atoms(
+        decision,
+        evidence_bundle,
+        question=question,
+        canonical_plan_projection=canonical_plan_projection,
+    )
+    return atoms[0] if atoms else None
+
+
+def exact_boolean_atoms(
+    decision: VerifyDecision,
+    evidence_bundle: EvidenceBundle,
+    *,
+    question: str,
+    canonical_plan_projection: Any | None = None,
+) -> list[dict[str, Any]]:
+    """Return every independently grounded exact Boolean authority atom."""
+
+    atoms: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
     result = next(
         (
             value
             for value in decision.claim_results
             if str(value.get("status") or "") == "supported"
-            and str(value.get("authority_status") or "") == "exact"
+            and str(value.get("authority_status") or "")
+            in {"exact", "composite_exact", "semantic_evidence_set"}
         ),
         None,
     )
     if result is None:
-        return None
+        return []
     result_polarity = str(result.get("canonical_answer_polarity") or "")
     decision_polarity = str(decision.canonical_answer_polarity or "")
     if (
@@ -36,27 +59,169 @@ def exact_boolean_atom(
         or decision_polarity not in {"yes", "no"}
         or result_polarity != decision_polarity
     ):
-        return None
+        return []
     lookup = unambiguous_evidence_alias_lookup(evidence_bundle.items)
-    evidence_id = str(result.get("authoritative_evidence_id") or "")
-    item = lookup.get(evidence_id)
-    if item is None:
-        return None
-    try:
-        canonical_id = identity_of(item).key
-    except ValueError:
-        return None
-    atom = _boolean_atom_fields(result, decision, canonical_id)
-    if not _boolean_atom_is_complete(atom, item, evidence_id):
-        return None
-    if _requires_current_paper_actor(question) and atom["actor"] != "current_paper":
-        return None
-    source_id, page_label = source_page_locator(item)
+    spans = result.get("supporting_evidence_spans") or ()
+    candidates = [value for value in spans if isinstance(value, dict)] or [result]
+    for candidate in candidates:
+        normalized = _authority_candidate(candidate, result)
+        evidence_id = str(
+            normalized.get("authoritative_evidence_id")
+            or normalized.get("evidence_id")
+            or ""
+        )
+        item = lookup.get(evidence_id)
+        if item is None:
+            continue
+        try:
+            canonical_id = identity_of(item).key
+        except ValueError:
+            continue
+        atom = _boolean_atom_fields(normalized, decision, canonical_id)
+        if not _boolean_atom_is_complete(atom, item, canonical_id):
+            continue
+        if _requires_current_paper_actor(question) and atom["actor"] != "current_paper":
+            continue
+        key = (canonical_id, atom["evidence_ref"])
+        if key in seen:
+            continue
+        seen.add(key)
+        source_id, page_label = source_page_locator(item)
+        atoms.append(
+            {
+                **atom,
+                "source_id": source_id,
+                "page_label": page_label,
+                "reason": str(normalized.get("reason") or "exact_boolean_proposition"),
+            }
+        )
+    if str(result.get("authority_status") or "") in {
+        "composite_exact",
+        "semantic_evidence_set",
+    }:
+        derivations = bound_boolean_derivations(
+            decision,
+            atoms,
+            question=question,
+            canonical_plan_projection=canonical_plan_projection,
+        )
+        if len(derivations) != 1:
+            return []
+    return atoms
+
+
+def bound_boolean_derivations(
+    decision: VerifyDecision,
+    atoms: list[dict[str, Any]],
+    *,
+    question: str,
+    canonical_plan_projection: Any | None = None,
+) -> list[dict[str, Any]]:
+    """Return the selected derivation only after independently binding every leaf."""
+
+    result = next(
+        (
+            value
+            for value in decision.claim_results
+            if str(value.get("status") or "") == "supported"
+            and str(value.get("authority_status") or "")
+            in {"composite_exact", "semantic_evidence_set"}
+        ),
+        None,
+    )
+    if result is None:
+        return []
+    selected_id = str(
+        result.get("selected_derivation_id") or decision.selected_derivation_id or ""
+    )
+    derivations = [
+        value
+        for value in result.get("authority_derivations") or ()
+        if isinstance(value, dict)
+        and str(value.get("derivation_id") or "") == selected_id
+    ]
+    if len(derivations) != 1:
+        return []
+    selected = derivations[0]
+    status = boolean_derivation_contract_status(
+        selected,
+        atoms,
+        question=question,
+        canonical_polarity=str(decision.canonical_answer_polarity or ""),
+        canonical_plan_projection=canonical_plan_projection,
+    )
+    return [deepcopy(selected)] if status == "bound" else []
+
+
+def _authority_candidate(
+    candidate: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    if candidate is result:
+        return result
     return {
-        **atom,
-        "source_id": source_id,
-        "page_label": page_label,
-        "reason": "exact_boolean_proposition",
+        **result,
+        "authoritative_evidence_id": candidate.get(
+            "evidence_id",
+            candidate.get("evidence_identity", ""),
+        ),
+        "authoritative_evidence_ref": candidate.get(
+            "evidence_ref", candidate.get("authoritative_evidence_ref", "")
+        ),
+        "authoritative_span_id": candidate.get(
+            "span_id", candidate.get("authoritative_span_id", "")
+        ),
+        "authoritative_quote": candidate.get(
+            "quote", candidate.get("authoritative_quote", "")
+        ),
+        "authoritative_span_start": candidate.get(
+            "span_start", candidate.get("authoritative_span_start")
+        ),
+        "authoritative_span_end": candidate.get(
+            "span_end", candidate.get("authoritative_span_end")
+        ),
+        "authoritative_canonical_start": candidate.get(
+            "canonical_start", candidate.get("authoritative_canonical_start")
+        ),
+        "authoritative_canonical_end": candidate.get(
+            "canonical_end", candidate.get("authoritative_canonical_end")
+        ),
+        "actor": candidate.get("actor", result.get("actor", "")),
+        "relation": candidate.get(
+            "relation", candidate.get("predicate", result.get("relation", ""))
+        ),
+        "predicate": candidate.get(
+            "predicate", candidate.get("relation", result.get("predicate", ""))
+        ),
+        "object": candidate.get("object", result.get("object", "")),
+        "arguments": candidate.get(
+            "arguments",
+            candidate.get("predicate_arguments", result.get("arguments", ())),
+        ),
+        "predicate_arguments": candidate.get(
+            "predicate_arguments",
+            candidate.get("arguments", result.get("predicate_arguments", ())),
+        ),
+        "polarity": candidate.get(
+            "polarity", result.get("canonical_answer_polarity", "")
+        ),
+        "qualifier": candidate.get("qualifier", result.get("qualifier", "")),
+        "quantifier": candidate.get("quantifier", result.get("quantifier", "")),
+        "scope": candidate.get(
+            "scope", candidate.get("section_scope", result.get("scope", ""))
+        ),
+        "section_scope": candidate.get(
+            "section_scope", candidate.get("scope", result.get("section_scope", ""))
+        ),
+        "proposition_slot_bindings": candidate.get(
+            "proposition_slot_bindings",
+            result.get("proposition_slot_bindings", {}),
+        ),
+        "evidence_relation": candidate.get(
+            "evidence_relation",
+            result.get("evidence_relation", ""),
+        ),
+        "reason": candidate.get("reason", result.get("reason", "")),
     }
 
 
@@ -95,6 +260,10 @@ def _boolean_atom_fields(
         "quantifier": str(result.get("quantifier") or ""),
         "scope": section_scope,
         "section_scope": section_scope,
+        "proposition_slot_bindings": dict(
+            result.get("proposition_slot_bindings") or {}
+        ),
+        "evidence_relation": str(result.get("evidence_relation") or ""),
     }
 
 
@@ -197,6 +366,8 @@ def unknown_claim_result(result: dict[str, Any]) -> dict[str, Any]:
         "authoritative_conflict": {},
         "verified_slot_state": "",
         "verified_support_slot_ids": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
     }
 
 

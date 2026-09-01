@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
@@ -13,12 +14,19 @@ from .evidence import EvidenceBundle
 from .evidence_identity import identity_of
 from .query_plan_schema import QueryPlan, slot_binding_state
 from .query_planning import request_planning_question
+from .semantic_evidence_set_authority import PropositionVerifier
+from .semantic_proposition_verification import (
+    boolean_authority_required,
+    semantic_boolean_verification,
+    verified_boolean_candidate_decision,
+)
 from .typed_proposition_authority import (
     TYPED_PROPOSITION_AUTHORITY_CONTRACT,
-    resolve_qasper_authority_transaction,
-    typed_slot_bindings,
+    resolve_typed_proposition_authority_transaction,
+    with_missing_boolean_authority,
     with_qasper_missing_authority,
 )
+from .typed_proposition_authority_slots import typed_slot_bindings
 from .verification_evidence_mapping import (
     blocking_verification_slots,
     claim_support_identities_by_claim,
@@ -44,6 +52,9 @@ from .verification_slot_support import (
     enforce_verification_slot_support,
     slot_value,
 )
+from .visual_evidence_authority import TYPED_VISUAL_EVIDENCE_PATH_CONTRACT
+from .visual_final_binding_projection import final_visual_binding_projection
+from .visual_verification import visual_verification_decision
 
 
 def verify_decision(
@@ -51,25 +62,29 @@ def verify_decision(
     retrieve_decision: Any,
     evidence_bundle: EvidenceBundle,
     answer: str = "",
+    *,
+    proposition_verifier: PropositionVerifier | None = None,
 ) -> VerifyDecision:
     mode = normalize_verification_mode(getattr(request, "verification_mode", None))
-    if mode == "off":
-        return VerifyDecision(
-            mode=mode,
-            status="not_requested",
-            reason="Verification disabled.",
-        )
-    if retrieve_decision.status == "not_required":
-        return VerifyDecision(
-            mode=mode,
-            status="not_required",
-            reason="Direct route does not require evidence verification.",
-        )
-    missing_slots = blocking_verification_slots(request, evidence_bundle)
-    if missing_slots:
-        return _missing_slot_decision(
-            request, retrieve_decision, mode, answer, missing_slots
-        )
+    preflight = _verification_preflight(
+        request,
+        retrieve_decision,
+        evidence_bundle,
+        answer=answer,
+        mode=mode,
+        proposition_verifier=proposition_verifier,
+    )
+    if preflight is not None:
+        return preflight
+    visual_decision = visual_verification_decision(
+        request,
+        retrieve_decision,
+        evidence_bundle,
+        mode=mode,
+        answer=answer,
+    )
+    if visual_decision is not None:
+        return visual_decision
     prompt, domain, claims = _verification_context(request, answer)
     if retrieve_decision.status != "good" and not _can_verify_available_evidence(
         evidence_bundle,
@@ -82,6 +97,7 @@ def verify_decision(
             prompt=prompt,
             answer=answer,
             domain=domain,
+            typed_boolean_verifier=proposition_verifier is not None,
         )
     claims, results = _verification_results(
         evidence_bundle,
@@ -90,6 +106,7 @@ def verify_decision(
         prompt=prompt,
         domain=domain,
         request=request,
+        proposition_verifier=proposition_verifier,
     )
     decision = _decision_for_claim_results(
         mode,
@@ -100,7 +117,7 @@ def verify_decision(
         prompt=prompt,
         domain=domain,
     )
-    typed_decision = resolve_qasper_authority_transaction(
+    typed_decision = resolve_typed_proposition_authority_transaction(
         request,
         decision,
         evidence_bundle,
@@ -115,12 +132,62 @@ def verify_decision(
     )
 
 
+def _verification_preflight(
+    request: Any,
+    retrieve_decision: Any,
+    evidence_bundle: EvidenceBundle,
+    *,
+    answer: str,
+    mode: str,
+    proposition_verifier: PropositionVerifier | None,
+) -> VerifyDecision | None:
+    if mode == "off":
+        return VerifyDecision(
+            mode=mode,
+            status="not_requested",
+            reason="Verification disabled.",
+        )
+    if retrieve_decision.status == "not_required":
+        return VerifyDecision(
+            mode=mode,
+            status="not_required",
+            reason="Direct route does not require evidence verification.",
+        )
+    candidate_decision = (
+        verified_boolean_candidate_decision(
+            request,
+            retrieve_decision,
+            evidence_bundle,
+            answer=answer,
+            mode=mode,
+            proposition_verifier=proposition_verifier,
+        )
+        if proposition_verifier is not None
+        else None
+    )
+    if candidate_decision is not None:
+        return candidate_decision
+    missing_slots = blocking_verification_slots(request, evidence_bundle)
+    if missing_slots:
+        return _missing_slot_decision(
+            request,
+            retrieve_decision,
+            mode,
+            answer,
+            missing_slots,
+            typed_boolean_verifier=proposition_verifier is not None,
+        )
+    return None
+
+
 def _missing_slot_decision(
     request: Any,
     retrieve_decision: Any,
     mode: str,
     answer: str,
     missing_slots: list[str],
+    *,
+    typed_boolean_verifier: bool = False,
 ) -> VerifyDecision:
     domain = normalize_verification_domain(
         getattr(request, "verification_domain", None)
@@ -134,7 +201,12 @@ def _missing_slot_decision(
         ),
         action="retry" if retrieve_decision.retry else "abstain",
     )
-    return with_qasper_missing_authority(
+    authority_projection = (
+        with_missing_boolean_authority
+        if typed_boolean_verifier and boolean_authority_required(request)
+        else with_qasper_missing_authority
+    )
+    return authority_projection(
         request,
         decision,
         question=request_planning_question(request),
@@ -152,6 +224,7 @@ def _insufficient_retrieval_decision(
     prompt: str,
     answer: str,
     domain: str,
+    typed_boolean_verifier: bool = False,
 ) -> VerifyDecision:
     decision = VerifyDecision(
         mode=mode,
@@ -159,7 +232,12 @@ def _insufficient_retrieval_decision(
         reason=f"{mode.title()} verification requested without sufficient evidence.",
         action="retry" if retrieve_decision.retry else "abstain",
     )
-    return with_qasper_missing_authority(
+    authority_projection = (
+        with_missing_boolean_authority
+        if typed_boolean_verifier and boolean_authority_required(request)
+        else with_qasper_missing_authority
+    )
+    return authority_projection(
         request,
         decision,
         question=prompt,
@@ -177,6 +255,7 @@ def _verification_results(
     prompt: str,
     domain: str,
     request: Any,
+    proposition_verifier: PropositionVerifier | None = None,
 ) -> tuple[list[str], list[VerifiedClaim]]:
     calculation_claims = split_claim_clauses(claims) if domain == "finance" else claims
     typed_calculation = calculation_claim_result(
@@ -202,20 +281,21 @@ def _verification_results(
         prompt,
         answer,
         evidence_bundle.items,
-        allow_missing_polarity=_request_requires_boolean_authority(request),
+        allow_missing_polarity=boolean_authority_required(request),
     )
     if typed_boolean is not None:
+        semantic = semantic_boolean_verification(
+            request,
+            prompt,
+            answer,
+            evidence_bundle,
+            typed_boolean,
+            proposition_verifier,
+        )
+        if semantic is not None:
+            return semantic
         return typed_boolean
     return claims, _verify_claims(claims, evidence_bundle.items, prompt, domain)
-
-
-def _request_requires_boolean_authority(request: Any) -> bool:
-    plan = getattr(request, "query_plan", None)
-    if isinstance(plan, dict):
-        answer_type = plan.get("answer_type")
-    else:
-        answer_type = getattr(plan, "answer_type", None)
-    return str(answer_type or getattr(request, "task_type", "")).lower() == "boolean"
 
 
 def with_verification_evidence(
@@ -292,6 +372,9 @@ def with_verification_evidence(
             decision,
             reconciled_slots,
         )
+        projection = final_visual_binding_projection(bundle, decision, request)
+        if projection is not None:
+            metadata["final_binding_projection"] = projection
     metadata["verify_decision"] = decision.as_dict()
     return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
 
@@ -301,10 +384,10 @@ def _reconciled_verification_slots(
     decision: VerifyDecision,
     bundle: EvidenceBundle,
 ) -> dict[str, tuple[str, ...]]:
-    if (
-        decision.typed_authority.get("contract_id")
-        == TYPED_PROPOSITION_AUTHORITY_CONTRACT
-    ):
+    if decision.typed_authority.get("contract_id") in {
+        TYPED_PROPOSITION_AUTHORITY_CONTRACT,
+        TYPED_VISUAL_EVIDENCE_PATH_CONTRACT,
+    }:
         return typed_slot_bindings(decision)
     if decision.status == "verified_conflict":
         return conflict_aware_slot_support(request, decision, bundle)
@@ -342,6 +425,10 @@ def _boolean_authority_metadata(decision: VerifyDecision) -> dict[str, Any]:
         "qualifier": decision.qualifier,
         "scope": decision.section_scope,
         "quantifier": decision.quantifier,
+        "authority_derivations": [
+            deepcopy(value) for value in decision.authority_derivations
+        ],
+        "selected_derivation_id": decision.selected_derivation_id,
     }
 
 
@@ -391,10 +478,13 @@ def _synchronize_verified_claim_query_plan(
         plan, QueryPlan
     ):
         return
+    visual_contract = decision.typed_authority.get("contract_id")
+    visual_typed = visual_contract == TYPED_VISUAL_EVIDENCE_PATH_CONTRACT
     verification_support_slots = [
         slot
         for slot in plan.evidence_slots
-        if slot.required_for_verification and slot.role == "support"
+        if slot.required_for_verification
+        and (slot.role == "support" or (visual_typed and slot.role == "operand"))
     ]
     if not verification_support_slots or any(
         not reconciled_slots.get(slot.slot_id) for slot in verification_support_slots
@@ -445,8 +535,8 @@ def _synchronize_verified_claim_query_plan(
                 if decision.status == "verified_conflict"
                 else "verified_claim_support.v1"
             ),
-            "authority_projection_contract": (
-                TYPED_PROPOSITION_AUTHORITY_CONTRACT if decision.typed_authority else ""
+            "authority_projection_contract": str(
+                decision.typed_authority.get("contract_id") or ""
             ),
         }
     )

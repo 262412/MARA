@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
@@ -10,51 +9,56 @@ from .boolean_authoritative_conflict import (
     conflict_sides_are_complete,
     with_verified_conflict_slots,
 )
+from .boolean_authority_schema import SEMANTIC_EVIDENCE_SET_RULE
+from .boolean_conjunction import derivation_support_group_constraint
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_schema import EvidenceBundle
 from .qasper_answer_relation import resolve_qasper_answer_relation
 from .query_plan_schema import QueryPlan
+from .semantic_evidence_set_plan_projection import (
+    semantic_authority_plan_projection_from_decision,
+)
+from .typed_proposition_authority_atoms import (
+    bound_boolean_derivations as _bound_boolean_derivations,
+)
 from .typed_proposition_authority_atoms import (
     conflict_slot_bindings as _conflict_slot_bindings,
 )
-from .typed_proposition_authority_atoms import exact_boolean_atom as _exact_boolean_atom
+from .typed_proposition_authority_atoms import (
+    exact_boolean_atoms as _exact_boolean_atoms,
+)
 from .typed_proposition_authority_atoms import (
     free_text_claim_result as _free_text_claim_result,
 )
-from .typed_proposition_authority_atoms import (
-    unknown_claim_result as _unknown_claim_result,
+from .typed_proposition_authority_failure import coherent_authority_failure
+from .typed_proposition_authority_missing import (
+    with_missing_boolean_authority,
+    with_qasper_missing_authority,
 )
 from .typed_proposition_authority_schema import TYPED_PROPOSITION_AUTHORITY_CONTRACT
+from .typed_proposition_authority_schema import (
+    has_composite_boolean_authority as _has_composite_boolean_authority,
+)
 from .typed_proposition_authority_schema import missing_authority as _missing_authority
+from .typed_proposition_authority_schema import planned_answer_type as _answer_type
+from .typed_proposition_authority_schema import (
+    qasper_authority_domain as _qasper_domain,
+)
 from .typed_proposition_authority_schema import (
     verified_authority as _verified_authority,
 )
+from .typed_proposition_authority_slots import (
+    boolean_slot_bindings as _boolean_slot_bindings,
+)
 from .verification_schema import VerifyDecision
 
-
-def with_qasper_missing_authority(
-    request: Any,
-    decision: VerifyDecision,
-    *,
-    question: str,
-    answer: str,
-    domain: str,
-    reason: str,
-) -> VerifyDecision:
-    if not _qasper_domain(domain):
-        return decision
-    required_slot_ids = [slot.slot_id for slot in _required_support_slots(request)]
-    authority = _missing_authority(
-        _answer_type(request),
-        question,
-        answer,
-        required_slot_ids,
-        reason,
-    )
-    return replace(decision, typed_authority=authority)
+__all__ = [
+    "with_missing_boolean_authority",
+    "with_qasper_missing_authority",
+]
 
 
-def resolve_qasper_authority_transaction(
+def resolve_typed_proposition_authority_transaction(
     request: Any,
     decision: VerifyDecision,
     evidence_bundle: EvidenceBundle,
@@ -63,18 +67,26 @@ def resolve_qasper_authority_transaction(
     answer: str,
     domain: str,
 ) -> VerifyDecision | None:
-    """Commit one coherent QASPER claim/slot/plan authority projection.
+    """Commit typed authority; non-QASPER domains opt in for composite proofs."""
 
-    ``None`` means the request is outside this contract and should retain the
-    domain's existing verification path.
-    """
-
-    if not _qasper_domain(domain):
-        return None
     answer_type = _answer_type(request)
+    if not _qasper_domain(domain) and not (
+        answer_type == "boolean" and _has_composite_boolean_authority(decision)
+    ):
+        return None
     required_slots = _required_support_slots(request)
     required_slot_ids = [slot.slot_id for slot in required_slots]
     if answer_type == "boolean":
+        if decision.status == "verified_conflict":
+            return _resolve_conflict_transaction(
+                request,
+                decision,
+                evidence_bundle,
+                question=question,
+                answer=answer,
+                required_slots=required_slots,
+                required_slot_ids=required_slot_ids,
+            )
         return _resolve_boolean_transaction(
             request,
             decision,
@@ -95,64 +107,7 @@ def resolve_qasper_authority_transaction(
     )
 
 
-def coherent_authority_failure(
-    decision: VerifyDecision,
-    reason: str,
-    *,
-    typed_authority: dict[str, Any] | None = None,
-) -> VerifyDecision:
-    """Downgrade every semantic projection together when authority fails."""
-
-    claim_results = [_unknown_claim_result(result) for result in decision.claim_results]
-    claims = list(decision.claims)
-    return replace(
-        decision,
-        status="unknown",
-        reason=f"Typed proposition authority was not established: {reason}.",
-        action="abstain",
-        unsupported_claims=[],
-        unknown_claims=claims,
-        verified_citations=[],
-        claim_results=claim_results,
-        input_answer_polarity="",
-        canonical_answer_polarity="",
-        semantic_correction_applied=False,
-        boolean_authority_status="missing",
-        authoritative_evidence_id="",
-        authoritative_evidence_ref="",
-        authoritative_span_id="",
-        authoritative_quote="",
-        authoritative_span_start=None,
-        authoritative_span_end=None,
-        authoritative_canonical_start=None,
-        authoritative_canonical_end=None,
-        actor="",
-        section_scope="",
-        relation="",
-        object="",
-        predicate_arguments=(),
-        qualifier="",
-        quantifier="",
-        verified_support_slot_ids=[],
-        authoritative_conflict={},
-        typed_authority=deepcopy(typed_authority or {}),
-    )
-
-
-def typed_slot_bindings(decision: VerifyDecision) -> dict[str, tuple[str, ...]]:
-    authority = decision.typed_authority
-    if not isinstance(authority, dict):
-        return {}
-    payload = authority.get("slot_bindings")
-    if not isinstance(payload, dict):
-        return {}
-    return {
-        str(slot_id): tuple(
-            str(value).strip() for value in values or [] if str(value).strip()
-        )
-        for slot_id, values in payload.items()
-        if str(slot_id).strip() and isinstance(values, (list, tuple))
-    }
+resolve_qasper_authority_transaction = resolve_typed_proposition_authority_transaction
 
 
 def _resolve_boolean_transaction(
@@ -165,47 +120,101 @@ def _resolve_boolean_transaction(
     required_slots: list[Any],
     required_slot_ids: list[str],
 ) -> VerifyDecision:
-    if decision.status == "verified_conflict":
-        return _resolve_conflict_transaction(
-            request,
+    (
+        canonical_plan_projection,
+        projection_reason,
+    ) = semantic_authority_plan_projection_from_decision(
+        question,
+        evidence_bundle,
+        decision,
+    )
+    if projection_reason:
+        return _boolean_failure(
             decision,
-            evidence_bundle,
-            question=question,
-            answer=answer,
-            required_slots=required_slots,
-            required_slot_ids=required_slot_ids,
+            question,
+            answer,
+            required_slot_ids,
+            projection_reason,
         )
-    atom = _exact_boolean_atom(decision, evidence_bundle, question=question)
-    if decision.status != "supported" or atom is None or not required_slots:
+    atoms = _exact_boolean_atoms(
+        decision,
+        evidence_bundle,
+        question=question,
+        canonical_plan_projection=canonical_plan_projection,
+    )
+    derivations = _bound_boolean_derivations(
+        decision,
+        atoms,
+        question=question,
+        canonical_plan_projection=canonical_plan_projection,
+    )
+    composite_expected = _has_composite_boolean_authority(decision)
+    if decision.status != "supported" or not atoms or not required_slots:
         reason = (
             "required_support_slot_missing"
             if not required_slots
             else "exact_boolean_authority_missing"
         )
-        authority = _missing_authority(
-            "boolean", question, answer, required_slot_ids, reason
-        )
-        return coherent_authority_failure(
-            decision,
-            reason,
-            typed_authority=authority,
-        )
-    evidence_id = str(atom["evidence_id"])
-    bindings: dict[str, tuple[str, ...]] = {
-        str(slot.slot_id): (evidence_id,) for slot in required_slots
-    }
-    state_version = _commit_query_plan(request, bindings, "verified_support")
+        return _boolean_failure(decision, question, answer, required_slot_ids, reason)
+    if composite_expected and not derivations:
+        reason = "boolean_authority_derivation_incomplete"
+        return _boolean_failure(decision, question, answer, required_slot_ids, reason)
+    bindings, slot_ref_bindings, selected_atoms = _boolean_slot_bindings(
+        request,
+        required_slots,
+        atoms,
+        derivations,
+        canonical_plan_projection=canonical_plan_projection,
+    )
+    if bindings is None or slot_ref_bindings is None or selected_atoms is None:
+        reason = "required_support_slot_binding_incomplete"
+        return _boolean_failure(decision, question, answer, required_slot_ids, reason)
+    return _commit_boolean_transaction(
+        request,
+        decision,
+        question=question,
+        answer=answer,
+        required_slot_ids=required_slot_ids,
+        bindings=bindings,
+        slot_ref_bindings=slot_ref_bindings,
+        atoms=selected_atoms,
+        derivations=derivations,
+    )
+
+
+def _commit_boolean_transaction(
+    request: Any,
+    decision: VerifyDecision,
+    *,
+    question: str,
+    answer: str,
+    required_slot_ids: list[str],
+    bindings: dict[str, tuple[str, ...]],
+    slot_ref_bindings: dict[str, tuple[str, ...]],
+    atoms: list[dict[str, Any]],
+    derivations: list[dict[str, Any]],
+) -> VerifyDecision:
+    state_version = _commit_query_plan(
+        request,
+        bindings,
+        "verified_support",
+        authority_derivations=derivations,
+    )
     authority = _verified_authority(
         "boolean",
         question,
         answer,
         decision.claim_results,
         bindings,
-        [atom],
+        atoms,
         state="verified_support",
-        reason="exact_boolean_proposition",
+        reason=_boolean_authority_reason(derivations),
         canonical_answer_polarity=decision.canonical_answer_polarity,
         query_plan_state_version=state_version,
+        required_slot_ids=required_slot_ids,
+        slot_ref_bindings=slot_ref_bindings,
+        authority_derivations=derivations,
+        selected_derivation_id=decision.selected_derivation_id,
     )
     slot_ids = list(bindings)
     claim_results = [
@@ -221,14 +230,25 @@ def _resolve_boolean_transaction(
         }
         for result in decision.claim_results
     ]
+    evidence_ids = list(
+        dict.fromkeys(value for ids in bindings.values() for value in ids)
+    )
     return replace(
         decision,
         claim_results=claim_results,
-        verified_citations=[evidence_id],
+        verified_citations=evidence_ids,
         verified_support_slot_ids=slot_ids,
         boolean_authority_status="verified_support",
         typed_authority=authority,
     )
+
+
+def _boolean_authority_reason(derivations: list[dict[str, Any]]) -> str:
+    if not derivations:
+        return "exact_boolean_proposition"
+    if str(derivations[0].get("rule_id") or "") == SEMANTIC_EVIDENCE_SET_RULE:
+        return "semantic_evidence_set_proposition"
+    return "composite_boolean_proposition"
 
 
 def _resolve_free_text_transaction(
@@ -259,9 +279,11 @@ def _resolve_free_text_transaction(
         reason = (
             "claim_extension_unverified"
             if extension_unverified
-            else "required_support_slot_missing"
-            if not required_slots
-            else resolution.reason
+            else (
+                "required_support_slot_missing"
+                if not required_slots
+                else resolution.reason
+            )
         )
         authority = _missing_authority(
             "free_text", question, answer, required_slot_ids, reason
@@ -277,6 +299,7 @@ def _resolve_free_text_transaction(
         question=question,
         answer=answer,
         required_slots=required_slots,
+        required_slot_ids=required_slot_ids,
         atoms=list(resolution.atoms),
         reason=resolution.reason,
     )
@@ -289,6 +312,7 @@ def _commit_free_text_transaction(
     question: str,
     answer: str,
     required_slots: list[Any],
+    required_slot_ids: list[str],
     atoms: list[dict[str, Any]],
     reason: str,
 ) -> VerifyDecision:
@@ -299,9 +323,11 @@ def _commit_free_text_transaction(
     claims = list(decision.claims) or [str(answer or "").strip()]
     claim_results = [
         _free_text_claim_result(
-            decision.claim_results[index]
-            if index < len(decision.claim_results)
-            else {},
+            (
+                decision.claim_results[index]
+                if index < len(decision.claim_results)
+                else {}
+            ),
             claim=claim,
             claim_id=f"claim:{index + 1}",
             atom=atoms[min(index, len(atoms) - 1)],
@@ -319,6 +345,7 @@ def _commit_free_text_transaction(
         state="verified_support",
         reason=reason,
         query_plan_state_version=state_version,
+        required_slot_ids=required_slot_ids,
     )
     return replace(
         decision,
@@ -374,7 +401,7 @@ def _resolve_conflict_transaction(
             for atom in atoms
         )
     ):
-        return _conflict_failure(
+        return _boolean_failure(
             decision,
             question,
             answer,
@@ -383,7 +410,7 @@ def _resolve_conflict_transaction(
         )
     bindings = _conflict_slot_bindings(required_slots, atoms)
     if set(bindings) != set(required_slot_ids):
-        return _conflict_failure(
+        return _boolean_failure(
             decision,
             question,
             answer,
@@ -422,6 +449,7 @@ def _commit_conflict_transaction(
         state="verified_conflict",
         reason="authoritative_conflict_abstention",
         query_plan_state_version=state_version,
+        required_slot_ids=list(bindings),
     )
     slot_ids = list(bindings)
     claim_results = [
@@ -456,7 +484,7 @@ def _commit_conflict_transaction(
     )
 
 
-def _conflict_failure(
+def _boolean_failure(
     decision: VerifyDecision,
     question: str,
     answer: str,
@@ -477,18 +505,29 @@ def _commit_query_plan(
     request: Any,
     bindings: dict[str, tuple[str, ...]],
     status: str,
+    *,
+    authority_derivations: list[dict[str, Any]] | None = None,
 ) -> int:
     plan = getattr(request, "query_plan", None)
     if not isinstance(plan, QueryPlan):
         return int(getattr(request, "query_plan_state_version", 0) or 0)
+    constraints = dict(plan.constraints)
+    if authority_derivations:
+        constraints["boolean_support_group"] = derivation_support_group_constraint(
+            authority_derivations[0],
+            constraints.get("boolean_support_group"),
+        )
     authoritative = replace(
         plan,
         evidence_slots=tuple(
-            replace(slot, status=status, evidence_ids=bindings[slot.slot_id])
-            if slot.slot_id in bindings
-            else slot
+            (
+                replace(slot, status=status, evidence_ids=bindings[slot.slot_id])
+                if slot.slot_id in bindings
+                else slot
+            )
             for slot in plan.evidence_slots
         ),
+        constraints=constraints,
     )
     current_version = int(getattr(request, "query_plan_state_version", 0) or 0)
     if authoritative == plan:
@@ -509,14 +548,3 @@ def _required_support_slots(request: Any) -> list[Any]:
         for slot in plan.evidence_slots
         if slot.required_for_verification and slot.role == "support"
     ]
-
-
-def _answer_type(request: Any) -> str:
-    plan = getattr(request, "query_plan", None)
-    value = getattr(plan, "answer_type", None) if plan is not None else None
-    return str(value or getattr(request, "task_type", "") or "free_text").lower()
-
-
-def _qasper_domain(domain: str) -> bool:
-    normalized = str(domain or "").strip().lower()
-    return normalized == "qasper" or normalized.startswith("qasper_")

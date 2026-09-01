@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import re
 import time
 from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,12 +17,16 @@ from .evidence_identity import (
 from .evidence_item_coercion import coerce_item as _coerce_item
 from .evidence_locators import merged_locator_metadata
 from .evidence_planning import select_planned_evidence
+from .evidence_ranking_tokens import item_tokens as _item_tokens
+from .evidence_ranking_tokens import metadata_tokens as _metadata_tokens
+from .evidence_ranking_tokens import tokens as _tokens
 from .evidence_ranking_trace import (
     actual_reranker_input,
     materialize_reranked_candidates,
 )
 from .evidence_schema import EvidenceBundle, EvidenceElement
 from .financial_table import parse_financial_table_cells_with_context
+from .fusion_stage import FUSION_STAGE_CONTRACT, fusion_stage_snapshot
 from .graph_evidence import graph_items
 from .hybrid_fusion import fuse_hybrid_evidence
 from .m3docrag import select_page_first_evidence
@@ -38,8 +42,7 @@ from .required_slot_selection import (
 )
 from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 from .source_identity_crosswalk import canonicalize_evidence_sources
-
-MAX_RERANK_CANDIDATES = 80
+from .visual_evidence_authority import project_visual_evidence
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,7 @@ class _EvidenceStages:
     required_slot_restored: int
     page_ranking_trace: dict[str, Any] | None
     fusion_trace: dict[str, Any] | None
+    fusion_stage: dict[str, Any]
     reranker_trace: dict[str, Any] | None
     assessments: SelectionAssessmentSnapshot
 
@@ -80,21 +84,24 @@ def build_evidence_bundle(
     metadata["schema_version"] = EVIDENCE_BUNDLE_SCHEMA_VERSION
     metadata["dedupe_trace"] = stages.dedupe_trace
     metadata["canonical_candidate_count"] = len(stages.canonical_candidates)
-    metadata["canonical_candidate_evidence"] = stages.canonical_candidates
-    metadata["candidate_evidence"] = stages.canonical_candidates
-    metadata["candidate_ranked_evidence"] = stages.ranked_candidates
+    metadata["canonical_candidate_evidence"] = deepcopy(stages.canonical_candidates)
+    metadata["candidate_evidence"] = deepcopy(stages.canonical_candidates)
+    metadata["candidate_ranked_evidence"] = deepcopy(stages.ranked_candidates)
     metadata["candidate_ranking_contract"] = "global_ranked_v1"
     metadata[
         "pre_rerank_required_slot_candidates_restored"
     ] = stages.required_slot_restored
-    metadata["reranker_input_evidence"] = stages.reranker_input
+    metadata["reranker_input_evidence"] = deepcopy(stages.reranker_input)
     metadata["reranker_input_contract"] = "required_slot_restored.v1"
-    if route == "hybrid":
-        metadata["fused_evidence"] = stages.ranked_candidates
+    metadata["fused_evidence"] = deepcopy(stages.ranked_candidates)
+    metadata["fusion_stage_snapshot"] = deepcopy(stages.fusion_stage)
     if stages.reranked is not None:
         metadata["reranked_candidate_count"] = len(stages.reranked)
-        metadata["reranked_evidence"] = stages.reranked
+        metadata["reranked_evidence"] = deepcopy(stages.reranked)
     ranking_metadata = dict(stages.ranking_metadata)
+    ranking_metadata["fusion_stage_contract_id"] = FUSION_STAGE_CONTRACT
+    ranking_metadata["candidate_stage"] = stages.fusion_stage["candidate_stage"]
+    ranking_metadata["fusion_stage_snapshot"] = deepcopy(stages.fusion_stage)
     execution_traces = ranking_metadata.get("reranker_execution_traces")
     if isinstance(execution_traces, list):
         metadata["reranker_execution_traces"] = execution_traces
@@ -108,10 +115,10 @@ def build_evidence_bundle(
     metadata["reranker_aggregate_trace"] = ranking_metadata
     metadata.update(merged_locator_metadata(metadata, deduped))
     metadata["modality_counts"] = dict(Counter(item["modality"] for item in deduped))
-    metadata["evidence"] = deduped
-    metadata["selected_evidence"] = deduped
-    metadata["generation_context_evidence"] = deduped
-    metadata["used_evidence"] = deduped
+    metadata["evidence"] = deepcopy(deduped)
+    metadata["selected_evidence"] = deepcopy(deduped)
+    metadata["generation_context_evidence"] = deepcopy(deduped)
+    metadata["used_evidence"] = deepcopy(deduped)
     metadata["stage_aliases"] = {
         "used_evidence": "generation_context_evidence",
     }
@@ -145,10 +152,13 @@ def _build_evidence_stages(
             domain=getattr(request, "verification_domain", None),
         )
     ranked_candidates = list(deduped)
-    reranker_candidate_limit = required_slot_candidate_limit(
-        query_plan,
-        base_limit=MAX_RERANK_CANDIDATES,
+    fusion_stage = fusion_stage_snapshot(
+        route,
+        canonical_candidates,
+        ranked_candidates,
+        fusion_trace=fusion_trace,
     )
+    reranker_candidate_limit = required_slot_candidate_limit(query_plan, base_limit=80)
     reranker_input, restored = required_slot_shortlist(
         ranked_candidates,
         query_plan,
@@ -170,10 +180,7 @@ def _build_evidence_stages(
         evidence_metadata,
         limit=required_slot_candidate_limit(query_plan, base_limit=30),
     )
-    reranker_input_stage = actual_reranker_input(
-        reranker_input,
-        ranking_metadata,
-    )
+    reranker_input_stage = actual_reranker_input(reranker_input, ranking_metadata)
     selection_candidates = _reranked_with_remaining_candidates(
         reranked,
         reranker_input,
@@ -197,6 +204,7 @@ def _build_evidence_stages(
         required_slot_restored=restored,
         page_ranking_trace=page_ranking_trace,
         fusion_trace=fusion_trace,
+        fusion_stage=fusion_stage,
         reranker_trace=reranker_trace,
         assessments=assessments,
     )
@@ -243,6 +251,7 @@ def _initial_evidence_items(
         items.extend(_rank_route_items(element_items, request, "doc_element"))
     if route in {"graph_global", "hybrid"}:
         items.extend(graph_items(request, evidence_metadata))
+    items = project_visual_evidence(items, evidence_metadata)
     items = _materialize_execution_cells(request, items, evidence_metadata)
     return canonicalize_evidence_sources(items, crosswalk)
 
@@ -549,38 +558,6 @@ def _selected_file_ids(request: Any) -> set[str]:
     }
 
 
-def _item_tokens(item: dict[str, Any]) -> set[str]:
-    return _tokens(
-        " ".join(
-            str(item.get(key) or "")
-            for key in (
-                "caption",
-                "element_id",
-                "modality",
-                "ocr_text",
-                "source_name",
-                "text",
-                "vlm_text",
-            )
-        )
-    )
-
-
-def _metadata_tokens(item: dict[str, Any]) -> set[str]:
-    metadata = dict(item.get("metadata") or {})
-    values: list[Any] = [
-        metadata.get("late_interaction_tokens"),
-        metadata.get("visual_retriever"),
-    ]
-    return _tokens(
-        " ".join(
-            str(part)
-            for value in values
-            for part in (value if isinstance(value, list) else [value])
-        )
-    )
-
-
 def _visual_retriever_score(item: dict[str, Any]) -> int:
     metadata = dict(item.get("metadata") or {})
     return int(float(metadata.get("visual_retriever_score") or 0.0) * 100)
@@ -589,11 +566,3 @@ def _visual_retriever_score(item: dict[str, Any]) -> int:
 def _element_retriever_score(item: dict[str, Any]) -> int:
     metadata = dict(item.get("metadata") or {})
     return int(float(metadata.get("element_retriever_score") or 0.0) * 100)
-
-
-def _tokens(value: str) -> set[str]:
-    return {
-        token
-        for token in re.findall(r"[a-zA-Z0-9]+", str(value or "").lower())
-        if len(token) > 2
-    }

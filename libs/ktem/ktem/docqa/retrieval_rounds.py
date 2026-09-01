@@ -20,6 +20,7 @@ from .typed_retrieval_recovery import (
     qasper_typed_recovery_required as _qasper_typed_recovery_required,
 )
 from .typed_retrieval_recovery import quality_retry_request as _quality_retry_request
+from .typed_retrieval_recovery import recovery_query as _recovery_query
 from .typed_retrieval_recovery import recovery_query_metadata
 from .typed_retrieval_recovery import (
     typed_qasper_recovery_requests as _typed_qasper_recovery_requests,
@@ -144,7 +145,11 @@ def _complete_second_round(
     recovered_bundle = _with_retrieval_rounds(recovered_bundle, 2)
     typed_recovery_no_progress = _qasper_typed_recovery_required(
         request
-    ) and not _typed_retrieval_recovery_has_progress(initial_bundle, recovered_bundle)
+    ) and not _typed_retrieval_recovery_has_progress(
+        initial_bundle,
+        recovered_bundle,
+        request=request,
+    )
     request.route_last_evidence_bundle = recovered_bundle
     retrieve_decision = _evaluate(
         request,
@@ -190,7 +195,7 @@ def retrieve_for_verifier_recovery(
         ] = "insufficient_remaining_time"
         return None
 
-    query = verifier_recovery_query(request)
+    query = _recovery_query(request, verifier_recovery_query(request))
     recovery_round = completed_rounds + 1
     recovery_metadata = _retrieve_second_round(
         request,

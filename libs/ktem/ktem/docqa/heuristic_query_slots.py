@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from .boolean_evidence_scope import boolean_retrieval_query
 from .finance_retrieval_focus import finance_retrieval_query
 from .query_evidence_text import requires_multiple_operands
@@ -9,6 +11,25 @@ from .query_phrase_extraction import (
     semantic_boolean_proposition_metric,
 )
 from .query_plan_schema import EvidenceLocator, EvidenceSlot
+
+_TREND_TERMS = {
+    "change",
+    "changed",
+    "trend",
+    "trended",
+    "increase",
+    "increased",
+    "decrease",
+    "decreased",
+    "decline",
+    "declined",
+    "peak",
+    "peaked",
+    "rise",
+    "rose",
+    "fall",
+    "fell",
+}
 
 
 def heuristic_slots(
@@ -21,18 +42,30 @@ def heuristic_slots(
     verification_domain: str = "",
 ) -> tuple[EvidenceSlot, ...]:
     multi_evidence = bool(capabilities.get("requires_multiple_evidence"))
-    if question_type == "multi_period_numeric":
-        return _period_operand_slots(
-            periods,
-            metric,
-            page_labels=_page_labels(capabilities),
-        )
     if answer_type == "numeric" and multi_evidence:
         return _paired_slots(
             question,
             metric,
             role="operand",
             required_for_execution=True,
+            page_labels=_page_labels(capabilities),
+        )
+    if question_type == "cross_page" and (
+        answer_type != "boolean" or capabilities.get("requires_visual")
+    ):
+        return _paired_slots(
+            question,
+            metric,
+            role="support",
+            page_labels=_page_labels(capabilities),
+            allow_duplicate_queries=True,
+        )
+    if capabilities.get("requires_visual"):
+        return _visual_support_slots(question, metric)
+    if question_type == "multi_period_numeric":
+        return _period_operand_slots(
+            periods,
+            metric,
             page_labels=_page_labels(capabilities),
         )
     if answer_type == "boolean":
@@ -49,28 +82,6 @@ def heuristic_slots(
             metric,
             page_labels=_page_labels(capabilities),
         )
-    if question_type == "cross_page":
-        return _paired_slots(
-            question,
-            metric,
-            role="support",
-            page_labels=_page_labels(capabilities),
-            allow_duplicate_queries=True,
-        )
-    if capabilities.get("requires_visual"):
-        return (
-            EvidenceSlot(
-                slot_id="support:visual_primary",
-                role="support",
-                metric=metric,
-                modality=modality_hint(question),
-                query=question,
-                locator=EvidenceLocator(
-                    figure_label=str(capabilities.get("figure_label") or ""),
-                    table_label=str(capabilities.get("table_label") or ""),
-                ),
-            ),
-        )
     primary_support = _primary_support_slots(
         question,
         answer_type,
@@ -82,6 +93,75 @@ def heuristic_slots(
     if primary_support:
         return primary_support
     return ()
+
+
+def visual_time_series_slots(
+    periods: list[str],
+    metric: str,
+) -> tuple[EvidenceSlot, ...]:
+    """Require one typed visual cell for every requested period."""
+
+    return tuple(
+        EvidenceSlot(
+            slot_id=f"support:{period}",
+            role="support",
+            metric=metric,
+            period=period,
+            modality="table",
+            required_for_execution=False,
+            required_for_verification=True,
+            statement_kind="visual_time_series_cell",
+            query=" ".join(value for value in (metric, period) if value),
+            locator=EvidenceLocator(),
+        )
+        for period in periods
+    )
+
+
+def mmdoc_visual_time_series_slots(
+    question: str,
+    normalized_type: str,
+    periods: list[str],
+    metric: str,
+    verification_domain: str,
+    causal_intent: bool,
+) -> tuple[EvidenceSlot, ...]:
+    """Plan typed cells only for explicit MMDoc multi-period trend questions."""
+
+    domain = str(verification_domain or "").strip().lower()
+    tokens = set(re.findall(r"[a-z0-9]+", str(question or "").lower()))
+    if not (
+        "mmdoc" in domain
+        and normalized_type == "free_text"
+        and not causal_intent
+        and len(periods) >= 2
+        and metric
+        and tokens & _TREND_TERMS
+    ):
+        return ()
+    return visual_time_series_slots(periods, metric)
+
+
+def _visual_support_slots(
+    question: str,
+    metric: str,
+) -> tuple[EvidenceSlot, ...]:
+    hinted_modality = modality_hint(question)
+    return (
+        EvidenceSlot(
+            slot_id="support:visual_primary",
+            role="support",
+            metric=metric or question,
+            modality=(
+                hinted_modality
+                if hinted_modality and hinted_modality != "auto"
+                else "page_image"
+            ),
+            statement_kind="visual_support",
+            query=question,
+            locator=EvidenceLocator(),
+        ),
+    )
 
 
 def _primary_support_slots(

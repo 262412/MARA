@@ -2,6 +2,13 @@ from __future__ import annotations
 
 import re
 
+from .finance_cash_conversion_cycle import (
+    FINANCE_ACCOUNT_ALIASES,
+    cash_conversion_cycle_formula,
+    is_cash_conversion_cycle,
+    is_fixed_asset_turnover,
+)
+
 FinanceOperandSpecs = tuple[tuple[str, str, str], ...]
 
 FINANCE_METRIC_ALIASES = {
@@ -89,6 +96,7 @@ FINANCE_METRIC_ALIASES = {
     "total assets": ("total assets",),
     "total debt": ("total debt", "long term debt", "short term debt"),
 }
+FINANCE_METRIC_ALIASES.update(FINANCE_ACCOUNT_ALIASES)
 
 
 def finance_metric_phrase_matches(metric: str, text: str) -> bool:
@@ -193,7 +201,13 @@ def finance_formula_spec(
     periods: list[str],
 ) -> dict[str, object] | None:
     lowered = str(question or "").lower()
-    if _is_fixed_asset_turnover(lowered):
+    if is_cash_conversion_cycle(lowered):
+        target_period = finance_target_period(lowered, periods)
+        return cash_conversion_cycle_formula(
+            target_period,
+            _previous_period(periods, target_period),
+        )
+    if is_fixed_asset_turnover(lowered):
         return _fixed_asset_turnover_formula(lowered, periods)
     if "inventory turnover" in lowered:
         return _inventory_turnover_formula(lowered, periods)
@@ -315,7 +329,7 @@ def finance_formula_status(question: str, periods: list[str]) -> str:
         return "supported"
     lowered = str(question or "").lower()
     unsupported_turnover = "turnover" in lowered and not (
-        _is_fixed_asset_turnover(lowered) or "inventory turnover" in lowered
+        is_fixed_asset_turnover(lowered) or "inventory turnover" in lowered
     )
     unsupported_percentage_of = bool(
         re.search(r"\bas\s+(?:a\s+)?(?:%|percent(?:age)?)\s+of\b", lowered)
@@ -380,7 +394,7 @@ def _named_formula_specs(
     periods: list[str],
     current_period: str,
 ) -> FinanceOperandSpecs:
-    if _is_fixed_asset_turnover(question):
+    if is_fixed_asset_turnover(question):
         previous_period = _previous_period(periods, current_period)
         if previous_period and current_period:
             return (
@@ -439,20 +453,6 @@ def _named_formula_specs(
             ("shareholders_equity", "shareholders equity"),
         )
     return ()
-
-
-def _is_fixed_asset_turnover(question: str) -> bool:
-    normalized = _normalized_metric_phrase(question)
-    return any(
-        alias in normalized
-        for alias in (
-            "fixed asset turnover",
-            "net fixed asset turnover",
-            "pp e turnover",
-            "ppe turnover",
-            "property plant and equipment turnover",
-        )
-    )
 
 
 def _previous_period(periods: list[str], target_period: str) -> str:

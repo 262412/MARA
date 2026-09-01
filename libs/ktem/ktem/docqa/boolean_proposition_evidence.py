@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from .boolean_current_experiment import is_current_experiment_question
+from .boolean_empirical_actions import empirical_action_present
 from .boolean_evidence_scope import (
     _closed_quantifier,
     _has_closed_quantifier,
@@ -173,7 +174,7 @@ def _proposition_frame(
     )
     resolution_text = _resolution_text(semantic_question, span, context)
     section_role = _section_role(item, span)
-    actor = contextual_actor(span, context, section_role)
+    actor = _resolved_actor(semantic_question, item, span, context, section_role)
     quantifier = _closed_quantifier(semantic_question)
     span_matches = _context_matches_proposition(semantic_question, span)
     span_qualifier = proposition_qualifier(span, question=semantic_question)
@@ -237,6 +238,22 @@ def _proposition_frame(
         section_role=section_role,
     )
     return proposition, section_role, scope_rejection, relation_score, object_score
+
+
+def _resolved_actor(
+    question: str,
+    item: dict[str, Any],
+    span: str,
+    context: str,
+    section_role: str,
+) -> str:
+    return contextual_actor(
+        span,
+        context,
+        section_role,
+        question=question,
+        document_text=evidence_item_text(item),
+    )
 
 
 def _deduplicated_assessments(
@@ -384,15 +401,22 @@ def _metalinguistic_relation_mention(question: str, span: str) -> bool:
     )
 
 
-def _assessment_rank(assessment: BooleanEvidenceAssessment) -> tuple[int, float, float]:
+def _assessment_rank(
+    assessment: BooleanEvidenceAssessment,
+) -> tuple[int, int, float, float]:
     class_rank = {
         "supports": 3,
         "contradicts": 3,
         "insufficient_scope": 2,
         "unrelated": 1,
     }
+    empirical_action = int(
+        assessment.proposition.action == "evaluate"
+        and empirical_action_present(assessment.span_text)
+    )
     return (
         class_rank[assessment.classification],
+        empirical_action,
         assessment.relation_score * assessment.object_score,
         assessment.object_score,
     )
@@ -402,7 +426,11 @@ def classify_boolean_evidence_set(
     question: str,
     answer: str,
     items: list[dict[str, Any]],
+    *,
+    preserve_support_spans: bool = False,
 ) -> BooleanEvidenceSet:
+    """Classify evidence, retaining exact support spans only when requested."""
+
     grouped: dict[str, list[BooleanEvidenceAssessment]] = {
         "supports": [],
         "contradicts": [],
@@ -417,11 +445,20 @@ def classify_boolean_evidence_set(
             grouped[assessment.classification].append(assessment)
     for classification, group_assessments in grouped.items():
         strongest: dict[
-            tuple[str, tuple[str, ...]],
+            tuple[str, tuple[str, ...], str],
             BooleanEvidenceAssessment,
         ] = {}
         for assessment in group_assessments:
-            key = (identity_of(assessment.item).key, assessment.proposition.key)
+            key = (
+                identity_of(assessment.item).key,
+                assessment.proposition.key,
+                (
+                    assessment.span_id
+                    if preserve_support_spans
+                    and classification in {"supports", "contradicts"}
+                    else ""
+                ),
+            )
             current = strongest.get(key)
             if current is None or (
                 _assessment_rank(assessment),

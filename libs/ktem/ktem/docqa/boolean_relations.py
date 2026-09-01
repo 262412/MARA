@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import re
 
+from .boolean_annotation_count import annotation_relation_present
+
 _RELATION_GROUPS = {
     "annotate": {
         "annotate",
+        "annotated",
+        "annotation",
+        "annotations",
+        "annotator",
+        "annotators",
         "construct",
         "crowdsource",
         "crowdsourced",
@@ -61,7 +68,10 @@ _RELATION_GROUPS = {
         "extraction",
         "inspect",
         "investigate",
+        "observe",
         "study",
+        "visualize",
+        "visualise",
     },
     "improve": {
         "benefit",
@@ -98,7 +108,14 @@ _RELATION_GROUPS = {
         "utilize",
         "use",
     },
-    "validate": {"check", "control", "validate", "verify"},
+    "validate": {
+        "check",
+        "control",
+        "controlled",
+        "controlling",
+        "validate",
+        "verify",
+    },
 }
 _RELATION_BY_FORM = {
     form: canonical for canonical, forms in _RELATION_GROUPS.items() for form in forms
@@ -132,11 +149,14 @@ _QUESTION_RELATION_ALIASES = {
 
 
 def boolean_relation_lemmas(value: str) -> set[str]:
-    return {
+    relations = {
         relation
         for token in re.findall(r"[a-z]+(?:-[a-z]+)?", str(value or "").lower())
         if (relation := boolean_relation_lemma(token))
     }
+    if annotation_relation_present(value):
+        relations.add("annotate")
+    return relations
 
 
 def primary_boolean_relation(value: str) -> str:

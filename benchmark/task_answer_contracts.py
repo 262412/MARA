@@ -306,6 +306,14 @@ def _synchronize_runtime_terminal_commit(prediction: dict[str, Any]) -> bool:
         for item in commit.get("authoritative_evidence") or []
         if isinstance(item, dict)
     ]
+    adapter_projection = _adapter_runtime_projection(
+        prediction,
+        answer,
+        guardrail_decision,
+    )
+    adapter_commit = None
+    if adapter_projection is not None:
+        adapter_commit, verify_decision, supporting_evidence = adapter_projection
     citations = [
         dict(item)
         for item in prediction.get("structured_citations") or []
@@ -315,6 +323,7 @@ def _synchronize_runtime_terminal_commit(prediction: dict[str, Any]) -> bool:
         prediction,
         answer=answer,
         verify_decision=verify_decision,
+        claim_verification=_adapter_claim_verification(adapter_commit),
         supporting_evidence=supporting_evidence,
         guardrail_decision=guardrail_decision,
         emitted_citations=citations,
@@ -327,11 +336,71 @@ def _synchronize_runtime_terminal_commit(prediction: dict[str, Any]) -> bool:
         ),
     )
     prediction.setdefault("evidence_metadata", {})["terminal_commit_projection"] = {
-        "contract_id": commit.get("contract_id"),
-        "projection_hash": commit.get("projection_hash"),
+        "contract_id": (
+            adapter_commit.get("contract_id")
+            if adapter_commit is not None
+            else commit.get("contract_id")
+        ),
+        "projection_hash": (
+            adapter_commit.get("projection_hash")
+            if adapter_commit is not None
+            else commit.get("projection_hash")
+        ),
         "answer": answer,
     }
     return True
+
+
+def _adapter_runtime_projection(
+    prediction: dict[str, Any],
+    answer: str,
+    guardrail_decision: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]] | None:
+    from .citation_adapters import validated_adapter_authority_commit
+
+    adapter_commit = validated_adapter_authority_commit(
+        prediction,
+        runtime_answer=answer,
+    )
+    if adapter_commit is None or (
+        str(guardrail_decision.get("action") or "").strip().lower() == "abstain"
+    ):
+        return None
+    supporting_evidence = [
+        dict(item)
+        for item in adapter_commit["authoritative_evidence"]
+        if isinstance(item, dict)
+    ]
+    verify_decision = {
+        "mode": "adapter",
+        "status": "supported",
+        "reason": "Benchmark adapter established canonical claim support.",
+        "action": "generate",
+        "claims": [
+            str(result.get("claim") or "") for result in adapter_commit["claim_results"]
+        ],
+        "verified_citations": list(adapter_commit["verified_citations"]),
+        "claim_results": deepcopy(adapter_commit["claim_results"]),
+        "unsupported_claims": [],
+        "unknown_claims": [],
+    }
+    return adapter_commit, verify_decision, supporting_evidence
+
+
+def _adapter_claim_verification(
+    adapter_commit: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if adapter_commit is None:
+        return None
+    from .citation_adapters import BENCHMARK_ADAPTER_AUTHORITY_COMMIT
+
+    return {
+        "contract_id": BENCHMARK_ADAPTER_AUTHORITY_COMMIT,
+        "status": "supported",
+        "claim_results": deepcopy(adapter_commit["claim_results"]),
+        "unsupported_claims": [],
+        "unknown_claims": [],
+    }
 
 
 def _update_contract_trace(prediction: dict[str, Any]) -> None:

@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 from .dataset_profiles import profile_for_manifest
 from .default_routes import CONTROLLER_AUTO_ALLOWED_ROUTES, DEFAULT_MARA_ROUTES
+from .jsonl import read_jsonl
 from .manifest_legacy_adapters import legacy_evidence_from_source
 from .schemas import (
     BenchmarkDocument,
@@ -532,11 +533,11 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
 def load_manifest(manifest_path: str | Path) -> ManifestBundle:
     manifest_path = Path(manifest_path).resolve()
     suffix = manifest_path.suffix.lower()
-    raw = manifest_path.read_text(encoding="utf-8-sig")
-
     if suffix == ".jsonl":
-        records = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        records = [dict(value) for value in read_jsonl(manifest_path)]
         return _coerce_examples(records, manifest_path)
+
+    raw = manifest_path.read_text(encoding="utf-8-sig")
 
     payload = json.loads(raw)
     if isinstance(payload, list):

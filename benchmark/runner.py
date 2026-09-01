@@ -503,12 +503,12 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
 
 
 def _benchmark_role(route: dict[str, Any], route_id: str) -> str:
+    normalized_route_id = str(route_id or "").strip().lower().replace("-", "_")
+    if normalized_route_id in {"direct", "direct_answer"}:
+        return "diagnostic"
     explicit = str(route.get("benchmark_role") or "").strip()
     if explicit in {"qa_quality", "diagnostic", "prototype"}:
         return explicit
-    normalized_route_id = str(route_id or "").strip()
-    if normalized_route_id == "direct_answer":
-        return "diagnostic"
     if (
         normalized_route_id.startswith("graph_rag")
         or normalized_route_id == "element_rag"

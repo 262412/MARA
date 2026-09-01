@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.docqa.evidence_identity import identity_of
+
 from kotaemon.base import HumanMessage, SystemMessage
 
 from .mara_ragtruth_claims import (
@@ -79,7 +81,7 @@ def route_ragtruth_answer(pipeline: Any, request: Any, bundle: Any) -> str | Non
     task_type = ragtruth_task_type(prompt)
     claims = response_claims(response)
     if not claims:
-        bundle.metadata["generation_backend"] = "ragtruth_claim_verifier_v1"
+        _record_empty_claim_trace(bundle.metadata)
         return '{"hallucination list": []}'
 
     verifier_response = llm(
@@ -114,6 +116,10 @@ def route_ragtruth_answer(pipeline: Any, request: Any, bundle: Any) -> str | Non
     _record_detector_trace(
         bundle.metadata,
         claims=claims,
+        source_evidence_id=_source_evidence_id(
+            source,
+            list(getattr(bundle, "items", None) or []),
+        ),
         task_type=task_type,
         candidate_answer=candidate_answer,
         candidates=candidates,
@@ -142,6 +148,7 @@ def _record_detector_trace(
     metadata: dict[str, Any],
     *,
     claims: list[str],
+    source_evidence_id: str,
     task_type: str,
     candidate_answer: str,
     candidates: set[int],
@@ -156,6 +163,8 @@ def _record_detector_trace(
         {
             "generation_backend": "ragtruth_claim_verifier_v1",
             "ragtruth_claim_count": len(claims),
+            "ragtruth_claims": list(claims),
+            "ragtruth_source_evidence_id": source_evidence_id,
             "ragtruth_task_type": task_type,
             "ragtruth_candidate_claim_count": len(candidates),
             "ragtruth_candidate_claim_indices": sorted(candidates),
@@ -170,5 +179,43 @@ def _record_detector_trace(
             "ragtruth_supported_claim_indices": sorted(supported),
             "ragtruth_unsupported_claim_count": len(selected_unsupported),
             "ragtruth_emitted_claim_indices": sorted(selected_unsupported)[:8],
+        }
+    )
+
+
+def _source_evidence_id(source: str, items: list[Any]) -> str:
+    normalized_source = _normalized_source_text(source)
+    if not normalized_source:
+        return ""
+    matches: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        evidence_text = " ".join(
+            str(item.get(field) or "").strip()
+            for field in ("text", "ocr_text", "vlm_text", "caption")
+            if str(item.get(field) or "").strip()
+        )
+        if _normalized_source_text(evidence_text) != normalized_source:
+            continue
+        try:
+            matches[identity_of(item).key] = item
+        except (TypeError, ValueError):
+            continue
+    return next(iter(matches)) if len(matches) == 1 else ""
+
+
+def _normalized_source_text(value: str) -> str:
+    return " ".join(str(value or "").split())
+
+
+def _record_empty_claim_trace(metadata: dict[str, Any]) -> None:
+    metadata.update(
+        {
+            "generation_backend": "ragtruth_claim_verifier_v1",
+            "ragtruth_claim_count": 0,
+            "ragtruth_claims": [],
+            "ragtruth_supported_claim_indices": [],
+            "ragtruth_emitted_claim_indices": [],
         }
     )

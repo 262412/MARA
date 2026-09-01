@@ -4,6 +4,7 @@ from collections import OrderedDict
 from typing import Any
 
 from .metrics import normalize_text
+from .ragtruth_native_scores import is_ragtruth_prediction, ragtruth_native_objective
 
 PHASE2_PROMPT_POLICY = "gold_answer_v1"
 
@@ -156,6 +157,12 @@ def phase2_failure_type(prediction: dict[str, Any]) -> str:
     if failure_class and failure_class != "none":
         return failure_class
 
+    if is_ragtruth_prediction(prediction):
+        native_score = ragtruth_native_objective(prediction)
+        if native_score is not None and native_score != 0.0:
+            return "none"
+        return _answer_mismatch_failure_type(prediction)
+
     f1 = metrics.get("f1")
     if isinstance(f1, (int, float)) and float(f1) == 0.0:
         if int(
@@ -173,6 +180,15 @@ def phase2_failure_type(prediction: dict[str, Any]) -> str:
         return "answer_mismatch_no_retrieval"
 
     return "none"
+
+
+def _answer_mismatch_failure_type(prediction: dict[str, Any]) -> str:
+    retrieved_count = dict(prediction.get("diagnostics") or {}).get("retrieved_count")
+    if retrieved_count is None:
+        retrieved_count = len(prediction.get("retrieved_hits") or [])
+    if int(retrieved_count or 0):
+        return "answer_mismatch_after_retrieval"
+    return "answer_mismatch_no_retrieval"
 
 
 def phase2_failure_counts(

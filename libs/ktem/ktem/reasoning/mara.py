@@ -31,11 +31,18 @@ from .mara_generation_context import cache_generation_context
 from .mara_query_planning import plan_steps as build_mara_plan_steps
 from .mara_query_planning import understand_query as understand_mara_query
 from .mara_query_planning import with_selected_source_context
+from .mara_qasper_candidate import (
+    generate_qasper_typed_candidate,
+    qasper_typed_candidate_request,
+)
 from .mara_ragtruth_answering import route_ragtruth_answer
 from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
 from .mara_route_preparation import prepare_controller_route, route_trace_payload
 from .mara_route_probe import page_image_route_available
 from .mara_route_retrieval import controller_text_retrieve, route_retrieval_metadata
+from .mara_semantic_proposition_verifier import build_semantic_proposition_verifier
+from .mara_trace import execution_trace_events as _execution_trace_events
+from .mara_trace import visible_execution_answer as _visible_execution_answer
 from .mara_visual_answering import route_visual_answer as _route_visual_answer
 from .mara_visual_gate import hybrid_should_use_visual_generator
 from .simple import FullQAPipeline
@@ -203,19 +210,6 @@ def _message_with_answer_format_requirements(message: str) -> str:
     return prompt + ANSWER_FORMAT_REQUIREMENTS
 
 
-def _execution_trace_events(
-    execution: RouteExecutionResult,
-) -> Generator[Document, None, None]:
-    for item in execution.controller_trace:
-        stage = item.get("stage")
-        if stage == "planner":
-            continue
-        payload = dict(item)
-        payload["event"] = str(stage or "controller")
-        payload["route"] = execution.controller_decision.route
-        yield _mara_event("agent_trace", payload)
-
-
 def _route_execution_events(
     execution: RouteExecutionResult,
     generation_events: list[Document],
@@ -237,15 +231,6 @@ def _route_execution_events(
         return Document(channel="chat", content=visible_answer)
     yield Document(channel="chat", content=MARA_ABSTAIN_MESSAGE)
     return Document(channel="chat", content=MARA_ABSTAIN_MESSAGE)
-
-
-def _visible_execution_answer(execution: RouteExecutionResult) -> str:
-    route = execution.controller_decision.route
-    if route == "direct_answer":
-        return MARA_DIRECT_MESSAGE
-    if route == "abstain":
-        return MARA_PLANNER_ABSTAIN_MESSAGE
-    return execution.answer
 
 
 def _generate_controller_route_answer(
@@ -291,6 +276,17 @@ def _generate_controller_route_answer(
     if decision.route == "element_rag":
         bundle.metadata["generation_backend"] = "local_element_evidence"
         return element_evidence_answer(bundle, message), []
+    if qasper_typed_candidate_request(request):
+        bundle.metadata["generation_backend"] = "qasper_typed_candidate_model"
+        answer = generate_qasper_typed_candidate(pipeline, request, bundle)
+        bundle.metadata["generation_answer_type_contract"] = {
+            "answer_type": "boolean",
+            "consistent": answer in {"yes", "no", "unanswerable"},
+            "reason": "structured_typed_candidate" if answer else "invalid_candidate",
+            "status": "passed" if answer else "failed",
+            "contract_id": "qasper_typed_candidate.v1",
+        }
+        return answer, []
     cache_generation_context(pipeline, message, history, bundle)
     generation_message = message_with_answer_type_contract(message, request)
     answer, events = _collect_text_rag_generation(
@@ -367,6 +363,7 @@ class MaraAgentPipeline(FullQAPipeline):
         query: str,
         *,
         task_type: str | None = None,
+        modality: str | None = None,
         qa_scope: str | None = None,
         active_file_id: str | None = None,
         page_number: int | None = None,
@@ -374,6 +371,7 @@ class MaraAgentPipeline(FullQAPipeline):
         return understand_mara_query(
             query,
             task_type=task_type,
+            modality=modality,
             qa_scope=qa_scope,
             active_file_id=active_file_id,
             page_number=page_number,
@@ -484,6 +482,7 @@ class MaraAgentPipeline(FullQAPipeline):
             retrieve=retrieve,
             generate=generate,
             rewrite=rewrite,
+            proposition_verifier=build_semantic_proposition_verifier(self),
             agent_trace=[planner_payload],
         )
         ensure_finance_numeric_trace(
@@ -498,12 +497,17 @@ class MaraAgentPipeline(FullQAPipeline):
         return execution, generation_events, artifact
 
     def stream(  # type: ignore
-        self, message: str, conv_id: str, history: list, **kwargs  # type: ignore
+        self,
+        message: str,
+        conv_id: str,
+        history: list,
+        **kwargs,  # type: ignore
     ) -> Generator[Document, None, Document]:
         routing_message = _controller_routing_message(self, message)
         understanding = self.understand_query(
             routing_message,
             task_type=getattr(self, "task_type", None),
+            modality=getattr(self, "modality", None),
             qa_scope=getattr(self, "qa_scope", None),
             active_file_id=getattr(self, "active_file_id", None),
             page_number=getattr(self, "page_number", None),

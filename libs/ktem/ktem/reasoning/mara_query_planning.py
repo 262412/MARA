@@ -35,13 +35,14 @@ def understand_query(
     query: str,
     *,
     task_type: str | None = None,
+    modality: str | None = None,
     qa_scope: str | None = None,
     active_file_id: str | None = None,
     page_number: int | None = None,
 ) -> dict[str, Any]:
     normalized = str(query or "").lower()
     detected_task = _detect_task_type(normalized, task_type)
-    modalities = _detect_modalities(normalized)
+    modalities = _requested_modalities(modality) or _detect_modalities(normalized)
     scope = _detect_scope(normalized, qa_scope, active_file_id, page_number)
     return {
         "question": query,
@@ -148,6 +149,13 @@ def _detect_modalities(normalized: str) -> list[str]:
         if any(keyword in normalized for keyword in keywords)
     ]
     return modalities or ["text"]
+
+
+def _requested_modalities(modality: str | None) -> list[str]:
+    value = str(modality or "").strip().lower().replace("-", "_")
+    if not value or value == "auto":
+        return []
+    return [value]
 
 
 def _detect_scope(

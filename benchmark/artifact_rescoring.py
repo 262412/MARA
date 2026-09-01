@@ -7,6 +7,7 @@ from typing import Any
 from .answer_finalizer import finalize_prediction_answer
 from .diagnostics import prediction_diagnostics
 from .indexed_citations import indexed_inline_citations
+from .jsonl import read_jsonl
 from .mara_oriented_scores import (
     add_mara_oriented_metrics,
     promote_external_primary_score,
@@ -212,11 +213,7 @@ def _read_optional_json(path: Path, *, default: Any) -> Any:
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    return [
-        dict(json.loads(line))
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [dict(value) for value in read_jsonl(path)]
 
 
 def _read_optional_jsonl(path: Path) -> list[dict[str, Any]] | None:

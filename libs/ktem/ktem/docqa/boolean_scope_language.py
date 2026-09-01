@@ -2,6 +2,60 @@ from __future__ import annotations
 
 import re
 
+_LANGUAGE_NAMES = (
+    "afrikaans",
+    "arabic",
+    "bengali",
+    "bulgarian",
+    "chinese",
+    "czech",
+    "danish",
+    "dutch",
+    "english",
+    "estonian",
+    "finnish",
+    "french",
+    "german",
+    "greek",
+    "hebrew",
+    "hindi",
+    "hungarian",
+    "indonesian",
+    "italian",
+    "japanese",
+    "korean",
+    "latvian",
+    "lithuanian",
+    "norwegian",
+    "persian",
+    "polish",
+    "portuguese",
+    "romanian",
+    "russian",
+    "slovak",
+    "slovenian",
+    "spanish",
+    "swahili",
+    "swedish",
+    "tamil",
+    "thai",
+    "turkish",
+    "ukrainian",
+    "urdu",
+    "vietnamese",
+)
+_LANGUAGE_NAME_PATTERN = "|".join(_LANGUAGE_NAMES)
+_NAMED_LANGUAGE_PAIR_RE = re.compile(
+    rf"\b(?:{_LANGUAGE_NAME_PATTERN})(?:-to-|-|/|→)" rf"(?:{_LANGUAGE_NAME_PATTERN})\b",
+    flags=re.IGNORECASE,
+)
+
+
+def named_language_pair_present(value: str) -> bool:
+    """Return whether text names two languages using compact pair notation."""
+
+    return _NAMED_LANGUAGE_PAIR_RE.search(str(value or "")) is not None
+
 
 def _language_data_question(question: str) -> bool:
     lowered = str(question or "").lower()

@@ -1,0 +1,281 @@
+{
+  "contract_id": "qasper_stage9_auditor_payload_characterization.v1",
+  "source": {
+    "job_id": "10397107",
+    "code_sha": "257a529874f0156236ca2aef54e93fa1997ff825",
+    "example_id": "7cd22ca9e107d2b13a7cc94252aaa9007976b338",
+    "route": "text_rag",
+    "observed_failure": "audit_prompt_bound_exceeded",
+    "observed_legacy_prompt_chars": 8044,
+    "prompt_char_limit": 8000
+  },
+  "question": "Do they inspect their model to see if their model learned to associate image parts with words related to entities?",
+  "original_candidate": "yes",
+  "candidate_judgment": "supported",
+  "proof_mode": "composite_conjunction",
+  "semantic_pack_identity": {
+    "semantic_pack_digest": "d635c05a150f24149e5ccf5183ed058af14ad7bbd0f3a084b11d44de7627d67f",
+    "span_universe_digest": "3410676947ec2194ca0d18d6242a51aa46fccbcb6cad339979253b44a6ca4bc0",
+    "candidate_transaction_id": "1fd812ddceed0f2f9fc9903ad3b36011264d84d025657a24e2418f90127ff66e"
+  },
+  "premises": [
+    {
+      "span_selector": "E1:S12",
+      "quote": "For the image-aided model (W+C+V; upper row in Figure FIGREF19 ), we confirm that the modality attention successfully attenuates irrelevant signals (selfies, etc.) and amplifies relevant modality-based contexts in prediction of a given token.",
+      "span_start": 2461,
+      "span_end": 2703,
+      "proposition_fragment": "For the image-aided model (W+C+V; upper row in Figure FIGREF19 ), we confirm that the modality attention successfully attenuates irrelevant signals (selfies, etc.) and amplifies relevant modality-based contexts in prediction of a given token.",
+      "binds_proposition_slots": [
+        "actor",
+        "predicate",
+        "object"
+      ],
+      "semantic_alignment": {
+        "contract_id": "qasper_selector_semantic_alignment.v1",
+        "status": "verified",
+        "alignment_digest": "0ce721e0e66b3a0091262c6643034acf808966ff794fc43bfa23c40673916802",
+        "covered_object_tokens": [
+          "associate",
+          "model",
+          "part",
+          "relat",
+          "word"
+        ],
+        "semantic_matches": {
+          "model": [
+            {
+              "text": "model",
+              "span_start": 2481,
+              "span_end": 2486,
+              "match_kind": "exact",
+              "rule_id": "exact_semantic_token"
+            }
+          ],
+          "associate": [
+            {
+              "text": "attention",
+              "span_start": 2556,
+              "span_end": 2565,
+              "match_kind": "synonym",
+              "rule_id": "semantic_relation_synonym"
+            }
+          ],
+          "part": [
+            {
+              "text": "signals",
+              "span_start": 2601,
+              "span_end": 2608,
+              "match_kind": "synonym",
+              "rule_id": "part_surface_synonym"
+            }
+          ],
+          "relat": [
+            {
+              "text": "attention",
+              "span_start": 2556,
+              "span_end": 2565,
+              "match_kind": "synonym",
+              "rule_id": "semantic_relation_synonym"
+            }
+          ],
+          "word": [
+            {
+              "text": "token",
+              "span_start": 2697,
+              "span_end": 2702,
+              "match_kind": "synonym",
+              "rule_id": "word_surface_synonym"
+            }
+          ]
+        },
+        "semantic_rule_ids": [
+          "current_paper_inspection_confirmation",
+          "exact_semantic_token",
+          "part_surface_synonym",
+          "semantic_relation_synonym",
+          "word_surface_synonym"
+        ]
+      }
+    },
+    {
+      "span_selector": "E1:S13",
+      "quote": "In the example of “disney word essential = coffee\" with visual tags selfie, phone, person, the modality attention successfully attenuates distracting visual signals and focuses on textual modalities, consequently making correct predictions.",
+      "span_start": 2704,
+      "span_end": 2944,
+      "proposition_fragment": "In the example of “disney word essential = coffee\" with visual tags selfie, phone, person, the modality attention successfully attenuates distracting visual signals and focuses on textual modalities, consequently making correct predictions.",
+      "binds_proposition_slots": [
+        "object"
+      ],
+      "semantic_alignment": {
+        "contract_id": "qasper_selector_semantic_alignment.v1",
+        "status": "verified",
+        "alignment_digest": "11a7d10c5ed947251dab94ace580f410cc1320a10a65250bd697fd6fcb9664e8",
+        "covered_object_tokens": [
+          "associate",
+          "image",
+          "part",
+          "relat",
+          "word"
+        ],
+        "semantic_matches": {
+          "word": [
+            {
+              "text": "word",
+              "span_start": 2730,
+              "span_end": 2734,
+              "match_kind": "exact",
+              "rule_id": "exact_semantic_token"
+            }
+          ],
+          "image": [
+            {
+              "text": "visual",
+              "span_start": 2760,
+              "span_end": 2766,
+              "match_kind": "exact",
+              "rule_id": "exact_semantic_token"
+            }
+          ],
+          "associate": [
+            {
+              "text": "attention",
+              "span_start": 2808,
+              "span_end": 2817,
+              "match_kind": "synonym",
+              "rule_id": "semantic_relation_synonym"
+            }
+          ],
+          "part": [
+            {
+              "text": "tags",
+              "span_start": 2767,
+              "span_end": 2771,
+              "match_kind": "synonym",
+              "rule_id": "part_surface_synonym"
+            }
+          ],
+          "relat": [
+            {
+              "text": "attention",
+              "span_start": 2808,
+              "span_end": 2817,
+              "match_kind": "synonym",
+              "rule_id": "semantic_relation_synonym"
+            }
+          ]
+        },
+        "semantic_rule_ids": [
+          "exact_semantic_token",
+          "part_surface_synonym",
+          "semantic_relation_synonym"
+        ]
+      }
+    },
+    {
+      "span_selector": "E1:S14",
+      "quote": "The named entities in the examples of “Beautiful night atop The Space Needle\" and “Splash Mountain\" are challenging to predict because they are composed of common nouns (space, needle, splash, mountain), and thus they often need additional contexts to correctly predict.",
+      "span_start": 2945,
+      "span_end": 3215,
+      "proposition_fragment": "The named entities in the examples of “Beautiful night atop The Space Needle\" and “Splash Mountain\" are challenging to predict because they are composed of common nouns (space, needle, splash, mountain), and thus they often need additional contexts to correctly predict.",
+      "binds_proposition_slots": [
+        "actor",
+        "object"
+      ],
+      "semantic_alignment": {
+        "contract_id": "qasper_selector_semantic_alignment.v1",
+        "status": "verified",
+        "alignment_digest": "85f4cd7d3e73cdb2cfb18daf3a12f11c242bc5510eeb5e1910963ba3a5bc759c",
+        "covered_object_tokens": [
+          "entity",
+          "part"
+        ],
+        "semantic_matches": {
+          "entity": [
+            {
+              "text": "entities",
+              "span_start": 2955,
+              "span_end": 2963,
+              "match_kind": "exact",
+              "rule_id": "exact_semantic_token"
+            }
+          ],
+          "part": [
+            {
+              "text": "contexts",
+              "span_start": 3185,
+              "span_end": 3193,
+              "match_kind": "synonym",
+              "rule_id": "part_surface_synonym"
+            }
+          ]
+        },
+        "semantic_rule_ids": [
+          "exact_semantic_token",
+          "part_surface_synonym"
+        ]
+      }
+    }
+  ],
+  "premise_slot_evidence": {
+    "P1": {
+      "actor": {
+        "text": "we",
+        "span_start": 2527,
+        "span_end": 2529,
+        "clause_ref": "C2",
+        "clause_start": 2495,
+        "clause_end": 2703,
+        "evidence_ref": "P1:actor"
+      },
+      "predicate": {
+        "text": "confirm",
+        "span_start": 2530,
+        "span_end": 2537,
+        "clause_ref": "C2",
+        "clause_start": 2495,
+        "clause_end": 2703,
+        "evidence_ref": "P1:predicate"
+      },
+      "object": {
+        "text": "model (W+C+V; upper row in Figure FIGREF19 ), we confirm that the modality attention successfully attenuates irrelevant signals (selfies, etc.) and amplifies relevant modality-based contexts in prediction of a given token",
+        "span_start": 2481,
+        "span_end": 2702,
+        "clause_ref": "E1:S12#semantic-clause",
+        "clause_start": 2461,
+        "clause_end": 2703,
+        "evidence_ref": "P1:object"
+      }
+    },
+    "P2": {
+      "object": {
+        "text": "word essential = coffee\" with visual tags selfie, phone, person, the modality attention",
+        "span_start": 2730,
+        "span_end": 2817,
+        "clause_ref": "C1",
+        "clause_start": 2704,
+        "clause_end": 2944,
+        "evidence_ref": "P2:object"
+      }
+    },
+    "P3": {
+      "actor": {
+        "text": "they",
+        "span_start": 3080,
+        "span_end": 3084,
+        "clause_ref": "C1",
+        "clause_start": 2945,
+        "clause_end": 3215,
+        "evidence_ref": "P3:actor"
+      },
+      "object": {
+        "text": "entities in the examples of “Beautiful night atop The Space Needle\" and “Splash Mountain\" are challenging to predict because they are composed of common nouns (space, needle, splash, mountain), and thus they often need additional contexts",
+        "span_start": 2955,
+        "span_end": 3193,
+        "clause_ref": "C1",
+        "clause_start": 2945,
+        "clause_end": 3215,
+        "evidence_ref": "P3:object"
+      }
+    }
+  }
+}

@@ -214,7 +214,7 @@ def _typed_authority_projection(
         for raw_atom in authority.get("authority_atoms") or []
         if isinstance(raw_atom, dict)
     ]
-    return {
+    projection = {
         "contract_id": str(authority.get("contract_id") or ""),
         "state": str(
             authority.get("state")
@@ -237,6 +237,11 @@ def _typed_authority_projection(
         "authority_atoms": atoms,
         "normalized_sha256": _stable_hash(normalized),
     }
+    if isinstance(authority.get("slot_ref_bindings"), dict):
+        projection["slot_ref_bindings"] = _normalize_value(
+            _mapping(authority.get("slot_ref_bindings")), evidence_index
+        )
+    return projection
 
 
 def _authority_atom_projection(

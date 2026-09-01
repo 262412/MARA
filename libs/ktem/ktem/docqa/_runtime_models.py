@@ -23,6 +23,7 @@ class DocQARequest:
     active_file_name: str = ""
     page_number: Optional[int] = None
     selected_text: str = ""
+    selected_source_title: str = ""
     graph_context: dict[str, Any] = field(default_factory=dict)
     graph_source_ids: Optional[list[str]] = None
     settings: Optional[dict[str, Any]] = None
@@ -31,6 +32,8 @@ class DocQARequest:
     max_context_length: Optional[int] = None
     reasoning_type: Optional[str] = None
     task_type: Optional[str] = None
+    answer_type: Optional[str] = None
+    modality: Optional[str] = None
     agent_mode: Optional[str] = None
     artifact_type: Optional[str] = None
     note_ids: Optional[list[str]] = None
@@ -62,6 +65,7 @@ class DocQARequest:
     generation_temperature: Optional[float] = None
     generation_top_p: Optional[float] = None
     generation_seed: Optional[int] = None
+    trace_context: dict[str, Any] = field(default_factory=dict)
     user_id: Any = None
     origin: str = "cli"
 

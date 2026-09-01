@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from .boolean_annotation_count import annotation_count_object, annotation_count_question
 from .boolean_evidence_scope import (
     _english_closed_scope,
     _has_closed_quantifier,
@@ -47,6 +48,9 @@ def _relation_compatibility(question: str, text: str) -> float:
 
 
 def _object_compatibility(question: str, text: str) -> tuple[float, str]:
+    if annotation_count_question(question):
+        object_value = annotation_count_object(question, text)
+        return (1.0 if object_value else 0.0, "annotation count")
     question_relations = boolean_relation_lemmas(question)
     evidence_relations = boolean_relation_lemmas(text)
     relation_tokens = {
@@ -84,3 +88,21 @@ def _object_compatibility(question: str, text: str) -> tuple[float, str]:
     shared = question_tokens & evidence_tokens
     score = len(shared) / len(question_tokens)
     return score, proposition_object
+
+
+def boolean_argument_token_coverage(
+    question: str,
+    text: str,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return normalized required arguments and the subset asserted in ``text``."""
+
+    question_relations = boolean_relation_lemmas(question)
+    evidence_relations = boolean_relation_lemmas(text)
+    relation_tokens = {
+        token
+        for relation in question_relations | evidence_relations
+        for token in _relation_surface_tokens(relation)
+    }
+    required = _question_argument_tokens(question, relation_tokens) - {""}
+    evidence = normalized_object_tokens(text, relation_tokens) - {""}
+    return tuple(sorted(required)), tuple(sorted(required & evidence))

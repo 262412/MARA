@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from .boolean_authoritative_conflict import authoritative_conflict_complete
 from .controller import RetrieveDecision, VerifyDecision
 from .evidence import EvidenceBundle
+from .execution_models import RouteExecutionResult
 from .query_planning import ensure_request_query_plan
 from .recovery_progress import (
+    canonical_proposition_binding_digest,
+    canonical_recovery_evidence_ids,
+    normalized_slot_state_digest,
     semantic_progress_evidence_ids,
     semantic_progress_slot_states,
+    semantic_raw_evidence_digest,
+    semantic_recovery_pack_digest,
 )
 from .route_budget import route_budget_metadata
 from .route_selection import ControllerDecision
@@ -78,23 +85,17 @@ def recovery_trace_fields(
     removed_ids = [value for value in before_ids if value not in after_ids]
     before_slots = typed_slot_states(initial_bundle)
     after_slots = typed_slot_states(recovered_bundle)
-    before_semantic_ids = semantic_progress_evidence_ids(initial_bundle)
-    after_semantic_ids = semantic_progress_evidence_ids(recovered_bundle)
-    new_semantic_ids = [
-        value for value in after_semantic_ids if value not in before_semantic_ids
-    ]
-    removed_semantic_ids = [
-        value for value in before_semantic_ids if value not in after_semantic_ids
-    ]
-    before_semantic_slots = semantic_progress_slot_states(
+    semantic_fields = _semantic_progress_fields(
         initial_bundle,
-        before_slots,
-    )
-    after_semantic_slots = semantic_progress_slot_states(
         recovered_bundle,
+        before_slots,
         after_slots,
     )
-    semantic_slot_state_changed = before_semantic_slots != after_semantic_slots
+    digest_fields = _semantic_digest_fields(
+        request,
+        initial_bundle,
+        recovered_bundle,
+    )
     typed = verify_decision.typed_authority
     typed = typed if isinstance(typed, dict) else {}
     return {
@@ -114,12 +115,8 @@ def recovery_trace_fields(
         "slot_states_before": before_slots,
         "slot_states_after": after_slots,
         "slot_state_changed": before_slots != after_slots,
-        "semantic_slot_states_before": before_semantic_slots,
-        "semantic_slot_states_after": after_semantic_slots,
-        "semantic_slot_state_changed": semantic_slot_state_changed,
-        "proposition_binding_changed": bool(
-            new_semantic_ids or removed_semantic_ids or semantic_slot_state_changed
-        ),
+        **semantic_fields,
+        **digest_fields,
         "candidate_answer_before": candidate_answer,
         "candidate_answer_after": candidate_answer,
         "candidate_changed": False,
@@ -133,22 +130,235 @@ def recovery_trace_fields(
     }
 
 
-def recovery_has_progress(fields: dict[str, Any]) -> bool:
-    return bool(
-        fields.get("new_semantic_evidence_ids")
-        or fields.get("semantic_slot_state_changed")
-        or fields.get("authority_changed")
+def _semantic_progress_fields(
+    initial_bundle: EvidenceBundle | None,
+    recovered_bundle: EvidenceBundle | None,
+    before_slots: list[dict[str, Any]],
+    after_slots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    before_ids = semantic_progress_evidence_ids(initial_bundle)
+    after_ids = semantic_progress_evidence_ids(recovered_bundle)
+    new_ids = [value for value in after_ids if value not in before_ids]
+    removed_ids = [value for value in before_ids if value not in after_ids]
+    before_semantic_slots = semantic_progress_slot_states(initial_bundle, before_slots)
+    after_semantic_slots = semantic_progress_slot_states(recovered_bundle, after_slots)
+    before_digest = normalized_slot_state_digest(initial_bundle, before_slots)
+    after_digest = normalized_slot_state_digest(recovered_bundle, after_slots)
+    slot_state_applicable = bool(before_digest or after_digest)
+    slot_state_changed = bool(slot_state_applicable and before_digest != after_digest)
+    return {
+        "semantic_evidence_ids_before": before_ids,
+        "semantic_evidence_ids_after": after_ids,
+        "new_semantic_evidence_ids": new_ids,
+        "removed_semantic_evidence_ids": removed_ids,
+        "semantic_slot_states_before": before_semantic_slots,
+        "semantic_slot_states_after": after_semantic_slots,
+        "semantic_slot_state_changed": slot_state_changed,
+        "normalized_slot_state_digest_before": before_digest,
+        "normalized_slot_state_digest_after": after_digest,
+        "normalized_slot_state_digest_changed": slot_state_changed,
+        "normalized_slot_state_digest_applicable": slot_state_applicable,
+        "slot_state_digest_before": before_digest,
+        "slot_state_digest_after": after_digest,
+        "slot_state_digest_changed": slot_state_changed,
+        "slot_state_digest_applicable": slot_state_applicable,
+    }
+
+
+def _semantic_digest_fields(
+    request: Any | None,
+    initial_bundle: EvidenceBundle | None,
+    recovered_bundle: EvidenceBundle | None,
+) -> dict[str, Any]:
+    pack_before = semantic_recovery_pack_digest(request, initial_bundle)
+    pack_after = semantic_recovery_pack_digest(request, recovered_bundle)
+    pack_applicable = bool(pack_before or pack_after)
+    pack_changed = bool(pack_applicable and pack_before != pack_after)
+    proposition_before = canonical_proposition_binding_digest(
+        request,
+        initial_bundle,
     )
+    proposition_after = canonical_proposition_binding_digest(
+        request,
+        recovered_bundle,
+    )
+    proposition_binding_applicable = bool(proposition_before or proposition_after)
+    proposition_binding_changed = bool(
+        proposition_binding_applicable and proposition_before != proposition_after
+    )
+    raw_before = semantic_raw_evidence_digest(initial_bundle)
+    raw_after = semantic_raw_evidence_digest(recovered_bundle)
+    evidence_applicable = bool(raw_before or raw_after)
+    evidence_changed = bool(evidence_applicable and raw_before != raw_after)
+    return {
+        "semantic_pack_digest_before": pack_before,
+        "semantic_pack_digest_after": pack_after,
+        "semantic_pack_digest_changed": pack_changed,
+        "semantic_pack_digest_applicable": pack_applicable,
+        "canonical_proposition_binding_digest_before": proposition_before,
+        "canonical_proposition_binding_digest_after": proposition_after,
+        "canonical_proposition_binding_digest_changed": proposition_binding_changed,
+        "canonical_proposition_binding_digest_applicable": (
+            proposition_binding_applicable
+        ),
+        "proposition_binding_digest_before": proposition_before,
+        "proposition_binding_digest_after": proposition_after,
+        "proposition_binding_digest_changed": proposition_binding_changed,
+        "proposition_binding_digest_applicable": proposition_binding_applicable,
+        "proposition_binding_changed": proposition_binding_changed,
+        "raw_evidence_digest_before": raw_before,
+        "raw_evidence_digest_after": raw_after,
+        "raw_evidence_digest_changed": evidence_changed,
+        "raw_evidence_digest_applicable": evidence_applicable,
+        "evidence_digest_before": raw_before,
+        "evidence_digest_after": raw_after,
+        "evidence_digest_changed": evidence_changed,
+        "evidence_digest_applicable": evidence_applicable,
+        "canonical_evidence_ids_before": canonical_recovery_evidence_ids(
+            initial_bundle
+        ),
+        "canonical_evidence_ids_after": canonical_recovery_evidence_ids(
+            recovered_bundle
+        ),
+        "recovery_transition": {
+            "from": "verification",
+            "to": _semantic_recovery_kind(
+                initial_bundle,
+                semantic_pack_changed=proposition_binding_changed,
+            ),
+            "status": (
+                "pack_changed" if proposition_binding_changed else "no_pack_change"
+            ),
+        },
+    }
+
+
+def recovery_has_progress(fields: dict[str, Any]) -> bool:
+    return any(
+        fields.get(applicable_key) is True and fields.get(changed_key) is True
+        for applicable_key, changed_key in (
+            (
+                "normalized_slot_state_digest_applicable",
+                "normalized_slot_state_digest_changed",
+            ),
+            ("slot_state_digest_applicable", "slot_state_digest_changed"),
+            (
+                "canonical_proposition_binding_digest_applicable",
+                "canonical_proposition_binding_digest_changed",
+            ),
+            (
+                "proposition_binding_digest_applicable",
+                "proposition_binding_digest_changed",
+            ),
+            ("semantic_pack_digest_applicable", "semantic_pack_digest_changed"),
+        )
+    )
+
+
+def mark_recovery_no_progress(event: dict[str, Any]) -> dict[str, Any]:
+    """Mark a recovery event as terminal without creating a reverify step."""
+
+    event.update(
+        {
+            "recovery_action": "stop_without_reverify",
+            "stop_reason": "recovery_no_progress",
+            "authority_changed": False,
+            "candidate_changed": False,
+            "proposition_binding_changed": False,
+        }
+    )
+    return event
+
+
+def _semantic_recovery_kind(
+    bundle: EvidenceBundle | None,
+    *,
+    semantic_pack_changed: bool = False,
+) -> str:
+    if semantic_pack_changed:
+        return "evidence_retrieval"
+    metadata = bundle.metadata if bundle is not None else {}
+    authority = metadata.get("semantic_proposition_authority")
+    authority = authority if isinstance(authority, dict) else {}
+    verifier = metadata.get("semantic_proposition_verifier")
+    verifier = verifier if isinstance(verifier, dict) else {}
+    current_reason = _current_semantic_rejection_reason(authority, verifier)
+    classified = _recovery_kind_for_reason(current_reason)
+    if classified:
+        return classified
+    transitions = verifier.get("recovery_transitions") or []
+    for transition in reversed(transitions):
+        if not isinstance(transition, dict):
+            continue
+        kind = str(transition.get("to") or "")
+        if kind in {"proof_repair", "quote_rebind", "proposition_repair"}:
+            return kind
+    return "evidence_retrieval"
+
+
+def _current_semantic_rejection_reason(
+    authority: dict[str, Any],
+    verifier: dict[str, Any],
+) -> str:
+    rejected = verifier.get("rejected_transactions") or []
+    for transaction in reversed(rejected):
+        if not isinstance(transaction, dict):
+            continue
+        reason = str(transaction.get("runtime_rejection_reason") or "").strip()
+        if reason:
+            return reason.casefold()
+    for value in (
+        verifier.get("audit_reason"),
+        authority.get("reason"),
+        verifier.get("reason"),
+    ):
+        reason = str(value or "").strip()
+        if reason:
+            return reason.casefold()
+    return ""
+
+
+def _recovery_kind_for_reason(reason: str) -> str:
+    if not reason:
+        return ""
+    if any(value in reason for value in ("quote", "span", "offset")):
+        return "quote_rebind"
+    if "question_proposition" in reason:
+        return "proposition_repair"
+    if any(
+        value in reason
+        for value in (
+            "audit",
+            "premise",
+            "conclusion",
+            "contradiction",
+            "entailment",
+            "quantifier",
+            "scope",
+            "polarity",
+        )
+    ):
+        return "proof_repair"
+    return ""
 
 
 def retrieval_no_progress_decision(
     trace: list[dict[str, Any]],
     decision: RetrieveDecision,
 ) -> RetrieveDecision | None:
-    if not any(event.get("stop_reason") == "recovery_no_progress" for event in trace):
+    event = next(
+        (
+            value
+            for value in reversed(trace)
+            if value.get("stop_reason") == "recovery_no_progress"
+        ),
+        None,
+    )
+    if event is None:
         return None
+    mark_recovery_no_progress(event)
     return RetrieveDecision(
-        status=decision.status,
+        status=("poor" if event.get("evidence_ids_after") == [] else decision.status),
         reason=(
             "Retrieval recovery produced no new semantic candidate or slot state. "
             "stop_reason=recovery_no_progress."
@@ -197,6 +407,17 @@ def same_route_verifier_recovery_trace(
         "recovery_action": "rebind_recovered_evidence",
         **shared,
     }
+    if not recovery_has_progress(shared):
+        mark_recovery_no_progress(rebind)
+        if policy != "crag_guarded":
+            return [focused, rebind], rebind
+        critic = {
+            "stage": "critic",
+            "status": verify_decision.status,
+            "reason": verify_decision.reason,
+            **shared,
+        }
+        return [critic, focused, rebind], rebind
     reverify = {
         "stage": "reverify",
         "attempt": 1,
@@ -273,6 +494,23 @@ def record_route_switch_reverification(result: Any) -> None:
         event.setdefault("reverification_status", result.verify_decision.status)
         event.setdefault("reverification_reason", result.verify_decision.reason)
         event.setdefault("reverification_evidence_ids", evidence_ids)
+
+
+def mark_resolved_initial_conflict(result: RouteExecutionResult) -> None:
+    decision = result.verify_decision
+    if decision.status != "verified_conflict" or not authoritative_conflict_complete(
+        decision.authoritative_conflict
+    ):
+        return
+    for event in reversed(result.controller_trace):
+        if event.get("stage") == "verifier":
+            event["stop_reason"] = "authority_conflict_resolved"
+            break
+
+
+def raw_candidate(result: RouteExecutionResult) -> str:
+    raw_answer = result.engine_terminal_state.get("raw_generated_answer")
+    return str(result.answer if raw_answer is None else raw_answer)
 
 
 def build_verifier_switch_event(

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import csv
-import json
-import os
-import tempfile
+import io
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .artifact_publication import atomic_write_jsonl, atomic_write_text
+from .artifact_requirements import (
+    normalize_artifact_detail,
+    report_context,
+    write_report_artifacts,
+    write_report_outputs,
+)
 from .baseline_registry import assert_writable_benchmark_output
 from .dataset_decision_report import (
     phase2_failure_counts_markdown,
@@ -30,6 +35,7 @@ from .report_identity_compaction import (
     IDENTITY_TRACE_LIMITS,
     compact_identity_evidence_list,
 )
+from .report_qasper_authority import qasper_authority_diagnostics_markdown
 from .report_route_metrics import route_metrics_markdown
 from .report_route_rankings import route_ranking_markdown
 from .report_summary_metrics import diagnostic_metric_lines
@@ -85,8 +91,7 @@ def _to_slug(text: str) -> str:
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    text = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
-    path.write_text(text, encoding="utf-8")
+    atomic_write_jsonl(path, rows)
 
 
 def _derive_retrieval_traces(predictions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -215,7 +220,7 @@ def write_reports(
     *,
     artifact_detail: str = "compact",
 ) -> Path:
-    artifact_detail = _normalize_artifact_detail(artifact_detail)
+    artifact_detail = normalize_artifact_detail(artifact_detail)
     output_dir = Path(output_dir).resolve()
     assert_writable_benchmark_output(output_dir)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -230,14 +235,21 @@ def write_reports(
     retrieval_traces_path = run_dir / "retrieval_traces.jsonl"
     markdown_path = run_dir / "report.md"
     route_metrics_path = run_dir / "route_metrics.csv"
+    semantic_debug_path = run_dir / "semantic_debug_traces.jsonl"
 
-    summary = {
-        **dict(report.get("summary", {}) or {}),
-        "artifact_detail": artifact_detail,
-        "artifact_limits": dict(ARTIFACT_LIMITS),
-    }
-    config = report.get("config", {})
-    predictions = _artifact_rows(report.get("predictions", []), artifact_detail)
+    (
+        source_predictions,
+        run_requirements,
+        semantic_debug_required,
+        semantic_debug_rows,
+        summary,
+        config,
+    ) = report_context(
+        report,
+        artifact_detail,
+        ARTIFACT_LIMITS,
+    )
+    predictions = _artifact_rows(source_predictions, artifact_detail)
     documents = _artifact_rows(report.get("documents", []), artifact_detail)
     retrieval_traces = report.get("retrieval_traces")
     if retrieval_traces is None:
@@ -245,46 +257,39 @@ def write_reports(
     else:
         retrieval_traces = _artifact_rows(retrieval_traces, artifact_detail)
 
-    _write_jsonl(predictions_path, predictions)
-    documents_path.write_text(
-        json.dumps(documents, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    route_metric_table = write_report_artifacts(
+        (
+            predictions_path,
+            semantic_debug_path,
+            documents_path,
+            retrieval_traces_path,
+            route_metrics_path,
+        ),
+        predictions,
+        semantic_debug_rows,
+        semantic_debug_required,
+        documents,
+        retrieval_traces,
+        summary,
+        _write_csv,
+        _write_jsonl,
     )
-    _write_jsonl(retrieval_traces_path, retrieval_traces)
-    route_metric_table = _route_metric_table(summary)
-    if route_metric_table:
-        _write_csv(route_metrics_path, route_metric_table)
 
-    markdown = _summary_markdown_lines(summary, suite_name)
-    for label, key in (("Engine", "engine"), ("Route", "route"), ("Scope", "scope")):
-        value = _first_present(summary, config, key=key)
-        if value is not None:
-            markdown.append(f"- {label}: `{value}`")
-    markdown += [
-        "",
-        "## Files",
-        "",
-        "- Summary: `summary.json`",
-        "- Predictions: `predictions.jsonl`",
-        "- Documents: `documents.json`",
-        "- Retrieval Traces: `retrieval_traces.jsonl`",
-    ]
-    if route_metric_table:
-        markdown.append("- Route Metrics: `route_metrics.csv`")
-    markdown += _report_markdown_sections(summary, route_metric_table)
-    markdown_path.write_text("\n".join(markdown), encoding="utf-8")
-    summary_path.write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    write_report_outputs(
+        run_dir,
+        markdown_path,
+        summary_path,
+        summary,
+        suite_name,
+        config,
+        route_metric_table,
+        semantic_debug_rows,
+        run_requirements,
+        _summary_markdown_lines,
+        _report_markdown_sections,
+        _first_present,
     )
     return run_dir
-
-
-def _normalize_artifact_detail(artifact_detail: str) -> str:
-    value = str(artifact_detail or "compact").strip().lower()
-    if value not in {"compact", "full"}:
-        raise ValueError("artifact_detail must be one of 'compact' or 'full'.")
-    return value
 
 
 def _artifact_rows(rows: Any, artifact_detail: str) -> list[dict[str, Any]]:
@@ -369,6 +374,10 @@ def _report_markdown_sections(
         ]
     for title, lines in (
         ("Route Ranking", route_ranking_markdown(summary)),
+        (
+            "QASPER Authority Diagnostics",
+            qasper_authority_diagnostics_markdown(summary),
+        ),
         *phase3_report_sections(summary),
         ("Skipped Routes", _skipped_route_markdown(summary)),
         ("Multimodal Backend Health", _backend_health_markdown(summary)),
@@ -463,32 +472,15 @@ def _diagnostic_failure_counts_markdown(summary: dict[str, Any]) -> list[str]:
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fieldnames = _csv_fieldnames(rows)
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="",
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as handle:
-            temporary_path = Path(handle.name)
-            writer = csv.DictWriter(
-                handle,
-                fieldnames=fieldnames,
-                extrasaction="raise",
-            )
-            writer.writeheader()
-            writer.writerows(rows)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary_path, path)
-        temporary_path = None
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(
+        output,
+        fieldnames=fieldnames,
+        extrasaction="raise",
+    )
+    writer.writeheader()
+    writer.writerows(rows)
+    atomic_write_text(path, output.getvalue())
 
 
 def _csv_fieldnames(rows: list[dict[str, Any]]) -> list[str]:

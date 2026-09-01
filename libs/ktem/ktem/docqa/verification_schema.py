@@ -32,6 +32,8 @@ class VerifiedClaim:
     quantifier: str = ""
     supporting_evidence_spans: tuple[dict[str, Any], ...] = ()
     contradicting_evidence_spans: tuple[dict[str, Any], ...] = ()
+    authority_derivations: tuple[dict[str, Any], ...] = ()
+    selected_derivation_id: str = ""
     authoritative_conflict: dict[str, Any] = field(default_factory=dict)
     verified_slot_state: str = ""
 
@@ -47,6 +49,9 @@ class VerifiedClaim:
         ]
         payload["contradicting_evidence_spans"] = [
             dict(value) for value in self.contradicting_evidence_spans
+        ]
+        payload["authority_derivations"] = [
+            dict(value) for value in self.authority_derivations
         ]
         return payload
 
@@ -82,12 +87,22 @@ class VerifyDecision:
     qualifier: str = ""
     quantifier: str = ""
     verified_support_slot_ids: list[str] = field(default_factory=list)
+    authority_derivations: tuple[dict[str, Any], ...] = ()
+    selected_derivation_id: str = ""
     authoritative_conflict: dict[str, Any] = field(default_factory=dict)
     typed_authority: dict[str, Any] = field(default_factory=dict)
+    candidate_contract_id: str = ""
+    candidate_label: str = ""
+    verifier_input_candidate: str = ""
+    verifier_candidate_status: str = ""
+    replacement_candidate_allowed: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["predicate"] = self.relation
         payload["arguments"] = list(self.predicate_arguments)
         payload["scope"] = self.section_scope
+        payload["authority_derivations"] = [
+            dict(value) for value in self.authority_derivations
+        ]
         return payload

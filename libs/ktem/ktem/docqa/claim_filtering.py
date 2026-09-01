@@ -12,6 +12,23 @@ _THOUGHT_DETAILS_RE = re.compile(
     r"<details\b[^>]*>\s*<summary\b[^>]*>.*?thought.*?</summary>.*?</details>",
     re.IGNORECASE | re.DOTALL,
 )
+_EMPTY_CODE_FENCE_RE = re.compile(
+    r"(?ms)^\s*```(?:[A-Za-z0-9_+-]+)?\s*\n\s*```\s*(?:\n|$)"
+)
+_EMPTY_DISPLAY_BLOCK_RE = re.compile(
+    r"(?ms)^\s*(?:\$\$\s*\$\$|\\\[\s*\\\]|\\\(\s*\\\))\s*(?:\n|$)"
+)
+_EMPTY_MULTILINE_DISPLAY_BLOCK_RE = re.compile(
+    r"(?ms)^\s*(?:\$\$\s*\n(?:\s*\n)*\s*\$\$|"
+    r"\\\[\s*\n(?:\s*\n)*\s*\\\]|"
+    r"\\\(\s*\n(?:\s*\n)*\s*\\\))\s*(?:\n|$)"
+)
+_FORMAT_ONLY_HEADING_RE = re.compile(
+    r"^\s*#{1,6}\s*(?:final\s+answer|answer|response|explanation|"
+    r"rationale|evidence|result|results|conclusion|solution|analysis)"
+    r"\s*[:：]?\s*$",
+    re.IGNORECASE,
+)
 _UNTAGGED_THOUGHT_PREFIX_RE = re.compile(
     r"^\s*thought\b\s*(?:okay\b|i\b|let\b|let's\b|we\b|the\b|:)",
     re.IGNORECASE,
@@ -26,7 +43,9 @@ _ABBREVIATION_RE = re.compile(
 
 
 def answer_claims(answer: str) -> list[str]:
-    cleaned = _clean_text(_remove_markdown_tables(_answer_text(answer)))
+    cleaned = _clean_text(
+        _remove_markdown_tables(_clean_display_text(_answer_text(answer)))
+    )
     claims = []
     for chunk in _split_sentences(cleaned):
         claim = _clean_claim(chunk)
@@ -110,9 +129,12 @@ def _clean_text(text: str) -> str:
 
 
 def _clean_display_text(text: str) -> str:
-    lines = [
-        re.sub(r"[ \t]+", " ", line).strip() for line in str(text or "").splitlines()
-    ]
+    cleaned = _EMPTY_CODE_FENCE_RE.sub("", str(text or ""))
+    cleaned = _EMPTY_DISPLAY_BLOCK_RE.sub("", cleaned)
+    cleaned = _EMPTY_MULTILINE_DISPLAY_BLOCK_RE.sub("", cleaned)
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.splitlines()]
+    lines = [line for line in lines if not _FORMAT_ONLY_HEADING_RE.match(line)]
+    lines = [line for line in lines if line not in {"---", "___", "***"}]
     while lines and not lines[0]:
         lines.pop(0)
     while lines and not lines[-1]:

@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any
 
+from .ragtruth_native_scores import is_ragtruth_prediction, ragtruth_native_objective
+
 FAILURE_TAXONOMY_TYPES = (
     "answer_mismatch",
     "timeout",
@@ -301,6 +303,9 @@ def _has_unsupported_claim(prediction: dict[str, Any]) -> bool:
 
 
 def _is_answer_mismatch(prediction: dict[str, Any]) -> bool:
+    if is_ragtruth_prediction(prediction):
+        native_score = ragtruth_native_objective(prediction)
+        return native_score is None or native_score == 0.0
     metrics = dict(prediction.get("metrics") or {})
     for key in ("native_score", "f1", "em", "anls"):
         value = metrics.get(key)

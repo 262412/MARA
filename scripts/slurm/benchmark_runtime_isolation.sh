@@ -113,6 +113,7 @@ mara_configure_benchmark_runtime() {
 
   export MARA_PROJECT_ROOT="$project_root"
   export MARA_BENCHMARK_PROJECT_ROOT="$project_root"
+  export MARA_BENCHMARK_SUITE_NAME="$suite_slug"
   export MARA_BENCHMARK_RUNTIME_ROOT="$runtime_root"
   export MARA_BENCHMARK_RUNTIME_DIR="$runtime_dir"
   export MARA_RUNTIME_DIR="$runtime_dir"
@@ -318,6 +319,16 @@ for name, value in {
     assert_inside(resolved(path_value), runtime_dir, name)
 
 payload = {
+    "contract_id": "benchmark_runtime_contract.v1",
+    "source_sha": os.environ.get("MARA_BENCHMARK_GIT_COMMIT", ""),
+    "git_dirty": os.environ.get("MARA_BENCHMARK_GIT_DIRTY", "").casefold() == "true",
+    "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
+    "execution_job_key": os.environ.get("MARA_EXECUTION_JOB_KEY", ""),
+    "execution_plan": os.environ.get("MARA_EXECUTION_PLAN", ""),
+    "execution_table": os.environ.get("MARA_EXECUTION_TABLE", ""),
+    "suite_name": os.environ.get("MARA_BENCHMARK_SUITE_NAME", ""),
+    "project_root": str(project_root),
+    "runtime_dir": str(runtime_dir),
     "sys.executable": str(actual_python),
     "slide_cli.__file__": str(slide_file),
     "ktem.__file__": str(ktem_file),
@@ -367,6 +378,65 @@ PY
   export MARA_BENCHMARK_RUNTIME_BOOTSTRAPPED=1
 }
 
+mara_reconcile_benchmark_completion() {
+  local producer_exit_code="${1:-0}"
+  local plan_path="${MARA_EXECUTION_PLAN:-}"
+  local table_path="${MARA_EXECUTION_TABLE:-}"
+  local job_key="${MARA_EXECUTION_JOB_KEY:-}"
+  local job_id="${SLURM_JOB_ID:-}"
+  local runtime_contract="${MARA_BENCHMARK_RUNTIME_CONTRACT:-}"
+  local artifact_dir="${MARA_BENCHMARK_ARTIFACT_DIR:-}"
+
+  if [[ -z "$plan_path" && -z "$table_path" && -z "$job_key" ]]; then
+    return 0
+  fi
+  [[ -n "$plan_path" && -n "$job_key" ]] || {
+    mara_benchmark_die "execution plan, job key, and table are required for producer reconciliation"
+    return 2
+  }
+  if [[ -z "$table_path" ]]; then
+    table_path="$(dirname -- "$plan_path")/slurm_submission_jobs.tsv"
+  fi
+  [[ -n "$job_id" ]] || {
+    mara_benchmark_die "SLURM_JOB_ID is required for producer reconciliation"
+    return 2
+  }
+  [[ -n "$runtime_contract" ]] || {
+    mara_benchmark_die "runtime contract is required for producer reconciliation"
+    return 2
+  }
+  [[ -x "${MARA_BENCHMARK_PYTHON:-}" ]] || {
+    mara_benchmark_die "job-owned benchmark interpreter is missing for producer reconciliation"
+    return 2
+  }
+
+  local command=(
+    "$MARA_BENCHMARK_PYTHON"
+    "${MARA_BENCHMARK_PROJECT_ROOT}/scripts/slurm/reconcile_benchmark_job.py"
+    --plan "$plan_path"
+    --table "$table_path"
+    --job-key "$job_key"
+    --job-id "$job_id"
+    --runtime-contract "$runtime_contract"
+    --producer-exit-code "$producer_exit_code"
+    --producer-only
+  )
+  if [[ -n "$artifact_dir" ]]; then
+    command+=(--artifact-dir "$artifact_dir")
+  fi
+  if "${command[@]}"; then
+    export MARA_BENCHMARK_COMPLETION_RECORDED=1
+    export MARA_BENCHMARK_COMPLETION_RECONCILED=1
+    return 0
+  else
+    local reconcile_status=$?
+    if [[ "$reconcile_status" == "2" ]]; then
+      export MARA_BENCHMARK_COMPLETION_RECORDED=1
+    fi
+    return "$reconcile_status"
+  fi
+}
+
 mara_cleanup_benchmark_runtime() {
   local runtime_dir
   local suite_dir
@@ -407,11 +477,21 @@ mara_install_benchmark_runtime_cleanup() {
   # the original exit status even if a defensive cleanup check reports a fault.
   trap '
     _mara_benchmark_exit_status=$?
+    _mara_benchmark_cleanup_status=0
     if declare -F cleanup >/dev/null 2>&1; then
-      cleanup || true
+      cleanup "$_mara_benchmark_exit_status" || true
     fi
     if [[ "${MARA_BENCHMARK_RUNTIME_CLEANED:-0}" != "1" && -n "${MARA_BENCHMARK_RUNTIME_DIR:-}" ]]; then
-      mara_cleanup_benchmark_runtime || printf "MARA benchmark runtime cleanup refused; preserving unverified runtime\n" >&2
+      if [[ -n "${MARA_EXECUTION_PLAN:-}" && "${MARA_BENCHMARK_COMPLETION_RECONCILED:-0}" != "1" ]]; then
+        _mara_benchmark_cleanup_status=2
+        printf "MARA producer completion is unreconciled; preserving runtime for audit\n" >&2
+      elif ! mara_cleanup_benchmark_runtime; then
+        _mara_benchmark_cleanup_status=2
+        printf "MARA benchmark runtime cleanup refused; preserving unverified runtime\n" >&2
+      fi
+    fi
+    if (( _mara_benchmark_cleanup_status != 0 && _mara_benchmark_exit_status == 0 )); then
+      _mara_benchmark_exit_status=$_mara_benchmark_cleanup_status
     fi
     exit "$_mara_benchmark_exit_status"
   ' EXIT

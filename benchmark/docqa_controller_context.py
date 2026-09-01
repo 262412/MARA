@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from kotaemon.docqa_request_policies import BENCHMARK_REQUEST_POLICY
@@ -9,6 +11,7 @@ from . import generation_contract
 from .benchmark_prompts import build_benchmark_prompt
 from .docqa_runtime_sources import (
     selected_source_fallback_text,
+    selected_source_title,
     source_identity_crosswalk,
 )
 from .engine_accessors import config_value, field_value
@@ -49,6 +52,10 @@ def docqa_request_kwargs(
             documents,
             selected_file_ids,
         ),
+        "selected_source_title": selected_source_title(
+            documents,
+            selected_file_ids,
+        ),
         "llm": config_value(engine.config, "llm_name", None),
         "use_citation": config_value(engine.config, "docqa_citation_mode", None),
         "max_context_length": engine.max_context_length,
@@ -85,6 +92,14 @@ def controller_request_context(example: Any, config: BenchmarkConfig, config_get
         controller_kwargs["verification_domain"] = controller_domain
     if controller_domain == "qasper" and not controller_kwargs.get("verification_mode"):
         controller_kwargs["verification_mode"] = "strict"
+    if controller_domain == "slidevqa" and not controller_kwargs.get(
+        "verification_mode"
+    ):
+        controller_kwargs["verification_mode"] = "light"
+    if controller_domain == "mmdocrag" and not controller_kwargs.get(
+        "verification_mode"
+    ):
+        controller_kwargs["verification_mode"] = "strict"
     if controller_domain == "ragtruth":
         controller_kwargs["allowed_routes"] = ["doc_text"]
         controller_kwargs["verification_mode"] = "off"
@@ -101,7 +116,29 @@ def controller_request_context(example: Any, config: BenchmarkConfig, config_get
         "retrieval_query": prompt.retrieval_query,
         "dataset_family": controller_domain,
         "task_type": runtime_task_type,
+        "answer_type": field_value(example, "answer_type", runtime_task_type),
+        "trace_context": _benchmark_trace_context(example, config),
+        "modality": field_value(example, "modality", None),
         **controller_kwargs,
+    }
+
+
+def _benchmark_trace_context(
+    example: Any,
+    config: BenchmarkConfig,
+) -> dict[str, str]:
+    example_id = str(field_value(example, "example_id", "") or "").strip()
+    dataset = str(config.suite_name or "").strip().casefold()
+    payload = {
+        "contract_id": "benchmark_transaction_identity.v1",
+        "dataset": dataset,
+        "example_id": example_id,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return {
+        **payload,
+        "trace_group_id": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        "benchmark_route_id": str(config.route or "").strip(),
     }
 
 

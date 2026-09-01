@@ -1,0 +1,39 @@
+# Ensemble based discriminative models for Visual Dialog Challenge 2018
+
+This manuscript describes our approach for the Visual Dialog Challenge 2018. We use an ensemble of three discriminative models with different encoders and decoders for our final submission. Our best performing model on 'test-std' split achieves the NDCG score of 55.46 and the MRR value of 63.77, securing third position in the challenge.
+
+## Introduction
+
+Visual dialog BIBREF0 is an interesting new task combining the research efforts from Computer Vision, Natural Language Processing and Information Retrieval. While BIBREF1 presents some tips and tricks for VQA 2.0 Challenge, we follow their guidelines for the Visual Dialog challenge 2018. Our models use attention similar to BIBREF2 to get object level image representations from Faster R-CNN model BIBREF3. We experiment with different encoder mechanisms to get representations of conversational history.
+
+## Models
+
+Common to all the models, we initialize our embedding matrix with pre-trained Glove word vectors of 300 dimensions using 6B tokens . Out of 11319 tokens present in the dataset, we found 188 tokens missing from the pre-trained Glove embeddings, so we manually map these tokens to words conveying semantically similar meaning, e.g. we map over ten variations of the word “yes” - misspelled or not picked up by tokenizer - “*yes", “yesa", “yess", “ytes", “yes-", “yes3", “yyes", “yees", etc.
+
+For image features, we extract Faster R-CNN features with ResNet-101 backbone trained on Visual genome BIBREF4 dataset, similar to BIBREF2. We use an adaptive number of object proposals per-image ranging from 10 to 100 generated using a fixed confidence threshold and each object is then associated with 2048-dimensional mean-pooled features using ROI pooling. We use discriminative decoding throughout our models.
+
+We first describe our models individually and then the ensembling technique that we employ. In the following, MN denotes Memory Networks to encode conversational history, RCNN signify R-CNN for object level representations of an image, Wt represents additional linear layer in the decoder, and LF a late fusion mechanism as defined in BIBREF0.
+
+## Models ::: LF-RCNN
+
+Late fusion encoder BIBREF0 with concatenated history. We use two-layered LSTMs with 512 hidden units for embedding questions and history. The object-level features are weighed using only question embeddings. The word embeddings from Glove vectors are frozen and are not fine-tuned. Figure FIGREF6 gives an overview of the architecture.
+
+## Models ::: MN-RCNN
+
+Memory network encoder BIBREF0 with bi-directional GRUs and word embeddings fine-tuned. Object-level features are weighed by question and caption embedding. The rest of the scheme is same as above. (Figure FIGREF6)
+
+## Models ::: MN-RCNN-Wt
+
+Same as above but with an additional linear layer applied to the dot product of candidate answer and encoder output, and gated using tanh function. Compare Figure FIGREF6 with Figure FIGREF6
+
+## Models ::: Ensembling
+
+We ensembled final layer's log-softmax output - which is a distribution over candidate answers for each round (Figure FIGREF7). We use the three models described above and take the mean of the results (we also tried taking maximum of the results but found mean to perform better). We also tried ensembling a subset of the above three models, but found the combination of all three to outperform the rest.
+
+## Experiments and Results
+
+We used Pytorch BIBREF5 for implementation. In our experiments, we find that fine-tuning initialized Glove embeddings performed better than frozen embeddings. Object level representations play a critical role to generate a correct response from the model. Eventually, we use an ensemble of all the models described above for our final submission. Table TABREF9 summarizes our results on validation set while Table TABREF8 on Test-Standard split.
+
+## Conclusion
+
+We experimented with discriminative models for our submission. Object level image representations gave a huge uplift in the evaluation metrics. Bi-directional GRUs constantly performed better than uni-directional LSTMs with Memory Networks outperforming Late fusion encoders for encoding conversational history. We even found that fine-tuning Glove embeddings performed better than their counterparts. Our final submission is an ensemble of three discriminative models and achieve the NDCG of 55.46 on test-std.

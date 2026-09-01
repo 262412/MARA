@@ -57,6 +57,7 @@ def test_azureopenai_model(openai_completion):
     assert isinstance(
         output, LLMInterface
     ), "Output for single text is not LLMInterface"
+    assert output.additional_kwargs["finish_reason"] == "stop"
     openai_completion.assert_called()
 
     # test for list[message] input - stream mode

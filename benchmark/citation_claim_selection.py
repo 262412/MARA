@@ -18,11 +18,46 @@ def minimum_verified_claim_support_items(
     span: str,
 ) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
+    derived_ids = _runtime_derived_support_ids(prediction)
     for group in verified_claim_support_groups(prediction, candidates):
         scoped = _scope_valid_group(prediction, group, span=span)
-        if scoped:
+        if not scoped:
+            continue
+        if derived_ids:
+            proof = _ordered_support_items(scoped, derived_ids)
+            if len(proof) != len(derived_ids):
+                continue
+            selected.extend(proof)
+        else:
             selected.append(_best_item(prediction, scoped, span=span))
-    return selected
+    return _deduplicated_items(selected)
+
+
+def _runtime_derived_support_ids(prediction: dict[str, Any]) -> list[str]:
+    authority = runtime_boolean_authority(prediction)
+    if not authority["complete"] or authority["authority_kind"] not in {
+        "composite_polarity",
+        "semantic_evidence_set_polarity",
+    }:
+        return []
+    return list(
+        dict.fromkeys(str(value) for value in authority["required_evidence_ids"])
+    )
+
+
+def _ordered_support_items(
+    items: list[dict[str, Any]],
+    evidence_ids: list[str],
+) -> list[dict[str, Any]]:
+    by_id = {identity_of(item).key: item for item in items}
+    return [by_id[evidence_id] for evidence_id in evidence_ids if evidence_id in by_id]
+
+
+def _deduplicated_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    output: dict[str, dict[str, Any]] = {}
+    for item in items:
+        output.setdefault(identity_of(item).key, item)
+    return list(output.values())
 
 
 def _scope_valid_group(
@@ -56,6 +91,11 @@ def _runtime_authoritative_qasper_support(
     authority = runtime_boolean_authority(prediction)
     if not authority["complete"]:
         return []
+    if authority["authority_kind"] in {
+        "composite_polarity",
+        "semantic_evidence_set_polarity",
+    }:
+        return _ordered_support_items(items, authority["required_evidence_ids"])
     evidence_id = str(authority["evidence_id"])
     matches = [item for item in items if identity_of(item).key == evidence_id]
     return matches if len(matches) == 1 else []

@@ -44,6 +44,26 @@ def runtime_boolean_authority(
             required_ids=required_ids,
             engine_label=engine_label,
         )
+    typed_authority = typed_authority_audit(
+        decision,
+        bundle,
+        slots,
+        verified_slots,
+        required_ids,
+        plan=plan,
+    )
+    if typed_authority.get("authority_kind") in {
+        "composite",
+        "semantic_evidence_set",
+    }:
+        return _runtime_derived_authority(
+            decision,
+            plan=plan,
+            slots=slots,
+            required_ids=required_ids,
+            engine_label=engine_label,
+            typed_authority=typed_authority,
+        )
     return _runtime_polarity_authority(
         decision,
         bundle=bundle,
@@ -53,6 +73,53 @@ def runtime_boolean_authority(
         required_ids=required_ids,
         engine_label=engine_label,
     )
+
+
+def _runtime_derived_authority(
+    decision: dict[str, Any],
+    *,
+    plan: dict[str, Any],
+    slots: list[dict[str, Any]],
+    required_ids: list[str],
+    engine_label: str,
+    typed_authority: dict[str, Any],
+) -> dict[str, Any]:
+    projection = typed_authority.get("authority")
+    projection = projection if isinstance(projection, dict) else {}
+    complete = bool(
+        typed_authority.get("complete")
+        and typed_authority.get("derivation_status") == "bound"
+        and engine_label in {"yes", "no"}
+        and decision.get("status") == "supported"
+        and decision.get("canonical_answer_polarity") == engine_label
+        and decision.get("boolean_authority_status") == "verified_support"
+        and plan.get("stage") == "verified"
+        and plan.get("state_authority") == "verified_claim_support.v1"
+        and slots
+    )
+    authority_kind = str(typed_authority.get("authority_kind") or "")
+    return {
+        "complete": complete,
+        "authority_kind": (
+            "semantic_evidence_set_polarity"
+            if authority_kind == "semantic_evidence_set"
+            else "composite_polarity"
+        ),
+        "status": "complete" if complete else "missing_or_inconsistent",
+        "decision": decision,
+        "plan": plan,
+        "required_slot_ids": [str(slot.get("slot_id") or "") for slot in slots],
+        "required_evidence_ids": required_ids,
+        # No single premise is authoritative for a composite conclusion.
+        "evidence_id": "",
+        "evidence_ref": "",
+        "quote": "",
+        "quote_ref_validation_status": str(typed_authority.get("atom_status") or ""),
+        "claim_results": records(decision.get("claim_results")),
+        "authority_derivations": list(projection.get("authority_derivations") or []),
+        "selected_derivation_id": str(projection.get("selected_derivation_id") or ""),
+        "failure_kind": "" if complete else "authority_missing",
+    }
 
 
 def runtime_typed_proposition_authority(
@@ -72,6 +139,7 @@ def runtime_typed_proposition_authority(
         slots,
         verified_slots,
         required_ids,
+        plan=plan,
     )
 
 

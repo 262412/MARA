@@ -37,6 +37,10 @@ ALCE_ANSWER_GROUNDING_RESPONSE_FORMAT = {
 }
 
 _WORD_RE = re.compile(r"[A-Za-z0-9]+")
+_EXPLICIT_FINAL_ANSWER_RE = re.compile(
+    r"(?:^|[\n.!?]\s+)(?:final\s+answer|answer)\s*[:：]\s*" r"(?P<answer>[^\n]+?)\s*$",
+    re.IGNORECASE,
+)
 _STOPWORDS = {
     "a",
     "an",
@@ -174,8 +178,9 @@ def _result_from_grounding_payload(
         or evidence[evidence_index].get("canonical_id")
         or ""
     )
-    if verdict == "supported" and _normalized(grounded_answer) != _normalized(
-        candidate_answer
+    if verdict == "supported" and not _supported_answer_consistent(
+        grounded_answer,
+        candidate_answer,
     ):
         return AlceGroundingResult(
             answer=candidate_answer,
@@ -200,8 +205,11 @@ def _result_from_grounding_payload(
             "ok",
             verdict=verdict,
             evidence_id=evidence_id,
-            answer_changed=_normalized(grounded_answer)
-            != _normalized(candidate_answer),
+            answer_changed=(
+                verdict != "supported"
+                and _normalized(grounded_answer) != _normalized(candidate_answer)
+            ),
+            grounded_answer=grounded_answer,
         ),
     )
 
@@ -296,6 +304,15 @@ def _normalized(text: str) -> str:
     return " ".join(_tokens(text))
 
 
+def _supported_answer_consistent(grounded_answer: str, candidate_answer: str) -> bool:
+    if _normalized(grounded_answer) == _normalized(candidate_answer):
+        return True
+    match = _EXPLICIT_FINAL_ANSWER_RE.search(str(candidate_answer or ""))
+    return bool(
+        match and _normalized(match.group("answer")) == _normalized(grounded_answer)
+    )
+
+
 def _is_abstention(text: str) -> bool:
     return _normalized(text) in {
         "",
@@ -311,8 +328,9 @@ def _trace(
     verdict: str = "",
     evidence_id: str = "",
     answer_changed: bool = False,
+    grounded_answer: str = "",
 ) -> dict[str, Any]:
-    return {
+    trace = {
         "contract_id": ALCE_ANSWER_GROUNDING_CONTRACT,
         "status": status,
         "verdict": verdict,
@@ -320,3 +338,6 @@ def _trace(
         "answer_changed": answer_changed,
         "generation_contract": benchmark_generation_config(),
     }
+    if grounded_answer:
+        trace["grounded_answer"] = grounded_answer
+    return trace

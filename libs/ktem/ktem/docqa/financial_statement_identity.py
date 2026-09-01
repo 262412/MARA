@@ -68,6 +68,8 @@ def required_financial_identity(metric: str) -> tuple[str, str]:
     normalized = str(metric or "").strip().lower()
     if normalized == "inventory":
         return "balance_sheet", "consolidated"
+    if normalized in {"accounts receivable", "accounts payable"}:
+        return "balance_sheet", "consolidated"
     if normalized in {
         "adjusted ebitda",
     }:
@@ -192,6 +194,8 @@ def _statement_kind(text: str) -> str:
             "statements of income",
             "statement of operations",
             "statements of operations",
+            "statement of earnings",
+            "statements of earnings",
             "income statement",
         )
     ) or re.search(r"\bst\s+atements?\s+of\s+income\b", text):

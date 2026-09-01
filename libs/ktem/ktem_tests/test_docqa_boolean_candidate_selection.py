@@ -90,6 +90,47 @@ def test_current_paper_boolean_question_rejects_cited_work_candidate():
     assert slot.evidence_ids == ()
 
 
+def test_boolean_slot_ranking_uses_lossless_question_for_latent_variable_binding():
+    question = (
+        "Do they add one latent variable for each language pair in their "
+        "Bayesian model?"
+    )
+    plan = QueryPlan(
+        answer_type="boolean",
+        question_type="simple_fact",
+        plan_id="plan:lossless-proposition",
+        constraints={"verification_domain": "qasper", "question": question},
+        evidence_slots=(
+            EvidenceSlot(
+                slot_id="support:boolean_proposition",
+                role="support",
+                metric="bayesian language latent model one pair variable",
+                statement_kind="boolean_proposition",
+                required_for_retrieval=False,
+                required_for_verification=True,
+                query=(
+                    question + " create build construct crosslingual latent variables"
+                ),
+            ),
+        ),
+    )
+    candidate = {
+        "evidence_id": "latent-variable",
+        "source_id": "paper",
+        "section_id": "methods",
+        "text": (
+            "We add one crosslingual latent variable for each language pair "
+            "in our Bayesian model."
+        ),
+    }
+
+    bound = bind_evidence_slots(plan, [candidate])
+
+    [slot] = bound.evidence_slots
+    assert slot.status == "retrieved_unverified"
+    assert slot.evidence_ids == (identity_of(candidate).key,)
+
+
 def test_boolean_candidate_binding_keeps_only_the_matching_slot_pending():
     plan = QueryPlan(
         answer_type="boolean",

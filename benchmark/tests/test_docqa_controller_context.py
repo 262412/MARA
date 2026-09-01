@@ -60,3 +60,60 @@ def test_qasper_runtime_task_type_does_not_expose_gold_answer_category(tmp_path)
     assert context["verification_mode"] == "strict"
     assert context["task_type"] == "qasper_qa"
     assert "unanswerable" not in context["task_type"]
+
+
+def test_qasper_trace_group_is_shared_while_route_identity_stays_distinct(tmp_path):
+    example = BenchmarkExample(
+        example_id="trace-example",
+        document_id="paper",
+        question="Did the authors evaluate both settings?",
+        answers=["yes"],
+        answer_type="boolean",
+        metadata={"dataset_family": "scientific_qa"},
+    )
+    contexts = []
+    for route in ("text_rag", "controller_auto", "crag_guarded"):
+        config = BenchmarkConfig(
+            suite_name="qasper-debug",
+            output_dir=tmp_path,
+            route=route,
+        )
+        contexts.append(
+            controller_request_context(
+                example,
+                config,
+                lambda key, config=config: getattr(config, key, None),
+            )
+        )
+
+    trace_contexts = [context["trace_context"] for context in contexts]
+    assert len({value["trace_group_id"] for value in trace_contexts}) == 1
+    assert [value["benchmark_route_id"] for value in trace_contexts] == [
+        "text_rag",
+        "controller_auto",
+        "crag_guarded",
+    ]
+
+
+def test_mmdoc_benchmark_defaults_to_strict_visual_verification(tmp_path):
+    example = BenchmarkExample(
+        example_id="ex",
+        document_id="report",
+        question="How did shareholder return change from 2017 to 2021?",
+        answers=["It peaked and then declined."],
+        answer_type="descriptive",
+        metadata={"dataset_family": "multimodal_doc_qa"},
+    )
+    config = BenchmarkConfig(
+        suite_name="mmdocrag-dev15",
+        output_dir=tmp_path,
+    )
+
+    context = controller_request_context(
+        example,
+        config,
+        lambda key: getattr(config, key, None),
+    )
+
+    assert context["verification_domain"] == "mmdocrag"
+    assert context["verification_mode"] == "strict"

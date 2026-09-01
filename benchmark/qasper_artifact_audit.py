@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .metrics import is_abstention_answer
+from .jsonl import read_jsonl
 
 _FIELD_PATHS = {
     "engine_product_answer": (
@@ -89,18 +90,11 @@ def audit_qasper_predictions(
 
 def audit_qasper_predictions_file(path: str | Path) -> dict[str, Any]:
     """Read one predictions JSONL file and return :func:`audit_qasper_predictions`."""
-
     rows: list[dict[str, Any]] = []
-    with Path(path).open("r", encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            if not line.strip():
-                continue
-            value = json.loads(line)
-            if not isinstance(value, dict):
-                raise ValueError(
-                    f"predictions JSONL line {line_number} must be an object"
-                )
-            rows.append(value)
+    for line_number, value in enumerate(read_jsonl(path), start=1):
+        if not isinstance(value, dict):
+            raise ValueError(f"predictions JSONL record {line_number} must be an object")
+        rows.append(value)
     return audit_qasper_predictions(rows)
 
 

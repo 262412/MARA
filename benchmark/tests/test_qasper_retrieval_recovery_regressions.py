@@ -6,6 +6,7 @@ from typing import Any
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import evaluate_retrieval_quality
 from ktem.docqa.execution import execute_controller_turn
+from ktem.docqa.query_evidence_binding import bind_evidence_slots
 from ktem.docqa.query_plan_schema import EvidenceSlot, QueryPlan
 from ktem.docqa.query_planning import build_query_plan, missing_slot_requests
 
@@ -13,6 +14,14 @@ from benchmark.docqa_index_cache import DocQAIndexCache, route_requires_element
 from benchmark.schemas import BenchmarkDocument
 
 QUESTION = "Did the authors evaluate the model on clinical tasks?"
+TOOLKIT_QUESTION = "Do they experiment with the toolkits?"
+TOOLKIT_EVIDENCE = (
+    "We present GluonCV and GluonNLP, the deep learning toolkits for computer "
+    "vision and natural language processing. We demonstrate the performance of "
+    "GluonCV/NLP models in various computer vision and natural language "
+    "processing tasks. Specifically, we evaluate models on standard benchmark "
+    "data sets."
+)
 
 
 def _evidence(evidence_id: str, text: str, *, source_id: str = "paper") -> dict:
@@ -91,6 +100,98 @@ def test_qasper_missing_boolean_proposition_gets_one_local_second_round():
     assert slot["status"] == "retrieved_unverified"
 
 
+def test_qasper_expanded_boolean_query_keeps_toolkit_evidence_candidate():
+    plan = build_query_plan(
+        TOOLKIT_QUESTION,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    [slot] = plan.evidence_slots
+    bound = bind_evidence_slots(
+        plan,
+        [_evidence("toolkit-support", TOOLKIT_EVIDENCE)],
+    )
+
+    [bound_slot] = bound.evidence_slots
+    assert slot.metric == "they experiment with toolkits"
+    assert plan.constraints["question"] == TOOLKIT_QUESTION
+    assert bound_slot.status == "retrieved_unverified"
+    assert bound_slot.evidence_ids
+
+
+def test_qasper_toolkit_boolean_regression_reaches_exact_authority():
+    calls: list[int] = []
+
+    def retrieve(request, _decision):
+        calls.append(request.retrieval_round_id)
+        return {"evidence": [_evidence("toolkit-support", TOOLKIT_EVIDENCE)]}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=TOOLKIT_QUESTION,
+            retrieval_query=TOOLKIT_QUESTION,
+            task_type="boolean",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            active_file_id="paper",
+            origin="benchmark",
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "Yes.",
+    )
+
+    assert calls == [1]
+    assert result.answer.lower().startswith("yes")
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+    assert result.verify_decision.boolean_authority_status == "verified_support"
+
+
+def _run_recovered_boolean_case(question: str, evidence_text: str):
+    evidence = _evidence("recovered-support", evidence_text)
+    return execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="boolean",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            active_file_id="paper",
+            origin="benchmark",
+        ),
+        retrieve=lambda *_args: {"evidence": [evidence]},
+        generate=lambda *_args: "yes",
+    )
+
+
+def test_qasper_recovered_off_the_shelf_case_remains_verified_no():
+    result = _run_recovered_boolean_case(
+        "Do they use off-the-shelf NLP systems to build their assistant?",
+        "Natural Language Understanding (NLU): We implemented an NLU unit "
+        "utilizing handcrafted rules, Regular Expressions (RegEx) and "
+        "Elasticsearch (ES) API.",
+    )
+
+    assert result.answer == "no"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+
+
+def test_qasper_recovered_bert_comparison_case_remains_verified_no():
+    result = _run_recovered_boolean_case(
+        "Does BERT reach the best performance among all the algorithms compared?",
+        "BERT remains 0.3 F1-score points behind the winning system and would "
+        "have achieved the second position among all competitors.",
+    )
+
+    assert result.answer == "no"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+
+
 def test_unrelated_graph_entity_does_not_satisfy_qasper_boolean_slot():
     plan = build_query_plan(
         QUESTION,
@@ -150,21 +251,35 @@ def test_non_qasper_verification_only_boolean_slot_stays_out_of_round_two():
 
 
 def test_6f024d4c_true_unanswerable_remains_fail_closed_after_retry():
-    calls = 0
+    question = "What was the baseline?"
+    document_title = (
+        "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+    )
+    calls: list[tuple[int, str, dict[str, Any]]] = []
 
-    def retrieve(_request, _decision):
-        nonlocal calls
-        calls += 1
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_round_id,
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
         return {"evidence": []}
 
     result = execute_controller_turn(
         DocQARequest(
-            prompt="What was the baseline?",
+            prompt=question,
+            retrieval_query=question,
             task_type="free_text",
             verification_domain="qasper",
+            verification_mode="strict",
             route_policy="doc",
             allowed_routes=["doc_text"],
             selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            active_file_name="2001_05865.txt",
+            selected_source_title=document_title,
         ),
         retrieve=retrieve,
         generate=lambda *_args: (_ for _ in ()).throw(
@@ -172,9 +287,153 @@ def test_6f024d4c_true_unanswerable_remains_fail_closed_after_retry():
         ),
     )
 
-    assert calls == 2
+    assert len(calls) == 2
+    assert calls[0][0] == 1
+    assert calls[0][1] == question
+    assert calls[1][0] == 2
+    assert calls[1][1] == f"{question} {document_title}"
+    assert calls[1][1].count(question) == 1
+    assert all(
+        token not in calls[1][1]
+        for token in ("actor:", "predicate:", "object:", "object_role:")
+    )
+    assert calls[1][2]["document_context"] == {
+        "kind": "selected_document_title",
+        "text": document_title,
+    }
     assert result.retrieve_decision.status == "poor"
     assert result.guardrail_decision.action == "abstain"
+
+
+def test_c9b8d385_true_unanswerable_recovery_uses_selected_document_title():
+    question = "What type of inflections are considered?"
+    document_title = (
+        "Copenhagen at CoNLL--SIGMORPHON 2018: Multilingual Inflection in "
+        "Context with Explicit Morphosyntactic Decoding"
+    )
+    calls: list[tuple[int, str, dict[str, Any]]] = []
+
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_round_id,
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
+        return {"evidence": []}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="qasper_qa",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            active_file_name="1809_01541.txt",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("unanswerable QASPER request must not generate")
+        ),
+    )
+
+    assert [round_id for round_id, _query, _metadata in calls] == [1, 2]
+    assert calls[1][1] == f"{question} {document_title}"
+    assert calls[1][2]["document_context"] == {
+        "kind": "selected_document_title",
+        "text": document_title,
+    }
+    assert result.retrieve_decision.status == "poor"
+    assert result.guardrail_decision.action == "abstain"
+
+
+def test_specific_free_text_recovery_does_not_add_document_heading():
+    question = "What NDCG score did the final submission achieve?"
+    document_title = (
+        "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+    )
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
+        return {"evidence": []}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="free_text",
+            verification_domain="qasper",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("empty retrieval must remain fail closed")
+        ),
+    )
+
+    assert [query for query, _metadata in calls] == [question, question]
+    assert "document_context" not in calls[1][1]
+    assert result.guardrail_decision.action == "abstain"
+
+
+def test_6f024d4c_context_recovery_does_not_force_answer_relation_authority():
+    question = "What was the baseline?"
+    document_title = (
+        "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+    )
+
+    def retrieve(request, _decision):
+        if request.retrieval_round_id == 1:
+            return {"evidence": []}
+        assert request.retrieval_query == f"{question} {document_title}"
+        return {
+            "evidence": [
+                _evidence(
+                    "ensemble",
+                    "Our final submission is an ensemble of three discriminative models.",
+                    source_id="runtime-file-1",
+                )
+            ]
+        }
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="free_text",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "The ensemble of three discriminative models.",
+    )
+
+    assert result.evidence_bundle.metadata["canonical_candidate_count"] == 1
+    assert result.guardrail_decision.action == "abstain"
+    assert result.verify_decision.typed_authority["reason"] == (
+        "answer_relation_unresolved"
+    )
 
 
 def test_auto_route_optional_doc_element_does_not_force_element_index():

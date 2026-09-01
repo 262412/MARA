@@ -3,21 +3,20 @@ from __future__ import annotations
 from typing import Any
 
 from .boolean_evidence_scope import boolean_retrieval_query
-from .boolean_proposition_evidence import (
-    boolean_proposition_object_identity,
-    proposition_qualifier,
-)
-from .boolean_relations import primary_boolean_relation
 from .evidence import EvidenceBundle
 from .evidence_identity import identity_of
 from .qasper_relation_frame import question_relation_frame
 from .query_planning import ensure_request_query_plan, request_planning_question
+from .question_proposition import build_question_proposition
 from .recovery_progress import (
     semantic_progress_evidence_ids,
     semantic_progress_slot_states,
     semantic_recovery_has_progress,
 )
 from .route_budget import route_budget_metadata
+
+_MAX_DOCUMENT_CONTEXT_ANCHOR_CHARS = 160
+_TYPED_QUERY_PREFIXES = ("actor:", "predicate:", "object:", "object_role:")
 
 
 def verifier_recovery_query(request: Any) -> str:
@@ -30,26 +29,15 @@ def verifier_recovery_query(request: Any) -> str:
 
 def verifier_recovery_frame(request: Any) -> dict[str, str]:
     question = request_planning_question(request)
-    plan = ensure_request_query_plan(request)
-    if _answer_relation_required(plan):
-        frame = question_relation_frame(question)
-        return {
-            "actor": frame.actor,
-            "predicate": frame.predicate,
-            "object": frame.expected_object_type,
-            "object_role": frame.expected_object_role,
-            "qualifier": frame.qualifier,
-            "quantifier": frame.quantifier,
-            "scope": frame.scope,
-        }
+    proposition = build_question_proposition(question)
     return {
-        "actor": "current_paper",
-        "predicate": primary_boolean_relation(question),
-        "object": boolean_proposition_object_identity(question),
-        "object_role": "proposition_object",
-        "qualifier": proposition_qualifier(question),
-        "quantifier": "none",
-        "scope": "document",
+        "actor": proposition.actor,
+        "predicate": proposition.predicate,
+        "object": proposition.object_surface,
+        "object_role": proposition.object_role,
+        "qualifier": proposition.qualifier,
+        "quantifier": proposition.quantifier,
+        "scope": proposition.scope,
     }
 
 
@@ -73,8 +61,10 @@ def typed_qasper_recovery_requests(
 def recovery_query(request: Any, slot_query: str) -> str:
     question = request_planning_question(request)
     semantic_query = verifier_recovery_query(request)
+    document_context = _recovery_document_context(request)
     parts = (
         question,
+        _without_question(str(document_context.get("text") or ""), question),
         _without_question(slot_query, question),
         _without_question(semantic_query, question),
     )
@@ -89,11 +79,52 @@ def initial_query_metadata() -> dict[str, str]:
 
 
 def recovery_query_metadata(request: Any) -> dict[str, Any]:
-    return {
+    metadata: dict[str, Any] = {
         "contract_id": "recovery_query.v1",
         "query_kind": "recovery",
         "typed_frame": verifier_recovery_frame(request),
     }
+    document_context = _recovery_document_context(request)
+    if document_context:
+        metadata["document_context"] = document_context
+    return metadata
+
+
+def _recovery_document_context(request: Any) -> dict[str, str]:
+    question = request_planning_question(request)
+    plan = ensure_request_query_plan(request)
+    if not _answer_relation_required(plan):
+        return {}
+    frame = question_relation_frame(question)
+    generic_baseline = (
+        frame.predicate == "baseline" and frame.expected_object_type == "answer object"
+    )
+    if frame.actor != "unknown" or (frame.predicate and not generic_baseline):
+        return {}
+    selected_file_ids = {
+        str(value).strip()
+        for value in getattr(request, "selected_file_ids", None) or []
+        if str(value).strip()
+    }
+    if len(selected_file_ids) > 1 or (
+        not selected_file_ids
+        and not str(getattr(request, "active_file_id", "") or "").strip()
+    ):
+        return {}
+    title = _selected_document_title(request)
+    if not title:
+        return {}
+    return {
+        "kind": "selected_document_title",
+        "text": title,
+    }
+
+
+def _selected_document_title(request: Any) -> str:
+    title = " ".join(str(getattr(request, "selected_source_title", "") or "").split())
+    if not title or any(prefix in title.casefold() for prefix in _TYPED_QUERY_PREFIXES):
+        return ""
+    return title[:_MAX_DOCUMENT_CONTEXT_ANCHOR_CHARS].rstrip()
 
 
 def _without_question(value: str, question: str) -> str:
@@ -176,7 +207,11 @@ def typed_retrieval_recovery_trace(
     )
     stop_reason = str(recovered_bundle.metadata.get("retrieval_stop_reason") or "")
     recovery_outcome = "retrieval_evidence_improved"
-    if not typed_retrieval_recovery_has_progress(initial_bundle, recovered_bundle):
+    if not typed_retrieval_recovery_has_progress(
+        initial_bundle,
+        recovered_bundle,
+        request=request,
+    ):
         stop_reason = "recovery_no_progress"
         recovery_outcome = "no_progress"
     elif stop_reason:
@@ -227,12 +262,15 @@ def typed_retrieval_recovery_trace(
 def typed_retrieval_recovery_has_progress(
     initial_bundle: EvidenceBundle,
     recovered_bundle: EvidenceBundle,
+    *,
+    request: Any | None = None,
 ) -> bool:
     return semantic_recovery_has_progress(
         initial_bundle,
         recovered_bundle,
         _typed_slot_states(initial_bundle),
         _typed_slot_states(recovered_bundle),
+        request=request,
     )
 
 

@@ -4,14 +4,21 @@ import re
 from typing import Any
 
 from .boolean_authoritative_conflict import authoritative_conflict_claim
-from .boolean_authority_schema import BooleanClaimAuthority, BooleanEvidenceAuthority
+from .boolean_authority_schema import (
+    BooleanClaimAuthority,
+    BooleanEvidenceAuthority,
+    supported_boolean_claim,
+)
 from .boolean_authority_selection import _best_authority, _deduplicated_authorities
+from .boolean_composite_resolution import composite_boolean_claim_authority
 from .boolean_deictic_authority import ambiguous_deictic_object_authority
+from .boolean_empirical_authority import direct_experiment_relation
 from .boolean_evidence_scope import (
     _actor,
     _scope_rejection,
     _section_role,
     evidence_item_text,
+    validate_boolean_scope,
 )
 from .boolean_proposition_conditions import non_authoritative_proposition_span
 from .boolean_proposition_context import (
@@ -26,6 +33,7 @@ from .boolean_proposition_evidence import (
     proposition_qualifier,
 )
 from .boolean_relations import primary_boolean_relation
+from .boolean_scope_alternatives import explicit_besides_alternative_context
 from .boolean_structured_authority import structured_boolean_authorities
 from .evidence_identity import identity_of
 from .evidence_text import extract_final_answer_text
@@ -60,19 +68,19 @@ def boolean_claim_authority(
     authority_items = _authority_items(evidence_items)
     probe_polarity = input_polarity or "yes"
     structured = structured_boolean_authorities(prompt, authority_items)
-    resolved = _non_english_result_authority(prompt, authority_items)
-    if resolved is None:
-        resolved = _exclusive_requirement_authority(prompt, authority_items)
+    resolved = _exclusive_requirement_authority(prompt, authority_items)
     if resolved is not None:
         canonical_polarity, authority = resolved
-        return _supported_authority(
+        return supported_boolean_claim(
             prompt,
             input_polarity,
             canonical_polarity,
             (authority,),
             reason="exact_closed_scope_proposition",
         )
-    classified = classify_boolean_evidence_set(prompt, probe_polarity, authority_items)
+    classified = classify_boolean_evidence_set(
+        prompt, probe_polarity, authority_items, preserve_support_spans=True
+    )
     supporting, contradicting = _combined_exact_authorities(
         prompt,
         probe_polarity,
@@ -118,7 +126,7 @@ def _resolve_boolean_authority_decision(
             if any(value in structured for value in supporting)
             else "exact_boolean_proposition"
         )
-        return _supported_authority(
+        return supported_boolean_claim(
             prompt,
             input_polarity,
             probe_polarity,
@@ -132,7 +140,7 @@ def _resolve_boolean_authority_decision(
             if any(value in structured for value in contradicting)
             else "exact_opposite_boolean_proposition"
         )
-        return _supported_authority(
+        return supported_boolean_claim(
             prompt,
             input_polarity,
             canonical_polarity,
@@ -140,10 +148,17 @@ def _resolve_boolean_authority_decision(
             contradicting=(),
             reason=reason,
         )
+    composite = composite_boolean_claim_authority(
+        prompt,
+        input_polarity,
+        authority_items,
+    )
+    if composite is not None:
+        return composite
     resolved = _negative_requirement_authority(prompt, authority_items)
     if resolved is not None:
         canonical_polarity, authority = resolved
-        return _supported_authority(
+        return supported_boolean_claim(
             prompt,
             input_polarity,
             canonical_polarity,
@@ -178,27 +193,6 @@ def boolean_evidence_assessment(
     )
 
 
-def _supported_authority(
-    prompt: str,
-    input_polarity: str,
-    canonical_polarity: str,
-    supporting: tuple[BooleanEvidenceAuthority, ...],
-    *,
-    contradicting: tuple[BooleanEvidenceAuthority, ...] = (),
-    reason: str,
-) -> BooleanClaimAuthority:
-    return BooleanClaimAuthority(
-        claim=f"{canonical_polarity}: {prompt}",
-        status="supported",
-        input_answer_polarity=input_polarity,
-        canonical_answer_polarity=canonical_polarity,
-        semantic_correction_applied=input_polarity != canonical_polarity,
-        supporting=supporting,
-        contradicting=contradicting,
-        reason=reason,
-    )
-
-
 def _exclusive_requirement_authority(
     prompt: str,
     evidence_items: list[dict[str, Any]],
@@ -223,9 +217,7 @@ def _exclusive_requirement_authority(
             polarity = (
                 "no"
                 if _requirement_negative_clause(quote, question_terms)
-                else "yes"
-                if asked_object_present
-                else "no"
+                else "yes" if asked_object_present else "no"
             )
             identity = identity_of(item).key
             span_id = _span_identity(identity, window)
@@ -359,12 +351,13 @@ def _exact_authorities(
             assessment.item,
             assessment.span_text,
             question=(
-                ""
-                if exact_span_completes_boolean_proposition(
+                semantic_boolean_proposition_question(prompt)
+                if assessment.proposition.quantifier == "other"
+                or not exact_span_completes_boolean_proposition(
                     prompt,
                     assessment.span_text,
                 )
-                else semantic_boolean_proposition_question(prompt)
+                else ""
             ),
         )
         if window is None:
@@ -422,6 +415,23 @@ def _exact_window(
 ) -> PropositionContextWindow | None:
     text = evidence_item_text(item)
     canonical_start = _optional_int(item.get("canonical_start"))
+    alternative = explicit_besides_alternative_context(question, text, span)
+    if alternative is not None:
+        return PropositionContextWindow(
+            text=alternative.text,
+            start=alternative.start,
+            end=alternative.end,
+            canonical_start=(
+                canonical_start + alternative.start
+                if canonical_start is not None
+                else None
+            ),
+            canonical_end=(
+                canonical_start + alternative.end
+                if canonical_start is not None
+                else None
+            ),
+        )
     return exact_proposition_context(
         text,
         span,
@@ -442,72 +452,53 @@ def _assertive_relation(
     prompt: str,
     assessment: BooleanEvidenceAssessment,
 ) -> bool:
-    span = assessment.span_text.lower()
+    raw_span = assessment.span_text
+    span = raw_span.lower()
     semantic_prompt = semantic_boolean_proposition_question(prompt)
     if not exact_span_asserts_boolean_relation(semantic_prompt, span):
         return False
+    if assessment.proposition.quantifier != "none":
+        scope = validate_boolean_scope(
+            prompt,
+            assessment.span_text,
+            assessment.proposition.polarity,
+            evidence_items=[assessment.item],
+        )
+        if not scope.scope_valid:
+            return False
     if assessment.object_score < 1.0 or not assessment.proposition.object:
         return False
     if re.search(r"\b(?:discuss|describe|mention)\w*\b", span):
         return False
     if non_authoritative_proposition_span(semantic_prompt, span):
         return False
+    if not direct_experiment_relation(
+        semantic_prompt,
+        raw_span,
+        evidence_item_text(assessment.item),
+    ):
+        return False
+    if _capability_limitation(semantic_prompt, span) and not re.search(
+        r"\b(?:able\s+to|capable\s+of|can|could)\b",
+        semantic_prompt,
+        flags=re.IGNORECASE,
+    ):
+        return False
     return True
 
 
-def _non_english_result_authority(
-    prompt: str,
-    evidence_items: list[dict[str, Any]],
-) -> tuple[str, BooleanEvidenceAuthority] | None:
-    lowered = prompt.lower()
-    if not (
-        "english" in lowered
-        and re.search(r"\b(?:only|exclusively|solely)\b", lowered)
-        and re.search(
-            r"\b(?:data|dataset|corpus|language|result|experiment)\w*\b", lowered
+def _capability_limitation(question: str, span: str) -> bool:
+    if primary_boolean_relation(question) != "learn":
+        return False
+    return bool(
+        re.search(
+            r"\b(?:not\s+able\s+to|unable\s+to|could\s+not|cannot|"
+            r"can't|fail(?:ed)?\s+to)\s+(?:capture|learn|represent|model|"
+            r"encode|distinguish|characteri[sz]e)\w*\b",
+            span,
+            flags=re.IGNORECASE,
         )
-    ):
-        return None
-    language = (
-        r"(?:non-english|german|french|spanish|chinese|japanese|arabic|multilingual)"
     )
-    relation = r"(?:evaluat|experiment|report|result|test|dataset|corpus)\w*"
-    candidates: list[BooleanEvidenceAuthority] = []
-    for item in evidence_items:
-        text = evidence_item_text(item)
-        for match in re.finditer(r"[^.!?\n]+(?:[.!?]+|$)", text):
-            quote = match.group(0).strip()
-            if not (
-                re.search(rf"\b{language}\b", quote, flags=re.IGNORECASE)
-                and re.search(rf"\b{relation}\b", quote, flags=re.IGNORECASE)
-            ):
-                continue
-            window = _exact_window(item, quote)
-            if window is None:
-                continue
-            identity = identity_of(item).key
-            span_id = _span_identity(identity, window)
-            candidates.append(
-                BooleanEvidenceAuthority(
-                    evidence_id=identity,
-                    evidence_ref=span_id,
-                    span_id=span_id,
-                    quote=window.text,
-                    span_start=window.start,
-                    span_end=window.end,
-                    canonical_start=window.canonical_start,
-                    canonical_end=window.canonical_end,
-                    actor="current_paper",
-                    section_scope=str(item.get("section_id") or "document"),
-                    relation=primary_boolean_relation(prompt),
-                    object="english dataset",
-                    quantifier="only",
-                    polarity="no",
-                    reason="explicit_non_english_counterexample",
-                    qualifier=proposition_qualifier(quote),
-                )
-            )
-    return ("no", _best_authority(tuple(candidates))) if candidates else None
 
 
 def _required_object_terms(prompt: str) -> set[str]:

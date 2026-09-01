@@ -489,6 +489,8 @@ def _valid_arity(step: CalculationStep) -> bool:
 def _allowed_constant(step: CalculationStep, question: str) -> bool:
     if step.constant == Decimal("100"):
         return True
+    if step.constant_source == "formula" and step.constant == Decimal("365"):
+        return True
     return bool(step.constant_source == "question" and str(step.constant) in question)
 
 

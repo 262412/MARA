@@ -4,6 +4,10 @@ from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .boolean_proposition_candidates import (
+    _semantic_proposition_question,
+    boolean_proposition_candidate_score,
+)
 from .boolean_proposition_evidence import boolean_proposition_authority_level
 from .cross_page_boolean_authority import reconcile_cross_page_boolean_proposition
 from .evidence_identity import identity_of
@@ -35,6 +39,21 @@ def candidate_assessment_score(
 ) -> float:
     if assessments is not None:
         return assessments.candidate_score(plan, slot, item)
+    if str(slot.statement_kind or "") == "boolean_proposition":
+        canonical_question = str(
+            plan.constraints.get("question") or slot.query or slot.metric or ""
+        ).strip()
+        semantic_score = boolean_proposition_candidate_score(
+            canonical_question,
+            item,
+            metric=str(slot.metric or ""),
+        )
+        return candidate_score_for_slot(
+            slot,
+            item,
+            requires_structure=bool(plan.constraints.get("requires_structure")),
+            boolean_assessment_score=semantic_score,
+        )
     return candidate_score_for_slot(
         slot,
         item,
@@ -138,7 +157,15 @@ def bound_slot_status(
                 )
                 if assessments is not None
                 else boolean_proposition_authority_level(
-                    slot.metric,
+                    _semantic_proposition_question(
+                        str(
+                            plan.constraints.get("question")
+                            or slot.query
+                            or slot.metric
+                            or ""
+                        ),
+                        slot.metric,
+                    ),
                     evidence_by_identity[evidence_id],
                 )
             )
@@ -208,6 +235,13 @@ def _existing_binding_score(
             return assessments.candidate_score(plan, slot, item)
         return float(assessments.authority_level(plan, slot, item) != "none")
     if slot.status in {"retrieved_partial", "retrieved_unverified"}:
+        if slot.statement_kind == "boolean_proposition":
+            return candidate_assessment_score(
+                plan,
+                slot,
+                item,
+                assessments=None,
+            )
         return candidate_score_for_slot(
             slot,
             item,
@@ -230,6 +264,16 @@ def _semantic_match(
 ) -> bool:
     if assessments is not None and slot.statement_kind == "boolean_proposition":
         return assessments.candidate_score(plan, slot, item) > 0
+    if slot.statement_kind == "boolean_proposition":
+        return (
+            candidate_assessment_score(
+                plan,
+                slot,
+                item,
+                assessments=None,
+            )
+            > 0
+        )
     return slot_semantic_match(
         slot,
         item,

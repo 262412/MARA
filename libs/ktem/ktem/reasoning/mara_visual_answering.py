@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ktem.docqa.visual_evidence_authority import record_visual_answer_authority
+
 from .mara_messages import MARA_VISUAL_EVIDENCE_ONLY_MESSAGE
 
 
@@ -17,6 +19,11 @@ def route_visual_answer(
     if ocr_answer:
         bundle.metadata["generation_backend"] = "ocr_first_visual_extractor"
         bundle.metadata["visual_generation_gate"] = "ocr_first_answer"
+        record_visual_answer_authority(
+            bundle,
+            ocr_answer,
+            backend="ocr_first_visual_extractor",
+        )
         return ocr_answer
     vlm_generator = getattr(pipeline, "vlm_generator", None)
     if vlm_generator is None:
@@ -33,10 +40,13 @@ def route_visual_answer(
         setattr(pipeline, "_mara_vlm_answer_cache", cache)
     if cache_key in cache:
         bundle.metadata["vlm_cache"] = {"hit": True, "key": cache_key}
-        return str(cache[cache_key])
+        answer = str(cache[cache_key])
+        record_visual_answer_authority(bundle, answer, backend=generator_name)
+        return answer
     answer = _visual_generator_answer(vlm_generator, request, bundle)
     if answer.strip():
         cache[cache_key] = answer
+        record_visual_answer_authority(bundle, answer, backend=generator_name)
     bundle.metadata["vlm_cache"] = {"hit": False, "key": cache_key}
     return answer
 

@@ -76,6 +76,7 @@ def _apply_request_constraints(
         "cross_page",
         "multi_period_numeric",
         "numeric",
+        "visual_time_series",
     }
     if page_number is None or (multi_page and not page_scoped):
         return constrained

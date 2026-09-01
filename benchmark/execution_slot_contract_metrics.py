@@ -49,6 +49,12 @@ def required_slot_reference_metrics(
     requires_structure = bool(plan.constraints.get("requires_structure"))
     calculation_operands = _calculation_operands(metadata)
     verified_execution_slots = _verified_execution_slots(metadata)
+    verified_typed_slots = _audited_typed_authority_slots(
+        prediction,
+        metadata,
+        items,
+        payload.get("evidence_slots") or [],
+    )
     audit_execution = any(
         str(answer or "").strip() and not is_abstention_answer(str(answer))
         for answer in prediction.get("gold_answers") or []
@@ -63,6 +69,7 @@ def required_slot_reference_metrics(
                 verified_execution_slots,
                 requires_structure=requires_structure,
                 audit_execution=audit_execution,
+                typed_authority_verified=slot.slot_id in verified_typed_slots,
             )
         )
     counts.update(
@@ -83,6 +90,7 @@ def _audit_slot_reference(
     *,
     requires_structure: bool,
     audit_execution: bool,
+    typed_authority_verified: bool,
 ) -> Counter[str]:
     counts: Counter[str] = Counter()
     required = bool(
@@ -133,17 +141,86 @@ def _audit_slot_reference(
                 requires_structure=requires_structure,
             )
         )
-    if _has_match_constraints(slot) and not any(
-        score_evidence_for_slot(
-            slot,
-            item,
-            requires_structure=requires_structure,
+    if (
+        _has_match_constraints(slot)
+        and not typed_authority_verified
+        and not any(
+            score_evidence_for_slot(
+                slot,
+                item,
+                requires_structure=requires_structure,
+            )
+            > 0
+            for item in resolved
         )
-        > 0
-        for item in resolved
     ):
         counts["semantic_false_fills"] += 1
     return counts
+
+
+def _audited_typed_authority_slots(
+    prediction: dict[str, Any],
+    metadata: dict[str, Any],
+    items: list[dict[str, Any]],
+    raw_slots: list[Any],
+) -> set[str]:
+    decision = prediction.get("engine_verify_decision") or metadata.get(
+        "verify_decision"
+    )
+    if not isinstance(decision, dict):
+        return set()
+    from .qasper_typed_authority_audit import typed_authority_audit
+
+    slots = [
+        slot
+        for slot in raw_slots
+        if isinstance(slot, dict) and _raw_slot_is_required(slot)
+    ]
+    verified_slots = [
+        slot
+        for slot in slots
+        if str(slot.get("status") or "") in {"verified_support", "verified_conflict"}
+    ]
+    required_ids = [
+        str(evidence_id)
+        for slot in slots
+        for evidence_id in slot.get("evidence_ids") or []
+        if str(evidence_id)
+    ]
+    bundle = prediction.get("engine_terminal_evidence_bundle")
+    if not isinstance(bundle, dict):
+        bundle = {"items": items}
+    audit = typed_authority_audit(
+        decision,
+        bundle,
+        slots,
+        verified_slots,
+        required_ids,
+    )
+    if not audit.get("complete") or audit.get("state") not in {
+        "verified_support",
+        "verified_conflict",
+    }:
+        return set()
+    authority = audit.get("authority")
+    authority = authority if isinstance(authority, dict) else {}
+    return {
+        str(slot_id)
+        for slot_id in authority.get("verified_slot_ids") or []
+        if str(slot_id)
+    }
+
+
+def _raw_slot_is_required(slot: dict[str, Any]) -> bool:
+    return any(
+        bool(slot.get(field))
+        for field in (
+            "required",
+            "required_for_retrieval",
+            "required_for_execution",
+            "required_for_verification",
+        )
+    )
 
 
 def _audit_execution_operand_slot(

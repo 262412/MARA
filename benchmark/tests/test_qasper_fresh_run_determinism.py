@@ -16,6 +16,9 @@ from benchmark.qasper_evidence_identity import stabilize_qasper_evidence_project
 from benchmark.qasper_fresh_run_diff import compare_prediction_runs
 from benchmark.qasper_prompt_budget import fit_qasper_verifier_items
 
+FIXTURE_DIR = Path(__file__).with_name("fixtures")
+TOOLKIT_REGRESSION_EXAMPLE = "5f2bade0881c719ab026bc2e2962e2ada96cdb25"
+
 
 def _evidence(runtime_id: str, text: str, *, text_hash: str) -> dict[str, object]:
     return {
@@ -314,3 +317,112 @@ def test_fresh_run_diff_ignores_runtime_ids_but_reports_semantic_drift() -> None
     assert candidate_drifted["unexpected_terminal_state_drift_count"] == 0
     assert authority_drifted["authority_drift_count"] == 1
     assert authority_drifted["unexpected_terminal_state_drift_count"] == 0
+
+
+def test_qasper_toolkit_acceptance_target_has_verified_anchor_baseline() -> None:
+    acceptance = json.loads(
+        (FIXTURE_DIR / "qasper_fresh_run_acceptance.json").read_text(encoding="utf-8")
+    )
+    target_keys = {
+        (entry["example_id"], entry["route"])
+        for entry in acceptance["changes"]
+        if entry["example_id"] == TOOLKIT_REGRESSION_EXAMPLE
+        and entry["category"] == "target"
+    }
+    assert target_keys == {
+        (TOOLKIT_REGRESSION_EXAMPLE, "text_rag"),
+        (TOOLKIT_REGRESSION_EXAMPLE, "controller_auto"),
+        (TOOLKIT_REGRESSION_EXAMPLE, "crag_guarded"),
+    }
+    baseline = {}
+    with (FIXTURE_DIR / "qasper_golden_replay_v1.jsonl").open(
+        encoding="utf-8"
+    ) as stream:
+        for line in stream:
+            row = json.loads(line)
+            key = (row.get("example_id"), row.get("route"))
+            if key in target_keys and row.get("run_label") == "anchor_0343ba1":
+                baseline[key] = row
+
+    assert set(baseline) == target_keys
+    for row in baseline.values():
+        assert row["answer_status"] == "answered"
+        assert row["terminal_outcome"] == "answered"
+        assert row["typed_authority"]["state"] == "verified_support"
+        assert row["verifier_decision"]["boolean_authority_status"] == (
+            "verified_support"
+        )
+
+
+def test_fresh_run_diff_rejects_verified_support_regression() -> None:
+    baseline = {
+        "example_id": TOOLKIT_REGRESSION_EXAMPLE,
+        "route": "text_rag",
+        "answer_status": "answered",
+        "terminal_outcome": "answered",
+        "answer_for_scoring": "yes",
+        "terminal_answer_state": {"answer": "yes", "status": "answered"},
+        "typed_authority": {"state": "verified_support"},
+    }
+    candidate = {
+        **baseline,
+        "answer_status": "abstained",
+        "terminal_outcome": "safe_abstention",
+        "answer_for_scoring": "unanswerable",
+        "terminal_answer_state": {
+            "answer": "unanswerable",
+            "status": "safe_abstention",
+        },
+        "typed_authority": {"state": "missing"},
+    }
+
+    diff = compare_prediction_runs(
+        [baseline],
+        [candidate],
+        acceptance={
+            "changes": [
+                {
+                    "example_id": TOOLKIT_REGRESSION_EXAMPLE,
+                    "route": "text_rag",
+                    "category": "target",
+                    "allow_terminal_drift": True,
+                }
+            ]
+        },
+    )
+
+    assert diff["verified_support_regression_count"] == 1
+    [row] = diff["rows"]
+    assert row["verified_support_regression"] is True
+    assert row["unexpected_terminal_state_drift"] is True
+    assert diff["unexpected_terminal_state_drift_count"] == 1
+
+
+def test_fresh_run_diff_rejects_authority_loss_without_answer_drift() -> None:
+    baseline = {
+        "example_id": TOOLKIT_REGRESSION_EXAMPLE,
+        "route": "text_rag",
+        "answer_status": "answered",
+        "terminal_outcome": "answered",
+        "answer_for_scoring": "yes",
+        "typed_authority": {"state": "verified_support"},
+    }
+    candidate = {**baseline, "typed_authority": {"state": "missing"}}
+
+    diff = compare_prediction_runs(
+        [baseline],
+        [candidate],
+        acceptance={
+            "changes": [
+                {
+                    "example_id": TOOLKIT_REGRESSION_EXAMPLE,
+                    "route": "text_rag",
+                    "category": "target",
+                    "allow_terminal_drift": True,
+                }
+            ]
+        },
+    )
+
+    assert diff["verified_support_regression_count"] == 1
+    assert diff["unexpected_terminal_state_drift_count"] == 1
