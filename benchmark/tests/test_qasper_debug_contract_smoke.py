@@ -17,6 +17,9 @@ from benchmark.qasper_causal_transaction import (
 )
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _write_run
+from benchmark.tests.qasper_retrieval_index_fixture import (
+    write_retrieval_index_binding,
+)
 from benchmark.tests.qasper_debug_contract_fixtures import (
     _debug_candidate_audit,
     _debug_unknown_assessment,
@@ -80,6 +83,7 @@ def _write_qasper_run(run_dir, *, predictions):
         "".join(f"{json.dumps(row, ensure_ascii=False)}\n" for row in semantic_rows),
         encoding="utf-8",
     )
+    write_retrieval_index_binding(run_dir, semantic_rows)
     probe_path = run_dir / "contract_probe_predictions.jsonl"
     probe_path.write_text(
         "".join(
@@ -250,6 +254,28 @@ def test_qasper_debug_contract_smoke_requires_live_probe_artifact(tmp_path):
     audit = json.loads((run_dir / "contract_smoke_audit.json").read_text())
     assert audit["contract_probe_artifact"]["status"] == "missing"
     assert audit["contract_probe_artifact"]["prediction_count"] == 0
+
+
+def test_qasper_debug_contract_stops_before_downstream_on_missing_index_binding(
+    tmp_path,
+):
+    run_dir = tmp_path / "run"
+    predictions = [
+        _qasper_debug_prediction(f"example-{example_index}", route)
+        for example_index in range(1, 7)
+        for route in ("controller_auto", "crag_guarded", "hybrid_rag")
+    ]
+    _write_qasper_run(run_dir, predictions=predictions)
+    (run_dir / "retrieval_index_artifact.json").unlink()
+
+    with pytest.raises(ValueError, match="retrieval_index_artifact_load_failed"):
+        validate(run_dir, suite_kind="qasper_debug")
+
+    audit = json.loads((run_dir / "contract_smoke_audit.json").read_text())
+    causal = audit["causal_transaction_audit"]
+    assert causal["retrieval_index_binding_audit"]["status"] == "failed"
+    assert causal["observations"] == []
+    assert causal["retrieval_index_binding_audit"]["observations"] == []
 
 
 def test_qasper_debug_contract_smoke_rejects_stale_provider_probe_audit(tmp_path):

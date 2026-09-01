@@ -24,6 +24,17 @@ from scripts.slurm.qasper_natural_semantic_pack_probe import probe_prediction
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
 
 
+def _matched_retrieval_index_binding(count: int) -> dict[str, Any]:
+    return {
+        "contract_id": "qasper_retrieval_index_binding_audit.v1",
+        "status": "matched",
+        "hard_rule": "stop_at_first_divergence",
+        "expected_record_count": count,
+        "matched_record_count": count,
+        "violations": [],
+    }
+
+
 def _probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
     reference = _causal_transaction(
         row,
@@ -223,6 +234,7 @@ def test_natural_probe_keeps_ambiguous_and_unambiguous_denominators_separate() -
         code_sha=_CODE_SHA,
         input_path=__import__("pathlib").Path(__file__),
         expected_count=2,
+        retrieval_index_binding=_matched_retrieval_index_binding(2),
     )
 
     assert audit["ambiguity_denominator"] == {
@@ -239,6 +251,7 @@ def test_six_sample_probe_requires_the_frozen_four_two_denominator() -> None:
         code_sha=_CODE_SHA,
         input_path=__import__("pathlib").Path(__file__),
         expected_count=6,
+        retrieval_index_binding=_matched_retrieval_index_binding(6),
     )
 
     assert audit["ambiguity_denominator"] == {"unambiguous": 6}
@@ -260,6 +273,7 @@ def test_six_sample_probe_accepts_four_ambiguous_two_unambiguous() -> None:
         code_sha=_CODE_SHA,
         input_path=__import__("pathlib").Path(__file__),
         expected_count=6,
+        retrieval_index_binding=_matched_retrieval_index_binding(6),
     )
 
     assert audit["ambiguity_denominator"] == {
@@ -276,6 +290,7 @@ def test_probe_code_identity_gate_rejects_dirty_or_non_sha_runs() -> None:
         code_sha=_CODE_SHA,
         input_path=__import__("pathlib").Path(__file__),
         expected_count=1,
+        retrieval_index_binding=_matched_retrieval_index_binding(1),
         runtime_code_sha=_CODE_SHA,
         runtime_worktree_clean=False,
     )
@@ -284,10 +299,35 @@ def test_probe_code_identity_gate_rejects_dirty_or_non_sha_runs() -> None:
         code_sha=f"{_CODE_SHA}-dirty",
         input_path=__import__("pathlib").Path(__file__),
         expected_count=1,
+        retrieval_index_binding=_matched_retrieval_index_binding(1),
     )
 
     assert dirty["hard_gates"]["single_clean_code_identity"] is False
     assert labeled_dirty["hard_gates"]["single_clean_code_identity"] is False
+
+
+def test_natural_probe_cannot_pass_with_an_old_retrieval_snapshot() -> None:
+    prediction = _probe_prediction(_row(), code_sha=_CODE_SHA)
+    binding = _matched_retrieval_index_binding(1)
+    binding.update(
+        {
+            "status": "failed",
+            "matched_record_count": 0,
+            "violations": ["retrieval_index_artifact_code_sha_mismatch"],
+        }
+    )
+
+    audit = probe.build_audit(
+        [prediction],
+        code_sha=_CODE_SHA,
+        input_path=__import__("pathlib").Path(__file__),
+        expected_count=1,
+        retrieval_index_binding=binding,
+    )
+
+    assert audit["hard_gates"]["real_retrieval_index_artifact_bound"] is False
+    assert audit["retrieval_index_binding_audit"] == binding
+    assert audit["status"] == "failed"
 
 
 def test_legacy_replay_uses_candidate_stage_rank_not_late_bundle_rank() -> None:

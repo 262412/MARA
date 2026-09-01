@@ -231,6 +231,14 @@ def _natural_audit(rows: list[dict[str, Any]]) -> dict[str, Any]:
         code_sha=_LATEST_RUN_SHA,
         input_path=Path(__file__),
         expected_count=18,
+        retrieval_index_binding={
+            "contract_id": "qasper_retrieval_index_binding_audit.v1",
+            "status": "matched",
+            "hard_rule": "stop_at_first_divergence",
+            "expected_record_count": 18,
+            "matched_record_count": 18,
+            "violations": [],
+        },
     )
 
 
