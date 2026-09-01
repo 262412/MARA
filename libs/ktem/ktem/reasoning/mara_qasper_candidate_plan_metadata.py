@@ -48,6 +48,10 @@ def candidate_selector_plan_metadata(
         "event_id": _selector_event_id(record, selector),
         "event_core_tokens": object_tokens,
         "predicate_match_kind": _predicate_match_kind(question, resolved),
+        "assertion_scope": str(analysis.get("assertion_scope") or "unresolved"),
+        "target_relation_present": analysis.get("target_relation_present") is True,
+        "meta_scope": analysis.get("meta_scope") is True,
+        "direct_relation_negated": analysis.get("direct_relation_negated"),
     }
 
 

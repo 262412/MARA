@@ -83,15 +83,12 @@ _PROBE_CASES: tuple[ProbeCase, ...] = (
     ),
     ProbeCase(
         "auditor_fail",
-        (
-            "If the authors released the code for the evaluated system, "
-            "reproducibility would improve."
-        ),
+        "The authors released the code for the evaluated system.",
         "yes",
         "unknown",
         "failed",
         expected_negative=True,
-        controlled_fault="non_entailing_proof",
+        controlled_fault="semantic_auditor_rejection",
         proposal_judgment="supported",
         controlled_candidate="yes",
     ),

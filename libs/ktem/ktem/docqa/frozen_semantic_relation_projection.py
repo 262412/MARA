@@ -22,6 +22,9 @@ def frozen_semantic_relation_evidence_set_constraint(
     }.get(relation)
     supplied = str(verdict or "")
     polarity_valid = _polarity_valid(relation, expected_verdict, supplied)
+    failure_reason = (
+        "" if polarity_valid else "local_semantic_relation_polarity_mismatch"
+    )
     analyses: list[dict[str, Any]] = []
     for premise in projection.premises:
         analysis = _frozen_premise_analysis(projection, premise)
@@ -31,11 +34,16 @@ def frozen_semantic_relation_evidence_set_constraint(
             "unbound",
         }:
             polarity_valid = False
+            failure_reason = "local_semantic_relation_state_invalid"
+        if analysis["assertion_scope"] != "asserted":
+            polarity_valid = False
+            failure_reason = "local_semantic_relation_unasserted_scope"
         analyses.append(analysis)
     return _frozen_constraint_payload(
         projection,
         supplied,
         polarity_valid=polarity_valid,
+        failure_reason=failure_reason,
         analyses=analyses,
         auditor_relationship=auditor_relationship,
     )
@@ -146,6 +154,7 @@ def _frozen_premise_analysis(
         ),
         "target_relation_present": premise.get("target_relation_present") is True,
         "relation_bearing": premise.get("relation_bearing") is True,
+        "assertion_scope": str(premise.get("assertion_scope") or "unresolved"),
         "meta_scope": premise.get("meta_scope") is True,
         "direct_relation_negated": premise.get("direct_relation_negated"),
         "clauses": [],
@@ -159,6 +168,7 @@ def _frozen_constraint_payload(
     supplied: str,
     *,
     polarity_valid: bool,
+    failure_reason: str,
     analyses: list[dict[str, Any]],
     auditor_relationship: str,
 ) -> dict[str, Any]:
@@ -170,7 +180,7 @@ def _frozen_constraint_payload(
     payload = {
         "contract_id": LOCAL_SEMANTIC_RELATION_CONSTRAINT,
         "status": "passed" if polarity_valid else "rejected",
-        "reason": "" if polarity_valid else "local_semantic_relation_polarity_mismatch",
+        "reason": "" if polarity_valid else failure_reason,
         "verdict": supplied,
         "expected_evidence_relation": relation,
         "auditor_relationship": str(auditor_relationship or ""),

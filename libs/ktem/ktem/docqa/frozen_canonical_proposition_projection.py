@@ -463,6 +463,7 @@ def _premise_record(
         "event_core_tokens": list(selector.get("event_core_tokens") or []),
         "predicate_match_kind": str(selector.get("predicate_match_kind") or ""),
         "local_relation_state": str(selector.get("local_relation_state") or ""),
+        "assertion_scope": str(selector.get("assertion_scope") or "unresolved"),
         "relation_bearing": selector.get("relation_bearing") is True,
         "target_relation_present": selector.get("target_relation_present"),
         "meta_scope": selector.get("meta_scope"),

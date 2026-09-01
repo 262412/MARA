@@ -102,6 +102,7 @@ def _selector_header_reason(
         or not isinstance(allowed, list)
         or tuple(allowed) != expected_slots
         or selector.get("relation_bearing") is not True
+        or selector.get("assertion_scope") != "asserted"
         or str(selector.get("candidate_relation_role") or "") != "polarity_evidence"
     ):
         return "canonical_plan_projection_selector_invalid"

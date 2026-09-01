@@ -45,6 +45,9 @@ from .semantic_relation_clause_lexical import meta_scoped as _is_meta_scoped
 from .semantic_relation_clause_lexical import object_span as _object_span
 from .semantic_relation_clause_lexical import predicate_spans as _predicate_spans
 from .semantic_relation_clause_lexical import (
+    proposition_assertion_scope as _proposition_assertion_scope,
+)
+from .semantic_relation_clause_lexical import (
     semantic_content_token_set as _semantic_content_token_set,
 )
 from .semantic_relation_constraint_projection import (
@@ -113,6 +116,7 @@ def semantic_relation_clause_analysis(
         "covered_object_tokens": list(selected.get("object_tokens_covered") or []),
         "target_relation_present": bool(selected.get("target_relation_present")),
         "relation_bearing": bool(selected.get("relation_bearing")),
+        "assertion_scope": str(selected.get("assertion_scope") or "unresolved"),
         "meta_scope": bool(selected.get("meta_scope")),
         "direct_relation_negated": selected.get("direct_relation_negated"),
         "clauses": clauses,
@@ -130,6 +134,7 @@ def locally_allowed_proposition_slots(
     analysis, observed = _locally_observed_slots(quote, proposition)
     if (
         analysis.get("relation_bearing") is not True
+        or analysis.get("assertion_scope") != "asserted"
         or analysis.get("meta_scope") is True
     ):
         return ()
@@ -143,7 +148,12 @@ def locally_observed_proposition_slots(
     """Return exact local slot observations, including companion noun spans."""
 
     analysis, observed = _locally_observed_slots(quote, proposition)
-    return () if analysis.get("meta_scope") is True else observed
+    return (
+        observed
+        if analysis.get("assertion_scope") == "asserted"
+        and analysis.get("meta_scope") is not True
+        else ()
+    )
 
 
 def _locally_observed_slots(
@@ -346,16 +356,13 @@ def _clause_analysis(
         if (span := candidates.get(slot)) is not None
     }
     predicate_span = predicate_spans[0] if predicate_spans else None
-    meta_scope = bool(
-        predicate_span and _is_meta_scoped(clause, predicate_span["span_start"] - start)
+    meta_scope, relation_negated, assertion_scope = _clause_relation_scope(
+        clause,
+        start=start,
+        predicate_span=predicate_span,
+        contextual_predicate=contextual_predicate,
+        proposition_negated=proposition.negated,
     )
-    relation_negated = (
-        _direct_relation_negated(clause, predicate_span["span_start"] - start)
-        if predicate_span is not None and not meta_scope
-        else None
-    )
-    if relation_negated is not None and proposition.negated:
-        relation_negated = not relation_negated
     binding_validity = {
         "actor": actor_matches,
         "predicate": bool(predicate_spans)
@@ -383,9 +390,41 @@ def _clause_analysis(
         "relation_bearing": bool(
             predicate_spans or contextual_predicate or _ASSERTIVE_VERB_RE.search(clause)
         ),
+        "assertion_scope": assertion_scope,
         "meta_scope": meta_scope,
         "direct_relation_negated": relation_negated,
     }
+
+
+def _clause_relation_scope(
+    clause: str,
+    *,
+    start: int,
+    predicate_span: Mapping[str, Any] | None,
+    contextual_predicate: Mapping[str, Any] | None,
+    proposition_negated: bool,
+) -> tuple[bool, bool | None, str]:
+    meta_scope = bool(
+        predicate_span and _is_meta_scoped(clause, predicate_span["span_start"] - start)
+    )
+    relation_negated = (
+        _direct_relation_negated(clause, predicate_span["span_start"] - start)
+        if predicate_span is not None and not meta_scope
+        else None
+    )
+    if relation_negated is not None and proposition_negated:
+        relation_negated = not relation_negated
+    scope_anchor = predicate_span or contextual_predicate
+    if meta_scope:
+        assertion_scope = "meta"
+    elif scope_anchor is not None:
+        assertion_scope = _proposition_assertion_scope(
+            clause,
+            scope_anchor["span_start"] - start,
+        )
+    else:
+        assertion_scope = "unresolved"
+    return meta_scope, relation_negated, assertion_scope
 
 
 def _analysis_status(
@@ -413,6 +452,8 @@ def _analysis_status(
         return "mention_only"
     if direct_complete and selected.get("meta_scope") is True:
         return "mention_only"
+    if direct_complete and selected.get("assertion_scope") != "asserted":
+        return "unbound"
     if direct_complete and selected.get("target_relation_present") is True:
         return (
             "explicit_contradiction"
@@ -449,7 +490,7 @@ def _predicate_actor_order_valid(
     )
 
 
-def _clause_score(value: Mapping[str, Any]) -> tuple[int, int, int, int, int]:
+def _clause_score(value: Mapping[str, Any]) -> tuple[int, int, int, int, int, int]:
     slots = dict(value.get("slot_evidence") or {})
     return (
         sum(
@@ -460,6 +501,7 @@ def _clause_score(value: Mapping[str, Any]) -> tuple[int, int, int, int, int]:
         len(value.get("object_tokens_covered") or []),
         int(value.get("target_relation_present") is True),
         int(value.get("meta_scope") is not True),
+        int(value.get("assertion_scope") == "asserted"),
     )
 
 
@@ -484,6 +526,7 @@ def _empty_clause() -> dict[str, Any]:
         "object_tokens_covered": [],
         "target_relation_present": False,
         "relation_bearing": False,
+        "assertion_scope": "unresolved",
         "meta_scope": False,
         "direct_relation_negated": None,
     }

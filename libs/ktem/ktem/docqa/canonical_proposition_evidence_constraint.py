@@ -30,6 +30,7 @@ def semantic_constraint_observation(
             for analysis in analyses
             for slot in analysis.get("slot_evidence") or {}
             if analysis.get("relation_bearing") is True
+            and analysis.get("assertion_scope") == "asserted"
             and analysis.get("meta_scope") is not True
         }
     )
@@ -39,6 +40,7 @@ def semantic_constraint_observation(
             str(token)
             for analysis in analyses
             if analysis.get("relation_bearing") is True
+            and analysis.get("assertion_scope") == "asserted"
             and analysis.get("meta_scope") is not True
             and "object" in (analysis.get("slot_evidence") or {})
             for token in analysis.get("covered_object_tokens") or []

@@ -17,6 +17,7 @@ from .mara_semantic_proposition_stages import (
     invalid_response_reason,
 )
 from .mara_semantic_transaction_support import (
+    bind_semantic_execution_identity,
     pre_audit_transaction_failure,
     semantic_pack_identity,
     transaction_result,
@@ -142,6 +143,7 @@ def audit_rejection_result(
         context.seed,
         context.question,
     )
+    bind_semantic_execution_identity(value, context)
     value["rejected_transaction"] = dict(
         (diagnostics.get("rejected_transactions") or [{}])[-1]
     )

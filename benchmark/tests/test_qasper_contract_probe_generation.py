@@ -149,6 +149,8 @@ class _Provider:
             "semantic audit proposal",
         )
         passed = _audit_entails_proposal(proposal)
+        if "CONTRACT PROBE CONTROLLED AUDITOR FAULT:" in text:
+            passed = False
         if not self.reject_fault:
             passed = True
         return _Response(_audit_payload(schema, proposal, passed=passed))

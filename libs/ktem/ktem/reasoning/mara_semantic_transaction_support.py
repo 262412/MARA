@@ -77,8 +77,6 @@ def bind_semantic_runtime_fields(
     value: dict[str, Any],
     context: SemanticPropositionTransactionContext,
 ) -> None:
-    value["question_proposition"] = context.proposition.as_dict()
-    value["question_proposition_resolution"] = dict(context.proposition_resolution)
     evidence_relation = str(value.get("evidence_relation") or "")
     projection = getattr(context, "canonical_plan_projection", None)
     if projection is not None:
@@ -100,7 +98,19 @@ def bind_semantic_runtime_fields(
                 if slot in canonical_bindings
             }
             premise["evidence_relation"] = evidence_relation
-    value["verifier"].update(
+    bind_semantic_execution_identity(value, context)
+
+
+def bind_semantic_execution_identity(
+    value: dict[str, Any],
+    context: SemanticPropositionTransactionContext,
+) -> None:
+    """Bind one transaction identity without promoting its semantic result."""
+
+    value["question_proposition"] = context.proposition.as_dict()
+    value["question_proposition_resolution"] = dict(context.proposition_resolution)
+    projection = getattr(context, "canonical_plan_projection", None)
+    value.setdefault("verifier", {}).update(
         {
             "release_mode": context.release_mode,
             "auditor_relationship": context.auditor_relationship,

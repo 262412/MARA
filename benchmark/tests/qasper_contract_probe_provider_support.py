@@ -87,7 +87,7 @@ def _assert_real_auditor_failure(rows: list[dict[str, Any]]) -> None:
     assert lineage["status"] == "failed"
     assert lineage["first_inconsistency"] == {
         "stage": "auditor_semantics",
-        "reason": "auditor_internal_inconsistency",
+        "reason": "premise_fragment_not_entailed",
         "attempt": 1,
         "raw_response_digest": lineage["audit"]["attempts"][0]["raw_response_digest"],
     }

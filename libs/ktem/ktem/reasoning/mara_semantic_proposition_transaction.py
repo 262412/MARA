@@ -350,6 +350,8 @@ def _project_internally_inconsistent_canonical_audit(
         projection is None
         or audit.value is None
         or local_consistency.get("status") != "auditor_internal_inconsistency"
+        or local_consistency.get("disagreement_scope") != "literal_fragment_only"
+        or local_consistency.get("override_eligible") is not True
         or local_constraint.get("status") != "passed"
     ):
         return audit
@@ -358,6 +360,7 @@ def _project_internally_inconsistent_canonical_audit(
         {
             "audit_model_observation_status": "auditor_internal_inconsistency",
             "audit_authority_source": "frozen_canonical_plan_projection",
+            "audit_projection_scope": "literal_fragment_only",
             "auditor_override_blocked": True,
             "audit_model_observation": dict(audit.value),
         }

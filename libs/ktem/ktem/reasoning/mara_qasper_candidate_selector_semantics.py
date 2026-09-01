@@ -160,7 +160,7 @@ def revalidated_selector_semantics(
 
     direct = _direct_selector_semantics(selector, question, text)
     alignment = verified_selector_semantic_alignment(question, selector)
-    if alignment is not None:
+    if alignment is not None and direct["assertion_scope"] == "asserted":
         _apply_verified_alignment(direct, selector, alignment)
     elif str(selector.get("predicate_match_kind") or "").strip() == "paraphrase":
         direct.update(
@@ -183,6 +183,7 @@ def revalidated_selector_semantics(
             "uncertainty_context" if uncertainty_context else "polarity_evidence"
         ),
         "polarity_signal": polarity_signal,
+        "assertion_scope": str(direct["assertion_scope"]),
         "semantic_alignment": alignment,
     }
 
@@ -199,6 +200,9 @@ def _direct_selector_semantics(
     )
     title_like = bool(_TITLE_MARKER_RE.search(text))
     observed_spans = dict(analysis.get("slot_evidence") or {})
+    assertion_scope = str(analysis.get("assertion_scope") or "unresolved")
+    if assertion_scope in {"conditional", "hypothetical"}:
+        observed_spans = {}
     target_relation_present = analysis.get("target_relation_present") is True
     if not predicate_surface_is_auditable(proposition, text):
         target_relation_present = False
@@ -211,6 +215,7 @@ def _direct_selector_semantics(
     direct_anchor = bool(
         relation_bearing
         and target_relation_present
+        and assertion_scope == "asserted"
         and analysis.get("meta_scope") is not True
         and isinstance(direct_negation, bool)
     )
@@ -231,6 +236,7 @@ def _direct_selector_semantics(
         "uncertainty_context": uncertainty_context,
         "local_relation_state": local_state,
         "local_relation_analysis_digest": str(analysis.get("analysis_digest") or ""),
+        "assertion_scope": assertion_scope,
         "analysis": analysis,
         "applicable_slots": applicable,
     }

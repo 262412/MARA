@@ -90,6 +90,43 @@ _INSPECTION_LEARNING_COMPLEMENT_RE = re.compile(
     r"\blearn(?:s|ed|t|ing)?\s+to\s+[A-Za-z]",
     re.IGNORECASE,
 )
+_CONDITIONAL_SCOPE_RE = re.compile(
+    r"\b(?:if|unless|provided(?:\s+that)?|assuming(?:\s+that)?|"
+    r"on\s+condition\s+that|in\s+case)\b",
+    re.IGNORECASE,
+)
+_CONDITIONAL_INVERSION_RE = re.compile(
+    r"^\s*(?:had|were|should)\b",
+    re.IGNORECASE,
+)
+_HYPOTHETICAL_SCOPE_RE = re.compile(
+    r"\b(?:whether|suppos(?:e|ed|ing)(?:\s+that)?|"
+    r"(?:imagine|imagined|imagining)(?:\s+that)?|hypothetical(?:ly)?|"
+    r"counterfactual(?:ly)?)\b",
+    re.IGNORECASE,
+)
+_TARGET_MODAL_SCOPE_RE = re.compile(
+    r"\b(?:could|may|might|would|should|will)\s+"
+    r"(?:(?:not|never|eventually|possibly|potentially)\s+){0,2}"
+    r"(?:[A-Za-z][A-Za-z-]*\s+){0,3}$",
+    re.IGNORECASE,
+)
+_TARGET_INTENTION_SCOPE_RE = re.compile(
+    r"\b(?:plan|planned|intend|intended)\s+to\s+" r"(?:[A-Za-z][A-Za-z-]*\s+){0,3}$",
+    re.IGNORECASE,
+)
+_ASSERTED_POLAR_COMPLEMENT_RE = re.compile(
+    r"\b(?:ask|asks|asked|asking|check|checks|checked|checking|determine|"
+    r"determines|determined|determining|discover|discovers|discovered|"
+    r"discovering|examine|examines|examined|examining|explore|explores|"
+    r"explored|exploring|find|finds|found|finding|inspect|inspects|inspected|"
+    r"inspecting|investigate|investigates|investigated|investigating|know|"
+    r"knows|knew|known|knowing|learn|learns|learned|learning|see|sees|saw|"
+    r"seen|seeing|test|tests|tested|testing|verify|verifies|verified|verifying|"
+    r"wonder|wonders|wondered|wondering)\b"
+    r"(?:\s+[A-Za-z][A-Za-z-]*){0,8}\s+if\b",
+    re.IGNORECASE,
+)
 
 
 def clause_spans(value: str) -> list[tuple[int, int]]:
@@ -302,6 +339,30 @@ def direct_relation_negated(clause: str, relation_start: int) -> bool:
             flags=re.IGNORECASE,
         )
     )
+
+
+def proposition_assertion_scope(clause: str, relation_start: int) -> str:
+    """Classify whether the target relation is asserted in this exact clause."""
+
+    value = str(clause or "")
+    prefix = value[:relation_start]
+    suffix = value[relation_start:]
+    if (
+        _CONDITIONAL_SCOPE_RE.search(prefix)
+        or _CONDITIONAL_INVERSION_RE.search(value)
+        or (
+            _CONDITIONAL_SCOPE_RE.search(suffix)
+            and not _ASSERTED_POLAR_COMPLEMENT_RE.search(suffix)
+        )
+    ):
+        return "conditional"
+    if (
+        _HYPOTHETICAL_SCOPE_RE.search(prefix)
+        or _TARGET_MODAL_SCOPE_RE.search(prefix)
+        or _TARGET_INTENTION_SCOPE_RE.search(prefix)
+    ):
+        return "hypothetical"
+    return "asserted"
 
 
 def semantic_content_token_set(value: str) -> set[str]:

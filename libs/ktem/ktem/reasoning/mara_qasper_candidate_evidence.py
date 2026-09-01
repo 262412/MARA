@@ -124,6 +124,7 @@ def _selector_disposition(
         "relation_bearing": bool(semantics["relation_bearing"]),
         "candidate_relation_role": str(semantics["candidate_relation_role"]),
         "local_relation_state": str(semantics["local_relation_state"]),
+        "assertion_scope": str(semantics["assertion_scope"]),
         "proposition_slot_spans": semantics["slot_spans"],
         "joint_slot_hint": jointly_aligned,
         "polarity_signal": (

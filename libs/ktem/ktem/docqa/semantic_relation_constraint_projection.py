@@ -28,12 +28,16 @@ def legacy_constraint_projection(
         proposition,
         premises,
     )
-    canonical = canonical_evidence_constraint_projection(
-        premises,
-        proposition,
-        verdict,
-        required_slots=required_slots,
-        required_object_tokens=required_object_tokens,
+    canonical = (
+        canonical_evidence_constraint_projection(
+            premises,
+            proposition,
+            verdict,
+            required_slots=required_slots,
+            required_object_tokens=required_object_tokens,
+        )
+        if all(analysis.get("assertion_scope") == "asserted" for analysis in analyses)
+        else None
     )
     if canonical is not None:
         return (
@@ -87,6 +91,8 @@ def evidence_set_reason(
         return "local_semantic_relation_missing"
     if any(value.get("status") == "mention_only" for value in analyses):
         return "local_semantic_relation_mention_only"
+    if any(value.get("assertion_scope") != "asserted" for value in analyses):
+        return "local_semantic_relation_unasserted_scope"
     if (
         verdict == "no"
         and no_evidence_semantics.get("admissible_as_explicit_contradiction")

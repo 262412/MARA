@@ -326,6 +326,20 @@ For MCP / agent tool changes:
 uv run --no-sync --python 3.10 python -m pytest libs/kotaemon/tests/test_mcp_tools.py libs/kotaemon/tests/test_mcp_manager.py -q
 ```
 
+Before any QASPER Provider probe, natural probe, or 6x3 submission, the
+QASPER pre-provider gate is mandatory:
+
+```powershell
+uv run --no-sync --python 3.10 python scripts/run_qasper_local_gate.py
+```
+
+From a linked worktree, run the same gate through the canonical-environment
+wrapper instead:
+
+```powershell
+scripts/run_with_canonical_env.sh scripts/run_qasper_local_gate.py
+```
+
 Do not use repository-root `pytest -q` as the default readiness signal until
 the existing root collection conflicts are fixed.
 

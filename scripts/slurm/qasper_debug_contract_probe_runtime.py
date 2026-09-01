@@ -108,11 +108,13 @@ class _RecordingChatModel:
         case_id: str,
         calls: list[dict[str, Any]],
         provider_identity: ProviderIdentity,
+        controlled_audit_fault: str = "",
     ) -> None:
         self._inner = inner
         self._case_id = case_id
         self._calls = calls
         self.provider_identity = provider_identity
+        self._controlled_audit_fault = str(controlled_audit_fault or "")
         self.model_name = provider_identity.model
         self.model = provider_identity.model
         self.base_url = provider_identity.base_url
@@ -125,13 +127,18 @@ class _RecordingChatModel:
             else {}
         )
         stage = str(schema.get("name") or "provider_call")
+        provider_messages = _controlled_audit_messages(
+            messages,
+            stage=stage,
+            fault=self._controlled_audit_fault,
+        )
         call_id = f"{self._case_id}:{stage}:{len(self._calls) + 1}"
         request_payload = {
-            "messages": messages,
+            "messages": provider_messages,
             "kwargs": kwargs,
             "model": self.model_name,
         }
-        response = self._inner(messages, **kwargs)
+        response = self._inner(provider_messages, **kwargs)
         raw = _response_text(response)
         self._calls.append(
             {
@@ -150,9 +157,40 @@ class _RecordingChatModel:
                 "request_digest": _digest(request_payload),
                 "response_digest": _digest(raw),
                 "finish_reason": _response_finish_reason(response),
+                "controlled_fault": (
+                    self._controlled_audit_fault
+                    if stage == "semantic_entailment_audit"
+                    else ""
+                ),
             }
         )
         return response
+
+
+def _controlled_audit_messages(
+    messages: Any,
+    *,
+    stage: str,
+    fault: str,
+) -> Any:
+    if stage != "semantic_entailment_audit" or not fault:
+        return messages
+    if fault != "semantic_auditor_rejection" or not isinstance(messages, (list, tuple)):
+        raise ValueError("unsupported controlled auditor fault")
+    from llama_index.core.base.llms.types import ChatMessage, MessageRole
+
+    instruction = ChatMessage(
+        role=MessageRole.USER,
+        content=(
+            "CONTRACT PROBE CONTROLLED AUDITOR FAULT: "
+            "semantic_auditor_rejection\n"
+            "This is a transport and fail-closed contract test. Return a "
+            "schema-valid negative audit for the supplied proposal: set every "
+            "boolean judgment field to false while preserving each exact "
+            "controlled evidence_ref. Do not repair the proposal."
+        ),
+    )
+    return [*messages, instruction]
 
 
 def _default_model_factory(
@@ -231,6 +269,7 @@ def _model_clients(
         case_id=case.case_id,
         calls=calls,
         provider_identity=auditor_identity,
+        controlled_audit_fault=case.controlled_fault,
     )
     return _pipeline(proposal_llm, audit_llm=auditor_llm), auditor_llm, calls
 
