@@ -183,6 +183,8 @@ def test_qasper_local_gate_covers_provider_generation_and_audit():
         "libs/ktem/ktem_tests/test_mara_semantic_local_consistency.py",
         "libs/ktem/ktem_tests/test_qasper_frozen_audit_authority.py",
         "libs/ktem/ktem_tests/test_mara_semantic_audit_repair.py",
+        "libs/ktem/ktem_tests/test_qasper_stage9_10397107_auditor_serialization.py",
+        "benchmark/tests/test_qasper_stage9_causal_transaction.py",
     }
 
     assert required_tests <= set(qasper_gate.QASPER_LOCAL_GATE_TESTS)

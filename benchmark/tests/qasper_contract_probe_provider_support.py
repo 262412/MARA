@@ -4,6 +4,9 @@ import json
 import re
 from typing import Any
 
+from benchmark.tests.qasper_contract_probe_auditor_support import (
+    controlled_auditor_premise_texts,
+)
 from benchmark.tests.qasper_contract_probe_schema_support import (  # noqa: F401
     _proposal_schema_context,
     _schema_body,
@@ -315,15 +318,17 @@ def _audit_entails_proposal(proposal: dict[str, Any]) -> bool:
     object_surface = _normalize_text(question_proposition.get("object_surface"))
     if polarity not in {"yes", "no"} or not question or not object_surface:
         return False
+    controlled_premises = controlled_auditor_premise_texts(proposal)
+    if controlled_premises is None or len(controlled_premises) != len(premises):
+        return False
     expected_signal = "support" if polarity == "yes" else "explicit_contradiction"
-    for premise in premises:
+    for premise, (quote, fragment_text) in zip(premises, controlled_premises):
         if not isinstance(premise, dict):
             return False
-        quote = str(premise.get("quote") or "")
+        fragment = _normalize_text(fragment_text)
         normalized_quote = _normalize_text(quote)
         if normalized_quote.startswith(("if ", "unless ")):
             return False
-        fragment = _normalize_text(premise.get("proposition_fragment"))
         if not quote or not fragment or fragment not in _normalize_text(quote):
             return False
         if object_surface not in _normalize_text(quote):
