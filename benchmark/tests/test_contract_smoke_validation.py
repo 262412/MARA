@@ -10,7 +10,7 @@ from benchmark.tests.contract_smoke_fixtures import (
     _prediction,
     _write_run,
 )
-from scripts.slurm.validate_contract_smoke import QASPER_HARD_GATES
+from scripts.slurm.validate_contract_smoke import HARD_GATES, QASPER_HARD_GATES
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_contract_smoke.py"
@@ -60,26 +60,6 @@ def _complete_qasper_answerability() -> dict[str, object]:
         "verifier_required_evidence_coverage": "1.000000",
         "quote_ref_validation_status": "bound",
     }
-
-
-def _attach_terminal_commit(prediction: dict[str, Any]) -> None:
-    terminal_commit = build_terminal_semantic_commit(
-        "yes",
-        {
-            "status": "supported",
-            "action": "return",
-            "canonical_answer_polarity": "yes",
-        },
-        {"status": "ok", "action": "return"},
-        {
-            "items": [_evidence()],
-            "metadata": {"verified_claim_support_evidence": [_evidence()]},
-        },
-        presentation_answer="yes",
-    ).as_dict()
-    prediction["engine_terminal_state"]["terminal_semantic_commit"] = terminal_commit
-    prediction["engine_terminal_commit"] = terminal_commit
-    prediction["terminal_semantic_commit"] = terminal_commit
 
 
 def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):

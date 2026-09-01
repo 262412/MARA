@@ -151,7 +151,9 @@ def _expected_key_coverage(
             )
         expected_digest = str(payload.get("expected_key_sha256") or "")
         if expected_digest and expected_digest != _key_sha256(expected_keys):
-            raise SystemExit("execution contract expected_key_sha256 does not match expected_keys")
+            raise SystemExit(
+                "execution contract expected_key_sha256 does not match expected_keys"
+            )
         manifest_path = payload.get("manifest")
         manifest_digest = str(payload.get("manifest_sha256") or "")
         if manifest_path and manifest_digest:

@@ -27,8 +27,13 @@ from .boolean_proposition_context import (
     proposition_spans,
 )
 from .boolean_proposition_context import semantic_resolution_text as _resolution_text
+from .boolean_proposition_matching import (
+    _context_matches_proposition,
+    _metalinguistic_relation_mention,
+    _proposition_content_tokens,
+    exact_span_asserts_boolean_relation,
+)
 from .boolean_proposition_polarity import answer_polarity as _answer_polarity
-from .boolean_proposition_polarity import attribute_predicate_is_asserted
 from .boolean_proposition_qualifiers import proposition_qualifier
 from .boolean_proposition_resolution import (
     closed_alternative_object_score,
@@ -40,9 +45,8 @@ from .boolean_proposition_schema import (
     BooleanEvidenceSet,
     BooleanProposition,
 )
-from .boolean_proposition_tokens import _content_tokens, _relation_surface_tokens
+from .boolean_proposition_tokens import _content_tokens
 from .boolean_quality_control_evidence import quality_control_evidence_kind
-from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
 from .boolean_structured_authority import structured_boolean_authority
 from .evidence_identity import identity_of
 from .query_phrase_extraction import semantic_boolean_proposition_question
@@ -357,23 +361,6 @@ def _classify_proposition_span(
     return classification, reason
 
 
-def exact_span_asserts_boolean_relation(question: str, span: str) -> bool:
-    """Return whether the exact span asserts a compatible Boolean relation."""
-
-    semantic_question = semantic_boolean_proposition_question(question)
-    target = primary_boolean_relation(semantic_question)
-    if not target:
-        return False
-    if target == "attribute":
-        return bool(
-            attribute_predicate_is_asserted(semantic_question, span)
-            or re.search(r"\b(?:is|are|was|were|has|have|with)\b", span, re.I)
-            or boolean_relation_lemmas(span)
-            & {"contain", "create", "evaluate", "provide", "train", "use"}
-        )
-    return _relation_compatibility(semantic_question, span) > 0
-
-
 def exact_span_completes_boolean_proposition(question: str, span: str) -> bool:
     """Return whether authority can use the exact span without context fill."""
 
@@ -382,22 +369,6 @@ def exact_span_completes_boolean_proposition(question: str, span: str) -> bool:
     return bool(
         exact_span_asserts_boolean_relation(semantic_question, span)
         and object_score >= 0.6
-    )
-
-
-def _metalinguistic_relation_mention(question: str, span: str) -> bool:
-    relation = primary_boolean_relation(question)
-    if not relation:
-        return False
-    surfaces = sorted(_relation_surface_tokens(relation), key=len, reverse=True)
-    relation_pattern = "|".join(re.escape(value) for value in surfaces)
-    return bool(
-        re.search(
-            rf"\b(?:{relation_pattern})\s+"
-            r"(?:assertion|claim|description|discussion|mention|statement)\b",
-            str(span or ""),
-            flags=re.IGNORECASE,
-        )
     )
 
 
@@ -573,25 +544,6 @@ def boolean_proposition_candidate_authority_level(
     return "complete" if candidate_score > 0 else "none"
 
 
-def _proposition_content_tokens(value: str) -> set[str]:
-    relation_tokens = {
-        token
-        for relation in boolean_relation_lemmas(value)
-        for token in _relation_surface_tokens(relation)
-    }
-    return (
-        _content_tokens(value)
-        - relation_tokens
-        - {
-            "author",
-            "authors",
-            "paper",
-            "study",
-            "work",
-        }
-    )
-
-
 def boolean_proposition_binding_trace(
     question: str,
     answer: str,
@@ -600,12 +552,6 @@ def boolean_proposition_binding_trace(
     from .boolean_proposition_trace import boolean_proposition_binding_trace as trace
 
     return trace(question, answer, items)
-
-
-def _context_matches_proposition(question: str, context: str) -> bool:
-    relation_score = _relation_compatibility(question, context)
-    object_score, _object = _object_compatibility(question, context)
-    return relation_score > 0 and object_score >= 0.6
 
 
 def boolean_proposition_object_identity(question: str) -> str:

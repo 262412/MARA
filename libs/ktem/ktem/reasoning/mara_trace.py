@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Generator
 
-from kotaemon.base import Document
-
 from ktem.docqa.execution import RouteExecutionResult
+
+from kotaemon.base import Document
 
 
 def execution_trace_events(

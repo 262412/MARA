@@ -19,6 +19,7 @@ CORE_STAGES = (
     "emitted_citation_evidence",
 )
 
+
 def _fixture_digest(value: Any) -> str:
     canonical = json.dumps(
         value,

@@ -10,11 +10,17 @@ from .controller import RetrieveDecision, VerifyDecision
 from .evidence_identity import identity_of
 from .evidence_schema import EvidenceBundle
 from .evidence_text import extract_final_answer_text
+from .execution_pre_audit import qasper_pre_audit_failure_reason
 from .execution_pre_audit import (
     qasper_pre_audit_failure_result as _qasper_pre_audit_failure_result,
-    qasper_pre_audit_failure_reason,
-    qasper_pre_audit_verify_decision,
+)
+from .execution_pre_audit import qasper_pre_audit_verify_decision
+from .execution_pre_audit import (
     qasper_typed_candidate_request as _qasper_typed_candidate_request,
+)
+from .execution_verification_decisions import (
+    empty_answer_verify_decision,
+    evidence_only_verify_decision,
 )
 from .pipeline_stage_timings import PipelineStageTimings
 from .qasper_answer_revision import (
@@ -56,40 +62,18 @@ def verify_generated_answer(
             abstain_message=abstain_message,
         )
     if bundle.metadata.get("generation_backend") == "evidence_only_without_vlm":
-        verify_decision = timings.measure(
-            "verification_seconds",
-            _evidence_only_verify_decision,
+        return _evidence_only_generated_answer_result(
             request,
             bundle,
-        )
-        return (
             answer,
-            verify_decision,
-            verification_guardrail(
-                verify_decision,
-                request,
-                guardrail_factory=guardrail_factory,
-            ),
-            list(trace_prefix or []),
+            trace_prefix,
+            timings,
+            guardrail_factory=guardrail_factory,
         )
     if not extract_final_answer_text(answer).strip():
         if ragtruth_contract_request(request):
             bundle.metadata["task_contract_fallback"] = "ragtruth_empty_generation"
             answer = ragtruth_empty_answer
-        elif _typed_qasper_boolean_request(request):
-            bundle.metadata[
-                "typed_boolean_generation_recovery"
-            ] = "empty_generation_requires_fresh_authority"
-            trace_prefix = [
-                *list(trace_prefix or []),
-                {
-                    "stage": "typed_boolean_generation_recovery",
-                    "candidate_before": extract_final_answer_text(answer).strip(),
-                    "candidate_after": "",
-                    "reason": "empty_generation_requires_fresh_authority",
-                    "action": "fresh_typed_verification",
-                },
-            ]
         else:
             return _handle_empty_generated_answer(
                 request,
@@ -114,6 +98,29 @@ def verify_generated_answer(
         guardrail_factory=guardrail_factory,
         abstain_message=abstain_message,
     )
+
+
+def _evidence_only_generated_answer_result(
+    request: Any,
+    bundle: EvidenceBundle,
+    answer: str,
+    trace_prefix: list[dict[str, Any]] | None,
+    timings: PipelineStageTimings,
+    *,
+    guardrail_factory: GuardrailFactory,
+) -> tuple[str, VerifyDecision, Any, list[dict[str, Any]]]:
+    verify_decision = timings.measure(
+        "verification_seconds",
+        evidence_only_verify_decision,
+        request,
+        bundle,
+    )
+    guardrail = verification_guardrail(
+        verify_decision,
+        request,
+        guardrail_factory=guardrail_factory,
+    )
+    return answer, verify_decision, guardrail, list(trace_prefix or [])
 
 
 def _typed_boolean_request(request: Any, verify: VerifyFn) -> bool:
@@ -228,15 +235,15 @@ def _handle_empty_generated_answer(
 ) -> tuple[str, VerifyDecision, Any, list[dict[str, Any]]]:
     verify_decision = timings.measure(
         "verification_seconds",
-        _empty_answer_verify_decision,
+        empty_answer_verify_decision,
         request,
         bundle,
     )
     trace = list(trace_prefix or [])
     if _typed_boolean_request(request, verify):
-        bundle.metadata["typed_boolean_generation_recovery"] = (
-            "empty_generation_rejected_without_verifier_call"
-        )
+        bundle.metadata[
+            "typed_boolean_generation_recovery"
+        ] = "empty_generation_rejected_without_verifier_call"
         trace.append(
             {
                 "stage": "typed_boolean_generation_recovery",
@@ -552,43 +559,3 @@ def _finance_benchmark_request(request: Any | None) -> bool:
     origin = str(getattr(request, "origin", "") or "").strip().lower()
     domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
     return origin == "benchmark" and domain in {"finance", "financial"}
-
-
-def _evidence_only_verify_decision(
-    request: Any,
-    bundle: EvidenceBundle,
-) -> VerifyDecision:
-    mode = _verification_mode(request)
-    return VerifyDecision(
-        mode=mode,
-        status="not_required",
-        reason="Evidence-only visual route did not invoke a VLM generator.",
-        verified_citations=_bundle_citation_ids(bundle),
-    )
-
-
-def _empty_answer_verify_decision(
-    request: Any,
-    bundle: EvidenceBundle,
-) -> VerifyDecision:
-    mode = _verification_mode(request)
-    return VerifyDecision(
-        mode=mode,
-        status="not_enough_evidence",
-        reason=f"{mode.title()} verification found no final answer to verify.",
-        action="abstain",
-        verified_citations=_bundle_citation_ids(bundle),
-    )
-
-
-def _verification_mode(request: Any) -> str:
-    mode = str(getattr(request, "verification_mode", None) or "off").strip().lower()
-    return mode if mode in {"off", "light", "strict"} else "off"
-
-
-def _bundle_citation_ids(bundle: EvidenceBundle) -> list[str]:
-    return list(
-        dict.fromkeys(
-            identity_of(item).key for item in bundle.items if identity_of(item).key
-        )
-    )

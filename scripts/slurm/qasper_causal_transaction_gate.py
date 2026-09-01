@@ -19,9 +19,7 @@ from scripts.slurm.qasper_natural_causal_transaction import (
 )
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
 from scripts.slurm.qasper_natural_semantic_pack_runtime import freeze_natural_pack
-from scripts.slurm.qasper_retrieval_index_gate import (
-    retrieval_index_binding_audit,
-)
+from scripts.slurm.qasper_retrieval_index_gate import retrieval_index_binding_audit
 
 _REPLAY_CONTRACT = "qasper_natural_causal_transaction_replay.v1"
 _REPLAY_STAGE_COUNT = len(QASPER_CAUSAL_TRANSACTION_STAGES)

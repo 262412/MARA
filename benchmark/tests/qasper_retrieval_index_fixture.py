@@ -7,9 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from benchmark.artifact_publication import file_sha256
-from scripts.slurm.qasper_retrieval_index_artifact import (
-    build_retrieval_index_artifact,
-)
+from scripts.slurm.qasper_retrieval_index_artifact import build_retrieval_index_artifact
 from scripts.slurm.qasper_retrieval_index_snapshot import (
     build_retrieval_index_restore_audit,
     index_snapshot_manifest,
@@ -44,9 +42,7 @@ def write_retrieval_index_binding(
         index_snapshot=index_snapshot_manifest(snapshot),
         source_artifacts={
             "predictions": _source(run_dir / "predictions.jsonl"),
-            "semantic_debug_traces": _source(
-                run_dir / "semantic_debug_traces.jsonl"
-            ),
+            "semantic_debug_traces": _source(run_dir / "semantic_debug_traces.jsonl"),
         },
         required_route=str(semantic_rows[0]["route"]),
     )

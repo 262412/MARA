@@ -8,7 +8,7 @@ from .required_slot_selection import (
     required_slot_candidate_limit,
     required_slot_shortlist,
 )
-from .selection_assessment_table import SelectionAssessmentTable
+from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 from .selection_score_normalization import normalized_selection_scores
 
 RERANK_CANDIDATE_LIMIT = 30
@@ -17,7 +17,7 @@ RERANK_CANDIDATE_LIMIT = 30
 def evidence_selection_context(
     items: list[dict[str, Any]],
     plan: QueryPlan,
-    assessments: SelectionAssessmentTable,
+    assessments: SelectionAssessmentSnapshot,
 ) -> tuple[list[dict[str, Any]], int, dict[str, int]]:
     candidates, restored_required = required_slot_shortlist(
         items,

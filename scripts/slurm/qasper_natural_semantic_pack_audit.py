@@ -111,12 +111,9 @@ def _hard_gates(
     return {
         "real_retrieval_index_artifact_bound": (
             retrieval_index_binding.get("status") == "matched"
-            and retrieval_index_binding.get("hard_rule")
-            == "stop_at_first_divergence"
-            and retrieval_index_binding.get("expected_record_count")
-            == expected_count
-            and retrieval_index_binding.get("matched_record_count")
-            == expected_count
+            and retrieval_index_binding.get("hard_rule") == "stop_at_first_divergence"
+            and retrieval_index_binding.get("expected_record_count") == expected_count
+            and retrieval_index_binding.get("matched_record_count") == expected_count
             and not retrieval_index_binding.get("violations")
         ),
         "prediction_count_complete": len(predictions) == expected_count,

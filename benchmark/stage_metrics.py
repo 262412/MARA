@@ -406,7 +406,9 @@ def _identity_metric_status(
             "status": (
                 "measured"
                 if gold_support_count and support_available
-                else "not_applicable" if not gold_support_count else "unavailable"
+                else "not_applicable"
+                if not gold_support_count
+                else "unavailable"
             ),
             "gold_identity_count": gold_support_count,
             "candidate_count": len(candidate_pool),

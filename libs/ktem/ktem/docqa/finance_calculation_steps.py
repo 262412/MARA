@@ -155,9 +155,7 @@ def _cash_conversion_cycle_steps(
     receivables_ids = _period_pair(input_ids, "accounts_receivable_")
     payables_ids = _period_pair(input_ids, "accounts_payable_")
     cogs_id = next(
-        input_id
-        for input_id in input_ids
-        if input_id.startswith("cost_of_goods_sold_")
+        input_id for input_id in input_ids if input_id.startswith("cost_of_goods_sold_")
     )
     revenue_id = next(
         input_id for input_id in input_ids if input_id.startswith("net_sales_")

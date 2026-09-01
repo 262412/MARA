@@ -254,14 +254,15 @@ def candidate_authority_analysis(
         candidate_identity_preserved,
         terminal_is_abstention,
     ) = _candidate_context(prediction, generator, verifier)
-    terminal_outcome, execution_failure_before_verification = (
-        pre_verifier_terminal_status(
-            prediction,
-            terminal_state,
-            generator,
-            verifier,
-            candidate,
-        )
+    (
+        terminal_outcome,
+        execution_failure_before_verification,
+    ) = pre_verifier_terminal_status(
+        prediction,
+        terminal_state,
+        generator,
+        verifier,
+        candidate,
     )
     false_abstention_cause = _false_abstention_cause(
         generator=generator,

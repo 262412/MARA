@@ -56,8 +56,7 @@ def retrieval_index_binding_audit(
         return _failed_or_skipped(
             required=True,
             violations=[
-                "retrieval_index_artifact_load_failed:"
-                f"{type(exc).__name__}:{exc}"
+                "retrieval_index_artifact_load_failed:" f"{type(exc).__name__}:{exc}"
             ],
         )
     restore_violations = _restore_audit_violations(
@@ -108,8 +107,7 @@ def _restore_audit_violations(
         restore_audit = json.loads(restore_audit_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         return [
-            "retrieval_index_restore_audit_load_failed:"
-            f"{type(exc).__name__}:{exc}"
+            "retrieval_index_restore_audit_load_failed:" f"{type(exc).__name__}:{exc}"
         ]
     if not isinstance(restore_audit, Mapping):
         return ["retrieval_index_restore_audit_object_required"]

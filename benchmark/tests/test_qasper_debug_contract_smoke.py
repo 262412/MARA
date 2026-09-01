@@ -17,9 +17,6 @@ from benchmark.qasper_causal_transaction import (
 )
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
 from benchmark.tests.contract_smoke_fixtures import _fixture_digest, _write_run
-from benchmark.tests.qasper_retrieval_index_fixture import (
-    write_retrieval_index_binding,
-)
 from benchmark.tests.qasper_debug_contract_fixtures import (
     _debug_candidate_audit,
     _debug_unknown_assessment,
@@ -29,6 +26,7 @@ from benchmark.tests.qasper_debug_contract_fixtures import (
     _qasper_debug_prediction as _base_qasper_debug_prediction,
 )
 from benchmark.tests.qasper_debug_semantic_pack_fixtures import _debug_semantic_pack
+from benchmark.tests.qasper_retrieval_index_fixture import write_retrieval_index_binding
 from benchmark.tests.qasper_terminal_projection_fixture import (
     attach_valid_terminal_projection,
 )

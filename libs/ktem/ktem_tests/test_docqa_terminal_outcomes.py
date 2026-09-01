@@ -125,7 +125,10 @@ def test_operational_exception_commits_execution_failed(
 
     commit = result.engine_terminal_commit
     assert commit["outcome"] == "execution_failed"
-    assert commit["outcome_reason"] == f"{failure_stage}_failed"
+    expected_reason = (
+        "planning_failed" if failure_stage == "planning" else "backend_failed"
+    )
+    assert commit["outcome_reason"] == expected_reason
     assert commit["semantic_answer"] == "unanswerable"
     assert commit["presentation_answer"] == ABSTAIN_MESSAGE
     assert commit["citations"] == []

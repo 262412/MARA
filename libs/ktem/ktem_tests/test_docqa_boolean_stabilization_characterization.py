@@ -12,10 +12,10 @@ from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.query_evidence_binding import bind_evidence_slots
 from ktem.docqa.query_planning import build_query_plan
 from ktem.docqa.typed_retrieval_recovery import (
-    typed_qasper_initial_query,
+    recovery_query,
+    recovery_query_metadata,
     typed_qasper_recovery_requests,
     typed_retrieval_recovery_trace,
-    verifier_recovery_query,
 )
 
 INDEXING_QUESTION = (
@@ -194,22 +194,28 @@ def test_distributed_indexing_near_matches_do_not_become_authority(
     assert authority.status != "supported"
 
 
-def test_typed_queries_keep_one_original_question_and_one_focused_frame() -> None:
+def test_recovery_query_keeps_typed_frame_out_of_natural_language_text() -> None:
     request = _boolean_request(INDEXING_QUESTION)
 
-    focused = verifier_recovery_query(request)
-    initial = typed_qasper_initial_query(request, INDEXING_QUESTION)
+    query = recovery_query(request, INDEXING_QUESTION)
+    metadata = recovery_query_metadata(request)
 
-    assert focused.count(INDEXING_QUESTION) == 0
-    assert initial.count(INDEXING_QUESTION) == 1
-    assert "actor:current_paper" in focused
-    assert "predicate:use" in focused
-    assert "object:dataset indexing method wikipedia" in focused
-    assert "indexing" in focused
-    assert "dataset" in focused
-    assert "wikipedia" in focused
-    assert "silver-standard" in focused
-    assert "answer retrieval" in focused
+    assert query.count(INDEXING_QUESTION) == 1
+    assert all(
+        token not in query
+        for token in ("actor:", "predicate:", "object:", "object_role:")
+    )
+    assert metadata["contract_id"] == "recovery_query.v1"
+    assert metadata["query_kind"] == "recovery"
+    assert metadata["typed_frame"] == {
+        "actor": "current_paper",
+        "predicate": "create",
+        "object": "a sample of a QA Wikipedia dataset",
+        "object_role": "object",
+        "qualifier": "none",
+        "quantifier": "none",
+        "scope": "document",
+    }
 
 
 def _parallel_candidates() -> list[dict[str, Any]]:

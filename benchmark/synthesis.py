@@ -188,9 +188,9 @@ def _collect_job(
         "prediction_count": 0,
     }
     if require_slurm_clean and (slurm_state != "COMPLETED" or slurm_exit_code != "0:0"):
-        result["failure_reason"] = (
-            f"slurm state={slurm_state} exit_code={slurm_exit_code}"
-        )
+        result[
+            "failure_reason"
+        ] = f"slurm state={slurm_state} exit_code={slurm_exit_code}"
         return result
     root = Path(job["output_root"])
     artifact_dir = resolve_artifact_dir(

@@ -9,11 +9,6 @@ from ktem_contracts.terminal_semantic_commit import with_projection_hash
 from ktem_contracts.terminal_session_state import with_terminal_semantic_commit
 
 from .application import DesktopApplicationService
-from .query_terminal_outcome import (
-    TERMINAL_SESSION_STATE_CONTRACT,
-    TERMINAL_SESSION_STATE_KEY,
-    _with_projection_hash,
-)
 
 
 class DesktopQueryCommitStateTest(unittest.TestCase):
@@ -94,21 +89,3 @@ class CommitRuntime:
                 terminal_semantic_commit=commit,
             ),
         )
-
-
-def _answered_terminal_commit(answer: str) -> dict[str, object]:
-    return _with_projection_hash(
-        {
-            "contract_id": "terminal_semantic_commit.v3",
-            "semantic_answer": answer,
-            "presentation_answer": answer,
-            "outcome": "answered",
-            "outcome_reason": "",
-            "answer_status": "answered",
-            "verify_decision": {"status": "supported", "action": "return"},
-            "guardrail_decision": {"status": "ok", "action": "return"},
-            "authoritative_evidence": [],
-            "citations": [],
-            "state_version": 3,
-        }
-    )

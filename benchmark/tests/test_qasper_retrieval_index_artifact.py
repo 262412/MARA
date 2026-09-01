@@ -71,13 +71,15 @@ def test_stage2_artifact_freezes_raw_records_ranking_and_digests() -> None:
     payload = transaction["stages"][1]["payload"]
     assert record["raw_retrieval_records"] == payload["raw_retrieval_records"]
     assert record["ranking"] == payload["ranking"]
-    assert record["raw_retrieval_records_digest"] == payload[
-        "raw_retrieval_records_digest"
-    ]
+    assert (
+        record["raw_retrieval_records_digest"]
+        == payload["raw_retrieval_records_digest"]
+    )
     assert record["ranking_digest"] == payload["ranking_digest"]
-    assert record["stage_comparison_digest"] == transaction["stages"][1][
-        "comparison_digest"
-    ]
+    assert (
+        record["stage_comparison_digest"]
+        == transaction["stages"][1]["comparison_digest"]
+    )
     assert binding["status"] == "matched"
     assert binding["matched_record_count"] == 1
     assert binding["violations"] == []
@@ -199,9 +201,10 @@ def test_restore_audit_proves_the_consumed_physical_snapshot(tmp_path) -> None:
 
     assert restore["status"] == "matched"
     assert restore["artifact_digest"] == artifact["artifact_digest"]
-    assert restore["expected_snapshot_tree_digest"] == restore[
-        "observed_snapshot_tree_digest"
-    ]
+    assert (
+        restore["expected_snapshot_tree_digest"]
+        == restore["observed_snapshot_tree_digest"]
+    )
     assert restore["violations"] == []
 
 

@@ -16,13 +16,18 @@ from .execution_slot_lineage import (
 from .query_evidence_binding import bind_evidence_slots
 from .query_planning import QueryPlan, retrieval_budget
 from .required_slot_selection import (
+    required_slot_candidate_limit,
     required_slot_context_quota,
+    required_slot_shortlist,
     slot_requires_selection,
 )
 from .required_slot_selection import slot_score as _slot_score
 from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 from .selection_query_anchors import anchor_coverage, phrase_bigram_coverage
-from .selection_score_normalization import without_selection_annotations
+from .selection_score_normalization import (
+    normalized_selection_scores,
+    without_selection_annotations,
+)
 from .selection_values import first_float as _first_float
 from .selection_values import string_values as _string_values
 

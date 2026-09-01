@@ -6,8 +6,8 @@ from .boolean_candidate_authority import (
     candidate_bound_boolean_claim_authority,
     structured_boolean_candidate_label,
 )
-from .candidate_verification_policy import finish_candidate_decision
 from .boolean_verification_projection import project_boolean_assessment
+from .candidate_verification_policy import finish_candidate_decision
 from .domain_verifiers import normalize_verification_domain
 from .evidence import EvidenceBundle
 from .query_planning import request_planning_question
@@ -15,10 +15,7 @@ from .semantic_evidence_set_authority import (
     PropositionVerifier,
     semantic_evidence_set_claim_authority,
 )
-from .verification_logic import (
-    VerifiedClaim,
-    VerifyDecision,
-)
+from .verification_logic import VerifiedClaim, VerifyDecision
 
 
 def boolean_authority_required(request: Any) -> bool:

@@ -39,30 +39,8 @@ from .query_plan_schema import (
     slot_binding_state,
     with_plan_id,
 )
-from .selection_assessment_table import SelectionAssessmentTable
-
-_TOKEN_RE = re.compile(r"[a-z0-9%$€£¥]+", re.IGNORECASE)
-_NUMERIC_TERMS = {
-    "amount",
-    "average",
-    "calculate",
-    "change",
-    "count",
-    "difference",
-    "decline",
-    "drop",
-    "ebitda",
-    "margin",
-    "million",
-    "millions",
-    "billion",
-    "billions",
-    "percent",
-    "percentage",
-    "ratio",
-    "rate",
-    "total",
-}
+from .query_planning_lexicon import NUMERIC_TERMS, planning_tokens
+from .selection_assessment_snapshot import SelectionAssessmentSnapshot
 
 
 def build_query_plan(
@@ -100,18 +78,18 @@ def _build_heuristic_query_plan(
     verification_domain: str,
 ) -> QueryPlan:
     text = str(question or "").strip()
-    tokens = _tokens(text)
+    tokens = planning_tokens(text)
     causal_intent = has_causal_intent(tokens)
     normalized_type = normalized_answer_type(
         answer_type,
         tokens,
         question=text,
-        numeric_terms=_NUMERIC_TERMS,
+        numeric_terms=NUMERIC_TERMS,
         causal_intent=causal_intent,
     )
     periods = periods_in_question(text)
     period_kind = period_kind_in_question(text)
-    metric = metric_phrase(text, periods, numeric_terms=_NUMERIC_TERMS)
+    metric = metric_phrase(text, periods, numeric_terms=NUMERIC_TERMS)
     capabilities = question_capabilities(
         text,
         tokens,
@@ -356,7 +334,7 @@ def bind_evidence_slots(
     plan: QueryPlan,
     evidence_items: list[dict[str, Any]],
     *,
-    assessments: SelectionAssessmentTable | None = None,
+    assessments: SelectionAssessmentSnapshot | None = None,
 ) -> QueryPlan:
     return _bind_evidence_slots(
         plan,
@@ -600,7 +578,3 @@ def _finance_slot_locator(
     if len(page_labels) == slot_count:
         return EvidenceLocator(page_label=page_labels[index])
     return EvidenceLocator(page_labels=page_labels)
-
-
-def _tokens(text: str) -> set[str]:
-    return {token.lower() for token in _TOKEN_RE.findall(str(text or ""))}

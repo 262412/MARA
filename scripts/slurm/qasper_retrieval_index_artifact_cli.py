@@ -35,9 +35,7 @@ def _create(args: argparse.Namespace) -> int:
         index_snapshot=index_snapshot_manifest(args.index_snapshot),
         source_artifacts={
             "predictions": _source_artifact(args.predictions),
-            "semantic_debug_traces": _source_artifact(
-                args.semantic_debug_traces
-            ),
+            "semantic_debug_traces": _source_artifact(args.semantic_debug_traces),
         },
         required_route=args.route,
     )

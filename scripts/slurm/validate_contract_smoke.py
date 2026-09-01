@@ -39,9 +39,6 @@ from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
 from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
     contract_probe_preflight_violations as _contract_probe_preflight_violations,
 )
-from benchmark.terminal_outcome_contract import (  # noqa: E402
-    terminal_outcome_summary_fields,
-)
 
 CONTRACT = "contract_smoke_audit.v2"
 HARD_GATES = _gate_contract.HARD_GATES
@@ -170,8 +167,7 @@ def validate(
     observed_requirements = _requirements(predictions)
     if suite_kind == "qasper_debug":
         retrieval_index_artifact_path = (
-            retrieval_index_artifact_path
-            or run_dir / "retrieval_index_artifact.json"
+            retrieval_index_artifact_path or run_dir / "retrieval_index_artifact.json"
         )
         retrieval_index_restore_audit_path = (
             retrieval_index_restore_audit_path
@@ -360,9 +356,7 @@ def _causal_transaction_audit(
         retrieval_index_restore_audit_path=retrieval_index_restore_audit_path,
         expected_code_sha=str(git.get("commit") or ""),
         expected_index_contract=str(provenance.get("index_contract") or ""),
-        expected_embedding_contract=str(
-            provenance.get("embedding_contract") or ""
-        ),
+        expected_embedding_contract=str(provenance.get("embedding_contract") or ""),
         require_retrieval_index_binding=True,
     )
 
@@ -532,9 +526,7 @@ def main() -> None:
     parser.add_argument(
         "--retrieval-index-artifact",
         type=Path,
-        help=(
-            "Frozen real QASPER Stage 2 artifact required by formal debug runs."
-        ),
+        help=("Frozen real QASPER Stage 2 artifact required by formal debug runs."),
     )
     parser.add_argument(
         "--retrieval-index-restore-audit",

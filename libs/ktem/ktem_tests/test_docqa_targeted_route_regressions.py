@@ -1,9 +1,10 @@
 from types import SimpleNamespace
+from typing import Any
 
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.evidence import EvidenceBundle, build_evidence_bundle
-from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.finance_typed_adequacy import ensure_finance_numeric_trace
 from ktem.docqa.query_planning import bind_evidence_slots, build_query_plan
 from ktem.docqa.verification import verify_decision, with_verification_evidence
@@ -11,7 +12,6 @@ from ktem.docqa.visual_backends import QwenVLVisualGenerator
 from ktem.reasoning.mara_finance_answering import route_finance_numeric_answer
 from ktem.reasoning.mara_query_planning import understand_query
 from ktem.reasoning.mara_visual_answering import route_visual_answer
-
 
 FINANCE_CCC_QUESTION = (
     "What is the FY2019 cash conversion cycle (CCC) for General Mills? "
@@ -76,9 +76,7 @@ def test_finance_ccc_chain_binds_all_operands_and_executes() -> None:
         slot["slot_id"]
         for slot in trace["authoritative_query_plan"]["evidence_slots"]
         if slot["role"] == "operand"
-    } == {
-        slot.slot_id for slot in bound.evidence_slots if slot.role == "operand"
-    }
+    } == {slot.slot_id for slot in bound.evidence_slots if slot.role == "operand"}
 
 
 def test_finance_full_controller_chain_returns_verified_answer() -> None:
@@ -285,7 +283,9 @@ def test_slidevqa_full_controller_chain_returns_verified_answer() -> None:
     assert execution.evidence_bundle.metadata["verified_evidence"]
 
 
-def test_visual_generator_records_only_page_identities_sent_to_vlm() -> None:
+def test_visual_generator_records_only_page_identities_sent_to_vlm(
+    monkeypatch: Any,
+) -> None:
     pages = [
         {
             "evidence_id": "page-image:slide-doc:6",
@@ -315,8 +315,12 @@ def test_visual_generator_records_only_page_identities_sent_to_vlm() -> None:
         )
 
     generator = QwenVLVisualGenerator(max_images=1, max_output_tokens=16)
-    generator._client = lambda: SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    monkeypatch.setattr(
+        generator,
+        "_client",
+        lambda: SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+        ),
     )
     assert generator.generate(request, bundle) == "FEMALE"
     assert bundle.metadata["visual_generation_evidence_ids"] == [

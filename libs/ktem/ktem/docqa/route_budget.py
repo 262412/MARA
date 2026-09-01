@@ -160,20 +160,33 @@ def run_blocking_route_stage(
         event["remaining_route_seconds_after"] = _rounded(
             remaining_route_seconds(request)
         )
-        if previous_call_timeout is None:
-            try:
-                delattr(request, "route_call_timeout_seconds")
-            except AttributeError:
-                pass
-        else:
-            request.route_call_timeout_seconds = previous_call_timeout
-        if previous_cancel_event is None:
-            try:
-                delattr(request, "route_call_cancel_event")
-            except AttributeError:
-                pass
-        else:
-            request.route_call_cancel_event = previous_cancel_event
+        _restore_route_call_state(
+            request,
+            previous_call_timeout=previous_call_timeout,
+            previous_cancel_event=previous_cancel_event,
+        )
+
+
+def _restore_route_call_state(
+    request: Any,
+    *,
+    previous_call_timeout: float | None,
+    previous_cancel_event: threading.Event | None,
+) -> None:
+    if previous_call_timeout is None:
+        try:
+            delattr(request, "route_call_timeout_seconds")
+        except AttributeError:
+            pass
+    else:
+        request.route_call_timeout_seconds = previous_call_timeout
+    if previous_cancel_event is None:
+        try:
+            delattr(request, "route_call_cancel_event")
+        except AttributeError:
+            pass
+    else:
+        request.route_call_cancel_event = previous_cancel_event
 
 
 def _route_budget_event(
@@ -205,64 +218,6 @@ def _run_timed_route_stage(
     timeout: float | None,
     cancel_event: threading.Event,
     *,
-    event: dict[str, Any],
-) -> _T:
-    result = _run_with_interruptible_timeout(
-        timeout,
-        lambda: call(*args, **kwargs),
-        on_timeout=lambda: _deadline_error(
-            request,
-            blocking_stage,
-            timeout,
-            remaining_route_seconds(request),
-        ),
-        on_cancel=lambda: _cancel_blocking_route_stage(
-            request,
-            blocking_stage,
-            call,
-            cancel_event,
-        ),
-        event=event,
-    )
-    if remaining_route_seconds(request) == 0.0:
-        raise _deadline_error(
-            request,
-            blocking_stage,
-            timeout,
-            remaining_route_seconds(request),
-        )
-    event["status"] = "completed"
-    return result
-
-
-def _route_budget_event(
-    request: Any,
-    blocking_stage: str,
-    absolute_deadline: float | None,
-    remaining_before: float | None,
-    configured_timeout_seconds: float | None,
-    timeout: float | None,
-) -> dict[str, Any]:
-    return {
-        "stage": "route_budget",
-        "blocking_stage": blocking_stage,
-        "absolute_deadline_monotonic": absolute_deadline,
-        "remaining_route_seconds_before": _rounded(remaining_before),
-        "terminal_commit_reserve_seconds": terminal_commit_reserve_seconds(request),
-        "configured_call_timeout_seconds": configured_timeout_seconds,
-        "call_timeout_budget_seconds": _rounded(timeout),
-        "status": "started",
-    }
-
-
-def _run_timed_route_stage(
-    request: Any,
-    blocking_stage: str,
-    call: Callable[..., _T],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    timeout: float | None,
-    cancel_event: threading.Event,
     event: dict[str, Any],
 ) -> _T:
     result = _run_with_interruptible_timeout(

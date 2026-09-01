@@ -217,7 +217,9 @@ def _exclusive_requirement_authority(
             polarity = (
                 "no"
                 if _requirement_negative_clause(quote, question_terms)
-                else "yes" if asked_object_present else "no"
+                else "yes"
+                if asked_object_present
+                else "no"
             )
             identity = identity_of(item).key
             span_id = _span_identity(identity, window)

@@ -1,5 +1,5 @@
-from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.docqa.element_parser import parse_element_index_records
+from ktem.docqa.finance_numeric_answer import finance_numeric_answer
 from ktem.docqa.financial_statement_identity import financial_statement_identity
 from ktem.docqa.query_evidence_binding import bind_evidence_slots
 from ktem.docqa.query_planning import build_query_plan
@@ -91,8 +91,7 @@ def test_statements_of_earnings_heading_propagates_to_cogs_and_sales_cells():
 
     assert cells
     assert {
-        (cell["row_label"], cell["period"], cell["statement_kind"])
-        for cell in cells
+        (cell["row_label"], cell["period"], cell["statement_kind"]) for cell in cells
     } == {
         ("Net sales", "2019", "income_statement"),
         ("Net sales", "2018", "income_statement"),

@@ -28,6 +28,7 @@ CANONICAL_REQUEST_FIELDS = (
     "active_file_name",
     "page_number",
     "selected_text",
+    "selected_source_title",
     "graph_context",
     "graph_source_ids",
     "settings",
@@ -36,6 +37,8 @@ CANONICAL_REQUEST_FIELDS = (
     "max_context_length",
     "reasoning_type",
     "task_type",
+    "answer_type",
+    "modality",
     "agent_mode",
     "artifact_type",
     "note_ids",
@@ -67,6 +70,7 @@ CANONICAL_REQUEST_FIELDS = (
     "generation_temperature",
     "generation_top_p",
     "generation_seed",
+    "trace_context",
     "user_id",
     "origin",
 )
@@ -131,6 +135,10 @@ APPENDED_FACADE_FIELDS = (
     "generation_top_p",
     "generation_seed",
     "route_terminal_reserve_seconds",
+    "selected_source_title",
+    "answer_type",
+    "modality",
+    "trace_context",
 )
 
 
@@ -175,6 +183,7 @@ def test_facade_conversion_deep_copies_mutable_fields():
         history=[("old question", "old answer")],
         page_image_records=[{"evidence_id": "page-1"}],
         element_index_records=[{"evidence_id": "element-1"}],
+        trace_context={"request": {"digest": "before"}},
         reranker_name="reranker-a",
     )
     facade_before = asdict(facade)
@@ -188,6 +197,7 @@ def test_facade_conversion_deep_copies_mutable_fields():
     runtime_request.history.append(("new question", "new answer"))
     runtime_request.page_image_records[0]["evidence_id"] = "page-2"
     runtime_request.element_index_records[0]["evidence_id"] = "element-2"
+    runtime_request.trace_context["request"]["digest"] = "after"
     runtime_request.reranker_name = "reranker-b"
 
     assert asdict(facade) == facade_before

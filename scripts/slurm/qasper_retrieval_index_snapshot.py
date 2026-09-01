@@ -107,9 +107,7 @@ def verify_retrieval_index_source_artifacts(
             continue
         if observed_digest != source.get("sha256"):
             reasons.append(f"retrieval_index_source_digest_mismatch:{name}")
-    reasons.extend(
-        verify_index_snapshot(artifact, snapshot_path=index_snapshot_path)
-    )
+    reasons.extend(verify_index_snapshot(artifact, snapshot_path=index_snapshot_path))
     return reasons
 
 
@@ -235,7 +233,9 @@ def _mapping(value: Any) -> dict[str, Any]:
 
 def _sha256(value: Any) -> bool:
     text = str(value or "")
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
+    return len(text) == 64 and all(
+        character in "0123456789abcdef" for character in text
+    )
 
 
 def _file_sha256(path: Path) -> str:

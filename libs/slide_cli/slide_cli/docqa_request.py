@@ -20,6 +20,7 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "active_file_name",
     "page_number",
     "selected_text",
+    "selected_source_title",
     "graph_context",
     "graph_source_ids",
     "settings",
@@ -28,6 +29,8 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "max_context_length",
     "reasoning_type",
     "task_type",
+    "answer_type",
+    "modality",
     "agent_mode",
     "artifact_type",
     "note_ids",
@@ -59,6 +62,7 @@ RUNTIME_DOCQA_REQUEST_FIELD_NAMES = (
     "generation_temperature",
     "generation_top_p",
     "generation_seed",
+    "trace_context",
     "user_id",
     "origin",
 )
@@ -126,6 +130,10 @@ class DocQARequest:
     generation_top_p: float | None = None
     generation_seed: int | None = None
     route_terminal_reserve_seconds: float | None = None
+    selected_source_title: str = ""
+    answer_type: str | None = None
+    modality: str | None = None
+    trace_context: dict[str, Any] = field(default_factory=dict)
 
 
 def to_runtime_docqa_request(request: DocQARequest):
@@ -157,6 +165,7 @@ def to_runtime_docqa_request(request: DocQARequest):
         active_file_name=deepcopy(request.active_file_name),
         page_number=deepcopy(request.page_number),
         selected_text=deepcopy(request.selected_text),
+        selected_source_title=deepcopy(request.selected_source_title),
         graph_context=deepcopy(request.graph_context),
         graph_source_ids=deepcopy(request.graph_source_ids),
         settings=deepcopy(request.settings),
@@ -165,6 +174,8 @@ def to_runtime_docqa_request(request: DocQARequest):
         max_context_length=deepcopy(request.max_context_length),
         reasoning_type=deepcopy(request.reasoning_type),
         task_type=deepcopy(request.task_type),
+        answer_type=deepcopy(request.answer_type),
+        modality=deepcopy(request.modality),
         agent_mode=deepcopy(request.agent_mode),
         artifact_type=deepcopy(request.artifact_type),
         note_ids=deepcopy(request.note_ids),
@@ -196,6 +207,7 @@ def to_runtime_docqa_request(request: DocQARequest):
         generation_temperature=deepcopy(request.generation_temperature),
         generation_top_p=deepcopy(request.generation_top_p),
         generation_seed=deepcopy(request.generation_seed),
+        trace_context=deepcopy(request.trace_context),
         user_id=deepcopy(request.user_id),
         origin=deepcopy(request.origin),
     )

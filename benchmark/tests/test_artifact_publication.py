@@ -7,7 +7,9 @@ from benchmark.jsonl import read_jsonl
 from benchmark.reports import write_reports
 
 
-def test_jsonl_artifact_keeps_unicode_line_separator_characters_inside_records(tmp_path):
+def test_jsonl_artifact_keeps_unicode_line_separator_characters_inside_records(
+    tmp_path,
+):
     row = {
         "example_id": "unicode",
         "route": "text",
@@ -64,7 +66,9 @@ def test_artifact_contract_rejects_post_marker_mutation(tmp_path):
         "Mutation Suite",
     )
     predictions = run_dir / "predictions.jsonl"
-    predictions.write_text(predictions.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    predictions.write_text(
+        predictions.read_text(encoding="utf-8") + " ", encoding="utf-8"
+    )
 
     try:
         verify_artifact_contract(run_dir)

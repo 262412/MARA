@@ -8,14 +8,13 @@ or invoking runtime code.
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from .metrics import is_abstention_answer
 from .jsonl import read_jsonl
+from .metrics import is_abstention_answer
 
 _FIELD_PATHS = {
     "engine_product_answer": (
@@ -93,7 +92,9 @@ def audit_qasper_predictions_file(path: str | Path) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for line_number, value in enumerate(read_jsonl(path), start=1):
         if not isinstance(value, dict):
-            raise ValueError(f"predictions JSONL record {line_number} must be an object")
+            raise ValueError(
+                f"predictions JSONL record {line_number} must be an object"
+            )
         rows.append(value)
     return audit_qasper_predictions(rows)
 

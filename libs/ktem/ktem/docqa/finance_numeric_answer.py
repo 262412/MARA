@@ -11,6 +11,10 @@ from .finance_fixed_asset_turnover import (
     fixed_asset_turnover_answer_fields,
     is_fixed_asset_turnover,
 )
+from .finance_numeric_intent import has_numeric_intent as _has_numeric_intent
+from .finance_numeric_intent import (
+    has_supported_formula_intent as _has_supported_formula_intent,
+)
 from .finance_numeric_values import (
     asks_for_causal_explanation as _asks_for_causal_explanation,
 )
@@ -241,43 +245,6 @@ def _numeric_attempt_failure_reason(
     if _has_supported_formula_intent(lowered):
         return "missing_operands"
     return "unsupported_formula"
-
-
-def _has_numeric_intent(question: str) -> bool:
-    return bool(
-        re.search(
-            r"\b(?:amount|average|calculate|calculation|change|difference|"
-            r"margin|percent(?:age)?|ratio|rate|total|turnover|value)\b",
-            question,
-        )
-        or "free cash flow" in question
-    )
-
-
-def _has_supported_formula_intent(question: str) -> bool:
-    return any(
-        term in question
-        for term in (
-            "capital expenditure", "cash conversion cycle", "ccc",
-            "capital spending",
-            "current ratio",
-            "debt to equity",
-            "difference",
-            "free cash flow",
-            "gross margin",
-            "inventory turnover",
-            "fixed asset turnover",
-            "net fixed asset turnover",
-            "ppe turnover",
-            "pp&e turnover",
-            "property plant and equipment turnover",
-            "operating margin",
-            "percent change",
-            "percentage change",
-            "quick ratio",
-            "working capital",
-        )
-    ) or ("average" in question and len(_question_years(question)) >= 2)
 
 
 def _free_cash_flow_answer(

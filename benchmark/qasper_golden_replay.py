@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from .jsonl import read_jsonl
 from .qasper_golden_projection import REQUIRED_ROW_FIELDS, ROW_CONTRACT_ID
 from .qasper_golden_projection import project_prediction as _project_prediction
-from .jsonl import read_jsonl
 
 CONTRACT_ID = "qasper_golden_replay.v1"
 ANCHOR_REPLAY_SHA256 = (

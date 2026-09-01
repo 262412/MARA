@@ -6,8 +6,8 @@ from typing import Any
 from .answer_finalizer import finalize_prediction_answer
 from .benchmark_prompts import build_benchmark_prompt
 from .benchmark_taxonomy import add_prediction_taxonomy
-from .diagnostics import prediction_diagnostics
 from .dataset_native_scores import qasper_annotation_diagnostics
+from .diagnostics import prediction_diagnostics
 from .mara_oriented_scores import (
     add_mara_oriented_metrics,
     promote_external_primary_score,

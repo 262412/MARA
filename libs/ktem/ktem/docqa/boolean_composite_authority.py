@@ -41,9 +41,9 @@ def same_source_argument_conjunctions(
         return ()
     required = tuple(str(value) for value in spec["required_argument_tokens"])
     candidates = _argument_premises(question, items, required=set(required))
-    by_source: dict[str, list[tuple[BooleanEvidenceAuthority, frozenset[str]]]] = (
-        defaultdict(list)
-    )
+    by_source: dict[
+        str, list[tuple[BooleanEvidenceAuthority, frozenset[str]]]
+    ] = defaultdict(list)
     for authority, coverage in candidates:
         by_source[authority.source_id].append((authority, coverage))
 

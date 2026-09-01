@@ -19,7 +19,6 @@ from .query_tasks import (
     QueryTaskManager,
     QueryTaskNotFoundError,
 )
-from .query_terminal_outcome import _with_projection_hash
 
 
 class StubQueryService:

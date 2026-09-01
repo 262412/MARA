@@ -281,7 +281,9 @@ def _authority_metric_values(
         "qasper_required_slot_authority_empty_count": float(
             1
             if empty_slot_state
-            else slot_count if authority_missing and not required_ids else 0
+            else slot_count
+            if authority_missing and not required_ids
+            else 0
         ),
         "qasper_required_slot_authority_missing_count": float(missing_count),
         "qasper_complete_to_unanswerable_empty_authority_count": float(
