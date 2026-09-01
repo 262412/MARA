@@ -24,6 +24,32 @@ from benchmark.qasper_causal_transaction_selected_plan import (
     selected_plan_stage_payload,
 )
 
+QASPER_RETRIEVAL_TRACE_IDENTITY_CONTRACT = "qasper_retrieval_trace_identity.v1"
+
+
+def retrieval_trace_semantic_projection(trace: list[Any]) -> list[Any]:
+    """Return Stage-2 retrieval identity without performance telemetry."""
+
+    projection = deepcopy(trace)
+    for item in projection:
+        if isinstance(item, dict):
+            item.pop("seconds", None)
+    return projection
+
+
+def retrieval_trace_telemetry_projection(trace: list[Any]) -> list[dict[str, Any]]:
+    """Return ordered timing observations while preserving their full values."""
+
+    return [
+        {
+            "trace_index": index,
+            "stage": str(item.get("stage") or ""),
+            "seconds": deepcopy(item["seconds"]),
+        }
+        for index, item in enumerate(trace)
+        if isinstance(item, Mapping) and "seconds" in item
+    ]
+
 
 def causal_transaction_stage_payloads(
     prediction: Mapping[str, Any],
@@ -86,7 +112,12 @@ def stage_comparison_payload(stage: str, payload: Mapping[str, Any]) -> Any:
             "status": payload.get("status"),
             "incompleteness_reasons": list(payload.get("incompleteness_reasons") or []),
             "raw_retrieval_records_digest": payload.get("raw_retrieval_records_digest"),
-            "retrieval_trace_digest": payload.get("retrieval_trace_digest"),
+            "retrieval_trace_identity_contract": payload.get(
+                "retrieval_trace_identity_contract"
+            ),
+            "retrieval_trace_semantic_digest": payload.get(
+                "retrieval_trace_semantic_digest"
+            ),
             "production_input_records_digest": payload.get(
                 "production_input_records_digest"
             ),
@@ -159,6 +190,8 @@ def _retrieval_payload(prediction: Mapping[str, Any]) -> dict[str, Any]:
     ranking_source = "retrieved_hits_order"
     ranking = _ranking_identity(ranking_records)
     retrieval_trace = deepcopy(prediction.get("retrieval_trace") or [])
+    semantic_trace = retrieval_trace_semantic_projection(retrieval_trace)
+    telemetry_trace = retrieval_trace_telemetry_projection(retrieval_trace)
     reasons = []
     if "retrieved_hits" not in prediction:
         reasons.append("raw_retrieval_records_missing")
@@ -168,8 +201,11 @@ def _retrieval_payload(prediction: Mapping[str, Any]) -> dict[str, Any]:
         reasons,
         raw_retrieval_records=raw_records,
         raw_retrieval_records_digest=canonical_digest(raw_records),
+        retrieval_trace_identity_contract=QASPER_RETRIEVAL_TRACE_IDENTITY_CONTRACT,
         retrieval_trace=retrieval_trace,
         retrieval_trace_digest=canonical_digest(retrieval_trace),
+        retrieval_trace_semantic_digest=canonical_digest(semantic_trace),
+        retrieval_trace_telemetry_digest=canonical_digest(telemetry_trace),
         production_input_records=production_input_records,
         production_input_records_digest=canonical_digest(production_input_records),
         ranking_source=ranking_source,

@@ -7,6 +7,16 @@ from typing import Any
 from benchmark.qasper_causal_transaction_stages import _retrieval_payload
 from scripts.slurm.qasper_natural_causal_transaction import _local_replay_prediction
 
+_EXPECTED_RETRIEVAL_DIGEST_FIELDS = [
+    "production_input_records_digest",
+    "ranking_digest",
+    "ranking_records_digest",
+    "raw_retrieval_records_digest",
+    "retrieval_trace_digest",
+    "retrieval_trace_semantic_digest",
+    "retrieval_trace_telemetry_digest",
+]
+
 
 def _evidence(evidence_id: str, text: str) -> dict[str, Any]:
     return {
@@ -78,13 +88,7 @@ def test_local_replay_keeps_retrieval_envelope_separate_from_candidate_snapshot(
     assert replay_prediction["evidence_bundle"] == original_bundle
     assert row["evidence_bundle"] == original_bundle
     digest_fields = sorted(key for key in reference_stage if key.endswith("_digest"))
-    assert digest_fields == [
-        "production_input_records_digest",
-        "ranking_digest",
-        "ranking_records_digest",
-        "raw_retrieval_records_digest",
-        "retrieval_trace_digest",
-    ]
+    assert digest_fields == _EXPECTED_RETRIEVAL_DIGEST_FIELDS
     assert {key: replay_stage[key] for key in digest_fields} == {
         key: reference_stage[key] for key in digest_fields
     }

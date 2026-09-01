@@ -14,10 +14,13 @@ from ktem.docqa.canonical_serialization import (
     canonical_digest,
 )
 
-from benchmark.qasper_causal_transaction import (
-    compare_qasper_causal_transaction_prefix,
+from benchmark.qasper_causal_transaction import compare_qasper_causal_transaction_prefix
+from benchmark.qasper_causal_transaction_stages import (
+    QASPER_RETRIEVAL_TRACE_IDENTITY_CONTRACT,
+    retrieval_trace_semantic_projection,
+    retrieval_trace_telemetry_projection,
+    stage_comparison_payload,
 )
-from benchmark.qasper_causal_transaction_stages import stage_comparison_payload
 
 ARTIFACT_CONTRACT = "qasper_retrieval_index_artifact.v1"
 INDEX_SNAPSHOT_CONTRACT = "qasper_index_snapshot.v1"
@@ -120,9 +123,12 @@ def audit_retrieval_index_binding(
             required_route=required_route,
         )
 
-    expected_by_key, selected_rows, observed_counts, count_violations = (
-        _stage2_row_sets(frozen, trace_rows, required_route=required_route)
-    )
+    (
+        expected_by_key,
+        selected_rows,
+        observed_counts,
+        count_violations,
+    ) = _stage2_row_sets(frozen, trace_rows, required_route=required_route)
     violations.extend(count_violations)
 
     observed_by_key = {_route_key(row): row for row in selected_rows}
@@ -226,12 +232,15 @@ def _stage2_record(
         "route": key[1],
         "raw_retrieval_records": deepcopy(payload["raw_retrieval_records"]),
         "raw_retrieval_records_digest": payload["raw_retrieval_records_digest"],
+        "retrieval_trace_identity_contract": payload[
+            "retrieval_trace_identity_contract"
+        ],
         "retrieval_trace": deepcopy(payload["retrieval_trace"]),
         "retrieval_trace_digest": payload["retrieval_trace_digest"],
+        "retrieval_trace_semantic_digest": payload["retrieval_trace_semantic_digest"],
+        "retrieval_trace_telemetry_digest": payload["retrieval_trace_telemetry_digest"],
         "production_input_records": deepcopy(payload["production_input_records"]),
-        "production_input_records_digest": payload[
-            "production_input_records_digest"
-        ],
+        "production_input_records_digest": payload["production_input_records_digest"],
         "ranking_source": payload["ranking_source"],
         "ranking": deepcopy(payload["ranking"]),
         "ranking_digest": payload["ranking_digest"],
@@ -265,6 +274,20 @@ def _validate_stage2_payload(
     for value_key, digest_key in digest_values.items():
         if canonical_digest(payload[value_key]) != payload.get(digest_key):
             raise ValueError(f"stage2_{digest_key}_invalid")
+    if (
+        payload.get("retrieval_trace_identity_contract")
+        != QASPER_RETRIEVAL_TRACE_IDENTITY_CONTRACT
+    ):
+        raise ValueError("stage2_retrieval_trace_identity_contract_invalid")
+    retrieval_trace = payload["retrieval_trace"]
+    if canonical_digest(
+        retrieval_trace_semantic_projection(retrieval_trace)
+    ) != payload.get("retrieval_trace_semantic_digest"):
+        raise ValueError("stage2_retrieval_trace_semantic_digest_invalid")
+    if canonical_digest(
+        retrieval_trace_telemetry_projection(retrieval_trace)
+    ) != payload.get("retrieval_trace_telemetry_digest"):
+        raise ValueError("stage2_retrieval_trace_telemetry_digest_invalid")
     if canonical_digest(payload) != stage.get("payload_digest"):
         raise ValueError("stage2_payload_digest_invalid")
     if canonical_digest(stage_comparison_payload(_STAGE_NAME, payload)) != stage.get(
@@ -306,7 +329,11 @@ def _compare_stage2_record(
             "raw_retrieval_records_mismatch",
         ),
         ("ranking", "ranking_digest", "ranking_mismatch"),
-        ("retrieval_trace", "retrieval_trace_digest", "retrieval_trace_mismatch"),
+        (
+            "retrieval_trace_semantic_projection",
+            "retrieval_trace_semantic_digest",
+            "retrieval_trace_semantic_mismatch",
+        ),
         (
             "production_input_records",
             "production_input_records_digest",
@@ -314,7 +341,16 @@ def _compare_stage2_record(
         ),
     )
     for value_key, digest_key, reason in comparisons:
-        if expected.get(value_key) != observed.get(value_key):
+        expected_value = expected.get(value_key)
+        observed_value = observed.get(value_key)
+        if value_key == "retrieval_trace_semantic_projection":
+            expected_value = retrieval_trace_semantic_projection(
+                list(expected.get("retrieval_trace") or [])
+            )
+            observed_value = retrieval_trace_semantic_projection(
+                list(observed.get("retrieval_trace") or [])
+            )
+        if expected_value != observed_value:
             return _divergence_observation(
                 key,
                 reason=reason,
@@ -330,7 +366,10 @@ def _compare_stage2_record(
             )
     for key_name, reason in (
         ("ranking_source", "ranking_source_mismatch"),
-        ("stage_payload_digest", "stage_payload_digest_mismatch"),
+        (
+            "retrieval_trace_identity_contract",
+            "retrieval_trace_identity_contract_mismatch",
+        ),
         ("stage_comparison_digest", "stage_comparison_digest_mismatch"),
     ):
         if expected.get(key_name) != observed.get(key_name):
@@ -396,9 +435,7 @@ def _binding_audit(
         "expected_index_contract": expected_index_contract,
         "expected_embedding_contract": expected_embedding_contract,
         "artifact_index_contract": str(artifact.get("index_contract") or ""),
-        "artifact_embedding_contract": str(
-            artifact.get("embedding_contract") or ""
-        ),
+        "artifact_embedding_contract": str(artifact.get("embedding_contract") or ""),
         "required_route": required_route,
         "artifact_digest": str(artifact.get("artifact_digest") or ""),
         "index_snapshot_tree_digest": str(
@@ -421,16 +458,22 @@ def _artifact_violations(artifact: Mapping[str, Any]) -> list[str]:
     if artifact.get("serializer_identity") != CANONICAL_SERIALIZER_IDENTITY:
         reasons.append("retrieval_index_artifact_integrity_invalid:serializer_invalid")
     digest = str(artifact.get("artifact_digest") or "")
-    payload = {key: value for key, value in artifact.items() if key != "artifact_digest"}
+    payload = {
+        key: value for key, value in artifact.items() if key != "artifact_digest"
+    }
     if not _sha256(digest) or canonical_digest(payload) != digest:
-        reasons.append("retrieval_index_artifact_integrity_invalid:artifact_digest_mismatch")
+        reasons.append(
+            "retrieval_index_artifact_integrity_invalid:artifact_digest_mismatch"
+        )
     if not _git_sha(artifact.get("code_sha")):
         reasons.append("retrieval_index_artifact_integrity_invalid:code_sha_invalid")
     records = artifact.get("stage2_records")
     if not isinstance(records, list) or len(records) != artifact.get(
         "stage2_record_count"
     ):
-        reasons.append("retrieval_index_artifact_integrity_invalid:record_count_invalid")
+        reasons.append(
+            "retrieval_index_artifact_integrity_invalid:record_count_invalid"
+        )
     reasons.extend(
         f"retrieval_index_artifact_integrity_invalid:{reason}"
         for reason in _index_snapshot_violations(
@@ -516,9 +559,13 @@ def _mapping(value: Any) -> dict[str, Any]:
 
 def _sha256(value: Any) -> bool:
     text = str(value or "")
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
+    return len(text) == 64 and all(
+        character in "0123456789abcdef" for character in text
+    )
 
 
 def _git_sha(value: Any) -> bool:
     text = str(value or "")
-    return len(text) == 40 and all(character in "0123456789abcdef" for character in text)
+    return len(text) == 40 and all(
+        character in "0123456789abcdef" for character in text
+    )
