@@ -24,14 +24,18 @@ from ktem.docqa.semantic_relation_clause_validation import (
 from .mara_qasper_selector_semantic_alignment_contract import (
     ALIGNMENT_CONTRACT,
     CURRENT_PAPER_ANALYSIS_HEADING_RE,
+    CURRENT_PAPER_INSPECTION_CONFIRMATION_RE,
     OBJECT_SYNONYM_RULES,
 )
 
 _SEMANTIC_TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)?")
 _AUDITABLE_INSPECTION_RE = re.compile(
-    r"\b(?:analys(?:e|es|ed|ing|is)|examine|examines|examined|examining|"
-    r"inspect(?:s|ed|ing)?|investigat(?:e|es|ed|ing|ion)|"
-    r"visualiz(?:e|es|ed|ing|ation)|visualis(?:e|es|ed|ing|ation))\b",
+    r"\b(?:analys(?:e|es|ed|ing)|analyz(?:e|es|ed|ing)|"
+    r"examine|examines|examined|examining|explor(?:e|es|ed|ing)|"
+    r"extract(?:s|ed|ing|ion)?|inspect(?:s|ed|ing)?|"
+    r"investigat(?:e|es|ed|ing)|observe|observes|observed|observing|"
+    r"visualiz(?:e|es|ed|ing)|"
+    r"visualis(?:e|es|ed|ing))\b",
     re.IGNORECASE,
 )
 
@@ -42,19 +46,115 @@ def predicate_surface_is_auditable(
 ) -> bool:
     return proposition.predicate != "inspect" or bool(
         _AUDITABLE_INSPECTION_RE.search(text)
+        or _inspection_confirmation_match(proposition, text)
     )
+
+
+def inspection_confirmation_alias_analysis(
+    proposition: QuestionProposition,
+    text: str,
+    analysis: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind an asserted current-paper confirmation to an exact inspect span."""
+
+    match = _inspection_confirmation_match(proposition, text)
+    declared = list(analysis.get("declared_proposition_slots") or [])
+    if match is None or "predicate" not in declared:
+        return dict(analysis)
+    predicate_start = match.start("predicate")
+    predicate_end = match.end("predicate")
+    predicate_span: dict[str, Any] = {
+        "text": match.group("predicate"),
+        "span_start": predicate_start,
+        "span_end": predicate_end,
+    }
+    clauses: list[dict[str, Any]] = []
+    selected: dict[str, Any] | None = None
+    for raw_clause in analysis.get("clauses") or []:
+        clause = dict(raw_clause)
+        clause_start = int(clause.get("span_start") or 0)
+        clause_end = int(clause.get("span_end") or 0)
+        if (
+            clause_start <= predicate_start < clause_end
+            and clause.get("assertion_scope") == "asserted"
+        ):
+            clause_ref = str(clause.get("clause_ref") or "")
+            evidence = dict(clause.get("slot_evidence") or {})
+            evidence["predicate"] = {
+                **predicate_span,
+                "clause_ref": clause_ref,
+                "clause_start": clause_start,
+                "clause_end": clause_end,
+            }
+            validity = dict(clause.get("slot_binding_validity") or {})
+            validity["predicate"] = True
+            clause.update(
+                slot_evidence=evidence,
+                slot_binding_validity=validity,
+                slot_bindings_valid=all(
+                    validity.get(slot) is True for slot in declared
+                ),
+                target_relation_present=True,
+                relation_bearing=True,
+                meta_scope=False,
+                direct_relation_negated=False,
+            )
+            selected = clause
+        clauses.append(clause)
+    if selected is None:
+        return dict(analysis)
+    validity = dict(selected.get("slot_binding_validity") or {})
+    slot_evidence = {
+        slot: dict(span)
+        for slot, span in dict(selected.get("slot_evidence") or {}).items()
+        if slot in declared and validity.get(slot) is True
+    }
+    fully_bound = bool(set(slot_evidence) == set(declared))
+    status = "affirmative_assertion" if fully_bound else "unbound"
+    payload = {
+        **dict(analysis),
+        "status": status,
+        "evidence_relation": ("proposition_support" if fully_bound else "undetermined"),
+        "joint_relation_clause_bound": fully_bound,
+        "selected_clause_ref": str(selected.get("clause_ref") or ""),
+        "slot_evidence": slot_evidence,
+        "covered_object_tokens": list(selected.get("object_tokens_covered") or []),
+        "target_relation_present": True,
+        "relation_bearing": True,
+        "assertion_scope": "asserted",
+        "meta_scope": False,
+        "direct_relation_negated": False,
+        "clauses": clauses,
+        "semantic_alias_rule_id": "current_paper_inspection_confirmation",
+    }
+    payload.pop("analysis_digest", None)
+    payload["analysis_digest"] = canonical_payload_digest(payload)
+    return payload
+
+
+def _inspection_confirmation_match(
+    proposition: QuestionProposition,
+    text: str,
+) -> re.Match[str] | None:
+    if proposition.actor != "current_paper" or proposition.predicate != "inspect":
+        return None
+    return CURRENT_PAPER_INSPECTION_CONFIRMATION_RE.search(text)
 
 
 def auditable_target_relation_present(question: str, text: str) -> bool:
     proposition = build_question_proposition(question)
-    analysis = semantic_relation_clause_analysis(
-        {
-            "quote": text,
-            "binds_proposition_slots": list(
-                applicable_proposition_evidence_slots(proposition)
-            ),
-        },
+    analysis = inspection_confirmation_alias_analysis(
         proposition,
+        text,
+        semantic_relation_clause_analysis(
+            {
+                "quote": text,
+                "binds_proposition_slots": list(
+                    applicable_proposition_evidence_slots(proposition)
+                ),
+            },
+            proposition,
+        ),
     )
     return bool(
         analysis.get("target_relation_present") is True
@@ -72,11 +172,16 @@ def build_local_selector_semantic_alignment(
     if identity is None:
         return None
     required = canonical_proposition_object_token_set(proposition)
+    confirmation_attested = bool(
+        _inspection_confirmation_match(proposition, identity["text"])
+    )
     matches = _selector_object_semantic_matches(
         identity["text"],
         span_start=identity["span_start"],
         required_tokens=required,
-        object_bearing="object" in set(semantics.get("slots") or ()),
+        object_bearing=(
+            "object" in set(semantics.get("slots") or ()) or confirmation_attested
+        ),
     )
     slots, rule_ids, actor_attested = _aligned_slots(
         proposition,
@@ -218,6 +323,13 @@ def _aligned_slots(
         for slot in applicable_proposition_evidence_slots(proposition)
         if slot in observed
     ]
+    confirmation_attested = bool(_inspection_confirmation_match(proposition, text))
+    if confirmation_attested and matches and "object" not in slots:
+        slots = [
+            slot
+            for slot in applicable_proposition_evidence_slots(proposition)
+            if slot in {*slots, "object"}
+        ]
     rule_ids = {
         str(match.get("rule_id") or "")
         for values in matches.values()
@@ -232,6 +344,8 @@ def _aligned_slots(
     if actor_attested:
         slots.insert(0, "actor")
         rule_ids.add("current_paper_analysis_heading")
+    if {"actor", "predicate"} <= set(slots) and confirmation_attested:
+        rule_ids.add("current_paper_inspection_confirmation")
     return slots, rule_ids, actor_attested
 
 

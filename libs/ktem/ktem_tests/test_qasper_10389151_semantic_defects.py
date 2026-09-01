@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from ktem.docqa.canonical_proposition_evidence_plan import (
-    canonical_evidence_set_analysis,
     canonical_proposition_evidence_selection,
 )
 from ktem.docqa.frozen_canonical_proposition_projection import (
@@ -23,6 +22,9 @@ from ktem.docqa.semantic_relation_clause_validation import (
     frozen_semantic_relation_analyses,
     premise_slot_evidence_for_audit,
     semantic_relation_evidence_set_constraint,
+)
+from ktem.reasoning.mara_qasper_candidate_selector_semantics import (
+    revalidated_selector_semantics,
 )
 from ktem.reasoning.mara_semantic_entailment_audit import (
     semantic_entailment_audit_prompt,
@@ -74,53 +76,30 @@ def _premises(case: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def test_10389151_a_auxiliary_learn_does_not_block_same_event_support() -> None:
+def test_10389151_a_analysis_heading_is_not_production_inspection_support() -> None:
     case = _case(SAMPLE_A)
     question = case["question"]
     selectors = _selectors(case)
-    required_slots = _required_slots(question)
 
     for selector in selectors:
         assert selector["span_end"] - selector["span_start"] == len(selector["text"])
         assert selector["event_id"] == case["event_id"]
-
-    analysis = canonical_evidence_set_analysis(
-        question,
-        selectors,
-        required_slots,
-        polarity_relation="proposition_support",
-    )
-    selection = canonical_proposition_evidence_selection(
-        question,
-        selectors,
-        required_slots,
-    )
-
-    assert analysis["valid"] is True
-    assert analysis["same_event"] is True
-    assert analysis["event_ids"] == [case["event_id"]]
-    assert analysis["required_object_tokens"] == tuple(
-        case["expected"]["required_object_tokens"]
-    )
-    assert "learn" not in analysis["required_object_tokens"]
-    assert selection.support is not None
-    assert selection.contradiction is None
-    assert [value["selector_id"] for value in selection.support] == case["expected"][
-        "support_span_refs"
+    semantics = [
+        revalidated_selector_semantics(
+            selector,
+            question,
+            selector["text"],
+        )
+        for selector in selectors
     ]
 
-    support_plan = selection.plan.support_plan
-    assert support_plan is not None
-    assert support_plan.span_refs == tuple(case["expected"]["support_span_refs"])
-    assert support_plan.event_subplans and len(support_plan.event_subplans) == 1
-    assert support_plan.event_subplans[0].event_id == case["event_id"]
-    assert support_plan.event_subplans[0].span_refs == tuple(
-        case["expected"]["support_span_refs"]
+    assert all("predicate" not in value["slots"] for value in semantics)
+    assert all(value["semantic_alignment"] is None for value in semantics)
+    assert not any(
+        value["local_relation_state"] == "affirmative_assertion"
+        and "predicate" in value["slots"]
+        for value in semantics
     )
-    assert support_plan.required_object_tokens == tuple(
-        case["expected"]["required_object_tokens"]
-    )
-    assert support_plan.covered_object_tokens == support_plan.required_object_tokens
 
 
 def test_10389151_b_composite_plan_projects_local_auditor_contributions() -> None:

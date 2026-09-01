@@ -101,7 +101,7 @@ def test_local_semantic_alignment_builds_one_complete_paragraph_event_plan() -> 
     )
 
 
-def test_object_companion_semantics_remain_local_to_analysis_event() -> None:
+def test_error_analysis_heading_is_not_an_inspection_event() -> None:
     question = (
         "Do they inspect their model to see if their model learned to associate "
         "image parts with words related to entities?"
@@ -116,27 +116,69 @@ def test_object_companion_semantics_remain_local_to_analysis_event() -> None:
     canonical = prepare_qasper_canonical_records(question, _sentence_records(text))
     binding = candidate_evidence_set_binding(canonical, question)
 
+    assert binding["binding_state"] == "unresolved"
+    assert binding["evidence_refs"] == []
+    assert all(
+        "predicate" not in selector["allowed_proposition_slots"]
+        for record in canonical
+        for selector in record["selectors"]
+    )
+
+
+def test_asserted_model_confirmation_builds_one_inspection_event_plan() -> None:
+    question = (
+        "Do they inspect their model to see if their model learned to associate "
+        "image parts with words related to entities?"
+    )
+    text = (
+        "For the image-aided model, we confirm that the modality attention "
+        "attenuates irrelevant signals and amplifies relevant modality-based "
+        "contexts in prediction of a given token. The named entities in the "
+        "examples are challenging to predict because they are composed of "
+        "common nouns, and thus they need additional visual contexts to predict."
+    )
+
+    canonical = prepare_qasper_canonical_records(question, _sentence_records(text))
+    binding = candidate_evidence_set_binding(canonical, question)
+
     assert binding["binding_state"] == "relation_bound_support"
     support = binding["canonical_evidence_plan"]["support_plan"]
     assert len(support["event_subplans"]) == 1
-    selected = {
-        selector["selector_id"]: selector
+    assert support["span_refs"] == ["E1:S1", "E1:S2"]
+    anchor = canonical[0]["selectors"][0]
+    assert anchor["predicate_match_kind"] == "alias"
+    assert set(anchor["allowed_proposition_slots"]) == {
+        "actor",
+        "predicate",
+        "object",
+    }
+    assert anchor["proposition_slot_spans"]["predicate"]["text"] == "confirm"
+    assert (
+        "current_paper_inspection_confirmation"
+        in anchor["semantic_alignment"]["semantic_rule_ids"]
+    )
+
+
+def test_conditional_model_confirmation_is_not_inspection_support() -> None:
+    question = (
+        "Do they inspect their model to see if their model learned to associate "
+        "image parts with words related to entities?"
+    )
+    text = (
+        "If we confirm that the model attends to visual regions related to entity "
+        "tokens, the follow-up experiment will report the result."
+    )
+
+    canonical = prepare_qasper_canonical_records(question, _sentence_records(text))
+    binding = candidate_evidence_set_binding(canonical, question)
+
+    assert binding["binding_state"] == "unresolved"
+    assert binding["evidence_refs"] == []
+    assert all(
+        "predicate" not in selector["allowed_proposition_slots"]
         for record in canonical
         for selector in record["selectors"]
-        if selector["selector_id"] in support["span_refs"]
-    }
-    assert {selector["event_id"] for selector in selected.values()} == {
-        support["event_subplans"][0]["event_id"]
-    }
-    companion = next(
-        selector
-        for selector in selected.values()
-        if "predicate" not in selector["allowed_proposition_slots"]
     )
-    assert companion["local_relation_state"] == "unbound"
-    assert companion["semantic_alignment"]["polarity_relation"] == "undetermined"
-    assert "word" in set(companion["object_tokens"])
-    assert "learn" not in set(companion["object_tokens"])
 
 
 def test_frozen_selector_universe_retains_multiple_proposition_spans() -> None:

@@ -94,7 +94,11 @@ OBJECT_SYNONYM_RULES: dict[str, tuple[tuple[str, re.Pattern[str]], ...]] = {
 }
 CURRENT_PAPER_ANALYSIS_HEADING_RE = re.compile(
     r"^\s*(?:error|qualitative|quantitative|case|model)?\s*"
-    r"(?:analysis|inspection|visualization|visualisation)\s*:",
+    r"(?:inspection|visualization|visualisation)\s*:",
+    re.IGNORECASE,
+)
+CURRENT_PAPER_INSPECTION_CONFIRMATION_RE = re.compile(
+    r"\b(?:we|the\s+authors?)\s+" r"(?P<predicate>confirm(?:s|ed|ing)?)\s+that\b",
     re.IGNORECASE,
 )
 
@@ -113,6 +117,7 @@ _LOCAL_ALIGNMENT_RULE_IDS = {
 } | {
     "exact_semantic_token",
     "current_paper_analysis_heading",
+    "current_paper_inspection_confirmation",
 }
 
 
@@ -271,6 +276,15 @@ def _semantic_rule_ids_match(
         and CURRENT_PAPER_ANALYSIS_HEADING_RE.search(str(selector.get("text") or ""))
     ):
         allowed_extras.add("current_paper_analysis_heading")
+    if (
+        "current_paper_inspection_confirmation" in observed_rule_ids
+        and payload.get("predicate_concept") == "inspect"
+        and {"actor", "predicate"} <= set(dict(payload.get("slot_refs") or {}))
+        and CURRENT_PAPER_INSPECTION_CONFIRMATION_RE.search(
+            str(selector.get("text") or "")
+        )
+    ):
+        allowed_extras.add("current_paper_inspection_confirmation")
     return observed_rule_ids == match_rule_ids | allowed_extras
 
 

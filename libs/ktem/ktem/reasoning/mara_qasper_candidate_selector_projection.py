@@ -51,23 +51,12 @@ def prioritized_candidate_prompt_evidence(
             }
         )
 
-    _canonical_records, canonical_trace = prepare_qasper_canonical_records_with_trace(
-        question,
-        [
-            {
-                **projection["record"],
-                "selectors": _candidate_selectors_from_options(
-                    projection["eligible_options"]
-                ),
-            }
-            for projection in projections
-        ],
-    )
-    selected_plan_refs = list(canonical_trace.get("selected_plan_refs") or [])
-    canonical_refs = list(canonical_trace.get("selector_universe_refs") or [])
-
     output: list[dict[str, Any]] = []
     for projection in projections:
+        selected_plan_refs, canonical_refs = _record_canonical_priorities(
+            projection,
+            question,
+        )
         options, proposition_bearing_refs = _prioritized_proposition_bearing_options(
             projection["eligible_options"],
             selected_plan_refs=selected_plan_refs,
@@ -87,6 +76,29 @@ def prioritized_candidate_prompt_evidence(
         )
         output.append(projected)
     return output
+
+
+def _record_canonical_priorities(
+    projection: dict[str, Any],
+    question: str,
+) -> tuple[list[str], list[str]]:
+    """Classify spans before the per-record selector cap is applied."""
+
+    _records, trace = prepare_qasper_canonical_records_with_trace(
+        question,
+        [
+            {
+                **projection["record"],
+                "selectors": _candidate_selectors_from_options(
+                    projection["eligible_options"]
+                ),
+            }
+        ],
+    )
+    return (
+        list(trace.get("selected_plan_refs") or []),
+        list(trace.get("selector_universe_refs") or []),
+    )
 
 
 def _candidate_selectors_from_options(

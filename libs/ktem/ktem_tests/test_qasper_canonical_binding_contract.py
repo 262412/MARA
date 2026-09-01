@@ -341,17 +341,6 @@ def test_role_incompatibility_uses_the_same_local_verifier_contract() -> None:
             {"cross_span", "paraphrase", "entity_alias"},
         ),
         (
-            "Do they inspect their model to see if their model learned to associate "
-            "image parts with words related to entities?",
-            [
-                "Error Analysis shows example cases where visual contexts affect "
-                "prediction of named entities. The model links image regions with "
-                "entity-related words."
-            ],
-            "relation_bound_support",
-            {"cross_span", "paraphrase", "entity_alias"},
-        ),
-        (
             "Is car-speak language collection of abstract features that classifier "
             "is later trained on?",
             [

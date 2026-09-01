@@ -22,6 +22,7 @@ from .mara_qasper_selector_semantic_alignment import (
     attested_selector_slot_span,
     auditable_target_relation_present,
     build_local_selector_semantic_alignment,
+    inspection_confirmation_alias_analysis,
     predicate_surface_is_auditable,
 )
 from .mara_qasper_selector_semantic_alignment_contract import (
@@ -195,8 +196,13 @@ def _direct_selector_semantics(
 ) -> dict[str, Any]:
     proposition = build_question_proposition(question)
     applicable = applicable_proposition_evidence_slots(proposition)
-    analysis = semantic_relation_clause_analysis(
-        {"quote": text, "binds_proposition_slots": list(applicable)}, proposition
+    analysis = inspection_confirmation_alias_analysis(
+        proposition,
+        text,
+        semantic_relation_clause_analysis(
+            {"quote": text, "binds_proposition_slots": list(applicable)},
+            proposition,
+        ),
     )
     title_like = bool(_TITLE_MARKER_RE.search(text))
     observed_spans = dict(analysis.get("slot_evidence") or {})

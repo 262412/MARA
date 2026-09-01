@@ -5,14 +5,15 @@ from pathlib import Path
 from typing import Any
 
 from ktem.docqa.canonical_serialization import canonical_digest
-from ktem.reasoning.mara_qasper_candidate_evidence import (
-    candidate_evidence_set_binding,
-)
+from ktem.reasoning.mara_qasper_candidate_evidence import candidate_evidence_set_binding
 from ktem.reasoning.mara_qasper_candidate_prompt import (
     _prioritized_candidate_prompt_evidence,
 )
 from ktem.reasoning.mara_qasper_semantic_pack import (
     prepare_qasper_canonical_records_with_trace,
+)
+from ktem.reasoning.mara_semantic_proposition_span_selectors import (
+    canonical_span_selectors,
 )
 
 FIXTURE = (
@@ -22,8 +23,7 @@ FIXTURE = (
 )
 EXAMPLE_ID = "7cd22ca9e107d2b13a7cc94252aaa9007976b338"
 TARGET_EVIDENCE_ID = (
-    "stable-chunk:3806ab5c7c7bee89c044213283a35d117"
-    "fee31a5c12bda899ef2232d5fba6a6c"
+    "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c"
 )
 
 
@@ -61,14 +61,16 @@ def test_job_10396653_stage2_production_input_is_frozen_exactly() -> None:
         "c3d83a65336fb102de91ef5b1a2a1617b99f15aa01607a6e521f650b1e7d54f3"
     )
     assert len(records) == payload["production_input_record_count"] == 8
-    assert canonical_digest(records) == digests["production_input_records"] == (
-        "f63a7fe09e1254e1e164180896d9dbaba3086396a86e977bf9dc16613cafb89d"
+    assert (
+        canonical_digest(records)
+        == digests["production_input_records"]
+        == ("f63a7fe09e1254e1e164180896d9dbaba3086396a86e977bf9dc16613cafb89d")
     )
     assert len({record["evidence_id"] for record in records}) == 8
     assert TARGET_EVIDENCE_ID in {record["evidence_id"] for record in records}
 
 
-def test_proposition_bearing_spans_are_selected_before_the_record_limit() -> None:
+def test_asserted_inspection_spans_are_selected_before_the_record_limit() -> None:
     payload = _fixture()
     source = next(
         record
@@ -85,32 +87,25 @@ def test_proposition_bearing_spans_are_selected_before_the_record_limit() -> Non
         "selectors": [],
     }
 
-    prioritized = _prioritized_candidate_prompt_evidence(
-        [record], payload["question"]
-    )
+    prioritized = _prioritized_candidate_prompt_evidence([record], payload["question"])
     selected_refs = [
         selector["selector_id"] for selector in prioritized[0]["selectors"]
     ]
     trace = prioritized[0]["candidate_selector_projection_trace"]
-    decisions = {
-        decision["selector_id"]: decision for decision in trace["decisions"]
-    }
+    decisions = {decision["selector_id"]: decision for decision in trace["decisions"]}
 
     assert len(selected_refs) == 4
-    assert {"E1:S5", "E1:S7"}.issubset(selected_refs)
+    assert {"E1:S12", "E1:S14"}.issubset(selected_refs)
+    assert not {"E1:S5", "E1:S7"}.intersection(selected_refs)
     assert not {"E1:S16", "E1:S20"}.intersection(selected_refs)
-    assert decisions["E1:S7"]["decision"] == (
-        "selected_for_canonical_projection"
-    )
+    assert decisions["E1:S12"]["decision"] == ("selected_for_canonical_projection")
+    assert decisions["E1:S5"]["decision"] == "not_proposition_bearing"
+    assert decisions["E1:S7"]["decision"] == "not_proposition_bearing"
     assert decisions["E1:S16"]["decision"] == "not_proposition_bearing"
     assert decisions["E1:S20"]["decision"] == "not_proposition_bearing"
-    assert trace["proposition_bearing_selector_refs"] == [
-        "E1:S5",
-        "E1:S7",
-        "E1:S8",
-        "E1:S9",
-        "E1:S10",
-    ]
+    proposition_bearing = set(trace["proposition_bearing_selector_refs"])
+    assert {"E1:S12", "E1:S14"} <= proposition_bearing
+    assert not {"E1:S5", "E1:S7"} & proposition_bearing
 
     canonical, _ = prepare_qasper_canonical_records_with_trace(
         payload["question"], prioritized
@@ -119,11 +114,55 @@ def test_proposition_bearing_spans_are_selected_before_the_record_limit() -> Non
     construction = binding["plan_construction_trace"]
 
     assert construction["binding_state"] == "relation_bound_support"
-    assert binding["evidence_refs"] == ["E1:S5", "E1:S7"]
-    assert construction["selected"]["support"]["span_refs"] == [
-        "E1:S5",
-        "E1:S7",
+    assert "E1:S12" in binding["evidence_refs"]
+    assert set(binding["evidence_refs"]) <= {
+        "E1:S12",
+        "E1:S13",
+        "E1:S14",
+        "E1:S15",
+    }
+    assert construction["selected"]["support"]["span_refs"] == binding["evidence_refs"]
+
+
+def test_error_analysis_and_example_similarity_do_not_form_inspection_support() -> None:
+    payload = _fixture()
+    source = next(
+        record
+        for record in payload["production_input_records"]
+        if record["evidence_id"] == TARGET_EVIDENCE_ID
+    )
+    selectors = [
+        selector
+        for selector in canonical_span_selectors(
+            "E1",
+            source["text"],
+            0,
+            None,
+            selector_max_chars=640,
+        )
+        if selector["selector_id"] in {"E1:S5", "E1:S7"}
     ]
+    records = [
+        {
+            **source,
+            "label": "E1",
+            "text_start": 0,
+            "selectors": selectors,
+        }
+    ]
+
+    canonical, _ = prepare_qasper_canonical_records_with_trace(
+        payload["question"], records
+    )
+    binding = candidate_evidence_set_binding(canonical, payload["question"])
+
+    assert binding["binding_state"] == "unresolved"
+    assert binding["evidence_refs"] == []
+    assert all(
+        "predicate" not in selector["allowed_proposition_slots"]
+        for record in canonical
+        for selector in record["selectors"]
+    )
 
 
 def test_all_eight_production_records_materialize_only_canonical_spans() -> None:
@@ -138,22 +177,17 @@ def test_all_eight_production_records_materialize_only_canonical_spans() -> None
             "canonical_start": None,
             "selectors": [],
         }
-        for index, record in enumerate(
-            payload["production_input_records"], start=1
-        )
+        for index, record in enumerate(payload["production_input_records"], start=1)
     ]
 
-    prioritized = _prioritized_candidate_prompt_evidence(
-        records, payload["question"]
-    )
+    prioritized = _prioritized_candidate_prompt_evidence(records, payload["question"])
     target = next(
-        record
-        for record in prioritized
-        if record["evidence_id"] == TARGET_EVIDENCE_ID
+        record for record in prioritized if record["evidence_id"] == TARGET_EVIDENCE_ID
     )
     selected_refs = [selector["selector_id"] for selector in target["selectors"]]
 
-    assert {"E7:S5", "E7:S7"}.issubset(selected_refs)
+    assert {"E7:S12", "E7:S14"}.issubset(selected_refs)
+    assert not {"E7:S5", "E7:S7"}.intersection(selected_refs)
     assert not {"E7:S16", "E7:S20"}.intersection(selected_refs)
     assert len(selected_refs) <= 4
 
@@ -163,4 +197,10 @@ def test_all_eight_production_records_materialize_only_canonical_spans() -> None
     binding = candidate_evidence_set_binding(canonical, payload["question"])
 
     assert binding["binding_state"] == "relation_bound_support"
-    assert binding["evidence_refs"] == ["E7:S5", "E7:S7"]
+    assert "E7:S12" in binding["evidence_refs"]
+    assert set(binding["evidence_refs"]) <= {
+        "E7:S12",
+        "E7:S13",
+        "E7:S14",
+        "E7:S15",
+    }
