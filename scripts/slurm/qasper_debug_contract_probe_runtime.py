@@ -133,38 +133,99 @@ class _RecordingChatModel:
             fault=self._controlled_audit_fault,
         )
         call_id = f"{self._case_id}:{stage}:{len(self._calls) + 1}"
-        request_payload = {
-            "messages": provider_messages,
-            "kwargs": kwargs,
-            "model": self.model_name,
-        }
-        response = self._inner(provider_messages, **kwargs)
+        attempt = _new_call_attempt(
+            call_id=call_id,
+            case_id=self._case_id,
+            stage=stage,
+            provider_identity=self.provider_identity,
+            inner=self._inner,
+            messages=provider_messages,
+            kwargs=kwargs,
+            controlled_audit_fault=self._controlled_audit_fault,
+        )
+        self._calls.append(attempt)
+        serializer = getattr(self._inner, "prepare_message", None)
+        if callable(serializer):
+            attempt["message_serializer_identity"] = _callable_identity(serializer)
+            try:
+                serialized_messages = serializer(provider_messages)
+            except Exception as exc:
+                _record_call_failure(
+                    attempt,
+                    exc,
+                    transport_status="failed_before_transport",
+                    failure_phase="message_serialization",
+                )
+                raise
+            attempt["message_serialization_status"] = "passed"
+            attempt["serialized_message_digest"] = _digest(serialized_messages)
+        try:
+            response = self._inner(provider_messages, **kwargs)
+        except Exception as exc:
+            _record_call_failure(
+                attempt,
+                exc,
+                transport_status="provider_call_failed",
+                failure_phase="provider_call",
+            )
+            raise
         raw = _response_text(response)
-        self._calls.append(
+        attempt.update(
             {
-                "call_id": call_id,
-                "case_id": self._case_id,
-                "stage": stage,
-                "provider_role": self.provider_identity.role,
-                "base_url": self.provider_identity.base_url,
-                "model": self.provider_identity.model,
-                "provider_identity": self.provider_identity.as_dict(),
-                "transport_mode": (
-                    "controlled_pre_audit_fixture"
-                    if getattr(self._inner, "controlled_pre_audit", False)
-                    else "live_provider"
-                ),
-                "request_digest": _digest(request_payload),
+                "call_status": "completed",
+                "transport_status": "passed",
                 "response_digest": _digest(raw),
                 "finish_reason": _response_finish_reason(response),
-                "controlled_fault": (
-                    self._controlled_audit_fault
-                    if stage == "semantic_entailment_audit"
-                    else ""
-                ),
             }
         )
         return response
+
+
+def _new_call_attempt(
+    *,
+    call_id: str,
+    case_id: str,
+    stage: str,
+    provider_identity: ProviderIdentity,
+    inner: Any,
+    messages: Any,
+    kwargs: dict[str, Any],
+    controlled_audit_fault: str,
+) -> dict[str, Any]:
+    request_payload = {
+        "messages": messages,
+        "kwargs": kwargs,
+        "model": provider_identity.model,
+    }
+    return {
+        "call_id": call_id,
+        "case_id": case_id,
+        "stage": stage,
+        "provider_role": provider_identity.role,
+        "base_url": provider_identity.base_url,
+        "model": provider_identity.model,
+        "provider_identity": provider_identity.as_dict(),
+        "transport_mode": (
+            "controlled_pre_audit_fixture"
+            if getattr(inner, "controlled_pre_audit", False)
+            else "live_provider"
+        ),
+        "call_status": "attempted",
+        "transport_status": "not_started",
+        "failure_phase": "",
+        "exception_type": "",
+        "exception_message": "",
+        "request_digest": _digest(request_payload),
+        "response_digest": "",
+        "finish_reason": "",
+        "controlled_fault": (
+            controlled_audit_fault if stage == "semantic_entailment_audit" else ""
+        ),
+        "message_type_identities": [_type_identity(message) for message in messages],
+        "message_serializer_identity": "",
+        "message_serialization_status": "not_exposed",
+        "serialized_message_digest": "",
+    }
 
 
 def _controlled_audit_messages(
@@ -177,10 +238,9 @@ def _controlled_audit_messages(
         return messages
     if fault != "semantic_auditor_rejection" or not isinstance(messages, (list, tuple)):
         raise ValueError("unsupported controlled auditor fault")
-    from llama_index.core.base.llms.types import ChatMessage, MessageRole
+    from kotaemon.base import HumanMessage
 
-    instruction = ChatMessage(
-        role=MessageRole.USER,
+    instruction = HumanMessage(
         content=(
             "CONTRACT PROBE CONTROLLED AUDITOR FAULT: "
             "semantic_auditor_rejection\n"
@@ -191,6 +251,36 @@ def _controlled_audit_messages(
         ),
     )
     return [*messages, instruction]
+
+
+def _type_identity(value: Any) -> str:
+    value_type = type(value)
+    return f"{value_type.__module__}.{value_type.__qualname__}"
+
+
+def _callable_identity(value: Any) -> str:
+    function = getattr(value, "__func__", value)
+    module = str(getattr(function, "__module__", "") or "")
+    name = str(getattr(function, "__qualname__", "") or "")
+    return ".".join(part for part in (module, name) if part)
+
+
+def _record_call_failure(
+    attempt: dict[str, Any],
+    exc: Exception,
+    *,
+    transport_status: str,
+    failure_phase: str,
+) -> None:
+    attempt.update(
+        {
+            "call_status": "failed",
+            "transport_status": transport_status,
+            "failure_phase": failure_phase,
+            "exception_type": type(exc).__name__,
+            "exception_message": str(exc)[:4000],
+        }
+    )
 
 
 def _default_model_factory(
