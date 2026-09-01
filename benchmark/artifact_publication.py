@@ -23,6 +23,8 @@ _PRIMARY_ARTIFACTS = (
     "contract_probe_predictions.jsonl",
     "contract_pre_audit_predictions.jsonl",
     "contract_probe_audit.json",
+    "retrieval_index_artifact.json",
+    "retrieval_index_restore_audit.json",
     "contract_smoke_audit.json",
 )
 
@@ -42,6 +44,8 @@ _ARTIFACT_REQUIREMENT_ALIASES = {
     "require_formal_audit": "contract_smoke_audit.json",
     "require_contract_smoke_audit": "contract_smoke_audit.json",
     "require_contract_smoke": "contract_smoke_audit.json",
+    "retrieval_index_artifact": "retrieval_index_artifact.json",
+    "retrieval_index_restore_audit": "retrieval_index_restore_audit.json",
 }
 
 
@@ -188,6 +192,8 @@ def publish_contract_smoke_audit(
     requirements: dict[str, bool] = {"contract_smoke_audit": True}
     if str(audit.get("suite_kind") or "").strip().casefold() == "qasper_debug":
         requirements["semantic_debug_traces"] = True
+        requirements["retrieval_index_artifact"] = True
+        requirements["retrieval_index_restore_audit"] = True
     return publish_artifact_contract(
         run_dir,
         run_requirements=requirements,

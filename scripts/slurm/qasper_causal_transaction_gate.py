@@ -19,6 +19,9 @@ from scripts.slurm.qasper_natural_causal_transaction import (
 )
 from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
 from scripts.slurm.qasper_natural_semantic_pack_runtime import freeze_natural_pack
+from scripts.slurm.qasper_retrieval_index_gate import (
+    retrieval_index_binding_audit,
+)
 
 _REPLAY_CONTRACT = "qasper_natural_causal_transaction_replay.v1"
 _REPLAY_STAGE_COUNT = len(QASPER_CAUSAL_TRANSACTION_STAGES)
@@ -30,6 +33,12 @@ def qasper_causal_transaction_artifact_audit(
     predictions: list[dict[str, Any]],
     *,
     suite_kind: str,
+    retrieval_index_artifact_path: Path | None = None,
+    retrieval_index_restore_audit_path: Path | None = None,
+    expected_code_sha: str = "",
+    expected_index_contract: str = "",
+    expected_embedding_contract: str = "",
+    require_retrieval_index_binding: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
     if suite_kind != "qasper_debug":
         return _not_applicable_audit(), []
@@ -58,15 +67,40 @@ def qasper_causal_transaction_artifact_audit(
             ),
             [violation],
         )
+    retrieval_index_binding = retrieval_index_binding_audit(
+        rows,
+        artifact_path=retrieval_index_artifact_path,
+        restore_audit_path=retrieval_index_restore_audit_path,
+        expected_code_sha=expected_code_sha,
+        expected_index_contract=expected_index_contract,
+        expected_embedding_contract=expected_embedding_contract,
+        required=require_retrieval_index_binding,
+    )
+    if require_retrieval_index_binding and (
+        retrieval_index_binding.get("status") != "matched"
+    ):
+        violations = list(retrieval_index_binding.get("violations") or [])
+        return (
+            _audit(
+                [],
+                violations,
+                expected_count=len(predictions),
+                observed_count=len(rows),
+                retrieval_index_binding=retrieval_index_binding,
+            ),
+            violations,
+        )
     observations, violations = _audit_rows(rows, predictions)
+    violations.extend(retrieval_index_binding.get("violations") or [])
     return (
         _audit(
             observations,
-            violations,
+            list(dict.fromkeys(violations)),
             expected_count=len(predictions),
             observed_count=len(rows),
+            retrieval_index_binding=retrieval_index_binding,
         ),
-        violations,
+        list(dict.fromkeys(violations)),
     )
 
 
@@ -500,6 +534,7 @@ def _audit(
     *,
     expected_count: int,
     observed_count: int,
+    retrieval_index_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "contract_id": "qasper_causal_transaction_artifact_audit.v1",
@@ -516,6 +551,7 @@ def _audit(
         "replay_matched_transaction_count": sum(
             observation.get("status") == "matched" for observation in observations
         ),
+        "retrieval_index_binding_audit": dict(retrieval_index_binding or {}),
         "observations": observations,
         "violations": violations,
     }
@@ -532,6 +568,13 @@ def _not_applicable_audit() -> dict[str, Any]:
         "complete_transaction_count": 0,
         "replay_expected_transaction_count": 0,
         "replay_matched_transaction_count": 0,
+        "retrieval_index_binding_audit": {
+            "contract_id": "qasper_retrieval_index_binding_audit.v1",
+            "status": "not_applicable",
+            "hard_rule": "stop_at_first_divergence",
+            "observations": [],
+            "violations": [],
+        },
         "observations": [],
         "violations": [],
     }

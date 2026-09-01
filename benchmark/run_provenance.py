@@ -22,6 +22,7 @@ _SERVICE_ENV_FIELDS = {
     "MARA_COLVISION_ENDPOINT": "colvision_endpoint",
 }
 _INDEX_CONTRACT_ENV = "MARA_BENCHMARK_INDEX_CONTRACT"
+_EMBEDDING_CONTRACT_ENV = "MARA_BENCHMARK_EMBEDDING_CONTRACT"
 
 
 def benchmark_run_provenance(
@@ -40,6 +41,7 @@ def benchmark_run_provenance(
         if str(environment.get(env_name) or "")
     }
     index_contract = str(environment.get(_INDEX_CONTRACT_ENV) or "")
+    embedding_contract = str(environment.get(_EMBEDDING_CONTRACT_ENV) or "")
     manifest_contract = {"sha256": _file_sha256(manifest)}
     paired_input_payload = {
         "manifest": manifest_contract,
@@ -50,18 +52,20 @@ def benchmark_run_provenance(
             if not key.endswith("_endpoint")
         },
         "index_contract": index_contract,
+        "embedding_contract": embedding_contract,
     }
     contract_payload: dict[str, Any] = {
         "git": {"commit": commit, "dirty": dirty},
         **{
             key: value
             for key, value in paired_input_payload.items()
-            if key != "index_contract"
+            if key not in {"index_contract", "embedding_contract"}
         },
     }
     runtime_payload = {
         **contract_payload,
         "index_contract": index_contract,
+        "embedding_contract": embedding_contract,
         "runtime_endpoints": {
             key: value for key, value in service.items() if key.endswith("_endpoint")
         },
@@ -74,6 +78,7 @@ def benchmark_run_provenance(
         },
         "service": service,
         "index_contract": index_contract,
+        "embedding_contract": embedding_contract,
         "paired_input_hash": _payload_hash(paired_input_payload),
         "contract_hash": _payload_hash(contract_payload),
         "execution_hash": _payload_hash(runtime_payload),

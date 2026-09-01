@@ -153,6 +153,8 @@ def validate(
     *,
     suite_kind: str,
     contract_probe_path: Path | None = None,
+    retrieval_index_artifact_path: Path | None = None,
+    retrieval_index_restore_audit_path: Path | None = None,
 ) -> dict[str, Any]:
     summary = _load_json(run_dir / "summary.json")
     predictions = _load_predictions(run_dir / "predictions.jsonl")
@@ -163,6 +165,15 @@ def validate(
     )
     expected_count = (18, 18) if suite_kind == "qasper_debug" else (2, 5)
     observed_requirements = _requirements(predictions)
+    if suite_kind == "qasper_debug":
+        retrieval_index_artifact_path = (
+            retrieval_index_artifact_path
+            or run_dir / "retrieval_index_artifact.json"
+        )
+        retrieval_index_restore_audit_path = (
+            retrieval_index_restore_audit_path
+            or run_dir / "retrieval_index_restore_audit.json"
+        )
     precondition_violations = _precondition_violations(
         run_dir,
         summary,
@@ -191,6 +202,8 @@ def validate(
         expected_count=expected_count,
         observed_requirements=observed_requirements,
         contract_probe_predictions=contract_probe_predictions,
+        retrieval_index_artifact_path=retrieval_index_artifact_path,
+        retrieval_index_restore_audit_path=retrieval_index_restore_audit_path,
     )
     publish_contract_smoke_audit(run_dir, audit)
     if audit["status"] != "passed":
@@ -207,14 +220,19 @@ def _complete_audit(
     expected_count: tuple[int, int],
     observed_requirements: set[str],
     contract_probe_predictions: list[dict[str, Any]],
+    retrieval_index_artifact_path: Path | None,
+    retrieval_index_restore_audit_path: Path | None,
 ) -> dict[str, Any]:
     (
         causal_transaction_audit,
         causal_transaction_violations,
-    ) = qasper_causal_transaction_artifact_audit(
+    ) = _causal_transaction_audit(
         run_dir,
+        summary,
         predictions,
         suite_kind=suite_kind,
+        retrieval_index_artifact_path=retrieval_index_artifact_path,
+        retrieval_index_restore_audit_path=retrieval_index_restore_audit_path,
     )
     behavior_violations = _behavior_violations(
         predictions,
@@ -254,7 +272,46 @@ def _complete_audit(
         failed_gates,
         contract_gate_failures,
     )
-    audit = {
+    return _complete_audit_payload(
+        run_dir,
+        summary,
+        predictions,
+        suite_kind=suite_kind,
+        expected_count=expected_count,
+        observed_requirements=observed_requirements,
+        stage_audits=stage_audits,
+        stage_violations=stage_violations,
+        behavior_violations=behavior_violations,
+        metrics=metrics,
+        hard_gates=hard_gates,
+        failed_gates=failed_gates,
+        contract_gate_failures=contract_gate_failures,
+        causal_transaction_audit=causal_transaction_audit,
+        debug_extensions=debug_extensions,
+        status=status,
+    )
+
+
+def _complete_audit_payload(
+    run_dir: Path,
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    expected_count: tuple[int, int],
+    observed_requirements: set[str],
+    stage_audits: list[dict[str, Any]],
+    stage_violations: list[dict[str, Any]],
+    behavior_violations: list[str],
+    metrics: dict[str, Any],
+    hard_gates: dict[str, Any],
+    failed_gates: list[str],
+    contract_gate_failures: list[str],
+    causal_transaction_audit: dict[str, Any],
+    debug_extensions: dict[str, Any],
+    status: str,
+) -> dict[str, Any]:
+    return {
         "contract": CONTRACT,
         "suite_kind": suite_kind,
         "artifact_detail": summary.get("artifact_detail"),
@@ -277,7 +334,34 @@ def _complete_audit(
         **debug_extensions,
         "status": status,
     }
-    return audit
+
+
+def _causal_transaction_audit(
+    run_dir: Path,
+    summary: dict[str, Any],
+    predictions: list[dict[str, Any]],
+    *,
+    suite_kind: str,
+    retrieval_index_artifact_path: Path | None,
+    retrieval_index_restore_audit_path: Path | None,
+) -> tuple[dict[str, Any], list[str]]:
+    provenance = summary.get("run_provenance")
+    provenance = provenance if isinstance(provenance, dict) else {}
+    git = provenance.get("git")
+    git = git if isinstance(git, dict) else {}
+    return qasper_causal_transaction_artifact_audit(
+        run_dir,
+        predictions,
+        suite_kind=suite_kind,
+        retrieval_index_artifact_path=retrieval_index_artifact_path,
+        retrieval_index_restore_audit_path=retrieval_index_restore_audit_path,
+        expected_code_sha=str(git.get("commit") or ""),
+        expected_index_contract=str(provenance.get("index_contract") or ""),
+        expected_embedding_contract=str(
+            provenance.get("embedding_contract") or ""
+        ),
+        require_retrieval_index_binding=True,
+    )
 
 
 def _audit_status(*violation_groups: Any) -> str:
@@ -443,6 +527,18 @@ def main() -> None:
         required=True,
     )
     parser.add_argument(
+        "--retrieval-index-artifact",
+        type=Path,
+        help=(
+            "Frozen real QASPER Stage 2 artifact required by formal debug runs."
+        ),
+    )
+    parser.add_argument(
+        "--retrieval-index-restore-audit",
+        type=Path,
+        help="Job-owned proof that the frozen QASPER index tree was restored.",
+    )
+    parser.add_argument(
         "--contract-probe-predictions",
         type=Path,
         help=(
@@ -458,6 +554,16 @@ def main() -> None:
             contract_probe_path=(
                 args.contract_probe_predictions.resolve()
                 if args.contract_probe_predictions
+                else None
+            ),
+            retrieval_index_artifact_path=(
+                args.retrieval_index_artifact.resolve()
+                if args.retrieval_index_artifact
+                else None
+            ),
+            retrieval_index_restore_audit_path=(
+                args.retrieval_index_restore_audit.resolve()
+                if args.retrieval_index_restore_audit
                 else None
             ),
         )

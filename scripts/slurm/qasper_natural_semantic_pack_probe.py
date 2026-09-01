@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import json
 from collections.abc import Mapping
 from pathlib import Path
@@ -20,10 +19,7 @@ from scripts.slurm.qasper_natural_production_path_probe import (
     fusion_replay_prediction,
     production_authority_probe,
 )
-from scripts.slurm.qasper_natural_semantic_pack_audit import build_audit
-from scripts.slurm.qasper_natural_semantic_pack_audit import (
-    runtime_code_identity as _runtime_code_identity,
-)
+from scripts.slurm.qasper_natural_semantic_pack_audit import build_audit  # noqa: F401
 from scripts.slurm.qasper_natural_semantic_pack_probe_payload import build_probe_result
 from scripts.slurm.qasper_natural_semantic_pack_replay import (
     candidate_path_replay_complete,
@@ -457,51 +453,9 @@ def _string_list(value: Any) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Replay natural QASPER retrieval records through the canonical pack."
-    )
-    parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--code-sha", required=True)
-    parser.add_argument("--route", default="text_rag")
-    parser.add_argument("--expected-count", type=int, default=6)
-    parser.add_argument("--semantic-debug-input", type=Path)
-    args = parser.parse_args()
+    from scripts.slurm.qasper_natural_semantic_pack_probe_cli import main as cli_main
 
-    rows = load_probe_inputs(args.input, route=args.route)
-    run_contexts = load_probe_run_contexts(
-        args.input,
-        rows,
-        semantic_debug_path=args.semantic_debug_input,
-    )
-    predictions = [
-        probe_prediction(
-            row,
-            code_sha=args.code_sha,
-            run_context=run_contexts[_prediction_key(row)],
-        )
-        for row in rows
-    ]
-    runtime_code_sha, runtime_worktree_clean = _runtime_code_identity()
-    audit = build_audit(
-        predictions,
-        code_sha=args.code_sha,
-        input_path=args.input,
-        expected_count=args.expected_count,
-        runtime_code_sha=runtime_code_sha,
-        runtime_worktree_clean=runtime_worktree_clean,
-    )
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    predictions_path = args.output_dir / "natural_semantic_pack_predictions.jsonl"
-    audit_path = args.output_dir / "natural_semantic_pack_audit.json"
-    predictions_path.write_text(
-        "".join(json.dumps(row, sort_keys=True) + "\n" for row in predictions)
-    )
-    audit_path.write_text(json.dumps(audit, indent=2, sort_keys=True) + "\n")
-    print(f"natural_semantic_pack_status={audit['status']}")
-    print(f"natural_semantic_pack_predictions={predictions_path.resolve()}")
-    print(f"natural_semantic_pack_audit={audit_path.resolve()}")
-    return 0 if audit["status"] == "passed" else 1
+    return cli_main()
 
 
 if __name__ == "__main__":

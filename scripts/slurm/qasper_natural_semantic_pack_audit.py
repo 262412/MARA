@@ -32,6 +32,7 @@ def build_audit(
     code_sha: str,
     input_path: Path,
     expected_count: int,
+    retrieval_index_binding: Mapping[str, Any],
     runtime_code_sha: str = "",
     runtime_worktree_clean: bool | None = None,
 ) -> dict[str, Any]:
@@ -54,7 +55,70 @@ def build_audit(
         str(_mapping(row.get("ambiguity")).get("denominator") or "unambiguous")
         for row in predictions
     )
-    gates = {
+    gates = _hard_gates(
+        predictions,
+        retrieval_index_binding=retrieval_index_binding,
+        expected_count=expected_count,
+        failed=failed,
+        causal_replay_observations=causal_replay_observations,
+        causal_replay_violations=causal_replay_violations,
+        observed_cohorts=observed_cohorts,
+        ambiguity_denominator=ambiguity_denominator,
+        code_sha=code_sha,
+        runtime_code_sha=runtime_code_sha,
+        runtime_worktree_clean=runtime_worktree_clean,
+    )
+    return {
+        "contract_id": AUDIT_CONTRACT,
+        "status": "passed" if all(gates.values()) else "failed",
+        "code_sha": code_sha,
+        "runtime_code_sha": runtime_code_sha,
+        "runtime_worktree_clean": runtime_worktree_clean,
+        "source": str(input_path.resolve()),
+        "source_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
+        "prediction_count": len(predictions),
+        "expected_prediction_count": expected_count,
+        "binding_state_counts": _counts(
+            str(row.get("binding_state") or "") for row in predictions
+        ),
+        "no_policy_cohort_counts": _counts(
+            cohort
+            for row in predictions
+            for cohort in row.get("no_policy_cohorts") or []
+        ),
+        "ambiguity_denominator": ambiguity_denominator,
+        "failed_examples": failed,
+        "retrieval_index_binding_audit": dict(retrieval_index_binding),
+        "causal_transaction_replay_audit": causal_replay_audit,
+        "hard_gates": gates,
+    }
+
+
+def _hard_gates(
+    predictions: list[dict[str, Any]],
+    *,
+    retrieval_index_binding: Mapping[str, Any],
+    expected_count: int,
+    failed: list[str],
+    causal_replay_observations: list[dict[str, Any]],
+    causal_replay_violations: list[str],
+    observed_cohorts: set[str],
+    ambiguity_denominator: dict[str, int],
+    code_sha: str,
+    runtime_code_sha: str,
+    runtime_worktree_clean: bool | None,
+) -> dict[str, bool]:
+    return {
+        "real_retrieval_index_artifact_bound": (
+            retrieval_index_binding.get("status") == "matched"
+            and retrieval_index_binding.get("hard_rule")
+            == "stop_at_first_divergence"
+            and retrieval_index_binding.get("expected_record_count")
+            == expected_count
+            and retrieval_index_binding.get("matched_record_count")
+            == expected_count
+            and not retrieval_index_binding.get("violations")
+        ),
         "prediction_count_complete": len(predictions) == expected_count,
         "all_structural_checks_passed": not failed,
         "online_local_causal_prefix_matched": bool(predictions)
@@ -76,29 +140,6 @@ def build_audit(
             expected_count != 6
             or ambiguity_denominator == _SIX_SAMPLE_AMBIGUITY_DENOMINATOR
         ),
-    }
-    return {
-        "contract_id": AUDIT_CONTRACT,
-        "status": "passed" if all(gates.values()) else "failed",
-        "code_sha": code_sha,
-        "runtime_code_sha": runtime_code_sha,
-        "runtime_worktree_clean": runtime_worktree_clean,
-        "source": str(input_path.resolve()),
-        "source_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
-        "prediction_count": len(predictions),
-        "expected_prediction_count": expected_count,
-        "binding_state_counts": _counts(
-            str(row.get("binding_state") or "") for row in predictions
-        ),
-        "no_policy_cohort_counts": _counts(
-            cohort
-            for row in predictions
-            for cohort in row.get("no_policy_cohorts") or []
-        ),
-        "ambiguity_denominator": ambiguity_denominator,
-        "failed_examples": failed,
-        "causal_transaction_replay_audit": causal_replay_audit,
-        "hard_gates": gates,
     }
 
 
