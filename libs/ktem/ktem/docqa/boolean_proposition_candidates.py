@@ -33,6 +33,7 @@ def boolean_proposition_candidate_score(
     proposition_question = semantic_boolean_proposition_question(
         _normalize_requirement_terms(_semantic_proposition_question(question, metric))
     )
+    proposition_question = semantic_boolean_proposition_question(proposition_source)
     candidate_item = _normalized_requirement_item(item)
     text = evidence_item_text(candidate_item)
     if not text:

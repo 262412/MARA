@@ -18,7 +18,7 @@ from .boolean_relations import boolean_relation_lemmas, primary_boolean_relation
 from .boolean_scope_language import named_language_pair_present
 
 _MAX_CONTEXT_SENTENCES = 5
-_MAX_CONTEXT_DISTANCE = 3
+_MAX_CONTEXT_DISTANCE = _MAX_CONTEXT_SENTENCES - 1
 _MAX_CONTEXT_CHARS = 1400
 _MAX_QUALIFIED_EMPIRICAL_SENTENCES = 6
 _MAX_QUALIFIED_EMPIRICAL_DISTANCE = 5

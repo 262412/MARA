@@ -369,7 +369,7 @@ def _segment_comparison_candidate_ids(
     ]
 
 
-def _update_bound_operand_state(
+def _track_operand(
     slot: EvidenceSlot,
     evidence_ids: tuple[str, ...],
     evidence_by_identity: dict[str, dict[str, Any]],

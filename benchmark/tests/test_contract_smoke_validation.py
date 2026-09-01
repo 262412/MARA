@@ -62,6 +62,26 @@ def _complete_qasper_answerability() -> dict[str, object]:
     }
 
 
+def _attach_terminal_commit(prediction: dict[str, Any]) -> None:
+    terminal_commit = build_terminal_semantic_commit(
+        "yes",
+        {
+            "status": "supported",
+            "action": "return",
+            "canonical_answer_polarity": "yes",
+        },
+        {"status": "ok", "action": "return"},
+        {
+            "items": [_evidence()],
+            "metadata": {"verified_claim_support_evidence": [_evidence()]},
+        },
+        presentation_answer="yes",
+    ).as_dict()
+    prediction["engine_terminal_state"]["terminal_semantic_commit"] = terminal_commit
+    prediction["engine_terminal_commit"] = terminal_commit
+    prediction["terminal_semantic_commit"] = terminal_commit
+
+
 def test_contract_smoke_validator_accepts_full_auditable_artifact(tmp_path):
     run_dir = tmp_path / "run"
     requirements = list(QASPER_REQUIREMENTS)
@@ -232,3 +252,4 @@ def test_qasper_contract_smoke_declares_runtime_authority_hard_gates():
         "qasper_invalid_typed_label_count",
         "qasper_canonical_semantic_pack_mismatch_count",
     } <= set(QASPER_HARD_GATES)
+    assert "terminal_outcome_contract_violation_count" in HARD_GATES

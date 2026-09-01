@@ -91,4 +91,17 @@ def _boolean_second_round_expansion(question: str) -> tuple[str, ...]:
         expansions.extend(relation_aliases.get(relation, ()))
     for token in sorted(_content_tokens(question)):
         expansions.extend(object_aliases.get(token, ()))
+    lowered = str(question or "").casefold()
+    if re.search(r"\bindex(?:ed|ing)(?:-based)?\b", lowered):
+        expansions.extend(("indexing-based", "indexing method", "indexed"))
+    if re.search(r"\bqa\b|\bquestion answering\b", lowered):
+        expansions.extend(("question answering", "answer retrieval"))
+    if re.search(r"\bsample\b", lowered):
+        expansions.extend(("sample", "silver-standard"))
+    if "wikipedia" in lowered:
+        expansions.extend(("Wikipedia", "entire Wikipedia"))
+    if "semantic role induction" in lowered:
+        expansions.extend(("SRI", "semantic roles", "role alignments"))
+    if re.search(r"\bparallel\s+(?:data|corpus|corpora)\b", lowered):
+        expansions.extend(("parallel corpus", "word alignments", "crosslingual"))
     return tuple(dict.fromkeys(expansions))

@@ -39,6 +39,9 @@ from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
 from scripts.slurm.validate_contract_smoke_probe import (  # noqa: E402
     contract_probe_preflight_violations as _contract_probe_preflight_violations,
 )
+from benchmark.terminal_outcome_contract import (  # noqa: E402
+    terminal_outcome_summary_fields,
+)
 
 CONTRACT = "contract_smoke_audit.v2"
 HARD_GATES = _gate_contract.HARD_GATES

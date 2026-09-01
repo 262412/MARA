@@ -5,12 +5,8 @@ from typing import Any
 from .deterministic_ranking import quantized_score
 from .evidence_identity import evidence_aliases, identity_of
 from .finance_narrative_evidence import finance_narrative_support_quality
-from .finance_query_planning import finance_metric_evidence_matches
 from .finance_scale import source_scale_evidence
-from .query_evidence_binding_support import (
-    agreement_attributes,
-    candidate_score_for_slot,
-)
+from .query_evidence_binding_support import agreement_attributes
 from .query_plan_schema import required_slot_count
 from .query_planning import QueryPlan
 from .selection_assessment_snapshot import SelectionAssessmentSnapshot
@@ -354,6 +350,63 @@ def _dimension_eviction_candidate(
     return identity_of(eviction).key
 
 
+def _protected_dimension_eviction_ids(
+    items: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+    plan: QueryPlan | None,
+    assessments: SelectionAssessmentTable | None,
+) -> set[str]:
+    protected: set[str] = set()
+    if plan is not None:
+        execution_slots = [
+            slot
+            for slot in plan.evidence_slots
+            if slot.required_for_execution and slot.role == "operand"
+        ]
+        for slot in execution_slots:
+            best = max(
+                (
+                    item
+                    for item in selected
+                    if _is_atomic_operand_candidate(item)
+                    and slot_score(
+                        plan,
+                        slot,
+                        item,
+                        assessments=assessments,
+                    )
+                    > 0
+                ),
+                key=lambda item: (
+                    quantized_score(
+                        slot_score(
+                            plan,
+                            slot,
+                            item,
+                            assessments=assessments,
+                        )
+                    ),
+                    quantized_score(_reranker_score(item)),
+                    identity_of(item).key,
+                ),
+                default=None,
+            )
+            if best is not None:
+                protected.add(identity_of(best).key)
+    for item in selected:
+        if not _is_atomic_operand_candidate(item):
+            continue
+        _scale, evidence_id = source_scale_evidence(item, items)
+        if not evidence_id:
+            continue
+        protected.update(
+            identity_of(candidate).key
+            for candidate in items
+            if evidence_id in evidence_aliases(candidate)
+        )
+    return protected
+
+
 def _add_slot_candidates(
     ranked: list[tuple[float, int, dict[str, Any]]],
     selected_ids: set[str],
@@ -475,21 +528,3 @@ def slot_score(
             requires_structure=bool(plan.constraints.get("requires_structure")),
         )
     )
-    if score > 0 or not (slot.required_for_execution and slot.role == "operand"):
-        return score
-    if _is_atomic_operand_candidate(item):
-        return 0.0
-    text = " ".join(
-        str(item.get(field) or "")
-        for field in ("text", "caption", "ocr_text", "table_title")
-    ).lower()
-    metric = str(slot.metric or "").strip().lower()
-    table_like = bool(
-        item.get("table_id")
-        or item.get("table_instance_id")
-        or str(item.get("modality") or "").lower() == "table"
-        or str(item.get("element_type") or "").lower() == "table"
-    )
-    if table_like and metric and finance_metric_evidence_matches(metric, text):
-        return 0.25
-    return 0.0
