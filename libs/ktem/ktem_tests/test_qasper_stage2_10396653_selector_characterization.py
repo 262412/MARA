@@ -124,3 +124,43 @@ def test_proposition_bearing_spans_are_selected_before_the_record_limit() -> Non
         "E1:S5",
         "E1:S7",
     ]
+
+
+def test_all_eight_production_records_materialize_only_canonical_spans() -> None:
+    payload = _fixture()
+    records = [
+        {
+            **record,
+            "label": f"E{index}",
+            "text_start": 0,
+            "candidate_source_text": record["text"],
+            "candidate_source_text_start": 0,
+            "canonical_start": None,
+            "selectors": [],
+        }
+        for index, record in enumerate(
+            payload["production_input_records"], start=1
+        )
+    ]
+
+    prioritized = _prioritized_candidate_prompt_evidence(
+        records, payload["question"]
+    )
+    target = next(
+        record
+        for record in prioritized
+        if record["evidence_id"] == TARGET_EVIDENCE_ID
+    )
+    selected_refs = [selector["selector_id"] for selector in target["selectors"]]
+
+    assert {"E7:S5", "E7:S7"}.issubset(selected_refs)
+    assert not {"E7:S16", "E7:S20"}.intersection(selected_refs)
+    assert len(selected_refs) <= 4
+
+    canonical, _ = prepare_qasper_canonical_records_with_trace(
+        payload["question"], prioritized
+    )
+    binding = candidate_evidence_set_binding(canonical, payload["question"])
+
+    assert binding["binding_state"] == "relation_bound_support"
+    assert binding["evidence_refs"] == ["E7:S5", "E7:S7"]
