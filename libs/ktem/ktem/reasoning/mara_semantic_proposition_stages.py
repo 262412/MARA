@@ -16,16 +16,9 @@ from .mara_candidate_unknown_audit import (
     candidate_unknown_audit_response_format,
     parse_candidate_unknown_audit,
 )
-from .mara_semantic_audit_preflight import (
-    PRE_AUDIT_SCHEMA_VALIDATION_FAILED,
-    audit_preflight_failure_reason,
-)
-from .mara_semantic_entailment_audit import (
-    SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-    SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT,
-    parse_semantic_entailment_audit,
-    semantic_entailment_audit_response_format,
-)
+from .mara_semantic_audit_preflight import audit_preflight_failure_reason
+from .mara_semantic_auditor_serialization import call_canonical_semantic_auditor
+from .mara_semantic_entailment_audit import parse_semantic_entailment_audit
 from .mara_semantic_proposition_debug import (
     provider_failure,
     response_completion_tokens,
@@ -129,12 +122,11 @@ def audit_stage(
         return _pre_audit_failure_stage(preflight_reason)
 
     def call(correction: str = "") -> StageCallResult:
-        return _call_audit(
+        return call_canonical_semantic_auditor(
             llm,
-            prompt,
+            _corrected_prompt(prompt, correction),
             premise_labels=labels,
             seed=seed,
-            correction_reason=correction,
             premise_slot_expectations=premise_slot_expectations,
             premise_slot_evidence=premise_slot_evidence,
         )
@@ -419,58 +411,6 @@ def _call_proposal(
         )
     except Exception as exc:
         LOGGER.exception("Semantic proposition verifier model call failed")
-        failure, detail = provider_failure(exc)
-        return StageCallResult(
-            None,
-            failure,
-            detail,
-            request_snapshot=request_snapshot,
-        )
-
-
-def _call_audit(
-    llm: Any,
-    prompt: str,
-    *,
-    premise_labels: list[str],
-    seed: int,
-    correction_reason: str,
-    premise_slot_expectations: dict[str, Collection[str]] | None,
-    premise_slot_evidence: dict[str, dict[str, Any]] | None,
-) -> StageCallResult:
-    try:
-        response_format = semantic_entailment_audit_response_format(
-            premise_labels,
-            premise_slot_expectations=premise_slot_expectations,
-            premise_slot_evidence=premise_slot_evidence,
-        )
-    except ValueError as exc:
-        return StageCallResult(
-            None,
-            PRE_AUDIT_SCHEMA_VALIDATION_FAILED,
-            str(exc)[:4000],
-            False,
-        )
-    request_snapshot: dict[str, Any] | None = None
-    try:
-        messages = [
-            SystemMessage(content=SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT),
-            HumanMessage(content=_corrected_prompt(prompt, correction_reason)),
-        ]
-        parameters = {
-            "max_tokens": SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-            "response_format": response_format,
-            "temperature": 0,
-            "top_p": 1,
-            "seed": seed,
-        }
-        request_snapshot = model_request_snapshot(messages, parameters)
-        return StageCallResult(
-            llm(messages, **parameters),
-            request_snapshot=request_snapshot,
-        )
-    except Exception as exc:
-        LOGGER.exception("Semantic entailment audit model call failed")
         failure, detail = provider_failure(exc)
         return StageCallResult(
             None,

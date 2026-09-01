@@ -469,9 +469,30 @@ def _attempts_complete(value: Any) -> bool:
             and (
                 _sha256(_mapping(attempt).get("raw_response_digest"))
                 or bool(_mapping(attempt).get("provider_failure_reason"))
+                or _failed_before_transport_attempt_complete(_mapping(attempt))
             )
             for attempt in attempts
         )
+    )
+
+
+def _failed_before_transport_attempt_complete(attempt: Mapping[str, Any]) -> bool:
+    serialization = _mapping(attempt.get("serialization"))
+    return bool(
+        attempt.get("parse_failure_reason")
+        and attempt.get("failed_before_transport") is True
+        and attempt.get("transport_status") == "failed_before_transport"
+        and serialization.get("contract_id")
+        == "semantic_auditor_request_serialization.v1"
+        and serialization.get("failed_before_transport") is True
+        and serialization.get("transport_status") == "failed_before_transport"
+        and serialization.get("failure_reason") == attempt.get("parse_failure_reason")
+        and serialization.get("serializer_identity")
+        and _sha256(serialization.get("message_digest"))
+        and int(serialization.get("prompt_char_count") or 0) > 0
+        and int(serialization.get("prompt_char_limit") or 0) > 0
+        and int(serialization.get("input_token_count") or 0) > 0
+        and int(serialization.get("input_token_limit") or 0) > 0
     )
 
 

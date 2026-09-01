@@ -392,15 +392,43 @@ def _lineage(diagnostics: dict[str, Any]) -> dict[str, Any]:
 
 
 def _attempt_lineage(stage: Any) -> list[dict[str, Any]]:
-    return [
-        {
+    attempts: list[dict[str, Any]] = []
+    for index, attempt in enumerate(stage.attempts, start=1):
+        record = {
             "attempt": index,
             "raw_response_digest": _response_digest(attempt.response),
             "parse_failure_reason": str(attempt.parse_failure_reason or ""),
             "provider_failure_reason": str(attempt.provider_failure_reason or ""),
         }
-        for index, attempt in enumerate(stage.attempts, start=1)
-    ]
+        snapshot = (
+            attempt.request_snapshot
+            if isinstance(attempt.request_snapshot, Mapping)
+            else {}
+        )
+        serialization = snapshot.get("serialization")
+        if isinstance(serialization, Mapping):
+            record.update(
+                {
+                    "request_snapshot_digest": _canonical_digest(snapshot),
+                    "serializer_identity": str(
+                        serialization.get("serializer_identity") or ""
+                    ),
+                    "message_digest": str(serialization.get("message_digest") or ""),
+                    "prompt_char_count": serialization.get("prompt_char_count"),
+                    "prompt_char_limit": serialization.get("prompt_char_limit"),
+                    "input_token_count": serialization.get("input_token_count"),
+                    "input_token_limit": serialization.get("input_token_limit"),
+                    "failed_before_transport": serialization.get(
+                        "failed_before_transport"
+                    ),
+                    "transport_status": str(
+                        serialization.get("transport_status") or ""
+                    ),
+                    "serialization": dict(serialization),
+                }
+            )
+        attempts.append(record)
+    return attempts
 
 
 def _record_stage_first_inconsistency(
@@ -418,19 +446,43 @@ def _record_stage_first_inconsistency(
         )
         if not reason:
             continue
+        serialization = _attempt_serialization(attempt)
+        inconsistency_stage = (
+            provider_stage
+            if attempt.provider_failure_reason
+            else _proposal_parser_failure_stage(reason)
+            if parser_stage == "proposal_parse"
+            else "auditor_message_serialization"
+            if serialization.get("failed_before_transport") is True
+            else parser_stage
+        )
         lineage["first_inconsistency"] = {
-            "stage": (
-                provider_stage
-                if attempt.provider_failure_reason
-                else _proposal_parser_failure_stage(reason)
-                if parser_stage == "proposal_parse"
-                else parser_stage
-            ),
+            "stage": inconsistency_stage,
             "reason": reason,
             "attempt": index,
             "raw_response_digest": _response_digest(attempt.response),
         }
+        if serialization:
+            lineage["first_inconsistency"].update(
+                {
+                    "serializer_identity": str(
+                        serialization.get("serializer_identity") or ""
+                    ),
+                    "message_digest": str(serialization.get("message_digest") or ""),
+                    "failed_before_transport": serialization.get(
+                        "failed_before_transport"
+                    ),
+                }
+            )
         return
+
+
+def _attempt_serialization(attempt: Any) -> Mapping[str, Any]:
+    snapshot = getattr(attempt, "request_snapshot", None)
+    if not isinstance(snapshot, Mapping):
+        return {}
+    serialization = snapshot.get("serialization")
+    return serialization if isinstance(serialization, Mapping) else {}
 
 
 def _proposal_parser_failure_stage(reason: str) -> str:

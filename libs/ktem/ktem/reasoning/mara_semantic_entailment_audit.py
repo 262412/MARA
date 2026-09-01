@@ -5,14 +5,14 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from ktem.docqa.question_proposition import (
-    QuestionProposition,
-    TypedConclusion,
-    proposition_evidence_bindings,
+from .mara_semantic_auditor_prompt import (  # noqa: F401
+    SEMANTIC_ENTAILMENT_AUDIT_MAX_PROMPT_CHARS as SEMANTIC_ENTAILMENT_AUDIT_MAX_PROMPT_CHARS,
+)
+from .mara_semantic_auditor_prompt import (  # noqa: F401
+    semantic_entailment_audit_prompt as semantic_entailment_audit_prompt,
 )
 
 SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS = 512
-SEMANTIC_ENTAILMENT_AUDIT_MAX_PROMPT_CHARS = 8000
 
 SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT = (
     "You are the independent audit stage for a document-grounded proof proposal. "
@@ -20,6 +20,9 @@ SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT = (
     "typed_conclusion.polarity; audit that supplied relationship without "
     "renaming the candidate judgment as a verifier verdict. "
     "The proposal may be wrong even when every quote is genuine. Check that each "
+    "premise's frozen_span_ref points to its one exact text in "
+    "frozen_evidence_spans; all other evidence fields are controlled refs and "
+    "digests into that immutable text. Check that each "
     "quote entails its stated proposition fragment without adding an action, "
     "object, actor, scope, modality, comparison, quantifier, polarity, or time. "
     "Judge each local fragment independently from the final conclusion: when a "
@@ -53,89 +56,6 @@ SEMANTIC_ENTAILMENT_AUDIT_SYSTEM_PROMPT = (
 class SemanticEntailmentAuditParse:
     value: dict[str, Any] | None
     failure_reason: str = ""
-
-
-def semantic_entailment_audit_prompt(
-    proposition: QuestionProposition,
-    conclusion: TypedConclusion,
-    proof_mode: str,
-    premises: list[dict[str, Any]],
-    *,
-    original_candidate: str = "",
-    candidate_judgment: str = "",
-    premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None = None,
-    semantic_pack_identity: Mapping[str, str] | None = None,
-) -> str:
-    payload = {
-        "original_candidate": str(original_candidate or "").strip().casefold(),
-        "candidate_judgment": str(candidate_judgment or "").strip().casefold(),
-        "question_proposition": proposition.as_dict(),
-        "typed_conclusion": conclusion.as_dict(),
-        "semantic_pack_identity": dict(semantic_pack_identity or {}),
-        "proof_mode": proof_mode,
-        "target_proposition_slot_bindings": proposition_evidence_bindings(proposition),
-        "premises": [
-            {
-                "premise_ref": f"P{index}",
-                "quote": str(premise.get("quote") or ""),
-                "proposition_fragment": str(premise.get("proposition_fragment") or ""),
-                "binds_proposition_slots": list(
-                    premise.get("binds_proposition_slots") or []
-                ),
-                "local_proposition_slot_contributions": _prompt_slot_evidence(
-                    f"P{index}",
-                    premise.get("binds_proposition_slots") or [],
-                    premise_slot_evidence=premise_slot_evidence,
-                ),
-                "semantic_alignment": _audit_alignment_projection(
-                    premise.get("semantic_alignment")
-                ),
-                "evidence_relation": str(premise.get("evidence_relation") or ""),
-            }
-            for index, premise in enumerate(premises, start=1)
-        ],
-    }
-    prompt = "/no_think\nAUDIT THIS PROOF PROPOSAL:\n" + json.dumps(
-        payload,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    if len(prompt) > SEMANTIC_ENTAILMENT_AUDIT_MAX_PROMPT_CHARS:
-        raise ValueError("Semantic entailment audit prompt exceeded its bound.")
-    return prompt
-
-
-def _audit_alignment_projection(value: Any) -> dict[str, Any]:
-    alignment = dict(value) if isinstance(value, Mapping) else {}
-    return {
-        key: alignment.get(key)
-        for key in (
-            "contract_id",
-            "status",
-            "alignment_digest",
-            "covered_object_tokens",
-            "semantic_matches",
-            "semantic_rule_ids",
-        )
-        if key in alignment
-    }
-
-
-def _prompt_slot_evidence(
-    label: str,
-    slots: Collection[str],
-    *,
-    premise_slot_evidence: Mapping[str, Mapping[str, Any]] | None,
-) -> dict[str, Any]:
-    evidence = dict((premise_slot_evidence or {}).get(label) or {})
-    return {
-        str(slot): (
-            _normalized_slot_evidence(label, str(slot), evidence.get(str(slot)))
-            if premise_slot_evidence is not None
-            else {"evidence_ref": f"{label}:{slot}"}
-        )
-        for slot in slots
-    }
 
 
 def _premise_check_schema(

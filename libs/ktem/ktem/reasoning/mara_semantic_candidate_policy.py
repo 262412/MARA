@@ -14,10 +14,10 @@ from .mara_candidate_unknown_audit import (
     candidate_unknown_audit_prompt,
     candidate_unknown_audit_rejection_reason,
 )
+from .mara_semantic_auditor_prompt import semantic_entailment_audit_prompt_unbounded
 from .mara_semantic_entailment_audit import (
     SEMANTIC_ENTAILMENT_AUDIT_MAX_PROMPT_CHARS,
     SEMANTIC_ENTAILMENT_AUDIT_MAX_TOKENS,
-    semantic_entailment_audit_prompt,
     semantic_entailment_rejection_reason,
 )
 from .mara_semantic_proposition_data_lineage import record_audit_data_lineage
@@ -371,7 +371,7 @@ def candidate_bound_semantic_audit_prompt(
     *,
     premise_slot_evidence: dict[str, dict[str, Any]] | None = None,
 ) -> str:
-    prompt = semantic_entailment_audit_prompt(
+    prompt = semantic_entailment_audit_prompt_unbounded(
         context.proposition,
         conclusion,
         str(value.get("proof_mode") or ""),

@@ -19,6 +19,7 @@ from ktem.reasoning.mara_semantic_proposition_packing import (
     semantic_proposition_verifier_prompt,
 )
 
+from benchmark.qasper_causal_evidence_chain import _attempts_complete
 from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
 from benchmark.qasper_causal_transaction import qasper_causal_transaction
 from benchmark.tests.qasper_terminal_projection_fixture import (
@@ -267,3 +268,31 @@ def test_stage_nine_rejects_a_self_consistent_but_nonlocal_proposal_input() -> N
     assert comparison["later_stages_evaluated"] is False
     local = replay["local_replay_transaction"]["stages"][8]
     assert "semantic_proposal_question_mismatch" in local["incompleteness_reasons"]
+
+
+def test_formal_lineage_accepts_a_complete_pretransport_serialization_attempt() -> None:
+    serialization = {
+        "contract_id": "semantic_auditor_request_serialization.v1",
+        "serializer_identity": "auditor-serializer-v1",
+        "message_digest": "a" * 64,
+        "prompt_char_count": 8001,
+        "prompt_char_limit": 8000,
+        "input_token_count": 2001,
+        "input_token_limit": 3456,
+        "failed_before_transport": True,
+        "transport_status": "failed_before_transport",
+        "failure_reason": "audit_prompt_bound_exceeded",
+    }
+    attempt = {
+        "attempt": 1,
+        "raw_response_digest": "",
+        "parse_failure_reason": "audit_prompt_bound_exceeded",
+        "provider_failure_reason": "",
+        "failed_before_transport": True,
+        "transport_status": "failed_before_transport",
+        "serialization": serialization,
+    }
+
+    assert _attempts_complete([attempt]) is True
+    attempt["serialization"] = {**serialization, "message_digest": ""}
+    assert _attempts_complete([attempt]) is False

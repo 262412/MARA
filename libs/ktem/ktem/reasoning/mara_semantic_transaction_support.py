@@ -24,28 +24,6 @@ from .mara_semantic_proposition_debug import semantic_transaction_debug
 from .mara_semantic_proposition_stages import ParsedSemanticStage
 
 
-def audit_prompt_failure(
-    context: SemanticPropositionTransactionContext,
-    proposal: ParsedSemanticStage,
-    diagnostics: dict[str, Any],
-) -> SemanticPropositionTransactionResult:
-    diagnostics.update(
-        {
-            "audit_status": "not_started",
-            "audit_execution_status": "not_started",
-            "audit_reason": "audit_prompt_bound_exceeded",
-        }
-    )
-    return transaction_result(
-        None,
-        "failed",
-        "audit_prompt_bound_exceeded",
-        diagnostics,
-        proposal_calls=proposal.call_count,
-        debug_trace=transaction_debug(context, proposal, None),
-    )
-
-
 def pre_audit_transaction_failure(
     proposal: ParsedSemanticStage,
     audit: ParsedSemanticStage,

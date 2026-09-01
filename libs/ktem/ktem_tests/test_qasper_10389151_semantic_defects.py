@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -74,6 +75,43 @@ def _premises(case: dict[str, Any]) -> list[dict[str, Any]]:
         }
         for selector in case["selectors"]
     ]
+
+
+def _assert_controlled_auditor_contributions(
+    payload: dict[str, Any],
+    premises: list[dict[str, Any]],
+    slot_evidence: dict[str, dict[str, Any]],
+    canonical_bindings: dict[str, str],
+) -> None:
+    controlled_spans = {
+        span["evidence_ref"]: span for span in payload["frozen_evidence_spans"]
+    }
+    for index, (prompt_premise, source_premise) in enumerate(
+        zip(payload["premises"], premises),
+        start=1,
+    ):
+        assert "proposition_slot_bindings" not in prompt_premise
+        assert controlled_spans[prompt_premise["frozen_span_ref"]]["text"] == (
+            source_premise["quote"]
+        )
+        contributions = prompt_premise["local_proposition_slot_contributions"]
+        assert set(contributions) == set(source_premise["binds_proposition_slots"])
+        source_object = slot_evidence[f"P{index}"]["object"]
+        object_contribution = contributions["object"]
+        assert (
+            object_contribution["text_digest"]
+            == hashlib.sha256(source_object["text"].encode("utf-8")).hexdigest()
+        )
+        assert (
+            source_premise["quote"][
+                object_contribution["relative_start"] : object_contribution[
+                    "relative_end"
+                ]
+            ]
+            == source_object["text"]
+        )
+        assert source_object["text"] != canonical_bindings["object"]
+        assert prompt_premise["semantic_alignment"]["status"] == "verified"
 
 
 def test_10389151_a_analysis_heading_is_not_production_inspection_support() -> None:
@@ -165,19 +203,14 @@ def test_10389151_b_composite_plan_projects_local_auditor_contributions() -> Non
     assert local_constraint["status"] == "passed"
     assert payload["target_proposition_slot_bindings"] == canonical_bindings
     assert payload["proof_mode"] == "composite_conjunction"
-    for prompt_premise, source_premise in zip(payload["premises"], premises):
-        assert "proposition_slot_bindings" not in prompt_premise
-        contributions = prompt_premise["local_proposition_slot_contributions"]
-        assert set(contributions) == set(source_premise["binds_proposition_slots"])
-        assert contributions["object"]["text"] in source_premise["quote"]
-        assert contributions["object"]["text"] != canonical_bindings["object"]
-        assert prompt_premise["semantic_alignment"]["status"] == "verified"
+    _assert_controlled_auditor_contributions(
+        payload,
+        premises,
+        slot_evidence,
+        canonical_bindings,
+    )
 
-    covered = {
-        token
-        for premise in payload["premises"]
-        for token in premise["semantic_alignment"]["covered_object_tokens"]
-    }
+    covered = set(local_constraint["covered_object_tokens"])
     assert covered == set(case["expected"]["required_object_tokens"])
 
 

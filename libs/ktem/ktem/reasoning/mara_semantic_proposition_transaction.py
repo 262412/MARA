@@ -60,7 +60,6 @@ from .mara_semantic_transaction_context import (
 )
 from .mara_semantic_transaction_support import (
     applicable_proposition_slots,
-    audit_prompt_failure,
     bind_semantic_runtime_fields,
     canonical_plan_projection_digest,
     canonical_plan_projection_for_context,
@@ -245,12 +244,9 @@ def _audit_transaction(
     bind_semantic_runtime_fields(value, context)
     conclusion = typed_conclusion(context.proposition, str(value.get("verdict") or ""))
     value["typed_conclusion"] = conclusion.as_dict()
-    try:
-        local_constraint, audit, audit_input = execute_semantic_entailment_audit(
-            context, value, conclusion
-        )
-    except ValueError:
-        return audit_prompt_failure(context, proposal, diagnostics)
+    local_constraint, audit, audit_input = execute_semantic_entailment_audit(
+        context, value, conclusion
+    )
     if audit.call_count > 0:
         diagnostics["auditor_semantic_pack_identity"] = semantic_pack_identity(context)
     diagnostics["independent_semantic_constraint"] = local_constraint
