@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from copy import deepcopy
 from typing import Any
 
@@ -17,27 +16,23 @@ from .mara_qasper_candidate_evidence import (
     candidate_selector_options as _candidate_selector_options,
 )
 from .mara_qasper_candidate_evidence import (
-    candidate_selector_options_with_trace as _candidate_selector_options_with_trace,
-)
-from .mara_qasper_candidate_evidence import (
     exact_candidate_slot_binding as _exact_candidate_slot_binding,
 )
 from .mara_qasper_candidate_identity import candidate_digest as _trace_digest
+from .mara_qasper_candidate_selector_projection import (
+    prioritized_candidate_prompt_evidence as _prioritized_candidate_prompt_evidence,
+)
 from .mara_qasper_selector_trace_projection import (
     project_qasper_canonical_selector_trace,
 )
 from .mara_qasper_semantic_pack import prepare_qasper_canonical_records_with_trace
 from .mara_semantic_proposition_packing import (
-    SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
     SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS,
     SemanticPropositionEvidencePacking,
     compact_json,
     pack_semantic_proposition_evidence,
     required_semantic_proposition_slots,
 )
-from .mara_semantic_proposition_span_selectors import canonical_span_selector_projection
-
-_CANDIDATE_SELECTORS_PER_RECORD = 4
 
 
 def _candidate_evidence(
@@ -338,136 +333,6 @@ def _candidate_prompt(
         "not_applicable. Do not rewrite the parsed candidate; return one JSON object "
         "matching the required schema."
     )
-
-
-def _prioritized_candidate_prompt_evidence(
-    evidence: list[dict[str, Any]],
-    question: str,
-) -> list[dict[str, Any]]:
-    output: list[dict[str, Any]] = []
-    for record in evidence:
-        source_text = str(
-            record.get("candidate_source_text") or record.get("text") or ""
-        )
-        text_start = int(record.get("candidate_source_text_start") or 0)
-        canonical_start = record.get("canonical_start")
-        canonical_start = canonical_start if isinstance(canonical_start, int) else None
-        raw_selectors, span_projection = canonical_span_selector_projection(
-            str(record.get("label") or ""),
-            source_text,
-            text_start,
-            canonical_start,
-            selector_max_chars=SEMANTIC_PROPOSITION_SELECTOR_MAX_CHARS,
-        )
-        projected = {
-            **record,
-            "text": source_text,
-            "text_start": text_start,
-            "selectors": raw_selectors,
-        }
-        eligible, eligibility_decisions = _candidate_selector_options_with_trace(
-            projected,
-            question=question,
-        )
-        options = eligible[:_CANDIDATE_SELECTORS_PER_RECORD]
-        projected["selectors"] = [
-            {
-                "selector_id": option["evidence_ref"],
-                "text": option["text"],
-                "span_start": option["span_start"],
-                "span_end": option["span_end"],
-            }
-            for option in options
-        ]
-        projected[
-            "candidate_selector_projection_trace"
-        ] = _candidate_selector_projection_trace(
-            raw_selectors,
-            eligible,
-            options,
-            span_projection=span_projection,
-            eligibility_decisions=eligibility_decisions,
-        )
-        output.append(projected)
-    return output
-
-
-def _candidate_selector_projection_trace(
-    raw_selectors: list[dict[str, Any]],
-    eligible_options: list[dict[str, Any]],
-    selected_options: list[dict[str, Any]],
-    *,
-    span_projection: dict[str, Any],
-    eligibility_decisions: list[dict[str, Any]],
-) -> dict[str, Any]:
-    eligible_ranks = {
-        str(option.get("evidence_ref") or ""): rank
-        for rank, option in enumerate(eligible_options, start=1)
-    }
-    selected_refs = [
-        str(option.get("evidence_ref") or "") for option in selected_options
-    ]
-    selected = set(selected_refs)
-    eligibility_by_index = {
-        int(decision.get("source_selector_index") or 0): decision
-        for decision in eligibility_decisions
-    }
-    decisions = [
-        _candidate_selector_decision(
-            selector,
-            eligibility=eligibility_by_index.get(index, {}),
-            eligible_rank=eligible_ranks.get(str(selector.get("selector_id") or "")),
-            selected=str(selector.get("selector_id") or "") in selected,
-        )
-        for index, selector in enumerate(raw_selectors, start=1)
-    ]
-    return {
-        "contract_id": "qasper_candidate_selector_projection.v1",
-        "complete": True,
-        "input_selector_count": len(raw_selectors),
-        "eligible_selector_count": len(eligible_options),
-        "selected_selector_count": len(selected_options),
-        "decision_count": len(decisions),
-        "selected_selector_refs": selected_refs,
-        "decisions_digest": _trace_digest(decisions),
-        "span_projection": span_projection,
-        "decisions": decisions,
-    }
-
-
-def _candidate_selector_decision(
-    selector: dict[str, Any],
-    *,
-    eligibility: dict[str, Any],
-    eligible_rank: int | None,
-    selected: bool,
-) -> dict[str, Any]:
-    selector_id = str(selector.get("selector_id") or "")
-    identity = {
-        "selector_id": selector_id,
-        "span_start": selector.get("span_start"),
-        "span_end": selector.get("span_end"),
-        "text": str(selector.get("text") or ""),
-    }
-    return {
-        "selector_id": selector_id,
-        "selector_identity_digest": _trace_digest(identity),
-        "span_start": selector.get("span_start"),
-        "span_end": selector.get("span_end"),
-        "text_digest": hashlib.sha256(
-            str(selector.get("text") or "").encode("utf-8")
-        ).hexdigest(),
-        "eligible_rank": eligible_rank,
-        "eligibility_reason": str(eligibility.get("reason") or ""),
-        "selected": selected,
-        "decision": (
-            "selected_for_canonical_projection"
-            if selected
-            else "candidate_selector_limit"
-            if eligible_rank is not None
-            else str(eligibility.get("reason") or "semantic_projection_filtered")
-        ),
-    }
 
 
 def _compact_candidate_selector_options(

@@ -31,6 +31,7 @@ from .mara_qasper_semantic_pack_observation import (
 from .mara_qasper_semantic_pack_observation import (
     source_records_from_payload as _source_records_from_payload,
 )
+from .mara_qasper_semantic_pack_trace import canonical_selector_projection_trace
 from .mara_semantic_proposition_packing import (
     SemanticPropositionEvidencePacking,
     semantic_proposition_pack_digest,
@@ -113,17 +114,13 @@ def prepare_qasper_canonical_records_with_trace(
                 if is_selected
                 else "not_in_canonical_selector_universe"
             )
-    trace = {
-        "contract_id": "qasper_canonical_selector_projection.v1",
-        "complete": True,
-        "input_record_count": len(records),
-        "output_record_count": len(projected),
-        "input_selector_count": len(decisions),
-        "selected_selector_count": len(selected_identities),
-        "decision_count": len(decisions),
-        "decisions_digest": canonical_payload_digest(decisions),
-        "decisions": decisions,
-    }
+    trace = canonical_selector_projection_trace(
+        records,
+        projected,
+        decisions,
+        observation,
+        selected_identities,
+    )
     return projected, trace
 
 

@@ -27,6 +27,7 @@ QASPER_LOCAL_GATE_TESTS: tuple[str, ...] = (
     "libs/ktem/ktem_tests/test_qasper_assertion_scope_contract.py",
     "libs/ktem/ktem_tests/test_qasper_canonical_semantic_pack_alignment.py",
     "libs/ktem/ktem_tests/test_qasper_frozen_audit_authority.py",
+    "libs/ktem/ktem_tests/test_qasper_stage2_10396653_selector_characterization.py",
     "benchmark/tests/test_qasper_contract_probe_assertion_scope.py",
     "benchmark/tests/test_qasper_contract_probe_generation.py",
     "benchmark/tests/test_qasper_contract_probe_audit.py",
