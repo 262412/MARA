@@ -35,6 +35,7 @@ QASPER_LOCAL_GATE_TESTS: tuple[str, ...] = (
     "benchmark/tests/test_qasper_natural_semantic_pack_probe.py",
     "benchmark/tests/test_qasper_retrieval_index_artifact.py",
     "benchmark/tests/test_qasper_retrieval_index_slurm_contract.py",
+    "benchmark/tests/test_qasper_auditor_startup_launcher.py",
     "benchmark/tests/test_qasper_stage12_replay_audit_characterization.py",
     "benchmark/tests/test_qasper_debug_contract_smoke.py",
     "benchmark/tests/test_run_provenance.py",
