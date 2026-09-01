@@ -473,12 +473,15 @@ def test_downstream_constraint_reuses_canonical_event_predicate() -> None:
                 "exact" if "predicate" in selector["slot_hints"] else "missing"
             ),
             "local_relation_state": "affirmative_assertion",
+            "assertion_scope": "asserted",
         }
         for selector in _split_plan_selectors(
             first_event="event-a",
             second_event="event-b",
         )
     ]
+    premises[1]["quote"] = "The authors compared the two systems."
+    premises[1]["span_end"] = premises[1]["span_start"] + len(premises[1]["quote"])
 
     constraint = semantic_relation_evidence_set_constraint(
         premises,

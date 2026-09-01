@@ -177,7 +177,7 @@ def test_text_semantic_conjunction_can_prove_an_inspection_question() -> None:
     ]
 
 
-def test_literal_premise_false_negative_stops_without_a_second_answer() -> None:
+def test_semantic_denial_with_literal_false_stops_without_a_second_answer() -> None:
     llm = _SequenceLLM(
         [
             _response(_literal_composite_proposal()),
@@ -197,21 +197,29 @@ def test_literal_premise_false_negative_stops_without_a_second_answer() -> None:
     assert result["premises"] == []
     assert result["candidate_verification_audit"]["status"] == "failed"
     trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["auditor_internal_inconsistency_count"] == 1
+    assert trace["auditor_internal_inconsistency_count"] == 0
     consistency = trace["local_premise_consistency"]
-    assert consistency["inconsistent_premise_refs"] == ["P1", "P2"]
+    assert consistency["status"] == "auditor_semantic_rejection"
+    assert consistency["literal_disagreement_premise_refs"] == ["P1", "P2"]
+    assert consistency["inconsistent_premise_refs"] == []
+    assert consistency["override_eligible"] is False
+    assert consistency["semantic_denial_fields"] == [
+        "jointly_entails",
+        "each_premise_required",
+        "conclusion_check.conclusion_entailed",
+    ]
     assert trace.get("proof_repair_count", 0) == 0
     assert trace.get("proof_reaudit_count", 0) == 0
     transition = trace["recovery_transitions"][-1]
     assert transition["from"] == "semantic_audit"
     assert transition["to"] == "stop_without_reverify"
-    assert transition["reason"] == "auditor_internal_inconsistency"
+    assert transition["reason"] == "premise_fragment_not_entailed"
     assert transition["outcome"] == "recovery_no_progress"
     assert transition["proposition_binding_digest_changed"] is False
     assert len(llm.calls) == 2
     [rejected] = trace["rejected_transactions"]
     assert rejected["local_premise_consistency"]["status"] == (
-        "auditor_internal_inconsistency"
+        "auditor_semantic_rejection"
     )
 
 

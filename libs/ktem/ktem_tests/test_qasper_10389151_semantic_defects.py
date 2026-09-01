@@ -280,6 +280,7 @@ def test_frozen_relation_projection_accepts_verdict_and_relation_forms() -> None
         "binds_proposition_slots": ["object"],
         "quote": "object",
         "local_relation_state": "unbound",
+        "assertion_scope": "asserted",
         "relation_bearing": True,
         "candidate_relation_role": "polarity_evidence",
         "semantic_alignment": {"status": "verified"},

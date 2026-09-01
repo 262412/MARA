@@ -7,6 +7,7 @@ from typing import Any
 
 from ktem.docqa.evidence_schema import EvidenceBundle
 from ktem.docqa.frozen_canonical_proposition_projection import (
+    frozen_canonical_plan_projection_checked,
     frozen_canonical_plan_projection_from_bundle,
     frozen_slot_support_by_ref,
 )
@@ -120,17 +121,21 @@ def _frozen_case() -> tuple[EvidenceBundle, Any, list[dict[str, Any]], dict[str,
     return bundle, frozen, frozen_slots, {"plans": plans, "projection": projection}
 
 
-def _all_false_audit(projection: Any) -> str:
+def _audit_with_fragment_disagreement(
+    projection: Any,
+    *,
+    semantic_fields_valid: bool,
+) -> str:
     checks = {}
     for index, premise in enumerate(projection.premises, start=1):
         premise_ref = f"P{index}"
         checks[premise_ref] = {
             "fragment_entailed": False,
-            "scope_consistent": False,
-            "evidence_relation_valid": False,
+            "scope_consistent": semantic_fields_valid,
+            "evidence_relation_valid": semantic_fields_valid,
             "proposition_slot_checks": {
                 slot: {
-                    "binding_valid": False,
+                    "binding_valid": semantic_fields_valid,
                     "evidence_ref": f"{premise_ref}:{slot}",
                 }
                 for slot in premise["binds_proposition_slots"]
@@ -139,23 +144,23 @@ def _all_false_audit(projection: Any) -> str:
     return json.dumps(
         {
             "premise_checks": checks,
-            "jointly_entails": False,
-            "each_premise_required": False,
-            "contradiction_free": False,
+            "jointly_entails": semantic_fields_valid,
+            "each_premise_required": semantic_fields_valid,
+            "contradiction_free": semantic_fields_valid,
             "conclusion_check": {
-                "conclusion_entailed": False,
-                "actor_consistent": False,
-                "predicate_consistent": False,
-                "object_consistent": False,
-                "polarity_consistent": False,
-                "quantifier_consistent": False,
-                "scope_consistent": False,
+                "conclusion_entailed": semantic_fields_valid,
+                "actor_consistent": semantic_fields_valid,
+                "predicate_consistent": semantic_fields_valid,
+                "object_consistent": semantic_fields_valid,
+                "polarity_consistent": semantic_fields_valid,
+                "quantifier_consistent": semantic_fields_valid,
+                "scope_consistent": semantic_fields_valid,
             },
         }
     )
 
 
-def test_internally_inconsistent_auditor_cannot_override_the_frozen_plan() -> None:
+def _run_frozen_audit(*, semantic_fields_valid: bool) -> tuple[Any, Any, Any, Any]:
     bundle, frozen, slots, case = _frozen_case()
     plans = case["plans"]
     projection = case["projection"]
@@ -168,7 +173,13 @@ def test_internally_inconsistent_auditor_cannot_override_the_frozen_plan() -> No
         ),
         "proposal-model",
     )
-    auditor = _StaticLLM(_all_false_audit(projection), "auditor-model")
+    auditor = _StaticLLM(
+        _audit_with_fragment_disagreement(
+            projection,
+            semantic_fields_valid=semantic_fields_valid,
+        ),
+        "auditor-model",
+    )
     binding = bundle.metadata["qasper_canonical_semantic_pack"]["proposition_binding"]
 
     result = run_semantic_proposition_transaction(
@@ -202,12 +213,21 @@ def test_internally_inconsistent_auditor_cannot_override_the_frozen_plan() -> No
         transaction_id="candidate-transaction-1",
     )
 
+    return result, proposal, auditor, projection
+
+
+def test_literal_fragment_disagreement_can_use_the_frozen_plan() -> None:
+    result, proposal, auditor, projection = _run_frozen_audit(
+        semantic_fields_valid=True
+    )
+
     assert result.status == "parsed"
     assert result.value is not None
     assert result.value["verdict"] == "yes"
     assert result.value["canonical_evidence_plan_id"] == projection.plan_id
     assert result.value["premises"] == list(projection.premises)
     assert result.diagnostics["auditor_internal_inconsistency"] is True
+    assert result.diagnostics["local_premise_consistency"]["override_eligible"] is True
     assert result.diagnostics["auditor_override_blocked"] is True
     assert result.diagnostics["audit_authority_source"] == (
         "frozen_canonical_plan_projection"
@@ -232,4 +252,49 @@ def test_internally_inconsistent_auditor_cannot_override_the_frozen_plan() -> No
     assert result.diagnostics["audit_status"] == "verified"
     assert result.diagnostics.get("audit_call_rejection_count", 0) == 0
     assert result.diagnostics.get("rejected_transactions", []) == []
+    assert proposal.calls == auditor.calls == 1
+
+
+def test_frozen_plan_projection_rejects_an_unasserted_selector() -> None:
+    _bundle, frozen, frozen_slots, case = _frozen_case()
+    plans = case["plans"]
+    plan = next(iter(plans.values()))
+    records = deepcopy(frozen.records)
+    records[0]["selectors"][0]["assertion_scope"] = "conditional"
+    support_by_ref, reason = frozen_slot_support_by_ref(
+        plan["span_refs"],
+        frozen_slots,
+    )
+    assert reason == ""
+    proposition = build_question_proposition(QUESTION)
+
+    projection, reason = frozen_canonical_plan_projection_checked(
+        plan,
+        records,
+        proposition=proposition,
+        expected_slots=applicable_proposition_evidence_slots(proposition),
+        slot_support_by_ref=support_by_ref,
+    )
+
+    assert projection is None
+    assert reason == "canonical_plan_projection_selector_invalid"
+
+
+def test_semantic_auditor_denial_cannot_be_overridden_by_the_frozen_plan() -> None:
+    result, proposal, auditor, _projection = _run_frozen_audit(
+        semantic_fields_valid=False
+    )
+
+    assert result.status == "audit_rejected"
+    assert result.value is not None
+    assert result.value["verdict"] == "insufficient_evidence"
+    assert result.diagnostics["auditor_internal_inconsistency"] is False
+    assert result.diagnostics["local_premise_consistency"]["override_eligible"] is False
+    assert result.diagnostics["audit_status"] == "rejected"
+    assert result.diagnostics["audit_semantic_rejection"] is True
+    assert result.diagnostics["audit_reason"] != ""
+    assert result.diagnostics.get("auditor_override_blocked") is not True
+    assert result.diagnostics.get("audit_authority_source") is None
+    assert result.diagnostics["audit_call_rejection_count"] == 1
+    assert len(result.diagnostics["rejected_transactions"]) == 1
     assert proposal.calls == auditor.calls == 1
