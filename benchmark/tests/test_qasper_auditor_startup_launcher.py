@@ -3,11 +3,85 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
+
+from benchmark.execution_plan import JobDefinition, build_execution_plan
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = PROJECT_ROOT / "scripts/slurm/qasper_natural_stage2_canary.sbatch"
 RUNTIME_CONTRACT = PROJECT_ROOT / "scripts/slurm/qasper_vllm_runtime_contract.sh"
+TEXT_RUNNER = PROJECT_ROOT / "scripts/slurm/text_route_rerun.sbatch"
+PREDICTION_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_benchmark_predictions.py"
+
+NATURAL_EXAMPLE_IDS = (
+    "6568a31241167f618ef5ede939053feaa2fb0d7e",
+    "f2155dc4aeab86bf31a838c8ff388c85440fce6e",
+    "7cd22ca9e107d2b13a7cc94252aaa9007976b338",
+    "e97186c51d4af490dba6faaf833d269c8256426c",
+    "e330e162ec29722f5ec9f83853d129c9e0693d65",
+    "25c1c4a91f5dedd4e06d14121af3b5921db125e9",
+)
+
+
+def _write_natural_manifest(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "dataset_name": "qasper_semantic_debug",
+                "documents": [],
+                "examples": [
+                    {"example_id": example_id} for example_id in NATURAL_EXAMPLE_IDS
+                ],
+                "routes": [
+                    {"route_id": "text_rag"},
+                    {"route_id": "controller_auto"},
+                    {"route_id": "crag_guarded"},
+                ],
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_predictions(path: Path, keys: list[list[str]]) -> None:
+    path.write_text(
+        "".join(
+            json.dumps({"example_id": example_id, "route": route}) + "\n"
+            for example_id, route in keys
+        ),
+        encoding="utf-8",
+    )
+
+
+def _natural_execution_contract(tmp_path: Path) -> tuple[Path, Path]:
+    manifest = tmp_path / "qasper-semantic-debug-6x3.json"
+    _write_natural_manifest(manifest)
+    plan_path = tmp_path / "plan" / "execution-plan.json"
+    plan = build_execution_plan(
+        [
+            JobDefinition(
+                kind="text",
+                dataset="qasper",
+                route="text_rag",
+                shard_index=0,
+                num_shards=1,
+                limit=6,
+                timeout_seconds=240,
+                suite_name="qasper-natural-text-rag",
+                manifest=manifest,
+                output_root=tmp_path / "online",
+            )
+        ],
+        output_plan=plan_path,
+        output_table=tmp_path / "plan" / "jobs.tsv",
+        source_sha="a" * 40,
+        sample_seed=20260615,
+    )
+    return manifest, Path(plan["jobs"][0]["contract_path"])
 
 
 def test_natural_launcher_uses_the_proven_provider_runtime_contract() -> None:
@@ -31,6 +105,96 @@ def test_natural_launcher_uses_the_proven_provider_runtime_contract() -> None:
         '[[ "$(realpath -m "$NINJA_BIN")" == "$(realpath -m "$VLLM_ENV_BIN/ninja")" ]]',
     ):
         assert required in runtime
+
+
+def test_natural_launcher_builds_exact_six_key_contract_before_text_run() -> None:
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+
+    build = launcher.index('"$VLLM_PYTHON" "$PLAN_BUILDER" build')
+    invoke = launcher.index(
+        'bash "$PROJECT_ROOT/scripts/slurm/text_route_rerun.sbatch"'
+    )
+
+    assert build < invoke
+    assert 'NATURAL_CONTRACT_JOB_SPEC="text,qasper,text_rag,0,1,6,' in launcher
+    assert '--source-sha "$EXPECTED_SHA"' in launcher
+    assert '--sample-seed "$NATURAL_SAMPLE_SEED"' in launcher
+    assert 'test -s "$NATURAL_EXECUTION_CONTRACT"' in launcher
+    assert (
+        'export MARA_EXECUTION_JOB_CONTRACT="$NATURAL_EXECUTION_CONTRACT"' in launcher
+    )
+
+
+def test_natural_contract_binds_exact_six_text_rag_keys_and_manifest_digest(
+    tmp_path: Path,
+) -> None:
+    manifest, contract_path = _natural_execution_contract(tmp_path)
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    expected_keys = [[example_id, "text_rag"] for example_id in NATURAL_EXAMPLE_IDS]
+    canonical_keys = "\n".join(
+        f"{example_id}\t{route}" for example_id, route in sorted(expected_keys)
+    )
+
+    assert contract["expected_count"] == 6
+    assert sorted(contract["expected_keys"]) == sorted(expected_keys)
+    assert contract["expected_route_ids"] == ["text_rag"]
+    assert contract["manifest"] == str(manifest.resolve())
+    assert (
+        contract["manifest_sha256"] == hashlib.sha256(manifest.read_bytes()).hexdigest()
+    )
+    assert (
+        contract["expected_key_sha256"]
+        == hashlib.sha256(canonical_keys.encode("utf-8")).hexdigest()
+    )
+
+    predictions = tmp_path / "natural-predictions.jsonl"
+    _write_predictions(predictions, expected_keys)
+    validated = subprocess.run(
+        [
+            sys.executable,
+            str(PREDICTION_VALIDATOR),
+            str(predictions),
+            "--expected-keys-file",
+            str(contract_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert validated.returncode == 0, validated.stderr
+    assert "execution_key_coverage=6/6" in validated.stdout
+
+
+def test_full_six_by_three_manifest_validation_still_rejects_natural_subset(
+    tmp_path: Path,
+) -> None:
+    manifest, contract_path = _natural_execution_contract(tmp_path)
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    predictions = tmp_path / "natural-predictions.jsonl"
+    _write_predictions(predictions, contract["expected_keys"])
+
+    validated = subprocess.run(
+        [
+            sys.executable,
+            str(PREDICTION_VALIDATOR),
+            str(predictions),
+            "--manifest",
+            str(manifest),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert validated.returncode != 0
+    assert "manifest/prediction key mismatch: missing=12 unexpected=0" in (
+        validated.stderr
+    )
+    text_runner = TEXT_RUNNER.read_text(encoding="utf-8")
+    assert 'if [[ -n "$EXECUTION_CONTRACT" ]]' in text_runner
+    assert '--expected-keys-file "$EXECUTION_CONTRACT"' in text_runner
+    assert '--manifest "$MANIFEST"' in text_runner
 
 
 def test_submission_identity_remains_verifiable_after_slurm_spool_disappears(
