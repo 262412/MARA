@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,10 @@ def finish_file_artifacts(
 
 
 def _enabled(settings: Any) -> bool:
-    return bool(getattr(settings, "KH_FILE_INDEX_ARTIFACTS_ENABLED", True))
+    # The secure artifact filesystem requires POSIX directory-fd operations.
+    return bool(
+        getattr(settings, "KH_FILE_INDEX_ARTIFACTS_ENABLED", os.name == "posix")
+    )
 
 
 __all__ = ["begin_file_artifacts", "finish_file_artifacts"]

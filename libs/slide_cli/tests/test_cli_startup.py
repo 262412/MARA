@@ -291,6 +291,7 @@ def test_ensure_llama_index_nltk_cache_sets_bundled_cache_without_heavy_imports(
     module.ensure_llama_index_nltk_cache()
 
     assert os.environ["NLTK_DATA"] == str(cache_dir)
+    assert (cache_dir / "tokenizers" / "punkt").is_dir()
     assert "llama_index.core" not in sys.modules
     assert "nltk" not in sys.modules
 

@@ -20,6 +20,7 @@ def _find_bundled_llama_index_nltk_cache() -> Path | None:
 def ensure_llama_index_nltk_cache() -> None:
     cache_dir = _find_bundled_llama_index_nltk_cache()
     if cache_dir is not None:
+        (cache_dir / "tokenizers" / "punkt").mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("NLTK_DATA", str(cache_dir))
 
 
