@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from langchain.schema import Document as LangchainDocument
+from langchain_core.documents import Document as LangchainDocument
 from llama_index.core.node_parser import SimpleNodeParser
 
 from kotaemon.base import Document
