@@ -296,7 +296,10 @@ def _gold_answer_prompt(
     elif "qasper" in dataset:
         parts.append(
             'For QASPER-style examples, output only the answer span, "yes", '
-            '"no", or "unanswerable".'
+            '"no", or "unanswerable". For a free-form answer, choose the '
+            "shortest complete span or comma-separated spans directly supported "
+            "by the evidence. Do not add explanations, background, or any "
+            "claim beyond those spans."
         )
     elif "financebench" in dataset:
         parts.append(
@@ -448,7 +451,9 @@ def _qasper_prompt(question: str, *, typed_only: bool = False) -> str:
         answer_contract = (
             "Return only the answer span, yes/no value, or "
             '"unanswerable" when the evidence does not answer the question. '
-            "Keep free-form answers short and do not add background commentary."
+            "Keep free-form answers short and do not add background commentary. "
+            "Use the shortest complete answer supported by the evidence; do not "
+            "combine supported facts with extra claims or explain the context."
         )
     return (
         _prompt_header(QASPER_PROMPT_SOURCE)

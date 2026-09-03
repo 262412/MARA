@@ -196,6 +196,24 @@ def test_runtime_contract_rejects_checkout_theflow_and_shared_canonical_venv(tmp
     )
 
 
+def test_runtime_contract_rejects_root_without_benchmark_prefix(tmp_path):
+    runtime_root = tmp_path / "quality_focus_run"
+    result = _bash(
+        f"""
+        set -u
+        export MARA_PROJECT_ROOT={PROJECT_ROOT}
+        export MARA_BENCHMARK_RUNTIME_ROOT={runtime_root}
+        export SLURM_JOB_ID=907
+        source {RUNTIME_HELPER}
+        mara_configure_benchmark_runtime invalid-root-suite
+        """
+    )
+
+    assert result.returncode != 0
+    assert "benchmark_*" in result.stderr
+    assert not runtime_root.exists()
+
+
 def test_runtime_contract_rejects_shared_storage_and_existing_job_runtime(tmp_path):
     runtime_root = tmp_path / "benchmark_runs"
     result = _bash(

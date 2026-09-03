@@ -1,4 +1,7 @@
+import pytest
 from ktem.docqa.claim_filtering import answer_claims, clean_answer_text
+from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.qasper_answer_relation import resolve_qasper_answer_relation
 from ktem.docqa.qasper_relation_frame import (
     question_relation_frame,
@@ -87,6 +90,115 @@ def test_qasper_novel_relation_resolves_against_verified_evidence():
 
     assert resolution.state == "verified_support"
     assert resolution.atoms
+
+
+@pytest.mark.parametrize(
+    ("question", "answer", "text", "predicate"),
+    (
+        (
+            "How do they detect spammers?",
+            "The difference of their topic distribution patterns.",
+            "Therefore we can detect spammers by means of the difference of "
+            "their topic distribution patterns.",
+            "method",
+        ),
+        (
+            "Which languages do they use?",
+            "English.",
+            "The dataset consists of articles from English Wikipedia.",
+            "use",
+        ),
+        (
+            "What is novel about their document-level encoder?",
+            "It is based on BERT.",
+            "We propose a novel document-level encoder based on BERT.",
+            "novel",
+        ),
+    ),
+)
+def test_qasper_quality_focus_body_relations_bind_to_typed_atoms(
+    question, answer, text, predicate
+):
+    resolution = resolve_qasper_answer_relation(
+        question,
+        answer,
+        [
+            {
+                "evidence_id": "paper-body",
+                "source_id": "paper",
+                "section_id": "method",
+                "text": text,
+            }
+        ],
+    )
+
+    assert resolution.state == "verified_support"
+    assert resolution.atom is not None
+    assert resolution.atom["relation"] == predicate
+
+
+def test_qasper_body_definition_evidence_binds_answer_relation_authority():
+    question = "What type of model is KAR?"
+    answer = "KAR is an end-to-end MRC model named Knowledge Aided Reader."
+    evidence = [
+        {
+            "evidence_id": "paper-abstract",
+            "source_id": "paper",
+            "section_id": "abstract",
+            "text": (
+                "We propose an end-to-end MRC model named as Knowledge Aided "
+                "Reader (KAR)."
+            ),
+        }
+    ]
+
+    resolution = resolve_qasper_answer_relation(question, answer, evidence)
+
+    assert resolution.state == "verified_support"
+    assert resolution.atom is not None
+    assert resolution.atom["relation"] == "define"
+    assert resolution.atom["actor"] == "current_paper"
+
+
+def test_qasper_body_definition_evidence_commits_typed_authority_transaction():
+    question = "What type of model is KAR?"
+    answer = "KAR is an end-to-end MRC model named Knowledge Aided Reader."
+    evidence = [
+        {
+            "evidence_id": "paper-abstract",
+            "source_id": "paper",
+            "section_id": "abstract",
+            "text": (
+                "We propose an end-to-end MRC model named as Knowledge Aided "
+                "Reader (KAR)."
+            ),
+        }
+    ]
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="free_text",
+            verification_mode="strict",
+            verification_domain="qasper",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            origin="benchmark",
+        ),
+        retrieve=lambda *_args: {"evidence": evidence},
+        generate=lambda *_args: answer,
+    )
+
+    assert result.answer == answer
+    assert result.verify_decision.status == "supported"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+    assert result.verify_decision.typed_authority["verified_slot_ids"] == [
+        "support:answer_relation"
+    ]
+    [slot] = result.evidence_bundle.metadata["query_plan"]["evidence_slots"]
+    assert slot["status"] == "verified_support"
 
 
 def test_typed_authority_requires_exact_required_verified_and_bound_slot_sets():

@@ -159,6 +159,17 @@ def relation_is_explicit(
             )
         )
     predicate_explicit = _predicate_is_explicit(frame.predicate, lowered)
+    if frame.predicate == "use" and re.search(
+        r"\blanguages?\b", frame.expected_object_type, re.IGNORECASE
+    ):
+        return bool(
+            predicate_explicit
+            or re.search(
+                r"\b(?:consist(?:s|ed)?\s+of|compris(?:e|es|ed|ing)|"
+                r"written|spoken|language|from|in)\b",
+                lowered,
+            )
+        )
     if frame.relation_kind == "quantity":
         return bool(
             answer_numbers and answer_numbers <= quote_numbers and predicate_explicit
@@ -166,7 +177,8 @@ def relation_is_explicit(
     if frame.relation_kind == "definition":
         return bool(
             re.search(
-                r"\b(?:mean|represent|refer|denote|define|stand|is|are)\w*\b",
+                r"\b(?:mean|represent|refer|denote|define|stand|is|are|"
+                r"named|called|known)\w*\b|\bnamed\s+as\b",
                 lowered,
             )
         )
@@ -181,7 +193,7 @@ def relation_is_explicit(
     if frame.relation_kind == "method":
         return bool(
             predicate_explicit
-            and re.search(r"\b(?:by|using|through|via|with)\b", lowered)
+            and re.search(r"\b(?:by|use|using|through|via|with)\b", lowered)
         )
     return predicate_explicit
 
@@ -318,7 +330,8 @@ def _definition_frame(
     quantifier: str,
 ) -> QuestionRelationFrame | None:
     if not re.search(
-        r"\b(?:mean|means|repr?esents?|refer\s+to|denote|define|stand\s+for)\b",
+        r"\b(?:mean|means|repr?esents?|refer\s+to|denote|define|stand\s+for)\b"
+        r"|\b(?:what|which)\s+(?:type|kind|sort)\s+of\b",
         question,
     ):
         return None
@@ -372,7 +385,8 @@ def _predicate_is_explicit(predicate: str, quote: str) -> bool:
         ),
         "novel": (
             _PREDICATE_PATTERNS["novel"],
-            r"\b(?:first|newly\s+introduced|innovation)\b",
+            r"\b(?:first|newly\s+introduced|innovation|overcome|"
+            r"address|solve|circumvent)\w*\b",
         ),
         "baseline": (
             _PREDICATE_PATTERNS["baseline"],
@@ -391,7 +405,8 @@ def _predicate_is_explicit(predicate: str, quote: str) -> bool:
     if predicate in {"cause", "method", "quantify"}:
         patterns = {
             "cause": r"\b(?:because|cause|due\s+to|reason|drive|lead|result)\w*\b",
-            "method": r"\b(?:use|apply|perform|compute|derive)\w*\b",
+            "method": r"\b(?:use|apply|perform|compute|derive|extract|"
+            r"classif(?:y|ies|ied|ying)|detect|measure|analy[sz]e?)\w*\b",
             "quantify": r"\b(?:number|count|total|amount)\w*\b",
         }
         return bool(re.search(patterns[predicate], quote, re.IGNORECASE))

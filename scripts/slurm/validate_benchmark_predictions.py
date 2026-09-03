@@ -46,6 +46,7 @@ def _qasper_answerability_coverage(
     manifest_path: Path | None = None,
 ) -> tuple[int, int]:
     answer_types: dict[str, str] | None = None
+    quality_focus_manifest = False
     if manifest_path is not None:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if not isinstance(manifest, dict):
@@ -53,6 +54,15 @@ def _qasper_answerability_coverage(
         examples = manifest.get("examples")
         if not isinstance(examples, list):
             raise SystemExit("QASPER manifest must contain an examples list")
+        metadata = manifest.get("metadata")
+        quality_focus = (
+            metadata.get("quality_focus") if isinstance(metadata, dict) else None
+        )
+        quality_focus_manifest = (
+            isinstance(quality_focus, dict)
+            and str(quality_focus.get("contract_id") or "").strip()
+            == "qasper_quality_focus_6x3.v1"
+        )
         answer_types = {}
         for example in examples:
             if not isinstance(example, dict):
@@ -83,13 +93,15 @@ def _qasper_answerability_coverage(
                     "QASPER prediction example_id is missing from manifest: "
                     f"{example_id or '<missing>'}"
                 )
-            if answer_types[example_id] != "boolean":
-                continue
             prediction_answer_type = str(row.get("answer_type") or "").strip().lower()
-            if prediction_answer_type != "boolean":
+            manifest_answer_type = answer_types[example_id]
+            if not quality_focus_manifest and manifest_answer_type != "boolean":
+                continue
+            if prediction_answer_type != manifest_answer_type:
                 raise SystemExit(
                     "QASPER manifest/prediction answer type mismatch for "
-                    f"{example_id}: boolean != {prediction_answer_type or '<missing>'}"
+                    f"{example_id}: {manifest_answer_type or '<missing>'} != "
+                    f"{prediction_answer_type or '<missing>'}"
                 )
         required_count += 1
         metadata = row.get("evidence_metadata")

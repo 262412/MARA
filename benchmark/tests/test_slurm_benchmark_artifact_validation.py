@@ -21,6 +21,7 @@ def _write_manifest(
     examples: list[dict[str, object]],
     *,
     routes: list[dict[str, object]] | None = None,
+    metadata: dict[str, object] | None = None,
 ) -> None:
     path.write_text(
         json.dumps(
@@ -30,6 +31,7 @@ def _write_manifest(
                 "documents": [],
                 "examples": examples,
                 "routes": routes or [],
+                "metadata": metadata or {},
             }
         ),
         encoding="utf-8",
@@ -335,6 +337,55 @@ def test_validator_treats_selected_free_text_qasper_manifest_as_not_applicable(
     assert result.returncode == 0, result.stderr
     assert "qasper_answerability_coverage=0/0" in result.stdout
     assert "qasper_answerability_status=not_applicable" in result.stdout
+
+
+def test_validator_requires_answerability_trace_for_quality_focus_manifest(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    predictions = tmp_path / "predictions.jsonl"
+    _write_manifest(
+        manifest,
+        [{"example_id": "free-text", "answer_type": "evidence_qa"}],
+        metadata={
+            "quality_focus": {
+                "contract_id": "qasper_quality_focus_6x3.v1",
+            }
+        },
+    )
+    _write_predictions(
+        predictions,
+        [
+            {
+                "example_id": "free-text",
+                "answer_type": "evidence_qa",
+                "predicted_answer": "grounded answer",
+                "error": None,
+                "evidence_metadata": {
+                    "qasper_answerability": {
+                        "contract_id": "qasper_runtime_authority_audit.v1",
+                        "status": "ok",
+                    }
+                },
+            }
+        ],
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            str(predictions),
+            "--require-qasper-answerability",
+            "--qasper-manifest",
+            str(manifest),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "qasper_answerability_coverage=1/1" in result.stdout
+    assert "qasper_answerability_status=not_applicable" not in result.stdout
 
 
 def test_validator_rejects_manifest_boolean_prediction_type_drift(tmp_path):

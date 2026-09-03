@@ -135,6 +135,13 @@ mara_configure_benchmark_runtime() {
   runtime_root="$(realpath -m "$runtime_root")"
   runtime_dir="${runtime_root}/${suite_slug}/${task_slug}"
   suite_dir="$(dirname "$runtime_dir")"
+  case "$(basename "$runtime_root")" in
+    benchmark_*) ;;
+    *)
+      mara_benchmark_die "runtime root must use a benchmark_* basename: $runtime_root"
+      return 2
+      ;;
+  esac
 
   # A runtime under the source checkout could resolve to the checkout .theflow
   # tree.  Refuse it before creating anything there.

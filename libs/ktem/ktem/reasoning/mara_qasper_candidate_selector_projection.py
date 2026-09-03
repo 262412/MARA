@@ -56,7 +56,11 @@ def prioritized_candidate_prompt_evidence(
 
     output: list[dict[str, Any]] = []
     for projection in projections:
-        selected_plan_refs, canonical_refs = _record_canonical_priorities(
+        (
+            selected_plan_refs,
+            canonical_refs,
+            canonical_selectors,
+        ) = _record_canonical_priorities(
             projection,
             question,
             candidate_transaction_id=candidate_transaction_id,
@@ -67,7 +71,10 @@ def prioritized_candidate_prompt_evidence(
             canonical_refs=canonical_refs,
         )
         projected = projection["record"]
-        projected["selectors"] = _candidate_selectors_from_options(options)
+        projected["selectors"] = _canonical_selectors_for_options(
+            options,
+            canonical_selectors,
+        )
         projected[
             "candidate_selector_projection_trace"
         ] = _candidate_selector_projection_trace(
@@ -87,10 +94,10 @@ def _record_canonical_priorities(
     question: str,
     *,
     candidate_transaction_id: str = "",
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], dict[str, dict[str, Any]]]:
     """Classify spans before the per-record selector cap is applied."""
 
-    _records, trace = prepare_qasper_canonical_records_with_trace(
+    canonical_records, trace = prepare_qasper_canonical_records_with_trace(
         question,
         [
             {
@@ -102,9 +109,16 @@ def _record_canonical_priorities(
         ],
         candidate_transaction_id=candidate_transaction_id,
     )
+    canonical_selectors = {
+        str(selector.get("selector_id") or ""): deepcopy(selector)
+        for record in canonical_records
+        for selector in record.get("selectors") or []
+        if str(selector.get("selector_id") or "")
+    }
     return (
         list(trace.get("selected_plan_refs") or []),
         list(trace.get("selector_universe_refs") or []),
+        canonical_selectors,
     )
 
 
@@ -121,6 +135,20 @@ def _candidate_selectors_from_options(
             span_end=option["span_end"],
         )
         selectors.append(selector)
+    return selectors
+
+
+def _canonical_selectors_for_options(
+    options: list[dict[str, Any]],
+    canonical_selectors: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    selectors: list[dict[str, Any]] = []
+    for option in options:
+        evidence_ref = str(option.get("evidence_ref") or "")
+        selector = canonical_selectors.get(evidence_ref)
+        if selector is None:
+            raise ValueError("candidate_canonical_selector_missing")
+        selectors.append(deepcopy(selector))
     return selectors
 
 

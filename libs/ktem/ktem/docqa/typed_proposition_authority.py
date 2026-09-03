@@ -266,9 +266,13 @@ def _resolve_free_text_transaction(
         answer,
         list(evidence_bundle.items),
     )
-    extension_unverified = len(decision.claim_results) > 1 and any(
-        str(result.get("status") or "") != "supported"
-        for result in decision.claim_results
+    extension_unverified = (
+        resolution.state != "verified_support"
+        and len(decision.claim_results) > 1
+        and any(
+            str(result.get("status") or "") != "supported"
+            for result in decision.claim_results
+        )
     )
     if (
         resolution.state != "verified_support"

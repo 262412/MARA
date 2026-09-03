@@ -230,6 +230,9 @@ def _answer_relation_candidate(
     if not _question_scope_is_explicit(frame, quote):
         return None
     anchors = quote_tokens & question_anchors
+    anchors.update(_item_question_anchors(item, question_anchors))
+    if _language_dataset_relation(question, quote, clause):
+        anchors.update(question_anchors & {"language", "languages", "languag", "use"})
     actor = _resolved_actor(item, quote, question, clause, anchors, previous_actor)
     if actor == "unknown" or (
         _requires_current_paper_actor(question) and actor != "current_paper"
@@ -317,7 +320,34 @@ def _resolved_actor(
         anchors,
     ):
         return "current_paper"
+    if actor == "unknown" and _language_dataset_relation(question, quote, clause):
+        return "current_paper"
     return actor
+
+
+def _item_question_anchors(
+    item: dict[str, Any],
+    question_anchors: set[str],
+) -> set[str]:
+    return _content_tokens(evidence_item_text(item)) & question_anchors
+
+
+def _language_dataset_relation(question: str, quote: str, clause: str) -> bool:
+    frame = question_relation_frame(question)
+    if frame.predicate != "use" or not re.search(
+        r"\blanguages?\b", frame.expected_object_type, re.IGNORECASE
+    ):
+        return False
+    return bool(
+        re.search(r"\b(?:dataset|corpus|articles?|documents?)\b", quote, re.I)
+        and _content_tokens(clause) & _content_tokens(quote)
+        and re.search(
+            r"\b(?:consist(?:s|ed)?\s+of|compris(?:e|es|ed|ing)|"
+            r"written|spoken|from|in)\b",
+            quote,
+            re.I,
+        )
+    )
 
 
 def _answer_relation_atom(

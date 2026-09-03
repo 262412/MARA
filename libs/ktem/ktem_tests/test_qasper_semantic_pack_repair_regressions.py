@@ -143,3 +143,28 @@ def test_candidate_selector_projection_retains_typed_planner_metadata() -> None:
         "predicate",
         "object",
     ]
+
+
+def test_candidate_selector_projection_is_idempotent_for_same_transaction() -> None:
+    question = "Did the authors compare the two systems?"
+    records = [
+        {
+            "evidence_id": "evidence-1",
+            "label": "E1",
+            "candidate_source_text": "The authors compared the two systems.",
+            "candidate_source_text_start": 0,
+            "canonical_start": None,
+        }
+    ]
+
+    projected = prioritized_candidate_prompt_evidence(
+        records,
+        question,
+        candidate_transaction_id="candidate-transaction-1",
+    )
+
+    assert projected == prepare_qasper_canonical_records(
+        question,
+        projected,
+        candidate_transaction_id="candidate-transaction-1",
+    )

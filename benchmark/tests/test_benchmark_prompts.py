@@ -56,6 +56,26 @@ def test_gold_answer_policy_uses_no_think_answer_only_prompt(tmp_path):
     assert prompt.retrieval_query == "What did the filing say about revenue?"
 
 
+def test_gold_answer_policy_constrains_qasper_free_form_answers_to_spans(tmp_path):
+    config = BenchmarkConfig(
+        suite_name="qasper-quality-focus-6x3",
+        output_dir=tmp_path / "out",
+        benchmark_prompt_policy="gold_answer_v1",
+    )
+
+    prompt = build_benchmark_prompt(
+        _example(
+            question="What type of model is KAR?",
+            answer_type="free_text",
+        ),
+        config,
+        dataset_name="qasper_quality_focus_6x3",
+    )
+
+    assert "shortest complete span or comma-separated spans" in prompt.runtime_prompt
+    assert "Do not add explanations, background" in prompt.runtime_prompt
+
+
 def test_gold_answer_policy_separates_ragtruth_task_and_retrieval_budgets(tmp_path):
     long_question = (
         "Original source prompt. "
