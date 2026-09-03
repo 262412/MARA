@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 from typing import Any
 
 from .mara_qasper_candidate_evidence import candidate_selector_options_with_trace
@@ -15,6 +16,8 @@ _CANDIDATE_SELECTORS_PER_RECORD = 4
 def prioritized_candidate_prompt_evidence(
     evidence: list[dict[str, Any]],
     question: str,
+    *,
+    candidate_transaction_id: str = "",
 ) -> list[dict[str, Any]]:
     projections: list[dict[str, Any]] = []
     for record in evidence:
@@ -56,6 +59,7 @@ def prioritized_candidate_prompt_evidence(
         selected_plan_refs, canonical_refs = _record_canonical_priorities(
             projection,
             question,
+            candidate_transaction_id=candidate_transaction_id,
         )
         options, proposition_bearing_refs = _prioritized_proposition_bearing_options(
             projection["eligible_options"],
@@ -81,6 +85,8 @@ def prioritized_candidate_prompt_evidence(
 def _record_canonical_priorities(
     projection: dict[str, Any],
     question: str,
+    *,
+    candidate_transaction_id: str = "",
 ) -> tuple[list[str], list[str]]:
     """Classify spans before the per-record selector cap is applied."""
 
@@ -94,6 +100,7 @@ def _record_canonical_priorities(
                 ),
             }
         ],
+        candidate_transaction_id=candidate_transaction_id,
     )
     return (
         list(trace.get("selected_plan_refs") or []),
@@ -104,15 +111,17 @@ def _record_canonical_priorities(
 def _candidate_selectors_from_options(
     options: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    return [
-        {
-            "selector_id": option["evidence_ref"],
-            "text": option["text"],
-            "span_start": option["span_start"],
-            "span_end": option["span_end"],
-        }
-        for option in options
-    ]
+    selectors: list[dict[str, Any]] = []
+    for option in options:
+        selector = deepcopy(option)
+        selector.update(
+            selector_id=option["evidence_ref"],
+            text=option["text"],
+            span_start=option["span_start"],
+            span_end=option["span_end"],
+        )
+        selectors.append(selector)
+    return selectors
 
 
 def _prioritized_proposition_bearing_options(

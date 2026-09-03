@@ -41,16 +41,24 @@ from .mara_semantic_proposition_packing import (
 def prepare_qasper_canonical_records(
     question: str,
     records: list[dict[str, Any]],
+    *,
+    candidate_transaction_id: str = "",
 ) -> list[dict[str, Any]]:
     """Project records to the exact, locally checked selector universe."""
 
-    projected, _trace = prepare_qasper_canonical_records_with_trace(question, records)
+    projected, _trace = prepare_qasper_canonical_records_with_trace(
+        question,
+        records,
+        candidate_transaction_id=candidate_transaction_id,
+    )
     return projected
 
 
 def prepare_qasper_canonical_records_with_trace(
     question: str,
     records: list[dict[str, Any]],
+    *,
+    candidate_transaction_id: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Project canonical records and retain every selector disposition."""
 
@@ -85,7 +93,11 @@ def prepare_qasper_canonical_records_with_trace(
                 selectors.append(selector)
         if selectors:
             annotated.append({**deepcopy(record), "selectors": selectors})
-    observation = candidate_evidence_set_binding(annotated, question)
+    observation = candidate_evidence_set_binding(
+        annotated,
+        question,
+        candidate_transaction_id=candidate_transaction_id,
+    )
     selected_refs = set(observation.get("selector_universe_refs") or [])
     projected = [
         {**record, "selectors": selected}
@@ -124,17 +136,19 @@ def prepare_qasper_canonical_records_with_trace(
     return projected, trace
 
 
-def _canonical_selector(
-    raw_selector: Any,
-    record: dict[str, Any],
+def _canonical_records_match(
     question: str,
-) -> dict[str, Any] | None:
-    selector, _reason = _canonical_selector_projection(
-        raw_selector,
-        record,
-        question,
+    records: list[dict[str, Any]],
+    candidate_transaction_id: str,
+) -> bool:
+    return (
+        prepare_qasper_canonical_records(
+            question,
+            records,
+            candidate_transaction_id=candidate_transaction_id,
+        )
+        == records
     )
-    return selector
 
 
 def _canonical_selector_projection(
@@ -220,9 +234,10 @@ def freeze_qasper_canonical_semantic_pack(
     records_reason = qasper_canonical_records_reason(canonical_records)
     if records_reason:
         raise ValueError(records_reason)
-    if (
-        prepare_qasper_canonical_records(question, canonical_records)
-        != canonical_records
+    if not _canonical_records_match(
+        question,
+        canonical_records,
+        candidate_transaction_id,
     ):
         raise ValueError("canonical_semantic_pack_proposition_binding_mismatch")
     authoritative_binding = candidate_evidence_set_binding(
@@ -326,7 +341,7 @@ def load_qasper_canonical_semantic_pack(
     records_reason = qasper_canonical_records_reason(records)
     if records_reason:
         return None, records_reason
-    if prepare_qasper_canonical_records(question, records) != records:
+    if not _canonical_records_match(question, records, stored_transaction):
         return None, "canonical_semantic_pack_proposition_binding_mismatch"
     if _stored_binding_reason(
         payload,

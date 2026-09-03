@@ -11,6 +11,7 @@ from .recovery_progress import (
     canonical_proposition_binding_digest,
     canonical_recovery_evidence_ids,
     normalized_slot_state_digest,
+    recovery_has_progress,
     semantic_progress_evidence_ids,
     semantic_progress_slot_states,
     semantic_raw_evidence_digest,
@@ -227,28 +228,6 @@ def _semantic_digest_fields(
             ),
         },
     }
-
-
-def recovery_has_progress(fields: dict[str, Any]) -> bool:
-    return any(
-        fields.get(applicable_key) is True and fields.get(changed_key) is True
-        for applicable_key, changed_key in (
-            (
-                "normalized_slot_state_digest_applicable",
-                "normalized_slot_state_digest_changed",
-            ),
-            ("slot_state_digest_applicable", "slot_state_digest_changed"),
-            (
-                "canonical_proposition_binding_digest_applicable",
-                "canonical_proposition_binding_digest_changed",
-            ),
-            (
-                "proposition_binding_digest_applicable",
-                "proposition_binding_digest_changed",
-            ),
-            ("semantic_pack_digest_applicable", "semantic_pack_digest_changed"),
-        )
-    )
 
 
 def mark_recovery_no_progress(event: dict[str, Any]) -> dict[str, Any]:

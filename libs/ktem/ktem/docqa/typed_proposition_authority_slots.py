@@ -96,13 +96,9 @@ def _single_or_composite_slot_bindings(
 
     if not side_slots and len(proposition_slots) == 1:
         slot = proposition_slots[0]
-        candidate_ids = _slot_atom_ids(slot, atom_by_id)
-        if proof_ids:
-            proposition_selection = proof_ids
-        else:
-            if not candidate_ids:
-                return None, None, None
-            proposition_selection = (candidate_ids[0],)
+        proposition_selection = _proposition_selection(slot, atom_by_id, proof_ids)
+        if proposition_selection is None:
+            return None, None, None
         bindings[str(slot.slot_id)] = proposition_selection
         selected_ids.extend(proposition_selection)
 
@@ -146,6 +142,21 @@ def _single_or_composite_slot_bindings(
     if not selected_atoms:
         return None, None, None
     return bindings, {}, selected_atoms
+
+
+def _proposition_selection(
+    slot: Any,
+    atom_by_id: dict[str, list[dict[str, Any]]],
+    proof_ids: tuple[str, ...],
+) -> tuple[str, ...] | None:
+    if proof_ids:
+        return proof_ids
+    candidate_ids = _slot_atom_ids(slot, atom_by_id)
+    if not candidate_ids:
+        # Replace a retrieval provisional binding only with an already verified
+        # atom; never promote an arbitrary evidence item here.
+        candidate_ids = tuple(atom_by_id)
+    return (candidate_ids[0],) if candidate_ids else None
 
 
 def _semantic_evidence_set_bindings(

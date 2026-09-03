@@ -29,6 +29,7 @@ def verify_required_calculation_slots(
     verified_ids: list[str] = []
     errors: list[str] = []
     used_operands: set[str] = set()
+    used_evidence_identities: set[str] = set()
     exact_lineage = any(
         str(getattr(operand, "query_slot_id", "") or "").strip() for operand in operands
     )
@@ -40,31 +41,27 @@ def verify_required_calculation_slots(
                 errors.append(f"required_slot_missing:{slot_id}")
             continue
         cardinality = max(1, int(slot.get("cardinality") or 1))
-        matching_operands = [
-            candidate
-            for candidate in operands
-            if candidate.operand_id not in used_operands
-            and (
-                not exact_lineage
-                or str(getattr(candidate, "query_slot_id", "") or "") == slot_id
-            )
-            and _operand_matches_slot(
-                candidate,
-                slot,
-                evidence_by_id,
-                evidence_text=evidence_text,
-            )
-        ]
+        matching_operands = _matching_operands(
+            operands,
+            slot,
+            slot_id,
+            evidence_by_id,
+            used_operands=used_operands,
+            used_evidence_identities=used_evidence_identities,
+            exact_lineage=exact_lineage,
+            evidence_text=evidence_text,
+        )
         if len(matching_operands) < cardinality:
             errors.append(f"required_slot_missing:{slot_id}")
             continue
+        selected_operands = matching_operands[:cardinality]
         operand_evidence_ids = [
             str(
                 getattr(operand, "evidence_identity", "")
                 or getattr(operand, "evidence_id", "")
                 or ""
             ).strip()
-            for operand in matching_operands
+            for operand in selected_operands
         ]
         state_slot = {
             **slot,
@@ -74,11 +71,56 @@ def verify_required_calculation_slots(
         if slot_binding_state(state_slot, list(evidence_by_id.values())) != "filled":
             errors.append(f"required_slot_missing:{slot_id}")
             continue
-        used_operands.update(
-            operand.operand_id for operand in matching_operands[:cardinality]
+        used_operands.update(operand.operand_id for operand in selected_operands)
+        used_evidence_identities.update(
+            identity
+            for identity in (
+                _operand_evidence_identity(operand) for operand in selected_operands
+            )
+            if identity
         )
         verified_ids.append(slot_id)
     return required_ids, verified_ids, errors
+
+
+def _matching_operands(
+    operands: tuple[Any, ...],
+    slot: dict[str, Any],
+    slot_id: str,
+    evidence_by_id: dict[str, dict[str, Any]],
+    *,
+    used_operands: set[str],
+    used_evidence_identities: set[str],
+    exact_lineage: bool,
+    evidence_text: Callable[[dict[str, Any]], str],
+) -> list[Any]:
+    return [
+        candidate
+        for candidate in operands
+        if candidate.operand_id not in used_operands
+        and (
+            not _operand_evidence_identity(candidate)
+            or _operand_evidence_identity(candidate) not in used_evidence_identities
+        )
+        and (
+            not exact_lineage
+            or str(getattr(candidate, "query_slot_id", "") or "") == slot_id
+        )
+        and _operand_matches_slot(
+            candidate,
+            slot,
+            evidence_by_id,
+            evidence_text=evidence_text,
+        )
+    ]
+
+
+def _operand_evidence_identity(operand: Any) -> str:
+    return str(
+        getattr(operand, "evidence_identity", "")
+        or getattr(operand, "evidence_id", "")
+        or ""
+    ).strip()
 
 
 def _dimension_matches_slot(

@@ -51,13 +51,18 @@ def _candidate_evidence(
         candidate_priority=True,
     )
     records = _candidate_prompt_records(packing)
-    prioritized_records = _prioritized_candidate_prompt_evidence(records, question)
+    prioritized_records = _prioritized_candidate_prompt_evidence(
+        records,
+        question,
+        candidate_transaction_id=candidate_transaction_id,
+    )
     (
         records,
         canonical_selector_projection_trace,
     ) = prepare_qasper_canonical_records_with_trace(
         question,
         prioritized_records,
+        candidate_transaction_id=candidate_transaction_id,
     )
     canonical_record_count = len(records)
     semantic_filtered_count = len(prioritized_records) - len(records)
