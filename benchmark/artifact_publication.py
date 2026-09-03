@@ -9,6 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from .jsonl import read_jsonl
+from .qasper_causal_evidence_chain_utils import canonical_digest, is_sha256
+
 ARTIFACT_MANIFEST_NAME = "artifact_manifest.json"
 ARTIFACT_COMPLETE_NAME = "artifact_complete.json"
 ARTIFACT_CONTRACT_VERSION = "benchmark_artifact.v1"
@@ -272,17 +275,168 @@ def _required_file_failures(
     if (
         semantic_name not in required
         or semantic_name not in files
-        or not predictions_path.is_file()
         or not semantic_path.is_file()
     ):
         return []
+    if not predictions_path.is_file():
+        return [semantic_name]
     expected = _nonempty_line_count(predictions_path)
     if expected <= 0:
         return []
     actual = _nonempty_line_count(semantic_path)
     if actual == expected:
-        return []
+        try:
+            predictions = read_jsonl(predictions_path)
+            traces = read_jsonl(semantic_path)
+        except (OSError, ValueError):
+            return [semantic_name]
+        if _semantic_trace_contract_valid(predictions, traces):
+            return []
     return [semantic_name]
+
+
+def _semantic_trace_contract_valid(
+    predictions: list[Any],
+    traces: list[Any],
+) -> bool:
+    from .qasper_causal_transaction import QASPER_CAUSAL_TRANSACTION_STAGES
+
+    if len(predictions) != len(traces):
+        return False
+    prediction_keys = [_semantic_identity(row) for row in predictions]
+    trace_keys = [_semantic_identity(row) for row in traces]
+    if any(key is None for key in (*prediction_keys, *trace_keys)):
+        return False
+    if prediction_keys != trace_keys:
+        return False
+    return all(
+        _semantic_trace_row_valid(trace, key, QASPER_CAUSAL_TRANSACTION_STAGES)
+        for trace, key in zip(traces, trace_keys)
+    )
+
+
+def _semantic_identity(value: Any) -> tuple[str, str] | None:
+    if not isinstance(value, Mapping):
+        return None
+    example_id = value.get("example_id")
+    route = value.get("route")
+    if not isinstance(example_id, str) or not example_id:
+        return None
+    if not isinstance(route, str) or not route:
+        return None
+    return example_id, route
+
+
+def _semantic_trace_row_valid(
+    trace: Any,
+    identity: tuple[str, str] | None,
+    stage_names: tuple[str, ...],
+) -> bool:
+    if not isinstance(trace, Mapping) or identity is None:
+        return False
+    transaction = trace.get("causal_transaction")
+    if not isinstance(transaction, Mapping):
+        return False
+    if transaction.get("contract_id") != "qasper_causal_transaction.v1":
+        return False
+    if transaction.get("transaction_key") != {
+        "example_id": identity[0],
+        "route": identity[1],
+    }:
+        return False
+    if transaction.get("stage_count") != len(stage_names):
+        return False
+    if transaction.get("stage_order") != list(stage_names):
+        return False
+    if transaction.get("status") not in {"complete", "incomplete"}:
+        return False
+    if not isinstance(transaction.get("incompleteness_reasons"), list):
+        return False
+    stages = transaction.get("stages")
+    if not isinstance(stages, list) or len(stages) != len(stage_names):
+        return False
+    if not is_sha256(transaction.get("terminal_chain_digest")):
+        return False
+    if not is_sha256(transaction.get("transaction_digest")):
+        return False
+    return _semantic_stages_valid(transaction, stages, stage_names)
+
+
+def _semantic_stages_valid(
+    transaction: Mapping[str, Any],
+    stages: list[Any],
+    stage_names: tuple[str, ...],
+) -> bool:
+    from .qasper_causal_transaction_stages import stage_comparison_payload
+
+    previous_chain_digest = ""
+    transaction_reasons: list[str] = []
+    for index, (name, stage) in enumerate(zip(stage_names, stages), start=1):
+        if not isinstance(stage, Mapping):
+            return False
+        if stage.get("stage_index") != index or stage.get("stage") != name:
+            return False
+        status = stage.get("status")
+        if status not in {"complete", "incomplete"}:
+            return False
+        reasons = stage.get("incompleteness_reasons")
+        if not isinstance(reasons, list):
+            return False
+        payload = stage.get("payload")
+        if not isinstance(payload, Mapping):
+            return False
+        payload_reasons = payload.get("incompleteness_reasons")
+        if not isinstance(payload_reasons, list):
+            return False
+        if reasons != payload_reasons:
+            return False
+        expected_status = "complete" if not payload_reasons else "incomplete"
+        if status != expected_status or payload.get("status") != expected_status:
+            return False
+        transaction_reasons.extend(
+            f"{name}:{reason}" for reason in payload_reasons
+        )
+        if stage.get("previous_chain_digest") != previous_chain_digest:
+            return False
+        payload_digest = stage.get("payload_digest")
+        comparison_digest = stage.get("comparison_digest")
+        chain_digest = stage.get("chain_digest")
+        if not is_sha256(payload_digest) or not is_sha256(comparison_digest):
+            return False
+        if canonical_digest(dict(payload)) != payload_digest:
+            return False
+        if (
+            canonical_digest(stage_comparison_payload(name, dict(payload)))
+            != comparison_digest
+        ):
+            return False
+        if not is_sha256(chain_digest):
+            return False
+        chain_payload = {
+            "stage_index": index,
+            "stage": name,
+            "payload_digest": payload_digest,
+            "previous_chain_digest": previous_chain_digest,
+        }
+        if canonical_digest(chain_payload) != chain_digest:
+            return False
+        previous_chain_digest = str(chain_digest)
+    expected_transaction_reasons = list(dict.fromkeys(transaction_reasons))
+    if transaction.get("incompleteness_reasons") != expected_transaction_reasons:
+        return False
+    expected_transaction_status = (
+        "complete" if not expected_transaction_reasons else "incomplete"
+    )
+    if transaction.get("status") != expected_transaction_status:
+        return False
+    if transaction.get("terminal_chain_digest") != previous_chain_digest:
+        return False
+    transaction_payload = {
+        key: value
+        for key, value in transaction.items()
+        if key != "transaction_digest"
+    }
+    return canonical_digest(transaction_payload) == transaction.get("transaction_digest")
 
 
 def verify_artifact_contract(run_dir: str | Path) -> dict[str, Any]:

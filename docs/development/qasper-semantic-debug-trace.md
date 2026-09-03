@@ -7,7 +7,14 @@ retrieval, verification, authority, recovery, scoring, or abstention decisions.
 
 Set `MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE=1` for a benchmark process. Slurm
 debug runs can additionally set `MARA_REQUIRE_SEMANTIC_DEBUG_TRACE=1`; the text
-runner then fails unless it publishes at least one debug row.
+runner then fails closed unless it publishes one row per prediction.
+
+The formal full-system QASPER launcher sets both variables. Required projection
+then emits exactly one structured transaction row per prediction, including
+predictions that fail before candidate generation or verification. Such a row
+preserves the transaction's real `incomplete` status when stages are missing;
+the publisher compares ordered `(example_id, route)` identities and the
+12-stage digest/chain shape, and continues to fail closed on any mismatch.
 
 The runtime contracts are:
 

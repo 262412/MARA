@@ -78,6 +78,11 @@ log() {
   printf '[%s] %s\n' "$(date -Is)" "$*"
 }
 
+if [[ "$REQUIRE_SEMANTIC_DEBUG_TRACE" == "1" && "$SEMANTIC_DEBUG_TRACE" != "1" ]]; then
+  log "required semantic debug trace requires semantic proposition debug tracing"
+  exit 2
+fi
+
 require_path() {
   local label="$1"
   local path="$2"
