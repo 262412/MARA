@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
+from .query_plan_schema import EvidenceSlot, QueryPlan, with_plan_id
+
 _FocusRule = tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]
 
 _FOCUS_RULES: tuple[_FocusRule, ...] = (
@@ -75,3 +79,48 @@ def finance_retrieval_query(question: str) -> str:
     if not focus:
         return str(question or "")
     return " ".join((str(question or "").strip(), *focus)).strip()
+
+
+def apply_finance_retrieval_focus(
+    plan: QueryPlan,
+    question: str,
+    *,
+    verification_domain: str,
+) -> QueryPlan:
+    slots = apply_finance_retrieval_focus_to_slots(
+        plan.evidence_slots,
+        question,
+        verification_domain=verification_domain,
+    )
+    if slots == plan.evidence_slots:
+        return plan
+    subqueries = tuple(slot.query for slot in slots if slot.query) or plan.subqueries
+    focused = replace(plan, evidence_slots=slots, subqueries=subqueries)
+    return with_plan_id(focused, question)
+
+
+def apply_finance_retrieval_focus_to_slots(
+    slots: tuple[EvidenceSlot, ...],
+    question: str,
+    *,
+    verification_domain: str,
+) -> tuple[EvidenceSlot, ...]:
+    if "finance" not in str(verification_domain or "").lower():
+        return slots
+    focus = finance_retrieval_focus_terms(question)
+    if not focus:
+        return slots
+    return tuple(
+        replace(
+            slot,
+            query=" ".join(
+                (slot.query,)
+                + tuple(
+                    term for term in focus if term.lower() not in slot.query.lower()
+                )
+            ).strip(),
+        )
+        if slot.query
+        else slot
+        for slot in slots
+    )

@@ -14,6 +14,7 @@ from .claim_support import claim_supported
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_identity import identity_of
 from .evidence_schema import EvidenceBundle
+from .layered_claim_support import layered_claim_supporting_ids
 from .query_plan_schema import EvidenceSlot, _slot_from_payload
 from .query_planning import score_evidence_for_slot
 from .typed_proposition_authority import coherent_authority_failure
@@ -145,11 +146,17 @@ def _claim_result_supports_item(
         return True
     if str(result.get("authority_status") or "") == "composite_exact":
         return identity in composite_ids
-    return not boolean_authority_required and claim_supported(
+    if boolean_authority_required:
+        return False
+    return claim_supported(
         claim,
         [item],
         prompt=prompt,
         domain=domain,
+    ) or identity in layered_claim_supporting_ids(
+        claim,
+        [item],
+        prompt=prompt,
     )
 
 
@@ -422,10 +429,14 @@ def _typed_authority_value(result: dict[str, Any], key: str) -> Any:
 def _requires_typed_boolean_authority(request: Any) -> bool:
     plan = getattr(request, "query_plan", None)
     answer_type = slot_value(plan, "answer_type")
-    if str(answer_type or getattr(request, "task_type", "")).lower() == "boolean":
-        return True
+    domain = str(getattr(request, "verification_domain", "") or "").lower()
     evidence_slots = slot_value(plan, "evidence_slots") or ()
-    return any(
+    explicit_boolean_proposition = any(
         str(slot_value(slot, "statement_kind") or "") == "boolean_proposition"
         for slot in evidence_slots
     )
+    if explicit_boolean_proposition:
+        return True
+    if str(answer_type or getattr(request, "task_type", "")).lower() != "boolean":
+        return False
+    return domain not in {"finance", "financial", "financebench"}

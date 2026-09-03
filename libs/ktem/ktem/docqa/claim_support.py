@@ -375,10 +375,12 @@ def _years(value: str) -> set[str]:
 
 
 def _direction_markers(value: str) -> set[str]:
-    tokens = {
-        _normalize_token(token)
-        for token in re.findall(r"[a-zA-Z0-9]+", _token_text(value).lower())
-    }
+    lowered = _token_text(value).lower()
+    tokens = {_normalize_token(token) for token in re.findall(r"[a-zA-Z0-9]+", lowered)}
+    if re.search(r"\bloss\s+function\b", lowered):
+        tokens.discard("loss")
+    if re.search(r"\bup\s+to\b", lowered):
+        tokens.discard("up")
     markers: set[str] = set()
     if tokens & _POSITIVE_DIRECTION_TOKENS:
         markers.add("positive")

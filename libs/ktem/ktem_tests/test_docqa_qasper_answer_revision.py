@@ -312,10 +312,11 @@ def test_revision_abstains_when_two_direct_objects_are_equally_authoritative() -
     )
 
 
-def test_failed_revision_does_not_retain_old_supported_authority() -> None:
+def test_unverified_extension_is_removed_without_dropping_core_authority() -> None:
+    first = _evidence("first", DIRECT_AUTHORITY)
     result = _run(
         [
-            _evidence("first", DIRECT_AUTHORITY),
+            first,
             _evidence(
                 "second",
                 "We leverage class distribution as prior knowledge.",
@@ -327,13 +328,21 @@ def test_failed_revision_does_not_retain_old_supported_authority() -> None:
         ),
     )
 
-    assert result.verify_decision.status == "unknown"
-    assert result.verify_decision.verified_citations == []
-    assert result.verify_decision.authoritative_evidence_id == ""
+    first_id = identity_of(first).key
+    assert result.answer == "The authors leverage labeled features."
+    assert result.engine_terminal_answer == result.answer
+    assert result.verify_decision.status == "supported"
+    assert result.verify_decision.verified_citations == [first_id]
+    assert result.verify_decision.authoritative_evidence_id == first_id
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
     assert all(
-        claim.get("authority_status") == "missing"
-        and claim.get("supporting_evidence_ids") == []
+        claim.get("status") == "supported"
+        and claim.get("authority_status") in {"exact", "semantic"}
         for claim in result.verify_decision.claim_results
+    )
+    assert any(
+        event.get("stage") == "claim_level_revision"
+        for event in result.controller_trace
     )
 
 

@@ -30,8 +30,7 @@ UNSUPPORTED_ANSWER = (
     "with several machine learning methods to identify argument components."
 )
 DIRECT_AUTHORITY = (
-    "Implicit premises encountered in actual data are now accounted for by "
-    "this work."
+    "Implicit premises encountered in actual data are now accounted for by this work."
 )
 
 
@@ -149,7 +148,9 @@ def test_same_sentence_non_argument_cannot_fill_account_for_relation() -> None:
     assert result.verify_decision.typed_authority["authority_atoms"] == []
 
 
-def test_answer_object_cannot_extend_beyond_the_exact_predicate_argument() -> None:
+def test_answer_object_drops_unconfirmed_extension_beyond_the_predicate_argument() -> (
+    None
+):
     question = "What background knowledge do they leverage?"
     request = DocQARequest(
         prompt=question,
@@ -173,6 +174,7 @@ def test_answer_object_cannot_extend_beyond_the_exact_predicate_argument() -> No
         generate=lambda *_args: "labeled features and class distribution",
     )
 
-    assert result.engine_terminal_answer == "unanswerable"
-    assert result.verify_decision.status == "unknown"
-    assert result.verify_decision.typed_authority["authority_atoms"] == []
+    assert result.engine_terminal_answer == "labeled features"
+    assert result.verify_decision.status == "supported"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+    assert result.verify_decision.typed_authority["authority_atoms"]

@@ -13,7 +13,7 @@ from .boolean_authority_schema import SEMANTIC_EVIDENCE_SET_RULE
 from .boolean_conjunction import derivation_support_group_constraint
 from .evidence_alias_lookup import unambiguous_evidence_alias_lookup
 from .evidence_schema import EvidenceBundle
-from .qasper_answer_relation import resolve_qasper_answer_relation
+from .layered_free_text_authority import resolve_layered_free_text_transaction
 from .query_plan_schema import QueryPlan
 from .semantic_evidence_set_plan_projection import (
     semantic_authority_plan_projection_from_decision,
@@ -26,9 +26,6 @@ from .typed_proposition_authority_atoms import (
 )
 from .typed_proposition_authority_atoms import (
     exact_boolean_atoms as _exact_boolean_atoms,
-)
-from .typed_proposition_authority_atoms import (
-    free_text_claim_result as _free_text_claim_result,
 )
 from .typed_proposition_authority_failure import coherent_authority_failure
 from .typed_proposition_authority_missing import (
@@ -261,123 +258,15 @@ def _resolve_free_text_transaction(
     required_slots: list[Any],
     required_slot_ids: list[str],
 ) -> VerifyDecision:
-    resolution = resolve_qasper_answer_relation(
-        question,
-        answer,
-        list(evidence_bundle.items),
-    )
-    extension_unverified = (
-        resolution.state != "verified_support"
-        and len(decision.claim_results) > 1
-        and any(
-            str(result.get("status") or "") != "supported"
-            for result in decision.claim_results
-        )
-    )
-    if (
-        resolution.state != "verified_support"
-        or not resolution.atoms
-        or not required_slots
-        or extension_unverified
-    ):
-        reason = (
-            "claim_extension_unverified"
-            if extension_unverified
-            else (
-                "required_support_slot_missing"
-                if not required_slots
-                else resolution.reason
-            )
-        )
-        authority = _missing_authority(
-            "free_text", question, answer, required_slot_ids, reason
-        )
-        return coherent_authority_failure(
-            decision,
-            reason,
-            typed_authority=authority,
-        )
-    return _commit_free_text_transaction(
+    return resolve_layered_free_text_transaction(
         request,
         decision,
+        evidence_bundle,
         question=question,
         answer=answer,
         required_slots=required_slots,
         required_slot_ids=required_slot_ids,
-        atoms=list(resolution.atoms),
-        reason=resolution.reason,
-    )
-
-
-def _commit_free_text_transaction(
-    request: Any,
-    decision: VerifyDecision,
-    *,
-    question: str,
-    answer: str,
-    required_slots: list[Any],
-    required_slot_ids: list[str],
-    atoms: list[dict[str, Any]],
-    reason: str,
-) -> VerifyDecision:
-    atom = atoms[0]
-    evidence_ids = tuple(dict.fromkeys(str(value["evidence_id"]) for value in atoms))
-    bindings = {slot.slot_id: evidence_ids for slot in required_slots}
-    state_version = _commit_query_plan(request, bindings, "verified_support")
-    claims = list(decision.claims) or [str(answer or "").strip()]
-    claim_results = [
-        _free_text_claim_result(
-            (
-                decision.claim_results[index]
-                if index < len(decision.claim_results)
-                else {}
-            ),
-            claim=claim,
-            claim_id=f"claim:{index + 1}",
-            atom=atoms[min(index, len(atoms) - 1)],
-            slot_ids=list(bindings),
-        )
-        for index, claim in enumerate(claims)
-    ]
-    authority = _verified_authority(
-        "free_text",
-        question,
-        answer,
-        claim_results,
-        bindings,
-        atoms,
-        state="verified_support",
-        reason=reason,
-        query_plan_state_version=state_version,
-        required_slot_ids=required_slot_ids,
-    )
-    return replace(
-        decision,
-        status="supported",
-        reason="Typed QASPER answer relation is supported.",
-        action="generate",
-        claims=claims,
-        unsupported_claims=[],
-        unknown_claims=[],
-        verified_citations=list(evidence_ids),
-        claim_results=claim_results,
-        authoritative_evidence_id=str(atom["evidence_id"]),
-        authoritative_evidence_ref=str(atom["evidence_ref"]),
-        authoritative_span_id=str(atom["span_id"]),
-        authoritative_quote=str(atom["quote"]),
-        authoritative_span_start=atom.get("span_start"),
-        authoritative_span_end=atom.get("span_end"),
-        authoritative_canonical_start=atom.get("canonical_start"),
-        authoritative_canonical_end=atom.get("canonical_end"),
-        actor=str(atom["actor"]),
-        section_scope=str(atom["section_scope"]),
-        relation=str(atom["relation"]),
-        object=str(atom["object"]),
-        predicate_arguments=tuple(atom.get("arguments") or ()),
-        qualifier=str(atom["qualifier"]),
-        quantifier=str(atom["quantifier"]),
-        verified_support_slot_ids=list(bindings),
-        typed_authority=authority,
+        commit_query_plan=_commit_query_plan,
     )
 
 

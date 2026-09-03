@@ -39,6 +39,8 @@ _PREDICATE_PATTERNS = {
     "collect": r"\bcollect(?:s|ed|ing)?\b",
     "release": r"\breleas(?:e|es|ed|ing)\b",
     "compare": r"\bcompar(?:e|es|ed|ing)\b",
+    "cause": r"\b(?:caus(?:e|es|ed|ing)|drive|drove|driven|reason)\b",
+    "demonstrate": r"\bdemonstrat(?:e|es|ed|ing)\b",
     "analyze": r"\banaly(?:ze|zes|zed|zing|se|ses|sed|sing)\b",
     "explore": r"\bexplor(?:e|es|ed|ing)\b",
     "address": r"\baddress(?:es|ed|ing)?\b",

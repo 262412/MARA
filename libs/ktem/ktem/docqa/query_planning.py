@@ -15,7 +15,11 @@ from .finance_query_planning import (
     finance_operand_specs,
     is_finance_segment_comparison,
 )
-from .finance_retrieval_focus import finance_retrieval_focus_terms
+from .finance_retrieval_focus import (
+    apply_finance_retrieval_focus,
+    apply_finance_retrieval_focus_to_slots,
+    finance_retrieval_focus_terms,
+)
 from .financial_statement_identity import required_financial_identity
 from .heuristic_query_slots import heuristic_slots, mmdoc_visual_time_series_slots
 from .query_classification import (
@@ -63,7 +67,12 @@ def build_query_plan(
         and planned.answer_type == "numeric"
         and registry_status in {"supported", "unsupported"}
     ):
-        return with_boolean_support_group(planned, question)
+        planned = with_boolean_support_group(planned, question)
+        return apply_finance_retrieval_focus(
+            planned,
+            question,
+            verification_domain=verification_domain,
+        )
     return _build_heuristic_query_plan(
         question,
         answer_type=answer_type,
@@ -121,6 +130,11 @@ def _build_heuristic_query_plan(
     if segment_comparison:
         planned_question_type = "comparison_argmax"
         slots = _segment_comparison_slots(slots)
+    slots = apply_finance_retrieval_focus_to_slots(
+        slots,
+        text,
+        verification_domain=verification_domain,
+    )
     subqueries = tuple(slot.query for slot in slots if slot.query) or (text,)
     constraints = query_plan_constraints(
         text,
