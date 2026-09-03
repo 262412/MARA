@@ -6,12 +6,13 @@ from pathlib import Path
 
 import pytest
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SUBMIT_FULLSYSTEM = PROJECT_ROOT / "scripts/slurm/submit_fullsystem_jobs.sh"
 CLEANUP_BARRIER = PROJECT_ROOT / "scripts/slurm/benchmark_cleanup_barrier.sbatch"
 TEXT_SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/text_route_rerun.sbatch"
+MULTIMODAL_SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/multimodal_route_rerun.sbatch"
 RUNTIME_HELPER = PROJECT_ROOT / "scripts/slurm/benchmark_runtime_isolation.sh"
+SERVICE_RUNTIME_PREFLIGHT = PROJECT_ROOT / "scripts/slurm/service_runtime_preflight.sh"
 
 
 def _require_posix_bash() -> None:
@@ -38,7 +39,9 @@ def _write_runtime_receipts(runtime_list: Path) -> Path:
     return receipt_list
 
 
-def _run_barrier(runtime_list: Path, **variables: str) -> subprocess.CompletedProcess[str]:
+def _run_barrier(
+    runtime_list: Path, **variables: str
+) -> subprocess.CompletedProcess[str]:
     receipt_list = _write_runtime_receipts(runtime_list)
     environment = os.environ.copy()
     environment.update(
@@ -67,6 +70,105 @@ def _quota_output(used_inodes: int, soft_limit: int) -> str:
     )
 
 
+def _write_executable(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _write_text_service_runtime(hpc_home: Path) -> None:
+    for path in (
+        hpc_home / "serve_qwen3_8b.sh",
+        hpc_home / "serve_retrieval.sh",
+        hpc_home / ".venv/bin/python",
+        hpc_home / ".venv/bin/vllm",
+        hpc_home / ".venv-retrieval/bin/python",
+    ):
+        _write_executable(path)
+    for path in (
+        hpc_home / "env.sh",
+        hpc_home / "env-retrieval.sh",
+        hpc_home / "configure_mara_local_models.py",
+        hpc_home / "local_retrieval_server.py",
+        hpc_home / ".venv/bin/activate",
+        hpc_home / ".venv-retrieval/bin/activate",
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("runtime fixture\n", encoding="utf-8")
+
+
+def test_service_runtime_preflight_rejects_broken_environment_symlinks(tmp_path):
+    _require_posix_bash()
+    hpc_home = tmp_path / "mara-hpc"
+    hpc_home.mkdir()
+    for path in (
+        hpc_home / "serve_qwen3_8b.sh",
+        hpc_home / "serve_retrieval.sh",
+    ):
+        _write_executable(path)
+    for path in (
+        hpc_home / "env.sh",
+        hpc_home / "env-retrieval.sh",
+        hpc_home / "configure_mara_local_models.py",
+        hpc_home / "local_retrieval_server.py",
+    ):
+        path.write_text("runtime fixture\n", encoding="utf-8")
+    (hpc_home / ".venv").symlink_to(tmp_path / "missing-vllm-environment")
+    (hpc_home / ".venv-retrieval").symlink_to(
+        tmp_path / "missing-retrieval-environment"
+    )
+
+    result = subprocess.run(
+        ["bash", str(SERVICE_RUNTIME_PREFLIGHT), str(hpc_home), "text"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "service_runtime_preflight_failed=missing_file" in result.stderr
+    assert str(hpc_home / ".venv/bin/activate") in result.stderr
+
+
+def test_service_runtime_preflight_accepts_complete_text_runtime(tmp_path):
+    _require_posix_bash()
+    hpc_home = tmp_path / "mara-hpc"
+    _write_text_service_runtime(hpc_home)
+
+    result = subprocess.run(
+        ["bash", str(SERVICE_RUNTIME_PREFLIGHT), str(hpc_home), "text"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "service_runtime_preflight=ok mode=text" in result.stdout
+    assert "service_runtime_digest=" in result.stdout
+
+
+def test_service_runtime_preflight_runs_before_runtime_or_plan_creation():
+    launcher = SUBMIT_FULLSYSTEM.read_text(encoding="utf-8")
+    text_wrapper = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+    multimodal_wrapper = MULTIMODAL_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert launcher.index(
+        'mara_preflight_service_runtime "$HPC_HOME" full'
+    ) < launcher.index('"$PLAN_PYTHON" "$PLAN_BUILDER" build')
+    text_preflight = text_wrapper.index(
+        'mara_preflight_service_runtime "$HPC_HOME" text'
+    )
+    multimodal_preflight = multimodal_wrapper.index(
+        'mara_preflight_service_runtime "$HPC_HOME" multimodal'
+    )
+    assert text_preflight < text_wrapper.index("trap cleanup EXIT")
+    assert text_preflight < text_wrapper.index("mara_configure_benchmark_runtime")
+    assert multimodal_preflight < multimodal_wrapper.index("trap cleanup EXIT")
+    assert multimodal_preflight < multimodal_wrapper.index(
+        "mara_configure_benchmark_runtime"
+    )
+
+
 def test_runtime_path_characterization_reaches_barrier_with_fake_sbatch(tmp_path):
     _require_posix_bash()
     launcher = SUBMIT_FULLSYSTEM.read_text(encoding="utf-8")
@@ -78,8 +180,7 @@ def test_runtime_path_characterization_reaches_barrier_with_fake_sbatch(tmp_path
     fake_bin.mkdir()
     fake_sbatch = fake_bin / "sbatch"
     fake_sbatch.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf '1234\\n'\n",
+        "#!/usr/bin/env bash\n" "printf '1234\\n'\n",
         encoding="utf-8",
     )
     fake_sbatch.chmod(0o755)

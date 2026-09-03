@@ -53,6 +53,9 @@ export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
 MARA_VLM_SERVE_SCRIPT="${MARA_VLM_SERVE_SCRIPT:-serve_qwen3_vl_8b_4k.sh}"
 
+source "${PROJECT_ROOT}/scripts/slurm/service_runtime_preflight.sh"
+mara_preflight_service_runtime "$HPC_HOME" multimodal "$MARA_VLM_SERVE_SCRIPT"
+
 SERVICE_PIDS=()
 
 log() {

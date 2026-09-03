@@ -72,6 +72,9 @@ export MARA_REQUIRE_SEMANTIC_DEBUG_TRACE="$REQUIRE_SEMANTIC_DEBUG_TRACE"
 export MARA_REQUIRE_CONTRACT_SMOKE="$REQUIRE_CONTRACT_SMOKE"
 export MARA_CONTRACT_SMOKE_SUITE_KIND="$CONTRACT_SMOKE_SUITE_KIND"
 
+source "${PROJECT_ROOT}/scripts/slurm/service_runtime_preflight.sh"
+mara_preflight_service_runtime "$HPC_HOME" text
+
 SERVICE_PIDS=()
 
 log() {
