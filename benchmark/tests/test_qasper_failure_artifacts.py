@@ -261,11 +261,21 @@ def test_run_requirements_are_preserved_across_republication(tmp_path, requireme
     (run_dir / "summary.json").write_text(
         json.dumps({"artifact_detail": "full"}), encoding="utf-8"
     )
-    (run_dir / "predictions.jsonl").write_text("{}\n", encoding="utf-8")
+    prediction = (
+        _pre_verifier_prediction()
+        if requirement == "semantic_debug_traces"
+        else {}
+    )
+    (run_dir / "predictions.jsonl").write_text(
+        json.dumps(prediction) + "\n", encoding="utf-8"
+    )
     publish_artifact_contract(run_dir, run_requirements={requirement: True})
 
     if requirement == "semantic_debug_traces":
-        (run_dir / "semantic_debug_traces.jsonl").write_text("{}\n", encoding="utf-8")
+        [trace] = qasper_semantic_debug_rows([prediction])
+        (run_dir / "semantic_debug_traces.jsonl").write_text(
+            json.dumps(trace) + "\n", encoding="utf-8"
+        )
     else:
         (run_dir / "contract_smoke_audit.json").write_text(
             json.dumps({"status": "failed"}), encoding="utf-8"

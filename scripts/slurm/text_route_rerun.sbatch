@@ -72,11 +72,19 @@ export MARA_REQUIRE_SEMANTIC_DEBUG_TRACE="$REQUIRE_SEMANTIC_DEBUG_TRACE"
 export MARA_REQUIRE_CONTRACT_SMOKE="$REQUIRE_CONTRACT_SMOKE"
 export MARA_CONTRACT_SMOKE_SUITE_KIND="$CONTRACT_SMOKE_SUITE_KIND"
 
+source "${PROJECT_ROOT}/scripts/slurm/service_runtime_preflight.sh"
+mara_preflight_service_runtime "$HPC_HOME" text
+
 SERVICE_PIDS=()
 
 log() {
   printf '[%s] %s\n' "$(date -Is)" "$*"
 }
+
+if [[ "$REQUIRE_SEMANTIC_DEBUG_TRACE" == "1" && "$SEMANTIC_DEBUG_TRACE" != "1" ]]; then
+  log "required semantic debug trace requires semantic proposition debug tracing"
+  exit 2
+fi
 
 require_path() {
   local label="$1"

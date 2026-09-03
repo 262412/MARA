@@ -78,6 +78,47 @@ KH_SETTINGS_SOURCE = "benchmark-runtime"
 PY
 }
 
+mara_benchmark_write_runtime_receipt() {
+  local receipt_dir="${MARA_BENCHMARK_RUNTIME_RECEIPT_DIR:-}"
+  local job_id="${SLURM_JOB_ID:-}"
+  local receipt_path
+  local temporary_path
+
+  # Interactive/helper callers do not need a scheduler receipt.  Full-system
+  # launchers export the directory, making the producer-owned receipt
+  # mandatory for the barrier contract.
+  [[ -n "$receipt_dir" ]] || return 0
+  [[ "$job_id" =~ ^[0-9]+$ ]] || {
+    mara_benchmark_die "SLURM_JOB_ID is required for a runtime receipt"
+    return 2
+  }
+  receipt_dir="$(realpath -m "$receipt_dir")"
+  [[ "$receipt_dir" != "/" ]] || {
+    mara_benchmark_die "runtime receipt directory is invalid"
+    return 2
+  }
+  mkdir -p "$receipt_dir" || return 2
+  receipt_path="${receipt_dir}/${job_id}.receipt"
+  if [[ -e "$receipt_path" || -L "$receipt_path" ]]; then
+    mara_benchmark_die "runtime receipt already exists: $receipt_path"
+    return 2
+  fi
+  temporary_path="${receipt_path}.tmp.$$"
+  if ! (umask 077; printf 'slurm_job_id=%s\nruntime_dir=%s\n' \
+    "$job_id" "$MARA_BENCHMARK_RUNTIME_DIR" >"$temporary_path"); then
+    rm -f -- "$temporary_path"
+    mara_benchmark_die "unable to write runtime receipt: $receipt_path"
+    return 2
+  fi
+  if ! ln -- "$temporary_path" "$receipt_path"; then
+    rm -f -- "$temporary_path"
+    mara_benchmark_die "unable to claim runtime receipt: $receipt_path"
+    return 2
+  fi
+  rm -- "$temporary_path"
+  export MARA_BENCHMARK_RUNTIME_RECEIPT_PATH="$receipt_path"
+}
+
 mara_configure_benchmark_runtime() {
   local suite_slug
   local task_slug
@@ -137,6 +178,7 @@ mara_configure_benchmark_runtime() {
   mkdir -p "$KH_APP_DATA_DIR" "$MARA_BENCHMARK_THEFLOW_DIR" "$THEFLOW_TEMP_PATH"
   printf '%s\n' "$owner_token" > "$MARA_BENCHMARK_RUNTIME_OWNER_FILE"
   mara_benchmark_write_settings_source "$MARA_BENCHMARK_THEFLOW_DIR" "$project_root"
+  mara_benchmark_write_runtime_receipt
 
   # Put only this job's settings module first.  Existing model/download caches
   # continue to follow the host UV/HF cache policy and are not redirected here.

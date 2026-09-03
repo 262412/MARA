@@ -18,7 +18,7 @@ EXECUTION_PLAN_BUILDER = (
 )
 SUBMIT_FULLSYSTEM = PROJECT_ROOT / "scripts/slurm/submit_fullsystem_jobs.sh"
 CLEANUP_BARRIER = PROJECT_ROOT / "scripts/slurm/benchmark_cleanup_barrier.sbatch"
-SYNTHESIS_SCRIPT = PROJECT_ROOT / "scripts/slurm/synthesize_benchmark_run.py"
+SYNTHESIS_SCRIPT = PROJECT_ROOT / "scripts/slurm/synthesize_benchmark_run.sbatch"
 CONTRACT_SMOKE_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_contract_smoke.py"
 INDEX_CONTRACT = PROJECT_ROOT / "scripts/slurm/benchmark_index_contract.py"
 SEMANTIC_EVALUATOR_NORMALIZER = (
