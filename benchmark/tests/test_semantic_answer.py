@@ -72,6 +72,12 @@ def test_semantic_judge_backend_accepts_canonical_local_alias():
     assert isinstance(judge, semantic_module.LocalSemanticJudge)
 
 
+def test_semantic_judge_backend_accepts_on_alias():
+    judge = semantic_module.semantic_judge_backend("on")
+
+    assert isinstance(judge, semantic_module.LocalSemanticJudge)
+
+
 def test_free_text_semantic_score_rewards_supported_explanation():
     def judge(_payload):
         return {

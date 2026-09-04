@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from ktem.docqa.qasper_semantic_pack_contract import canonical_payload_digest
+
 from kotaemon.base import HumanMessage, SystemMessage
 
 from .mara_qasper_candidate_budget import (
@@ -14,8 +16,10 @@ from .mara_qasper_candidate_evidence import candidate_evidence_set_binding
 from .mara_qasper_candidate_identity import candidate_digest
 from .mara_qasper_candidate_prompt import _bound_candidate_slots, _candidate_prompt
 from .mara_qasper_selector_trace_projection import (
+    candidate_record_occurrence_indices,
     project_qasper_canonical_selector_trace,
 )
+from .mara_qasper_semantic_pack import prepare_qasper_canonical_records_with_trace
 
 _CandidateRequestFit = tuple[
     list[dict[str, Any]],
@@ -97,6 +101,8 @@ def fit_candidate_request(
     pre_request_dropped_count = int(
         evidence_diagnostics.get("pre_request_dropped_evidence_count") or 0
     )
+    canonical_projection_events: list[dict[str, Any]] = []
+    dropped_for_request = False
     while True:
         diagnostics, messages, token_measurement = _candidate_request_iteration(
             llm,
@@ -111,36 +117,126 @@ def fit_candidate_request(
         )
         decision, drop_index = _request_fit_decision(token_measurement, selected)
         attempts.append(
-            _candidate_request_attempt(
+            _candidate_request_fit_attempt(
                 selected,
                 token_measurement,
                 decision=decision,
-                dropped_evidence_id=(
-                    str(selected[drop_index].get("evidence_id") or "")
-                    if drop_index is not None
-                    else ""
-                ),
+                drop_index=drop_index,
             )
         )
         if drop_index is None:
-            _record_candidate_request_projection(
+            if (
+                dropped_for_request
+                and evidence_diagnostics.get("canonical_projection_required") is True
+            ):
+                projected, projection_event = _reproject_request_records(
+                    question,
+                    selected,
+                    candidate_transaction_id=candidate_transaction_id,
+                )
+                dropped_for_request = False
+                if projection_event is not None:
+                    canonical_projection_events.append(projection_event)
+                    dropped_count += max(0, len(selected) - len(projected))
+                    selected = projected
+                    selected_indices = candidate_record_occurrence_indices(
+                        initial,
+                        selected,
+                    )
+                    continue
+            return _finalize_candidate_request_fit(
                 diagnostics,
                 initial=initial,
                 selected=selected,
                 selected_indices=selected_indices,
                 attempts=attempts,
                 messages=messages,
-            )
-            return (
-                selected,
-                diagnostics,
-                messages,
-                token_measurement,
-                pre_request_dropped_count + dropped_count,
+                token_measurement=token_measurement,
+                canonical_projection_events=canonical_projection_events,
+                pre_request_dropped_count=pre_request_dropped_count,
+                dropped_count=dropped_count,
             )
         selected.pop(drop_index)
         selected_indices.pop(drop_index)
         dropped_count += 1
+        dropped_for_request = True
+
+
+def _reproject_request_records(
+    question: str,
+    selected: list[dict[str, Any]],
+    *,
+    candidate_transaction_id: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    projected, projection_trace = prepare_qasper_canonical_records_with_trace(
+        question,
+        selected,
+        candidate_transaction_id=candidate_transaction_id,
+    )
+    if projected == selected:
+        return selected, None
+    return projected, {
+        "before_record_ids": [
+            str(record.get("evidence_id") or "") for record in selected
+        ],
+        "after_record_ids": [
+            str(record.get("evidence_id") or "") for record in projected
+        ],
+        "before_record_digest": canonical_payload_digest(selected),
+        "after_record_digest": canonical_payload_digest(projected),
+        "projection_trace_digest": canonical_payload_digest(projection_trace),
+    }
+
+
+def _candidate_request_fit_attempt(
+    selected: list[dict[str, Any]],
+    token_measurement: dict[str, Any],
+    *,
+    decision: str,
+    drop_index: int | None,
+) -> dict[str, Any]:
+    dropped_evidence_id = (
+        str(selected[drop_index].get("evidence_id") or "")
+        if drop_index is not None
+        else ""
+    )
+    return _candidate_request_attempt(
+        selected,
+        token_measurement,
+        decision=decision,
+        dropped_evidence_id=dropped_evidence_id,
+    )
+
+
+def _finalize_candidate_request_fit(
+    diagnostics: dict[str, Any],
+    *,
+    initial: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+    selected_indices: list[int],
+    attempts: list[dict[str, Any]],
+    messages: list[Any],
+    token_measurement: dict[str, Any],
+    canonical_projection_events: list[dict[str, Any]],
+    pre_request_dropped_count: int,
+    dropped_count: int,
+) -> _CandidateRequestFit:
+    _record_candidate_request_projection(
+        diagnostics,
+        initial=initial,
+        selected=selected,
+        selected_indices=selected_indices,
+        attempts=attempts,
+        messages=messages,
+        canonical_projection_events=canonical_projection_events,
+    )
+    return (
+        selected,
+        diagnostics,
+        messages,
+        token_measurement,
+        pre_request_dropped_count + dropped_count,
+    )
 
 
 def _candidate_request_iteration(
@@ -230,6 +326,7 @@ def _record_candidate_request_projection(
     selected_indices: list[int],
     attempts: list[dict[str, Any]],
     messages: list[Any],
+    canonical_projection_events: list[dict[str, Any]] | None = None,
 ) -> None:
     selected_index_set = set(selected_indices)
     selected_ids = [
@@ -248,6 +345,10 @@ def _record_candidate_request_projection(
         for index, record in enumerate(initial)
     ]
     final_message_stack = _serialized_messages(messages)
+    canonical_projection_events = list(canonical_projection_events or [])
+    candidate_message_records_digest = canonical_payload_digest(selected)
+    diagnostics["candidate_message_records_digest"] = candidate_message_records_digest
+    diagnostics["candidate_message_record_ids"] = selected_ids
     diagnostics["candidate_request_projection_trace"] = {
         "contract_id": "qasper_candidate_request_projection.v1",
         "complete": True,
@@ -261,6 +362,10 @@ def _record_candidate_request_projection(
         "attempt_count": len(attempts),
         "attempts_digest": _digest(attempts),
         "attempts": attempts,
+        "canonical_projection_event_count": len(canonical_projection_events),
+        "canonical_projection_events": canonical_projection_events,
+        "candidate_message_record_ids": selected_ids,
+        "candidate_message_records_digest": candidate_message_records_digest,
         "final_message_stack": final_message_stack,
         "final_message_stack_digest": _digest(final_message_stack),
     }

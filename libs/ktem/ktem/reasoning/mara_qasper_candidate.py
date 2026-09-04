@@ -252,6 +252,9 @@ def _freeze_candidate_semantic_pack(
         candidate_transaction_id=transaction_id,
         candidate_binding=diagnostics.get("candidate_evidence_set_binding"),
         candidate_required_slots=diagnostics.get("required_slots"),
+        candidate_records_digest=str(
+            diagnostics.get("candidate_message_records_digest") or ""
+        ),
     )
     diagnostics.update(
         qasper_candidate_pack_identity_projection(

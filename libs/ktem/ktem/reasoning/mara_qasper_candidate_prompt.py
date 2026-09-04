@@ -23,6 +23,7 @@ from .mara_qasper_candidate_selector_projection import (
     prioritized_candidate_prompt_evidence as _prioritized_candidate_prompt_evidence,
 )
 from .mara_qasper_selector_trace_projection import (
+    candidate_record_occurrence_indices,
     project_qasper_canonical_selector_trace,
 )
 from .mara_qasper_semantic_pack import prepare_qasper_canonical_records_with_trace
@@ -83,7 +84,9 @@ def _candidate_evidence(
     canonical_selector_projection_trace = project_qasper_canonical_selector_trace(
         canonical_selector_projection_trace,
         source_record_count=canonical_record_count,
-        selected_indices=list(range(len(records))),
+        selected_indices=list(
+            candidate_prompt_projection_trace.get("selected_record_indices") or []
+        ),
         rejection_reason="candidate_prompt_char_budget",
     )
     diagnostics = _candidate_evidence_diagnostics(
@@ -162,6 +165,7 @@ def _candidate_evidence_diagnostics(
         "typed_proposition": packing.question_proposition,
         "question_proposition_resolution": packing.question_proposition_resolution,
         "required_slots": bound_slots,
+        "canonical_projection_required": True,
         "candidate_evidence_set_binding": evidence_set_binding,
         "candidate_prompt_projection_trace": candidate_prompt_projection_trace,
         "canonical_selector_projection_trace": canonical_selector_projection_trace,
@@ -185,48 +189,45 @@ def _fit_candidate_prompt_evidence(
 ]:
     selected = list(records)
     attempts: list[dict[str, Any]] = []
+    canonical_projection_events: list[dict[str, Any]] = []
+    dropped_for_prompt = False
     while selected:
-        evidence_set_binding = _candidate_evidence_set_binding(
-            selected,
-            question,
-            candidate_transaction_id=candidate_transaction_id,
-        )
-        bound_slots = _bound_candidate_slots(
-            slots,
-            selected,
-            binding=evidence_set_binding,
-        )
-        prompt = _candidate_prompt(
+        evidence_set_binding, bound_slots, prompt = _candidate_prompt_fit_state(
             question,
             selected,
+            slots=slots,
             proposition=proposition,
             proposition_resolution=proposition_resolution,
-            required_slots=bound_slots,
-            evidence_set_binding=evidence_set_binding,
+            candidate_transaction_id=candidate_transaction_id,
         )
-        attempts.append(
-            {
-                "attempt": len(attempts) + 1,
-                "record_ids": [
-                    str(record.get("evidence_id") or "") for record in selected
-                ],
-                "prompt_chars": len(prompt),
-                "decision": (
-                    "accepted"
-                    if len(prompt) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS
-                    else "drop_last_record"
-                ),
-            }
-        )
+        attempts.append(_candidate_prompt_fit_attempt(selected, prompt, len(attempts)))
         if len(prompt) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS:
+            if dropped_for_prompt:
+                selected, projection_event = _reproject_prompt_records(
+                    question,
+                    selected,
+                    candidate_transaction_id=candidate_transaction_id,
+                )
+                dropped_for_prompt = False
+                if projection_event is not None:
+                    canonical_projection_events.append(projection_event)
+                    if not selected:
+                        break
+                    continue
             return (
                 selected,
                 bound_slots,
                 evidence_set_binding,
                 len(records) - len(selected),
-                _prompt_projection_trace(records, selected, attempts),
+                _prompt_projection_trace(
+                    records,
+                    selected,
+                    attempts,
+                    canonical_projection_events=canonical_projection_events,
+                ),
             )
         selected.pop()
+        dropped_for_prompt = True
     evidence_set_binding = _candidate_evidence_set_binding(
         [],
         question,
@@ -237,28 +238,111 @@ def _fit_candidate_prompt_evidence(
         _bound_candidate_slots(slots, [], binding=evidence_set_binding),
         evidence_set_binding,
         len(records),
-        _prompt_projection_trace(records, [], attempts),
+        _prompt_projection_trace(
+            records,
+            [],
+            attempts,
+            canonical_projection_events=canonical_projection_events,
+        ),
     )
+
+
+def _candidate_prompt_fit_state(
+    question: str,
+    selected: list[dict[str, Any]],
+    *,
+    slots: list[dict[str, Any]],
+    proposition: dict[str, Any],
+    proposition_resolution: dict[str, Any],
+    candidate_transaction_id: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
+    evidence_set_binding = _candidate_evidence_set_binding(
+        selected,
+        question,
+        candidate_transaction_id=candidate_transaction_id,
+    )
+    bound_slots = _bound_candidate_slots(
+        slots,
+        selected,
+        binding=evidence_set_binding,
+    )
+    prompt = _candidate_prompt(
+        question,
+        selected,
+        proposition=proposition,
+        proposition_resolution=proposition_resolution,
+        required_slots=bound_slots,
+        evidence_set_binding=evidence_set_binding,
+    )
+    return evidence_set_binding, bound_slots, prompt
+
+
+def _candidate_prompt_fit_attempt(
+    selected: list[dict[str, Any]],
+    prompt: str,
+    attempt_index: int,
+) -> dict[str, Any]:
+    return {
+        "attempt": attempt_index + 1,
+        "record_ids": [str(record.get("evidence_id") or "") for record in selected],
+        "prompt_chars": len(prompt),
+        "decision": (
+            "accepted"
+            if len(prompt) <= SEMANTIC_PROPOSITION_VERIFIER_MAX_PROMPT_CHARS
+            else "drop_last_record"
+        ),
+    }
+
+
+def _reproject_prompt_records(
+    question: str,
+    selected: list[dict[str, Any]],
+    *,
+    candidate_transaction_id: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    projected, projection_trace = prepare_qasper_canonical_records_with_trace(
+        question,
+        selected,
+        candidate_transaction_id=candidate_transaction_id,
+    )
+    if projected == selected:
+        return selected, None
+    return projected, {
+        "before_record_ids": [
+            str(record.get("evidence_id") or "") for record in selected
+        ],
+        "after_record_ids": [
+            str(record.get("evidence_id") or "") for record in projected
+        ],
+        "before_record_digest": _trace_digest(selected),
+        "after_record_digest": _trace_digest(projected),
+        "projection_trace_digest": _trace_digest(projection_trace),
+    }
 
 
 def _prompt_projection_trace(
     records: list[dict[str, Any]],
     selected: list[dict[str, Any]],
     attempts: list[dict[str, Any]],
+    *,
+    canonical_projection_events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    selected_ids = {str(record.get("evidence_id") or "") for record in selected}
+    selected_indices = candidate_record_occurrence_indices(records, selected)
+    selected_index_set = set(selected_indices)
     decisions = [
         {
+            "record_index": index + 1,
             "evidence_id": str(record.get("evidence_id") or ""),
-            "selected": str(record.get("evidence_id") or "") in selected_ids,
+            "selected": index in selected_index_set,
             "decision": (
                 "selected_for_candidate_prompt"
-                if str(record.get("evidence_id") or "") in selected_ids
+                if index in selected_index_set
                 else "candidate_prompt_char_budget"
             ),
         }
-        for record in records
+        for index, record in enumerate(records)
     ]
+    canonical_projection_events = list(canonical_projection_events or [])
     return {
         "contract_id": "qasper_candidate_prompt_projection.v1",
         "complete": True,
@@ -270,6 +354,10 @@ def _prompt_projection_trace(
         "attempt_count": len(attempts),
         "attempts_digest": _trace_digest(attempts),
         "attempts": attempts,
+        "selected_record_indices": selected_indices,
+        "selected_record_indices_digest": _trace_digest(selected_indices),
+        "canonical_projection_event_count": len(canonical_projection_events),
+        "canonical_projection_events": canonical_projection_events,
     }
 
 

@@ -33,6 +33,10 @@ _UNTAGGED_THOUGHT_PREFIX_RE = re.compile(
     r"^\s*thought\b\s*(?:okay\b|i\b|let\b|let's\b|we\b|the\b|:)",
     re.IGNORECASE,
 )
+_ANSWER_CALL_WRAPPER_RE = re.compile(
+    r"^\s*answer\s*\(\s*(?P<answer>.*?)\s*\)\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
 _INITIAL_PERIOD_TOKEN = "__MARA_INITIAL_PERIOD__"
 _INITIAL_PERIOD_RE = re.compile(r"\b([A-Z])\.")
 _ABBREVIATION_PERIOD_TOKEN = "__MARA_ABBREVIATION_PERIOD__"
@@ -69,6 +73,11 @@ def _answer_text(answer: str) -> str:
     text = _drop_late_answer_marker_rewrite(text)
     text = re.sub(r"<[^>]+>", " ", text)
     text = _drop_incomplete_trailing_markup(text)
+    wrapped = _ANSWER_CALL_WRAPPER_RE.fullmatch(text)
+    if wrapped:
+        text = wrapped.group("answer")
+    if marker or wrapped:
+        text = _unwrap_answer_latex(text)
     return _remove_inner_abstain_text(text)
 
 
@@ -88,6 +97,20 @@ def _drop_incomplete_trailing_markup(text: str) -> str:
             cleaned = cleaned[: match.start()]
             break
     return cleaned.rstrip()
+
+
+def _unwrap_answer_latex(text: str) -> str:
+    cleaned = str(text or "").strip()
+    for opener, closer in (("$$", "$$"), (r"\[", r"\]"), (r"\(", r"\)")):
+        if not (cleaned.startswith(opener) and cleaned.endswith(closer)):
+            continue
+        body = cleaned[len(opener) : -len(closer)].strip()
+        if body.startswith(r"\text{") and body.endswith("}"):
+            return body[len(r"\text{") : -1].strip()
+        return cleaned
+    if cleaned.startswith(r"\text{") and cleaned.endswith("}"):
+        return cleaned[len(r"\text{") : -1].strip()
+    return cleaned
 
 
 def _last_discardable_answer_marker(text: str) -> re.Match[str] | None:

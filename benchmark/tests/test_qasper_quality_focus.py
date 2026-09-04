@@ -53,6 +53,29 @@ def test_quality_focus_manifest_is_new_six_by_three_diagnostic_matrix() -> None:
     ] == [case["failure_class"] for case in QASPER_QUALITY_FOCUS_CASES]
 
 
+def test_quality_focus_uses_observed_recovery_and_safe_negative_control() -> None:
+    recovery_case = next(
+        case
+        for case in QASPER_QUALITY_FOCUS_CASES
+        if case["failure_class"] == "retrieval_recovery_new_evidence"
+    )
+    negative_case = next(
+        case
+        for case in QASPER_QUALITY_FOCUS_CASES
+        if case["failure_class"] == "unanswerable_control"
+    )
+
+    recovery = recovery_case["recovery_expectation"]
+    assert recovery["stage"] == "targeted_retrieval"
+    assert recovery["action"] == "targeted_slot_retrieval"
+    assert recovery["observed_new_evidence"] >= recovery["minimum_new_evidence"] >= 1
+    assert recovery_case["example_id"] == "1f085b9bb7bfd0d6c8cba1a9d73f08fcf2da7590"
+    assert negative_case["example_id"] == "c34e80fbbfda0f1786d3b00e06cef5ada78a3f3c"
+    assert negative_case["negative_control_basis"] == (
+        "empty_gold_evidence_and_no_source_conclusion"
+    )
+
+
 def test_quality_focus_manifest_fails_closed_on_route_drift() -> None:
     source = _source_manifest()
     source["routes"] = [{"route_id": "text_rag"}]

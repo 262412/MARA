@@ -347,7 +347,7 @@ def test_validator_requires_answerability_trace_for_quality_focus_manifest(tmp_p
         [{"example_id": "free-text", "answer_type": "evidence_qa"}],
         metadata={
             "quality_focus": {
-                "contract_id": "qasper_quality_focus_6x3.v1",
+                "contract_id": "qasper_quality_focus_6x3.v2",
             }
         },
     )

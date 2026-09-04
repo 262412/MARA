@@ -61,6 +61,7 @@ def verify_generated_answer(
             guardrail_factory=guardrail_factory,
             abstain_message=abstain_message,
         )
+    answer = extract_final_answer_text(answer)
     if bundle.metadata.get("generation_backend") == "evidence_only_without_vlm":
         return _evidence_only_generated_answer_result(
             request,

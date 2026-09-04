@@ -8,6 +8,7 @@ from ktem.docqa.qasper_semantic_pack_contract import (
     QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
     QASPER_CANONICAL_SEMANTIC_PACK_METADATA_KEY,
     canonical_payload_digest,
+    qasper_candidate_records_digest_reason,
     qasper_canonical_records_reason,
     qasper_canonical_span_universe_digest,
 )
@@ -31,6 +32,7 @@ from .mara_qasper_semantic_pack_observation import (
 from .mara_qasper_semantic_pack_observation import (
     source_records_from_payload as _source_records_from_payload,
 )
+from .mara_qasper_semantic_pack_payload import pack_payload as _pack_payload
 from .mara_qasper_semantic_pack_trace import canonical_selector_projection_trace
 from .mara_semantic_proposition_packing import (
     SemanticPropositionEvidencePacking,
@@ -222,6 +224,7 @@ def freeze_qasper_canonical_semantic_pack(
     candidate_transaction_id: str,
     candidate_binding: dict[str, Any] | None = None,
     candidate_required_slots: list[dict[str, Any]] | None = None,
+    candidate_records_digest: str = "",
 ) -> SemanticPropositionEvidencePacking:
     """Freeze the exact semantic object seen by one QASPER candidate.
 
@@ -233,6 +236,10 @@ def freeze_qasper_canonical_semantic_pack(
     canonical_records = deepcopy(records)
     records_reason = qasper_canonical_records_reason(canonical_records)
     if records_reason:
+        raise ValueError(records_reason)
+    if records_reason := qasper_candidate_records_digest_reason(
+        canonical_records, candidate_records_digest
+    ):
         raise ValueError(records_reason)
     if not _canonical_records_match(
         question,
@@ -274,6 +281,7 @@ def freeze_qasper_canonical_semantic_pack(
         slots=canonical_slots,
         proposition_binding=authoritative_binding,
         candidate_transaction_id=candidate_transaction_id,
+        candidate_records_digest=candidate_records_digest,
     )
     payload["source_packing_observation"] = _source_packing_observation(
         source_packing,
@@ -340,6 +348,11 @@ def load_qasper_canonical_semantic_pack(
         return None, "canonical_semantic_pack_identity_mismatch"
     records_reason = qasper_canonical_records_reason(records)
     if records_reason:
+        return None, records_reason
+    stored_records_digest = str(payload.get("candidate_message_records_digest") or "")
+    if records_reason := qasper_candidate_records_digest_reason(
+        records, stored_records_digest
+    ):
         return None, records_reason
     if not _canonical_records_match(question, records, stored_transaction):
         return None, "canonical_semantic_pack_proposition_binding_mismatch"
@@ -559,39 +572,6 @@ def qasper_source_packing_observation(
         return None
     observation = raw_pack.get("source_packing_observation")
     return deepcopy(observation) if isinstance(observation, dict) else None
-
-
-def _pack_payload(
-    packing: SemanticPropositionEvidencePacking,
-    *,
-    question: str,
-    slots: list[dict[str, Any]],
-    proposition_binding: dict[str, Any],
-    candidate_transaction_id: str,
-) -> dict[str, Any]:
-    return {
-        "contract_id": QASPER_CANONICAL_SEMANTIC_PACK_CONTRACT,
-        "candidate_transaction_id": str(candidate_transaction_id or ""),
-        "question_digest": canonical_payload_digest(question.strip()),
-        "semantic_pack_digest": packing.semantic_pack_digest,
-        "span_universe_digest": qasper_canonical_span_universe_digest(packing.records),
-        "records": deepcopy(packing.records),
-        "slots": deepcopy(slots),
-        "proposition_binding": deepcopy(proposition_binding),
-        "proposition_binding_digest": str(
-            proposition_binding.get("binding_digest") or ""
-        ),
-        "item_char_limit": packing.item_char_limit,
-        "input_token_budget": packing.input_token_budget,
-        "estimated_input_tokens": packing.estimated_input_tokens,
-        "dropped_count": packing.dropped_count,
-        "truncated_count": packing.truncated_count,
-        "question_proposition": deepcopy(packing.question_proposition),
-        "question_proposition_resolution": deepcopy(
-            packing.question_proposition_resolution
-        ),
-        "immutable_after_candidate_generation": True,
-    }
 
 
 def _nonnegative_int(value: Any) -> int | None:

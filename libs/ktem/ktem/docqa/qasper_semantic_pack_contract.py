@@ -17,6 +17,22 @@ def canonical_payload_digest(value: Any) -> str:
     return _canonical_digest(value)
 
 
+def qasper_candidate_records_digest(
+    records: Sequence[Mapping[str, Any]],
+    expected: str = "",
+) -> str:
+    return str(expected or canonical_payload_digest(records))
+
+
+def qasper_candidate_records_digest_reason(
+    records: Sequence[Mapping[str, Any]],
+    expected: str,
+) -> str:
+    if expected and canonical_payload_digest(records) != expected:
+        return "canonical_semantic_pack_candidate_records_mismatch"
+    return ""
+
+
 def qasper_canonical_span_universe_digest(
     records: Sequence[Mapping[str, Any]],
 ) -> str:
@@ -188,6 +204,13 @@ def qasper_semantic_pack_continuity_reason(
     record_reason = qasper_canonical_records_reason(records)
     if record_reason:
         return record_reason
+    candidate_records_digest = str(
+        payload.get("candidate_message_records_digest") or ""
+    )
+    if candidate_records_digest and canonical_payload_digest(records) != (
+        candidate_records_digest
+    ):
+        return "canonical_semantic_pack_candidate_records_mismatch"
     semantic_digest = str(payload.get("semantic_pack_digest") or "")
     span_digest = str(payload.get("span_universe_digest") or "")
     candidate_transaction_id = str(payload.get("candidate_transaction_id") or "")
@@ -224,6 +247,7 @@ def _stage_identity_reason(
     pack: Mapping[str, Any],
 ) -> str:
     candidate = bundle.metadata.get("qasper_candidate_generation")
+    candidate_records_digest = str(pack.get("candidate_message_records_digest") or "")
     verifier_trace = bundle.metadata.get("semantic_proposition_verifier")
     response_verifier = response.get("verifier")
     if not isinstance(candidate, Mapping):
@@ -242,6 +266,12 @@ def _stage_identity_reason(
         or candidate.get("candidate_evidence_set_binding")
         != pack.get("proposition_binding")
         or candidate.get("required_slots") != pack.get("slots")
+        or (
+            candidate_records_digest
+            and candidate.get("candidate_message_records_digest")
+            and candidate.get("candidate_message_records_digest")
+            != candidate_records_digest
+        )
     ):
         return "candidate_stage_identity_mismatch"
     verifier_expected = {

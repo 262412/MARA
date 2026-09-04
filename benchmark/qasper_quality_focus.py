@@ -1,9 +1,12 @@
 """Build the QASPER quality-focused 6x3 diagnostic manifest.
 
-The cases are deliberately selected from the 2026-09-02 full run.  Five are
-answerable rows covering distinct failure boundaries and one is an
-unanswerable control.  The manifest therefore tests the same three routes
-without reusing the legacy six-row sample.
+The cases are deliberately selected from the 2026-09-02 full run.  The
+answerable rows cover distinct failure boundaries, including a Boolean case
+whose full-run trace performed targeted retrieval and added evidence.  The
+unanswerable control is a question for which the source annotation has no
+supporting evidence and the paper does not state the requested conclusion.
+The manifest therefore tests the same three routes without reusing the
+legacy six-row sample.
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ from typing import Any, Mapping
 
 from .manifest_subset import build_manifest_subset
 
-QASPER_QUALITY_FOCUS_CONTRACT = "qasper_quality_focus_6x3.v1"
+QASPER_QUALITY_FOCUS_CONTRACT = "qasper_quality_focus_6x3.v2"
 QASPER_QUALITY_FOCUS_ROUTES = (
     "text_rag",
     "controller_auto",
@@ -32,7 +35,7 @@ _LEGACY_QASPER_FOCUS_IDS = frozenset(
     }
 )
 
-QASPER_QUALITY_FOCUS_CASES = (
+QASPER_QUALITY_FOCUS_CASES: tuple[dict[str, Any], ...] = (
     {
         "example_id": "97d1ac71eed13d4f51f29aac0e1a554007907df8",
         "failure_class": "title_only_authority",
@@ -58,16 +61,23 @@ QASPER_QUALITY_FOCUS_CASES = (
         "diagnostic_target": "question predicate must be resolved before abstention",
     },
     {
-        "example_id": "c9bc6f53b941863e801280343afa14248521ce43",
-        "failure_class": "retrieval_recovery_no_progress",
+        "example_id": "1f085b9bb7bfd0d6c8cba1a9d73f08fcf2da7590",
+        "failure_class": "retrieval_recovery_new_evidence",
         "gold_class": "answerable",
-        "diagnostic_target": "retrieval recovery must expose a real new candidate",
+        "diagnostic_target": "targeted recovery must add evidence before re-verification",
+        "recovery_expectation": {
+            "stage": "targeted_retrieval",
+            "action": "targeted_slot_retrieval",
+            "minimum_new_evidence": 1,
+            "observed_new_evidence": 2,
+        },
     },
     {
-        "example_id": "63b92dcc701ec77fdb3355ede5d37d2fbf057bcc",
+        "example_id": "c34e80fbbfda0f1786d3b00e06cef5ada78a3f3c",
         "failure_class": "unanswerable_control",
         "gold_class": "unanswerable",
-        "diagnostic_target": "negative control must remain safely unanswerable",
+        "diagnostic_target": "negative control must have no direct source conclusion",
+        "negative_control_basis": "empty_gold_evidence_and_no_source_conclusion",
     },
 )
 
@@ -94,6 +104,7 @@ def build_qasper_quality_focus_manifest(
             raise ValueError(
                 f"quality focus gold class mismatch: {example['example_id']}"
             )
+        _validate_case_contract(example, case)
         example["quality_focus"] = case
         examples.append(example)
     subset["dataset_name"] = "qasper_quality_focus_6x3"
@@ -128,6 +139,33 @@ def _validate_routes(source: Mapping[str, Any]) -> None:
             "quality focus requires routes in order: "
             + ", ".join(QASPER_QUALITY_FOCUS_ROUTES)
         )
+
+
+def _validate_case_contract(
+    example: Mapping[str, Any], case: Mapping[str, Any]
+) -> None:
+    failure_class = str(case.get("failure_class") or "")
+    if failure_class == "retrieval_recovery_new_evidence":
+        expectation = case.get("recovery_expectation")
+        if not isinstance(expectation, Mapping):
+            raise ValueError("recovery case must declare recovery_expectation")
+        minimum_new_evidence = int(expectation.get("minimum_new_evidence") or 0)
+        observed_new_evidence = int(expectation.get("observed_new_evidence") or 0)
+        if minimum_new_evidence < 1 or observed_new_evidence < minimum_new_evidence:
+            raise ValueError("recovery case must declare observed new evidence")
+        if str(expectation.get("stage") or "") != "targeted_retrieval":
+            raise ValueError("recovery case must target targeted_retrieval")
+        if str(expectation.get("action") or "") != "targeted_slot_retrieval":
+            raise ValueError("recovery case must target targeted_slot_retrieval")
+    elif failure_class == "unanswerable_control":
+        if example.get("gold_evidence") or example.get("evidence_sources"):
+            raise ValueError(
+                f"negative control unexpectedly has gold evidence: {example['example_id']}"
+            )
+        if case.get("negative_control_basis") != (
+            "empty_gold_evidence_and_no_source_conclusion"
+        ):
+            raise ValueError("negative control must declare an evidence-first basis")
 
 
 def _gold_class(example: Mapping[str, Any]) -> str:

@@ -123,7 +123,14 @@ def semantic_judge_backend(
     value = str(backend or "off").strip()
     if value.lower() in {"", "off", "none"}:
         return None
-    if value.lower() in {"local", "local_qwen3_8b", "builtin:local_qwen3_8b"}:
+    if value.lower() in {
+        "on",
+        "true",
+        "1",
+        "local",
+        "local_qwen3_8b",
+        "builtin:local_qwen3_8b",
+    }:
         return local_semantic_judge(
             model=model,
             timeout_seconds=timeout_seconds,
@@ -131,7 +138,7 @@ def semantic_judge_backend(
     module_name, separator, attribute = value.rpartition(".")
     if not separator:
         raise ValueError(
-            "semantic evaluator must be off, local_qwen3_8b, or a Python path"
+            "semantic evaluator must be off, on, local_qwen3_8b, or a Python path"
         )
     candidate = getattr(importlib.import_module(module_name), attribute)
     if not callable(candidate):

@@ -17,6 +17,7 @@ from benchmark.artifact_publication import (  # noqa: E402
     verify_artifact_contract,
 )
 from benchmark.jsonl import iter_jsonl  # noqa: E402
+from benchmark.qasper_quality_focus import QASPER_QUALITY_FOCUS_CONTRACT  # noqa: E402
 
 
 def _prediction_is_usable(prediction: dict[str, Any]) -> bool:
@@ -61,7 +62,7 @@ def _qasper_answerability_coverage(
         quality_focus_manifest = (
             isinstance(quality_focus, dict)
             and str(quality_focus.get("contract_id") or "").strip()
-            == "qasper_quality_focus_6x3.v1"
+            == QASPER_QUALITY_FOCUS_CONTRACT
         )
         answer_types = {}
         for example in examples:

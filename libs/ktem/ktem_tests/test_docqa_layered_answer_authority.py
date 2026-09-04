@@ -7,14 +7,20 @@ from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.evidence_identity import identity_of
-from ktem.docqa.execution import execute_controller_turn
+from ktem.docqa.execution import ABSTAIN_MESSAGE, execute_controller_turn
 from ktem.docqa.query_evidence_binding import bind_evidence_slots
 from ktem.docqa.query_planning import build_query_plan
 from ktem.docqa.verification import verify_decision
 
 
 def _request(
-    question: str, *, domain: str, task_type: str = "free_text"
+    question: str,
+    *,
+    domain: str,
+    task_type: str = "free_text",
+    route_policy: str = "doc",
+    allowed_routes: list[str] | None = None,
+    agent_mode: str | None = None,
 ) -> DocQARequest:
     return DocQARequest(
         prompt=question,
@@ -22,8 +28,9 @@ def _request(
         task_type=task_type,
         verification_mode="strict",
         verification_domain=domain,
-        route_policy="doc",
-        allowed_routes=["doc_text"],
+        route_policy=route_policy,
+        allowed_routes=allowed_routes or ["doc_text"],
+        agent_mode=agent_mode,
         selected_file_ids=["source"],
         origin="benchmark",
     )
@@ -45,9 +52,19 @@ def _run(
     *,
     domain: str = "qasper",
     task_type: str = "free_text",
+    route_policy: str = "doc",
+    allowed_routes: list[str] | None = None,
+    agent_mode: str | None = None,
 ) -> Any:
     return execute_controller_turn(
-        _request(question, domain=domain, task_type=task_type),
+        _request(
+            question,
+            domain=domain,
+            task_type=task_type,
+            route_policy=route_policy,
+            allowed_routes=allowed_routes,
+            agent_mode=agent_mode,
+        ),
         retrieve=lambda *_args: {"evidence": evidence},
         generate=lambda *_args: answer,
     )
@@ -166,6 +183,81 @@ def test_qasper_contradictory_extension_remains_fail_closed() -> None:
     assert result.verify_decision.status == "unknown"
     assert result.verify_decision.typed_authority["state"] == "missing"
     assert result.verify_decision.verified_citations == []
+
+
+@pytest.mark.parametrize(
+    ("route_policy", "agent_mode", "candidate"),
+    (
+        (
+            "doc",
+            None,
+            "KAR is an end-to-end MRC model named Knowledge Aided Reader.",
+        ),
+        (
+            "auto",
+            None,
+            r"Answer: $$\text{KAR is an end-to-end MRC model named Knowledge Aided Reader.}$$",
+        ),
+        (
+            "auto",
+            "thorough",
+            "Answer(KAR is an end-to-end MRC model named Knowledge Aided Reader.)",
+        ),
+    ),
+    ids=("text_rag", "controller_auto", "crag_guarded"),
+)
+def test_qasper_controller_candidate_normalization_binds_kar_authority(
+    route_policy: str,
+    agent_mode: str | None,
+    candidate: str,
+) -> None:
+    question = "What type of model is KAR?"
+    evidence = [
+        _item(
+            "We propose an end-to-end MRC model named as Knowledge Aided Reader (KAR).",
+            evidence_id="1809.03449-abstract",
+        )
+    ]
+    result = _run(
+        question,
+        candidate,
+        evidence,
+        route_policy=route_policy,
+        allowed_routes=["doc_text", "hybrid"],
+        agent_mode=agent_mode,
+    )
+
+    normalized = "KAR is an end-to-end MRC model named Knowledge Aided Reader."
+    assert result.answer == normalized
+    assert result.engine_terminal_answer == normalized
+    assert result.verify_decision.status == "supported"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+    assert result.verify_decision.typed_authority["candidate_answer"] == normalized
+    assert result.verify_decision.typed_authority["authority_atoms"][0][
+        "predicate"
+    ] == ("define")
+
+
+def test_qasper_unsupported_wrapped_controller_candidate_remains_abstention() -> None:
+    result = _run(
+        "What type of model is KAR?",
+        r"Answer: $$\text{KAR is a graph neural network.}$$",
+        [
+            _item(
+                "We propose an end-to-end MRC model named as Knowledge Aided Reader (KAR).",
+                evidence_id="1809.03449-abstract",
+            )
+        ],
+        route_policy="auto",
+        allowed_routes=["doc_text", "hybrid"],
+    )
+
+    assert result.answer == ABSTAIN_MESSAGE
+    assert result.engine_terminal_answer == "unanswerable"
+    assert result.verify_decision.status == "unknown"
+    assert result.verify_decision.action == "abstain"
+    assert result.verify_decision.typed_authority["state"] == "missing"
+    assert result.verify_decision.typed_authority["authority_atoms"] == []
 
 
 def test_finance_explanatory_boolean_answer_is_not_rejected_by_qasper_gate() -> None:
