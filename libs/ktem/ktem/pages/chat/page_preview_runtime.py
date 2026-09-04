@@ -2,15 +2,20 @@
 
 Provides helper functions for PDF handling, file signatures, and preview directory management.
 """
+
 import hashlib
 import os
+import re
 import shutil
 import tempfile
+from html import escape
+from pathlib import Path
 from urllib.parse import quote
 
 from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 
-from ...assets import PDFJS_PREBUILT_DIR
+from ...assets import get_pdfjs_runtime_dir
 from ...utils.render import BASE_PATH
 from .page_preview_types import is_pdf_source
 
@@ -27,7 +32,7 @@ def get_file_signature(file_path: str) -> str:
     try:
         stat = os.stat(file_path)
         raw = f"{os.path.abspath(file_path)}|{stat.st_size}|{int(stat.st_mtime_ns)}"
-    except Exception:
+    except OSError:
         raw = os.path.abspath(file_path)
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
@@ -43,7 +48,10 @@ def build_pdfjs_viewer_src(file_path: str, page: int, fit_mode: str = "pdf") -> 
     Returns:
         Complete URL for PDF.js viewer or empty string if viewer not found
     """
-    viewer_html_path = PDFJS_PREBUILT_DIR / "web" / "viewer.html"
+    from theflow.settings import settings as flowsettings
+
+    pdfjs_dir = get_pdfjs_runtime_dir(getattr(flowsettings, "KH_APP_DATA_DIR", None))
+    viewer_html_path = pdfjs_dir / "web" / "viewer.html"
     if not viewer_html_path.is_file():
         return ""
 
@@ -69,7 +77,7 @@ def notice_html(message: str) -> str:
     Returns:
         HTML string with notice styling
     """
-    return f"<div class='pdf-preview-notice'>{message or ''}</div>"
+    return f"<div class='pdf-preview-notice'>{escape(str(message or ''), quote=True)}</div>"
 
 
 def safe_int(value, fallback: int = 1) -> int:
@@ -84,7 +92,7 @@ def safe_int(value, fallback: int = 1) -> int:
     """
     try:
         return int(value)
-    except Exception:
+    except (TypeError, ValueError):
         return int(fallback)
 
 
@@ -119,7 +127,7 @@ def safe_pdf_page_count(pdf_path: str, fallback: int = 1, logger=None) -> int:
         return fallback
     try:
         return max(1, len(PdfReader(pdf_path, strict=False).pages))
-    except Exception as exc:
+    except (OSError, PdfReadError, ValueError) as exc:
         if logger is not None:
             logger.warning("Failed to read PDF total pages from %s: %s", pdf_path, exc)
         return fallback
@@ -141,7 +149,7 @@ def is_valid_pdf(pdf_path: str) -> bool:
             return False
         pages = len(PdfReader(pdf_path, strict=False).pages)
         return pages > 0
-    except Exception:
+    except (OSError, PdfReadError, ValueError):
         return False
 
 
@@ -174,13 +182,27 @@ def ensure_pdf_preview_copy(file_path: str, file_name: str) -> str:
     if not is_pdf_source(file_name, file_path):
         return file_path
 
-    preview_dir = get_pdf_preview_dir()
-    preview_name = f"{os.path.splitext(os.path.basename(file_path))[0]}.pdf"
-    preview_path = os.path.join(preview_dir, preview_name)
+    preview_dir = Path(get_pdf_preview_dir())
+    source = Path(file_path).resolve()
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", source.stem).strip("._")
+    safe_stem = safe_stem[:80] or "preview"
+    signature = get_file_signature(str(source))[:16]
+    preview_path = preview_dir / f"{safe_stem}_{signature}.pdf"
+    if preview_path.is_file() and preview_path.stat().st_size == source.stat().st_size:
+        return str(preview_path)
 
-    if not os.path.isfile(preview_path):
-        shutil.copyfile(file_path, preview_path)
-    elif os.path.getsize(preview_path) != os.path.getsize(file_path):
-        shutil.copyfile(file_path, preview_path)
-
-    return preview_path
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=preview_dir,
+            prefix=f".{safe_stem}-",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+        shutil.copyfile(source, temp_path)
+        os.replace(temp_path, preview_path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
+    return str(preview_path)

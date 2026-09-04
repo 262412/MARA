@@ -22,6 +22,7 @@ class _MindmapGraphService:
         graph_source_ids,
         focus_file_id,
         force_rebuild,
+        user_id,
     ):
         self.calls.append(
             {
@@ -29,6 +30,7 @@ class _MindmapGraphService:
                 "graph_source_ids": list(graph_source_ids),
                 "focus_file_id": focus_file_id,
                 "force_rebuild": force_rebuild,
+                "user_id": user_id,
             }
         )
         return {
@@ -47,6 +49,10 @@ class _MindmapPage:
         self.docqa = _MindmapRuntime()
         self.knowledge_graph = _MindmapGraphService()
         self.trace_artifact: dict[str, Any] | None = None
+
+    @staticmethod
+    def _resolve_persist_user_id(user_id, _request):
+        return user_id
 
     def _build_selected_input_map(self, *selecteds):
         return {7: list(selecteds)}
@@ -174,4 +180,5 @@ def _expected_graph_call():
         "graph_source_ids": ["file-1", "file-2"],
         "focus_file_id": "file-1",
         "force_rebuild": True,
+        "user_id": "user-1",
     }

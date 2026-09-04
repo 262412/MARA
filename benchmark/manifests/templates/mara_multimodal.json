@@ -52,7 +52,9 @@
       "controller_mode": "llm",
       "route_policy": "element",
       "allowed_routes": [
-        "doc_element"
+        "doc_element",
+        "doc_text",
+        "doc_page_image"
       ],
       "text_retriever_backend": "docqa_element_metadata",
       "generator_backend": "Qwen/Qwen3-8B",
@@ -86,6 +88,7 @@
     },
     {
       "route_id": "controller_auto",
+      "headline_role": "deployed_policy",
       "route_name": "Controller auto",
       "engine": "docqa_runtime",
       "scope": "multi_document",

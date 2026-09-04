@@ -3,27 +3,39 @@ from __future__ import annotations
 import math
 import re
 import string
+import unicodedata
 from collections import Counter
+from collections.abc import Callable
 from statistics import mean
 
+from .numeric_equivalence import numeric_tolerance_score as _numeric_tolerance_score
+
+numeric_tolerance_score = _numeric_tolerance_score
 PUNCT_TABLE = str.maketrans("", "", string.punctuation)
 WHITESPACE_RE = re.compile(r"\s+")
-NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
 ABSTENTION_RE = re.compile(
-    "|".join(
-        [
-            r"文档证据无法支持",
-            r"证据无法支持",
-            r"无法根据(?:所给|当前)?文档",
-            r"没有足够(?:的)?(?:文档)?证据",
-            r"insufficient evidence",
-            r"not enough evidence",
-            r"not supported by (?:the )?document",
-            r"cannot be supported by (?:the )?document",
-            r"cannot answer (?:from|based on)",
-            r"unable to answer (?:from|based on)",
-        ]
-    ),
+    r"^\s*(?:"
+    r"unanswerable\b.*|"
+    r"MARA could not retrieve enough evidence\b.*|"
+    r"(?:the\s+)?(?:available\s+)?(?:document\s+)?evidence is insufficient\b.*|"
+    r"insufficient evidence\b.*|"
+    r"not enough evidence\b.*|"
+    r"not supported by (?:the )?document\b.*|"
+    r"cannot be supported by (?:the )?document\b.*|"
+    r"cannot answer\b.*|"
+    r"unable to answer\b.*|"
+    r"文档证据无法支持(?:该回答|这个回答|回答该问题)?[。.!！]?\s*|"
+    r"证据无法支持(?:该回答|这个回答|回答该问题)?[。.!！]?\s*|"
+    r"无法根据(?:所给|当前|现有|可用)?文档(?:证据)?(?:回答|作答).+|"
+    r"(?:当前|现有|可用)?文档没有足够(?:的)?证据(?:回答|支持).+|"
+    r"没有足够(?:的)?(?:文档)?证据(?:回答|支持).+"
+    r")\s*$",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+TOKEN_V2_RE = re.compile(
+    r"[$€£¥]?\d+(?:[.,]\d+)*(?:%)?|"
+    r"[a-z]+(?:['’][a-z]+)?|"
+    r"[\u3400-\u4dbf\u4e00-\u9fff]",
     flags=re.IGNORECASE,
 )
 TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$")
@@ -42,13 +54,18 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
-def _tokenize(text: str) -> list[str]:
+def _legacy_tokenize(text: str) -> list[str]:
     normalized = normalize_text(text)
     if not normalized:
         return []
     if " " in normalized:
         return normalized.split()
     return list(normalized)
+
+
+def _tokenize(text: str) -> list[str]:
+    normalized = unicodedata.normalize("NFKC", str(text or "")).lower()
+    return [match.group(0) for match in TOKEN_V2_RE.finditer(normalized)]
 
 
 def exact_match_score(prediction: str, gold_answers: list[str]) -> float:
@@ -60,18 +77,35 @@ def exact_match_score(prediction: str, gold_answers: list[str]) -> float:
     )
 
 
+def legacy_token_f1_score(prediction: str, gold_answers: list[str]) -> float:
+    return _token_f1(
+        prediction,
+        gold_answers,
+        tokenizer=_legacy_tokenize,
+    )
+
+
 def token_f1_score(prediction: str, gold_answers: list[str]) -> float:
+    return _token_f1(prediction, gold_answers, tokenizer=_tokenize)
+
+
+def _token_f1(
+    prediction: str,
+    gold_answers: list[str],
+    *,
+    tokenizer: Callable[[str], list[str]],
+) -> float:
     if not gold_answers:
         return 0.0
 
-    pred_tokens = _tokenize(prediction)
+    pred_tokens = tokenizer(prediction)
     if not pred_tokens:
         return 0.0
 
     best_score = 0.0
     pred_counter = Counter(pred_tokens)
     for answer in gold_answers:
-        gold_tokens = _tokenize(answer)
+        gold_tokens = tokenizer(answer)
         if not gold_tokens:
             continue
         gold_counter = Counter(gold_tokens)
@@ -443,38 +477,16 @@ def formula_normalized_match_score(
     )
 
 
-def _extract_number(text: str) -> float | None:
-    match = NUMBER_RE.search(str(text or ""))
-    if not match:
-        return None
-    return float(match.group(0).replace(",", ""))
-
-
-def numeric_tolerance_score(
-    prediction: str,
-    gold_answers: list[str],
-    tolerance: float = 0.001,
-) -> float:
-    predicted = _extract_number(prediction)
-    if predicted is None or not gold_answers:
-        return 0.0
-    for answer in gold_answers:
-        gold = _extract_number(answer)
-        if gold is None:
-            continue
-        allowed_delta = abs(gold) * tolerance
-        if abs(predicted - gold) <= allowed_delta:
-            return 1.0
-    return 0.0
-
-
 def is_abstention_answer(prediction: str) -> bool:
     return bool(ABSTENTION_RE.search(str(prediction or "")))
 
 
 def false_abstention_score(prediction: str, gold_answers: list[str]) -> float:
-    has_gold_answer = any(str(answer or "").strip() for answer in gold_answers)
-    return float(has_gold_answer and is_abstention_answer(prediction))
+    has_answerable_gold = any(
+        str(answer or "").strip() and not is_abstention_answer(str(answer))
+        for answer in gold_answers
+    )
+    return float(has_answerable_gold and is_abstention_answer(prediction))
 
 
 def _split_markdown_table_row(line: str) -> list[str]:

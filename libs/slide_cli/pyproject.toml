@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 61.0", "wheel", "setuptools-git-versioning>=2.0,<3"]
+requires = ["setuptools==80.9.0", "wheel==0.45.1", "setuptools-git-versioning==2.1.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -19,6 +19,8 @@ dynamic = ["version"]
 requires-python = ">= 3.10"
 description = "MARA research assistant CLI for document QA, study artifacts, and slide workflows."
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE.txt", "NOTICE"]
 dependencies = [
     "click>=8.1.7,<9",
     "platformdirs>=4.2.1,<5",

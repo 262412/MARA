@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from benchmark.dataset_decision_protocol import (
     phase2_dataset_decision,
     phase2_failure_counts,
@@ -6,6 +8,40 @@ from benchmark.dataset_decision_protocol import (
 from benchmark.runner import run_benchmark
 from benchmark.schemas import BenchmarkConfig
 from benchmark.summary import add_mara_summary_fields
+
+
+class _Phase2Engine:
+    @staticmethod
+    def run_example(_bundle, example):
+        return {
+            "example_id": example.example_id,
+            "document_id": example.document_id,
+            "question": example.question,
+            "gold_answers": example.answers,
+            "gold_pages": [],
+            "gold_sources": [],
+            "predicted_answer": "wrong answer",
+            "predicted_pages": [],
+            "predicted_sources": ["doc#source"],
+            "retrieved_hits": [
+                {
+                    "document_id": "doc",
+                    "source_backrefs": ["doc#source"],
+                    "text": "right answer",
+                }
+            ],
+            "evidence_bundle": {},
+        }
+
+    @staticmethod
+    def document_reports():
+        return []
+
+    @staticmethod
+    def task_contract_llm():
+        return lambda *_args, **_kwargs: SimpleNamespace(
+            text='{"verdict":"unsupported","evidence_quote":""}'
+        )
 
 
 def test_phase2_dataset_decision_freezes_main_and_blocked_candidates():
@@ -65,6 +101,86 @@ def test_phase2_failure_type_splits_abstention_and_retriever_only_gaps():
     )
 
 
+def test_phase2_failure_type_uses_ragtruth_native_objective():
+    clean_negative = {
+        "route": "text_rag",
+        "predicted_answer": '{"hallucination list": []}',
+        "gold_answers": ["The response being verified."],
+        "retrieved_hits": [{"text": "source context"}],
+        "metrics": {"f1": 0.0},
+        "diagnostics": {"retrieved_count": 1, "failure_class": "none"},
+        "example_metadata": {
+            "dataset_family": "hallucination_verification",
+            "labels": [],
+        },
+    }
+    positive_labeled = {
+        **clean_negative,
+        "predicted_answer": '{"hallucination list": ["profit doubled"]}',
+        "gold_answers": ["Revenue rose and profit doubled."],
+        "example_metadata": {
+            "dataset_family": "hallucination_verification",
+            "labels": [{"label_type": "hallucination", "text": "profit doubled"}],
+        },
+    }
+    generic_qa = {
+        **clean_negative,
+        "example_metadata": {"dataset_family": "scientific_qa", "labels": []},
+    }
+
+    assert phase2_failure_type(clean_negative) == "none"
+    assert phase2_failure_type(positive_labeled) == "none"
+    assert phase2_failure_type(generic_qa) == "answer_mismatch_after_retrieval"
+
+
+def test_phase2_failure_type_requires_explicit_ragtruth_labels_for_clean_negative():
+    for metadata in (
+        {"dataset_family": "hallucination_verification"},
+        {
+            "dataset_family": "hallucination_verification",
+            "labels": {"not": "a list"},
+        },
+    ):
+        prediction = {
+            "route": "text_rag",
+            "predicted_answer": '{"hallucination list": []}',
+            "gold_answers": ["The response being verified."],
+            "retrieved_hits": [{"text": "source context"}],
+            "metrics": {"f1": 0.0},
+            "diagnostics": {"retrieved_count": 1, "failure_class": "none"},
+            "example_metadata": metadata,
+        }
+
+        assert phase2_failure_type(prediction) == "answer_mismatch_after_retrieval"
+
+
+def test_phase2_failure_type_rejects_malformed_json_without_labels():
+    prediction = {
+        "route": "text_rag",
+        "predicted_answer": "not json",
+        "gold_answers": ["The response being verified."],
+        "retrieved_hits": [{"text": "source context"}],
+        "metrics": {"f1": 1.0},
+        "diagnostics": {"retrieved_count": 1, "failure_class": "none"},
+        "example_metadata": {"dataset_family": "hallucination_verification"},
+    }
+
+    assert phase2_failure_type(prediction) == "answer_mismatch_after_retrieval"
+
+
+def test_phase2_failure_type_does_not_promote_ragtruth_detection_proxy():
+    prediction = {
+        "route": "text_rag",
+        "predicted_answer": '{"hallucination list": ["wrong span"]}',
+        "retrieved_hits": [{"text": "source context"}],
+        "metrics": {"f1": 0.0, "ragtruth_positive_detected": 1.0},
+        "diagnostics": {"retrieved_count": 1, "failure_class": "none"},
+        "example_metadata": {"dataset_family": "hallucination_verification"},
+    }
+
+    assert phase2_failure_type(prediction) == "answer_mismatch_after_retrieval"
+
+
 def test_phase2_failure_counts_groups_predictions_by_phase2_type():
     rows = phase2_failure_counts(
         "financebench_plan5_text_main_current",
@@ -106,33 +222,6 @@ def test_phase2_failure_counts_groups_predictions_by_phase2_type():
 
 
 def test_run_benchmark_summary_includes_phase2_protocol(monkeypatch, tmp_path):
-    class Engine:
-        @staticmethod
-        def run_example(_bundle, example):
-            return {
-                "example_id": example.example_id,
-                "document_id": example.document_id,
-                "question": example.question,
-                "gold_answers": example.answers,
-                "gold_pages": [],
-                "gold_sources": [],
-                "predicted_answer": "wrong answer",
-                "predicted_pages": [],
-                "predicted_sources": ["doc#source"],
-                "retrieved_hits": [
-                    {
-                        "document_id": "doc",
-                        "source_backrefs": ["doc#source"],
-                        "text": "right answer",
-                    }
-                ],
-                "evidence_bundle": {},
-            }
-
-        @staticmethod
-        def document_reports():
-            return []
-
     manifest_path = tmp_path / "manifest.json"
     (tmp_path / "doc.txt").write_text("source text", encoding="utf-8")
     manifest_path.write_text(
@@ -163,7 +252,7 @@ def test_run_benchmark_summary_includes_phase2_protocol(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         "benchmark.runner.get_engine",
-        lambda _engine_name, _config: Engine(),
+        lambda _engine_name, _config: _Phase2Engine(),
     )
 
     report = run_benchmark(

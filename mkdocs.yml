@@ -13,6 +13,16 @@ nav:
   - Development:
       - development/index.md
       - Codebase Hygiene Contract: development/codebase-hygiene-contract.md
+      - MARA Desktop:
+          - Development Launch Pack: desktop/README.md
+          - Product Requirements: desktop/product-requirements.md
+          - Feature Parity Matrix: desktop/feature-parity-matrix.md
+          - UX Design Specification: desktop/ux-design-spec.md
+          - Architecture: desktop/architecture.md
+          - Architecture Decision: desktop/adr/0001-electron-react-python-sidecar.md
+          - Security and Risk Register: desktop/security-and-risk-register.md
+          - Release and Acceptance: desktop/release-and-acceptance-plan.md
+          - Technical Spike Results: desktop/technical-spike-results.md
       - Platform CLI support: development/platform-cli-support.md
       # - Data & Data Structure Components: development/data-components.md
       # - Features: pages/app/features.md

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from ktem.docqa.finance_retrieval_focus import finance_retrieval_focus_terms
+
 ANSWER_FORMAT_MARKER = "\n\nAnswer formatting requirements:"
 _GENERIC_STRUCTURED_CALCULATION_TERMS = (
+    "amount",
     "average",
     "calculate",
     "calculation",
@@ -14,12 +17,18 @@ _GENERIC_STRUCTURED_CALCULATION_TERMS = (
     "ratio",
     "sum",
     "total",
+    "value",
 )
 _GENERIC_STRUCTURED_CALCULATION_CONTEXT_TERMS = (
     "based on",
+    "balance sheet",
+    "cash flow",
+    "financial statement",
     "from the table",
     "in the table",
+    "statement of",
     "using the",
+    "usd ",
 )
 _GENERIC_STRUCTURED_CALCULATION_FOCUS = (
     "source table",
@@ -70,23 +79,53 @@ _FINANCE_FOCUS_RULES: tuple[
     ),
     (
         (),
-        ("capital expenditure", "capex", "cash flow"),
+        ("capital expenditure", "capital spending", "capex", "cash flow"),
         (
             "Consolidated Statement of Cash Flows",
             "Capital expenditures",
+            "Capital spending",
             "Purchases of property, plant and equipment",
             "Net cash provided by operating activities",
         ),
     ),
     (
         (),
-        ("ppne", "pp&e", "ppe", "fixed asset"),
+        (
+            "ppne",
+            "pp&e",
+            "ppe",
+            "fixed asset",
+            "property, plant and equipment",
+            "property, plant, and equipment",
+            "property and equipment",
+        ),
         (
             "Consolidated Balance Sheet",
+            "Property, plant and equipment, net",
             "Property, plant and equipment",
             "Property and equipment",
             "Accumulated depreciation",
             "Total assets",
+        ),
+    ),
+    (
+        (),
+        ("total current assets", "current assets"),
+        (
+            "Consolidated Balance Sheet",
+            "Total current assets",
+            "Current assets",
+        ),
+    ),
+    (
+        (),
+        ("cost of goods sold", "cost of sales", "cogs"),
+        (
+            "Consolidated Statement of Income",
+            "Cost of goods sold",
+            "Cost of sales",
+            "Net revenues",
+            "Net sales",
         ),
     ),
     (
@@ -141,21 +180,36 @@ _FINANCE_FOCUS_RULES: tuple[
         ("operating margin", "gross margin"),
         (
             "Consolidated Statement of Income",
+            "Consolidated Statements of Operations",
             "Net sales",
-            "Operating income",
+            "Total revenues",
+            "Total costs and expenses",
             "Gross profit",
+            "Operating income",
             "Selling, general and administrative",
         ),
     ),
     (
         (),
-        ("primary customers", "customers", "customer base"),
+        ("primary customers", "customer base"),
         (
-            "customers",
-            "commercial airlines",
+            "major customers",
+            "limited number of commercial airlines",
             "U.S. government contracts",
-            "revenues from a limited number",
+            "percent of revenues",
             "substantial portion of our revenue",
+        ),
+    ),
+    (
+        (),
+        ("customer concentration", "major customer"),
+        (
+            "customer concentration",
+            "major customer",
+            "one customer accounted for",
+            "consolidated net revenue",
+            "year ended",
+            "concentration of credit risk",
         ),
     ),
     (
@@ -183,12 +237,33 @@ _FINANCE_FOCUS_RULES: tuple[
         ),
     ),
     (
+        ("segment",),
+        ("increase", "decrease", "proportional", "proportionally"),
+        (
+            "Reporting Segment",
+            "Net sales by segment",
+            "Net revenue by segment",
+        ),
+    ),
+    (
+        (),
+        ("adjusted ebitda", "adjusted non-gaap ebitda"),
+        (
+            "Reconciliation of Non-GAAP Measures",
+            "Adjusted EBITDA",
+            "Twelve Months Ended",
+        ),
+    ),
+    (
         (),
         ("acquisition", "acquisitions", "acquired"),
         (
+            "Note Acquisitions",
             "acquisition",
             "acquisitions",
             "completed the acquisition",
+            "acquired all outstanding shares",
+            "wholly owned subsidiary",
             "business combinations",
             "purchase price",
         ),
@@ -197,10 +272,35 @@ _FINANCE_FOCUS_RULES: tuple[
         (),
         ("debt securities", "registered", "trading symbol"),
         (
+            "Section 12(b)",
+            "Section 12(g)",
             "Title of each class",
             "Trading Symbol",
             "Name of each exchange",
             "New York Stock Exchange",
+            "None",
+        ),
+    ),
+    (
+        (),
+        ("retiree", "retirees", "future benefit payments"),
+        (
+            "Estimated Future Benefit Payments",
+            "benefit payments to retirees",
+            "Pension Benefits",
+            "Health Care and Life",
+            "dollars in millions",
+        ),
+    ),
+    (
+        (),
+        ("what industry", "primarily operate", "industry does"),
+        (
+            "Item 1 Business",
+            "company overview",
+            "global leader",
+            "developing and producing",
+            "products and services",
         ),
     ),
     (
@@ -264,7 +364,7 @@ def _is_structured_calculation_question(question: str) -> bool:
 
 def _finance_retrieval_focus_terms(question: str) -> list[str]:
     normalized = str(question or "").lower()
-    terms: list[str] = []
+    terms = list(finance_retrieval_focus_terms(question))
     for required_terms, alternative_terms, focus_terms in _FINANCE_FOCUS_RULES:
         if _matches_focus_rule(normalized, required_terms, alternative_terms):
             _extend_unique(terms, list(focus_terms))

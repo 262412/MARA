@@ -1,0 +1,216 @@
+{
+  "source": {
+    "job_id": "10389151",
+    "git_sha": "6fb1d7ae9a92f3c525b88be2775c05e423f2c56f",
+    "artifact_root": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_quality_6fb1d7ae9a92f3c525b88be2775c05e423f2c56f_20260831/quality/debug/qasper/20260831_042124_focused-6fb1d7a-qasper-semantic-quality-10389151",
+    "route": "text_rag"
+  },
+  "cases": {
+    "7cd22ca9e107d2b13a7cc94252aaa9007976b338": {
+      "document_id": "1802.07862",
+      "question": "Do they inspect their model to see if their model learned to associate image parts with words related to entities?",
+      "raw_responses": {
+        "candidate_generation": "{\n\n\n\"candidate\": \"unanswerable\"\n\n}",
+        "semantic_proposal": "{\n\n\n  \"candidate_judgment\": \"unknown\",\n  \"canonical_evidence_plan_id\": \"\"\n\n}",
+        "semantic_audit": "{\n  \"audit_scope\": \"original_candidate_and_verifier_unknown_only\",\n  \"audited_candidate\": \"unanswerable\",\n  \"audited_verdict\": \"insufficient_evidence\",\n  \"audited_judgment\": \"unknown\",\n  \"typed_conclusion_present\": true,\n  \"reviewed_evidence_present\": true,\n  \"support_gap_valid\": true,\n  \"contradiction_gap_valid\": true,\n  \"relationship_consistent\": true,\n  \"replacement_candidate_allowed\": false,\n  \"replacement_candidate\": \"\"\n}"
+      },
+      "evidence_id": "evidence:89a36b85-ef2b-4998-bf1d-5985783d42c0:stable-chunk%3A3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+      "event_id": "aef320b1aa7abab1b4ee45ee73ef4ab0ea412195fa73b71b0857958a3ac8dca2",
+      "selectors": [
+        {
+          "selector_id": "E1:S5",
+          "text": "Error Analysis: Table TABREF17 shows example cases where incorporation of visual contexts affects prediction of named entities.",
+          "span_start": 851,
+          "span_end": 978,
+          "evidence_id": "evidence:89a36b85-ef2b-4998-bf1d-5985783d42c0:stable-chunk%3A3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+          "event_id": "aef320b1aa7abab1b4ee45ee73ef4ab0ea412195fa73b71b0857958a3ac8dca2",
+          "slot_hints": ["actor", "predicate", "object"],
+          "allowed_slots": ["actor", "predicate", "object"],
+          "predicate_match_kind": "alias",
+          "local_relation_state": "affirmative_assertion",
+          "relation_bearing": true,
+          "object_tokens": ["associate", "entity", "image", "model", "part", "relat"],
+          "event_core_tokens": ["associate", "entity", "image", "model", "part", "relat"],
+          "semantic_alignment": {
+            "contract_id": "qasper_selector_semantic_alignment.v1",
+            "status": "verified",
+            "proposition_id": "e5cb89ff444921ddcac7f67dd50c480b5b1f545a9a5ed1ba8a94f87584bdde48",
+            "predicate_concept": "inspect",
+            "predicate_match_kind": "alias",
+            "polarity_relation": "proposition_support",
+            "local_relation_state": "affirmative_assertion",
+            "required_object_tokens": ["associate", "entity", "image", "learn", "model", "part", "relat", "word"],
+            "covered_object_tokens": ["associate", "entity", "image", "model", "part", "relat", "word"],
+            "rule_ids": ["current_paper_analysis_heading", "exact_semantic_token", "part_surface_synonym", "semantic_relation_synonym"]
+          }
+        },
+        {
+          "selector_id": "E1:S8",
+          "text": "Similarly, while the text-only model erroneously predicts `Apple' in the caption “Grandma w dat lit Apple Crisp\" as an organization (Apple Inc.), the visual contexts (describing objects related to food) help disambiguate the token, making the model predict it correctly as a non-named entity (a fruit).",
+          "span_start": 1515,
+          "span_end": 1817,
+          "evidence_id": "evidence:89a36b85-ef2b-4998-bf1d-5985783d42c0:stable-chunk%3A3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+          "event_id": "aef320b1aa7abab1b4ee45ee73ef4ab0ea412195fa73b71b0857958a3ac8dca2",
+          "slot_hints": ["actor", "object"],
+          "allowed_slots": ["actor", "object"],
+          "predicate_match_kind": "missing",
+          "local_relation_state": "unbound",
+          "relation_bearing": true,
+          "object_tokens": ["entity", "image", "model", "part", "relat", "word"],
+          "event_core_tokens": ["entity", "image", "model", "part", "relat", "word"],
+          "semantic_alignment": {
+            "contract_id": "qasper_selector_semantic_alignment.v1",
+            "status": "verified",
+            "proposition_id": "e5cb89ff444921ddcac7f67dd50c480b5b1f545a9a5ed1ba8a94f87584bdde48",
+            "predicate_concept": "inspect",
+            "predicate_match_kind": "missing",
+            "polarity_relation": "undetermined",
+            "local_relation_state": "unbound",
+            "required_object_tokens": ["associate", "entity", "image", "learn", "model", "part", "relat", "word"],
+            "covered_object_tokens": ["entity", "image", "model", "part", "relat", "word"],
+            "rule_ids": ["exact_semantic_token", "part_surface_synonym", "word_surface_synonym"]
+          }
+        }
+      ],
+      "observed_plan": {
+        "candidate_plan_span_refs": ["E1:S5", "E1:S8"],
+        "candidate_plan_event_ids": ["aef320b1aa7abab1b4ee45ee73ef4ab0ea412195fa73b71b0857958a3ac8dca2"],
+        "candidate_plan_polarity": "proposition_support",
+        "candidate_plan_required_slots": ["actor", "predicate", "object"],
+        "candidate_plan_covered_slots": ["actor", "predicate", "object"],
+        "candidate_plan_required_object_tokens": ["associate", "entity", "image", "learn", "model", "part", "relat", "word"],
+        "candidate_plan_covered_object_tokens": ["associate", "entity", "image", "model", "part", "relat", "word"],
+        "candidate_plan_valid": false,
+        "rejection_reasons": ["object_coverage_incomplete", "event_subplan_incomplete"]
+      },
+      "expected": {
+        "support_span_refs": ["E1:S5", "E1:S8"],
+        "support_event_ids": ["aef320b1aa7abab1b4ee45ee73ef4ab0ea412195fa73b71b0857958a3ac8dca2"],
+        "required_slots": ["actor", "predicate", "object"],
+        "required_object_tokens": ["associate", "entity", "image", "model", "part", "relat", "word"]
+      }
+    },
+    "6568a31241167f618ef5ede939053feaa2fb0d7e": {
+      "document_id": "1603.01514",
+      "question": "Do they add one latent variable for each language pair in their Bayesian model?",
+      "raw_responses": {
+        "candidate_generation": "{\n\n\n\"candidate\": \"yes\"\n\n}",
+        "semantic_proposal": "{\n\n\n    \"candidate_judgment\": \"supported\",\n    \"canonical_evidence_plan_id\": \"76c4bdca66fd25de487c140881f3b8e48d3a5619adefb27766a45b0a8c10d80c\"\n  }",
+        "semantic_audit": "{\n  \"premise_checks\": {\n    \"P1\": {\n      \"fragment_entailed\": true,\n      \"scope_consistent\": true,\n      \"evidence_relation_valid\": true,\n      \"proposition_slot_checks\": {\n        \"actor\": {\"binding_valid\": true, \"evidence_ref\": \"P1:actor\"},\n        \"predicate\": {\"binding_valid\": true, \"evidence_ref\": \"P1:predicate\"},\n        \"object\": {\"binding_valid\": false, \"evidence_ref\": \"P1:object\"},\n        \"quantifier\": {\"binding_valid\": true, \"evidence_ref\": \"P1:quantifier\"}\n      }\n    },\n    \"P2\": {\n      \"fragment_entailed\": true,\n      \"scope_consistent\": true,\n      \"evidence_relation_valid\": true,\n      \"proposition_slot_checks\": {\n        \"actor\": {\"binding_valid\": true, \"evidence_ref\": \"P2:actor\"},\n        \"predicate\": {\"binding_valid\": true, \"evidence_ref\": \"P2:predicate\"},\n        \"object\": {\"binding_valid\": false, \"evidence_ref\": \"P2:object\"}\n      }\n    }\n  },\n  \"jointly_entails\": false,\n  \"each_premise_required\": false,\n  \"contradiction_free\": true,\n  \"conclusion_check\": {\n    \"conclusion_entailed\": false,\n    \"actor_consistent\": true,\n    \"predicate_consistent\": true,\n    \"object_consistent\": false,\n    \"polarity_consistent\": true,\n    \"quantifier_consistent\": false,\n    \"scope_consistent\": true\n  }\n}"
+      },
+      "evidence_id": "evidence:50e0dd6e-79e1-46d4-95af-98cb74af8edc:stable-chunk%3Acc08426747de3f7487cd7a6d3f8711e20b98617adef6f3f30b4f3e91f6273a46",
+      "event_id": "4793df7e5489c8cdc7a341ecc68213a74e63330e70c857e07e2c0d7f6ff35e91",
+      "selectors": [
+        {
+          "selector_id": "E2:S27",
+          "text": "We make copies of the monolingual model for each language and add additional crosslingual latent variables (CLVs) to couple the monolingual models, capturing crosslingual semantic role patterns.",
+          "span_start": 2505,
+          "span_end": 2699,
+          "evidence_id": "evidence:50e0dd6e-79e1-46d4-95af-98cb74af8edc:stable-chunk%3Acc08426747de3f7487cd7a6d3f8711e20b98617adef6f3f30b4f3e91f6273a46",
+          "event_id": "4793df7e5489c8cdc7a341ecc68213a74e63330e70c857e07e2c0d7f6ff35e91",
+          "slot_hints": ["actor", "predicate", "object", "quantifier"],
+          "allowed_slots": ["actor", "predicate", "object", "quantifier"],
+          "predicate_match_kind": "exact",
+          "local_relation_state": "affirmative_assertion",
+          "relation_bearing": true,
+          "object_tokens": ["each", "language", "latent", "model", "pair", "variable"],
+          "event_core_tokens": ["each", "language", "latent", "model", "pair", "variable"],
+          "semantic_alignment": {
+            "contract_id": "qasper_selector_semantic_alignment.v1",
+            "status": "verified",
+            "predicate_concept": "add",
+            "predicate_match_kind": "exact",
+            "polarity_relation": "proposition_support",
+            "local_relation_state": "affirmative_assertion",
+            "required_object_tokens": ["each", "language", "latent", "model", "one", "pair", "variable"],
+            "covered_object_tokens": ["each", "language", "latent", "model", "pair", "variable"],
+            "rule_ids": ["exact_semantic_token", "paired_relation"]
+          }
+        },
+        {
+          "selector_id": "E2:S28",
+          "text": "Concretely, when training on parallel sentences, whenever the head words of the arguments are aligned, we add a CLV as a parent of the two corresponding role variables.",
+          "span_start": 2700,
+          "span_end": 2868,
+          "evidence_id": "evidence:50e0dd6e-79e1-46d4-95af-98cb74af8edc:stable-chunk%3Acc08426747de3f7487cd7a6d3f8711e20b98617adef6f3f30b4f3e91f6273a46",
+          "event_id": "4793df7e5489c8cdc7a341ecc68213a74e63330e70c857e07e2c0d7f6ff35e91",
+          "slot_hints": ["actor", "predicate", "object"],
+          "allowed_slots": ["actor", "predicate", "object"],
+          "predicate_match_kind": "exact",
+          "local_relation_state": "affirmative_assertion",
+          "relation_bearing": true,
+          "object_tokens": ["one", "pair", "variable"],
+          "event_core_tokens": ["one", "pair", "variable"],
+          "semantic_alignment": {
+            "contract_id": "qasper_selector_semantic_alignment.v1",
+            "status": "verified",
+            "predicate_concept": "add",
+            "predicate_match_kind": "exact",
+            "polarity_relation": "proposition_support",
+            "local_relation_state": "affirmative_assertion",
+            "required_object_tokens": ["each", "language", "latent", "model", "one", "pair", "variable"],
+            "covered_object_tokens": ["one", "pair", "variable"],
+            "rule_ids": ["exact_semantic_token", "paired_cardinality", "indefinite_singular"]
+          }
+        }
+      ],
+      "observed_plan": {
+        "plan_id": "76c4bdca66fd25de487c140881f3b8e48d3a5619adefb27766a45b0a8c10d80c",
+        "polarity": "proposition_support",
+        "proof_mode": "composite_conjunction",
+        "span_refs": ["E2:S27", "E2:S28"],
+        "event_ids": ["4793df7e5489c8cdc7a341ecc68213a74e63330e70c857e07e2c0d7f6ff35e91"],
+        "required_slots": ["actor", "predicate", "object", "quantifier"],
+        "covered_slots": ["actor", "predicate", "object", "quantifier"],
+        "required_object_tokens": ["each", "language", "latent", "model", "one", "pair", "variable"],
+        "covered_object_tokens": ["each", "language", "latent", "model", "one", "pair", "variable"],
+        "selection_status": "selected",
+        "auditor_status": "audit_rejected",
+        "auditor_reason": "premise_proposition_binding_rejected"
+      },
+      "auditor_payload": {
+        "premise_checks": {
+          "P1": {
+            "fragment_entailed": true,
+            "scope_consistent": true,
+            "evidence_relation_valid": true,
+            "proposition_slot_checks": {
+              "actor": {"binding_valid": true, "evidence_ref": "P1:actor"},
+              "predicate": {"binding_valid": true, "evidence_ref": "P1:predicate"},
+              "object": {"binding_valid": false, "evidence_ref": "P1:object"},
+              "quantifier": {"binding_valid": true, "evidence_ref": "P1:quantifier"}
+            }
+          },
+          "P2": {
+            "fragment_entailed": true,
+            "scope_consistent": true,
+            "evidence_relation_valid": true,
+            "proposition_slot_checks": {
+              "actor": {"binding_valid": true, "evidence_ref": "P2:actor"},
+              "predicate": {"binding_valid": true, "evidence_ref": "P2:predicate"},
+              "object": {"binding_valid": false, "evidence_ref": "P2:object"}
+            }
+          }
+        },
+        "jointly_entails": false,
+        "each_premise_required": false,
+        "contradiction_free": true,
+        "conclusion_check": {
+          "conclusion_entailed": false,
+          "actor_consistent": true,
+          "predicate_consistent": true,
+          "object_consistent": false,
+          "polarity_consistent": true,
+          "quantifier_consistent": false,
+          "scope_consistent": true
+        }
+      },
+      "expected": {
+        "support_span_refs": ["E2:S27", "E2:S28"],
+        "support_event_ids": ["4793df7e5489c8cdc7a341ecc68213a74e63330e70c857e07e2c0d7f6ff35e91"],
+        "required_slots": ["actor", "predicate", "object", "quantifier"],
+        "required_object_tokens": ["each", "language", "latent", "model", "one", "pair", "variable"]
+      }
+    }
+  }
+}

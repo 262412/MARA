@@ -17,6 +17,23 @@ def _read_jsonl(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def _paired_semantic_summary(score, *, coverage=None):
+    summary = {
+        "avg_semantic_answer_f1": score,
+        "per_example_metric_records": [
+            {
+                "dataset": "qasper",
+                "example_id": "ex-1",
+                "route": "controller_auto",
+                "semantic_answer_f1": score,
+            }
+        ],
+    }
+    if coverage is not None:
+        summary["semantic_judge_coverage"] = coverage
+    return summary
+
+
 def fixture_rescore_alce_evaluator(_prediction):
     return {
         "metrics": {"official_answer_score": 0.64},
@@ -162,6 +179,39 @@ def test_run_cli_writes_v2_route_options_into_config(monkeypatch, tmp_path):
     assert captured["config"].num_shards == 4
 
 
+def test_evaluate_repair_gates_cli_writes_stage_specific_report(tmp_path):
+    phase_b = tmp_path / "phase-b.json"
+    phase_g = tmp_path / "phase-g.json"
+    output = tmp_path / "repair-gates.json"
+    phase_b.write_text(json.dumps(_paired_semantic_summary(0.40)), encoding="utf-8")
+    phase_g.write_text(
+        json.dumps(_paired_semantic_summary(0.49, coverage=0.997)),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "evaluate-repair-gates",
+            "--phase-b-summary",
+            str(phase_b),
+            "--phase-g-summary",
+            str(phase_g),
+            "--paired-semantic-ci-low",
+            "0.01",
+            "--token-f1-rescore-delta",
+            "0",
+            "--output",
+            str(output),
+        ]
+    )
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert exit_code == 2
+    assert payload["release_gate"] is False
+    assert payload["gates"]["semantic_f1_delta_pp"]["passed"] is True
+    assert payload["gates"]["ragtruth_positive_recall"]["status"] == "missing"
+
+
 def test_rescore_artifact_cli_writes_mara_scores_without_mutating_source(tmp_path):
     source_run, source_summary = _write_long_answer_rescore_source_run(
         tmp_path / "source-run"
@@ -193,7 +243,7 @@ def test_rescore_artifact_cli_writes_mara_scores_without_mutating_source(tmp_pat
     assert summary["avg_mara_score"] == 1.0
     assert summary["avg_native_score"] == 1.0
     assert summary["avg_mara_proxy_score"] == 0.875
-    assert summary["primary_score_metric"] == "quality_avg_native_score"
+    assert summary["primary_score_metric"] == "deployed_policy_avg_native_score"
     assert summary["primary_score_label"] == "Dataset-Native Local Score"
     assert summary["primary_score_scope"] == "qa_quality"
     assert summary["score_authority_level"] == "local_dataset_native"
@@ -251,7 +301,7 @@ def test_rescore_artifacts_cli_rescores_direct_child_runs_and_skips_rescores(
     assert source_dirs == {str(source_a.resolve()), str(source_b.resolve())}
     for run in rescored_runs:
         summary = json.loads((run / "summary.json").read_text(encoding="utf-8"))
-        assert summary["primary_score_metric"] == "quality_avg_native_score"
+        assert summary["primary_score_metric"] == "deployed_policy_avg_native_score"
         assert summary["primary_score_scope"] == "qa_quality"
         assert summary["primary_score"] == 0.5
         assert str(summary["suite_name"]).startswith("batch-")
@@ -286,7 +336,7 @@ def test_rescore_artifacts_cli_runs_as_python_module(tmp_path):
     [rescored_run] = list(output_dir.iterdir())
     summary = json.loads((rescored_run / "summary.json").read_text(encoding="utf-8"))
     assert summary["mara_rescore_source_run_dir"] == str(source_run.resolve())
-    assert summary["primary_score_metric"] == "quality_avg_native_score"
+    assert summary["primary_score_metric"] == "deployed_policy_avg_native_score"
     assert summary["primary_score"] == 0.5
 
 
@@ -346,7 +396,7 @@ def test_rescore_artifact_cli_applies_external_evaluator_to_headline_score(tmp_p
     predictions = _read_jsonl(rescored_run / "predictions.jsonl")
     assert summary["avg_mara_score"] == 0.64
     assert summary["mara_score_metadata"]["scoring_mode"] == "paper_grade_external_v1"
-    assert summary["primary_score_metric"] == "quality_avg_native_score"
+    assert summary["primary_score_metric"] == "deployed_policy_avg_native_score"
     assert summary["primary_score_label"] == "Paper-Grade External Score"
     assert summary["score_authority_level"] == "paper_grade_external"
     assert summary["paper_grade_score_available"] is True

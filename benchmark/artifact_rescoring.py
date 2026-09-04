@@ -7,6 +7,7 @@ from typing import Any
 from .answer_finalizer import finalize_prediction_answer
 from .diagnostics import prediction_diagnostics
 from .indexed_citations import indexed_inline_citations
+from .jsonl import read_jsonl
 from .mara_oriented_scores import (
     add_mara_oriented_metrics,
     promote_external_primary_score,
@@ -14,6 +15,8 @@ from .mara_oriented_scores import (
 from .reports import write_reports
 from .research_evaluators import external_research_adapter_metrics
 from .scoring import normalize_operational_fields, score_prediction
+from .semantic_answer import semantic_judge_backend
+from .stage_metrics import prediction_stage_metric_status, prediction_stage_metrics
 from .summary import add_mara_summary_fields
 from .verifier_observability import prediction_verifier_observability
 
@@ -26,19 +29,30 @@ def rescore_artifact_run(
     artifact_detail: str = "compact",
     benchmark_answer_mode: str = "scoring_adapter_v1",
     external_evaluators: dict[str, str] | None = None,
+    semantic_evaluator: str | None = None,
+    semantic_evaluator_model: str = "Qwen/Qwen3-8B",
+    semantic_evaluator_timeout_seconds: float = 60.0,
 ) -> Path:
     source_dir = Path(run_dir).resolve()
     summary = _read_json(source_dir / "summary.json")
     dataset_name = str(summary.get("dataset_name") or "unknown")
     predictions = _read_jsonl(source_dir / "predictions.jsonl")
     evaluator_route = _external_evaluator_route(external_evaluators)
+    semantic_judge = semantic_judge_backend(
+        semantic_evaluator,
+        model=semantic_evaluator_model,
+        timeout_seconds=semantic_evaluator_timeout_seconds,
+    )
     for prediction in predictions:
         _rescore_prediction_base_metrics(
             prediction,
             dataset_name=dataset_name,
             benchmark_answer_mode=benchmark_answer_mode,
+            semantic_judge=semantic_judge,
         )
         add_mara_oriented_metrics(prediction, dataset_name=dataset_name)
+        prediction["stage_metrics"] = prediction_stage_metrics(prediction)
+        prediction["stage_metric_status"] = prediction_stage_metric_status(prediction)
         if evaluator_route:
             (
                 prediction["external_adapter_metrics"],
@@ -73,6 +87,7 @@ def _rescore_prediction_base_metrics(
     *,
     dataset_name: str,
     benchmark_answer_mode: str,
+    semantic_judge=None,
 ) -> None:
     _prepare_prediction_defaults(prediction)
     _refresh_indexed_inline_citations(prediction)
@@ -87,7 +102,10 @@ def _rescore_prediction_base_metrics(
         prediction,
         answer_key="predicted_answer",
     )
-    prediction["metrics"] = score_prediction(prediction)
+    prediction["metrics"] = score_prediction(
+        prediction,
+        semantic_judge=semantic_judge,
+    )
     prediction["diagnostics"] = prediction_diagnostics(prediction)
     prediction["verifier_observability"] = prediction_verifier_observability(prediction)
 
@@ -98,10 +116,16 @@ def _prepare_prediction_defaults(prediction: dict[str, Any]) -> None:
     prediction.setdefault("gold_pages", [])
     prediction.setdefault("predicted_pages", [])
     prediction.setdefault("gold_sources", [])
+    prediction.setdefault("gold_source_ids", [])
+    prediction.setdefault("gold_evidence_texts", [])
     prediction.setdefault("predicted_sources", [])
     prediction.setdefault("predicted_citations", [])
     prediction.setdefault("scored_predicted_sources", [])
     prediction.setdefault("gold_evidence", [])
+    prediction.setdefault(
+        "gold_evidence_records",
+        list(prediction.get("gold_evidence") or []),
+    )
     prediction.setdefault("expected_formats", [])
     prediction.setdefault("expected_guardrails", {})
     prediction.setdefault("claim_verification", {})
@@ -131,6 +155,9 @@ def rescore_artifact_runs(
     artifact_detail: str = "compact",
     benchmark_answer_mode: str = "scoring_adapter_v1",
     external_evaluators: dict[str, str] | None = None,
+    semantic_evaluator: str | None = None,
+    semantic_evaluator_model: str = "Qwen/Qwen3-8B",
+    semantic_evaluator_timeout_seconds: float = 60.0,
 ) -> list[Path]:
     runs = _discover_rescorable_runs(Path(input_dir))
     return [
@@ -141,6 +168,9 @@ def rescore_artifact_runs(
             artifact_detail=artifact_detail,
             benchmark_answer_mode=benchmark_answer_mode,
             external_evaluators=external_evaluators,
+            semantic_evaluator=semantic_evaluator,
+            semantic_evaluator_model=semantic_evaluator_model,
+            semantic_evaluator_timeout_seconds=(semantic_evaluator_timeout_seconds),
         )
         for run_dir in runs
     ]
@@ -183,11 +213,7 @@ def _read_optional_json(path: Path, *, default: Any) -> Any:
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    return [
-        dict(json.loads(line))
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [dict(value) for value in read_jsonl(path)]
 
 
 def _read_optional_jsonl(path: Path) -> list[dict[str, Any]] | None:

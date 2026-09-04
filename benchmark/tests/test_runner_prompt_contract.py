@@ -95,6 +95,8 @@ def test_run_benchmark_records_benchmark_prompt_contract(monkeypatch, tmp_path):
     )
     assert report["summary"]["benchmark_prompt_policy"] == "benchmark_v1"
     assert report["summary"]["benchmark_prompt_profiles"] == {"citation_grounded_qa": 1}
+    assert prediction["timings"]["answerability_seconds"] >= 0
+    assert prediction["timings"]["answer_finalization_seconds"] >= 0
 
 
 def test_run_benchmark_records_gold_answer_no_think_contract(monkeypatch, tmp_path):

@@ -1,0 +1,1353 @@
+name: Desktop Gate 2
+
+"on":
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-gate2.yaml"
+      - "apps/desktop/**"
+      - "libs/ktem/ktem/default_flowsettings.py"
+      - "libs/ktem/ktem/desktop_model_routes.py"
+      - "libs/ktem/ktem/embeddings/**"
+      - "libs/ktem/ktem/llms/**"
+      - "libs/ktem/ktem/runtime_defaults.py"
+      - "libs/ktem/ktem/runtime_bootstrap.py"
+      - "libs/kotaemon/kotaemon/embeddings/**"
+      - "libs/ktem/ktem_tests/test_runtime_bootstrap_paths.py"
+      - "libs/ktem/ktem_tests/test_desktop_model_routes.py"
+      - "libs/ktem/ktem_tests/test_model_managers.py"
+      - "libs/slide_cli/slide_cli/docqa_runtime.py"
+      - "uv.lock"
+  push:
+    branches: [main, Dev]
+    paths:
+      - ".github/workflows/desktop-gate2.yaml"
+      - "apps/desktop/**"
+      - "libs/ktem/ktem/default_flowsettings.py"
+      - "libs/ktem/ktem/desktop_model_routes.py"
+      - "libs/ktem/ktem/embeddings/**"
+      - "libs/ktem/ktem/llms/**"
+      - "libs/ktem/ktem/runtime_defaults.py"
+      - "libs/ktem/ktem/runtime_bootstrap.py"
+      - "libs/kotaemon/kotaemon/embeddings/**"
+      - "libs/ktem/ktem_tests/test_runtime_bootstrap_paths.py"
+      - "libs/ktem/ktem_tests/test_desktop_model_routes.py"
+      - "libs/ktem/ktem_tests/test_model_managers.py"
+      - "libs/slide_cli/slide_cli/docqa_runtime.py"
+      - "uv.lock"
+
+permissions:
+  contents: read
+
+jobs:
+  package-linux-22:
+    name: Package and smoke on Ubuntu 22.04
+    runs-on: ubuntu-22.04
+    env:
+      XDG_CACHE_HOME: /tmp/mara-desktop/cache
+      XDG_CONFIG_HOME: /tmp/mara-desktop/config
+      XDG_DATA_HOME: /tmp/mara-desktop/data
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Sync locked Python workspace
+        run: uv sync --all-packages --frozen --python 3.10
+      - name: Install Sidecar build dependency
+        run: uv pip install --python .venv -r apps/desktop/sidecar/requirements-build.txt
+      - name: Install locked desktop dependencies
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Run desktop contracts
+        working-directory: apps/desktop
+        run: npm run verify
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+      - name: Package native Linux application
+        working-directory: apps/desktop
+        run: npm run package:linux
+      - name: Smoke packaged vertical slice and record metrics
+        shell: bash
+        run: |
+          mkdir -p apps/desktop/release/metrics
+          phase_file=apps/desktop/release/metrics/linux-22-phase.txt
+          record_phase() {
+            printf 'phase=%s\n' "$1" > "$phase_file"
+          }
+          record_phase seed-initial-data
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          smoke_model_port=43127
+          embedding_port_file=/tmp/mara-desktop/embedding-port.txt
+          embedding_failure_file=/tmp/mara-desktop/embedding-model-unavailable
+          embedding_block_file=/tmp/mara-desktop/data/MARA/tmp/gate3-embedding-block
+          embedding_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-embedding-request
+          query_block_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-block
+          query_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-request
+          (
+            cd apps/desktop
+            ../../.venv/bin/python -m sidecar.smoke_embedding_server \
+              --port-file "$embedding_port_file" \
+              --port "$smoke_model_port" \
+              --constant-embeddings \
+              --failure-marker "$embedding_failure_file" \
+              --block-marker "$embedding_block_file" \
+              --request-marker "$embedding_request_file" \
+              --chat-block-marker "$query_block_file" \
+              --chat-request-marker "$query_request_file"
+          ) &
+          embedding_pid=$!
+          trap 'kill "$embedding_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 100); do
+            if test -s "$embedding_port_file"; then break; fi
+            sleep 0.1
+          done
+          test -s "$embedding_port_file"
+          export OPENAI_API_KEY=mara-desktop-smoke
+          export OPENAI_API_BASE="http://127.0.0.1:$(cat "$embedding_port_file")/v1"
+          export OPENAI_EMBEDDINGS_MODEL=smoke-embedding
+          export OPENAI_CHAT_MODEL=smoke-chat
+          export NO_PROXY=127.0.0.1,localhost
+          export HTTP_PROXY=http://127.0.0.1:9
+          export HTTPS_PROXY=http://127.0.0.1:9
+          export no_proxy="$NO_PROXY"
+          export http_proxy="$HTTP_PROXY"
+          export https_proxy="$HTTPS_PROXY"
+          export KH_APP_DATA_DIR=/tmp/mara-desktop/data/MARA/state/ktem_app_data
+          export THEFLOW_SETTINGS_MODULE=ktem.default_flowsettings
+          export KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED=1
+          cli_input=/tmp/mara-desktop/data/MARA/tmp/gate3-cli-compat.txt
+          printf '%s\n' 'MARA CLI to Desktop Gate 3 compatibility fixture.' \
+            > "$cli_input"
+          record_phase cli-index
+          .venv/bin/MARA docqa index "$cli_input" --json > /dev/null
+          set -o pipefail
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase cli-indexed \
+                --expect-name gate3-cli-compat.txt \
+                --summary-file apps/desktop/release/metrics/linux-22-cli-before.txt
+          record_phase index-delete-smoke
+          app_executable="$GITHUB_WORKSPACE/apps/desktop/release/MARA-linux-x64/MARA"
+          time_file="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-time.txt"
+          stale_query_marker=/tmp/mara-desktop/data/MARA/tmp/query-journal-stale-marker
+          stale_query_token=stale-query-smoke-token
+          printf '%s\n' "$stale_query_token" > "$stale_query_marker"
+          export MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER="$stale_query_marker"
+          export MARA_DESKTOP_QUERY_SMOKE_FAULT_TOKEN="$stale_query_token"
+          export MARA_DESKTOP_QUERY_SMOKE_MODE=query_persistence
+          (
+            cd /usr
+            /usr/bin/time -v -o "$time_file" \
+              xvfb-run -a "$app_executable" \
+                --smoke-test-nonempty --smoke-test-gate3 \
+                --smoke-test-gate3-formats
+          )
+          unset MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER
+          unset MARA_DESKTOP_QUERY_SMOKE_FAULT_TOKEN
+          unset MARA_DESKTOP_QUERY_SMOKE_MODE
+          test -f "$stale_query_marker"
+          unlink "$stale_query_marker"
+          printf '%s\n' \
+            'query_smoke_isolation=inherited_env,residual_marker status_success'
+          test -n "$(find /tmp/mara-desktop/data/MARA/cache/theflow \
+            -name progress.pkl -type f -print -quit)"
+          test ! -e /usr/.theflow
+          test ! -e "$GITHUB_WORKSPACE/.theflow"
+          test ! -e "$GITHUB_WORKSPACE/apps/desktop/release/MARA-linux-x64/.theflow"
+          test ! -e /tmp/mara-desktop/data/MARA/tmp/.theflow
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase desktop-deleted \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-cli-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          touch "$embedding_failure_file"
+          record_phase model-unavailable-smoke
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-model-unavailable
+          find "$embedding_failure_file" -maxdepth 0 -type f -delete
+          record_phase model-retry-smoke
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-retry
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase fault-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-fault-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          touch "$embedding_block_file"
+          record_phase cancellation-smoke
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-cancel
+          record_phase cancellation-cli-verify
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase cancellation-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-cancel-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          record_phase partial-recovery-smoke
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-partial \
+            > apps/desktop/release/metrics/linux-22-partial-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-partial-stderr.txt
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase partial-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-partial-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          touch "$embedding_block_file"
+          record_phase sidecar-exit-smoke
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-sidecar-exit \
+            > apps/desktop/release/metrics/linux-22-sidecar-exit-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-sidecar-exit-stderr.txt
+          test ! -e "$embedding_block_file"
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase sidecar-exit-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-sidecar-exit-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          record_phase disk-full-smoke
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-disk-full \
+            > apps/desktop/release/metrics/linux-22-disk-full-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-disk-full-stderr.txt
+          ! grep -F "/tmp/mara-desktop/data/MARA" \
+            apps/desktop/release/metrics/linux-22-disk-full-stderr.txt
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase disk-full-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-disk-full-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          record_phase database-lock-smoke
+          xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+            --smoke-test-gate3-database-lock \
+            > apps/desktop/release/metrics/linux-22-database-lock-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-database-lock-stderr.txt
+          ! grep -F "/tmp/mara-desktop/data/MARA" \
+            apps/desktop/release/metrics/linux-22-database-lock-stderr.txt
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase database-lock-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-database-lock-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          record_phase large-file-smoke
+          /usr/bin/time -v \
+            -o apps/desktop/release/metrics/linux-22-large-file-time.txt \
+            xvfb-run -a apps/desktop/release/MARA-linux-x64/MARA \
+              --smoke-test-gate3-large-file \
+            > apps/desktop/release/metrics/linux-22-large-file-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-large-file-stderr.txt
+          .venv/bin/MARA docqa files --json \
+            | .venv/bin/python apps/desktop/sidecar/cli_compatibility_probe.py \
+                --phase large-file-recovered \
+                --expect-empty \
+                --summary-file apps/desktop/release/metrics/linux-22-large-file-after.txt
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          record_phase query-persistence-smoke
+          query_persistence_stdout="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-query-persistence-stdout.txt"
+          query_persistence_stderr="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-query-persistence-stderr.txt"
+          (
+            cd /usr
+            xvfb-run -a "$app_executable" --smoke-test-query-persistence
+          ) > "$query_persistence_stdout" 2> "$query_persistence_stderr"
+          grep -F \
+            "query_persistence=partial,typed_error,blocked_retry,recovery,single_turn error_code=query_state_permission_denied status_success" \
+            "$query_persistence_stdout"
+          ! grep -F "/tmp/mara-desktop/data/MARA" "$query_persistence_stderr"
+          ! find /tmp/mara-desktop/data/MARA/tmp -maxdepth 1 \
+            -name 'query-journal-permission-fault-*' -print -quit | grep -q .
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          record_phase single-instance-smoke
+          single_primary_stdout="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-single-primary-stdout.txt"
+          single_primary_stderr="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-single-primary-stderr.txt"
+          single_secondary_stdout="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-single-secondary-stdout.txt"
+          single_secondary_stderr="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-single-secondary-stderr.txt"
+          xvfb-run -a bash -c '
+            set -euo pipefail
+            app_executable=$1
+            primary_stdout=$2
+            primary_stderr=$3
+            secondary_stdout=$4
+            secondary_stderr=$5
+            cd /usr
+            "$app_executable" --smoke-test-single-instance \
+              > "$primary_stdout" 2> "$primary_stderr" &
+            primary_pid=$!
+            trap '\''kill "$primary_pid" 2>/dev/null || true'\'' EXIT
+            for _ in $(seq 1 300); do
+              if grep -Fq "single_instance_primary=ready" "$primary_stdout" 2>/dev/null; then
+                break
+              fi
+              sleep 0.1
+            done
+            grep -Fq "single_instance_primary=ready" "$primary_stdout"
+            "$app_executable" --smoke-test-single-instance \
+              > "$secondary_stdout" 2> "$secondary_stderr"
+            wait "$primary_pid"
+            trap - EXIT
+          ' bash "$app_executable" "$single_primary_stdout" \
+            "$single_primary_stderr" "$single_secondary_stdout" \
+            "$single_secondary_stderr"
+          grep -F \
+            "single_instance=secondary_blocked,primary_focused,one_sidecar status_success" \
+            "$single_primary_stdout"
+          record_phase unconfigured-first-start
+          unconfigured_root=/tmp/mara-desktop-unconfigured
+          mkdir -p "$unconfigured_root/data" \
+            "$unconfigured_root/config" "$unconfigured_root/cache"
+          unconfigured_stdout="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-unconfigured-stdout.txt"
+          unconfigured_stderr="$GITHUB_WORKSPACE/apps/desktop/release/metrics/linux-22-unconfigured-stderr.txt"
+          (
+            cd /usr
+            env \
+              -u OPENAI_API_KEY -u OPENAI_API_BASE \
+              -u OPENAI_EMBEDDINGS_MODEL -u OPENAI_CHAT_MODEL \
+              -u GOOGLE_API_KEY -u AZURE_OPENAI_API_KEY \
+              -u AZURE_OPENAI_ENDPOINT -u AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT \
+              -u LOCAL_MODEL -u LOCAL_MODEL_EMBEDDINGS -u KH_OLLAMA_URL \
+              -u VOYAGE_API_KEY -u COHERE_API_KEY -u MISTRAL_API_KEY \
+              -u KH_APP_DATA_DIR \
+              XDG_DATA_HOME="$unconfigured_root/data" \
+              XDG_CONFIG_HOME="$unconfigured_root/config" \
+              XDG_CACHE_HOME="$unconfigured_root/cache" \
+              xvfb-run -a "$app_executable" \
+                --smoke-test-indexing-unconfigured
+          ) > "$unconfigured_stdout" 2> "$unconfigured_stderr"
+          grep -F "issue_code=embedding_not_configured" "$unconfigured_stdout"
+          grep -F "issue_code=llm_not_configured" "$unconfigured_stdout"
+          grep -F "renderer_ui=real-navigation,draft,settings,keyboard mode=blocked status_success" \
+            "$unconfigured_stdout"
+          grep -F "task_created=false" "$unconfigured_stdout"
+          test ! -e "$unconfigured_root/data/MARA/state/index-tasks.json"
+          test ! -e "$unconfigured_root/data/MARA/state/query-tasks.json"
+          test -z "$(find "$unconfigured_root/data/MARA/cache/theflow" \
+            -name progress.pkl -type f -print -quit)"
+          test ! -e /usr/.theflow
+          test ! -e "$GITHUB_WORKSPACE/.theflow"
+          test ! -e "$GITHUB_WORKSPACE/apps/desktop/release/MARA-linux-x64/.theflow"
+          printf '%s\n' \
+            'working_directory=system-read-only' \
+            'data_root=desktop-owned' \
+            'issue_code=embedding_not_configured' \
+            'task_created=false' \
+            > apps/desktop/release/metrics/linux-22-unconfigured-evidence.txt
+          record_phase model-settings-ui-smoke
+          settings_root=/tmp/mara-desktop-settings
+          settings_model_port=43128
+          settings_port_file="$settings_root/model-port.txt"
+          settings_data_root="$settings_root/data/MARA"
+          settings_chat_capture="$settings_data_root/tmp/settings-chat-route.json"
+          mkdir -p "$settings_data_root/tmp" \
+            "$settings_root/config" "$settings_root/cache"
+          node apps/desktop/scripts/run-python.mjs \
+            -m sidecar.smoke_model_route_fixture \
+            --data-root "$settings_data_root" --seed
+          (
+            cd apps/desktop
+            ../../.venv/bin/python -m sidecar.smoke_embedding_server \
+              --port-file "$settings_port_file" \
+              --port "$settings_model_port" \
+              --token ollama \
+              --constant-embeddings \
+              --block-marker "$settings_data_root/tmp/gate3-embedding-block" \
+              --request-marker "$settings_data_root/tmp/gate3-embedding-request" \
+              --chat-block-marker "$settings_data_root/tmp/gate3-query-block" \
+              --chat-request-marker "$settings_data_root/tmp/gate3-query-request" \
+              --chat-capture "$settings_chat_capture"
+          ) &
+          settings_embedding_pid=$!
+          trap 'kill "$embedding_pid" "$settings_embedding_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 100); do
+            if test -s "$settings_port_file"; then break; fi
+            sleep 0.1
+          done
+          test -s "$settings_port_file"
+          (
+            cd /usr
+            env \
+              -u OPENAI_API_KEY -u OPENAI_API_BASE \
+              -u OPENAI_EMBEDDINGS_MODEL -u OPENAI_CHAT_MODEL \
+              -u GOOGLE_API_KEY -u AZURE_OPENAI_API_KEY \
+              -u AZURE_OPENAI_ENDPOINT -u AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT \
+              -u LOCAL_MODEL -u LOCAL_MODEL_EMBEDDINGS -u KH_OLLAMA_URL \
+              -u VOYAGE_API_KEY -u COHERE_API_KEY -u MISTRAL_API_KEY \
+              -u KH_APP_DATA_DIR \
+              MARA_DESKTOP_SMOKE_MODEL_BASE_URL="http://127.0.0.1:$settings_model_port/v1" \
+              MARA_DESKTOP_SMOKE_STARTUP_DELAY_MS=1500 \
+              XDG_DATA_HOME="$settings_root/data" \
+              XDG_CONFIG_HOME="$settings_root/config" \
+              XDG_CACHE_HOME="$settings_root/cache" \
+              xvfb-run -a "$app_executable" --smoke-test-model-settings
+          ) > apps/desktop/release/metrics/linux-22-settings-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-settings-stderr.txt
+          grep -F \
+            "renderer_model_settings=ui-save,restart,doctor-ready,redacted status_success" \
+            apps/desktop/release/metrics/linux-22-settings-stdout.txt
+          test ! -e "$settings_data_root/state/model-credentials.bin"
+          ! grep -F '"credential"' "$settings_data_root/state/model-settings.json"
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root "$settings_data_root"
+          record_phase model-settings-persistence-smoke
+          (
+            cd /usr
+            env \
+              -u OPENAI_API_KEY -u OPENAI_API_BASE \
+              -u OPENAI_EMBEDDINGS_MODEL -u OPENAI_CHAT_MODEL \
+              -u GOOGLE_API_KEY -u AZURE_OPENAI_API_KEY \
+              -u AZURE_OPENAI_ENDPOINT -u AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT \
+              -u LOCAL_MODEL -u LOCAL_MODEL_EMBEDDINGS -u KH_OLLAMA_URL \
+              -u VOYAGE_API_KEY -u COHERE_API_KEY -u MISTRAL_API_KEY \
+              -u KH_APP_DATA_DIR -u MARA_DESKTOP_SMOKE_MODEL_BASE_URL \
+              XDG_DATA_HOME="$settings_root/data" \
+              XDG_CONFIG_HOME="$settings_root/config" \
+              XDG_CACHE_HOME="$settings_root/cache" \
+              xvfb-run -a "$app_executable" \
+                --smoke-test-nonempty --smoke-test-gate3
+          ) > apps/desktop/release/metrics/linux-22-settings-restart-stdout.txt \
+            2> apps/desktop/release/metrics/linux-22-settings-restart-stderr.txt
+          grep -F "renderer_query=source-selection,enter,stream,citation status_success" \
+            apps/desktop/release/metrics/linux-22-settings-restart-stdout.txt
+          grep -F \
+            "renderer_markdown=heading,list,table,code,blockquote,katex,citations,safe-links status_success" \
+            apps/desktop/release/metrics/linux-22-settings-restart-stdout.txt
+          grep -F '"model": "gpt-5.6-luna"' "$settings_chat_capture"
+          grep -F '"stream": true' "$settings_chat_capture"
+          cp "$settings_chat_capture" \
+            apps/desktop/release/metrics/linux-22-settings-chat-route.json
+          node apps/desktop/scripts/run-python.mjs \
+            -m sidecar.smoke_model_route_fixture \
+            --data-root "$settings_data_root" --verify \
+            --expected-chat-model gpt-5.6-luna \
+            > apps/desktop/release/metrics/linux-22-model-route-migration.json
+          test ! -e /usr/.theflow
+          test ! -e "$GITHUB_WORKSPACE/.theflow"
+          test ! -e "$GITHUB_WORKSPACE/apps/desktop/release/MARA-linux-x64/.theflow"
+          du -sb apps/desktop/release/MARA-linux-x64 \
+            > apps/desktop/release/metrics/linux-22-size.txt
+          find apps/desktop/release/MARA-linux-x64 -type f | wc -l \
+            > apps/desktop/release/metrics/linux-22-file-count.txt
+          ldd apps/desktop/release/MARA-linux-x64/resources/sidecar/mara-desktop-sidecar/mara-desktop-sidecar \
+            > apps/desktop/release/metrics/linux-22-sidecar-ldd.txt
+          sha256sum apps/desktop/release/MARA-linux-x64/resources/sidecar/mara-desktop-sidecar/mara-desktop-sidecar \
+            > apps/desktop/release/metrics/linux-22-sidecar-sha256.txt
+          if grep -q "not found" apps/desktop/release/metrics/linux-22-sidecar-ldd.txt; then
+            exit 1
+          fi
+          cat apps/desktop/release/metrics/linux-22-time.txt >> "$GITHUB_STEP_SUMMARY"
+          cat apps/desktop/release/metrics/linux-22-size.txt >> "$GITHUB_STEP_SUMMARY"
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture \
+            --data-root /tmp/mara-desktop/data/MARA
+          record_phase complete
+          kill "$embedding_pid" 2>/dev/null || true
+          kill "$settings_embedding_pid" 2>/dev/null || true
+          wait "$embedding_pid" 2>/dev/null || true
+          wait "$settings_embedding_pid" 2>/dev/null || true
+          trap - EXIT
+          cp -a /tmp/mara-desktop/data/MARA \
+            apps/desktop/release/gate2-smoke-data
+      - name: Archive Linux package
+        run: tar -C apps/desktop/release -czf apps/desktop/release/mara-linux-22.tar.gz MARA-linux-x64 metrics gate2-smoke-data
+      - name: Upload Ubuntu 22.04 package evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-linux-22
+          path: apps/desktop/release/mara-linux-22.tar.gz
+          if-no-files-found: error
+      - name: Upload Ubuntu 22.04 metrics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-linux-22-metrics
+          path: apps/desktop/release/metrics/
+          if-no-files-found: error
+
+  smoke-linux-24:
+    name: Smoke Ubuntu 22.04 package on Ubuntu 24.04
+    needs: package-linux-22
+    runs-on: ubuntu-24.04
+    env:
+      XDG_DATA_HOME: /tmp/mara-desktop/data
+    steps:
+      - name: Checkout smoke support
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download Ubuntu 22.04 package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: mara-desktop-linux-22
+          path: desktop-artifact
+      - name: Extract package
+        run: tar -xzf desktop-artifact/mara-linux-22.tar.gz -C desktop-artifact
+      - name: Configure Electron sandbox
+        run: |
+          sudo chown root:root desktop-artifact/MARA-linux-x64/chrome-sandbox
+          sudo chmod 4755 desktop-artifact/MARA-linux-x64/chrome-sandbox
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+      - name: Restore deterministic smoke data
+        run: |
+          mkdir -p /tmp/mara-desktop/data/MARA
+          cp -a desktop-artifact/gate2-smoke-data/. /tmp/mara-desktop/data/MARA/
+      - name: Smoke packaged vertical slice
+        shell: bash
+        run: |
+          # The shared snapshot persists its model base URL, so both runners must
+          # expose the deterministic smoke model at the same loopback port.
+          smoke_model_port=43127
+          embedding_port_file=/tmp/mara-desktop/embedding-port.txt
+          query_block_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-block
+          query_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-request
+          (
+            cd apps/desktop
+            python3 -m sidecar.smoke_embedding_server \
+              --port-file "$embedding_port_file" \
+              --port "$smoke_model_port" \
+              --token ollama \
+              --constant-embeddings \
+              --chat-block-marker "$query_block_file" \
+              --chat-request-marker "$query_request_file"
+          ) &
+          embedding_pid=$!
+          trap 'kill "$embedding_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 100); do
+            if test -s "$embedding_port_file"; then break; fi
+            sleep 0.1
+          done
+          test -s "$embedding_port_file"
+          export NO_PROXY=127.0.0.1,localhost
+          export HTTP_PROXY=http://127.0.0.1:9
+          export HTTPS_PROXY=http://127.0.0.1:9
+          export no_proxy="$NO_PROXY"
+          export http_proxy="$HTTP_PROXY"
+          export https_proxy="$HTTPS_PROXY"
+          export MARA_DESKTOP_SMOKE_MODEL_BASE_URL="http://127.0.0.1:$(cat "$embedding_port_file")/v1"
+          xvfb-run -a desktop-artifact/MARA-linux-x64/MARA \
+            --smoke-test-model-settings
+          unset MARA_DESKTOP_SMOKE_MODEL_BASE_URL
+          xvfb-run -a desktop-artifact/MARA-linux-x64/MARA \
+            --smoke-test-nonempty --smoke-test-gate3 \
+            --smoke-test-gate3-formats
+
+  package-windows:
+    name: Package, smoke, and Defender scan on Windows
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 1665fc8e37b5d70a134820d6d7891747471a2ac8bc940ee7af0b69fd03b28d61
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Sync locked Python workspace
+        run: uv sync --all-packages --frozen --python 3.10
+      - name: Install Sidecar build dependency
+        run: uv pip install --python .venv -r apps/desktop/sidecar/requirements-build.txt
+      - name: Install locked desktop dependencies
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Run desktop contracts
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          npm run verify
+          if (Test-Path "../../.theflow") {
+            throw "Desktop contracts created checkout-local TheFlow storage."
+          }
+      - name: Package native Windows application
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          npm run package:windows
+          if (Test-Path "../../.theflow") {
+            throw "Desktop packaging created checkout-local TheFlow storage."
+          }
+      - name: Smoke packaged vertical slice and record metrics
+        shell: pwsh
+        run: |
+          $appData = [Environment]::GetFolderPath(
+            [Environment+SpecialFolder]::ApplicationData
+          )
+          $env:APPDATA = $appData
+          $dataRoot = Join-Path $appData "MARA"
+          $metrics = "apps/desktop/release/windows-metrics.txt"
+          $diagnostics = "apps/desktop/release/windows-smoke-diagnostics.txt"
+          $stdout = "apps/desktop/release/windows-smoke-stdout.txt"
+          $stderr = "apps/desktop/release/windows-smoke-stderr.txt"
+          $faultStdout = "apps/desktop/release/windows-fault-stdout.txt"
+          $faultStderr = "apps/desktop/release/windows-fault-stderr.txt"
+          $retryStdout = "apps/desktop/release/windows-retry-stdout.txt"
+          $retryStderr = "apps/desktop/release/windows-retry-stderr.txt"
+          $cancelStdout = "apps/desktop/release/windows-cancel-stdout.txt"
+          $cancelStderr = "apps/desktop/release/windows-cancel-stderr.txt"
+          $partialStdout = "apps/desktop/release/windows-partial-stdout.txt"
+          $partialStderr = "apps/desktop/release/windows-partial-stderr.txt"
+          $queryPersistenceStdout = "apps/desktop/release/windows-query-persistence-stdout.txt"
+          $queryPersistenceStderr = "apps/desktop/release/windows-query-persistence-stderr.txt"
+          $singlePrimaryStdout = "apps/desktop/release/windows-single-primary-stdout.txt"
+          $singlePrimaryStderr = "apps/desktop/release/windows-single-primary-stderr.txt"
+          $singleSecondaryStdout = "apps/desktop/release/windows-single-secondary-stdout.txt"
+          $singleSecondaryStderr = "apps/desktop/release/windows-single-secondary-stderr.txt"
+          $sidecarExitStdout = "apps/desktop/release/windows-sidecar-exit-stdout.txt"
+          $sidecarExitStderr = "apps/desktop/release/windows-sidecar-exit-stderr.txt"
+          $diskFullStdout = "apps/desktop/release/windows-disk-full-stdout.txt"
+          $diskFullStderr = "apps/desktop/release/windows-disk-full-stderr.txt"
+          $databaseLockStdout = "apps/desktop/release/windows-database-lock-stdout.txt"
+          $databaseLockStderr = "apps/desktop/release/windows-database-lock-stderr.txt"
+          $largeFileStdout = "apps/desktop/release/windows-large-file-stdout.txt"
+          $largeFileStderr = "apps/desktop/release/windows-large-file-stderr.txt"
+          $unconfiguredStdout = "apps/desktop/release/windows-unconfigured-stdout.txt"
+          $unconfiguredStderr = "apps/desktop/release/windows-unconfigured-stderr.txt"
+          $unconfiguredEvidence = "apps/desktop/release/windows-unconfigured-evidence.txt"
+          $settingsStdout = "apps/desktop/release/windows-settings-stdout.txt"
+          $settingsStderr = "apps/desktop/release/windows-settings-stderr.txt"
+          $settingsRestartStdout = "apps/desktop/release/windows-settings-restart-stdout.txt"
+          $settingsRestartStderr = "apps/desktop/release/windows-settings-restart-stderr.txt"
+          $executable = (Resolve-Path "apps/desktop/release/MARA-win32-x64/MARA.exe").Path
+          $installRoot = Split-Path $executable -Parent
+          $readOnlyCwd = Join-Path $env:RUNNER_TEMP "mara-desktop-readonly-cwd"
+          $outsideTheflowRoots = [ordered]@{
+            "working-directory" = $readOnlyCwd
+            "install-directory" = $installRoot
+            "repository-checkout" = (Resolve-Path ".").Path
+          }
+          function Assert-NoExternalTheflow([string] $phase) {
+            foreach ($entry in $outsideTheflowRoots.GetEnumerator()) {
+              if (Test-Path (Join-Path $entry.Value ".theflow")) {
+                throw "Unexpected .theflow location=$($entry.Key) phase=$phase."
+              }
+            }
+          }
+          New-Item -ItemType Directory -Force -Path $readOnlyCwd | Out-Null
+          $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+          & icacls $readOnlyCwd /inheritance:r `
+            /grant:r "SYSTEM:(OI)(CI)(F)" `
+            /grant:r "${currentUser}:(OI)(CI)(RX)" `
+            /deny "${currentUser}:(OI)(CI)(W)" | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not apply the read-only working-directory ACL."
+          }
+          try {
+            Set-Content (Join-Path $readOnlyCwd "write-probe") "blocked" `
+              -ErrorAction Stop
+            throw "The Windows smoke working directory remained writable."
+          } catch [System.UnauthorizedAccessException] {
+            "working_directory_acl=write_denied" | Set-Content $unconfiguredEvidence
+          }
+          Assert-NoExternalTheflow "prelaunch"
+          $unconfiguredDataRoot = $dataRoot
+          foreach ($name in @(
+            "OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_EMBEDDINGS_MODEL",
+            "OPENAI_CHAT_MODEL", "GOOGLE_API_KEY", "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT",
+            "LOCAL_MODEL", "LOCAL_MODEL_EMBEDDINGS", "KH_OLLAMA_URL",
+            "VOYAGE_API_KEY", "COHERE_API_KEY", "MISTRAL_API_KEY",
+            "KH_APP_DATA_DIR"
+          )) {
+            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+          }
+          $unconfiguredProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-indexing-unconfigured" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $unconfiguredStdout `
+            -RedirectStandardError $unconfiguredStderr -PassThru
+          $unconfiguredProcess.WaitForExit()
+          if (Test-Path $unconfiguredStdout) {
+            Get-Content $unconfiguredStdout | Write-Host
+          }
+          if (Test-Path $unconfiguredStderr) {
+            Get-Content $unconfiguredStderr | Write-Host
+          }
+          if ($unconfiguredProcess.ExitCode -ne 0) {
+            exit $unconfiguredProcess.ExitCode
+          }
+          if (-not (Select-String -Path $unconfiguredStdout `
+            -SimpleMatch "issue_code=embedding_not_configured" -Quiet)) {
+            throw "The unconfigured package did not report embedding_not_configured."
+          }
+          if (-not (Select-String -Path $unconfiguredStdout `
+            -SimpleMatch "issue_code=llm_not_configured" -Quiet)) {
+            throw "The unconfigured package did not report llm_not_configured."
+          }
+          if (-not (Select-String -Path $unconfiguredStdout `
+            -SimpleMatch "renderer_ui=real-navigation,draft,settings,keyboard mode=blocked status_success" -Quiet)) {
+            throw "The unconfigured package did not pass the real Renderer UI smoke."
+          }
+          if (Test-Path (Join-Path $unconfiguredDataRoot "state/index-tasks.json")) {
+            throw "The unconfigured package persisted an index task."
+          }
+          if (Test-Path (Join-Path $unconfiguredDataRoot "state/query-tasks.json")) {
+            throw "The unconfigured package persisted a query task."
+          }
+          $unconfiguredProgress = Get-ChildItem `
+            (Join-Path $unconfiguredDataRoot "cache/theflow") `
+            -Filter progress.pkl -Recurse -File -ErrorAction SilentlyContinue
+          if ($unconfiguredProgress) {
+            throw "The unconfigured package started TheFlow indexing work."
+          }
+          if (-not (Test-Path (Join-Path $unconfiguredDataRoot "logs/indexing.log"))) {
+            throw "The unconfigured package did not create its Desktop-owned log."
+          }
+          Assert-NoExternalTheflow "post-unconfigured"
+          @(
+            "working_directory=acl-write-denied"
+            "data_root=appdata-mara"
+            "issue_code=embedding_not_configured"
+            "query_issue_code=llm_not_configured"
+            "task_created=false"
+            "unconfigured_exit_code=$($unconfiguredProcess.ExitCode)"
+          ) | Add-Content $unconfiguredEvidence
+          $settingsDataRoot = $dataRoot
+          New-Item -ItemType Directory -Force `
+            -Path (Join-Path $settingsDataRoot "tmp") | Out-Null
+          node apps/desktop/scripts/run-python.mjs `
+            -m sidecar.smoke_model_route_fixture `
+            --data-root $settingsDataRoot --seed
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not seed the stale Desktop model routes."
+          }
+          $settingsPortFile = Join-Path $env:RUNNER_TEMP `
+            "mara-settings-port-$([Guid]::NewGuid()).txt"
+          $settingsBlockMarker = Join-Path $settingsDataRoot `
+            "tmp/gate3-embedding-block"
+          $settingsRequestMarker = Join-Path $settingsDataRoot `
+            "tmp/gate3-embedding-request"
+          $settingsQueryBlockMarker = Join-Path $settingsDataRoot `
+            "tmp/gate3-query-block"
+          $settingsQueryRequestMarker = Join-Path $settingsDataRoot `
+            "tmp/gate3-query-request"
+          $settingsChatCapture = Join-Path $settingsDataRoot `
+            "tmp/settings-chat-route.json"
+          $settingsFailureMarker = Join-Path $env:RUNNER_TEMP `
+            "mara-model-unavailable"
+          $python = (Resolve-Path ".venv/Scripts/python.exe").Path
+          $settingsServer = Start-Process -FilePath $python `
+            -ArgumentList @(
+              "-m", "sidecar.smoke_embedding_server",
+              "--port-file", $settingsPortFile,
+              "--token", "mara-desktop-settings-secret-sentinel",
+              "--constant-embeddings",
+              "--failure-marker", $settingsFailureMarker,
+              "--block-marker", $settingsBlockMarker,
+              "--request-marker", $settingsRequestMarker,
+              "--chat-block-marker", $settingsQueryBlockMarker,
+              "--chat-request-marker", $settingsQueryRequestMarker,
+              "--chat-capture", $settingsChatCapture
+            ) `
+            -WorkingDirectory "apps/desktop" -PassThru -WindowStyle Hidden
+          for ($attempt = 0; $attempt -lt 100; $attempt++) {
+            if (Test-Path $settingsPortFile) { break }
+            Start-Sleep -Milliseconds 100
+          }
+          if (-not (Test-Path $settingsPortFile)) {
+            Stop-Process -Id $settingsServer.Id -Force -ErrorAction SilentlyContinue
+            throw "The deterministic Settings smoke server did not start."
+          }
+          $settingsPort = Get-Content $settingsPortFile
+          $env:NO_PROXY = "127.0.0.1,localhost"
+          $env:MARA_DESKTOP_SMOKE_MODEL_BASE_URL = `
+            "http://127.0.0.1:$settingsPort/v1"
+          $env:MARA_DESKTOP_SMOKE_STARTUP_DELAY_MS = "1500"
+          $settingsProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-model-settings --smoke-test-model-settings-secure" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $settingsStdout `
+            -RedirectStandardError $settingsStderr -PassThru
+          $settingsProcess.WaitForExit()
+          Remove-Item "Env:MARA_DESKTOP_SMOKE_MODEL_BASE_URL" `
+            -ErrorAction SilentlyContinue
+          Remove-Item "Env:MARA_DESKTOP_SMOKE_STARTUP_DELAY_MS" `
+            -ErrorAction SilentlyContinue
+          if (Test-Path $settingsStdout) {
+            Get-Content $settingsStdout | Write-Host
+          }
+          if (Test-Path $settingsStderr) {
+            Get-Content $settingsStderr | Write-Host
+          }
+          if ($settingsProcess.ExitCode -ne 0) {
+            Stop-Process -Id $settingsServer.Id -Force -ErrorAction SilentlyContinue
+            exit $settingsProcess.ExitCode
+          }
+          if (-not (Select-String -Path $settingsStdout -SimpleMatch `
+            "renderer_model_settings=ui-save,restart,doctor-ready,redacted status_success" `
+            -Quiet)) {
+            Stop-Process -Id $settingsServer.Id -Force -ErrorAction SilentlyContinue
+            throw "The packaged Settings page did not save and refresh readiness."
+          }
+          $settingsCredentialPath = Join-Path $settingsDataRoot `
+            "state/model-credentials.bin"
+          if (-not (Test-Path $settingsCredentialPath)) {
+            throw "Windows safeStorage did not persist the packaged test credential."
+          }
+          if ([Text.Encoding]::UTF8.GetString(
+              [IO.File]::ReadAllBytes($settingsCredentialPath)).Contains(
+                "mara-desktop-settings-secret-sentinel")) {
+            throw "Windows safeStorage persisted a plaintext credential."
+          }
+          if (Select-String -Path (Join-Path $settingsDataRoot `
+            "state/model-settings.json") -SimpleMatch '"credential"' -Quiet) {
+            throw "Desktop model metadata contains a credential field."
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $settingsDataRoot
+          $settingsRestartProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-nonempty --smoke-test-gate3" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $settingsRestartStdout `
+            -RedirectStandardError $settingsRestartStderr -PassThru
+          $settingsRestartProcess.WaitForExit()
+          if (Test-Path $settingsRestartStdout) {
+            Get-Content $settingsRestartStdout | Write-Host
+          }
+          if (Test-Path $settingsRestartStderr) {
+            Get-Content $settingsRestartStderr | Write-Host
+          }
+          if ($settingsRestartProcess.ExitCode -ne 0) {
+            Stop-Process -Id $settingsServer.Id -Force -ErrorAction SilentlyContinue
+            exit $settingsRestartProcess.ExitCode
+          }
+          if (-not (Select-String -Path $settingsRestartStdout -SimpleMatch `
+            "renderer_query=source-selection,enter,stream,citation status_success" `
+            -Quiet)) {
+            throw "Persisted Settings did not support the real Renderer query."
+          }
+          if (-not (Select-String -Path $settingsRestartStdout -SimpleMatch `
+            "renderer_markdown=heading,list,table,code,blockquote,katex,citations,safe-links status_success" `
+            -Quiet)) {
+            throw "The packaged Renderer did not produce safe semantic Markdown DOM."
+          }
+          $capturedRoute = Get-Content $settingsChatCapture -Raw |
+            ConvertFrom-Json
+          if ($capturedRoute.model -ne "gpt-5.6-luna" -or
+              $capturedRoute.stream -ne $true) {
+            throw "The packaged query did not use the saved chat route."
+          }
+          Copy-Item $settingsChatCapture `
+            "apps/desktop/release/windows-settings-chat-route.json"
+          node apps/desktop/scripts/run-python.mjs `
+            -m sidecar.smoke_model_route_fixture `
+            --data-root $settingsDataRoot --verify `
+            --expected-chat-model gpt-5.6-luna `
+            --forbidden-secret mara-desktop-settings-secret-sentinel |
+            Set-Content "apps/desktop/release/windows-model-route-migration.json"
+          if ($LASTEXITCODE -ne 0) {
+            throw "The stale Desktop model route migration did not verify."
+          }
+          Assert-NoExternalTheflow "post-settings-persistence"
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $portFile = Join-Path $env:RUNNER_TEMP "mara-embedding-port.txt"
+          $failureMarker = Join-Path $env:RUNNER_TEMP "mara-model-unavailable"
+          $blockMarker = Join-Path $dataRoot "tmp/gate3-embedding-block"
+          $requestMarker = Join-Path $dataRoot "tmp/gate3-embedding-request"
+          $queryBlockMarker = Join-Path $dataRoot "tmp/gate3-query-block"
+          $queryRequestMarker = Join-Path $dataRoot "tmp/gate3-query-request"
+          $embeddingServer = Start-Process -FilePath $python `
+            -ArgumentList @(
+              "-m", "sidecar.smoke_embedding_server",
+              "--port-file", $portFile,
+              "--constant-embeddings",
+              "--failure-marker", $failureMarker,
+              "--block-marker", $blockMarker,
+              "--request-marker", $requestMarker,
+              "--chat-block-marker", $queryBlockMarker,
+              "--chat-request-marker", $queryRequestMarker
+            ) `
+            -WorkingDirectory "apps/desktop" -PassThru -WindowStyle Hidden
+          for ($attempt = 0; $attempt -lt 100; $attempt++) {
+            if (Test-Path $portFile) { break }
+            Start-Sleep -Milliseconds 100
+          }
+          if (-not (Test-Path $portFile)) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            throw "The deterministic embedding smoke server did not start."
+          }
+          $embeddingPort = Get-Content $portFile
+          $env:OPENAI_API_KEY = "mara-desktop-smoke"
+          $env:OPENAI_API_BASE = "http://127.0.0.1:$embeddingPort/v1"
+          $env:OPENAI_EMBEDDINGS_MODEL = "smoke-embedding"
+          $env:OPENAI_CHAT_MODEL = "smoke-chat"
+          $env:NO_PROXY = "127.0.0.1,localhost"
+          $env:HTTP_PROXY = "http://127.0.0.1:9"
+          $env:HTTPS_PROXY = "http://127.0.0.1:9"
+          $env:KH_APP_DATA_DIR = Join-Path $dataRoot "state/ktem_app_data"
+          $env:THEFLOW_SETTINGS_MODULE = "ktem.default_flowsettings"
+          $env:KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED = "1"
+          $cliBefore = "apps/desktop/release/windows-cli-compat-before.txt"
+          $cliAfter = "apps/desktop/release/windows-cli-compat-after.txt"
+          $beforeRecords = & ".venv/Scripts/MARA.exe" docqa files --json |
+            Out-String
+          if ($LASTEXITCODE -ne 0) {
+            throw "MARA CLI could not read the Desktop smoke data."
+          }
+          $beforeRecords | & $python `
+            "apps/desktop/sidecar/cli_compatibility_probe.py" `
+            --phase cli-read --expect-name gate2-smoke.txt `
+            --summary-file $cliBefore
+          if ($LASTEXITCODE -ne 0) {
+            throw "MARA CLI did not observe the Desktop fixture."
+          }
+          $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+          $staleQueryMarker = Join-Path $dataRoot `
+            "tmp/query-journal-stale-marker"
+          $staleQueryToken = "stale-query-smoke-token"
+          Set-Content -Path $staleQueryMarker -Value $staleQueryToken
+          $env:MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER = $staleQueryMarker
+          $env:MARA_DESKTOP_QUERY_SMOKE_FAULT_TOKEN = $staleQueryToken
+          $env:MARA_DESKTOP_QUERY_SMOKE_MODE = "query_persistence"
+          $process = Start-Process $executable `
+            -ArgumentList (
+              "--smoke-test-nonempty --smoke-test-gate3 " +
+              "--smoke-test-gate3-formats"
+            ) `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          $peakWorkingSet = 0
+          while (-not $process.HasExited) {
+            $process.Refresh()
+            $peakWorkingSet = [Math]::Max($peakWorkingSet, $process.WorkingSet64)
+            Start-Sleep -Milliseconds 100
+          }
+          $stopwatch.Stop()
+          Remove-Item "Env:MARA_DESKTOP_QUERY_SMOKE_FAULT_MARKER" `
+            -ErrorAction SilentlyContinue
+          Remove-Item "Env:MARA_DESKTOP_QUERY_SMOKE_FAULT_TOKEN" `
+            -ErrorAction SilentlyContinue
+          Remove-Item "Env:MARA_DESKTOP_QUERY_SMOKE_MODE" `
+            -ErrorAction SilentlyContinue
+          if (-not (Test-Path $staleQueryMarker)) {
+            throw "Ordinary startup consumed a residual query smoke marker."
+          }
+          Remove-Item $staleQueryMarker -Force
+          @(
+            "exit_code=$($process.ExitCode)"
+            "elapsed_ms=$($stopwatch.ElapsedMilliseconds)"
+            "peak_working_set_bytes=$peakWorkingSet"
+          ) | Set-Content $diagnostics
+          "query_smoke_isolation=inherited_env,residual_marker status_success" |
+            Add-Content $diagnostics
+          if (Test-Path $stdout) {
+            Get-Content $stdout | Write-Host
+          }
+          if (Test-Path $stderr) {
+            Get-Content $stderr | Write-Host
+          }
+          if ($process.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $process.ExitCode
+          }
+          $theflowProgress = Get-ChildItem (Join-Path $dataRoot "cache/theflow") `
+            -Filter progress.pkl -Recurse -File -ErrorAction SilentlyContinue
+          if (-not $theflowProgress) {
+            throw "The packaged index did not write TheFlow progress to Desktop cache."
+          }
+          Assert-NoExternalTheflow "post-index"
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          "model_unavailable" | Set-Content $failureMarker
+          $faultProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-model-unavailable" `
+            -RedirectStandardOutput $faultStdout `
+            -RedirectStandardError $faultStderr -PassThru
+          $faultProcess.WaitForExit()
+          Remove-Item $failureMarker -Force
+          "fault_exit_code=$($faultProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $faultStdout) {
+            Get-Content $faultStdout | Write-Host
+          }
+          if (Test-Path $faultStderr) {
+            Get-Content $faultStderr | Write-Host
+          }
+          if ($faultProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $faultProcess.ExitCode
+          }
+          $retryProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-retry" `
+            -RedirectStandardOutput $retryStdout `
+            -RedirectStandardError $retryStderr -PassThru
+          $retryProcess.WaitForExit()
+          "retry_exit_code=$($retryProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $retryStdout) {
+            Get-Content $retryStdout | Write-Host
+          }
+          if (Test-Path $retryStderr) {
+            Get-Content $retryStderr | Write-Host
+          }
+          if ($retryProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $retryProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          "block" | Set-Content $blockMarker
+          $cancelProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-cancel" `
+            -RedirectStandardOutput $cancelStdout `
+            -RedirectStandardError $cancelStderr -PassThru
+          $cancelProcess.WaitForExit()
+          "cancel_exit_code=$($cancelProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $cancelStdout) {
+            Get-Content $cancelStdout | Write-Host
+          }
+          if (Test-Path $cancelStderr) {
+            Get-Content $cancelStderr | Write-Host
+          }
+          if ($cancelProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $cancelProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $partialProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-partial" `
+            -RedirectStandardOutput $partialStdout `
+            -RedirectStandardError $partialStderr -PassThru
+          $partialProcess.WaitForExit()
+          "partial_exit_code=$($partialProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $partialStdout) {
+            Get-Content $partialStdout | Write-Host
+          }
+          if (Test-Path $partialStderr) {
+            Get-Content $partialStderr | Write-Host
+          }
+          if ($partialProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $partialProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $queryPersistenceProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-query-persistence" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $queryPersistenceStdout `
+            -RedirectStandardError $queryPersistenceStderr -PassThru
+          $queryPersistenceProcess.WaitForExit()
+          "query_persistence_exit_code=$($queryPersistenceProcess.ExitCode)" |
+            Add-Content $diagnostics
+          if (Test-Path $queryPersistenceStdout) {
+            Get-Content $queryPersistenceStdout | Write-Host
+          }
+          if (Test-Path $queryPersistenceStderr) {
+            Get-Content $queryPersistenceStderr | Write-Host
+            if (Select-String -Path $queryPersistenceStderr `
+              -SimpleMatch $dataRoot -Quiet) {
+              throw "The query persistence diagnostics exposed the Desktop data path."
+            }
+          }
+          if ($queryPersistenceProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $queryPersistenceProcess.ExitCode
+          }
+          if (-not (Select-String -Path $queryPersistenceStdout -SimpleMatch `
+            "query_persistence=partial,typed_error,blocked_retry,recovery,single_turn error_code=query_state_permission_denied status_success" `
+            -Quiet)) {
+            throw "The packaged query journal did not recover one persisted turn."
+          }
+          if (Get-ChildItem (Join-Path $dataRoot "tmp") `
+              -Filter "query-journal-permission-fault-*" -ErrorAction SilentlyContinue) {
+            throw "The packaged query persistence smoke left its marker behind."
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $singlePrimary = Start-Process $executable `
+            -ArgumentList "--smoke-test-single-instance" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $singlePrimaryStdout `
+            -RedirectStandardError $singlePrimaryStderr -PassThru
+          for ($attempt = 0; $attempt -lt 300; $attempt++) {
+            if ((Test-Path $singlePrimaryStdout) -and
+                (Select-String -Path $singlePrimaryStdout -SimpleMatch `
+                  "single_instance_primary=ready" -Quiet)) {
+              break
+            }
+            Start-Sleep -Milliseconds 100
+          }
+          if (-not ((Test-Path $singlePrimaryStdout) -and
+              (Select-String -Path $singlePrimaryStdout -SimpleMatch `
+                "single_instance_primary=ready" -Quiet))) {
+            Stop-Process -Id $singlePrimary.Id -Force -ErrorAction SilentlyContinue
+            throw "The primary packaged application did not enter single-instance smoke."
+          }
+          $singleSecondary = Start-Process $executable `
+            -ArgumentList "--smoke-test-single-instance" `
+            -WorkingDirectory $readOnlyCwd `
+            -RedirectStandardOutput $singleSecondaryStdout `
+            -RedirectStandardError $singleSecondaryStderr -PassThru
+          $singleSecondary.WaitForExit()
+          $singlePrimary.WaitForExit()
+          @(
+            "single_primary_exit_code=$($singlePrimary.ExitCode)"
+            "single_secondary_exit_code=$($singleSecondary.ExitCode)"
+          ) | Add-Content $diagnostics
+          if ($singlePrimary.ExitCode -ne 0 -or $singleSecondary.ExitCode -ne 0) {
+            throw "The packaged single-instance smoke did not exit cleanly."
+          }
+          if (-not (Select-String -Path $singlePrimaryStdout -SimpleMatch `
+            "single_instance=secondary_blocked,primary_focused,one_sidecar status_success" `
+            -Quiet)) {
+            throw "The second packaged launch did not reuse the primary Sidecar."
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          "block" | Set-Content $blockMarker
+          $sidecarExitProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-sidecar-exit" `
+            -RedirectStandardOutput $sidecarExitStdout `
+            -RedirectStandardError $sidecarExitStderr -PassThru
+          $sidecarExitProcess.WaitForExit()
+          "sidecar_exit_code=$($sidecarExitProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $sidecarExitStdout) {
+            Get-Content $sidecarExitStdout | Write-Host
+          }
+          if (Test-Path $sidecarExitStderr) {
+            Get-Content $sidecarExitStderr | Write-Host
+          }
+          if ($sidecarExitProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $sidecarExitProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $diskFullProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-disk-full" `
+            -RedirectStandardOutput $diskFullStdout `
+            -RedirectStandardError $diskFullStderr -PassThru
+          $diskFullProcess.WaitForExit()
+          "disk_full_exit_code=$($diskFullProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $diskFullStdout) {
+            Get-Content $diskFullStdout | Write-Host
+          }
+          if (Test-Path $diskFullStderr) {
+            Get-Content $diskFullStderr | Write-Host
+            if (Select-String -Path $diskFullStderr -SimpleMatch $dataRoot -Quiet) {
+              throw "The disk-full diagnostics exposed the Desktop data path."
+            }
+          }
+          if ($diskFullProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $diskFullProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $databaseLockProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-database-lock" `
+            -RedirectStandardOutput $databaseLockStdout `
+            -RedirectStandardError $databaseLockStderr -PassThru
+          $databaseLockProcess.WaitForExit()
+          "database_lock_exit_code=$($databaseLockProcess.ExitCode)" | Add-Content $diagnostics
+          if (Test-Path $databaseLockStdout) {
+            Get-Content $databaseLockStdout | Write-Host
+          }
+          if (Test-Path $databaseLockStderr) {
+            Get-Content $databaseLockStderr | Write-Host
+            if (Select-String -Path $databaseLockStderr -SimpleMatch $dataRoot -Quiet) {
+              throw "The database-lock diagnostics exposed the Desktop data path."
+            }
+          }
+          if ($databaseLockProcess.ExitCode -ne 0) {
+            Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+            exit $databaseLockProcess.ExitCode
+          }
+          node apps/desktop/scripts/run-python.mjs -m sidecar.smoke_fixture `
+            --data-root $dataRoot
+          $largeFileStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+          $largeFileProcess = Start-Process $executable `
+            -ArgumentList "--smoke-test-gate3-large-file" `
+            -RedirectStandardOutput $largeFileStdout `
+            -RedirectStandardError $largeFileStderr -PassThru
+          $largeFilePeakWorkingSet = 0
+          while (-not $largeFileProcess.HasExited) {
+            $largeFileProcess.Refresh()
+            $largeFilePeakWorkingSet = [Math]::Max(
+              $largeFilePeakWorkingSet,
+              $largeFileProcess.WorkingSet64
+            )
+            Start-Sleep -Milliseconds 100
+          }
+          $largeFileStopwatch.Stop()
+          Stop-Process -Id $embeddingServer.Id -Force -ErrorAction SilentlyContinue
+          Stop-Process -Id $settingsServer.Id -Force -ErrorAction SilentlyContinue
+          @(
+            "large_file_exit_code=$($largeFileProcess.ExitCode)"
+            "large_file_elapsed_ms=$($largeFileStopwatch.ElapsedMilliseconds)"
+            "large_file_peak_working_set_bytes=$largeFilePeakWorkingSet"
+          ) | Add-Content $diagnostics
+          if (Test-Path $largeFileStdout) {
+            Get-Content $largeFileStdout | Write-Host
+          }
+          if (Test-Path $largeFileStderr) {
+            Get-Content $largeFileStderr | Write-Host
+          }
+          if ($largeFileProcess.ExitCode -ne 0) {
+            exit $largeFileProcess.ExitCode
+          }
+          $afterRecords = & ".venv/Scripts/MARA.exe" docqa files --json |
+            Out-String
+          if ($LASTEXITCODE -ne 0) {
+            throw "MARA CLI could not read the post-Desktop data."
+          }
+          $afterRecords | & $python `
+            "apps/desktop/sidecar/cli_compatibility_probe.py" `
+            --phase large-file-recovered --expect-empty --summary-file $cliAfter
+          if ($LASTEXITCODE -ne 0) {
+            throw "MARA CLI still observes records deleted by Desktop."
+          }
+          $files = Get-ChildItem "apps/desktop/release/MARA-win32-x64" -Recurse -File
+          $bytes = ($files | Measure-Object Length -Sum).Sum
+          $sidecar = "apps/desktop/release/MARA-win32-x64/resources/sidecar/mara-desktop-sidecar/mara-desktop-sidecar.exe"
+          $sidecarSha256 = (Get-FileHash $sidecar -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            "elapsed_ms=$($stopwatch.ElapsedMilliseconds)"
+            "peak_working_set_bytes=$peakWorkingSet"
+            "package_bytes=$bytes"
+            "file_count=$($files.Count)"
+            "sidecar_sha256=$sidecarSha256"
+          ) | Set-Content $metrics
+          Get-Content $metrics | Add-Content $diagnostics
+          Get-Content $metrics | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Scan package with Windows Defender
+        shell: pwsh
+        run: |
+          $evidence = "apps/desktop/release/windows-defender.txt"
+          $scanPath = (Resolve-Path "apps/desktop/release/MARA-win32-x64").Path
+          $defender = Get-Command Start-MpScan -ErrorAction SilentlyContinue
+          if (-not $defender) {
+            throw "Windows Defender Start-MpScan is unavailable on this runner."
+          }
+          $status = Get-MpComputerStatus
+          @(
+            "antivirus_enabled=$($status.AntivirusEnabled)"
+            "antimalware_service_enabled=$($status.AMServiceEnabled)"
+            "signature_version=$($status.AntivirusSignatureVersion)"
+            "signature_last_updated=$($status.AntivirusSignatureLastUpdated)"
+            "scan_path=$scanPath"
+          ) | Set-Content $evidence
+          if (-not $status.AntivirusEnabled -or -not $status.AMServiceEnabled) {
+            throw "Windows Defender antivirus engine is not enabled on this runner."
+          }
+          $preferences = Get-MpPreference
+          $driveRoot = [System.IO.Path]::GetPathRoot($scanPath)
+          if (@($preferences.ExclusionPath) -contains $driveRoot) {
+            Remove-MpPreference -ExclusionPath $driveRoot
+            "removed_runner_drive_exclusion=$driveRoot" | Add-Content $evidence
+          }
+          if ($preferences.DisableArchiveScanning) {
+            Set-MpPreference -DisableArchiveScanning $false
+            "archive_scanning_enabled=True" | Add-Content $evidence
+          }
+          try {
+            Start-MpScan -ScanType CustomScan -ScanPath $scanPath -ErrorAction Stop
+          } catch {
+            "scan_error=$($_.Exception.Message)" | Add-Content $evidence
+            throw
+          }
+          $matches = Get-MpThreatDetection | Where-Object {
+            $_.Resources -match "MARA-win32-x64"
+          }
+          if ($matches) {
+            $matches | Format-List | Out-String | Add-Content $evidence
+            Get-Content $evidence | Add-Content $env:GITHUB_STEP_SUMMARY
+            exit 1
+          }
+          "scan_result=no_detections" | Add-Content $evidence
+          Get-Content $evidence | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Upload Windows smoke diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-windows-smoke-diagnostics
+          path: |
+            apps/desktop/release/windows-smoke-diagnostics.txt
+            apps/desktop/release/windows-smoke-stdout.txt
+            apps/desktop/release/windows-smoke-stderr.txt
+            apps/desktop/release/windows-fault-stdout.txt
+            apps/desktop/release/windows-fault-stderr.txt
+            apps/desktop/release/windows-retry-stdout.txt
+            apps/desktop/release/windows-retry-stderr.txt
+            apps/desktop/release/windows-cancel-stdout.txt
+            apps/desktop/release/windows-cancel-stderr.txt
+            apps/desktop/release/windows-partial-stdout.txt
+            apps/desktop/release/windows-partial-stderr.txt
+            apps/desktop/release/windows-query-persistence-stdout.txt
+            apps/desktop/release/windows-query-persistence-stderr.txt
+            apps/desktop/release/windows-single-primary-stdout.txt
+            apps/desktop/release/windows-single-primary-stderr.txt
+            apps/desktop/release/windows-single-secondary-stdout.txt
+            apps/desktop/release/windows-single-secondary-stderr.txt
+            apps/desktop/release/windows-sidecar-exit-stdout.txt
+            apps/desktop/release/windows-sidecar-exit-stderr.txt
+            apps/desktop/release/windows-disk-full-stdout.txt
+            apps/desktop/release/windows-disk-full-stderr.txt
+            apps/desktop/release/windows-database-lock-stdout.txt
+            apps/desktop/release/windows-database-lock-stderr.txt
+            apps/desktop/release/windows-large-file-stdout.txt
+            apps/desktop/release/windows-large-file-stderr.txt
+            apps/desktop/release/windows-unconfigured-stdout.txt
+            apps/desktop/release/windows-unconfigured-stderr.txt
+            apps/desktop/release/windows-unconfigured-evidence.txt
+            apps/desktop/release/windows-settings-stdout.txt
+            apps/desktop/release/windows-settings-stderr.txt
+            apps/desktop/release/windows-settings-restart-stdout.txt
+            apps/desktop/release/windows-settings-restart-stderr.txt
+            apps/desktop/release/windows-settings-chat-route.json
+            apps/desktop/release/windows-model-route-migration.json
+            apps/desktop/release/windows-metrics.txt
+            apps/desktop/release/windows-cli-compat-before.txt
+            apps/desktop/release/windows-cli-compat-after.txt
+          if-no-files-found: warn
+      - name: Upload Windows Defender diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-windows-defender
+          path: apps/desktop/release/windows-defender.txt
+          if-no-files-found: warn
+      - name: Upload Windows package evidence
+        if: ${{ success() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mara-desktop-windows-build
+          path: |
+            apps/desktop/release/MARA-win32-x64/
+            apps/desktop/release/windows-metrics.txt
+          if-no-files-found: warn

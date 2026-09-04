@@ -7,6 +7,14 @@ kotaemon-env*
 .env
 .superpowers/
 /.codex/skills/ui-ux-pro-max/
+node_modules/
+test-results/
+playwright-report/
+coverage-artifacts/
+apps/desktop/dist-electron/
+apps/desktop/dist-tests/
+apps/desktop/release/
+apps/desktop/resources/sidecar/
 
 # LaTeX build artifacts
 *.aux
@@ -473,6 +481,8 @@ zip_cache_dir_in/
 # Benchmark results and figures (generated)
 results/
 figures/
+!docs/demo_paper/figures/
+!docs/demo_paper/figures/mara-ui-qa.png
 benchmark/artifacts/
 /data
 /data/

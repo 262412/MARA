@@ -12,16 +12,40 @@ _THOUGHT_DETAILS_RE = re.compile(
     r"<details\b[^>]*>\s*<summary\b[^>]*>.*?thought.*?</summary>.*?</details>",
     re.IGNORECASE | re.DOTALL,
 )
+_EMPTY_CODE_FENCE_RE = re.compile(
+    r"(?ms)^\s*```(?:[A-Za-z0-9_+-]+)?\s*\n\s*```\s*(?:\n|$)"
+)
+_EMPTY_DISPLAY_BLOCK_RE = re.compile(
+    r"(?ms)^\s*(?:\$\$\s*\$\$|\\\[\s*\\\]|\\\(\s*\\\))\s*(?:\n|$)"
+)
+_EMPTY_MULTILINE_DISPLAY_BLOCK_RE = re.compile(
+    r"(?ms)^\s*(?:\$\$\s*\n(?:\s*\n)*\s*\$\$|"
+    r"\\\[\s*\n(?:\s*\n)*\s*\\\]|"
+    r"\\\(\s*\n(?:\s*\n)*\s*\\\))\s*(?:\n|$)"
+)
+_FORMAT_ONLY_HEADING_RE = re.compile(
+    r"^\s*#{1,6}\s*(?:final\s+answer|answer|response|explanation|"
+    r"rationale|evidence|result|results|conclusion|solution|analysis)"
+    r"\s*[:：]?\s*$",
+    re.IGNORECASE,
+)
 _UNTAGGED_THOUGHT_PREFIX_RE = re.compile(
     r"^\s*thought\b\s*(?:okay\b|i\b|let\b|let's\b|we\b|the\b|:)",
     re.IGNORECASE,
 )
 _INITIAL_PERIOD_TOKEN = "__MARA_INITIAL_PERIOD__"
 _INITIAL_PERIOD_RE = re.compile(r"\b([A-Z])\.")
+_ABBREVIATION_PERIOD_TOKEN = "__MARA_ABBREVIATION_PERIOD__"
+_ABBREVIATION_RE = re.compile(
+    r"\b(St|Mt|Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|etc)\.",
+    re.IGNORECASE,
+)
 
 
 def answer_claims(answer: str) -> list[str]:
-    cleaned = _clean_text(_remove_markdown_tables(_answer_text(answer)))
+    cleaned = _clean_text(
+        _remove_markdown_tables(_clean_display_text(_answer_text(answer)))
+    )
     claims = []
     for chunk in _split_sentences(cleaned):
         claim = _clean_claim(chunk)
@@ -44,7 +68,26 @@ def _answer_text(answer: str) -> str:
         return ""
     text = _drop_late_answer_marker_rewrite(text)
     text = re.sub(r"<[^>]+>", " ", text)
+    text = _drop_incomplete_trailing_markup(text)
     return _remove_inner_abstain_text(text)
+
+
+def _drop_incomplete_trailing_markup(text: str) -> str:
+    cleaned = str(text or "")
+    for opener, closer in (("$$", "$$"), (r"\[", r"\]"), (r"\(", r"\)")):
+        if opener == closer:
+            if cleaned.count(opener) % 2:
+                cleaned = cleaned[: cleaned.rfind(opener)]
+            continue
+        if cleaned.count(opener) > cleaned.count(closer):
+            cleaned = cleaned[: cleaned.rfind(opener)]
+
+    for match in reversed(list(re.finditer(r"\\[A-Za-z]+\s*\{", cleaned))):
+        tail = cleaned[match.start() :]
+        if tail.count("{") > tail.count("}"):
+            cleaned = cleaned[: match.start()]
+            break
+    return cleaned.rstrip()
 
 
 def _last_discardable_answer_marker(text: str) -> re.Match[str] | None:
@@ -86,9 +129,12 @@ def _clean_text(text: str) -> str:
 
 
 def _clean_display_text(text: str) -> str:
-    lines = [
-        re.sub(r"[ \t]+", " ", line).strip() for line in str(text or "").splitlines()
-    ]
+    cleaned = _EMPTY_CODE_FENCE_RE.sub("", str(text or ""))
+    cleaned = _EMPTY_DISPLAY_BLOCK_RE.sub("", cleaned)
+    cleaned = _EMPTY_MULTILINE_DISPLAY_BLOCK_RE.sub("", cleaned)
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.splitlines()]
+    lines = [line for line in lines if not _FORMAT_ONLY_HEADING_RE.match(line)]
+    lines = [line for line in lines if line not in {"---", "___", "***"}]
     while lines and not lines[0]:
         lines.pop(0)
     while lines and not lines[-1]:
@@ -113,9 +159,19 @@ def _is_markdown_table_line(line: str) -> bool:
 
 
 def _split_sentences(text: str) -> list[str]:
-    protected = _INITIAL_PERIOD_RE.sub(rf"\1{_INITIAL_PERIOD_TOKEN}", text)
+    protected = _ABBREVIATION_RE.sub(
+        rf"\1{_ABBREVIATION_PERIOD_TOKEN}",
+        text,
+    )
+    protected = _INITIAL_PERIOD_RE.sub(rf"\1{_INITIAL_PERIOD_TOKEN}", protected)
     chunks = re.split(r"(?<=[.!?])\s+", protected)
-    return [chunk.replace(_INITIAL_PERIOD_TOKEN, ".") for chunk in chunks]
+    return [
+        chunk.replace(_INITIAL_PERIOD_TOKEN, ".").replace(
+            _ABBREVIATION_PERIOD_TOKEN,
+            ".",
+        )
+        for chunk in chunks
+    ]
 
 
 def _clean_claim(claim: str) -> str:

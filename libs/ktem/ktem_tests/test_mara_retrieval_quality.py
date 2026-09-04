@@ -6,6 +6,12 @@ from ktem.reasoning.mara import (
     _collect_text_rag_generation,
     _message_with_answer_format_requirements,
 )
+from ktem.reasoning.mara_answer_type_contract import (
+    answer_type_consistency as _answer_type_consistency,
+)
+from ktem.reasoning.mara_answer_type_contract import (
+    message_with_answer_type_contract as _message_with_answer_type_contract,
+)
 from ktem.reasoning.mara_retrieval_query import retrieval_query
 from ktem.reasoning.simple import FullQAPipeline
 
@@ -96,6 +102,7 @@ def test_finance_retrieval_query_expands_capex_cash_flow_questions():
 
     assert "Consolidated Statement of Cash Flows" in query
     assert "Capital expenditures" in query
+    assert "Capital spending" in query
     assert "Purchases of property, plant and equipment" in query
 
 
@@ -111,6 +118,43 @@ def test_finance_retrieval_query_expands_ppne_balance_sheet_questions():
     assert "Accumulated depreciation" in query
 
 
+def test_finance_retrieval_query_expands_full_net_ppe_phrase():
+    query = retrieval_query(
+        (
+            "What is Boeing's FY2018 net property, plant, and equipment? "
+            "Use the balance sheet."
+        ),
+        domain="finance",
+    )
+
+    assert "Consolidated Balance Sheet" in query
+    assert "Property, plant and equipment, net" in query
+
+
+def test_finance_retrieval_query_expands_total_current_assets_question():
+    query = retrieval_query(
+        "How much total current assets did Nike have in FY2019?",
+        domain="finance",
+    )
+
+    assert "Consolidated Balance Sheet" in query
+    assert "Total current assets" in query
+
+
+def test_finance_retrieval_query_expands_cogs_percentage_of_revenue():
+    query = retrieval_query(
+        (
+            "What was the average cost of goods sold as a percent of revenue "
+            "from FY2016 to FY2018?"
+        ),
+        domain="finance",
+    )
+
+    assert "Consolidated Statement of Income" in query
+    assert "Cost of goods sold" in query
+    assert "Net revenues" in query
+
+
 def test_finance_retrieval_query_expands_segment_growth_questions():
     query = retrieval_query(
         "If we exclude the impact of M&A, which segment dragged down "
@@ -122,6 +166,31 @@ def test_finance_retrieval_query_expands_segment_growth_questions():
     assert "Organic sales" in query
     assert "Acquisitions" in query
     assert "Divestitures" in query
+
+
+def test_finance_retrieval_query_expands_segment_proportional_change():
+    query = retrieval_query(
+        (
+            "From FY21 to FY22, excluding Embedded, in which AMD reporting "
+            "segment did sales proportionally increase the most?"
+        ),
+        domain="finance",
+    )
+
+    assert "Reporting Segment" in query
+    assert "Net sales by segment" in query
+    assert "Net revenue by segment" in query
+
+
+def test_finance_retrieval_query_expands_adjusted_non_gaap_ebitda():
+    query = retrieval_query(
+        "What was adjusted non-GAAP EBITDA for the twelve months ended 2023?",
+        domain="finance",
+    )
+
+    assert "Reconciliation of Non-GAAP Measures" in query
+    assert "Adjusted EBITDA" in query
+    assert "Twelve Months Ended" in query
 
 
 def test_finance_retrieval_query_expands_capital_intensity_questions():
@@ -306,6 +375,31 @@ def test_mara_answer_format_requirements_skip_benchmark_prompt_contract():
     )
 
     assert _message_with_answer_format_requirements(prompt) == prompt
+
+
+def test_mara_generation_prompt_includes_query_plan_answer_type():
+    request = SimpleNamespace(
+        query_plan=SimpleNamespace(answer_type="free_text"),
+    )
+
+    prompt = _message_with_answer_type_contract(
+        "What background knowledge do the authors leverage?",
+        request,
+    )
+
+    assert "Required answer type: free_text" in prompt
+    assert "Do not use a numeric or formula template" in prompt
+
+
+def test_mara_generation_answer_type_check_rejects_formula_only_free_text():
+    assert _answer_type_consistency("free_text", "$$ x / y $$") == (
+        False,
+        "formula_only_answer",
+    )
+    assert _answer_type_consistency("free_text", "They leverage labeled features.") == (
+        True,
+        "free_text",
+    )
 
 
 def test_mara_text_generation_returns_final_answer_without_rendered_thought(

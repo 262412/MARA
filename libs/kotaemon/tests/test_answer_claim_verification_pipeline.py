@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import pytest
+
 from kotaemon.base import Document, LLMInterface
+from kotaemon.indices.qa.citation import (
+    CitationPipeline,
+    CitationToolCallConfigurationError,
+)
 from kotaemon.indices.qa.citation_qa import AnswerWithContextPipeline
 from kotaemon.indices.qa.citation_qa_inline import AnswerWithInlineCitation
 from kotaemon.indices.qa.format_context import EVIDENCE_MODE_FIGURE
@@ -19,6 +25,14 @@ class FakeStreamingLLM(ChatLLM):
     def stream(self, messages):
         for chunk in self.chunks:
             yield LLMInterface(content=chunk, logprobs=[])
+
+
+class RecordingGenerationLLM(ChatLLM):
+    calls: list[dict[str, Any]] = []
+
+    def stream(self, _messages, **kwargs):
+        self.calls.append(dict(kwargs))
+        yield LLMInterface(content="Supported answer.", logprobs=[])
 
 
 @dataclass
@@ -82,6 +96,58 @@ def _claims_with_status(
     return [
         claim for claim in claim_verification["claims"] if claim.get("status") == status
     ]
+
+
+def test_stream_surfaces_citation_tool_call_configuration_errors():
+    class ToolCallBadRequest(Exception):
+        status_code = 400
+
+    class MisconfiguredLLM(ChatLLM):
+        def invoke(self, _messages, **_kwargs):
+            raise ToolCallBadRequest(
+                'tool_choice="required" requires --tool-call-parser to be set'
+            )
+
+    pipeline = AnswerWithContextPipeline(
+        llm=FakeStreamingLLM(chunks=["Supported answer."]),
+        citation_pipeline=CitationPipeline(llm=MisconfiguredLLM()),
+        create_mindmap_pipeline=lambda **kwargs: None,
+        enable_citation=True,
+        enable_claim_verification=False,
+    )
+
+    with pytest.raises(CitationToolCallConfigurationError):
+        _consume_stream(
+            pipeline.stream(
+                question="What is supported?",
+                evidence="Supported answer.",
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "pipeline_type",
+    [AnswerWithContextPipeline, AnswerWithInlineCitation],
+)
+def test_answer_generation_forwards_explicit_sampling_contract(pipeline_type):
+    llm = RecordingGenerationLLM(calls=[])
+    pipeline = pipeline_type(
+        llm=llm,
+        citation_pipeline=lambda **kwargs: None,
+        create_mindmap_pipeline=lambda **kwargs: None,
+    )
+
+    _consume_stream(
+        pipeline.stream(
+            question="What is supported?",
+            evidence="",
+            temperature=0,
+            top_p=1,
+            seed=20260724,
+        )
+    )
+
+    assert llm.calls == [{"temperature": 0, "top_p": 1, "seed": 20260724}]
 
 
 def test_stream_records_supported_claim_when_claim_verification_enabled():

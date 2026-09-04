@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -8,8 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from ktem.db.models import Conversation, engine
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
+from . import _runtime_notebook_guides as _guides
+from . import _runtime_notebook_materialization as _materialization
 from . import artifact_service as artifact_records
 from .artifact_models import (
     ARTIFACT_STATUS_READY,
@@ -18,7 +20,33 @@ from .artifact_models import (
 )
 
 NOTEBOOK_KEY = "mara_notebook"
-_SAFE_PATH_PART_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+class NotebookAccessError(RuntimeError):
+    """A notebook is missing or unavailable to the explicit principal."""
+
+    def __init__(self) -> None:
+        super().__init__("Notebook is unavailable.")
+
+
+def build_source_guides(records: list[Any]) -> list[dict[str, Any]]:
+    return _guides.build_source_guides(records)
+
+
+def note_source_markdown(conversation_id: str, note: dict[str, Any]) -> str:
+    return _materialization.note_source_markdown(conversation_id, note)
+
+
+def default_note_sources_dir() -> Path:
+    return _materialization.default_note_sources_dir()
+
+
+def materialize_note_source(
+    conversation_id: str,
+    note: dict[str, Any],
+    root_dir: str | Path | None = None,
+) -> str:
+    return _materialization.materialize_note_source(conversation_id, note, root_dir)
 
 
 def _timestamp(value: str | None = None) -> str:
@@ -40,33 +68,12 @@ def _unique_text(values: Any) -> list[str]:
     return result
 
 
-def _record_value(record: Any, key: str, default: Any = "") -> Any:
-    if isinstance(record, dict):
-        return record.get(key, default)
-    return getattr(record, key, default)
-
-
-def _topics_from_name(name: str) -> list[str]:
-    stem = Path(str(name or "source")).stem
-    topics = [
-        part
-        for part in _SAFE_PATH_PART_RE.split(stem.replace("_", " "))
-        if part and not part.isdigit()
-    ]
-    return topics[:5] or [stem or "source"]
-
-
 def _title_from_text(title: str | None, text: str) -> str:
     normalized = str(title or "").strip()
     if normalized:
         return normalized
     first_line = str(text or "").strip().splitlines()[0:1]
     return first_line[0][:80] if first_line else "Untitled note"
-
-
-def _safe_path_part(value: str, fallback: str) -> str:
-    normalized = _SAFE_PATH_PART_RE.sub("-", str(value or "").strip()).strip(".-")
-    return (normalized or fallback)[:80]
 
 
 def _normalize_note(note: Any) -> dict[str, Any] | None:
@@ -142,49 +149,6 @@ def set_selected_sources(
     return updated
 
 
-def note_source_markdown(conversation_id: str, note: dict[str, Any]) -> str:
-    title = _title_from_text(str(note.get("title") or ""), str(note.get("text") or ""))
-    citation_refs = _unique_text(note.get("citation_refs", []))
-    metadata = [
-        f"Conversation: {conversation_id}",
-        f"Note ID: {note.get('note_id', '')}",
-        f"Source: {note.get('source', '')}",
-        "Citation refs: " + (", ".join(citation_refs) if citation_refs else "(none)"),
-    ]
-    return "\n".join(
-        [
-            f"# {title}",
-            "",
-            *metadata,
-            "",
-            str(note.get("text") or "").strip(),
-            "",
-        ]
-    )
-
-
-def default_note_sources_dir() -> Path:
-    from theflow.settings import settings as flowsettings
-
-    return Path(getattr(flowsettings, "KH_APP_DATA_DIR", Path.cwd())) / "mara_notes"
-
-
-def materialize_note_source(
-    conversation_id: str,
-    note: dict[str, Any],
-    root_dir: str | Path | None = None,
-) -> str:
-    source_root = Path(root_dir) if root_dir is not None else default_note_sources_dir()
-    conversation_part = _safe_path_part(conversation_id, "conversation")
-    note_part = _safe_path_part(str(note.get("note_id") or ""), "note")
-    source_path = source_root / conversation_part / f"mara-note-{note_part}.md"
-    source_path.parent.mkdir(parents=True, exist_ok=True)
-    source_path.write_text(
-        note_source_markdown(conversation_id, note), encoding="utf-8"
-    )
-    return source_path.resolve().as_posix()
-
-
 def record_note_indexed_source(
     data_source: dict[str, Any] | None,
     note_id: str,
@@ -221,37 +185,6 @@ def record_note_indexed_source(
     if indexed_ids:
         updated["graph_source_ids"] = list(notebook["selected_source_ids"])
     return updated, updated_note
-
-
-def build_source_guides(records: list[Any]) -> list[dict[str, Any]]:
-    guides: list[dict[str, Any]] = []
-    for record in records:
-        name = str(_record_value(record, "name", "source") or "source")
-        tokens = int(_record_value(record, "tokens", 0) or 0)
-        loader = str(_record_value(record, "loader", "document") or "document")
-        metadata = {
-            "tokens": tokens,
-            "size": int(_record_value(record, "size", 0) or 0),
-            "loader": loader,
-            "path": str(_record_value(record, "path", "") or ""),
-            "date_created": _record_value(record, "date_created", ""),
-        }
-        guides.append(
-            {
-                "source_id": str(_record_value(record, "file_id", "") or ""),
-                "name": name,
-                "summary": (
-                    f"{name} is an indexed {loader} source with {tokens} tokens."
-                ),
-                "key_topics": _topics_from_name(name),
-                "suggested_questions": [
-                    f"What are the key points in {name}?",
-                    f"Which evidence from {name} supports the answer?",
-                ],
-                "metadata": metadata,
-            }
-        )
-    return guides
 
 
 def list_notes(data_source: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -387,6 +320,7 @@ def record_artifact_export(
 def save_artifact_to_conversation(
     conversation_id: str,
     *,
+    user_id: Any,
     artifact_type: str,
     payload: Any,
     artifact_id: str | None = None,
@@ -400,7 +334,9 @@ def save_artifact_to_conversation(
     timestamp: str | None = None,
 ) -> dict[str, Any]:
     with Session(engine) as session:
-        row = _load_conversation(session, conversation_id)
+        row = _load_conversation(
+            session, conversation_id, user_id=user_id, access="write"
+        )
         updated, artifact = save_artifact(
             dict(row.data_source or {}),
             artifact_type=artifact_type,
@@ -425,9 +361,13 @@ def save_artifact_to_conversation(
 def delete_artifact_from_conversation(
     conversation_id: str,
     artifact_id: str,
+    *,
+    user_id: Any,
 ) -> dict[str, Any]:
     with Session(engine) as session:
-        row = _load_conversation(session, conversation_id)
+        row = _load_conversation(
+            session, conversation_id, user_id=user_id, access="write"
+        )
         updated, artifact = delete_artifact(dict(row.data_source or {}), artifact_id)
         row.data_source = updated
         row.date_updated = datetime.now()
@@ -440,12 +380,15 @@ def record_artifact_export_to_conversation(
     conversation_id: str,
     artifact_id: str,
     *,
+    user_id: Any,
     export_format: str,
     path: str,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
     with Session(engine) as session:
-        row = _load_conversation(session, conversation_id)
+        row = _load_conversation(
+            session, conversation_id, user_id=user_id, access="write"
+        )
         updated, artifact = record_artifact_export(
             dict(row.data_source or {}),
             artifact_id,
@@ -463,6 +406,8 @@ def record_artifact_export_to_conversation(
 def save_captured_artifact(
     conversation_id: str,
     artifact: Any,
+    *,
+    user_id: Any,
     **metadata: Any,
 ) -> dict[str, Any] | None:
     if artifact is None:
@@ -474,6 +419,7 @@ def save_captured_artifact(
             metadata.setdefault("citations", artifact.get("citations"))
     return save_artifact_to_conversation(
         conversation_id,
+        user_id=user_id,
         artifact_type=artifact_type,
         payload=artifact,
         **metadata,
@@ -494,31 +440,62 @@ def preserve_state(
     return merged
 
 
-def _load_conversation(session: Session, conversation_id: str) -> Conversation:
+def _load_conversation(
+    session: Session,
+    conversation_id: str,
+    *,
+    user_id: Any,
+    access: str,
+    allow_public: bool = False,
+) -> Conversation:
+    normalized_id = str(conversation_id or "").strip()
+    normalized_user = str(user_id or "").strip()
+    if not normalized_id or not normalized_user or access not in {"read", "write"}:
+        raise NotebookAccessError()
+    principal = Conversation.user == normalized_user
+    if access == "read" and allow_public:
+        principal = or_(principal, Conversation.is_public.is_(True))
     row = session.exec(
-        select(Conversation).where(Conversation.id == conversation_id)
+        select(Conversation).where(
+            Conversation.id == normalized_id,
+            principal,
+        )
     ).one_or_none()
     if row is None:
-        raise ValueError(f"Conversation '{conversation_id}' does not exist.")
+        raise NotebookAccessError()
     return row
 
 
-def get_notebook(conversation_id: str) -> dict[str, Any]:
+def get_notebook(
+    conversation_id: str,
+    *,
+    user_id: Any,
+    allow_public: bool = False,
+) -> dict[str, Any]:
     with Session(engine) as session:
-        row = _load_conversation(session, conversation_id)
+        row = _load_conversation(
+            session,
+            conversation_id,
+            user_id=user_id,
+            access="read",
+            allow_public=allow_public,
+        )
         return _notebook(dict(row.data_source or {}))
 
 
 def add_note_to_conversation(
     conversation_id: str,
     *,
+    user_id: Any,
     title: str,
     text: str,
     note_id: str | None = None,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
     with Session(engine) as session:
-        row = _load_conversation(session, conversation_id)
+        row = _load_conversation(
+            session, conversation_id, user_id=user_id, access="write"
+        )
         updated, note = add_note(
             dict(row.data_source or {}),
             title=title,
@@ -536,6 +513,7 @@ def add_note_to_conversation(
 def save_answer_note_to_conversation(
     conversation_id: str,
     *,
+    user_id: Any,
     title: str,
     answer: str,
     citation_refs: list[str] | None = None,
@@ -543,7 +521,9 @@ def save_answer_note_to_conversation(
     timestamp: str | None = None,
 ) -> dict[str, Any]:
     with Session(engine) as session:
-        row = _load_conversation(session, conversation_id)
+        row = _load_conversation(
+            session, conversation_id, user_id=user_id, access="write"
+        )
         updated, note = save_answer_as_note(
             dict(row.data_source or {}),
             answer=answer,
@@ -562,9 +542,13 @@ def save_answer_note_to_conversation(
 def select_conversation_sources(
     conversation_id: str,
     source_ids: list[str],
+    *,
+    user_id: Any,
 ) -> list[str]:
     with Session(engine) as session:
-        row = _load_conversation(session, conversation_id)
+        row = _load_conversation(
+            session, conversation_id, user_id=user_id, access="write"
+        )
         updated = set_selected_sources(dict(row.data_source or {}), source_ids)
         row.data_source = updated
         row.date_updated = datetime.now()
@@ -577,12 +561,15 @@ def record_note_indexed_source_to_conversation(
     conversation_id: str,
     note_id: str,
     *,
+    user_id: Any,
     source_ids: list[str],
     source_path: str,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
     with Session(engine) as session:
-        row = _load_conversation(session, conversation_id)
+        row = _load_conversation(
+            session, conversation_id, user_id=user_id, access="write"
+        )
         updated, note = record_note_indexed_source(
             dict(row.data_source or {}),
             note_id,

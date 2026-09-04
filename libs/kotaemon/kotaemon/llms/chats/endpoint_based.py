@@ -55,6 +55,9 @@ class EndpointChatLLM(ChatLLM):
         request_json = {
             "messages": [{"content": m.text, "role": decide_role(m)} for m in input_]
         }
+        request_json.update(
+            {key: value for key, value in kwargs.items() if value is not None}
+        )
 
         response = requests.post(self.endpoint_url, json=request_json).json()
 

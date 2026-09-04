@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from types import SimpleNamespace
 from typing import Any, Generator
 
 from ktem.docqa.claim_filtering import clean_answer_text
@@ -10,22 +9,40 @@ from ktem.docqa.graph_index import graph_answer_from_evidence
 
 from kotaemon.base import Document, RetrievedDocument
 
+from .mara_answer_type_contract import (
+    answer_type_consistency,
+    message_with_answer_type_contract,
+    request_answer_type,
+)
 from .mara_artifacts import build_artifact_for_pipeline
-from .mara_controller import planner_trace_payload
+from .mara_controller_request import (
+    controller_execution_request as _controller_execution_request,
+)
+from .mara_controller_request import (
+    controller_routing_message as _controller_routing_message,
+)
 from .mara_element_answer import element_evidence_answer
 from .mara_evidence import build_mara_evidence_metadata
-from .mara_finance_answering import route_finance_numeric_answer
+from .mara_finance_answering import (
+    ensure_finance_numeric_trace,
+    route_finance_numeric_answer,
+)
+from .mara_generation_context import cache_generation_context
+from .mara_qasper_candidate import (
+    generate_qasper_typed_candidate,
+    qasper_typed_candidate_request,
+)
 from .mara_query_planning import plan_steps as build_mara_plan_steps
 from .mara_query_planning import understand_query as understand_mara_query
 from .mara_query_planning import with_selected_source_context
+from .mara_ragtruth_answering import route_ragtruth_answer
 from .mara_retrieval_query import messages_share_retrieval_cache_key, retrieval_query
-from .mara_route_probe import (
-    controller_latency_budget,
-    controller_route_probe,
-    dataset_family,
-    page_image_route_available,
-)
-from .mara_route_retrieval import route_retrieval_metadata
+from .mara_route_preparation import prepare_controller_route, route_trace_payload
+from .mara_route_probe import page_image_route_available
+from .mara_route_retrieval import controller_text_retrieve, route_retrieval_metadata
+from .mara_semantic_proposition_verifier import build_semantic_proposition_verifier
+from .mara_trace import execution_trace_events as _execution_trace_events
+from .mara_trace import visible_execution_answer as _visible_execution_answer
 from .mara_visual_answering import route_visual_answer as _route_visual_answer
 from .mara_visual_gate import hybrid_should_use_visual_generator
 from .simple import FullQAPipeline
@@ -89,21 +106,6 @@ def _mara_event(mara_channel: str, payload: Any) -> Document:
     )
 
 
-def _route_trace_payload(
-    understanding: dict[str, Any],
-    agent_mode: str | None,
-    plan: list[dict[str, str]],
-) -> dict[str, Any]:
-    return {
-        "event": "route",
-        "task_type": understanding["task_type"],
-        "modalities": understanding["modalities"],
-        "scope": understanding["scope"],
-        "agent_mode": agent_mode or "auto",
-        "plan": plan,
-    }
-
-
 def _planner_route(planner_payload: dict[str, Any]) -> str:
     decision = planner_payload.get("decision")
     if not isinstance(decision, dict):
@@ -118,45 +120,6 @@ def _effective_route(pipeline: Any, planner_payload: dict[str, Any]) -> str:
         return _ROUTE_POLICY_ALIASES.get(policy, policy)
     planner_route = _planner_route(planner_payload)
     return _ROUTE_POLICY_ALIASES.get(planner_route, planner_route)
-
-
-def _controller_routing_message(pipeline: Any, message: str) -> str:
-    return str(
-        getattr(pipeline, "controller_question", None)
-        or getattr(pipeline, "retrieval_query", None)
-        or message
-    ).strip()
-
-
-def _controller_execution_request(
-    pipeline: Any,
-    message: str,
-) -> SimpleNamespace:
-    controller_mode = str(getattr(pipeline, "controller_mode", "") or "").strip()
-    docqa_request = getattr(pipeline, "docqa_request", None)
-    return SimpleNamespace(
-        prompt=message,
-        origin=str(
-            getattr(docqa_request, "origin", None)
-            or getattr(pipeline, "origin", "")
-            or ""
-        ),
-        controller_mode=controller_mode or "llm",
-        route_policy=getattr(pipeline, "route_policy", None) or "auto",
-        allowed_routes=list(getattr(pipeline, "allowed_routes", None) or []),
-        verification_mode=getattr(pipeline, "verification_mode", None) or "light",
-        verification_domain=(
-            getattr(pipeline, "verification_domain", None)
-            or getattr(pipeline, "dataset_family", None)
-            or ""
-        ),
-        active_file_id=getattr(pipeline, "active_file_id", "") or "",
-        active_file_name=getattr(pipeline, "active_file_name", "") or "",
-        page_number=getattr(pipeline, "page_number", None),
-        selected_text=getattr(pipeline, "selected_text", "") or "",
-        selected_file_ids=list(getattr(pipeline, "selected_file_ids", None) or []),
-        graph_context=getattr(pipeline, "graph_context", None) or {},
-    )
 
 
 def _with_available_modalities(
@@ -247,19 +210,6 @@ def _message_with_answer_format_requirements(message: str) -> str:
     return prompt + ANSWER_FORMAT_REQUIREMENTS
 
 
-def _execution_trace_events(
-    execution: RouteExecutionResult,
-) -> Generator[Document, None, None]:
-    for item in execution.controller_trace:
-        stage = item.get("stage")
-        if stage == "planner":
-            continue
-        payload = dict(item)
-        payload["event"] = str(stage or "controller")
-        payload["route"] = execution.controller_decision.route
-        yield _mara_event("agent_trace", payload)
-
-
 def _route_execution_events(
     execution: RouteExecutionResult,
     generation_events: list[Document],
@@ -283,15 +233,6 @@ def _route_execution_events(
     return Document(channel="chat", content=MARA_ABSTAIN_MESSAGE)
 
 
-def _visible_execution_answer(execution: RouteExecutionResult) -> str:
-    route = execution.controller_decision.route
-    if route == "direct_answer":
-        return MARA_DIRECT_MESSAGE
-    if route == "abstain":
-        return MARA_PLANNER_ABSTAIN_MESSAGE
-    return execution.answer
-
-
 def _generate_controller_route_answer(
     pipeline: Any,
     request: Any,
@@ -303,6 +244,9 @@ def _generate_controller_route_answer(
     history: list,
     kwargs: dict[str, Any],
 ) -> tuple[str, list[Document]]:
+    ragtruth_answer = route_ragtruth_answer(pipeline, request, bundle)
+    if ragtruth_answer is not None:
+        return ragtruth_answer, []
     if decision.route == "page_image_rag":
         visual_answer = _route_visual_answer(
             pipeline,
@@ -332,7 +276,35 @@ def _generate_controller_route_answer(
     if decision.route == "element_rag":
         bundle.metadata["generation_backend"] = "local_element_evidence"
         return element_evidence_answer(bundle, message), []
-    return _collect_text_rag_generation(pipeline, message, conv_id, history, kwargs)
+    if qasper_typed_candidate_request(request):
+        bundle.metadata["generation_backend"] = "qasper_typed_candidate_model"
+        answer = generate_qasper_typed_candidate(pipeline, request, bundle)
+        bundle.metadata["generation_answer_type_contract"] = {
+            "answer_type": "boolean",
+            "consistent": answer in {"yes", "no", "unanswerable"},
+            "reason": "structured_typed_candidate" if answer else "invalid_candidate",
+            "status": "passed" if answer else "failed",
+            "contract_id": "qasper_typed_candidate.v1",
+        }
+        return answer, []
+    cache_generation_context(pipeline, message, history, bundle)
+    generation_message = message_with_answer_type_contract(message, request)
+    answer, events = _collect_text_rag_generation(
+        pipeline,
+        generation_message,
+        conv_id,
+        history,
+        kwargs,
+    )
+    answer_type = request_answer_type(request)
+    consistent, reason = answer_type_consistency(answer_type, answer)
+    bundle.metadata["generation_answer_type_contract"] = {
+        "answer_type": answer_type,
+        "consistent": consistent,
+        "reason": reason,
+        "status": "passed" if consistent else "failed",
+    }
+    return answer, events
 
 
 class MaraAgentPipeline(FullQAPipeline):
@@ -375,6 +347,14 @@ class MaraAgentPipeline(FullQAPipeline):
         pipeline = super().prepare_pipeline_instance(settings, retrievers)
         prefix = f"reasoning.options.{cls.get_info()['id']}"
         pipeline.agent_mode = settings.get(f"{prefix}.agent_mode", "auto")
+        pipeline.retrieval_candidate_kwargs = {
+            "top_k": 30,
+            "do_extend": True,
+            "dense_top_k": 50,
+            "sparse_top_k": 50,
+            "rerank_top_k": 80,
+            "rrf_k": 60,
+        }
         return pipeline
 
     @classmethod
@@ -383,6 +363,7 @@ class MaraAgentPipeline(FullQAPipeline):
         query: str,
         *,
         task_type: str | None = None,
+        modality: str | None = None,
         qa_scope: str | None = None,
         active_file_id: str | None = None,
         page_number: int | None = None,
@@ -390,6 +371,7 @@ class MaraAgentPipeline(FullQAPipeline):
         return understand_mara_query(
             query,
             task_type=task_type,
+            modality=modality,
             qa_scope=qa_scope,
             active_file_id=active_file_id,
             page_number=page_number,
@@ -420,7 +402,12 @@ class MaraAgentPipeline(FullQAPipeline):
             history,
         )
         attempts = [{"attempt": 1, "evidence_count": len(docs), "retry_reason": ""}]
-        if _should_retry_retrieval(getattr(self, "agent_mode", None), docs):
+        retry_disabled = bool(
+            getattr(self, "_mara_disable_nested_retrieval_retry", False)
+        )
+        if not retry_disabled and _should_retry_retrieval(
+            getattr(self, "agent_mode", None), docs
+        ):
             docs, info = super().retrieve(
                 retrieval_query(message, domain=_retrieval_domain(self)),
                 history,
@@ -452,14 +439,20 @@ class MaraAgentPipeline(FullQAPipeline):
         retrieval_message = str(routing_message or message)
 
         def retrieve(_request: Any, _decision: Any) -> dict[str, Any]:
+            query = str(getattr(_request, "retrieval_query", "") or retrieval_message)
             return route_retrieval_metadata(
                 self,
                 _decision.route,
-                retrieval_message,
+                query,
                 history,
                 understanding,
-                text_retrieve=lambda: self.retrieve(retrieval_message, history),
+                text_retrieve=lambda: controller_text_retrieve(
+                    self,
+                    query,
+                    history,
+                ),
                 metadata_builder=self.build_evidence_metadata,
+                request=_request,
             )
 
         def generate(_request: Any, _decision: Any, _bundle: Any) -> str:
@@ -481,12 +474,20 @@ class MaraAgentPipeline(FullQAPipeline):
         rewrite_generator = getattr(self, "rewrite_generator", None)
         rewrite = rewrite_generator if callable(rewrite_generator) else None
 
+        execution_request = getattr(
+            self, "_mara_active_execution_request", None
+        ) or _controller_execution_request(self, message)
         execution = execute_controller_turn(
-            _controller_execution_request(self, message),
+            execution_request,
             retrieve=retrieve,
             generate=generate,
             rewrite=rewrite,
+            proposition_verifier=build_semantic_proposition_verifier(self),
             agent_trace=[planner_payload],
+        )
+        ensure_finance_numeric_trace(
+            execution_request,
+            execution.evidence_bundle,
         )
         if generation_events and execution.answer != generated_answer:
             generation_events = []
@@ -496,12 +497,17 @@ class MaraAgentPipeline(FullQAPipeline):
         return execution, generation_events, artifact
 
     def stream(  # type: ignore
-        self, message: str, conv_id: str, history: list, **kwargs  # type: ignore
+        self,
+        message: str,
+        conv_id: str,
+        history: list,
+        **kwargs,  # type: ignore
     ) -> Generator[Document, None, Document]:
         routing_message = _controller_routing_message(self, message)
         understanding = self.understand_query(
             routing_message,
             task_type=getattr(self, "task_type", None),
+            modality=getattr(self, "modality", None),
             qa_scope=getattr(self, "qa_scope", None),
             active_file_id=getattr(self, "active_file_id", None),
             page_number=getattr(self, "page_number", None),
@@ -512,28 +518,30 @@ class MaraAgentPipeline(FullQAPipeline):
             understanding,
             agent_mode=getattr(self, "agent_mode", "auto"),
         )
-        yield _mara_event(
-            "agent_trace",
-            _route_trace_payload(
-                understanding,
-                getattr(self, "agent_mode", "auto"),
-                plan,
-            ),
-        )
-        route_probe = controller_route_probe(
-            self, routing_message, history, understanding
-        )
-        latency_budget = controller_latency_budget(self)
-        planner_payload = planner_trace_payload(
+        initial_trace = route_trace_payload(
             understanding,
-            planner=getattr(self, "planner", None),
-            planner_model=getattr(self, "planner_model", None),
-            question=routing_message,
-            allowed_routes=getattr(self, "allowed_routes", None),
-            route_probe=route_probe,
-            dataset_family=dataset_family(self),
-            latency_budget=latency_budget,
+            getattr(self, "agent_mode", "auto"),
+            plan,
         )
+        yield _mara_event("agent_trace", initial_trace)
+        execution_request = _controller_execution_request(self, message)
+        preparation = prepare_controller_route(
+            self,
+            execution_request,
+            routing_message,
+            history,
+            understanding,
+            initial_trace,
+        )
+        if preparation.deadline_execution is not None:
+            return (
+                yield from _route_execution_events(
+                    preparation.deadline_execution,
+                    [],
+                    None,
+                )
+            )
+        planner_payload = preparation.planner_payload or {}
         yield _mara_event("agent_trace", planner_payload)
         effective_route = _effective_route(self, planner_payload)
         if effective_route in {
@@ -545,15 +553,19 @@ class MaraAgentPipeline(FullQAPipeline):
             "hybrid",
             "abstain",
         }:
-            execution, generation_events, artifact = self.execute_controller_route(
-                message,
-                conv_id,
-                history,
-                understanding,
-                planner_payload,
-                kwargs,
-                routing_message=routing_message,
-            )
+            self._mara_active_execution_request = execution_request
+            try:
+                execution, generation_events, artifact = self.execute_controller_route(
+                    message,
+                    conv_id,
+                    history,
+                    understanding,
+                    planner_payload,
+                    kwargs,
+                    routing_message=routing_message,
+                )
+            finally:
+                delattr(self, "_mara_active_execution_request")
             return (
                 yield from _route_execution_events(
                     execution,

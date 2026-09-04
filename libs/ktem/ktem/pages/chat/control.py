@@ -1,14 +1,16 @@
 import logging
-from copy import deepcopy
+from typing import TypeAlias, cast
 
 import gradio as gr
 from ktem.app import BasePage
 from ktem.assets import ICONS_DIR
-from ktem.db.models import Conversation, User, engine
-from sqlmodel import Session, or_, select
+from ktem.auth.service import resolve_request_user_id
+from ktem.db.models import User, engine
+from ktem.docqa._runtime_session_mutations import RuntimeSessionMutationService
+from ktem.docqa._runtime_session_service import RuntimeSessionService
+from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
 
-from ...utils.conversation import sync_retrieval_n_message
 from .chat_suggestion import ChatSuggestion
 from .common import STATE
 
@@ -17,6 +19,8 @@ logger = logging.getLogger(__name__)
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
 ASSETS_DIR = str(ICONS_DIR)
+Request: TypeAlias = gr.Request | None
+_REQUEST = cast(gr.Request, object())
 
 
 logout_js = """
@@ -36,6 +40,44 @@ def is_conv_name_valid(name):
         errors.append("Name cannot be longer than 40 characters")
 
     return "; ".join(errors)
+
+
+def _empty_conversation_state(app):
+    default_chat_suggestions = [[each] for each in ChatSuggestion.CHAT_SAMPLES]
+    indices = []
+    for index in app.index_manager.indices:
+        if index.selector is None:
+            continue
+        if isinstance(index.selector, int):
+            indices.append(index.default_selector)
+        if isinstance(index.selector, tuple):
+            indices.extend(index.default_selector)
+    return (
+        "",
+        "",
+        "",
+        [],
+        default_chat_suggestions,
+        "",
+        None,
+        [],
+        [],
+        False,
+        STATE,
+        *indices,
+    )
+
+
+def _server_user_id(request, auth_mode):
+    if request is _REQUEST:
+        return None
+    return resolve_request_user_id(request, auth_mode=auth_mode)
+
+
+def _should_reject_rename(user_id, errors):
+    if errors:
+        gr.Warning(errors)
+    return user_id is None or bool(errors)
 
 
 class ConversationControl(BasePage):
@@ -171,16 +213,16 @@ class ConversationControl(BasePage):
                 visible=False,
             )
 
-    def load_chat_history(self, user_id):
+    def load_chat_history(self, user_id, request: gr.Request = _REQUEST):
         """Reload chat history"""
+        resolved_user_id = self._resolve_user_id(user_id, request)
+        return self._load_chat_history(resolved_user_id)
 
-        # In case user are admin. They can also watch the
-        # public conversations
-        can_see_public: bool = False
+    def _load_chat_history(self, user_id):
+        can_see_public = False
         with Session(engine) as session:
             statement = select(User).where(User.id == user_id)
             result = session.exec(statement).one_or_none()
-
             if result is not None:
                 if flowsettings.KH_USER_CAN_SEE_PUBLIC:
                     can_see_public = (
@@ -190,139 +232,102 @@ class ConversationControl(BasePage):
                     can_see_public = True
 
         print(f"User-id: {user_id}, can see public conversations: {can_see_public}")
+        sessions = self._get_session_service(user_id).list_sessions(
+            user_id,
+            include_public=can_see_public,
+            public_first=can_see_public,
+        )
+        return [(session.name, session.conversation_id) for session in sessions]
 
-        options = []
-        with Session(engine) as session:
-            # Define condition based on admin-role:
-            # - can_see: can see their conversations & public files
-            # - can_not_see: only see their conversations
-            if can_see_public:
-                statement = (
-                    select(Conversation)
-                    .where(
-                        or_(
-                            Conversation.user == user_id,
-                            Conversation.is_public,
-                        )
-                    )
-                    .order_by(
-                        Conversation.is_public.desc(), Conversation.date_created.desc()
-                    )  # type: ignore
-                )
-            else:
-                statement = (
-                    select(Conversation)
-                    .where(Conversation.user == user_id)
-                    .order_by(Conversation.date_created.desc())  # type: ignore
-                )
-
-            results = session.exec(statement).all()
-            for result in results:
-                options.append((result.name, result.id))
-
-        return options
-
-    def reload_conv(self, user_id):
-        conv_list = self.load_chat_history(user_id)
+    def reload_conv(self, user_id, request: gr.Request = _REQUEST):
+        conv_list = self.load_chat_history(user_id, request)
         if conv_list:
             return gr.update(value=None, choices=conv_list)
         else:
             return gr.update(value=None, choices=[])
 
-    def new_conv(self, user_id):
+    def new_conv(self, user_id, request: gr.Request = _REQUEST):
         """Create new chat"""
+        user_id = self._resolve_user_id(user_id, request)
         if user_id is None:
             gr.Warning("Please sign in first (Settings → User Settings)")
             return None, gr.update()
-        with Session(engine) as session:
-            new_conv = Conversation(user=user_id)
-            session.add(new_conv)
-            session.commit()
+        created = self._get_session_service(user_id).create_session(user_id=user_id)
+        history = self._load_chat_history(user_id)
+        return created.conversation_id, gr.update(
+            value=created.conversation_id,
+            choices=history,
+        )
 
-            id_ = new_conv.id
-
-        history = self.load_chat_history(user_id)
-
-        return id_, gr.update(value=id_, choices=history)
-
-    def delete_conv(self, conversation_id, user_id):
+    def delete_conv(self, conversation_id, user_id, request: gr.Request = _REQUEST):
         """Delete the selected conversation"""
         if not conversation_id:
             gr.Warning("No conversation selected.")
             return None, gr.update()
-
+        user_id = self._resolve_user_id(user_id, request)
         if user_id is None:
             gr.Warning("Please sign in first (Settings → User Settings)")
             return None, gr.update()
-
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == conversation_id)
-            result = session.exec(statement).one()
-
-            session.delete(result)
-            session.commit()
-
-        history = self.load_chat_history(user_id)
+        try:
+            self._get_mutation_service(user_id).delete_session(
+                conversation_id,
+                user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
+        history = self._load_chat_history(user_id)
         if history:
             id_ = history[0][1]
             return id_, gr.update(value=id_, choices=history)
         else:
             return None, gr.update(value=None, choices=[])
 
-    def select_conv(self, conversation_id, user_id):
+    def select_conv(self, conversation_id, user_id, request: gr.Request = _REQUEST):
         """Select the conversation"""
         default_chat_suggestions = [[each] for each in ChatSuggestion.CHAT_SAMPLES]
-
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == conversation_id)
-            try:
-                result = session.exec(statement).one()
-                id_ = result.id
-                name = result.name
-                is_conv_public = result.is_public
-
-                # disable file selection ids state if
-                # not the owner of the conversation
-                if user_id == result.user:
-                    selected = result.data_source.get("selected", {})
-                else:
-                    selected = {}
-
-                chats = result.data_source.get("messages", [])
-                chat_suggestions = result.data_source.get(
-                    "chat_suggestions", default_chat_suggestions
+        user_id = self._resolve_user_id(user_id, request)
+        try:
+            session_info = self._get_session_service(user_id).load_session(
+                conversation_id,
+                user_id=user_id,
+            )
+            if session_info is None:
+                raise PermissionError(
+                    "Conversation is outside the authenticated user scope: "
+                    f"conversation_id={conversation_id}"
                 )
-
-                retrieval_history: list[str] = result.data_source.get(
-                    "retrieval_messages", []
-                )
-                plot_history: list[dict] = result.data_source.get("plot_history", [])
-
-                # On initialization
-                # Ensure len of retrieval and messages are equal
-                retrieval_history = sync_retrieval_n_message(chats, retrieval_history)
-
-                info_panel = (
-                    retrieval_history[-1]
-                    if retrieval_history
-                    else "<h5><b>No evidence found.</b></h5>"
-                )
-                plot_data = plot_history[-1] if plot_history else None
-                state = result.data_source.get("state", STATE)
-
-            except Exception as e:
-                logger.warning(e)
-                id_ = ""
-                name = ""
-                selected = {}
-                chats = []
-                chat_suggestions = default_chat_suggestions
-                retrieval_history = []
-                plot_history = []
-                info_panel = ""
-                plot_data = None
-                state = STATE
-                is_conv_public = False
+            id_ = session_info.conversation_id
+            name = session_info.name
+            is_conv_public = session_info.is_public
+            selected = (
+                session_info.selected_mapping if user_id == session_info.user_id else {}
+            )
+            chats = session_info.data_source.get("messages", [])
+            chat_suggestions = session_info.data_source.get(
+                "chat_suggestions", default_chat_suggestions
+            )
+            retrieval_history = session_info.retrieval_messages
+            plot_history = session_info.plot_history
+            info_panel = (
+                retrieval_history[-1]
+                if retrieval_history
+                else "<h5><b>No evidence found.</b></h5>"
+            )
+            plot_data = plot_history[-1] if plot_history else None
+            state = session_info.state
+        except Exception as exc:
+            logger.warning("Conversation selection failed: %s", exc)
+            id_ = ""
+            name = ""
+            selected = {}
+            chats = []
+            chat_suggestions = default_chat_suggestions
+            retrieval_history = []
+            plot_history = []
+            info_panel = ""
+            plot_data = None
+            state = STATE
+            is_conv_public = False
 
         indices = []
         for index in self._app.index_manager.indices:
@@ -349,32 +354,43 @@ class ConversationControl(BasePage):
             *indices,
         )
 
-    def rename_conv(self, conversation_id, new_name, is_renamed, user_id):
+    def clear_conv(self):
+        return _empty_conversation_state(self._app)
+
+    def rename_conv(
+        self,
+        conversation_id,
+        new_name,
+        is_renamed,
+        user_id,
+        request: gr.Request = _REQUEST,
+    ):
         """Rename the conversation"""
-        if not is_renamed or KH_DEMO_MODE or user_id is None or not conversation_id:
+        if not is_renamed or KH_DEMO_MODE or not conversation_id:
             return (
                 gr.update(),
                 conversation_id,
                 gr.update(visible=False),
             )
 
+        user_id = self._resolve_user_id(user_id, request)
         errors = is_conv_name_valid(new_name)
-        if errors:
-            gr.Warning(errors)
+        if _should_reject_rename(user_id, errors):
             return (
                 gr.update(),
                 conversation_id,
                 gr.update(visible=False),
             )
 
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == conversation_id)
-            result = session.exec(statement).one()
-            result.name = new_name
-            session.add(result)
-            session.commit()
-
-        history = self.load_chat_history(user_id)
+        try:
+            self._get_mutation_service(user_id).rename_session(
+                conversation_id,
+                new_name,
+                user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
+        history = self._load_chat_history(user_id)
         gr.Info("Conversation renamed.")
         return (
             gr.update(choices=history),
@@ -383,12 +399,18 @@ class ConversationControl(BasePage):
         )
 
     def persist_chat_suggestions(
-        self, conversation_id, new_suggestions, is_updated, user_id
+        self,
+        conversation_id,
+        new_suggestions,
+        is_updated,
+        user_id,
+        request: gr.Request = _REQUEST,
     ):
         """Update the conversation's chat suggestions"""
         if not is_updated:
             return
 
+        user_id = self._resolve_user_id(user_id, request)
         if user_id is None:
             gr.Warning("Please sign in first (Settings → User Settings)")
             return gr.update(), ""
@@ -397,20 +419,40 @@ class ConversationControl(BasePage):
             gr.Warning("No conversation selected.")
             return gr.update(), ""
 
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == conversation_id)
-            result = session.exec(statement).one()
-
-            data_source = deepcopy(result.data_source)
-            data_source["chat_suggestions"] = [
-                [x] for x in new_suggestions.iloc[:, 0].tolist()
-            ]
-
-            result.data_source = data_source
-            session.add(result)
-            session.commit()
-
+        try:
+            self._get_mutation_service(user_id).update_chat_suggestions(
+                conversation_id,
+                new_suggestions.iloc[:, 0].tolist(),
+                user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
         gr.Info("Chat suggestions updated.")
+
+    @staticmethod
+    def _resolve_user_id(user_id, request: Request):
+        auth_mode = str(getattr(flowsettings, "MARA_AUTH_MODE", "auto")).lower()
+        if auth_mode not in {"password", "sso"}:
+            return user_id
+        resolved = _server_user_id(request, auth_mode)
+        if not resolved:
+            raise gr.Error("Authenticated user identity is unavailable.")
+        return resolved
+
+    def _get_session_service(self, user_id) -> RuntimeSessionService:
+        return RuntimeSessionService(
+            app=self._app,
+            file_index=None,
+            engine=engine,
+            resolve_user_id=lambda value=None: user_id if value is None else value,  # type: ignore[misc]
+        )
+
+    @staticmethod
+    def _get_mutation_service(user_id) -> RuntimeSessionMutationService:
+        return RuntimeSessionMutationService(
+            engine=engine,
+            resolve_user_id=lambda value=None: user_id if value is None else value,  # type: ignore[misc]
+        )
 
     def toggle_demo_login_visibility(self, user_api_key, request: gr.Request):
         try:

@@ -10,6 +10,9 @@ from . import _runtime_mara as _mara
 from ._runtime_models import DocQARequest, _PreparedPipeline
 from ._runtime_utils import _serialize_value
 from .evidence_text import extract_final_answer_text
+from .terminal_session_state import (
+    state_with_stream_terminal_commit as _state_with_stream_terminal_commit,
+)
 
 
 @dataclass
@@ -22,6 +25,13 @@ class TurnStreamResult:
     state: dict[str, Any]
     capture: _mara.ResponseCapture
     preserve_text_after_chat_clear: bool = False
+
+
+def state_with_stream_terminal_commit(
+    stream_result: TurnStreamResult,
+    message_index: int,
+) -> dict[str, Any]:
+    return _state_with_stream_terminal_commit(stream_result, message_index)
 
 
 def build_turn_request(
@@ -43,6 +53,7 @@ def build_turn_request(
         qa_scope=request.qa_scope,
         page_number=request.page_number,
         selected_text=request.selected_text,
+        selected_source_title=request.selected_source_title,
         graph_context=deepcopy(request.graph_context),
         graph_source_ids=deepcopy(request.graph_source_ids),
         settings=deepcopy(request.settings or load_settings(resolved_user_id)),
@@ -106,7 +117,15 @@ def consume_stream_result(
     history: list,
     result: TurnStreamResult,
 ) -> Iterator[dict[str, Any]]:
-    stream = iter(prepared.pipeline.stream(request.prompt, conversation_id, history))
+    generation_kwargs = _generation_kwargs_for_request(request)
+    stream = iter(
+        prepared.pipeline.stream(
+            request.prompt,
+            conversation_id,
+            history,
+            **generation_kwargs,
+        )
+    )
     while True:
         try:
             response = next(stream)
@@ -116,6 +135,15 @@ def consume_stream_result(
                 yield from _ingest_response_event(response, prepared, result)
             break
         yield from _ingest_response_event(response, prepared, result)
+
+
+def _generation_kwargs_for_request(request: DocQARequest) -> dict[str, Any]:
+    values = {
+        "temperature": request.generation_temperature,
+        "top_p": request.generation_top_p,
+        "seed": request.generation_seed,
+    }
+    return {key: value for key, value in values.items() if value is not None}
 
 
 def _ingest_response_event(
@@ -130,7 +158,23 @@ def _ingest_response_event(
 
 
 def finalize_stream_result(result: TurnStreamResult, empty_message: str) -> None:
-    result.text = extract_final_answer_text(_hide_unclosed_think_block(result.text))
+    answer = result.text
+    execution = result.capture.execution
+    if isinstance(execution, dict):
+        terminal_answer = str(execution.get("engine_terminal_answer") or "").strip()
+        if terminal_answer:
+            answer = terminal_answer
+        terminal_commit = execution.get("engine_terminal_commit") or execution.get(
+            "terminal_semantic_commit"
+        )
+        if (
+            isinstance(terminal_commit, dict)
+            and terminal_commit.get("answer_status") == "abstained"
+        ):
+            presentation_answer = str(execution.get("answer") or "").strip()
+            if presentation_answer:
+                answer = presentation_answer
+    result.text = extract_final_answer_text(_hide_unclosed_think_block(answer))
     if not result.text:
         result.text = empty_message
 

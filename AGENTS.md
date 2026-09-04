@@ -18,3 +18,13 @@ Mandatory development contract:
   a change is complete.
 - Do not refresh `scripts/codebase_hygiene_baseline.json` just to make the
   hygiene gate pass.
+
+Shared environment safety:
+
+- Only the primary checkout may own the canonical `.venv` symlink.
+- In the primary checkout, use `uv run --no-sync ...` after `./install.sh`.
+  Do not let routine test commands resync workspace members as editable.
+- In a linked worktree, use `scripts/run_with_canonical_env.sh ...`; never run
+  project-syncing `uv run` or `uv sync` against the canonical environment.
+- Only `./install.sh` may synchronize the canonical environment, and it must
+  keep all workspace packages non-editable.

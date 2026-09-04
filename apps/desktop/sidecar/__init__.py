@@ -1,0 +1,1 @@
+"""MARA Desktop Python sidecar."""

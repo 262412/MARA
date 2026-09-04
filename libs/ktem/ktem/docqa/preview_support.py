@@ -3,15 +3,14 @@ from __future__ import annotations
 import logging
 import os
 import re
-import shutil
-import subprocess
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-from ktem.db.models import engine
-from ktem.utils.dependencies import find_soffice_binary
-from sqlmodel import Session, select
+from ktem.preview.context import PreviewPurpose, preview_access_for_user
+from ktem.preview.docx import extract_docx_text
+from ktem.preview.office import OfficePreviewConversionService
+from ktem.preview.service import PreviewService
 
 try:
     from pptx import Presentation
@@ -48,7 +47,7 @@ def detect_office_extension(file_name: str, file_path: str) -> str:
         try:
             with open(file_path, "rb") as file_obj:
                 header = file_obj.read(8)
-            if header.startswith(b"\xD0\xCF\x11\xE0"):
+            if header.startswith(b"\xd0\xcf\x11\xe0"):
                 return ".doc"
         except Exception:
             pass
@@ -67,24 +66,6 @@ def read_text_file(file_path: str, max_chars: int = 9000) -> str:
         except Exception:
             continue
     return ""
-
-
-def extract_docx_text(file_path: str, max_chars: int = 9000) -> str:
-    texts: list[str] = []
-    try:
-        with zipfile.ZipFile(file_path) as zf:
-            with zf.open("word/document.xml") as file_obj:
-                root = ET.fromstring(file_obj.read())
-        total_chars = 0
-        for node in root.iter():
-            if node.tag.endswith("}t") and node.text:
-                texts.append(node.text)
-                total_chars += len(node.text)
-                if total_chars >= max_chars:
-                    break
-    except Exception:
-        return ""
-    return " ".join(texts)[:max_chars]
 
 
 def extract_xlsx_text(file_path: str, max_chars: int = 9000) -> str:
@@ -190,188 +171,11 @@ class PresentationTextService:
             pass
 
 
-class OfficePreviewConversionService:
-    def __init__(self, logger: logging.Logger | None = None):
-        self._logger = logger or logging.getLogger(__name__)
-        self._office_pdf_cache: dict[str, str] = {}
-
-    @staticmethod
-    def _get_file_signature(file_path: str) -> str:
-        try:
-            stat = os.stat(file_path)
-            raw = f"{os.path.abspath(file_path)}|{stat.st_size}|{int(stat.st_mtime_ns)}"
-        except Exception:
-            raw = os.path.abspath(file_path)
-        import hashlib
-
-        return hashlib.md5(raw.encode("utf-8")).hexdigest()
-
-    @staticmethod
-    def _is_valid_pdf(pdf_path: str) -> bool:
-        try:
-            if not pdf_path or (not os.path.isfile(pdf_path)):
-                return False
-            if os.path.getsize(pdf_path) < 64:
-                return False
-            from pypdf import PdfReader
-
-            pages = len(PdfReader(pdf_path, strict=False).pages)
-            return pages > 0
-        except Exception:
-            return False
-
-    @staticmethod
-    def _get_pdf_preview_dir() -> str:
-        import tempfile
-
-        gradio_temp_dir = os.environ.get("GRADIO_TEMP_DIR", tempfile.gettempdir())
-        preview_dir = os.path.join(gradio_temp_dir, "pdf_previews")
-        os.makedirs(preview_dir, exist_ok=True)
-        return preview_dir
-
-    @staticmethod
-    def find_soffice_binary() -> str:
-        return find_soffice_binary()
-
-    def convert_to_pdf_preview(self, file_path: str, file_name: str) -> str:
-        if not file_path or not os.path.isfile(file_path):
-            return ""
-        ext = detect_office_extension(file_name, file_path)
-        if ext not in {".docx", ".pptx", ".xlsx", ".doc", ".ppt", ".xls"}:
-            return ""
-
-        cache_key = self._get_file_signature(file_path)
-        cached_output = self._office_pdf_cache.get(cache_key, "")
-        if cached_output and os.path.isfile(cached_output):
-            return cached_output
-
-        preview_dir = self._get_pdf_preview_dir()
-        stem = os.path.splitext(os.path.basename(file_path))[0]
-        libreoffice_output_pdf = os.path.join(preview_dir, f"{stem}.pdf")
-        output_pdf = os.path.join(preview_dir, f"{stem}_{cache_key[:12]}.pdf")
-
-        convert_input_path = file_path
-        temp_input_path = ""
-        current_ext = os.path.splitext(file_path)[1].lower()
-        if not current_ext and ext:
-            temp_input_path = os.path.join(preview_dir, f"{stem}_{cache_key[:12]}{ext}")
-            try:
-                shutil.copyfile(file_path, temp_input_path)
-                convert_input_path = temp_input_path
-            except Exception:
-                convert_input_path = file_path
-
-        soffice_cmd = self.find_soffice_binary()
-        if soffice_cmd:
-            try:
-                result = subprocess.run(
-                    [
-                        soffice_cmd,
-                        "--headless",
-                        "--convert-to",
-                        "pdf",
-                        "--outdir",
-                        preview_dir,
-                        convert_input_path,
-                    ],
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=120,
-                )
-                if os.path.isfile(libreoffice_output_pdf):
-                    if libreoffice_output_pdf != output_pdf:
-                        try:
-                            shutil.copyfile(libreoffice_output_pdf, output_pdf)
-                        except Exception:
-                            output_pdf = libreoffice_output_pdf
-                    self._office_pdf_cache[cache_key] = output_pdf
-                    self._cleanup_temp_input(temp_input_path)
-                    return output_pdf
-                if os.path.isfile(output_pdf):
-                    self._office_pdf_cache[cache_key] = output_pdf
-                    self._cleanup_temp_input(temp_input_path)
-                    return output_pdf
-                stderr_msg = (result.stderr or "").strip()
-                stdout_msg = (result.stdout or "").strip()
-                if stderr_msg or stdout_msg:
-                    self._logger.warning(
-                        "LibreOffice conversion finished without output file. stdout=%s stderr=%s",
-                        stdout_msg[:500],
-                        stderr_msg[:500],
-                    )
-            except Exception as exc:
-                self._logger.warning(
-                    "Failed to convert office file to PDF preview via soffice: %s",
-                    repr(exc),
-                )
-        else:
-            self._logger.info(
-                "LibreOffice soffice binary not found. Skipping soffice conversion."
-            )
-
-        if ext in {".docx", ".doc"}:
-            try:
-                from docx2pdf import convert as docx2pdf_convert
-
-                docx2pdf_convert(convert_input_path, output_pdf)
-                if os.path.isfile(output_pdf):
-                    self._office_pdf_cache[cache_key] = output_pdf
-                    self._cleanup_temp_input(temp_input_path)
-                    return output_pdf
-            except Exception as exc:
-                self._logger.warning(
-                    "Failed to convert office file to PDF preview via docx2pdf: %s",
-                    repr(exc),
-                )
-
-        self._cleanup_temp_input(temp_input_path)
-        return ""
-
-    def get_cached_pdf_preview(self, file_path: str) -> str:
-        if not file_path or not os.path.isfile(file_path):
-            return ""
-        cache_key = self._get_file_signature(file_path)
-        cached_pdf = self._office_pdf_cache.get(cache_key, "")
-        if cached_pdf and os.path.isfile(cached_pdf) and self._is_valid_pdf(cached_pdf):
-            return cached_pdf
-
-        preview_dir = self._get_pdf_preview_dir()
-        stem = os.path.splitext(os.path.basename(file_path))[0]
-        recovered_pdf = os.path.join(preview_dir, f"{stem}_{cache_key[:12]}.pdf")
-        if os.path.isfile(recovered_pdf) and self._is_valid_pdf(recovered_pdf):
-            self._office_pdf_cache[cache_key] = recovered_pdf
-            return recovered_pdf
-
-        try:
-            if os.path.isdir(preview_dir):
-                for filename in os.listdir(preview_dir):
-                    if filename.startswith(stem + "_") and filename.endswith(".pdf"):
-                        candidate_path = os.path.join(preview_dir, filename)
-                        if os.path.isfile(candidate_path) and self._is_valid_pdf(
-                            candidate_path
-                        ):
-                            self._office_pdf_cache[cache_key] = candidate_path
-                            return candidate_path
-        except Exception:
-            pass
-
-        return ""
-
-    @staticmethod
-    def _cleanup_temp_input(temp_input_path: str):
-        if temp_input_path and os.path.isfile(temp_input_path):
-            try:
-                os.remove(temp_input_path)
-            except Exception:
-                pass
-
-
 class PreviewFileResolver:
     def __init__(self, app, file_name_cache: dict[str, str]):
         self._app = app
         self._file_name_cache = file_name_cache
+        self._service = PreviewService(app)
 
     @staticmethod
     def extract_first_selected_file_id(selected_file_ids):
@@ -390,87 +194,39 @@ class PreviewFileResolver:
 
         return selected
 
-    def resolve_file_path_by_id(self, file_id: str) -> str:
+    def _access(self, user_id=None):
+        return preview_access_for_user(self._app, user_id)
+
+    def resolve_source(self, file_id: str, *, user_id=None):
+        source = self._service.resolve_source(file_id, access=self._access(user_id))
+        self._file_name_cache[file_id] = source.name
+        return source
+
+    def resolve_sources(self, file_ids, *, user_id=None, strict: bool = True):
+        sources = self._service.resolve_sources(
+            file_ids, access=self._access(user_id), strict=strict
+        )
+        self._file_name_cache.update(
+            {source.file_id: source.name for source in sources}
+        )
+        return sources
+
+    def resolve_file_path_by_id(self, file_id: str, *, user_id=None) -> str:
         if not file_id:
             return ""
-        for index in self._app.index_manager.indices:
-            resources = getattr(index, "_resources", {}) or {}
-            source_table = resources.get("Source")
-            file_storage_path = resources.get("FileStoragePath")
-            if source_table is None:
-                continue
+        return str(self.resolve_source(file_id, user_id=user_id).path)
 
-            with Session(engine) as session:
-                statement = select(source_table).where(source_table.id == file_id)
-                source_obj = session.exec(statement).first()
-            if not source_obj:
-                continue
-
-            self._file_name_cache[file_id] = getattr(source_obj, "name", "") or ""
-            stored_path = getattr(source_obj, "path", "") or ""
-            if not stored_path:
-                continue
-
-            if file_storage_path:
-                candidate_storage_path = os.path.join(
-                    str(file_storage_path), stored_path
-                )
-                if os.path.isfile(candidate_storage_path):
-                    return candidate_storage_path
-            if os.path.isfile(stored_path):
-                return stored_path
-        return ""
-
-    def resolve_file_name_by_id(self, file_id: str) -> str:
+    def resolve_file_name_by_id(self, file_id: str, *, user_id=None) -> str:
         if not file_id:
             return ""
-        if file_id in self._file_name_cache:
-            return self._file_name_cache[file_id]
-        _ = self.resolve_file_path_by_id(file_id)
-        return self._file_name_cache.get(file_id, "")
+        return self.resolve_source(file_id, user_id=user_id).name
 
-    def resolve_selected_file(self, selected_file_ids):
+    def resolve_selected_file(self, selected_file_ids, *, user_id=None):
         file_id = self.extract_first_selected_file_id(selected_file_ids)
         if not file_id:
             return "", "", ""
-
-        file_name = ""
-        resolved_path = ""
-        for index in self._app.index_manager.indices:
-            resources = getattr(index, "_resources", {}) or {}
-            source_table = resources.get("Source")
-            file_storage_path = resources.get("FileStoragePath")
-            if source_table is None:
-                continue
-
-            with Session(engine) as session:
-                statement = select(source_table).where(source_table.id == file_id)
-                source_obj = session.exec(statement).first()
-
-            if not source_obj:
-                continue
-
-            file_name = getattr(source_obj, "name", "") or ""
-            stored_path = getattr(source_obj, "path", "") or ""
-
-            if stored_path and file_storage_path:
-                candidate_storage_path = os.path.join(
-                    str(file_storage_path), stored_path
-                )
-                if os.path.isfile(candidate_storage_path):
-                    resolved_path = candidate_storage_path
-                    break
-
-            if stored_path and os.path.isfile(stored_path):
-                resolved_path = stored_path
-                break
-
-        if not file_name:
-            file_name = self.resolve_file_name_by_id(file_id)
-        if not resolved_path:
-            resolved_path = self.resolve_file_path_by_id(file_id)
-
-        return file_id, file_name, resolved_path
+        source = self.resolve_source(str(file_id), user_id=user_id)
+        return source.file_id, source.name, str(source.path)
 
 
 class PreviewSupportService:
@@ -482,15 +238,20 @@ class PreviewSupportService:
         self._presentation_service = PresentationTextService()
 
     def resolve_selected_file(
-        self, selected_file_ids: list[str] | None
+        self, selected_file_ids: list[str] | None, *, user_id=None
     ) -> tuple[str, str, str]:
-        return self._resolver.resolve_selected_file(selected_file_ids or [])
+        return self._resolver.resolve_selected_file(
+            selected_file_ids or [], user_id=user_id
+        )
 
-    def resolve_file_path(self, file_id: str) -> str:
-        return self._resolver.resolve_file_path_by_id(file_id)
+    def resolve_file_path(self, file_id: str, *, user_id=None) -> str:
+        return self._resolver.resolve_file_path_by_id(file_id, user_id=user_id)
 
-    def resolve_file_name(self, file_id: str) -> str:
-        return self._resolver.resolve_file_name_by_id(file_id)
+    def resolve_file_name(self, file_id: str, *, user_id=None) -> str:
+        return self._resolver.resolve_file_name_by_id(file_id, user_id=user_id)
+
+    def resolve_sources(self, file_ids, *, user_id=None, strict: bool = True):
+        return self._resolver.resolve_sources(file_ids, user_id=user_id, strict=strict)
 
     @staticmethod
     def extract_pdf_page_text(
@@ -517,45 +278,39 @@ class PreviewSupportService:
         file_name: str,
         page_number: int,
         max_chars: int = 7000,
+        *,
+        user_id=None,
     ) -> str:
         if not file_id or not file_name:
             return ""
 
-        source_path = self.resolve_file_path(file_id)
-        if not source_path:
-            return ""
+        source = self._resolver.resolve_source(file_id, user_id=user_id)
+        source_path = str(source.path)
+        file_name = source.name
 
         source_extension = detect_office_extension(file_name, source_path)
         file_extension = (Path(file_name).suffix or Path(source_path).suffix).lower()
 
-        if file_extension == ".pdf":
-            return self.extract_pdf_page_text(
-                source_path, page_number, max_chars=max_chars
-            )
-
+        fallback_text = ""
         if source_extension in {".pptx", ".ppt"}:
-            return self._presentation_service.extract_slide_text(
+            fallback_text = self._presentation_service.extract_slide_text(
                 source_path,
                 page_number,
                 max_chars=max_chars,
             )
+        elif file_extension in {".docx", ".doc"}:
+            fallback_text = extract_docx_text(source_path, max_chars=max_chars)
+        elif file_extension in {".xlsx", ".xls", ".csv"}:
+            fallback_text = extract_xlsx_text(source_path, max_chars=max_chars)
+        elif file_extension in {".txt", ".md", ".html", ".mhtml"}:
+            fallback_text = read_text_file(source_path, max_chars=max_chars)
 
-        if source_extension in {".docx", ".doc", ".xlsx", ".xls"}:
-            cached_pdf = self._office_conversion.get_cached_pdf_preview(source_path)
-            if not cached_pdf:
-                cached_pdf = self._office_conversion.convert_to_pdf_preview(
-                    source_path, file_name
-                )
-            if cached_pdf and os.path.isfile(cached_pdf):
-                return self.extract_pdf_page_text(
-                    cached_pdf, page_number, max_chars=max_chars
-                )
-
-        if file_extension in {".docx", ".doc"}:
-            return extract_docx_text(source_path, max_chars=max_chars)
-        if file_extension in {".xlsx", ".xls", ".csv"}:
-            return extract_xlsx_text(source_path, max_chars=max_chars)
-        if file_extension in {".txt", ".md", ".html", ".mhtml"}:
-            return read_text_file(source_path, max_chars=max_chars)
-
-        return ""
+        context = self._resolver._service.page_context(
+            file_id,
+            page=page_number,
+            access=self._resolver._access(user_id),
+            purpose=PreviewPurpose.DOCQA,
+            max_chars=max_chars,
+            fallback_text=fallback_text,
+        )
+        return context.text

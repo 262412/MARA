@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+from typing import Any
+
+from ktem.docqa.boolean_authority_schema import GROUNDED_SEMANTIC_VERIFIER_CONTRACT
+from ktem.docqa.question_proposition import (
+    applicable_proposition_evidence_slots,
+    build_question_proposition,
+    proposition_evidence_bindings,
+    typed_conclusion,
+)
+from ktem.docqa.semantic_entailment_audit import semantic_entailment_audit_attestation
+from ktem.docqa.semantic_relation_clause_validation import (
+    semantic_relation_clause_analysis,
+)
+
+
+def audited_verdict(
+    response: dict[str, Any],
+    question: str,
+    *,
+    canonical_plan_projection: Any | None = None,
+) -> dict[str, Any]:
+    """Attach a valid independent-audit attestation to a semantic test verdict."""
+
+    proof_mode = (
+        canonical_plan_projection.proof_mode
+        if canonical_plan_projection is not None
+        else (
+            "atomic_semantic"
+            if len(response["premises"]) == 1
+            else "composite_conjunction"
+        )
+    )
+    response["proof_mode"] = proof_mode
+    proposition = build_question_proposition(question)
+    canonical_bindings = proposition_evidence_bindings(proposition)
+    applicable_slots = applicable_proposition_evidence_slots(proposition)
+    conclusion = typed_conclusion(proposition, response["verdict"])
+    evidence_relation = (
+        "proposition_support"
+        if response["verdict"] == "yes"
+        else "explicit_contradiction"
+    )
+    response["evidence_relation"] = evidence_relation
+    response["question_proposition"] = proposition.as_dict()
+    response["typed_conclusion"] = conclusion.as_dict()
+    if canonical_plan_projection is None:
+        _bind_test_premises(
+            response["premises"],
+            proposition,
+            canonical_bindings,
+            evidence_relation,
+            applicable_slots=applicable_slots,
+        )
+    verifier = response.setdefault("verifier", {})
+    verifier.update(
+        contract_id=GROUNDED_SEMANTIC_VERIFIER_CONTRACT,
+        release_mode=False,
+        auditor_relationship="distinct_model",
+    )
+    verifier.setdefault("semantic_pack_digest", "test-semantic-pack")
+    response["entailment_audit"] = semantic_entailment_audit_attestation(
+        question,
+        response["verdict"],
+        response["premises"],
+        model="independent-test-auditor",
+        seed=8,
+        proof_mode=proof_mode,
+        proposition=proposition,
+        conclusion=conclusion,
+        auditor_relationship="distinct_model",
+        audit_result=_test_audit_result(response["premises"]),
+        canonical_plan_projection=canonical_plan_projection,
+    )
+    return response
+
+
+def _bind_test_premises(
+    premises: list[dict[str, Any]],
+    proposition: Any,
+    canonical_bindings: dict[str, str],
+    evidence_relation: str,
+    *,
+    applicable_slots: tuple[str, ...],
+) -> None:
+    offsets: dict[str, int] = {}
+    for index, premise in enumerate(premises, start=1):
+        evidence_id = str(premise["evidence_id"])
+        start = offsets.get(evidence_id, 0)
+        quote = str(premise["quote"])
+        premise.setdefault("span_selector", f"test:{evidence_id}:S{index}")
+        premise.setdefault("span_start", start)
+        premise.setdefault("span_end", start + len(quote))
+        proposition_slots = _locally_supported_slots(
+            premise,
+            proposition,
+            applicable_slots=applicable_slots,
+            evidence_relation=evidence_relation,
+        )
+        premise.setdefault("binds_proposition_slots", proposition_slots)
+        premise["proposition_slot_bindings"] = {
+            slot: canonical_bindings[slot]
+            for slot in premise["binds_proposition_slots"]
+        }
+        premise["evidence_relation"] = evidence_relation
+        offsets[evidence_id] = start + len(quote) + 1
+
+
+def _locally_supported_slots(
+    premise: dict[str, Any],
+    proposition: Any,
+    *,
+    applicable_slots: tuple[str, ...],
+    evidence_relation: str,
+) -> list[str]:
+    supported = []
+    for slot in applicable_slots:
+        analysis = semantic_relation_clause_analysis(
+            {
+                **premise,
+                "binds_proposition_slots": [slot],
+                "evidence_relation": evidence_relation,
+            },
+            proposition,
+        )
+        if analysis.get("joint_relation_clause_bound") is True:
+            supported.append(slot)
+    return supported
+
+
+def _test_audit_result(premises: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "premise_checks": [
+            {
+                "premise_ref": f"P{index}",
+                "fragment_entailed": True,
+                "scope_consistent": True,
+                "proposition_bindings_valid": True,
+                "evidence_relation_valid": True,
+                "declared_proposition_slots": list(premise["binds_proposition_slots"]),
+                "proposition_slot_checks": [
+                    {
+                        "slot": slot,
+                        "binding_valid": True,
+                        "evidence_text": str(premise["quote"]),
+                    }
+                    for slot in premise["binds_proposition_slots"]
+                ],
+            }
+            for index, premise in enumerate(premises, start=1)
+        ],
+        "jointly_entails": True,
+        "each_premise_required": True,
+        "contradiction_free": True,
+        "conclusion_check": {
+            "conclusion_entailed": True,
+            "actor_consistent": True,
+            "predicate_consistent": True,
+            "object_consistent": True,
+            "polarity_consistent": True,
+            "quantifier_consistent": True,
+            "scope_consistent": True,
+        },
+    }

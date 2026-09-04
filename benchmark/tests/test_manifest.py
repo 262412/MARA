@@ -96,6 +96,7 @@ def test_normalize_financebench_manifest(tmp_path):
         "doc_period": 2024,
         "question_type": None,
         "question_reasoning": None,
+        "dataset_family": "financebench",
     }
 
 
@@ -424,7 +425,11 @@ def test_default_mara_routes_cover_full_route_ablation_matrix():
     assert DEFAULT_MARA_ROUTES[3]["requires_backend_config"] is True
     assert "backend_status" not in DEFAULT_MARA_ROUTES[3]
     assert "missing_backends" not in DEFAULT_MARA_ROUTES[3]
-    assert DEFAULT_MARA_ROUTES[4]["allowed_routes"] == ["doc_element"]
+    assert DEFAULT_MARA_ROUTES[4]["allowed_routes"] == [
+        "doc_element",
+        "doc_text",
+        "doc_page_image",
+    ]
     assert DEFAULT_MARA_ROUTES[4]["implementation_stage"] == (
         "prototype_element_metadata_index"
     )
@@ -523,6 +528,18 @@ def test_manifest_templates_load_expected_mara_route_sets():
     for route in all_routes.routes + text_only.routes + multimodal.routes:
         assert route["benchmark_prompt_policy"] == "gold_answer_v1"
         assert route["benchmark_no_think"] is True
+
+
+def test_multimodal_manifest_element_route_has_structured_fallbacks():
+    template = Path(__file__).parents[1] / "manifests/templates/mara_multimodal.json"
+    manifest = load_manifest(template)
+
+    assert manifest.routes[2]["route_id"] == "element_rag"
+    assert manifest.routes[2]["allowed_routes"] == [
+        "doc_element",
+        "doc_text",
+        "doc_page_image",
+    ]
 
 
 def test_load_v2_manifest_preserves_top_level_ragas_evaluator(tmp_path):

@@ -1,10 +1,8 @@
-import hashlib
-import uuid
 from types import SimpleNamespace
 from typing import Any, cast
 
 import ktem.docqa.runtime as runtime_module
-from ktem.db.models import Conversation, User, engine
+from ktem.db.models import Conversation, engine
 from ktem.docqa import _runtime_app, _runtime_models, _runtime_utils
 from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
 from ktem.docqa.knowledge_graph import GlobalKnowledgeGraphService
@@ -40,15 +38,29 @@ def _make_scope_runtime(monkeypatch):
         def __init__(self):
             self.page_context_calls = []
 
-        def resolve_file_name(self, _file_id):
+        def resolve_file_name(self, _file_id, *, user_id=None):
+            assert user_id == "user-1"
             return "alpha.pdf"
 
-        def resolve_selected_file(self, _selected_file_ids):
+        def resolve_selected_file(self, _selected_file_ids, *, user_id=None):
+            assert user_id == "user-1"
             return "file-1", "alpha.pdf", None
 
-        def get_page_context_text(self, file_id, file_name, page_number):
+        def get_page_context_text(
+            self, file_id, file_name, page_number, *, user_id=None
+        ):
+            assert user_id == "user-1"
             self.page_context_calls.append((file_id, file_name, page_number))
             return "page-only context"
+
+        @staticmethod
+        def resolve_sources(file_ids, *, user_id=None, strict=True):
+            assert user_id == "user-1"
+            assert strict is True
+            return [
+                SimpleNamespace(file_id=file_id, name="alpha.pdf", path="")
+                for file_id in file_ids
+            ]
 
     monkeypatch.setattr(runtime_module, "reasonings", {"simple": _FakeReasoning})
 
@@ -119,25 +131,13 @@ class _FakeMaraReasoning:
         return _FakeMaraPipeline()
 
 
-def _make_mara_runtime():
-    runtime = cast(Any, object.__new__(DocQARuntime))
-    runtime._resolve_user_id = lambda user_id=None: "user-1"
-    runtime.load_settings = lambda user_id=None: {"reasoning.use": "mara"}
-    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
-    runtime._web_search_cls = None
-    runtime.file_index = None
-    runtime._preview = SimpleNamespace(
-        resolve_file_name=lambda _file_id: "alpha.pdf",
-        resolve_file_path=lambda _file_id: "",
-    )
-    runtime.knowledge_graph = None
-
-    session_info = runtime_module.DocQASession(
-        conversation_id="conv-1",
+def _make_docqa_session(conversation_id="conv-1", data_source=None):
+    return runtime_module.DocQASession(
+        conversation_id=conversation_id,
         name="Conversation",
         user_id="user-1",
         is_public=False,
-        data_source={},
+        data_source=dict(data_source or {}),
         messages=[],
         retrieval_messages=[],
         plot_history=[],
@@ -148,7 +148,27 @@ def _make_mara_runtime():
         date_created=None,
         date_updated=None,
     )
-    runtime.load_session = lambda _conversation_id: None
+
+
+def _make_mara_runtime():
+    runtime = cast(Any, object.__new__(DocQARuntime))
+    runtime._resolve_user_id = lambda user_id=None: "user-1"
+    runtime.load_settings = lambda user_id=None: {"reasoning.use": "mara"}
+    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
+    runtime._web_search_cls = None
+    runtime.file_index = None
+    runtime._preview = SimpleNamespace(
+        resolve_file_name=lambda _file_id, **_kwargs: "alpha.pdf",
+        resolve_file_path=lambda _file_id, **_kwargs: "",
+        resolve_sources=lambda file_ids, **_kwargs: [
+            SimpleNamespace(file_id=file_id, name="alpha.pdf", path="")
+            for file_id in file_ids
+        ],
+    )
+    runtime.knowledge_graph = None
+
+    session_info = _make_docqa_session()
+    runtime.load_session = lambda _conversation_id, user_id=None: None
     runtime.create_session = lambda user_id=None: session_info
     runtime.persist_conversation_state = lambda **_kwargs: ([], [])
     return runtime
@@ -179,7 +199,6 @@ def test_runtime_response_preserves_mara_agent_outputs(monkeypatch):
 
 def test_runtime_persists_mara_artifact_to_notebook(monkeypatch):
     monkeypatch.setattr(runtime_module, "reasonings", {"mara": _FakeMaraReasoning})
-
     conversation = Conversation(user="user-1")
     conversation.data_source = {"origin": "cli"}
     with Session(engine) as session:
@@ -188,33 +207,10 @@ def test_runtime_persists_mara_artifact_to_notebook(monkeypatch):
         session.refresh(conversation)
         conversation_id = conversation.id
 
-    runtime = cast(Any, object.__new__(DocQARuntime))
-    runtime._resolve_user_id = lambda user_id=None: "user-1"
-    runtime.load_settings = lambda user_id=None: {"reasoning.use": "mara"}
-    runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
-    runtime._web_search_cls = None
-    runtime.file_index = None
-    runtime._preview = SimpleNamespace(
-        resolve_file_name=lambda _file_id: "alpha.pdf",
-        resolve_file_path=lambda _file_id: "",
-    )
-    runtime.knowledge_graph = None
+    runtime = _make_mara_runtime()
     runtime.get_conversation_graph_cache = lambda _conversation_id: {}
-    runtime.load_session = lambda _conversation_id: runtime_module.DocQASession(
-        conversation_id=conversation_id,
-        name="Conversation",
-        user_id="user-1",
-        is_public=False,
-        data_source={"origin": "cli"},
-        messages=[],
-        retrieval_messages=[],
-        plot_history=[],
-        state={"app": {"regen": False}},
-        selected_mapping={},
-        graph_source_ids=[],
-        origin="cli",
-        date_created=None,
-        date_updated=None,
+    runtime.load_session = lambda _conversation_id, user_id=None: _make_docqa_session(
+        conversation_id, {"origin": "cli"}
     )
 
     try:
@@ -395,108 +391,6 @@ def test_prepare_pipeline_document_scope_does_not_force_selected_page(monkeypatc
     assert prepared.pipeline.page_number is None
     assert prepared.pipeline.selected_text == ""
     assert runtime._preview.page_context_calls == []
-
-
-def test_ensure_default_managed_user_reuses_existing_admin(monkeypatch):
-    runtime = object.__new__(DocQARuntime)
-    runtime._app = SimpleNamespace(f_user_management=True)
-
-    username = f"docqa_runtime_{uuid.uuid4().hex[:8]}"
-    monkeypatch.setattr(
-        runtime_module.flowsettings,
-        "KH_FEATURE_USER_MANAGEMENT_ADMIN",
-        username,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        runtime_module.flowsettings,
-        "KH_FEATURE_USER_MANAGEMENT_PASSWORD",
-        "Admin123!",
-        raising=False,
-    )
-
-    with Session(engine) as session:
-        user = User(
-            username=username,
-            username_lower=username.lower(),
-            password="existing-hash",
-            admin=True,
-        )
-        session.add(user)
-        session.commit()
-        session.refresh(user)
-        existing_id = str(user.id)
-
-    try:
-        assert runtime._ensure_default_managed_user() == existing_id
-    finally:
-        with Session(engine) as session:
-            row = session.exec(
-                select(User).where(User.username_lower == username.lower())
-            ).one_or_none()
-            if row is not None:
-                session.delete(row)
-                session.commit()
-
-
-def test_ensure_default_managed_user_creates_missing_admin(monkeypatch):
-    runtime = object.__new__(DocQARuntime)
-    runtime._app = SimpleNamespace(f_user_management=True)
-
-    username = f"docqa_runtime_{uuid.uuid4().hex[:8]}"
-    password = "Admin123!"
-    monkeypatch.setattr(
-        runtime_module.flowsettings,
-        "KH_FEATURE_USER_MANAGEMENT_ADMIN",
-        username,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        runtime_module.flowsettings,
-        "KH_FEATURE_USER_MANAGEMENT_PASSWORD",
-        password,
-        raising=False,
-    )
-
-    captured: dict[str, User] = {}
-
-    class _FakeResult:
-        def first(self):
-            return None
-
-    class _FakeSession:
-        def __init__(self, *_args, **_kwargs):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def exec(self, _statement):
-            return _FakeResult()
-
-        def add(self, user):
-            captured["user"] = user
-
-        def commit(self):
-            return None
-
-        def refresh(self, user):
-            if not getattr(user, "id", None):
-                user.id = "created-user-id"
-
-    monkeypatch.setattr(runtime_module, "Session", _FakeSession)
-
-    created_id = runtime._ensure_default_managed_user()
-    created_user = captured["user"]
-
-    assert str(created_user.id) == created_id
-    assert created_user.username == username
-    assert created_user.username_lower == username.lower()
-    assert created_user.admin is True
-    assert created_user.password == hashlib.sha256(password.encode()).hexdigest()
 
 
 def test_doctor_reports_invalid_optional_models_as_warnings(monkeypatch):

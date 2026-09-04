@@ -1,0 +1,2 @@
+This marker satisfies llama-index's legacy `tokenizers/punkt` availability check.
+The bundled `punkt_tab` data is the tokenizer resource used by the locked NLTK.

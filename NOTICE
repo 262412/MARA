@@ -1,8 +1,13 @@
-Slides
+MARA application distribution
 
 This project is a modified and branded fork of Cinnamon/kotaemon:
 https://github.com/Cinnamon/kotaemon
 
 The upstream project is distributed under the Apache License, Version 2.0.
 This fork retains the Apache License 2.0 terms and preserves upstream
-attribution while applying local modifications and the Slides product name.
+attribution while applying local modifications under the MARA product name.
+
+This distribution bundles the official Mozilla PDF.js v6.1.200 compressed
+distribution from https://github.com/mozilla/pdf.js. PDF.js is licensed under
+the Apache License, Version 2.0; its license is included in the ktem package at
+ktem/assets/vendor/pdfjs/LICENSE.pdfjs.

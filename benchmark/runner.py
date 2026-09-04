@@ -1,37 +1,34 @@
 from __future__ import annotations
 
-import json
+from copy import deepcopy
 from dataclasses import fields, replace
 from pathlib import Path
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import Any
 
-from .answer_finalizer import finalize_prediction_answer
-from .benchmark_prompts import build_benchmark_prompt
-from .benchmark_taxonomy import add_prediction_taxonomy
-from .diagnostics import prediction_diagnostics
+from .backend_health_summary import load_backend_health
 from .engines import EngineRunResult, get_engine
+from .external_adapter_summary import (
+    external_adapter_summary_metadata,
+    external_adapter_summary_metadata_by_route,
+)
 from .manifest import load_manifest
-from .mara_oriented_scores import (
-    add_mara_oriented_metrics,
-    promote_external_primary_score,
-)
-from .research_adapters import (
-    research_adapter_metric_metadata,
-    research_adapter_metrics,
-    route_backend_metadata,
-)
-from .research_evaluators import (
-    external_research_adapter_metric_metadata,
-    external_research_adapter_metrics,
-)
+from .operational_terminal_outcome import operational_terminal_fields
+from .performance_timing import apply_engine_failure_diagnostics, measure_duration
+from .prediction_completion import complete_prediction
+from .research_adapters import research_adapter_metric_metadata, route_backend_metadata
 from .route_execution import route_skip_record
-from .route_timeout import RouteExecutionTimeout, run_with_route_timeout
+from .route_timeout import (
+    RouteExecutionTimeout,
+    raise_if_route_budget_exceeded,
+    route_timeout_seconds,
+    run_with_route_timeout,
+)
+from .run_provenance import benchmark_run_provenance
 from .sampling import select_examples_for_config, selection_summary
 from .schemas import BenchmarkConfig, ManifestBundle
-from .scoring import normalize_operational_fields, score_prediction
+from .semantic_answer import semantic_judge_backend
 from .summary import build_benchmark_summary
-from .verifier_observability import prediction_verifier_observability
 
 _CONFIG_FIELD_NAMES = {field.name for field in fields(BenchmarkConfig)}
 
@@ -114,6 +111,8 @@ def _config_for_route(
     updates.setdefault("scope", route.get("scope", config.scope))
     if config.docqa_citation_mode is not None:
         updates["docqa_citation_mode"] = config.docqa_citation_mode
+    if config.route_timeout_seconds is not None:
+        updates["route_timeout_seconds"] = config.route_timeout_seconds
     _set_visual_generator_backend(updates, route)
     return replace(config, **updates)
 
@@ -142,10 +141,13 @@ def _engine_result_to_prediction(
     return {
         "example_id": example.example_id,
         "document_id": example.document_id,
+        "document_ids": list(example.document_ids or [example.document_id]),
         "question": example.question,
         "gold_answers": example.answers,
         "gold_pages": example.evidence_pages,
         "gold_sources": example.evidence_sources,
+        "gold_source_ids": example.gold_source_ids,
+        "gold_evidence_texts": example.gold_evidence_texts,
         "predicted_answer": result.answer,
         "predicted_pages": result.predicted_pages,
         "predicted_sources": result.predicted_sources,
@@ -164,9 +166,26 @@ def _engine_result_to_prediction(
         "guardrail_decision": result.guardrail_decision,
         "evidence_bundle": result.evidence_bundle,
         "workflow_plan": result.workflow_plan,
+        "engine_terminal_answer": result.engine_terminal_answer,
+        "engine_terminal_state": deepcopy(result.engine_terminal_state),
+        "engine_verify_decision": deepcopy(result.engine_verify_decision),
+        "engine_terminal_guardrail_decision": deepcopy(
+            result.engine_terminal_guardrail_decision
+        ),
+        "engine_terminal_evidence_bundle": deepcopy(
+            result.engine_terminal_evidence_bundle
+        ),
+        "engine_terminal_projection_hash": result.engine_terminal_projection_hash,
+        "engine_terminal_commit": deepcopy(result.engine_terminal_commit),
+        "terminal_semantic_commit": deepcopy(result.engine_terminal_commit),
         "claim_verification": result.claim_verification,
         "presentation": result.presentation,
+        "source_identity_crosswalk": result.source_identity_crosswalk,
         "timings": {
+            **{
+                str(key): round(float(value or 0.0), 6)
+                for key, value in result.timings.items()
+            },
             "parse_seconds": round(float(result.timings.get("parse_seconds", 0.0)), 4),
             "index_seconds": round(float(result.timings.get("index_seconds", 0.0)), 4),
             "retrieval_seconds": round(
@@ -182,6 +201,7 @@ def _engine_result_to_prediction(
         "context_preview": result.context_preview,
         "document_path": str(document.path),
         "gold_evidence": example.gold_evidence,
+        "gold_evidence_records": example.gold_evidence_records,
         "expected_formats": example.expected_formats,
         "expected_guardrails": example.expected_guardrails,
     }
@@ -196,6 +216,12 @@ def _run_engine_example(engine, bundle: ManifestBundle, example) -> dict[str, An
         return engine.run_example(bundle, example)
     result = engine.run(example=example, documents=documents)
     return _engine_result_to_prediction(result, example=example, documents=documents)
+
+
+def _set_engine_route_deadline(engine: Any, deadline: float | None) -> None:
+    setter = getattr(engine, "set_route_deadline_monotonic", None)
+    if callable(setter):
+        setter(deadline)
 
 
 def _prepare_engine_examples(
@@ -215,15 +241,25 @@ def _error_prediction(
     route_config: BenchmarkConfig,
     exc: Exception,
 ) -> dict[str, Any]:
+    error_type = _error_type(exc)
+    outcome = "timeout" if error_type == "route_timeout" else "execution_failed"
+    terminal_fields = operational_terminal_fields(
+        outcome=outcome,
+        reason=error_type,
+    )
     return {
         "example_id": example.example_id,
         "document_id": document.document_id,
+        "document_ids": list(example.document_ids or [example.document_id]),
         "document_path": str(document.path),
         "question": example.question,
         "gold_answers": example.answers,
         "gold_pages": example.evidence_pages,
         "gold_sources": example.evidence_sources,
+        "gold_source_ids": example.gold_source_ids,
+        "gold_evidence_texts": example.gold_evidence_texts,
         "gold_evidence": example.gold_evidence,
+        "gold_evidence_records": example.gold_evidence_records,
         "predicted_answer": "",
         "predicted_pages": [],
         "predicted_sources": [],
@@ -268,53 +304,12 @@ def _error_prediction(
         "expected_formats": example.expected_formats,
         "expected_guardrails": example.expected_guardrails,
         "error": str(exc),
-        "error_type": _error_type(exc),
-        "route_timeout_seconds": _route_timeout_seconds(exc, route_config),
+        "error_type": error_type,
+        "route_timeout_seconds": route_timeout_seconds(
+            exc, route_config.route_timeout_seconds
+        ),
+        **terminal_fields,
     }
-
-
-def _prepare_prediction_defaults(
-    prediction: dict[str, Any],
-    *,
-    example,
-    document,
-    route_config: BenchmarkConfig,
-    route: dict[str, Any],
-    dataset_name: str,
-) -> None:
-    prompt = build_benchmark_prompt(example, route_config, dataset_name=dataset_name)
-    prediction["document_path"] = str(document.path)
-    prediction["document_ids"] = example.document_ids or [example.document_id]
-    prediction["engine"] = route_config.engine
-    prediction["route"] = route_config.route
-    prediction["scope"] = route_config.scope or example.scope
-    prediction["benchmark_role"] = _benchmark_role(route, route_config.route)
-    prediction.setdefault("benchmark_prompt_policy", prompt.policy)
-    prediction.setdefault("benchmark_prompt_profile", prompt.profile)
-    prediction.setdefault("benchmark_prompt_source", prompt.prompt_source)
-    prediction.setdefault("benchmark_answer_mode", route_config.benchmark_answer_mode)
-    prediction.setdefault("benchmark_no_think", prompt.no_think)
-    prediction.setdefault("route_timeout_seconds", route_config.route_timeout_seconds)
-    prediction.setdefault("benchmark_question", prompt.benchmark_question)
-    prediction.setdefault("benchmark_retrieval_query", prompt.retrieval_query)
-    prediction.setdefault("benchmark_runtime_prompt", prompt.runtime_prompt)
-    prediction.setdefault("example_metadata", dict(example.metadata or {}))
-    prediction.setdefault("expected_formats", example.expected_formats)
-    prediction.setdefault("expected_guardrails", example.expected_guardrails)
-    prediction.setdefault("predicted_citations", [])
-    prediction.setdefault("scored_predicted_sources", [])
-    prediction.setdefault("evidence_metadata", {})
-    prediction.setdefault("agent_trace", [])
-    prediction.setdefault("controller_trace", [])
-    prediction.setdefault("controller_decision", {})
-    prediction.setdefault("route_decision", {})
-    prediction.setdefault("retrieve_decision", {})
-    prediction.setdefault("verify_decision", {})
-    prediction.setdefault("guardrail_decision", {})
-    prediction.setdefault("evidence_bundle", {})
-    prediction.setdefault("workflow_plan", {})
-    prediction.setdefault("claim_verification", {})
-    prediction.setdefault("presentation", {})
 
 
 def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
@@ -324,6 +319,8 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "route": item["route"],
         "scope": item["scope"],
         "benchmark_role": item.get("benchmark_role", "qa_quality"),
+        "agent_mode": item.get("agent_mode"),
+        "route_policy": item.get("route_policy"),
         "benchmark_prompt_policy": item.get("benchmark_prompt_policy"),
         "benchmark_prompt_profile": item.get("benchmark_prompt_profile"),
         "benchmark_prompt_source": item.get("benchmark_prompt_source"),
@@ -332,7 +329,10 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "document_ids": item["document_ids"],
         "gold_pages": item.get("gold_pages", []),
         "gold_sources": item.get("gold_sources", []),
+        "gold_source_ids": item.get("gold_source_ids", []),
+        "gold_evidence_texts": item.get("gold_evidence_texts", []),
         "gold_evidence": item.get("gold_evidence", []),
+        "gold_evidence_records": item.get("gold_evidence_records", []),
         "predicted_pages": item.get("predicted_pages", []),
         "predicted_sources": item.get("predicted_sources", []),
         "predicted_citations": item.get("predicted_citations", []),
@@ -359,6 +359,28 @@ def _retrieval_trace_row(item: dict[str, Any]) -> dict[str, Any]:
         "error": item.get("error"),
         "error_type": item.get("error_type"),
         "route_timeout_seconds": item.get("route_timeout_seconds"),
+        "engine_terminal_commit": item.get("engine_terminal_commit", {}),
+        "terminal_semantic_commit": item.get("terminal_semantic_commit", {}),
+        "engine_terminal_answer": item.get("engine_terminal_answer", ""),
+        "engine_terminal_state": item.get("engine_terminal_state", {}),
+        "engine_verify_decision": item.get("engine_verify_decision", {}),
+        "engine_terminal_guardrail_decision": item.get(
+            "engine_terminal_guardrail_decision", {}
+        ),
+        "engine_terminal_evidence_bundle": item.get(
+            "engine_terminal_evidence_bundle", {}
+        ),
+        "engine_terminal_projection_hash": item.get(
+            "engine_terminal_projection_hash", ""
+        ),
+        "terminal_outcome": item.get("terminal_outcome", ""),
+        "terminal_outcome_reason": item.get("terminal_outcome_reason", ""),
+        "terminal_outcome_classification": item.get(
+            "terminal_outcome_classification", ""
+        ),
+        "terminal_outcome_contract_violation": item.get(
+            "terminal_outcome_contract_violation", False
+        ),
     }
 
 
@@ -385,17 +407,34 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         if engine_key not in engines:
             engines[engine_key] = get_engine(route_config.engine, route_config)
         engine = engines[engine_key]
-        _prepare_engine_examples(engine, selected_bundle, selected_bundle.examples)
+        semantic_judge = semantic_judge_backend(
+            route_config.semantic_evaluator,
+            model=route_config.semantic_evaluator_model,
+            timeout_seconds=route_config.semantic_evaluator_timeout_seconds,
+        )
+        preparation_seconds = measure_duration(
+            lambda: _prepare_engine_examples(
+                engine, selected_bundle, selected_bundle.examples
+            )
+        )
 
         for example in selected_bundle.examples:
             document = selected_bundle.documents[example.document_id]
             route_started_at = perf_counter()
+            route_deadline_monotonic = (
+                monotonic() + route_config.route_timeout_seconds
+                if route_config.route_timeout_seconds is not None
+                else None
+            )
+            _set_engine_route_deadline(engine, route_deadline_monotonic)
             try:
                 prediction = run_with_route_timeout(
                     route_config.route_timeout_seconds,
                     lambda: _run_engine_example(engine, selected_bundle, example),
                 )
-                _raise_if_route_budget_exceeded(route_started_at, route_config)
+                raise_if_route_budget_exceeded(
+                    route_started_at, route_config.route_timeout_seconds
+                )
                 prediction["error"] = None
             except Exception as exc:
                 prediction = _error_prediction(
@@ -404,45 +443,20 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
                     route_config=route_config,
                     exc=exc,
                 )
-            _prepare_prediction_defaults(
+                apply_engine_failure_diagnostics(prediction, engine)
+            complete_prediction(
                 prediction,
                 example=example,
                 document=document,
                 route_config=route_config,
                 route=route,
                 dataset_name=bundle.dataset_name,
+                benchmark_role=_benchmark_role(route, route_config.route),
+                preparation_seconds=preparation_seconds,
+                example_count=len(selected_bundle.examples),
+                engine=engine,
+                semantic_judge=semantic_judge,
             )
-            normalize_operational_fields(prediction)
-            prediction["modality"] = example.modality
-            prediction["answer_type"] = example.answer_type
-            prediction["gold_evidence"] = example.gold_evidence
-            finalize_prediction_answer(
-                prediction,
-                dataset_name=bundle.dataset_name,
-                mode=route_config.benchmark_answer_mode,
-            )
-            prediction["product_metrics"] = score_prediction(
-                prediction,
-                answer_key="predicted_answer",
-            )
-            prediction["metrics"] = score_prediction(prediction)
-            prediction["diagnostics"] = prediction_diagnostics(prediction)
-            prediction["verifier_observability"] = prediction_verifier_observability(
-                prediction
-            )
-            add_prediction_taxonomy(prediction)
-            add_mara_oriented_metrics(prediction, dataset_name=bundle.dataset_name)
-            prediction["adapter_metrics"] = research_adapter_metrics(prediction)
-            prediction["adapter_metric_metadata"] = research_adapter_metric_metadata()
-            (
-                prediction["external_adapter_metrics"],
-                prediction["external_adapter_metric_metadata"],
-            ) = external_research_adapter_metrics(prediction, route)
-            promote_external_primary_score(
-                prediction,
-                dataset_name=bundle.dataset_name,
-            )
-            prediction["backend_metadata"] = route_backend_metadata(route, route_config)
             predictions.append(prediction)
 
     backend_metadata = {
@@ -458,17 +472,22 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
         active_routes=active_routes,
         predictions=predictions,
         backend_metadata=backend_metadata,
-        backend_health=_load_backend_health(config.backend_health_json),
+        backend_health=load_backend_health(config.backend_health_json),
         skipped_routes=skipped_routes,
         adapter_metric_metadata=research_adapter_metric_metadata(),
-        external_adapter_metric_metadata=_external_adapter_summary_metadata(
+        external_adapter_metric_metadata=external_adapter_summary_metadata(
             predictions,
             active_routes,
         ),
         external_adapter_metric_metadata_by_route=(
-            _external_adapter_summary_metadata_by_route(predictions, active_routes)
+            external_adapter_summary_metadata_by_route(predictions, active_routes)
         ),
         selection=selection_summary(config, len(bundle.examples)),
+    )
+    summary["run_provenance"] = benchmark_run_provenance(
+        manifest_path=manifest_path,
+        config=config.to_dict(),
+        repo_root=Path(__file__).resolve().parents[1],
     )
 
     return {
@@ -483,19 +502,13 @@ def run_benchmark(manifest_path: str, config: BenchmarkConfig) -> dict[str, Any]
     }
 
 
-def _load_backend_health(path: Path | None) -> dict[str, Any] | None:
-    if path is None:
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def _benchmark_role(route: dict[str, Any], route_id: str) -> str:
+    normalized_route_id = str(route_id or "").strip().lower().replace("-", "_")
+    if normalized_route_id in {"direct", "direct_answer"}:
+        return "diagnostic"
     explicit = str(route.get("benchmark_role") or "").strip()
     if explicit in {"qa_quality", "diagnostic", "prototype"}:
         return explicit
-    normalized_route_id = str(route_id or "").strip()
-    if normalized_route_id == "direct_answer":
-        return "diagnostic"
     if (
         normalized_route_id.startswith("graph_rag")
         or normalized_route_id == "element_rag"
@@ -510,26 +523,6 @@ def _error_type(exc: Exception) -> str:
     return "execution_error"
 
 
-def _raise_if_route_budget_exceeded(
-    started_at: float,
-    route_config: BenchmarkConfig,
-) -> None:
-    timeout_seconds = route_config.route_timeout_seconds
-    if not timeout_seconds or timeout_seconds <= 0:
-        return
-    if perf_counter() - started_at > timeout_seconds:
-        raise RouteExecutionTimeout(timeout_seconds)
-
-
-def _route_timeout_seconds(
-    exc: Exception,
-    route_config: BenchmarkConfig,
-) -> float | None:
-    if isinstance(exc, RouteExecutionTimeout):
-        return exc.seconds
-    return route_config.route_timeout_seconds
-
-
 def _manifest_document_reports(bundle: ManifestBundle) -> list[dict[str, Any]]:
     return [document.to_dict() for document in bundle.documents.values()]
 
@@ -541,42 +534,3 @@ def _engine_document_reports(engines: Any) -> list[dict[str, Any]]:
             continue
         reports.extend(engine.document_reports())
     return reports
-
-
-def _external_adapter_summary_metadata(
-    predictions: list[dict[str, Any]],
-    active_routes: list[dict[str, Any]],
-) -> dict[str, Any]:
-    for prediction in predictions:
-        metadata = prediction.get("external_adapter_metric_metadata")
-        if isinstance(metadata, dict):
-            return metadata
-    route = active_routes[0] if active_routes else {}
-    return external_research_adapter_metric_metadata(route)
-
-
-def _external_adapter_summary_metadata_by_route(
-    predictions: list[dict[str, Any]],
-    active_routes: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    metadata_by_route: dict[str, dict[str, Any]] = {}
-    prediction_metadata = _prediction_external_metadata_by_route(predictions)
-    for index, route in enumerate(active_routes, start=1):
-        route_id = _route_id(route, f"route_{index}")
-        metadata_by_route[route_id] = prediction_metadata.get(
-            route_id,
-            external_research_adapter_metric_metadata(route),
-        )
-    return metadata_by_route
-
-
-def _prediction_external_metadata_by_route(
-    predictions: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    metadata_by_route: dict[str, dict[str, Any]] = {}
-    for prediction in predictions:
-        route = str(prediction.get("route") or "").strip()
-        metadata = prediction.get("external_adapter_metric_metadata")
-        if route and isinstance(metadata, dict) and route not in metadata_by_route:
-            metadata_by_route[route] = metadata
-    return metadata_by_route

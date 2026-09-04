@@ -1,0 +1,51 @@
+{
+  "name": "@mara/desktop-spike",
+  "version": "0.0.0",
+  "private": true,
+  "description": "MARA Desktop pre-development process and UI spike",
+  "main": "dist-electron/electron/main.js",
+  "scripts": {
+    "build": "npm run build:electron && npm run build:renderer",
+    "build:electron": "tsc -p tsconfig.electron.json && vite build --config vite.preload.config.ts",
+    "build:renderer": "vite build",
+    "contracts:generate": "node scripts/run-python.mjs -m sidecar.generate_contracts",
+    "contracts:check": "node scripts/run-python.mjs -m sidecar.generate_contracts --check",
+    "package:linux": "npm run sidecar:bundle && npm run build && node scripts/package-app.mjs linux",
+    "package:windows": "npm run sidecar:bundle && npm run build && node scripts/package-app.mjs win32",
+    "sidecar:bundle": "node scripts/build-sidecar.mjs",
+    "smoke:electron": "npm run build && electron . --smoke-test",
+    "start": "npm run build && electron .",
+    "test": "npm run test:electron && npm run test:renderer && npm run test:sidecar && npm run test:packaging",
+    "test:electron": "npm run build:electron && node --test dist-electron/**/*.test.js",
+    "test:renderer": "tsc -p tsconfig.renderer-test.json --noEmit && node --import tsx --test --test-concurrency=1 src/*.test.ts src/*.test.tsx src/components/*.test.ts src/components/*.test.tsx",
+    "test:sidecar": "node scripts/run-python.mjs -m unittest discover -s sidecar -t . -p test_*.py",
+    "test:packaging": "node --test scripts/sidecar-bundle-config.test.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "verify": "npm run contracts:check && npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "katex": "0.18.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-markdown": "10.1.0",
+    "rehype-katex": "7.0.1",
+    "remark-gfm": "4.0.1",
+    "remark-math": "6.0.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.0.4",
+    "@types/jsdom": "30.0.0",
+    "@types/node": "26.1.2",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.4",
+    "electron": "43.2.0",
+    "jsdom": "30.0.1",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2",
+    "vite": "8.1.5"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

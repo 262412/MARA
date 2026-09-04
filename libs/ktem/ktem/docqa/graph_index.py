@@ -228,8 +228,23 @@ def _rank_candidates(
         (_score_candidate(item, query_tokens, global_query), index, item)
         for index, item in enumerate(candidates)
     ]
-    ranked.sort(key=lambda item: (-item[0], item[1]))
+    ranked.sort(
+        key=lambda item: (
+            -item[0],
+            _kind_tie_priority(item[2], global_query=global_query),
+            str(item[2].get("evidence_id") or ""),
+        )
+    )
     return ranked
+
+
+def _kind_tie_priority(item: dict[str, Any], *, global_query: bool) -> int:
+    priorities = (
+        {"community": 0, "entity": 1, "relation": 2, "claim": 3}
+        if global_query
+        else {"entity": 0, "relation": 1, "claim": 2, "community": 3}
+    )
+    return priorities.get(str(item.get("kind") or ""), 4)
 
 
 def _pipeline_candidates(

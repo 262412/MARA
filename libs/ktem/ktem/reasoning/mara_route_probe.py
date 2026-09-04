@@ -4,6 +4,7 @@ from typing import Any
 
 from .mara_route_retrieval import route_retrieval_metadata
 from .mara_route_scorer import route_probe_from_metadata
+from .mara_visual_intent import has_explicit_visual_intent
 
 
 def controller_route_probe(
@@ -141,21 +142,7 @@ def _understanding_has_visual_intent(understanding: dict[str, Any]) -> bool:
     if modalities & {"figure", "image", "page_image", "slide"}:
         return True
     question = str(understanding.get("question") or "").lower()
-    return any(
-        term in question
-        for term in (
-            "chart",
-            "diagram",
-            "figure",
-            "graph",
-            "image",
-            "picture",
-            "shown",
-            "slide",
-            "visual",
-            "visible",
-        )
-    )
+    return has_explicit_visual_intent(question)
 
 
 def _should_probe_visual_route(

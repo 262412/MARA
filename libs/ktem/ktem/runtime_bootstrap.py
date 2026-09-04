@@ -25,6 +25,20 @@ class RuntimePaths:
 
 
 def get_runtime_paths() -> RuntimePaths:
+    desktop_data_root = str(os.environ.get("MARA_DESKTOP_DATA_DIR", "") or "").strip()
+    if desktop_data_root:
+        desktop_root = Path(desktop_data_root).expanduser().resolve()
+        config_dir = desktop_root / "state" / "config"
+        data_dir = desktop_root / "state" / "runtime"
+        cache_dir = desktop_root / "cache"
+        return RuntimePaths(
+            config_dir=config_dir,
+            data_dir=data_dir,
+            cache_dir=cache_dir,
+            flowsettings_path=config_dir / "flowsettings.py",
+            env_path=config_dir / ".env",
+        )
+
     dirs = PlatformDirs(appname="Kotaemon", appauthor="Cinnamon")
     config_dir = Path(dirs.user_config_dir).resolve()
     data_dir = Path(dirs.user_data_dir).resolve()
@@ -105,7 +119,22 @@ def _synchronize_theflow_settings(settings_source: str) -> None:
     flowsettings._initialized = True
 
 
+def ensure_llama_index_nltk_cache() -> None:
+    for entry in sys.path:
+        if not entry:
+            continue
+        cache_dir = (
+            Path(entry).resolve() / "llama_index" / "core" / "_static" / "nltk_cache"
+        )
+        if not cache_dir.is_dir():
+            continue
+        (cache_dir / "tokenizers" / "punkt").mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("NLTK_DATA", str(cache_dir))
+        return
+
+
 def bootstrap_runtime_settings() -> str:
+    ensure_llama_index_nltk_cache()
     explicit_module = str(os.environ.get("THEFLOW_SETTINGS_MODULE", "") or "").strip()
     if explicit_module:
         _synchronize_theflow_settings(explicit_module)
@@ -123,10 +152,37 @@ def bootstrap_runtime_settings() -> str:
     return PACKAGE_FLOWSETTINGS_MODULE
 
 
+def bootstrap_packaged_runtime_settings() -> str:
+    """Force the packaged user-XDG runtime regardless of workspace files."""
+    os.environ["THEFLOW_SETTINGS_MODULE"] = PACKAGE_FLOWSETTINGS_MODULE
+    os.environ[BOOTSTRAP_MARKER_ENV] = "1"
+    _synchronize_theflow_settings(PACKAGE_FLOWSETTINGS_MODULE)
+    return PACKAGE_FLOWSETTINGS_MODULE
+
+
 def load_packaged_runtime_env() -> Path:
     runtime_paths = get_runtime_paths()
     runtime_paths.config_dir.mkdir(parents=True, exist_ok=True)
-    load_dotenv(runtime_paths.env_path, override=False)
+    desktop_owned_config = bool(os.environ.get("MARA_DESKTOP_DATA_DIR"))
+    desktop_model_environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name == "MARA_DESKTOP_MODEL_SETTINGS"
+        or name == "MARA_DESKTOP_SETTINGS_REVISION"
+        or name.startswith("MARA_DESKTOP_CHAT_")
+        or name.startswith("MARA_DESKTOP_EMBEDDING_")
+    }
+    load_dotenv(runtime_paths.env_path, override=desktop_owned_config)
+    if desktop_model_environment.get("MARA_DESKTOP_MODEL_SETTINGS") == "1":
+        for name in [
+            key
+            for key in os.environ
+            if key == "MARA_DESKTOP_SETTINGS_REVISION"
+            or key.startswith("MARA_DESKTOP_CHAT_")
+            or key.startswith("MARA_DESKTOP_EMBEDDING_")
+        ]:
+            os.environ.pop(name, None)
+        os.environ.update(desktop_model_environment)
     return runtime_paths.env_path
 
 
@@ -173,10 +229,19 @@ def build_user_flowsettings_template() -> str:
 """
 
 
-def build_user_env_example() -> str:
-    return """# Kotaemon runtime environment example
+def _build_user_env_template(
+    *,
+    auth_mode: str,
+    include_password_file_setting: bool,
+) -> str:
+    password_file_setting = (
+        "MARA_ADMIN_PASSWORD_FILE=\n" if include_password_file_setting else ""
+    )
+    return f"""# Kotaemon runtime environment example
 # Copy the keys you need into `.env` in this same directory.
 
+MARA_AUTH_MODE={auth_mode}
+{password_file_setting}
 OPENAI_API_BASE=https://api.openai.com/v1
 OPENAI_API_KEY=<YOUR_OPENAI_KEY>
 OPENAI_CHAT_MODEL=gpt-4o-mini
@@ -195,3 +260,20 @@ VOYAGE_API_KEY=
 LOCAL_MODEL=
 LOCAL_MODEL_EMBEDDINGS=
 """
+
+
+def build_user_env(*, auth_mode: str) -> str:
+    """Build the real user env without password acquisition settings."""
+    from ktem.auth.policy import resolve_auth_mode
+
+    return _build_user_env_template(
+        auth_mode=resolve_auth_mode(configured_mode=auth_mode),
+        include_password_file_setting=False,
+    )
+
+
+def build_user_env_example() -> str:
+    return _build_user_env_template(
+        auth_mode="auto",
+        include_password_file_setting=True,
+    )

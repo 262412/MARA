@@ -60,7 +60,7 @@ def read_text_file(file_path: str, max_chars: int = 9000) -> str:
             with open(file_path, "r", encoding=enc, errors="ignore") as file_obj:
                 content = file_obj.read(max_chars * 2)
             return content[:max_chars]
-        except Exception:
+        except (OSError, UnicodeError):
             continue
     return ""
 
@@ -69,18 +69,25 @@ def build_html_pages(
     page_contents: list[str],
     body_class: str = "",
     extra_head: str = "",
-    inline_script: str = "",
 ) -> list[str]:
     html_pages: list[str] = []
     for content_html in page_contents:
         body_attr = f" class='{body_class}'" if body_class else ""
-        script_html = f"<script>{inline_script}</script>" if inline_script else ""
+        content_security_policy = (
+            "default-src 'none'; "
+            "script-src 'none'; "
+            "style-src 'unsafe-inline'; img-src data: blob:; font-src data:; "
+            "connect-src 'none'; media-src 'none'; object-src 'none'; "
+            "frame-src 'none'; worker-src 'none'; base-uri 'none'; "
+            "form-action 'none'"
+        )
         html_doc = (
             "<!doctype html><html><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            '<meta http-equiv="Content-Security-Policy" '
+            f'content="{content_security_policy}">'
             f"<style>{PREVIEW_HTML_STYLE}</style>{extra_head}</head><body{body_attr}>"
             f"{content_html}"
-            f"{script_html}"
             "</body></html>"
         )
         html_pages.append("data:text/html;charset=utf-8," + quote(html_doc, safe=""))

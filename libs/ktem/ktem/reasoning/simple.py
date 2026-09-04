@@ -123,19 +123,7 @@ class FullQAPipeline(BaseReasoning):
         self, message: str, history: list
     ) -> tuple[list[RetrievedDocument], list[Document]]:
         """Retrieve the documents based on the message"""
-        # if len(message) < self.trigger_context:
-        #     # prefer adding context for short user questions, avoid adding context for
-        #     # long questions, as they are likely to contain enough information
-        #     # plus, avoid the situation where the original message is already too long
-        #     # for the model to handle
-        #     query = self.add_query_context(message, history).content
-        # else:
-        #     query = message
-        query = None
-        if not query:
-            # TODO: previously return [], [] because we think this message as something
-            # like "Hello", "I need help"...
-            query = message
+        query = message
 
         docs, doc_ids = [], []
         plot_docs = []
@@ -151,7 +139,9 @@ class FullQAPipeline(BaseReasoning):
 
         for idx, retriever in enumerate(self.retrievers):
             retriever_node = self._prepare_child(retriever, f"retriever_{idx}")
-            all_retriever_docs = retriever_node(text=query)
+            all_retriever_docs = retriever_node(
+                text=query, **getattr(self, "retrieval_candidate_kwargs", {})
+            )
 
             retriever_docs = apply_retrieval_policy(
                 all_retriever_docs,
@@ -198,7 +188,7 @@ class FullQAPipeline(BaseReasoning):
     def prepare_mindmap(self, answer) -> Document | None:
         mindmap = answer.metadata["mindmap"]
         if mindmap:
-            mindmap_text = mindmap.text
+            mindmap_text = Render.escape_text(mindmap.text, quote=False)
             mindmap_svg = dedent(
                 """
                 <div class="markmap">
@@ -223,15 +213,15 @@ class FullQAPipeline(BaseReasoning):
 
             mindmap_content = Document(
                 channel="info",
-                content=Render.collapsible(
-                    header="""
+                content=(
+                    "<details class='evidence' open><summary>"
+                    """
                     <i>Mindmap</i>
                     <a href="#" id='mindmap-toggle'>
                         [Expand]</a>
                     <a href="#" id='mindmap-export'>
-                        [Export]</a>""",
-                    content=mindmap_svg,
-                    open=True,
+                        [Export]</a>"""
+                    f"</summary>{mindmap_svg}</details><br>"
                 ),
             )
         else:

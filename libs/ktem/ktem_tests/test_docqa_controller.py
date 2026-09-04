@@ -10,6 +10,10 @@ from ktem.docqa.controller import (
     parse_planner_decision,
 )
 from ktem.docqa.execution import execute_controller_turn
+from ktem_tests.controller_test_assertions import (
+    assert_empty_verify_decision,
+    assert_graph_bundle_contract,
+)
 
 
 def test_docqa_package_exports_controller_helpers():
@@ -64,7 +68,7 @@ def test_route_and_executor_registries_expose_evidence_policies():
 def test_response_capture_builds_controller_contract_fields():
     capture = ResponseCapture(
         DocQARequest(
-            prompt="Compare these sources.",
+            prompt="How are these sources connected?",
             controller_mode="llm",
             route_policy="graph",
             allowed_routes=["graph_global"],
@@ -103,15 +107,12 @@ def test_response_capture_builds_controller_contract_fields():
         "reason": "Retrieved evidence is sufficient for generation.",
         "retry": False,
     }
-    assert payload["verify_decision"] == {
-        "mode": "strict",
-        "status": "supported",
-        "reason": "Strict verification requested; current verifier observed evidence.",
-        "action": "generate",
-        "claims": [],
-        "unsupported_claims": [],
-        "verified_citations": ["doc-1"],
-    }
+    assert_empty_verify_decision(
+        payload["verify_decision"],
+        mode="strict",
+        status="supported",
+        reason="Strict verification requested; current verifier observed evidence.",
+    )
     assert payload["controller_decision"] == {
         "route": "graph_rag",
         "legacy_route": "graph_global",
@@ -132,14 +133,7 @@ def test_response_capture_builds_controller_contract_fields():
         "policy": "graph",
     }
     assert payload["workflow_plan"]["steps"][0]["executor"] == "retrieve_graph"
-    bundle = payload["evidence_bundle"]
-    assert bundle["route"] == "graph_global"
-    assert bundle["metadata"]["modality_counts"] == {"graph": 1}
-    assert bundle["metadata"]["page_coverage"] == ["1"]
-    assert bundle["items"][0]["evidence_id"] == "doc-1"
-    assert bundle["items"][0]["modality"] == "graph"
-    assert bundle["items"][0]["evidence_level"] == "graph"
-    assert payload["backend_metadata"] == {"graph_backend": "local_graph_index"}
+    assert_graph_bundle_contract(payload)
 
 
 def test_apply_request_context_copies_planner_contract_fields():
@@ -303,7 +297,7 @@ def test_strict_verifier_marks_unsupported_claims_and_abstain_action():
     assert payload["verify_decision"]["unsupported_claims"] == [
         "Profit declined sharply."
     ]
-    assert payload["verify_decision"]["verified_citations"] == ["doc-1"]
+    assert payload["verify_decision"]["verified_citations"] == ["evidence:file-1:doc-1"]
 
 
 def test_light_verifier_ignores_reasoning_scaffolding_and_inner_abstain_text():
@@ -344,15 +338,12 @@ def test_direct_route_verification_is_not_required():
     )
 
     assert payload["retrieve_decision"]["status"] == "not_required"
-    assert payload["verify_decision"] == {
-        "mode": "light",
-        "status": "not_required",
-        "reason": "Direct route does not require evidence verification.",
-        "action": "generate",
-        "claims": [],
-        "unsupported_claims": [],
-        "verified_citations": [],
-    }
+    assert_empty_verify_decision(
+        payload["verify_decision"],
+        mode="light",
+        status="not_required",
+        reason="Direct route does not require evidence verification.",
+    )
 
 
 def test_execute_controller_turn_direct_answer_skips_retrieval_and_generation():
@@ -440,6 +431,18 @@ def test_execute_controller_turn_switches_route_after_poor_retrieval():
         "reason": "No retrieved evidence was captured for this turn.",
         "route_switch_candidates": ["hybrid"],
         "route_switch_used": True,
+        "failed_retrieval_rounds": 1,
+        "failed_slot_coverage": None,
+        "failed_missing_required_slot_count": 0,
+        "failure_type": "retrieval_adequacy_failure",
+        "recovered_evidence_ids": ["hybrid-1"],
+        "reverification_status": "not_requested",
+        "reverification_reason": "Verification disabled.",
+        "reverification_evidence_ids": ["hybrid-1"],
+        "attempt": 1,
+        "transition_committed": True,
+        "attempt_status": "good",
+        "expected_evidence_gain": True,
     }
 
 
@@ -508,6 +511,25 @@ def test_execute_controller_turn_good_retrieval_generates_with_evidence_bundle()
     assert result.guardrail_decision.action == "return"
     assert result.verify_decision.status == "supported"
     assert result.evidence_bundle.items[0]["source_backrefs"] == ["file-1#page:2"]
+    assert [
+        item["canonical_id"]
+        for item in result.evidence_bundle.metadata["verified_evidence"]
+    ] == ["evidence:file-1:doc-1"]
+    assert [
+        item["canonical_id"]
+        for item in result.evidence_bundle.metadata["verified_claim_support_evidence"]
+    ] == ["evidence:file-1:doc-1"]
+    assert "cited_evidence" not in result.evidence_bundle.metadata
+    timings = result.evidence_bundle.metadata["pipeline_stage_timings"]
+    assert set(timings) == {
+        "planning_seconds",
+        "retrieval_seconds",
+        "generation_seconds",
+        "retry_seconds",
+        "verification_seconds",
+        "finalization_seconds",
+    }
+    assert all(value >= 0 for value in timings.values())
 
 
 def test_execute_controller_turn_rewrites_unsupported_answer_once():
@@ -561,15 +583,18 @@ def test_execute_controller_turn_element_route_requires_element_evidence():
             ]
         }
 
-    def fail_generate(_request, _decision, _bundle):
-        raise AssertionError("element route must not generate from text-only evidence")
+    def generate(_request, decision, _bundle):
+        assert decision.legacy_route == "doc_text"
+        return "The table-like paragraph identifies revenue."
 
     result = execute_controller_turn(
         DocQARequest(prompt="Which table shows revenue?", route_policy="element"),
         retrieve=retrieve,
-        generate=fail_generate,
+        generate=generate,
     )
 
+    assert "not retrieve enough evidence" in result.answer
     assert result.controller_decision.route == "element_rag"
     assert result.retrieve_decision.status == "poor"
     assert result.guardrail_decision.action == "abstain"
+    assert result.evidence_bundle.metadata["missing_required_slot_count"] == 1

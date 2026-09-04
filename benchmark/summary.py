@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any
 
 from .answer_summary import (
@@ -8,7 +6,11 @@ from .answer_summary import (
     avg_product_metric,
 )
 from .backend_health_summary import backend_health_summary
+from .citation_headline_summary import citation_headline_summary
+from .contract_invariant_metrics import contract_invariant_summary
 from .dataset_decision_protocol import phase2_dataset_decision, phase2_failure_counts
+from .effective_route_metrics import effective_route_stage_metric_table
+from .headline_policy import headline_policy_predictions
 from .mara_oriented_scores import (
     MARA_METRIC_KEYS,
     mara_proxy_score_metadata,
@@ -16,13 +18,27 @@ from .mara_oriented_scores import (
 )
 from .metrics import round_metric, safe_mean
 from .multimodal_route_summary import phase3_multimodal_summary
+from .page_metric_summary import page_metric_summary
 from .prompt_summary import benchmark_prompt_summary
+from .route_output_agreement import route_output_agreement_rate
 from .score_authority import (
     paper_grade_score_available,
     primary_score_label,
     score_authority_level,
 )
+from .semantic_answer import SEMANTIC_ANSWER_CONTRACT
+from .semantic_summary import semantic_answer_coverage
+from .stage_metrics import stage_metric_summary
 from .summary_diagnostics import diagnostic_summary_fields
+from .summary_rankings import route_rankings
+from .summary_records import (
+    adapter_metadata_summary,
+    benchmark_identity_summary,
+    per_example_metric_records,
+    route_role,
+)
+from .terminal_outcome_contract import terminal_outcome_route_fields
+from .timing_summary import route_timing_fields, timing_summary
 from .verification_metrics import verification_summary
 from .verifier_observability import (
     route_verifier_observability_fields,
@@ -36,6 +52,7 @@ _CITATION_GROUP_METRICS = (
     "citation_metadata_precision",
 )
 _PRIMARY_SCORE_METRIC = "quality_avg_native_score"
+_DEPLOYED_POLICY_SCORE_METRIC = "deployed_policy_avg_native_score"
 _PRIMARY_SCORE_FALLBACK_METRIC = "avg_native_score"
 _DIAGNOSTIC_SCORE_METRICS = ("avg_em", "avg_f1", "avg_anls")
 
@@ -56,11 +73,18 @@ def build_benchmark_summary(
 ) -> dict[str, Any]:
     skipped_routes = skipped_routes or []
     return {
-        **_identity_summary(bundle, config, active_routes, predictions, skipped_routes),
+        **benchmark_identity_summary(
+            bundle, config, active_routes, predictions, skipped_routes
+        ),
         **(selection or {}),
         **_primary_score_summary(predictions),
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
+        **stage_metric_summary(predictions),
+        "effective_route_stage_metric_table": effective_route_stage_metric_table(
+            bundle.dataset_name,
+            predictions,
+        ),
         **benchmark_prompt_summary(predictions),
         **answer_finalization_summary(predictions),
         **_format_guardrail_summary(predictions),
@@ -77,25 +101,18 @@ def build_benchmark_summary(
             active_routes=active_routes,
         ),
         **verification_summary(predictions),
-        **verifier_observability_summary(predictions),
-        **_timing_summary(predictions),
-        **_cache_summary(predictions, config.cache_mode),
-        "route_metric_table": _route_metric_table(bundle.dataset_name, predictions),
-        **diagnostic_summary_fields(
+        **contract_invariant_summary(predictions),
+        "per_example_metric_records": per_example_metric_records(
             bundle.dataset_name,
             predictions,
-            skipped_routes=skipped_routes,
         ),
-        "quality_route_metric_table": _route_metric_table(
-            bundle.dataset_name,
-            _role_predictions(predictions, {"qa_quality"}),
-        ),
-        "diagnostic_route_metric_table": _route_metric_table(
-            bundle.dataset_name,
-            _role_predictions(predictions, {"diagnostic", "prototype"}),
+        **verifier_observability_summary(predictions),
+        **timing_summary(predictions),
+        **_cache_summary(predictions, config.cache_mode),
+        **_route_report_summary(
+            bundle.dataset_name, predictions, skipped_routes=skipped_routes
         ),
         **_quality_route_summary(predictions),
-        "route_rankings": _route_rankings(bundle.dataset_name, predictions),
         "mara_score_metadata": _headline_score_metadata(
             bundle.dataset_name,
             predictions,
@@ -103,11 +120,39 @@ def build_benchmark_summary(
         "mara_proxy_score_metadata": mara_proxy_score_metadata(bundle.dataset_name),
         "backend_metadata": backend_metadata,
         **backend_health_summary(backend_health),
-        "adapter_metric_metadata": adapter_metric_metadata or {},
-        "external_adapter_metric_metadata": external_adapter_metric_metadata or {},
-        "external_adapter_metric_metadata_by_route": (
-            external_adapter_metric_metadata_by_route or {}
+        **adapter_metadata_summary(
+            adapter_metric_metadata=adapter_metric_metadata,
+            external_adapter_metric_metadata=external_adapter_metric_metadata,
+            external_adapter_metric_metadata_by_route=(
+                external_adapter_metric_metadata_by_route
+            ),
         ),
+    }
+
+
+def _route_report_summary(
+    dataset_name: str,
+    predictions: list[dict[str, Any]],
+    *,
+    skipped_routes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    route_metrics = _route_metric_table(dataset_name, predictions)
+    return {
+        "route_metric_table": route_metrics,
+        **diagnostic_summary_fields(
+            dataset_name,
+            predictions,
+            skipped_routes=skipped_routes,
+        ),
+        "quality_route_metric_table": _route_metric_table(
+            dataset_name,
+            _role_predictions(predictions, {"qa_quality"}),
+        ),
+        "diagnostic_route_metric_table": _route_metric_table(
+            dataset_name,
+            _role_predictions(predictions, {"diagnostic", "prototype"}),
+        ),
+        "route_rankings": route_rankings(dataset_name, route_metrics),
     }
 
 
@@ -121,6 +166,11 @@ def add_mara_summary_fields(
         **_primary_score_summary(predictions),
         **_quality_summary(predictions),
         **_native_detail_metric_summary(predictions),
+        **stage_metric_summary(predictions),
+        "effective_route_stage_metric_table": effective_route_stage_metric_table(
+            dataset_name,
+            predictions,
+        ),
         **answer_finalization_summary(predictions),
         "phase2_dataset_decision": phase2_dataset_decision(dataset_name),
         "phase2_failure_counts": phase2_failure_counts(dataset_name, predictions),
@@ -128,7 +178,13 @@ def add_mara_summary_fields(
             dataset_name,
             predictions,
         ),
+        **contract_invariant_summary(predictions),
+        "per_example_metric_records": per_example_metric_records(
+            dataset_name,
+            predictions,
+        ),
         **verifier_observability_summary(predictions),
+        **timing_summary(predictions),
         "route_metric_table": _route_metric_table(dataset_name, predictions),
         **diagnostic_summary_fields(dataset_name, predictions),
         "quality_route_metric_table": _route_metric_table(
@@ -140,52 +196,43 @@ def add_mara_summary_fields(
             _role_predictions(predictions, {"diagnostic", "prototype"}),
         ),
         **_quality_route_summary(predictions),
-        "route_rankings": _route_rankings(dataset_name, predictions),
+        "route_rankings": route_rankings(
+            dataset_name,
+            _route_metric_table(dataset_name, predictions),
+        ),
         "mara_score_metadata": _headline_score_metadata(dataset_name, predictions),
         "mara_proxy_score_metadata": mara_proxy_score_metadata(dataset_name),
     }
 
 
-def _identity_summary(
-    bundle: Any,
-    config: Any,
-    active_routes: list[dict[str, Any]],
-    predictions: list[dict[str, Any]],
-    skipped_routes: list[dict[str, Any]],
-) -> dict[str, Any]:
-    num_skipped_routes = len(skipped_routes)
-    return {
-        "dataset_name": bundle.dataset_name,
-        "manifest_path": str(bundle.manifest_path),
-        "suite_name": config.suite_name,
-        "engine": config.engine if len(active_routes) == 1 else "matrix",
-        "route": config.route,
-        "scope": config.scope,
-        "num_documents": len(bundle.documents),
-        "num_examples": len(bundle.examples),
-        "num_routes": len(active_routes),
-        "num_executed_routes": len(active_routes) - num_skipped_routes,
-        "num_skipped_routes": num_skipped_routes,
-        "skipped_routes": skipped_routes,
-        "not_configured_routes": [
-            item
-            for item in skipped_routes
-            if item.get("backend_status") == "not_configured"
-        ],
-        "num_predictions": len(predictions),
-    }
-
-
 def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
+        "answer_quality_contract": SEMANTIC_ANSWER_CONTRACT,
+        "token_f1_contract": "token_f1_v2",
         "avg_em": _avg_metric(predictions, "em"),
         "avg_f1": _avg_metric(predictions, "f1"),
+        "avg_token_f1_v2": _avg_metric(predictions, "token_f1_v2"),
+        "avg_legacy_token_f1": _avg_metric(predictions, "legacy_token_f1"),
+        "avg_semantic_answer_precision": _avg_metric(
+            predictions, "semantic_answer_precision"
+        ),
+        "avg_semantic_answer_recall": _avg_metric(
+            predictions, "semantic_answer_recall"
+        ),
+        "avg_semantic_answer_f1": _avg_metric(predictions, "semantic_answer_f1"),
+        **semantic_answer_coverage(predictions),
         "product_avg_em": avg_product_metric(predictions, "em"),
         "product_avg_f1": avg_product_metric(predictions, "f1"),
         "avg_anls": _avg_metric(predictions, "anls"),
         "avg_page_hit": _avg_metric(predictions, "page_hit"),
-        "avg_citation_recall": _avg_metric(predictions, "citation_recall"),
-        "avg_citation_precision": _avg_metric(predictions, "citation_precision"),
+        "avg_strict_page_hit": _avg_metric(predictions, "strict_page_hit"),
+        "avg_equivalent_evidence_page_hit": _avg_metric(
+            predictions,
+            "equivalent_evidence_page_hit",
+        ),
+        **page_metric_summary(predictions),
+        "route_output_agreement_rate": route_output_agreement_rate(predictions),
+        **citation_headline_summary(predictions),
         **_citation_group_summary(predictions),
         **_citation_locator_summary(predictions),
         "avg_element_hit": _avg_metric(predictions, "element_hit"),
@@ -211,14 +258,25 @@ def _quality_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _primary_score_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
-    primary_predictions = _role_predictions(predictions, {"qa_quality"})
+    quality_predictions = _role_predictions(predictions, {"qa_quality"})
+    primary_predictions, policy = headline_policy_predictions(quality_predictions)
     if primary_predictions:
         paper_grade = paper_grade_score_available(primary_predictions)
         return {
-            "primary_score_metric": _PRIMARY_SCORE_METRIC,
+            "primary_score_metric": (
+                _DEPLOYED_POLICY_SCORE_METRIC
+                if policy
+                in {
+                    "deployed_controller_policy",
+                    "deployed_manifest_policy",
+                }
+                else _PRIMARY_SCORE_METRIC
+            ),
             "primary_score": _avg_metric(primary_predictions, "native_score"),
             "primary_score_label": primary_score_label(paper_grade),
             "primary_score_scope": "qa_quality",
+            "primary_score_policy": policy,
+            "primary_score_routes": _ordered_routes(primary_predictions),
             "score_authority_level": score_authority_level(paper_grade),
             "paper_grade_score_available": paper_grade,
             "diagnostic_score_metrics": list(_DIAGNOSTIC_SCORE_METRICS),
@@ -229,6 +287,8 @@ def _primary_score_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
         "primary_score": _avg_metric(predictions, "native_score"),
         "primary_score_label": primary_score_label(paper_grade),
         "primary_score_scope": "all_routes_fallback",
+        "primary_score_policy": "all_routes_fallback",
+        "primary_score_routes": _ordered_routes(predictions),
         "score_authority_level": score_authority_level(paper_grade),
         "paper_grade_score_available": paper_grade,
         "diagnostic_score_metrics": list(_DIAGNOSTIC_SCORE_METRICS),
@@ -247,6 +307,9 @@ def _quality_route_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "quality_avg_em": _avg_metric(quality_predictions, "em"),
         "quality_avg_f1": _avg_metric(quality_predictions, "f1"),
+        "quality_avg_semantic_answer_f1": _avg_metric(
+            quality_predictions, "semantic_answer_f1"
+        ),
         "quality_product_avg_em": avg_product_metric(quality_predictions, "em"),
         "quality_product_avg_f1": avg_product_metric(quality_predictions, "f1"),
         "quality_avg_mara_score": _avg_metric(quality_predictions, "mara_score"),
@@ -370,20 +433,6 @@ def _format_guardrail_summary(predictions: list[dict[str, Any]]) -> dict[str, An
     }
 
 
-def _timing_summary(predictions: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        f"avg_{key}": round_metric(
-            safe_mean([item["timings"][key] for item in predictions])
-        )
-        for key in (
-            "retrieval_seconds",
-            "generation_seconds",
-            "parse_seconds",
-            "index_seconds",
-        )
-    }
-
-
 def _cache_summary(
     predictions: list[dict[str, Any]],
     cache_mode: str,
@@ -471,6 +520,9 @@ def _route_metric_table(
                 "num_predictions": len(route_predictions),
                 "avg_em": _avg_metric(route_predictions, "em"),
                 "avg_f1": _avg_metric(route_predictions, "f1"),
+                "avg_semantic_answer_f1": _avg_metric(
+                    route_predictions, "semantic_answer_f1"
+                ),
                 "product_avg_em": avg_product_metric(route_predictions, "em"),
                 "product_avg_f1": avg_product_metric(route_predictions, "f1"),
                 "avg_answer_for_user_tokens": avg_answer_tokens(
@@ -485,6 +537,15 @@ def _route_metric_table(
                 **_native_detail_metric_summary(route_predictions),
                 "avg_anls": _avg_metric(route_predictions, "anls"),
                 "avg_page_hit": _avg_metric(route_predictions, "page_hit"),
+                "avg_strict_page_hit": _avg_metric(
+                    route_predictions,
+                    "strict_page_hit",
+                ),
+                "avg_equivalent_evidence_page_hit": _avg_metric(
+                    route_predictions,
+                    "equivalent_evidence_page_hit",
+                ),
+                **page_metric_summary(route_predictions),
                 "avg_element_hit": _avg_metric(route_predictions, "element_hit"),
                 "avg_element_locator_hit": _avg_metric(
                     route_predictions, "element_locator_hit"
@@ -501,61 +562,17 @@ def _route_metric_table(
                     route_predictions, "unsupported_claim_rate"
                 ),
                 "avg_abstention_rate": _avg_metric(route_predictions, "abstained"),
+                **terminal_outcome_route_fields(route_predictions),
                 **route_verifier_observability_fields(route_predictions),
                 "avg_multimodal_answer_support": _avg_metric(
                     route_predictions, "multimodal_answer_support"
                 ),
-                "avg_total_seconds": round_metric(
-                    safe_mean(
-                        [
-                            (prediction.get("performance") or {}).get("total_seconds")
-                            for prediction in route_predictions
-                        ]
-                    )
-                ),
-                "benchmark_role": _route_role(route_predictions),
+                **route_timing_fields(route_predictions),
+                **stage_metric_summary(route_predictions),
+                "benchmark_role": route_role(route_predictions),
             }
         )
     return rows
-
-
-def _route_rankings(
-    dataset_name: str,
-    predictions: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    rows = _route_metric_table(dataset_name, predictions)
-    return [
-        ranking
-        for metric in (
-            "avg_native_score",
-            "avg_mara_proxy_score",
-            "avg_mara_score",
-            "avg_f1",
-        )
-        for ranking in [_route_ranking(dataset_name, rows, metric)]
-        if ranking is not None
-    ]
-
-
-def _route_ranking(
-    dataset_name: str,
-    rows: list[dict[str, Any]],
-    metric: str,
-) -> dict[str, Any] | None:
-    ranked = [
-        (row["route"], row[metric]) for row in rows if row.get(metric) is not None
-    ]
-    ranked.sort(key=lambda item: (-float(item[1]), item[0]))
-    if not ranked:
-        return None
-    return {
-        "dataset_name": dataset_name,
-        "rank_metric": metric,
-        "routes": [
-            {"rank": index, "route": route, "score": score}
-            for index, (route, score) in enumerate(ranked, start=1)
-        ],
-    }
 
 
 def _ordered_routes(predictions: list[dict[str, Any]]) -> list[str]:
@@ -576,11 +593,3 @@ def _role_predictions(
         for prediction in predictions
         if str(prediction.get("benchmark_role") or "qa_quality") in roles
     ]
-
-
-def _route_role(predictions: list[dict[str, Any]]) -> str:
-    for prediction in predictions:
-        role = str(prediction.get("benchmark_role") or "").strip()
-        if role:
-            return role
-    return "qa_quality"

@@ -3,7 +3,7 @@ from ktem.docqa.evidence import build_evidence_bundle
 from ktem.docqa.hybrid_fusion import fuse_hybrid_evidence
 
 
-def test_hybrid_route_uses_modality_normalized_fusion_scores():
+def test_hybrid_route_uses_retriever_level_rrf_scores():
     request = DocQARequest(
         prompt="Explain the revenue chart and table.",
         route_policy="hybrid",
@@ -46,14 +46,194 @@ def test_hybrid_route_uses_modality_normalized_fusion_scores():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert bundle.items[0]["evidence_id"] == "text-b"
+    assert bundle.items[0]["evidence_id"] == "page-image:file-b:5"
     assert bundle.metadata["hybrid_fusion_trace"]["ranker"] == (
-        "modality_normalized_rrf_v1"
+        "retriever_reciprocal_rank_fusion_v2"
     )
     confidence = bundle.items[0]["metadata"]["evidence_confidence"]
-    assert confidence["route"] == "text"
-    assert confidence["normalized_score"] == 1.0
-    assert confidence["pre_fusion_rank"] == 1
+    assert confidence["route"] == "page_image"
+    assert confidence["normalized_score"] > 0.99
+    assert confidence["pre_fusion_rank"] == 2
+
+
+def test_rrf_accumulates_rank_contributions_for_shared_evidence_identity():
+    fused, trace = fuse_hybrid_evidence(
+        "What does the table show?",
+        [
+            {
+                "evidence_id": "shared",
+                "source_id": "report",
+                "page_label": "4",
+                "modality": "table",
+                "text": "Revenue table.",
+                "metadata": {
+                    "visual_retriever_score": 0.8,
+                    "element_retriever_score": 0.8,
+                },
+            },
+            {
+                "evidence_id": "visual-only",
+                "source_id": "report",
+                "page_label": "5",
+                "modality": "page_image",
+                "text": "Revenue image.",
+                "metadata": {"visual_retriever_score": 0.9},
+            },
+            {
+                "evidence_id": "element-only",
+                "source_id": "report",
+                "page_label": "6",
+                "modality": "table",
+                "text": "Revenue appendix.",
+                "metadata": {"element_retriever_score": 0.7},
+            },
+        ],
+    )
+
+    assert fused[0]["evidence_id"] == "shared"
+    assert trace["retriever_lists"] == ["element", "visual"]
+
+
+def test_rrf_builds_independent_lists_from_retrieval_lineage():
+    fused, trace = fuse_hybrid_evidence(
+        "revenue",
+        [
+            {
+                "evidence_id": "dense-only",
+                "source_id": "report",
+                "text": "Revenue background.",
+                "retrieval_lineage": [
+                    {"retriever_name": "dense", "raw_rank": 1, "raw_score": 0.9}
+                ],
+            },
+            {
+                "evidence_id": "shared",
+                "source_id": "report",
+                "text": "Revenue result.",
+                "retrieval_lineage": [
+                    {"retriever_name": "dense", "raw_rank": 2, "raw_score": 0.8},
+                    {"retriever_name": "bm25", "raw_rank": 1, "raw_score": 12.0},
+                ],
+            },
+        ],
+        strategy="rrf",
+    )
+
+    assert fused[0]["evidence_id"] == "shared"
+    assert trace["retriever_lists"] == [
+        "bm25|round:unknown|query:default",
+        "dense|round:unknown|query:default",
+    ]
+
+
+def test_hybrid_item_scores_use_canonical_cell_identity():
+    items = [
+        {
+            "evidence_id": "parent-table",
+            "source_id": "report",
+            "page_label": "4",
+            "table_id": "balance-sheet",
+            "cell_id": cell_id,
+            "evidence_level": "cell",
+            "modality": "table",
+            "text": text,
+        }
+        for cell_id, text in (
+            ("current-assets", "Current assets were 100."),
+            ("current-liabilities", "Current liabilities were 50."),
+        )
+    ]
+
+    for strategy in ("rrf", "weighted"):
+        _fused, trace = fuse_hybrid_evidence(
+            "What was the current ratio?",
+            items,
+            strategy=strategy,
+        )
+        assert set(trace["item_scores"]) == {
+            "cell:report:current-assets",
+            "cell:report:current-liabilities",
+        }
+
+
+def test_rrf_does_not_treat_reranker_score_as_first_stage_retrieval():
+    fused, trace = fuse_hybrid_evidence(
+        "revenue result",
+        [
+            {
+                "evidence_id": "reranker-only",
+                "source_id": "report",
+                "page_label": "4",
+                "text": "Unrelated appendix.",
+                "metadata": {"reranker_score": 100.0},
+            },
+            {
+                "evidence_id": "retrieval-match",
+                "source_id": "report",
+                "page_label": "5",
+                "text": "The revenue result improved.",
+            },
+        ],
+        strategy="rrf",
+    )
+
+    assert fused[0]["evidence_id"] == "retrieval-match"
+    assert trace["retriever_lists"] == ["text"]
+
+
+def test_equal_score_fusion_order_uses_canonical_identity_not_input_order():
+    items = [
+        {
+            "evidence_id": evidence_id,
+            "source_id": "report",
+            "text": "Identical retrieval evidence.",
+            "metadata": {"retriever_score": 0.5},
+        }
+        for evidence_id in ("b", "a")
+    ]
+
+    for strategy in ("weighted", "rrf"):
+        forward, forward_trace = fuse_hybrid_evidence(
+            "retrieval evidence",
+            items,
+            strategy=strategy,
+        )
+        reverse, reverse_trace = fuse_hybrid_evidence(
+            "retrieval evidence",
+            list(reversed(items)),
+            strategy=strategy,
+        )
+
+        assert [item["evidence_id"] for item in forward] == ["a", "b"]
+        assert [item["evidence_id"] for item in reverse] == ["a", "b"]
+        assert forward_trace["tie_breaker"] == "canonical_evidence_identity"
+        assert reverse_trace["score_tie_precision_decimals"] == 6
+
+
+def test_near_equal_retriever_scores_use_fixed_precision_then_identity():
+    items = [
+        {
+            "evidence_id": "b",
+            "source_id": "report",
+            "text": "Identical retrieval evidence.",
+            "retrieval_lineage": [{"retriever_name": "dense", "raw_score": 0.90000049}],
+        },
+        {
+            "evidence_id": "a",
+            "source_id": "report",
+            "text": "Identical retrieval evidence.",
+            "retrieval_lineage": [{"retriever_name": "dense", "raw_score": 0.90000041}],
+        },
+    ]
+
+    fused, trace = fuse_hybrid_evidence(
+        "retrieval evidence",
+        items,
+        strategy="rrf",
+    )
+
+    assert [item["evidence_id"] for item in fused] == ["a", "b"]
+    assert trace["score_tie_precision_decimals"] == 6
 
 
 def test_hybrid_route_can_use_rrf_fusion_strategy():
@@ -97,7 +277,7 @@ def test_hybrid_route_can_use_rrf_fusion_strategy():
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
     assert bundle.metadata["hybrid_fusion_trace"]["ranker"] == (
-        "reciprocal_rank_fusion_v1"
+        "retriever_reciprocal_rank_fusion_v2"
     )
     assert all(
         "rrf_score" in item["metadata"]["hybrid_fusion_components"]
@@ -149,12 +329,55 @@ def test_hybrid_route_can_use_learned_cross_modal_ranker():
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
     assert bundle.items[0]["evidence_id"] == "element:file-b:5:table-a"
-    assert bundle.metadata["hybrid_fusion_trace"]["ranker"] == (
+    assert bundle.metadata["hybrid_reranker_trace"]["ranker"] == (
         "fixture_learned_ranker"
     )
     assert (
         bundle.items[0]["metadata"]["hybrid_fusion_components"]["learned_score"] == 3.0
     )
+    assert bundle.metadata["ranking_trace"]["backend_execution"] is True
+    assert bundle.metadata["ranking_trace"]["backend"] == "fixture_learned_ranker"
+    assert bundle.metadata["ranking_trace"]["score_field"] == "reranker_score"
+
+
+def test_fused_lineage_records_the_actual_post_fusion_ranking_output():
+    class PromoteLastRanker:
+        name = "fixture_promote_last"
+
+        def score(self, query, item):
+            return 10.0 if item["evidence_id"] == "text-081" else 0.0
+
+    request = DocQARequest(
+        prompt="Find the promoted financial evidence.",
+        route_policy="hybrid",
+    )
+    metadata = {
+        "hybrid_fusion_ranker": PromoteLastRanker(),
+        "evidence": [
+            {
+                "evidence_id": f"text-{index:03d}",
+                "source_id": "report",
+                "page_label": str(index),
+                "text": f"Distinct financial statement evidence row {index}.",
+            }
+            for index in range(1, 82)
+        ],
+    }
+
+    bundle = build_evidence_bundle("hybrid", request, metadata)
+
+    candidate_ids = {
+        item["evidence_id"] for item in bundle.metadata["candidate_evidence"]
+    }
+    fused_ids = {item["evidence_id"] for item in bundle.metadata["fused_evidence"]}
+    assert len(candidate_ids) == 81
+    assert "text-081" in candidate_ids
+    assert "text-081" in fused_ids
+    assert fused_ids <= candidate_ids
+    assert "text-081" not in {
+        item["evidence_id"] for item in bundle.metadata["reranked_evidence"]
+    }
+    assert bundle.metadata["ranking_trace"]["backend_execution"] is True
 
 
 def test_hybrid_fusion_prioritizes_financial_statement_text_over_irrelevant_visual_score():
@@ -186,7 +409,7 @@ def test_hybrid_fusion_prioritizes_financial_statement_text_over_irrelevant_visu
     assert fused[0]["evidence_id"] == "text-income-balance-page"
     components = fused[0]["metadata"]["hybrid_fusion_components"]
     assert components["finance_statement_match"] > 0
-    assert trace["ranker"] == "modality_normalized_rrf_v1"
+    assert trace["ranker"] == "retriever_reciprocal_rank_fusion_v2"
 
 
 def test_hybrid_fusion_does_not_apply_finance_statement_boost_by_default():
@@ -219,7 +442,7 @@ def test_hybrid_fusion_does_not_apply_finance_statement_boost_by_default():
     assert components["finance_statement_match"] == 0.0
 
 
-def test_hybrid_fusion_keeps_top_text_and_limits_noisy_visual_pages():
+def test_hybrid_fusion_keeps_wide_candidates_for_downstream_mmr_selection():
     fused, trace = fuse_hybrid_evidence(
         "What were the revenue growth risks?",
         [
@@ -260,12 +483,13 @@ def test_hybrid_fusion_keeps_top_text_and_limits_noisy_visual_pages():
         "text-risk",
         "text-summary",
         "page-image:mmdoc:4",
+        "page-image:mmdoc:99",
     ]
-    assert trace["dropped_noise_count"] == 1
-    assert trace["selected_top_k"] == {"text": 2, "page_image": 1, "element": 2}
+    assert trace["dropped_noise_count"] == 0
+    assert "selected_top_k" not in trace
 
 
-def test_hybrid_bundle_falls_back_to_text_when_visual_page_degrades_locator():
+def test_hybrid_bundle_preserves_cross_page_visual_evidence():
     request = DocQARequest(
         prompt="What were the revenue growth risks?",
         route_policy="hybrid",
@@ -299,8 +523,11 @@ def test_hybrid_bundle_falls_back_to_text_when_visual_page_degrades_locator():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert [item["evidence_id"] for item in bundle.items] == ["text-risk"]
-    assert bundle.metadata["hybrid_fusion_trace"]["fallback_route"] == "text"
+    assert {item["evidence_id"] for item in bundle.items} == {
+        "text-risk",
+        "page-image:mmdoc:99",
+    }
+    assert bundle.metadata["hybrid_fusion_trace"]["fallback_route"] == ""
     assert bundle.metadata["hybrid_fusion_trace"]["best_single_route"] == "text"
 
 

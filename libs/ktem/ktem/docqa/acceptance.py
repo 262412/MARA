@@ -41,7 +41,9 @@ from ktem.db.models import Conversation, engine  # noqa: E402
 from ktem.docqa import DocQARequest, DocQARuntime  # noqa: E402
 from ktem.index.file.index import FileIndex  # noqa: E402
 from ktem.main import App  # noqa: E402
-from ktem.utils.dependencies import DependencyChecker, find_soffice_binary  # noqa: E402
+from ktem.preview.context import PreviewPurpose  # noqa: E402
+from ktem.preview.errors import PreviewError  # noqa: E402
+from ktem.preview.service import PreviewService, publish_validated_pdf  # noqa: E402
 from openpyxl import Workbook  # noqa: E402
 from pptx import Presentation  # noqa: E402
 from pptx.util import Inches  # noqa: E402
@@ -287,36 +289,23 @@ class AcceptanceMatrix:
         )
 
     def _convert_to_pdf(self, source_path: Path, output_pdf: Path) -> None:
-        available, libreoffice_info = DependencyChecker.check_libreoffice()
-        if not available:
-            raise AcceptanceFailure(
-                "LibreOffice is required to generate the PDF sample."
+        try:
+            converted_pdf = PreviewService().prepare_pdf(
+                source_path,
+                source_path.name,
+                purpose=PreviewPurpose.ACCEPTANCE,
             )
-
-        soffice = find_soffice_binary()
-        if not soffice:
+            if converted_pdf is None:
+                raise AcceptanceFailure(
+                    f"Shared preview conversion returned no PDF for {source_path}"
+                )
+            publish_validated_pdf(converted_pdf, output_pdf.parent, output_pdf.name)
+        except PreviewError as exc:
             raise AcceptanceFailure(
-                f"Unable to locate LibreOffice executable: {libreoffice_info}"
-            )
-
-        output_pdf.parent.mkdir(parents=True, exist_ok=True)
-        command = [
-            str(soffice),
-            "--headless",
-            "--convert-to",
-            "pdf",
-            "--outdir",
-            str(output_pdf.parent),
-            str(source_path),
-        ]
-        self._run_command(command, timeout=180)
-        converted_pdf = output_pdf.parent / f"{source_path.stem}.pdf"
-        if not converted_pdf.exists():
-            raise AcceptanceFailure(
-                f"LibreOffice did not produce PDF for {source_path}"
-            )
-        if converted_pdf != output_pdf:
-            shutil.move(str(converted_pdf), str(output_pdf))
+                "Unable to generate the PDF sample: "
+                f"code={exc.code.value} stage={exc.stage} "
+                f"converter={exc.converter} details={exc.details}"
+            ) from exc
 
     def run_doctor(self) -> None:
         result = self._run_cli(

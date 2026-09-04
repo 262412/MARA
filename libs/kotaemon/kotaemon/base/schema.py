@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar
 
-from langchain.schema.messages import AIMessage as LCAIMessage
-from langchain.schema.messages import HumanMessage as LCHumanMessage
-from langchain.schema.messages import SystemMessage as LCSystemMessage
+from langchain_core.messages import AIMessage as LCAIMessage
+from langchain_core.messages import HumanMessage as LCHumanMessage
+from langchain_core.messages import SystemMessage as LCSystemMessage
 from llama_index.core.bridge.pydantic import Field
 from llama_index.core.schema import Document as BaseDocument
 

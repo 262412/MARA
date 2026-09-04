@@ -1,8 +1,26 @@
+from pathlib import Path
+
+import pytest
+
 from kotaemon.contribs.promptui.config import export_pipeline_to_config
 from kotaemon.contribs.promptui.export import export_from_dict
 from kotaemon.contribs.promptui.ui import build_from_dict
 
 from .simple_pipeline import Pipeline
+
+
+def test_internal_promptui_tunnel_is_retired_without_downloads_or_embedded_secrets():
+    from kotaemon.contribs.promptui.tunnel import Tunnel
+
+    source = (
+        Path(__file__).parents[1] / "kotaemon/contribs/promptui/tunnel.py"
+    ).read_text(encoding="utf-8")
+    tunnel = Tunnel(appname="demo", username="operator", local_port=7860)
+
+    with pytest.raises(RuntimeError, match="retired"):
+        tunnel.run()
+    for forbidden in ("requests.get", "subprocess.Popen", "--token", "chmod"):
+        assert forbidden not in source
 
 
 class TestPromptConfig:

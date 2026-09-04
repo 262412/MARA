@@ -40,28 +40,31 @@ def test_offline_layout_sidecar_records_normalize_page_elements(tmp_path):
         file_path=source_path,
     )
 
-    assert records == [
-        {
-            "evidence_id": "element:file-1:4:table-4-1",
-            "file_id": "file-1",
-            "file_name": "report.pdf",
-            "page_label": "4",
-            "element_id": "table-4-1",
-            "modality": "table",
-            "bbox": [10, 20, 30, 40],
-            "caption": "Regional revenue",
-            "text": "North 10\nSouth 12",
-            "source_backrefs": ["file-1#page:4"],
-            "metadata": {
-                "element_schema_version": "1.0",
-                "sidecar_schema_version": "legacy",
-                "index_source": "offline_layout_sidecar",
-                "offline_layout_record_index": 0,
-                "offline_layout_sidecar": "report.pdf.mara-elements.json",
-                "parser_backend": "docling",
-            },
-        }
-    ]
+    [record] = records
+    assert record["evidence_id"] == "element:file-1:4:table-4-1"
+    assert record["source_id"] == "file-1"
+    assert record["file_id"] == "file-1"
+    assert record["file_name"] == "report.pdf"
+    assert record["page_label"] == "4"
+    assert record["element_id"] == "table-4-1"
+    assert record["modality"] == "table"
+    assert record["bbox"] == [10, 20, 30, 40]
+    assert record["caption"] == "Regional revenue"
+    assert record["text"] == "North 10\nSouth 12"
+    assert record["source_backrefs"] == ["file-1#page:4"]
+    assert record["identity"] == {
+        "source_id": "file-1",
+        "kind": "element",
+        "local_id": "table-4-1",
+    }
+    assert record["metadata"] == {
+        "element_schema_version": "1.0",
+        "sidecar_schema_version": "legacy",
+        "index_source": "offline_layout_sidecar",
+        "offline_layout_record_index": 0,
+        "offline_layout_sidecar": "report.pdf.mara-elements.json",
+        "parser_backend": "docling",
+    }
 
 
 def test_offline_layout_records_for_documents_consumes_file_once(tmp_path):

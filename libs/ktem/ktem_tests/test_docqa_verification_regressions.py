@@ -1,9 +1,14 @@
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.docqa.claim_filtering import answer_claims, clean_answer_text
+from ktem.docqa.claim_support import claim_supported
 from ktem.docqa.controller import build_controller_outputs
 from ktem.docqa.domain_verifiers import DomainVerifierRegistry
 from ktem.docqa.evidence_text import extract_final_answer_text
 from ktem.docqa.execution import execute_controller_turn
+from ktem_tests.finance_test_fixtures import (
+    quick_ratio_evidence_metadata as _quick_ratio_evidence_metadata,
+)
+from ktem_tests.finance_test_fixtures import quick_ratio_prompt as _quick_ratio_prompt
 
 
 def test_light_verifier_checks_final_answer_after_think_block_only():
@@ -77,6 +82,30 @@ def test_clean_answer_text_drops_untagged_thought_without_final_answer():
 
     assert clean_answer_text(answer) == ""
     assert answer_claims(answer) == []
+
+
+def test_incomplete_display_math_tail_preserves_substantive_answer():
+    answer = "The paper leverages labeled features. $$ \\text{"
+
+    assert clean_answer_text(answer) == "The paper leverages labeled features."
+    assert answer_claims(answer) == ["The paper leverages labeled features."]
+
+
+def test_markup_only_latex_command_is_not_a_supported_claim():
+    assert answer_claims(r"$$ \text{") == []
+    assert (
+        claim_supported(
+            r"$$ \text{",
+            [{"evidence_id": "source", "text": "The text describes labeled features."}],
+        )
+        is False
+    )
+
+
+def test_complete_latex_answer_is_preserved():
+    answer = r"$$ \text{labeled features} $$"
+
+    assert clean_answer_text(answer) == answer
 
 
 def test_verifier_abstains_reasoning_only_generation_without_claim_explosion():
@@ -284,7 +313,7 @@ def test_verifier_focuses_finance_questions_on_final_numeric_conclusion():
     assert payload["guardrail_decision"]["action"] == "return"
 
 
-def test_default_verifier_does_not_apply_finance_numeric_adapter():
+def test_default_verifier_still_rejects_conflicting_numeric_claim():
     payload = build_controller_outputs(
         DocQARequest(
             prompt=_quick_ratio_prompt(),
@@ -298,9 +327,14 @@ def test_default_verifier_does_not_apply_finance_numeric_adapter():
         ),
     )
 
-    assert payload["verify_decision"]["status"] == "supported"
-    assert payload["verify_decision"]["unsupported_claims"] == []
-    assert payload["guardrail_decision"]["action"] == "return"
+    assert payload["verify_decision"]["status"] == "unsupported"
+    assert payload["verify_decision"]["unsupported_claims"] == [
+        (
+            "Based on current assets, inventories, and current liabilities, "
+            "3M's quick ratio was 1.20."
+        )
+    ]
+    assert payload["guardrail_decision"]["action"] == "revise"
 
 
 def test_default_verifier_supports_short_source_level_evidence():
@@ -560,27 +594,3 @@ def test_execute_controller_turn_abstains_on_unsupported_quick_ratio_result():
     assert result.verify_decision.status == "unsupported"
     assert result.guardrail_decision.action == "abstain"
     assert result.answer
-
-
-def _quick_ratio_prompt() -> str:
-    return (
-        "Does 3M have a reasonably healthy liquidity profile based on its quick "
-        "ratio for Q2 of FY2023?"
-    )
-
-
-def _quick_ratio_evidence_metadata() -> dict:
-    return {
-        "evidence": [
-            {
-                "evidence_id": "balance-sheet-page",
-                "file_id": "file-1",
-                "page_label": "4",
-                "text": (
-                    "Total current assets $15,754 million. "
-                    "Total inventories $5,280 million. "
-                    "Total current liabilities $10,936 million."
-                ),
-            }
-        ]
-    }

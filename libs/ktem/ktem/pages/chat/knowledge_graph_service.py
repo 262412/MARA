@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import re
@@ -9,6 +9,8 @@ from typing import Any
 
 from ktem.db.engine import engine
 from ktem.llms.manager import llms
+from ktem.preview.context import preview_access_for_user
+from ktem.preview.service import PreviewService
 from sqlalchemy import select
 from sqlmodel import Session
 from theflow.settings import settings as flowsettings
@@ -86,6 +88,7 @@ class GlobalKnowledgeGraphService:
         self._app = app
         self._index = index
         self._lock = threading.Lock()
+        self._preview = PreviewService(app, engine=engine)
         self._builder = KnowledgeGraphBuilder(self)
         self._renderer = KnowledgeGraphRenderer(self)
 
@@ -183,35 +186,27 @@ class GlobalKnowledgeGraphService:
         with path.open("w", encoding="utf-8") as file_obj:
             json.dump(state, file_obj, ensure_ascii=False, indent=2)
 
-    def _load_sources(self, source_ids: list[str]) -> dict[str, dict[str, Any]]:
+    def _load_sources(
+        self, source_ids: list[str], *, user_id: Any = None
+    ) -> dict[str, dict[str, Any]]:
         source_ids = self._normalize_source_ids(source_ids)
         if not source_ids or self._index is None:
             return {}
-
-        source_table = self._index._resources["Source"]
-        with Session(engine) as session:
-            rows = session.execute(
-                select(source_table).where(source_table.id.in_(source_ids))
-            ).all()
-
-        sources_by_id: dict[str, dict[str, Any]] = {}
-        for (row,) in rows:
-            file_id = str(getattr(row, "id", "") or "")
-            if not file_id:
-                continue
-            sources_by_id[file_id] = {
-                "id": file_id,
-                "name": str(getattr(row, "name", "") or file_id),
-                "path": str(getattr(row, "path", "") or ""),
-                "size": int(getattr(row, "size", 0) or 0),
-                "date_created": str(getattr(row, "date_created", "") or ""),
+        sources = self._preview.resolve_sources(
+            source_ids,
+            access=preview_access_for_user(self._app, user_id),
+            strict=True,
+        )
+        return {
+            source.file_id: {
+                "id": source.file_id,
+                "name": source.name or source.file_id,
+                "path": source.stored_path,
+                "size": source.size,
+                "date_created": str(source.date_created or ""),
             }
-
-        ordered_sources: dict[str, dict[str, Any]] = {}
-        for source_id in source_ids:
-            if source_id in sources_by_id:
-                ordered_sources[source_id] = sources_by_id[source_id]
-        return ordered_sources
+            for source in sources
+        }
 
     @staticmethod
     def _make_signature(source: dict[str, Any]) -> str:
@@ -562,12 +557,13 @@ class GlobalKnowledgeGraphService:
         graph_source_ids: list[str] | str | None,
         focus_file_id: str = "",
         force_rebuild: bool = False,
+        *,
+        user_id: Any = None,
     ) -> dict[str, Any]:
         conversation_id = str(conversation_id or "draft")
         source_ids = self._normalize_source_ids(graph_source_ids)
-
         with self._lock:
-            sources = self._load_sources(source_ids)
+            sources = self._load_sources(source_ids, user_id=user_id)
             valid_source_ids = list(sources.keys())
             manifest = {
                 file_id: self._make_signature(source)
@@ -582,7 +578,6 @@ class GlobalKnowledgeGraphService:
                 or 0
             )
             missing_count = max(0, len(source_ids) - len(valid_source_ids))
-
             if not valid_source_ids:
                 html_content = self._render_empty_html(
                     "No graph sources in this conversation yet.",

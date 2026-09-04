@@ -124,7 +124,7 @@ def test_workbench_matches_reference_prototype_structure():
     assert "page._render_citations_card_html()" in chat_layout
     assert "render_studio_trace_panel" in chat_page
     assert "response.artifact" in chat_page
-    assert "render_conversation_notebook_update" in chat_page
+    assert "render_conversation_notebook_root" in chat_page
     assert "render_latest_reasoning_trace" in chat_page
     assert "render_latest_citations_card" in chat_page
     assert "Citations (3)" not in chat_page

@@ -176,12 +176,13 @@ def test_conversation_notebook_notes_are_persisted():
     try:
         note = add_note_to_conversation(
             conversation_id,
+            user_id="user-1",
             title="Manual note",
             text="Persist this note.",
             note_id="note-1",
             timestamp="2026-05-31T12:03:00+00:00",
         )
-        notebook = get_notebook(conversation_id)
+        notebook = get_notebook(conversation_id, user_id="user-1")
 
         assert notebook["notes"] == [note]
         assert note["source"] == "manual"
@@ -208,10 +209,13 @@ def test_conversation_source_selection_is_persisted():
         selected = select_conversation_sources(
             conversation_id,
             ["file-2", "file-1", "file-2"],
+            user_id="user-1",
         )
 
         assert selected == ["file-2", "file-1"]
-        assert get_notebook(conversation_id)["selected_source_ids"] == [
+        assert get_notebook(conversation_id, user_id="user-1")[
+            "selected_source_ids"
+        ] == [
             "file-2",
             "file-1",
         ]
@@ -242,6 +246,7 @@ def test_conversation_artifact_is_persisted_to_notebook():
     try:
         artifact = save_artifact_to_conversation(
             conversation_id,
+            user_id="user-1",
             artifact_type="study_guide",
             payload={"sections": []},
             artifact_id="artifact-1",
@@ -255,12 +260,17 @@ def test_conversation_artifact_is_persisted_to_notebook():
         assert artifact["title"] == "Study Guide"
         assert artifact["created_at"] == "2026-05-31T12:06:00+00:00"
         assert artifact["updated_at"] == "2026-05-31T12:06:00+00:00"
-        assert get_notebook(conversation_id)["artifacts"] == [artifact]
-        assert list_artifacts({NOTEBOOK_KEY: get_notebook(conversation_id)}) == [
+        assert get_notebook(conversation_id, user_id="user-1")["artifacts"] == [
             artifact
         ]
+        assert list_artifacts(
+            {NOTEBOOK_KEY: get_notebook(conversation_id, user_id="user-1")}
+        ) == [artifact]
         assert (
-            get_artifact({NOTEBOOK_KEY: get_notebook(conversation_id)}, "artifact-1")
+            get_artifact(
+                {NOTEBOOK_KEY: get_notebook(conversation_id, user_id="user-1")},
+                "artifact-1",
+            )
             == artifact
         )
     finally:
@@ -285,6 +295,7 @@ def test_cross_format_artifacts_survive_reload_for_collection_evaluation():
     try:
         save_artifact_to_conversation(
             conversation_id,
+            user_id="user-1",
             artifact_type="study_guide",
             payload={"overview": "Grounded overview."},
             artifact_id="artifact-1",
@@ -296,6 +307,7 @@ def test_cross_format_artifacts_survive_reload_for_collection_evaluation():
         )
         save_artifact_to_conversation(
             conversation_id,
+            user_id="user-1",
             artifact_type="quiz",
             payload={"multiple_choice": []},
             artifact_id="artifact-2",
@@ -307,7 +319,7 @@ def test_cross_format_artifacts_survive_reload_for_collection_evaluation():
         )
 
         report = evaluate_artifact_collection(
-            get_notebook(conversation_id)["artifacts"]
+            get_notebook(conversation_id, user_id="user-1")["artifacts"]
         )
 
         assert report["artifact_count"] == 2

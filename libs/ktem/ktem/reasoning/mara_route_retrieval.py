@@ -4,17 +4,32 @@ import os
 import re
 from typing import Any, Callable
 
+from ktem.docqa import element_slot_candidates
 from ktem.docqa.element_retriever import rank_element_records
+from ktem.docqa.evidence_identity import identity_of
 from ktem.docqa.graph_index import (
     graph_context_evidence_metadata,
     select_graph_index_evidence,
 )
 from ktem.docqa.multimodal_index import build_local_page_image_records
+from ktem.docqa.query_planning import build_query_plan
+from ktem.docqa.visual_evidence_authority import (
+    bridge_element_records_to_page_records as _bridge_element_records_to_page_records,
+)
 from ktem.docqa.visual_retriever import rank_page_image_records
+
+from .mara_element_ingestion_trace import element_ingestion_trace
+from .mara_route_retrieval_trace import (
+    bounded_retrieval_attempts as _bounded_retrieval_attempts,
+)
+from .mara_route_retrieval_trace import (
+    reranker_execution_traces as _reranker_execution_traces,
+)
 
 TextRetrieveFn = Callable[[], tuple[list[Any], list[Any]]]
 MetadataBuilderFn = Callable[[list[Any], dict[str, Any]], dict[str, Any]]
 DEFAULT_PAGE_IMAGE_RANK_CANDIDATE_LIMIT = 48
+ELEMENT_RANK_CANDIDATE_LIMIT = 20
 _QUERY_STOPWORDS = {
     "and",
     "are",
@@ -36,6 +51,23 @@ _QUERY_STOPWORDS = {
 }
 
 
+def controller_text_retrieve(
+    pipeline: Any,
+    query: str,
+    history: list,
+) -> tuple[list[Any], list[Any]]:
+    marker = "_mara_disable_nested_retrieval_retry"
+    previous = getattr(pipeline, marker, None)
+    setattr(pipeline, marker, True)
+    try:
+        return pipeline.retrieve(query, history)
+    finally:
+        if previous is None:
+            delattr(pipeline, marker)
+        else:
+            setattr(pipeline, marker, previous)
+
+
 def route_retrieval_metadata(
     pipeline: Any,
     route: str,
@@ -45,11 +77,17 @@ def route_retrieval_metadata(
     *,
     text_retrieve: TextRetrieveFn,
     metadata_builder: MetadataBuilderFn,
+    request: Any | None = None,
 ) -> dict[str, Any]:
     if route == "page_image_rag":
         return _page_image_metadata(pipeline, understanding)
     if route == "element_rag":
-        return _element_metadata(pipeline, understanding)
+        return _element_metadata(
+            pipeline,
+            understanding,
+            query=message,
+            request=request,
+        )
     if route == "graph_rag":
         return _graph_metadata(pipeline, understanding)
     if route == "hybrid_rag":
@@ -65,7 +103,15 @@ def route_retrieval_metadata(
             _merge_page_image_metadata(
                 metadata, _page_image_metadata(pipeline, understanding)
             )
-        _merge_element_metadata(metadata, _element_metadata(pipeline, understanding))
+        _merge_element_metadata(
+            metadata,
+            _element_metadata(
+                pipeline,
+                understanding,
+                query=message,
+                request=request,
+            ),
+        )
         _merge_graph_metadata(metadata, _graph_metadata(pipeline, understanding))
         return metadata
     return _text_metadata(
@@ -90,6 +136,11 @@ def _text_metadata(
     docs, info = text_retrieve()
     pipeline._mara_cached_retrieval = (message, list(history), docs, info)
     metadata = metadata_builder(docs, understanding)
+    reranker_traces = _reranker_execution_traces(pipeline)
+    if reranker_traces:
+        metadata["reranker_execution_traces"] = reranker_traces
+        metadata["reranker_execution_trace"] = reranker_traces[-1]
+        metadata["reranker_backend"] = str(reranker_traces[-1].get("backend") or "")
     attempts = _bounded_retrieval_attempts(
         getattr(pipeline, "_mara_retrieval_attempts", [])
     )
@@ -97,21 +148,6 @@ def _text_metadata(
         metadata["retrieval_attempts"] = attempts
     metadata["retrieval_info_count"] = len(info)
     return metadata
-
-
-def _bounded_retrieval_attempts(attempts: Any) -> list[dict[str, Any]]:
-    bounded: list[dict[str, Any]] = []
-    for attempt in attempts or []:
-        if not isinstance(attempt, dict):
-            continue
-        bounded.append(
-            {
-                "attempt": int(attempt.get("attempt") or 0),
-                "evidence_count": int(attempt.get("evidence_count") or 0),
-                "retry_reason": str(attempt.get("retry_reason") or ""),
-            }
-        )
-    return bounded
 
 
 def _page_image_metadata(
@@ -183,7 +219,11 @@ def _page_image_metadata_enabled(pipeline: Any) -> bool:
 def _page_image_records_for_pipeline(pipeline: Any) -> list[dict[str, Any]]:
     explicit_records = getattr(pipeline, "page_image_index_records", None)
     if explicit_records:
-        return [dict(item) for item in explicit_records if isinstance(item, dict)]
+        return _bridge_element_records_to_page_records(
+            [dict(item) for item in explicit_records if isinstance(item, dict)],
+            element_slot_candidates.element_records_for_pipeline(pipeline),
+            pipeline=pipeline,
+        )
 
     file_records = [
         dict(item)
@@ -208,10 +248,14 @@ def _page_image_records_for_pipeline(pipeline: Any) -> list[dict[str, Any]]:
     if page_number not in (None, ""):
         page_numbers = [int(str(page_number))]
     max_pages = None if page_numbers else _page_image_rank_candidate_limit(pipeline)
-    return build_local_page_image_records(
-        file_records,
-        page_numbers=page_numbers,
-        max_pages=max_pages,
+    return _bridge_element_records_to_page_records(
+        build_local_page_image_records(
+            file_records,
+            page_numbers=page_numbers,
+            max_pages=max_pages,
+        ),
+        element_slot_candidates.element_records_for_pipeline(pipeline),
+        pipeline=pipeline,
     )
 
 
@@ -322,8 +366,11 @@ def _string_values(values: list[Any]) -> list[str]:
 def _element_metadata(
     pipeline: Any,
     understanding: dict[str, Any],
+    *,
+    query: str = "",
+    request: Any | None = None,
 ) -> dict[str, Any]:
-    records = _element_records_for_pipeline(pipeline)
+    records = element_slot_candidates.element_records_for_pipeline(pipeline)
     if not records:
         return {
             "requested_modalities": list(understanding.get("modalities", [])),
@@ -332,30 +379,65 @@ def _element_metadata(
             "source_ids": [],
             "evidence_ids": [],
             "evidence": [],
+            "element_candidate_count": 0,
+            "element_selected_candidate_count": 0,
+            "element_ingestion_trace": element_ingestion_trace(pipeline, records),
         }
     ranked, scores = rank_element_records(
-        str(understanding.get("question") or ""),
+        str(query or understanding.get("question") or ""),
         records,
         retriever=getattr(pipeline, "element_retriever", None),
         evidence_hints=_element_evidence_hints(understanding, pipeline),
     )
+    request = (
+        request if request is not None else getattr(pipeline, "docqa_request", None)
+    )
+    plan = build_query_plan(
+        str(understanding.get("question") or ""),
+        answer_type=str(
+            getattr(request, "answer_type", None)
+            or getattr(request, "task_type", None)
+            or ""
+        ),
+        verification_domain=str(getattr(request, "verification_domain", None) or ""),
+        planner_payload=getattr(request, "query_plan", None),
+    )
+    active_slot_id = str(getattr(request, "retrieval_slot_id", "") or "").strip()
+    (
+        selected,
+        restored_required,
+        active_slot_candidate_count,
+        active_slot_parent_candidate_count,
+    ) = element_slot_candidates.shortlist_element_candidates(
+        ranked,
+        plan,
+        active_slot_id=active_slot_id,
+        candidate_limit=ELEMENT_RANK_CANDIDATE_LIMIT,
+    )
+    selected_ids = {identity_of(item).key for item in selected}
     return {
         "requested_modalities": list(understanding.get("modalities", [])),
-        "modality_counts": _element_modality_counts(ranked),
-        "page_coverage": _unique(item.get("page_label") for item in ranked),
-        "source_ids": _unique(item.get("file_id") for item in ranked),
-        "evidence_ids": _unique(item.get("evidence_id") for item in ranked),
+        "modality_counts": element_slot_candidates.element_modality_counts(selected),
+        "page_coverage": _unique(item.get("page_label") for item in selected),
+        "source_ids": _unique(item.get("file_id") for item in selected),
+        "evidence_ids": _unique(item.get("evidence_id") for item in selected),
         "evidence": [],
-        "element_index": ranked,
-        "element_retriever_scores": scores,
+        "element_index": selected,
+        "element_retriever_scores": {
+            evidence_id: score
+            for evidence_id, score in scores.items()
+            if evidence_id in selected_ids
+        },
+        "element_candidate_count": len(records),
+        "element_selected_candidate_count": len(selected),
+        "element_required_slot_candidates_restored": restored_required,
+        "element_active_slot_id": active_slot_id,
+        "element_active_slot_candidate_count": active_slot_candidate_count,
+        "element_active_slot_parent_candidate_count": (
+            active_slot_parent_candidate_count
+        ),
+        "element_ingestion_trace": element_ingestion_trace(pipeline, records),
     }
-
-
-def _element_records_for_pipeline(pipeline: Any) -> list[dict[str, Any]]:
-    explicit_records = getattr(pipeline, "element_index_records", None)
-    if not explicit_records:
-        return []
-    return [dict(item) for item in explicit_records if isinstance(item, dict)]
 
 
 def _element_evidence_hints(
@@ -412,16 +494,6 @@ def _hint_values(value: Any) -> list[Any]:
     if isinstance(value, (list, tuple, set)):
         return list(value)
     return [value]
-
-
-def _element_modality_counts(records: list[dict[str, Any]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for record in records:
-        modality = str(
-            record.get("modality") or record.get("element_type") or "element"
-        ).strip()
-        counts[modality or "element"] = counts.get(modality or "element", 0) + 1
-    return counts
 
 
 def _merge_page_image_metadata(

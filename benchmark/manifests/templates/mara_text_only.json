@@ -44,6 +44,7 @@
     },
     {
       "route_id": "controller_auto",
+      "headline_role": "deployed_policy",
       "route_name": "Controller auto",
       "engine": "docqa_runtime",
       "scope": "multi_document",

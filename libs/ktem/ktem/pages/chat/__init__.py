@@ -5,13 +5,14 @@ import os
 import re
 import shutil
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import gradio as gr
 from ktem.app import BasePage
+from ktem.auth.service import resolve_request_user_id
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
-from ktem.reasoning.prompt_optimization.mindmap import MINDMAP_HTML_EXPORT_TEMPLATE
+from ktem.preview.context import preview_access_for_user
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
     SuggestConvNamePipeline,
 )
@@ -37,7 +38,9 @@ from .chat_auxiliary_events import (
 )
 from .chat_conversation_events import bind_chat_conversation_events
 from .chat_docqa_runtime import build_web_docqa_request
+from .chat_gradio_adapters import chat_app_load_ports, chat_conversation_ports
 from .chat_knowledge_graph_bindings import subscribe_public_knowledge_graph_events
+from .chat_knowledge_graph_runtime import generate_graph, refresh_graph
 from .chat_layout import render_chat_workbench_layout
 from .chat_message_events import bind_chat_submit_events
 from .chat_preview_events import bind_chat_preview_events
@@ -57,14 +60,16 @@ from .source_scope import (
 )
 from .studio_artifact_controls import bind_studio_artifact_events
 from .studio_artifacts import (
-    render_conversation_notebook_update,
+    render_conversation_notebook_root,
     render_studio_trace_panel,
 )
+from .studio_callback_identity import bind_page_callback
 
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
 KH_WEB_SEARCH_BACKEND = getattr(flowsettings, "KH_WEB_SEARCH_BACKEND", None)
 logger = logging.getLogger(__name__)
+_DIRECT_CALL_REQUEST = cast(gr.Request, object())
 WebSearch = None
 if KH_WEB_SEARCH_BACKEND:
     try:
@@ -158,12 +163,7 @@ function() {
         links[i].onclick = scrollToCitation;
     }
 
-    var markmap_div = document.querySelector("div.markmap");
     var mindmap_el_script = document.querySelector('div.markmap script');
-
-    if (mindmap_el_script) {
-        markmap_div_html = markmap_div.outerHTML;
-    }
 
     // render the mindmap if the script tag is present
     if (mindmap_el_script) {
@@ -180,9 +180,8 @@ function() {
 
         if (mindmap_el) {
             function on_svg_export(event) {
-                html = "{html_template}";
-                html = html.replace("{markmap_div}", markmap_div_html);
-                spawnDocument(html, {window: "width=1000,height=1000"});
+                event.preventDefault();
+                spawnDocument(mindmap_el, {window: "width=1000,height=1000"});
             }
 
             var link = document.getElementById("mindmap-toggle");
@@ -201,11 +200,9 @@ function() {
                 };
             }
 
-            if (markmap_div_html) {
-                var link = document.getElementById("mindmap-export");
-                if (link) {
-                    link.addEventListener('click', on_svg_export);
-                }
+            var export_link = document.getElementById("mindmap-export");
+            if (export_link) {
+                export_link.addEventListener('click', on_svg_export);
             }
         }
     }, 250);
@@ -333,10 +330,7 @@ function() {
 
     return [links.length]
 }
-""".replace(
-    "{html_template}",
-    MINDMAP_HTML_EXPORT_TEMPLATE.replace("\n", "").replace('"', '\\"'),
-)
+"""
 
 fetch_api_key_js = """
 function(_, __) {
@@ -621,7 +615,9 @@ class ChatPage(BasePage):
         try:
             with Session(engine) as session:
                 statement = select(Source)
-                if self.file_index.config.get("private", False):
+                if self.file_index.config.get("private", False) or getattr(
+                    self._app, "f_user_management", False
+                ):
                     statement = statement.where(Source.user == user_id)
 
                 rows = session.execute(statement).all()
@@ -669,7 +665,9 @@ class ChatPage(BasePage):
         graph_source_ids,
         first_selector_choices,
         user_id,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        user_id = self._resolve_persist_user_id(user_id, request)
         source_map = self._load_available_source_map(user_id)
         selector_source_map = self._build_selector_source_map(first_selector_choices)
         return sync_graph_source_ids(
@@ -683,38 +681,24 @@ class ChatPage(BasePage):
         conversation_id,
         user_id,
         graph_source_ids,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         normalized_ids = self._normalize_selected_file_ids(graph_source_ids)
         if not conversation_id:
             return normalized_ids
-
+        user_id = self._resolve_persist_user_id(user_id, request)
+        available_ids = set(self._load_available_source_map(user_id))
+        normalized_ids = [
+            file_id for file_id in normalized_ids if file_id in available_ids
+        ]
         try:
-            with Session(engine) as session:
-                statement = select(Conversation).where(
-                    Conversation.id == conversation_id
-                )
-                row = session.exec(statement).one_or_none()
-                if not row:
-                    return normalized_ids
-
-                if row.user not in (None, user_id):
-                    return normalized_ids
-
-                data_source = dict(row.data_source or {})
-                existing_ids = self._normalize_selected_file_ids(
-                    data_source.get("graph_source_ids", [])
-                )
-                if existing_ids == normalized_ids:
-                    return normalized_ids
-
-                data_source["graph_source_ids"] = normalized_ids
-                row.data_source = data_source
-                session.add(row)
-                session.commit()
-        except Exception as exc:
-            logger.warning("Failed to persist conversation source scope: %s", exc)
-
-        return normalized_ids
+            return self.docqa.persist_graph_source_ids(
+                conversation_id,
+                normalized_ids,
+                user_id=user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
 
     @staticmethod
     def _format_corpus_file_type(file_name: str) -> str:
@@ -750,11 +734,14 @@ class ChatPage(BasePage):
             return "1 page"
         return "page count unavailable"
 
-    def _resolve_source_file_path(self, file_id: str) -> str:
+    def _resolve_source_file_path(self, file_id: str, user_id=None) -> str:
         if not file_id:
             return ""
         try:
-            return self.page_preview.resolve_file_path(file_id)
+            return self.page_preview.resolve_file_path(
+                file_id,
+                access=preview_access_for_user(self._app, user_id),
+            )
         except Exception as exc:
             logger.debug("Failed to resolve source file path %s: %s", file_id, exc)
             return ""
@@ -787,12 +774,7 @@ class ChatPage(BasePage):
             file_id: str(record.get("name", "") or file_id)
             for file_id, record in records.items()
         }
-        if not source_map:
-            source_map = self._build_selector_source_map(first_selector_choices)
-            records = {
-                file_id: {"id": file_id, "name": name, "path": "", "size": 0}
-                for file_id, name in source_map.items()
-            }
+        del first_selector_choices
 
         rows: list[dict] = []
         for file_id in source_map:
@@ -800,7 +782,7 @@ class ChatPage(BasePage):
             file_name = str(record.get("name", "") or source_map.get(file_id, file_id))
             if keyword and keyword not in file_name.lower():
                 continue
-            file_path = self._resolve_source_file_path(file_id)
+            file_path = self._resolve_source_file_path(file_id, user_id)
             size = int(record.get("size", 0) or 0)
             if not size and file_path and os.path.isfile(file_path):
                 size = os.path.getsize(file_path)
@@ -1240,8 +1222,19 @@ class ChatPage(BasePage):
         )
 
     def refresh_page_context_view(
-        self, file_id, file_name, file_path, page_number, total_pages, filter_text=""
+        self,
+        file_id,
+        file_name,
+        file_path,
+        page_number,
+        total_pages,
+        filter_text="",
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        if file_id:
+            file_name, file_path = self.page_preview._resolve_callback_source(
+                file_id, request
+            )
         return (
             self._render_page_strip_header(file_id, file_name, file_path, total_pages),
             self._render_page_thumbnail_strip(
@@ -1260,7 +1253,9 @@ class ChatPage(BasePage):
         selected_file_ids,
         graph_source_ids,
         filter_text,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        user_id = self._resolve_persist_user_id(user_id, request)
         selected_ids = self._normalize_selected_file_ids(selected_file_ids)
         selected_set = set(selected_ids)
         keyword = str(filter_text or "").strip().lower()
@@ -1300,56 +1295,28 @@ class ChatPage(BasePage):
             return gr.update(), gr.update(), ""
         return "select", gr.update(value=[target_id]), ""
 
-    def load_conversation_graph_state(self, conversation_id):
+    def load_conversation_graph_state(
+        self,
+        conversation_id,
+        user_id=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
+    ):
         if not conversation_id:
             return []
+        user_id = self._resolve_persist_user_id(user_id, request)
         try:
-            with Session(engine) as session:
-                statement = select(Conversation).where(
-                    Conversation.id == conversation_id
-                )
-                result = session.exec(statement).one_or_none()
-        except Exception:
-            return []
-        if not result:
-            return []
-        data_source = dict(result.data_source or {})
-        value = self._normalize_selected_file_ids(
-            data_source.get("graph_source_ids", [])
-        )
-        fallback_ids = self._extract_selected_ids_from_data_source(data_source)
-        merged_ids = self._merge_unique_file_ids(value, fallback_ids)
-        if merged_ids and merged_ids != value:
-            data_source["graph_source_ids"] = merged_ids
-            try:
-                with Session(engine) as session:
-                    statement = select(Conversation).where(
-                        Conversation.id == conversation_id
-                    )
-                    row = session.exec(statement).one_or_none()
-                    if row:
-                        row.data_source = data_source
-                        session.add(row)
-                        session.commit()
-            except Exception:
-                pass
-            return merged_ids
-
-        if fallback_ids and not value:
-            data_source["graph_source_ids"] = fallback_ids
-            try:
-                with Session(engine) as session:
-                    statement = select(Conversation).where(
-                        Conversation.id == conversation_id
-                    )
-                    row = session.exec(statement).one_or_none()
-                    if row:
-                        row.data_source = data_source
-                        session.add(row)
-                        session.commit()
-            except Exception:
-                pass
-        return value if value else fallback_ids
+            graph_source_ids = self.docqa.load_graph_source_ids(
+                conversation_id,
+                user_id=user_id,
+            )
+            available_ids = set(self._load_available_source_map(user_id))
+            return [
+                file_id
+                for file_id in self._normalize_selected_file_ids(graph_source_ids)
+                if file_id in available_ids
+            ]
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
 
     def show_knowledge_graph_loading(self, _trigger=None, mode: str = "update"):
         normalized_mode = str(mode or "update").strip().lower()
@@ -1382,46 +1349,16 @@ class ChatPage(BasePage):
         graph_source_ids,
         focus_file_id,
         selected_file_ids=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
-        if not self.knowledge_graph:
-            return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
-        source_scope = self._merge_unique_file_ids(
-            self._normalize_selected_file_ids(graph_source_ids),
-            self._normalize_selected_file_ids(selected_file_ids),
-            [focus_file_id] if focus_file_id else [],
+        return refresh_graph(
+            self,
+            conversation_id,
+            graph_source_ids,
+            focus_file_id,
+            selected_file_ids,
+            request,
         )
-        try:
-            graph_view = self.knowledge_graph.get_graph_view(
-                conversation_id=conversation_id,
-                graph_source_ids=source_scope,
-                focus_file_id=focus_file_id,
-                force_rebuild=False,
-            )
-
-            # Auto-heal stale cache during normal refresh so file add/delete events
-            # immediately reflect in the graph without requiring manual button click.
-            if graph_view.get("status") == "stale":
-                graph_view = self.knowledge_graph.get_graph_view(
-                    conversation_id=conversation_id,
-                    graph_source_ids=source_scope,
-                    focus_file_id=focus_file_id,
-                    force_rebuild=True,
-                )
-
-            return (
-                self._json_to_plot(graph_view),
-                graph_view,
-                f"Status: {graph_view.get('status_message', 'ready')}",
-                graph_view.get("graph_source_ids", []),
-            )
-        except Exception as exc:
-            logger.warning("Failed to refresh knowledge graph: %s", exc)
-            return (
-                gr.update(value=""),
-                None,
-                "Status: failed to load knowledge graph.",
-                self._normalize_selected_file_ids(source_scope),
-            )
 
     def auto_refresh_knowledge_graph(
         self,
@@ -1429,14 +1366,14 @@ class ChatPage(BasePage):
         graph_source_ids,
         focus_file_id,
         selected_file_ids=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
-        # Keep backward compatibility with existing event wiring without
-        # forcing a rebuild.
         return self.refresh_knowledge_graph(
             conversation_id=conversation_id,
             graph_source_ids=graph_source_ids,
             focus_file_id=focus_file_id,
             selected_file_ids=selected_file_ids,
+            request=request,
         )
 
     def generate_knowledge_graph(
@@ -1445,35 +1382,16 @@ class ChatPage(BasePage):
         graph_source_ids,
         focus_file_id,
         selected_file_ids=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
-        if not self.knowledge_graph:
-            return gr.update(value=""), None, "Status: knowledge graph unavailable.", []
-        source_scope = self._merge_unique_file_ids(
-            self._normalize_selected_file_ids(graph_source_ids),
-            self._normalize_selected_file_ids(selected_file_ids),
-            [focus_file_id] if focus_file_id else [],
+        return generate_graph(
+            self,
+            conversation_id,
+            graph_source_ids,
+            focus_file_id,
+            selected_file_ids,
+            request,
         )
-        try:
-            graph_view = self.knowledge_graph.get_graph_view(
-                conversation_id=conversation_id,
-                graph_source_ids=source_scope,
-                focus_file_id=focus_file_id,
-                force_rebuild=True,
-            )
-            return (
-                self._json_to_plot(graph_view),
-                graph_view,
-                f"Status: {graph_view.get('status_message', 'ready')}",
-                graph_view.get("graph_source_ids", []),
-            )
-        except Exception as exc:
-            logger.warning("Failed to generate knowledge graph: %s", exc)
-            return (
-                gr.update(value=""),
-                None,
-                "Status: failed to generate knowledge graph.",
-                self._normalize_selected_file_ids(source_scope),
-            )
 
     def _format_chat_message(self, content: str, role: str) -> str:
         """Format a chat message as a bubble"""
@@ -1540,6 +1458,7 @@ class ChatPage(BasePage):
         active_file_name,
         page_number,
         selected_page_text,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
         *selecteds,
     ):
         if not last_question:
@@ -1562,7 +1481,6 @@ class ChatPage(BasePage):
             rerun_history = rerun_history[:-1] + [(last_question, None)]
         else:
             rerun_history = rerun_history + [(last_question, None)]
-
         final_output = None
         for output in self.chat_fn(
             conversation_id,
@@ -1581,7 +1499,7 @@ class ChatPage(BasePage):
             page_number,
             "page",
             selected_page_text,
-            *("", "llm", "auto", "light", "", None),
+            *("", "llm", "auto", "light", "", None, request),
             *selecteds,
         ):
             final_output = output
@@ -1635,7 +1553,7 @@ class ChatPage(BasePage):
             pdfview_js=pdfview_js,
         )
         self.chat_control.conversation_id.change(
-            render_conversation_notebook_update,
+            bind_page_callback(render_conversation_notebook_root, self),
             [self.chat_control.conversation_id],
             [self.plot_panel, self.notebook_panel],
         )
@@ -1663,6 +1581,7 @@ class ChatPage(BasePage):
         request: gr.Request,
     ):
         """Submit a message to the chatbot"""
+        user_id = self._resolve_persist_user_id(user_id, request)
         if KH_DEMO_MODE:
             sso_user_id = check_rate_limit("chat", request)
             logger.debug("User ID: %s", sso_user_id)
@@ -1684,7 +1603,7 @@ class ChatPage(BasePage):
 
         if not conv_id:
             if not KH_DEMO_MODE:
-                id_, update = self.chat_control.new_conv(user_id)
+                id_, update = self.chat_control.new_conv(user_id, request)
                 with Session(engine) as session:
                     statement = select(Conversation).where(Conversation.id == id_)
                     name = session.exec(statement).one().name
@@ -1731,27 +1650,26 @@ class ChatPage(BasePage):
         else:
             return gr.update(visible=True), gr.update(visible=False)
 
-    def on_set_public_conversation(self, is_public, convo_id):
+    def on_set_public_conversation(
+        self,
+        is_public,
+        convo_id,
+        user_id=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
+    ):
         if not convo_id:
             gr.Warning("No conversation selected")
             return
-
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == convo_id)
-
-            result = session.exec(statement).one()
-            name = result.name
-
-            if result.is_public != is_public:
-                # Only trigger updating when user
-                # select different value from the current
-                result.is_public = is_public
-                session.add(result)
-                session.commit()
-
-                gr.Info(
-                    f"Conversation: {name} is {'public' if is_public else 'private'}."
-                )
+        user_id = self._resolve_persist_user_id(user_id, request)
+        try:
+            name = self.docqa.set_session_public(
+                convo_id,
+                bool(is_public),
+                user_id=user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
+        gr.Info(f"Conversation: {name} is {'public' if is_public else 'private'}.")
 
     def on_subscribe_public_events(self):
         if self.knowledge_graph and len(self._indices_input) > 1 and self.file_index:
@@ -1771,53 +1689,30 @@ class ChatPage(BasePage):
             self._app.subscribe_event(
                 name="onSignOut",
                 definition={
-                    "fn": lambda: self.chat_control.select_conv("", None),
-                    "outputs": [
-                        self.chat_control.conversation_id,
-                        self.chat_control.conversation,
-                        self.chat_control.conversation_rn,
-                        self.chat_panel.chatbot,
-                        self.followup_questions,
-                        self.info_panel,
-                        self.state_plot_panel,
-                        self.state_retrieval_history,
-                        self.state_plot_history,
-                        self.chat_control.cb_is_public,
-                        self.state_chat,
-                    ]
-                    + self._indices_input,
+                    "fn": self.chat_control.clear_conv,
+                    "outputs": chat_conversation_ports(
+                        self, demo_mode=KH_DEMO_MODE
+                    ).selection.gradio_outputs,
                     "show_progress": "hidden",
                 },
             )
 
     def _on_app_created(self):
         if KH_DEMO_MODE:
+            ports = chat_app_load_ports(self)
             self._app.app.load(
                 fn=lambda x: x,
-                inputs=[self._user_api_key],
-                outputs=[self._user_api_key],
+                inputs=ports.api_key.gradio_inputs,
+                outputs=ports.api_key.gradio_outputs,
                 js=fetch_api_key_js,
             ).then(
                 fn=self.chat_control.toggle_demo_login_visibility,
-                inputs=[self._user_api_key],
-                outputs=[
-                    self.chat_control.cb_suggest_chat,
-                    self.chat_control.btn_new,
-                    self.chat_control.btn_demo_logout,
-                    self.chat_control.btn_demo_login,
-                ],
+                inputs=ports.login_visibility.gradio_inputs,
+                outputs=ports.login_visibility.gradio_outputs,
             ).then(
                 fn=self.suggest_chat_conv,
-                inputs=[
-                    self._app.settings_state,
-                    self.language,
-                    self.chat_panel.chatbot,
-                    self._use_suggestion,
-                ],
-                outputs=[
-                    self.followup_questions_ui,
-                    self.followup_questions,
-                ],
+                inputs=ports.suggestions.gradio_inputs,
+                outputs=ports.suggestions.gradio_outputs,
             ).then(
                 fn=None,
                 inputs=None,
@@ -1835,12 +1730,14 @@ class ChatPage(BasePage):
         messages,
         state,
         graph_source_ids,
+        request: gr.Request,
         *selecteds,
     ):
         """Update the data source"""
         if not convo_id:
             gr.Warning("No conversation selected")
             return
+        user_id = self._resolve_persist_user_id(user_id, request)
         selected_inputs = self._build_selected_input_map(*selecteds)
         selected_file_ids = []
         if self.file_index is not None:
@@ -1864,25 +1761,47 @@ class ChatPage(BasePage):
         )
         return result
 
+    @staticmethod
+    def _resolve_persist_user_id(user_id, request: gr.Request | None):
+        auth_mode = str(getattr(flowsettings, "MARA_AUTH_MODE", "auto")).lower()
+        if auth_mode not in {"password", "sso"}:
+            return user_id
+        resolved = (
+            None
+            if request is _DIRECT_CALL_REQUEST
+            else resolve_request_user_id(request, auth_mode=auth_mode)
+        )
+        if not resolved:
+            raise gr.Error("Authenticated user identity is unavailable.")
+        return resolved
+
     def reasoning_changed(self, reasoning_type):
         if reasoning_type != DEFAULT_SETTING:
             # override app settings state (temporary)
             gr.Info("Reasoning type changed to `{}`".format(reasoning_type))
         return reasoning_type
 
-    def is_liked(self, convo_id, liked: gr.LikeData):
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == convo_id)
-            result = session.exec(statement).one()
-
-            data_source = deepcopy(result.data_source)
-            likes = data_source.get("likes", [])
-            likes.append([liked.index, liked.value, liked.liked])
-            data_source["likes"] = likes
-
-            result.data_source = data_source
-            session.add(result)
-            session.commit()
+    def is_liked(
+        self,
+        convo_id,
+        liked: gr.LikeData,
+        user_id=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
+    ):
+        if not convo_id:
+            gr.Warning("No conversation selected")
+            return
+        user_id = self._resolve_persist_user_id(user_id, request)
+        try:
+            self.docqa.append_session_like(
+                convo_id,
+                liked.index,
+                liked.value,
+                liked.liked,
+                user_id=user_id,
+            )
+        except PermissionError as exc:
+            raise gr.Error(str(exc)) from exc
 
     def message_selected(self, retrieval_history, plot_history, msg: gr.SelectData):
         index = msg.index[0]
@@ -2051,9 +1970,10 @@ class ChatPage(BasePage):
         verification_mode,
         planner_model,
         state_plot_panel,
+        request: gr.Request,
         *selecteds,
-        request: gr.Request | None = None,
     ):
+        user_id = self._resolve_persist_user_id(user_id, request)
         inputs = ChatCallbackInputs(
             conversation_id=conversation_id,
             chat_history=chat_history,

@@ -1,0 +1,288 @@
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import pytest
+from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.query_evidence_binding import bind_evidence_slots
+from ktem.docqa.query_planning import build_query_plan
+
+from benchmark.answer_finalizer import finalize_prediction_answer
+from benchmark.qasper_answerability import verify_qasper_answerability
+from benchmark.qasper_evidence_identity import canonical_prompt_span
+from benchmark.qasper_quote_binding import _bind_authoritative_quote
+from benchmark.task_answer_contracts import (
+    apply_task_answer_contract,
+    synchronize_terminal_answer_state,
+)
+
+
+class _Verifier:
+    def __init__(self, verdict: str, quote: str) -> None:
+        self.verdict = verdict
+        self.quote = quote
+
+    def __call__(self, _prompt: str, **_kwargs: Any) -> Any:
+        payload = {
+            "verdict": self.verdict,
+            "evidence_quote": self.quote,
+        }
+        if self.verdict in {
+            "yes_complete",
+            "no_complete",
+            "yes_partial",
+            "no_partial",
+        }:
+            payload["evidence_ref"] = "E1:S1"
+        return type(
+            "Result",
+            (),
+            {"text": json.dumps(payload)},
+        )()
+
+
+def _item(evidence_id: str, text: str) -> dict[str, Any]:
+    return {
+        "evidence_id": evidence_id,
+        "source_id": "paper",
+        "section_id": "results",
+        "text": text,
+    }
+
+
+def _alias_mapping(items: list[dict[str, Any]]) -> str:
+    aliases = []
+    for index, item in enumerate(items, start=1):
+        text = str(item["text"])
+        aliases.append(
+            {
+                "evidence_ref": f"E{index}:S1",
+                "runtime_evidence_id": identity_of(item).key,
+                **canonical_prompt_span(
+                    item,
+                    text=text,
+                    item_start=0,
+                    item_end=len(text),
+                ),
+            }
+        )
+    return json.dumps(aliases)
+
+
+def _artifact_experiment_evidence() -> dict[str, Any]:
+    evidence = _item(
+        "experiment",
+        (
+            "Sentence pairs are useful challenges for machine translation, but "
+            "their construction is difficult to automate.\n\n"
+            "## Current state of the art\n"
+            "Machine translation systems provide broad coverage, although their "
+            "handling of grammatical gender remains uneven across languages.\n\n"
+            "For instance, the sentence is translated by Google Translate, Bing "
+            "Translate, and Yandex. In fact, I have been unable to construct any "
+            "English sentence that those systems translate using the feminine "
+            "plural pronoun.\n\n"
+            "The following discussion compares these observations with prior work."
+        ),
+    )
+    evidence.update(
+        {
+            "canonical_start": 200,
+            "canonical_end": 200 + len(evidence["text"]),
+        }
+    )
+    evidence.pop("section_id")
+    return evidence
+
+
+def _apply_qasper_contract(
+    prediction: dict[str, Any],
+    verifier: _Verifier | None = None,
+) -> tuple[bool, bool]:
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed",
+        mode="scoring_adapter_v1",
+    )
+    applied = apply_task_answer_contract(
+        prediction,
+        dataset_name="qasper_typed",
+        llm_factory=lambda: verifier or _Verifier("insufficient_evidence", ""),
+    )
+    finalize_prediction_answer(
+        prediction,
+        dataset_name="qasper_typed",
+        mode="scoring_adapter_v1",
+    )
+    return applied, synchronize_terminal_answer_state(prediction)
+
+
+def test_grounded_complete_quote_without_unique_evidence_identity_is_rejected() -> None:
+    quote = "We evaluated the model on clinical tasks."
+    first = _item("first", quote)
+    first.update({"canonical_start": 0, "canonical_end": len(quote)})
+    second = _item("second", quote)
+    second.update({"canonical_start": 100, "canonical_end": 100 + len(quote)})
+
+    bound, status = _bind_authoritative_quote(
+        "",
+        quote,
+        [first, second],
+        alias_mapping=_alias_mapping([first, second]),
+    )
+
+    assert bound is None
+    assert status == "quote_identity_unresolved"
+
+
+def test_overlapping_chunks_with_the_same_canonical_quote_collapse_to_one_authority() -> (
+    None
+):
+    quote = "We evaluated the model on clinical tasks."
+    first = _item("first", quote)
+    first.update({"canonical_start": 100, "canonical_end": 100 + len(quote)})
+    second = _item("second", quote)
+    second.update({"canonical_start": 100, "canonical_end": 100 + len(quote)})
+
+    bound, status = _bind_authoritative_quote(
+        "",
+        quote,
+        [first, second],
+        alias_mapping=_alias_mapping([first, second]),
+    )
+
+    assert bound is not None
+    assert status == "bound"
+    assert bound.span.identity == (f"quote:paper:100:{100 + len(quote)}")
+
+
+def test_deterministic_experiment_resolution_keeps_its_selected_evidence() -> None:
+    quote = (
+        "For instance, the sentence is translated by Google Translate, Bing "
+        "Translate, and Yandex. In fact, I have been unable to construct any "
+        "English sentence that those systems translate using the feminine "
+        "plural pronoun."
+    )
+    evidence_item = _item("experiment", quote)
+    evidence_item.update({"canonical_start": 200, "canonical_end": 200 + len(quote)})
+    result = verify_qasper_answerability(
+        _Verifier("insufficient_evidence", ""),
+        question="Do the authors conduct experiments on the tasks mentioned?",
+        evidence=quote,
+        evidence_items=[evidence_item],
+        candidate_answer="unanswerable",
+    )
+
+    assert result.answer == "yes"
+    assert result.trace["verifier_input_evidence_ids"] == "evidence:paper:experiment"
+
+
+@pytest.mark.parametrize(
+    "route",
+    ("text_rag", "controller_auto", "crag_guarded"),
+)
+def test_1dc2da_target_support_survives_terminal_citation_rebuild(
+    route: str,
+) -> None:
+    evidence = _artifact_experiment_evidence()
+    plan = bind_evidence_slots(
+        build_query_plan(
+            "Do the authors conduct experiments on the tasks mentioned?",
+            answer_type="boolean",
+            verification_domain="qasper",
+        ),
+        [evidence],
+    )
+    [bound_slot] = plan.evidence_slots
+    assert bound_slot.evidence_ids == (identity_of(evidence).key,)
+    prediction: dict[str, Any] = {
+        "example_id": "1dc2da5078a7e5ea82ccd1c90d81999a922bc9bf",
+        "question": "Do the authors conduct experiments on the tasks mentioned?",
+        "answer_type": "boolean",
+        "predicted_answer": "unanswerable",
+        "route": route,
+        "gold_evidence": ["anonymous-support"],
+        "evidence_bundle": {"items": [evidence], "metadata": {}},
+        "evidence_metadata": {
+            "selected_evidence": [evidence],
+            "generation_context_evidence": [evidence],
+            "query_plan": plan.as_dict(),
+        },
+        "structured_citations": [],
+        "predicted_citations": [],
+    }
+    applied, synchronized = _apply_qasper_contract(prediction)
+
+    assert applied is False
+    assert synchronized is True
+    assert prediction["answer_for_scoring"] == "unanswerable"
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert prediction["post_engine_answerability_llm_call_count"] == 0
+    answerability = prediction["evidence_metadata"]["qasper_answerability"]
+    assert answerability["verifier_required_evidence_coverage"] == "0.000000"
+    assert answerability["evidence_quote"] == ""
+    assert prediction["structured_citations"] == []
+
+
+@pytest.mark.parametrize(
+    "route",
+    ("text_rag", "controller_auto", "crag_guarded"),
+)
+def test_111afb77_target_no_keeps_exact_support_and_citation(route: str) -> None:
+    question = (
+        "Overall, does having parallel data improve semantic role induction "
+        "across multiple languages?"
+    )
+    quote = (
+        "We propose a Bayesian model of semantic role induction that uses "
+        "crosslingual latent variables to capture role alignments in parallel "
+        "corpora. Adding word alignments in parallel sentences results in small, "
+        "non significant improvements, even if there is some labeled data "
+        "available in the source language. This difficulty in showing the "
+        "usefulness of parallel corpora for semantic role induction may be due "
+        "to the current assumptions about role alignments."
+    )
+    evidence = _item("parallel-result", quote)
+    plan = bind_evidence_slots(
+        build_query_plan(
+            question,
+            answer_type="boolean",
+            verification_domain="qasper",
+        ),
+        [evidence],
+    )
+    prediction: dict[str, Any] = {
+        "example_id": "111afb77cfbf4c98e0458606378fa63a0e965e36",
+        "question": question,
+        "answer_type": "boolean",
+        "predicted_answer": "no",
+        "route": route,
+        "gold_evidence": ["anonymous-support"],
+        "evidence_bundle": {"items": [evidence], "metadata": {}},
+        "evidence_metadata": {
+            "selected_evidence": [evidence],
+            "generation_context_evidence": [evidence],
+            "query_plan": plan.as_dict(),
+        },
+        "structured_citations": [],
+        "predicted_citations": [],
+    }
+
+    applied, synchronized = _apply_qasper_contract(
+        prediction,
+        _Verifier("no_complete", quote),
+    )
+
+    assert applied is False
+    assert synchronized is True
+    assert prediction["answer_for_scoring"] == "no"
+    assert prediction["contract_action"] == ("hard_violation_missing_runtime_authority")
+    assert prediction["contract_semantic_rewrite"] is False
+    assert prediction["post_engine_answerability_llm_call_count"] == 0
+    trace = prediction["evidence_metadata"]["qasper_answerability"]
+    assert trace["evidence_quote"] == ""
+    assert trace["authoritative_quote_evidence_id"] == ""
+    [verified_slot] = prediction["evidence_metadata"]["query_plan"]["evidence_slots"]
+    assert verified_slot["status"] == "retrieved_unverified"
+    assert prediction["structured_citations"] == []

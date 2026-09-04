@@ -194,12 +194,38 @@ def test_primary_score_uses_quality_routes_not_diagnostic_routes():
     assert rescored["avg_mara_score"] == 0.5
     assert rescored["quality_avg_mara_score"] == 0.9
     assert rescored["quality_avg_native_score"] == 0.9
-    assert rescored["primary_score_metric"] == "quality_avg_native_score"
+    assert rescored["primary_score_metric"] == "deployed_policy_avg_native_score"
     assert rescored["primary_score_label"] == "Dataset-Native Local Score"
     assert rescored["primary_score_scope"] == "qa_quality"
+    assert rescored["primary_score_policy"] == "deployed_controller_policy"
     assert rescored["score_authority_level"] == "local_dataset_native"
     assert rescored["paper_grade_score_available"] is False
     assert rescored["primary_score"] == 0.9
+
+
+def test_primary_score_uses_only_deployed_controller_policy():
+    summary = {"dataset_name": "sample"}
+    predictions = [
+        {
+            "example_id": "example-1",
+            "benchmark_role": "qa_quality",
+            "route": route,
+            "metrics": {"native_score": score},
+            "performance": {},
+        }
+        for route, score in (
+            ("controller_auto", 0.9),
+            ("crag_guarded", 0.2),
+            ("text_rag", 0.1),
+        )
+    ]
+
+    rescored = add_mara_summary_fields(summary, predictions)
+
+    assert rescored["primary_score"] == 0.9
+    assert rescored["primary_score_metric"] == "deployed_policy_avg_native_score"
+    assert rescored["primary_score_policy"] == "deployed_controller_policy"
+    assert rescored["primary_score_routes"] == ["controller_auto"]
 
 
 def _route_metric_report():

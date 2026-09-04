@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .financebench_pages import align_financebench_page
+from .jsonl import read_jsonl
 from .manifest import write_manifest
 
 
@@ -13,11 +14,7 @@ def _load_json(path: Path) -> Any:
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [dict(value) for value in read_jsonl(path)]
 
 
 def _pick(record: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -86,6 +83,13 @@ def _financebench_evidence_fields(
                 evidence_item["span"] = span
             if alignment:
                 evidence_item["page_alignment"] = alignment
+                evidence_item["page_mapping"] = {
+                    "dataset_page": dataset_page,
+                    "runtime_page": page,
+                    "mapping_source": alignment,
+                    "mapping_confidence": 1.0,
+                    "mapping_version": "financebench_page_mapping.v1",
+                }
             if len(evidence_item) > 1:
                 gold_evidence.append(evidence_item)
             continue
@@ -214,10 +218,12 @@ def normalize_financebench_manifest(
                 "format_type": "pdf",
                 "question": str(_pick(record, "question", default="")).strip(),
                 "answers": answers,
+                "answer_type": _financebench_answer_type(record),
                 "evidence_pages": evidence_pages,
                 "evidence_sources": evidence_sources,
                 "gold_evidence": gold_evidence,
                 "metadata": {
+                    "dataset_family": "financebench",
                     "doc_name": document_name,
                     "company": record.get("company"),
                     "doc_type": record.get("doc_type"),
@@ -229,6 +235,13 @@ def normalize_financebench_manifest(
         )
 
     return write_manifest(output_path, "financebench", records)
+
+
+def _financebench_answer_type(record: dict[str, Any]) -> str:
+    question_type = str(record.get("question_type") or "").strip().lower()
+    if question_type == "metrics-generated":
+        return "numeric"
+    return "extractive"
 
 
 def normalize_slidevqa_manifest(

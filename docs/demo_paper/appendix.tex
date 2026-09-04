@@ -1,11 +1,14 @@
+\section{Appendix}
+
 \ifmaraanonymous
-\section{Anonymous Appendix Note}
+\paragraph{Anonymous note.}
 
-This anonymous version omits MSc-specific identity, student, and supervisor details. The technical appendix retains command families, evaluation protocol, and diagnostic notes that do not identify the author.
-\else
-\section{MSc Project Mapping}
+This anonymous version omits identity, student, course, and supervisor details. The technical appendix retains command families, evaluation protocol, project mapping, and diagnostic notes that do not identify the author.
+\fi
 
-\begin{tabularx}{\linewidth}{p{0.30\linewidth}>{\raggedright\arraybackslash}X}
+\noindent\textbf{MSc project mapping.}\par\smallskip
+
+\noindent\begin{tabularx}{\linewidth}{@{}p{0.30\linewidth}>{\raggedright\arraybackslash}X@{}}
 \toprule
 Requirement area & MARA coverage \\
 \midrule
@@ -13,12 +16,73 @@ Practical implementation & Local Web UI, CLI workflows, document indexing, route
 Analytical evaluation & Full-system benchmark synthesis over 41 complete artifact sets and 3,540 prediction records, with route metrics, paired deltas, bootstrap CIs, route decisions, backend metadata, and diagnostics. \\
 Innovation & Controller-centred extension of a basic local QA framework using Self-RAG-inspired route decisions, evidence checks, workflow-cost traces, route switches, and abstention. \\
 Ethics & Public, synthetic, or self-provided non-sensitive documents; no human participants; local-first execution and visible backend metadata. \\
+\ifmaramsc
 Project context & COMP702 -- M.Sc. Project (2025/26), School of Computer Science and Informatics, University of Liverpool. \\
+\else
+Project context & MSc delivery mapping retained in the appendix for completeness; venue-facing versions omit course identifiers, student ID, and supervisor details. \\
+\fi
 \bottomrule
 \end{tabularx}
+
+\ifmaramsc
+For MSc delivery, these constraints define a clear prototype boundary: a usable local workbench, a controller with inspectable routes, and benchmark evidence that explains the system's behaviour. For a later submission, the strongest path is to keep the system/demo framing, include a real UI screenshot and short video, and avoid overstating results as leaderboard performance.
+\else
+For venue-facing versions, this mapping is supplementary project context rather than a main-paper claim. The main paper is framed as a system demo with a public release, screenshot, command surface, and route-level evaluation.
 \fi
 
-\section{Command and Skill Surface}
+\paragraph{Full-system benchmark coverage.}
+
+The main paper reports the three datasets that best support the demo narrative: QASPER for text-heavy scientific QA, ALCE-ASQA for citation-grounded QA, and MMDocRAG for multimodal QA. The full-system benchmark claim in the abstract is broader than this selected table. Table~\ref{tab:appendix-coverage} accounts for all 41 complete artifact sets and all 3,540 per-example prediction records in the synthesis bundle. Records count route-level prediction rows, not unique questions. Table~\ref{tab:appendix-diagnostic-results} reports the remaining diagnostic dataset results on the same 0--100 scale as the main table; the source CSV files keep the original 0--1 scores.
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\linewidth}{@{}lrr>{\raggedright\arraybackslash}X@{}}
+\toprule
+\rowcolor{gray!10}
+Dataset & Sets & Records & Paper role \\
+\midrule
+ALCE-ASQA & 4 & 600 & Main citation-grounded dataset. \\
+FinanceBench & 3 & 600 & Diagnostic numeric and financial QA dataset. \\
+MMDocRAG & 20 & 600 & Main multimodal and visual dataset. \\
+QASPER & 4 & 600 & Main text-heavy scientific QA dataset. \\
+RAGTruth & 6 & 900 & Diagnostic groundedness and abstention dataset. \\
+SlideVQA & 4 & 240 & Diagnostic visual slide QA dataset. \\
+\bottomrule
+\end{tabularx}
+\refstepcounter{table}
+\label{tab:appendix-coverage}
+\smallskip
+Table~\thetable: Full-system benchmark coverage.
+\end{center}
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llrrrrrr}
+\toprule
+\rowcolor{gray!10}
+Dataset & Route & N & F1 & Native & Citation & Page hit & False abs. \\
+\midrule
+FinanceBench & controller\_auto & 150 & 15.10 & 8.67 & 51.00 & 60.00 & 2.67 \\
+FinanceBench & crag\_guarded & 150 & 15.33 & 8.67 & 51.00 & 60.00 & 2.67 \\
+FinanceBench & direct\_answer & 150 & 17.34 & 2.67 & 0.00 & 0.00 & 0.00 \\
+FinanceBench & text\_rag & 150 & 14.83 & 8.67 & 48.56 & 60.00 & 7.33 \\
+\midrule
+RAGTruth & controller\_auto & 300 & 21.68 & 54.00 & 55.67 & -- & 0.00 \\
+RAGTruth & crag\_guarded & 300 & 21.45 & 54.00 & 55.67 & -- & 1.00 \\
+RAGTruth & text\_rag & 300 & 23.06 & 54.00 & 98.33 & -- & 0.00 \\
+\midrule
+SlideVQA & controller\_auto & 120 & 43.25 & 43.25 & 100.00 & 100.00 & 0.00 \\
+SlideVQA & page\_image\_rag\_vlm & 120 & 43.25 & 43.25 & 100.00 & 100.00 & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{Diagnostic dataset route results.}
+\label{tab:appendix-diagnostic-results}
+\end{table*}
+
+\paragraph{Command and skill surface.}
 
 MARA separates high-permission product commands from the specialist document-QA workflow. The paper's system claims refer to the shared runtime and persisted state behind these commands, not to independent QA implementations. This reduces Web/CLI drift, but contract tests remain necessary because the codebase still has entrypoints across \texttt{ktem}, \texttt{kotaemon}, and \texttt{slide\_cli}.
 
@@ -26,22 +90,22 @@ MARA separates high-permission product commands from the specialist document-QA 
 \begin{description}[leftmargin=0pt,labelindent=0pt,style=nextline,itemsep=2pt,topsep=2pt]
     \item[App lifecycle] \texttt{MARA app init}, \texttt{MARA app doctor}, \texttt{MARA app run}.
     \item[DocQA indexing] \texttt{MARA docqa index ./docs/report.pdf}, \texttt{MARA docqa files}, \texttt{MARA docqa delete \textless file-id\textgreater}.
-    \item[DocQA answering] \texttt{MARA docqa ask --file report.pdf --reasoning mara --prompt "..."}; \texttt{MARA docqa chat --file report.pdf}.
-    \item[Sessions and sources] \texttt{MARA docqa sessions}, \texttt{MARA docqa resume \textless conversation-id\textgreater}, \texttt{MARA docqa sources select \textless conversation-id\textgreater{} --file paper.pdf}.
-    \item[Notes and artifacts] \texttt{MARA docqa notes save-answer \textless conversation-id\textgreater}; \texttt{MARA docqa artifacts generate \textless conversation-id\textgreater{} --type quiz}.
-    \item[Agent support assets] \texttt{MARA platform install --platform codex --mode full --yes}; \texttt{MARA platform install --platform claude-code --mode full --yes}; \texttt{MARA platform validate}.
+    \item[DocQA answering] \texttt{MARA docqa ask -{}-file report.pdf -{}-reasoning mara -{}-prompt "..."}; \texttt{MARA docqa chat -{}-file report.pdf}.
+    \item[Sessions and sources] \texttt{MARA docqa sessions}, \texttt{MARA docqa resume \textless conversation-id\textgreater}, \texttt{MARA docqa sources select \textless conversation-id\textgreater{} -{}-file paper.pdf}.
+    \item[Notes and artifacts] \texttt{MARA docqa notes save-answer \textless conversation-id\textgreater}; \texttt{MARA docqa artifacts generate \textless conversation-id\textgreater{} -{}-type quiz}.
+    \item[Agent support assets] \texttt{MARA platform install -{}-platform codex -{}-mode full -{}-yes}; \texttt{MARA platform install -{}-platform claude-code -{}-mode full -{}-yes}; \texttt{MARA platform validate}.
 \end{description}
 \end{small}
 
 {\raggedright
-Focused skill wrappers include \texttt{MARA-docqa-index}, \texttt{MARA-docqa-ask}, \texttt{MARA-docqa-chat}, \texttt{MARA-docqa-resume}, \texttt{MARA-app-run}, \texttt{MARA-model-run}, and platform installation/status skills. They provide agent-facing documentation around the same CLI surface. The local Web app default is port 7860; \texttt{MARA app run --port}, \texttt{GRADIO\_SERVER\_PORT}, or platform \texttt{PORT} can override it.
+Focused skill wrappers include \texttt{MARA-docqa-index}, \texttt{MARA-docqa-ask}, \texttt{MARA-docqa-chat}, \texttt{MARA-docqa-resume}, \texttt{MARA-app-run}, \texttt{MARA-model-run}, and platform installation/status skills. They provide agent-facing documentation around the same CLI surface. The local Web app default is port 7860; \texttt{MARA app run -{}-port}, \texttt{GRADIO\_SERVER\_PORT}, or platform \texttt{PORT} can override it.
 \par}
 
-\section{Kotaemon Increment Boundary}
+\paragraph{Kotaemon increment boundary.}
 
 MARA is a branded fork of Kotaemon. The inherited substrate provides upload, model configuration, indexing, and ordinary local document QA. MARA's paper contribution is the controller-centred extension: explicit route decisions, evidence and verification traces, multimodal route interfaces, DocQA CLI reuse, platform command wrappers, and route-level benchmark artifacts. Internal package names remain compatible with the fork history, but the user-facing product surface is \texttt{MARA} / \texttt{MARA-cli}.
 
-\section{Additional Route Interpretation}
+\paragraph{Additional route interpretation.}
 
 Routes outside the main top-five are still part of the implemented system.
 \texttt{direct\_answer} is a baseline and a useful non-document control.
@@ -49,22 +113,14 @@ Routes outside the main top-five are still part of the implemented system.
 Graph routes are scoped routes for summaries, comparison, and global context; they are visible in controller decisions but need stronger standalone graph evaluation before being promoted to a headline route.
 \texttt{visual\_retriever\_only} is best understood as a retrieval diagnostic rather than a full QA route.
 
-\section{Post-Benchmark Diagnostic}
+\paragraph{Post-benchmark diagnostic.}
 
 After the full-system benchmark, a targeted RAGTruth prompt-budget rerun inspected a prompt-length failure mode. The repair was verified on a small diagnostic subset, but it was not part of the same full-system protocol. The paper therefore treats it as a resolved engineering diagnostic, not as a replacement for the main RAGTruth or route-ranking results.
 
-\section{Reproducibility Notes}
+\paragraph{Reproducibility notes.}
 
-The main benchmark source for this paper is the full-system synthesis. In this workspace, the synthesis artifacts are located under:
-\begin{quote}\small
-\path{outputs/MARA/final_thesis_benchmark_statistical_20260705_fullsystem_postfix/09_synthesis}
-\end{quote}
-The key files are:
-\begin{itemize}
-    \item \path{statistical_synthesis_report.md}, \path{statistical_main_result_table.csv}, and \path{statistical_route_decision_summary.csv};
-    \item \path{statistical_failure_latency_backend_table.csv}, \path{statistical_paired_route_delta.csv}, and \path{statistical_bootstrap_ci_by_route.csv};
-    \item \path{statistical_controller_oracle_regret.csv}, \path{statistical_win_loss_tie_table.csv}, and \path{slurm_submission_jobs.tsv}.
-\end{itemize}
-The synthesis script is \path{build_fullsystem_synthesis.py}; the repository snapshot inspected while preparing this draft was \path{3ee655797cc16fb005b37216f9c2a32aba9463d6}. The artifact files themselves should still be treated as the authority for scores and backend metadata.
+The software artifact for this paper is the public MARA release \texttt{v0.0.40}\footnote{\url{https://github.com/262412/MARA/releases/tag/v0.0.40}}. The release tag identifies the application version used for the demo. Benchmark evidence is packaged separately as the companion supplementary bundle\footnote{\path{mara-full-system-benchmark-synthesis-v0.0.40.zip}}, rather than referenced through environment-specific runtime locations. In an external submission, that bundle accompanies the paper and contains a README, the synthesis report, aggregate result tables, route-decision summaries, failure/latency/backend summaries, paired-delta tables, bootstrap confidence intervals, controller-oracle regret diagnostics, win/loss/tie diagnostics, the Slurm submission ledger, the synthesis input manifest, per-example metric records, and the synthesis script. Exact filenames are listed in the bundle README.
+
+Inside the supplementary files, runtime roots are replaced by a symbolic benchmark-run root while dataset, route, backend, score, and manifest fields are preserved. The artifact files themselves should be treated as the authority for scores and backend metadata; the external-facing paper uses the public release tag and supplement filename as its reproducibility anchors.
 
 The run used local model and retrieval backends recorded in the benchmark metadata, including Qwen/Qwen3-8B for text generation and BAAI/bge-m3 for text retrieval. Visual route metadata must be read per run: the default local visual retriever is \texttt{local\_late\_interaction} with backend type \texttt{deterministic\_smoke}; ColPali/ColQwen-style retrievers are configured HTTP backends when available; and local Qwen3-VL generation is used only when the VLM endpoint is configured and healthy. Paper-grade external evaluators were not configured for the main result table; results are reported as local dataset-native scores and MARA diagnostic metrics.

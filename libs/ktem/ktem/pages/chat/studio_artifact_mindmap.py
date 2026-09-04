@@ -66,7 +66,10 @@ def generate_studio_mindmap_outputs(
         answer_html,
         page._render_citations_card_html(""),
         trace_html,
-        render_conversation_notebook_panel_html(conversation_id),
+        render_conversation_notebook_panel_html(
+            conversation_id,
+            user_id=values["user_id"],
+        ),
         graph_source_ids,
         gr.update(visible=False, value=""),
         {"html": viewer_html},
@@ -84,6 +87,7 @@ def _build_graph_view(
         graph_source_ids=source_ids,
         focus_file_id=str(values["active_file_id"] or "").strip(),
         force_rebuild=True,
+        user_id=values["user_id"],
     )
 
 
@@ -109,6 +113,7 @@ def _save_mindmap_artifact(
 ) -> dict[str, Any]:
     return save_artifact(
         conversation_id=conversation_id,
+        user_id=values["user_id"],
         payload=_mindmap_payload(graph_view, graph_source_ids),
         title="Interactive Mind Map",
         prompt=prompt,
@@ -146,6 +151,7 @@ def _mindmap_trace_html(
 def save_studio_mindmap_artifact(
     *,
     conversation_id: str,
+    user_id: Any,
     payload: dict[str, Any],
     title: str,
     prompt: str,
@@ -156,6 +162,7 @@ def save_studio_mindmap_artifact(
 
     return notebook_service.save_artifact_to_conversation(
         conversation_id,
+        user_id=user_id,
         artifact_type="mindmap",
         payload=payload,
         title=title,

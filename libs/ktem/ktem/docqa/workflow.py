@@ -142,6 +142,9 @@ class WorkflowPlan:
     policy: str
     controller_mode: str
     strategy: str
+    agent_mode: str = "auto"
+    verification_mode: str = "off"
+    execution_control: str = "fixed_state_machine"
     steps: list[WorkflowStep] = field(default_factory=list)
 
     @property
@@ -155,6 +158,9 @@ class WorkflowPlan:
             "policy": self.policy,
             "controller_mode": self.controller_mode,
             "strategy": self.strategy,
+            "agent_mode": self.agent_mode,
+            "verification_mode": self.verification_mode,
+            "execution_control": self.execution_control,
             "steps": [step.as_dict() for step in self.steps],
             "total_cost_units": total_cost,
             "reward_features": {
@@ -204,7 +210,9 @@ def build_workflow_plan(
             route=normalized_route,
             policy=policy,
             controller_mode=controller_mode,
-            strategy="planner_workflow",
+            strategy="planned_trace",
+            agent_mode=_agent_mode(request),
+            verification_mode=_verification_mode(request),
             steps=planned,
         )
     return WorkflowPlan(
@@ -212,6 +220,8 @@ def build_workflow_plan(
         policy=policy,
         controller_mode=controller_mode,
         strategy="route_default",
+        agent_mode=_agent_mode(request),
+        verification_mode=_verification_mode(request),
         steps=_default_steps(normalized_route, _verification_enabled(request)),
     )
 
@@ -296,8 +306,17 @@ def _normalize_route(route: Any) -> str:
 
 
 def _verification_enabled(request: Any) -> bool:
-    mode = str(getattr(request, "verification_mode", "") or "").strip().lower()
-    return mode in {"light", "strict"}
+    return _verification_mode(request) in {"light", "strict"}
+
+
+def _verification_mode(request: Any) -> str:
+    mode = str(getattr(request, "verification_mode", "") or "off").strip().lower()
+    return mode if mode in {"off", "light", "strict"} else "off"
+
+
+def _agent_mode(request: Any) -> str:
+    mode = str(getattr(request, "agent_mode", "") or "auto").strip().lower()
+    return mode if mode in {"auto", "fast", "thorough"} else "auto"
 
 
 def _has_executor(steps: list[WorkflowStep], executor: str) -> bool:

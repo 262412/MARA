@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import copy
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
+from ktem.docqa.element_record_contract import element_record_from_mapping
+from ktem.docqa.evidence_record_identity import unique_evidence_records
+
+from .ocr_layout_sidecars import build_pdf_ocr_layout_sidecar
 from .schemas import BenchmarkDocument
 
 IMAGE_FORMAT_TYPES = {"bmp", "gif", "jpeg", "jpg", "png", "tif", "tiff", "webp"}
@@ -36,16 +43,82 @@ def page_image_records_from_documents(
 def element_index_records_from_documents(
     documents: list[BenchmarkDocument],
 ) -> list[dict[str, Any]]:
+    return _element_index_records_from_documents(
+        documents,
+        produce_pdf_ocr_layout=False,
+    )
+
+
+def mmdoc_element_index_records_from_documents(
+    documents: list[BenchmarkDocument],
+) -> list[dict[str, Any]]:
+    return _element_index_records_from_documents(
+        documents,
+        produce_pdf_ocr_layout=True,
+    )
+
+
+def _element_index_records_from_documents(
+    documents: list[BenchmarkDocument],
+    *,
+    produce_pdf_ocr_layout: bool,
+) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for document in documents:
-        records.extend(_offline_element_records(document))
+        offline_records = _offline_element_records(document)
+        records.extend(offline_records)
+        if (
+            produce_pdf_ocr_layout
+            and not offline_records
+            and document.path.suffix.lower() == ".pdf"
+        ):
+            records.extend(_pdf_ocr_element_records(document))
         for payload in _document_element_payloads(document):
             record = _element_index_record_from_payload(
                 document, payload, len(records) + 1
             )
             if record is not None:
                 records.append(record)
-    return _unique_element_records(records)
+    return unique_evidence_records(records)
+
+
+def _pdf_ocr_element_records(document: BenchmarkDocument) -> list[dict[str, Any]]:
+    path = Path(document.path)
+    file_stat = path.stat()
+    resolved_path = str(path.resolve())
+    payloads = _cached_pdf_ocr_layout_elements(
+        resolved_path,
+        int(file_stat.st_size),
+        int(file_stat.st_mtime_ns),
+        str(document.document_id),
+    )
+    records: list[dict[str, Any]] = []
+    for index, payload in enumerate(payloads, start=1):
+        record = _element_index_record_from_payload(
+            document, copy.deepcopy(payload), index
+        )
+        if record is not None:
+            records.append(record)
+    return records
+
+
+@lru_cache(maxsize=8)
+def _cached_pdf_ocr_layout_elements(
+    resolved_path: str,
+    file_size: int,
+    modified_ns: int,
+    document_id: str,
+) -> tuple[dict[str, Any], ...]:
+    del file_size, modified_ns
+    sidecar = build_pdf_ocr_layout_sidecar(
+        resolved_path,
+        document_id=document_id,
+    )
+    return tuple(
+        copy.deepcopy(payload)
+        for payload in sidecar.get("layout_elements") or []
+        if isinstance(payload, dict)
+    )
 
 
 def page_image_record_from_document(document: BenchmarkDocument) -> dict[str, Any]:
@@ -119,32 +192,80 @@ def _element_index_record_from_payload(
     file_name = str(
         payload.get("file_name") or payload.get("source_name") or document.path.name
     ).strip()
-    raw_metadata = payload.get("metadata")
-    metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
-    output = {
-        "evidence_id": str(
-            payload.get("evidence_id") or f"element:{file_id}:{page_label}:{element_id}"
-        ),
-        "file_id": file_id,
-        "file_name": file_name,
-        "page_label": page_label,
-        "element_id": element_id,
-        "modality": str(
+    evidence_id = str(
+        payload.get("evidence_id") or f"element:{file_id}:{page_label}:{element_id}"
+    )
+    metadata = dict(payload.get("metadata") or {})
+    for key in (
+        "visual_extractions",
+        "structured_visual_evidence",
+        "table_cells",
+        "ocr_cells",
+        "vlm_cells",
+    ):
+        if key in payload and key not in metadata:
+            metadata[key] = payload[key]
+    normalized_payload = {**payload, "metadata": metadata}
+    return element_record_from_mapping(
+        normalized_payload,
+        default_file_id=file_id,
+        default_file_name=file_name,
+        default_page_label=page_label,
+        default_element_id=element_id,
+        default_modality=str(
             payload.get("modality") or payload.get("element_type") or "element"
         ),
-        "bbox": payload.get("bbox"),
-        "caption": caption,
-        "text": text,
-        "source_backrefs": _source_backrefs(payload, file_id, page_label),
-        "metadata": dict(metadata),
-    }
+        default_evidence_id=evidence_id,
+    )
+
+
+def _add_element_contract_fields(
+    output: dict[str, Any],
+    payload: dict[str, Any],
+    metadata: dict[str, Any],
+) -> None:
+    for field in (
+        "parent_element_id",
+        "section_id",
+        "table_id",
+        "continuation_id",
+        "normalized_text_hash",
+        "cell_id",
+        "span_id",
+        "row_label",
+        "column_label",
+        "period",
+        "period_kind",
+        "value",
+        "unit",
+        "scale",
+        "currency",
+        "statement_kind",
+        "financial_scope",
+    ):
+        value = str(payload.get(field) or metadata.get(field) or "").strip()
+        if value:
+            output[field] = value
+    for field in ("row_index", "column_index", "chunk_start", "chunk_end"):
+        value = payload.get(field, metadata.get(field))
+        if value is not None:
+            output[field] = value
+    neighbor_element_ids = _alias_values(
+        payload.get("neighbor_element_ids")
+        or metadata.get("neighbor_element_ids")
+        or metadata.get("neighbors")
+    )
+    if neighbor_element_ids:
+        output["neighbor_element_ids"] = neighbor_element_ids
+    duplicate_evidence_ids = _alias_values(payload.get("duplicate_evidence_ids"))
+    if duplicate_evidence_ids:
+        output["duplicate_evidence_ids"] = duplicate_evidence_ids
     element_id_aliases = _alias_values(payload.get("element_id_aliases"))
     if element_id_aliases:
         output["element_id_aliases"] = element_id_aliases
     element_type_aliases = _alias_values(payload.get("element_type_aliases"))
     if element_type_aliases:
         output["element_type_aliases"] = element_type_aliases
-    return output
 
 
 def _source_backrefs(
@@ -172,18 +293,6 @@ def _alias_values(value: Any) -> list[str]:
         text = str(item or "").strip()
         if text and text not in output:
             output.append(text)
-    return output
-
-
-def _unique_element_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    output: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for record in records:
-        evidence_id = str(record.get("evidence_id") or "").strip()
-        if not evidence_id or evidence_id in seen:
-            continue
-        seen.add(evidence_id)
-        output.append(record)
     return output
 
 

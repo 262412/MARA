@@ -1,0 +1,478 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+from typing import Any
+
+from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.controller import evaluate_retrieval_quality
+from ktem.docqa.execution import execute_controller_turn
+from ktem.docqa.query_evidence_binding import bind_evidence_slots
+from ktem.docqa.query_plan_schema import EvidenceSlot, QueryPlan
+from ktem.docqa.query_planning import build_query_plan, missing_slot_requests
+
+from benchmark.docqa_index_cache import DocQAIndexCache, route_requires_element
+from benchmark.schemas import BenchmarkDocument
+
+QUESTION = "Did the authors evaluate the model on clinical tasks?"
+TOOLKIT_QUESTION = "Do they experiment with the toolkits?"
+TOOLKIT_EVIDENCE = (
+    "We present GluonCV and GluonNLP, the deep learning toolkits for computer "
+    "vision and natural language processing. We demonstrate the performance of "
+    "GluonCV/NLP models in various computer vision and natural language "
+    "processing tasks. Specifically, we evaluate models on standard benchmark "
+    "data sets."
+)
+
+
+def _evidence(evidence_id: str, text: str, *, source_id: str = "paper") -> dict:
+    return {
+        "evidence_id": evidence_id,
+        "source_id": source_id,
+        "text": text,
+    }
+
+
+def test_qasper_missing_boolean_proposition_gets_one_local_second_round():
+    calls: list[tuple[int, str, tuple[str, ...], dict[str, Any]]] = []
+
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_round_id,
+                request.retrieval_query,
+                tuple(request.selected_file_ids or []),
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
+        if request.retrieval_round_id == 1:
+            return {"evidence": []}
+        return {
+            "evidence": [
+                _evidence(
+                    "support",
+                    "We evaluated the model on clinical tasks.",
+                    source_id="runtime-file-1",
+                )
+            ]
+        }
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=QUESTION,
+            retrieval_query=QUESTION,
+            task_type="boolean",
+            verification_domain="qasper",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "Yes.",
+    )
+
+    assert len(calls) == 2
+    assert calls[0][0] == 1
+    assert calls[1][0] == 2
+    assert calls[0][2] == calls[1][2] == ("runtime-file-1",)
+    assert calls[0][1] == QUESTION
+    assert calls[0][1].count(QUESTION) == 1
+    assert calls[0][3] == {
+        "contract_id": "initial_retrieval_query.v1",
+        "query_kind": "initial",
+    }
+    assert calls[1][1] != QUESTION
+    assert calls[1][1].count(QUESTION) == 1
+    assert all(
+        token not in calls[1][1]
+        for token in ("actor:", "predicate:", "object:", "object_role:")
+    )
+    assert calls[1][3]["contract_id"] == "recovery_query.v1"
+    assert calls[1][3]["query_kind"] == "recovery"
+    assert calls[1][3]["typed_frame"]["actor"] == "current_paper"
+    assert result.evidence_bundle.metadata["retrieval_rounds"] == 2
+    contracts = result.evidence_bundle.metadata["retrieval_query_contracts"]
+    assert [item["query_kind"] for item in contracts] == ["initial", "recovery"]
+    assert contracts[0]["query"] == QUESTION
+    assert contracts[1]["query"] == calls[1][1]
+    assert contracts[1]["typed_frame"] == calls[1][3]["typed_frame"]
+    assert result.evidence_bundle.metadata["canonical_candidate_count"] == 1
+    [slot] = result.evidence_bundle.metadata["query_plan"]["evidence_slots"]
+    assert slot["status"] == "retrieved_unverified"
+
+
+def test_qasper_expanded_boolean_query_keeps_toolkit_evidence_candidate():
+    plan = build_query_plan(
+        TOOLKIT_QUESTION,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    [slot] = plan.evidence_slots
+    bound = bind_evidence_slots(
+        plan,
+        [_evidence("toolkit-support", TOOLKIT_EVIDENCE)],
+    )
+
+    [bound_slot] = bound.evidence_slots
+    assert slot.metric == "they experiment with toolkits"
+    assert plan.constraints["question"] == TOOLKIT_QUESTION
+    assert bound_slot.status == "retrieved_unverified"
+    assert bound_slot.evidence_ids
+
+
+def test_qasper_toolkit_boolean_regression_reaches_exact_authority():
+    calls: list[int] = []
+
+    def retrieve(request, _decision):
+        calls.append(request.retrieval_round_id)
+        return {"evidence": [_evidence("toolkit-support", TOOLKIT_EVIDENCE)]}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=TOOLKIT_QUESTION,
+            retrieval_query=TOOLKIT_QUESTION,
+            task_type="boolean",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            active_file_id="paper",
+            origin="benchmark",
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "Yes.",
+    )
+
+    assert calls == [1]
+    assert result.answer.lower().startswith("yes")
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+    assert result.verify_decision.boolean_authority_status == "verified_support"
+
+
+def _run_recovered_boolean_case(question: str, evidence_text: str):
+    evidence = _evidence("recovered-support", evidence_text)
+    return execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="boolean",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["paper"],
+            active_file_id="paper",
+            origin="benchmark",
+        ),
+        retrieve=lambda *_args: {"evidence": [evidence]},
+        generate=lambda *_args: "yes",
+    )
+
+
+def test_qasper_recovered_off_the_shelf_case_remains_verified_no():
+    result = _run_recovered_boolean_case(
+        "Do they use off-the-shelf NLP systems to build their assistant?",
+        "Natural Language Understanding (NLU): We implemented an NLU unit "
+        "utilizing handcrafted rules, Regular Expressions (RegEx) and "
+        "Elasticsearch (ES) API.",
+    )
+
+    assert result.answer == "no"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+
+
+def test_qasper_recovered_bert_comparison_case_remains_verified_no():
+    result = _run_recovered_boolean_case(
+        "Does BERT reach the best performance among all the algorithms compared?",
+        "BERT remains 0.3 F1-score points behind the winning system and would "
+        "have achieved the second position among all competitors.",
+    )
+
+    assert result.answer == "no"
+    assert result.verify_decision.typed_authority["state"] == "verified_support"
+
+
+def test_unrelated_graph_entity_does_not_satisfy_qasper_boolean_slot():
+    plan = build_query_plan(
+        QUESTION,
+        answer_type="boolean",
+        verification_domain="qasper",
+    )
+    metadata = {
+        "evidence": [
+            _evidence(
+                "graph-unrelated",
+                "The graph entity describes a citation network unrelated to clinical evaluation.",
+                source_id="runtime-file-1",
+            )
+        ],
+        "bound_query_plan": plan.as_dict(),
+    }
+
+    decision = evaluate_retrieval_quality(
+        "hybrid",
+        metadata,
+        prompt=QUESTION,
+        verification_domain="qasper",
+    )
+
+    assert decision.status == "ambiguous"
+    assert decision.retry is True
+
+
+def test_non_qasper_verification_only_boolean_slot_stays_out_of_round_two():
+    plan = QueryPlan(
+        answer_type="boolean",
+        question_type="simple_fact",
+        evidence_slots=(
+            EvidenceSlot(
+                slot_id="support:boolean_proposition",
+                role="support",
+                statement_kind="boolean_proposition",
+                required_for_retrieval=False,
+                required_for_verification=True,
+                query="whether the report confirms the claim",
+            ),
+        ),
+        constraints={"verification_domain": "finance"},
+    )
+
+    assert missing_slot_requests(plan) == []
+    evidence = _evidence("context", "The report confirms the claim.")
+    decision = evaluate_retrieval_quality(
+        "doc_text",
+        {"evidence": [evidence], "bound_query_plan": plan.as_dict()},
+        prompt="Does the report confirm the claim?",
+        verification_domain="finance",
+    )
+
+    assert decision.status == "good"
+    assert decision.retry is False
+
+
+def test_6f024d4c_true_unanswerable_remains_fail_closed_after_retry():
+    question = "What was the baseline?"
+    document_title = (
+        "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+    )
+    calls: list[tuple[int, str, dict[str, Any]]] = []
+
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_round_id,
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
+        return {"evidence": []}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="free_text",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            active_file_name="2001_05865.txt",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("unanswerable QASPER request must not generate")
+        ),
+    )
+
+    assert len(calls) == 2
+    assert calls[0][0] == 1
+    assert calls[0][1] == question
+    assert calls[1][0] == 2
+    assert calls[1][1] == f"{question} {document_title}"
+    assert calls[1][1].count(question) == 1
+    assert all(
+        token not in calls[1][1]
+        for token in ("actor:", "predicate:", "object:", "object_role:")
+    )
+    assert calls[1][2]["document_context"] == {
+        "kind": "selected_document_title",
+        "text": document_title,
+    }
+    assert result.retrieve_decision.status == "poor"
+    assert result.guardrail_decision.action == "abstain"
+
+
+def test_c9b8d385_true_unanswerable_recovery_uses_selected_document_title():
+    question = "What type of inflections are considered?"
+    document_title = (
+        "Copenhagen at CoNLL--SIGMORPHON 2018: Multilingual Inflection in "
+        "Context with Explicit Morphosyntactic Decoding"
+    )
+    calls: list[tuple[int, str, dict[str, Any]]] = []
+
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_round_id,
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
+        return {"evidence": []}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="qasper_qa",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            active_file_name="1809_01541.txt",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("unanswerable QASPER request must not generate")
+        ),
+    )
+
+    assert [round_id for round_id, _query, _metadata in calls] == [1, 2]
+    assert calls[1][1] == f"{question} {document_title}"
+    assert calls[1][2]["document_context"] == {
+        "kind": "selected_document_title",
+        "text": document_title,
+    }
+    assert result.retrieve_decision.status == "poor"
+    assert result.guardrail_decision.action == "abstain"
+
+
+def test_specific_free_text_recovery_does_not_add_document_heading():
+    question = "What NDCG score did the final submission achieve?"
+    document_title = (
+        "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+    )
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    def retrieve(request, _decision):
+        calls.append(
+            (
+                request.retrieval_query,
+                dict(getattr(request, "retrieval_query_metadata", {}) or {}),
+            )
+        )
+        return {"evidence": []}
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="free_text",
+            verification_domain="qasper",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("empty retrieval must remain fail closed")
+        ),
+    )
+
+    assert [query for query, _metadata in calls] == [question, question]
+    assert "document_context" not in calls[1][1]
+    assert result.guardrail_decision.action == "abstain"
+
+
+def test_6f024d4c_context_recovery_does_not_force_answer_relation_authority():
+    question = "What was the baseline?"
+    document_title = (
+        "Ensemble based discriminative models for Visual Dialog Challenge 2018"
+    )
+
+    def retrieve(request, _decision):
+        if request.retrieval_round_id == 1:
+            return {"evidence": []}
+        assert request.retrieval_query == f"{question} {document_title}"
+        return {
+            "evidence": [
+                _evidence(
+                    "ensemble",
+                    "Our final submission is an ensemble of three discriminative models.",
+                    source_id="runtime-file-1",
+                )
+            ]
+        }
+
+    result = execute_controller_turn(
+        DocQARequest(
+            prompt=question,
+            retrieval_query=question,
+            task_type="free_text",
+            verification_domain="qasper",
+            verification_mode="strict",
+            route_policy="doc",
+            allowed_routes=["doc_text"],
+            selected_file_ids=["runtime-file-1"],
+            active_file_id="runtime-file-1",
+            selected_source_title=document_title,
+        ),
+        retrieve=retrieve,
+        generate=lambda *_args: "The ensemble of three discriminative models.",
+    )
+
+    assert result.evidence_bundle.metadata["canonical_candidate_count"] == 1
+    assert result.guardrail_decision.action == "abstain"
+    assert result.verify_decision.typed_authority["reason"] == (
+        "answer_relation_unresolved"
+    )
+
+
+def test_auto_route_optional_doc_element_does_not_force_element_index():
+    config = SimpleNamespace(
+        route="controller_auto",
+        route_policy="auto",
+        allowed_routes=["doc_text", "doc_element"],
+    )
+
+    assert route_requires_element(config) is False
+    assert (
+        route_requires_element(SimpleNamespace(route="element", route_policy="element"))
+        is True
+    )
+    assert (
+        route_requires_element(
+            SimpleNamespace(route="doc_element", route_policy="auto")
+        )
+        is True
+    )
+    assert (
+        route_requires_element(SimpleNamespace(route="hybrid", route_policy="hybrid"))
+        is True
+    )
+
+
+def test_cache_identity_partitions_canonical_document_ids(tmp_path):
+    path = tmp_path / "paper.txt"
+    path.write_text("same paper", encoding="utf-8")
+    first = BenchmarkDocument("dataset-paper-a", path, format_type="txt")
+    second = BenchmarkDocument("dataset-paper-b", path, format_type="txt")
+    cache = DocQAIndexCache(
+        SimpleNamespace(suite_name="qasper", route="doc_text"),
+        shared_prepared_file_ids={},
+    )
+
+    first_key, first_trace = cache.document_identity(first)
+    second_key, second_trace = cache.document_identity(second)
+
+    assert first_key != second_key
+    assert first_trace["document_id"] == "dataset-paper-a"
+    assert second_trace["document_id"] == "dataset-paper-b"

@@ -13,7 +13,16 @@ from typing import Any, Iterable
 from kotaemon.base import Document
 
 from ._runtime_utils import _serialize_value
-from .element_parser import parse_element_index_record
+from .element_parser import (
+    parse_element_index_records,
+    parse_financial_numeric_span_records,
+)
+from .element_record_contract import element_record_from_mapping
+from .evidence_record_identity import (
+    EvidenceRecordIngestionResult,
+    isolate_evidence_records,
+    unique_evidence_records,
+)
 
 logger = logging.getLogger(__name__)
 ELEMENT_INDEX_DOC_TYPE = "mara_element_index"
@@ -29,6 +38,7 @@ ELEMENT_INDEX_METADATA_REQUIRED_KEYS = [
     "element_index_schema_version",
     "element_index_record",
 ]
+ELEMENT_INDEX_METADATA_OPTIONAL_KEYS = ["element_ingestion_trace"]
 ELEMENT_INDEX_RECORD_REQUIRED_KEYS = [
     "evidence_id",
     "file_id",
@@ -48,6 +58,7 @@ def element_index_persistence_contract() -> dict[str, Any]:
         "relation_type": ELEMENT_INDEX_RELATION_TYPE,
         "schema_version": ELEMENT_INDEX_SCHEMA_VERSION,
         "metadata_required_keys": list(ELEMENT_INDEX_METADATA_REQUIRED_KEYS),
+        "metadata_optional_keys": list(ELEMENT_INDEX_METADATA_OPTIONAL_KEYS),
         "record_required_keys": list(ELEMENT_INDEX_RECORD_REQUIRED_KEYS),
     }
 
@@ -100,21 +111,38 @@ def element_records_from_documents(documents: Iterable[Any]) -> list[dict[str, A
         page_label = _page_label(metadata)
         if not file_id or not page_label:
             continue
+        doc_id = _doc_id(doc)
+        file_name = _file_name(metadata)
+        text = _text(doc, metadata)
+        parsed_records = parse_element_index_records(
+            doc_id=doc_id,
+            file_id=file_id,
+            file_name=file_name,
+            page_label=page_label,
+            text=text,
+            metadata=metadata,
+        )
         if element_id:
             records.append(
                 _element_record(doc, metadata, file_id, page_label, element_id)
             )
-            continue
-        record = parse_element_index_record(
-            doc_id=_doc_id(doc),
-            file_id=file_id,
-            file_name=_file_name(metadata),
-            page_label=page_label,
-            text=_text(doc, metadata),
-            metadata=metadata,
+            records.extend(
+                record
+                for record in parsed_records
+                if record.get("evidence_level") == "cell"
+            )
+        else:
+            records.extend(parsed_records)
+        records.extend(
+            parse_financial_numeric_span_records(
+                doc_id=doc_id,
+                file_id=file_id,
+                file_name=file_name,
+                page_label=page_label,
+                text=text,
+                metadata=metadata,
+            )
         )
-        if record is not None:
-            records.append(record)
     return records
 
 
@@ -123,17 +151,20 @@ def element_records_from_index_documents(
 ) -> list[dict[str, Any]]:
     """Read persisted layout-element records from element-index documents."""
     records = []
-    seen: set[str] = set()
     for doc in documents:
         metadata = _metadata(doc)
         if metadata.get("type") != ELEMENT_INDEX_DOC_TYPE:
             continue
         record = _persisted_element_record(metadata.get("element_index_record"))
-        if record is None or record["evidence_id"] in seen:
-            continue
-        seen.add(record["evidence_id"])
-        records.append(record)
-    return records
+        if record is not None:
+            trace = metadata.get("element_ingestion_trace")
+            if isinstance(trace, dict):
+                record = dict(record)
+                record_metadata = dict(record.get("metadata") or {})
+                record_metadata["element_ingestion_trace"] = dict(trace)
+                record["metadata"] = record_metadata
+            records.append(record)
+    return unique_evidence_records(records)
 
 
 def element_index_documents_from_documents(
@@ -153,7 +184,9 @@ def element_index_documents_from_records(
 ) -> list[Document]:
     source_id = str(file_id or "").strip()
     documents = []
-    for record in _unique_element_records(records):
+    ingestion = _isolated_element_records(records)
+    trace = ingestion.as_trace()
+    for record in ingestion.accepted_records:
         metadata = {
             "type": ELEMENT_INDEX_DOC_TYPE,
             "source_id": source_id,
@@ -163,6 +196,7 @@ def element_index_documents_from_records(
             "element_index_relation_type": ELEMENT_INDEX_RELATION_TYPE,
             "element_index_schema_version": ELEMENT_INDEX_SCHEMA_VERSION,
             "element_index_record": record,
+            "element_ingestion_trace": trace,
         }
         documents.append(
             Document(
@@ -286,37 +320,31 @@ def _persisted_element_record(value: Any) -> dict[str, Any] | None:
     element_id = str(value.get("element_id") or "").strip()
     if not evidence_id or not file_id or not page_label or not element_id:
         return None
-    raw_metadata = value.get("metadata")
-    metadata = _safe_dict(raw_metadata)
-    modality = str(value.get("modality") or value.get("element_type") or "element")
-    return {
-        "evidence_id": evidence_id,
-        "file_id": file_id,
-        "source_id": source_id or file_id,
-        "file_name": str(value.get("file_name") or value.get("source_name") or ""),
-        "page_label": page_label,
-        "page_number": _page_number(page_label),
-        "element_id": element_id,
-        "element_type": modality,
-        "modality": modality,
-        "bbox": _serialize_value(value.get("bbox")),
-        "caption": str(value.get("caption") or ""),
-        "text": str(value.get("text") or ""),
-        "source_backrefs": _source_backrefs(value, file_id, page_label),
-        "metadata": metadata,
-    }
+    return element_record_from_mapping(
+        value,
+        default_file_id=file_id,
+        default_file_name=str(value.get("file_name") or value.get("source_name") or ""),
+        default_page_label=page_label,
+        default_element_id=element_id,
+        default_modality=str(
+            value.get("modality") or value.get("element_type") or "element"
+        ),
+        default_evidence_id=evidence_id,
+    )
 
 
 def _unique_element_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    unique = []
-    seen: set[str] = set()
-    for record in records:
-        normalized = _persisted_element_record(record)
-        if normalized is None or normalized["evidence_id"] in seen:
-            continue
-        seen.add(normalized["evidence_id"])
-        unique.append(normalized)
-    return unique
+    return list(_isolated_element_records(records).accepted_records)
+
+
+def _isolated_element_records(
+    records: Iterable[dict[str, Any]],
+) -> EvidenceRecordIngestionResult:
+    return isolate_evidence_records(
+        normalized
+        for record in records
+        if (normalized := _persisted_element_record(record)) is not None
+    )
 
 
 def _source_backrefs(value: dict[str, Any], file_id: str, page_label: str) -> list[str]:
@@ -382,7 +410,7 @@ def _element_modality(metadata: dict[str, Any]) -> str:
 
 
 def _visual_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    return {
+    visual = {
         key: metadata[key]
         for key in (
             "rendered_page_image",
@@ -396,6 +424,20 @@ def _visual_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         )
         if key in metadata
     }
+    for key in (
+        "visual_extractions",
+        "structured_visual_evidence",
+        "table_cells",
+        "ocr_cells",
+        "vlm_cells",
+        "extracted_elements",
+        "visual_elements",
+        "ocr_table",
+        "vlm_table",
+    ):
+        if key in metadata:
+            visual[key] = metadata[key]
+    return visual
 
 
 def _is_pdf_record(file_record: dict[str, Any]) -> bool:

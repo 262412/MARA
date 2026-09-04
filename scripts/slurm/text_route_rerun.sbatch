@@ -12,35 +12,79 @@ source ~/.bashrc
 set -euo pipefail
 
 PROJECT_ROOT="${MARA_PROJECT_ROOT:-/mnt/scratch/users/tbczhang/projects/MARA}"
+export MARA_PROJECT_ROOT="$PROJECT_ROOT"
 HPC_HOME="${MARA_HPC_HOME:-/mnt/scratch/users/tbczhang/mara-hpc}"
 RUN_ROOT="${MARA_TEXT_RUN_ROOT:-${MARA_FINAL_RUN_ROOT:-/mnt/scratch/users/tbczhang/outputs/MARA/text_route_slurm}}"
 OUT_ROOT="${MARA_TEXT_OUTPUT_DIR:-${MARA_FINAL_OUTPUT_DIR:-${RUN_ROOT}/01_core_text}}"
 HEALTH_ROOT="${MARA_TEXT_HEALTH_DIR:-${RUN_ROOT}/00_health}"
 RUN_ID="${SLURM_JOB_ID:-manual-$(date +%Y%m%d_%H%M%S)}"
+PORT_OFFSET=$((10#${SLURM_JOB_ID:-$$} % 10000))
+TEXT_LLM_PORT="${MARA_TEXT_LLM_PORT:-$((20000 + PORT_OFFSET))}"
+RETRIEVAL_PORT="${MARA_RETRIEVAL_PORT:-$((40000 + PORT_OFFSET))}"
+TEXT_LLM_BASE_URL="http://127.0.0.1:${TEXT_LLM_PORT}/v1"
+RETRIEVAL_BASE_URL="http://127.0.0.1:${RETRIEVAL_PORT}"
 
 MANIFEST="${MARA_TEXT_MANIFEST:-${MARA_FINAL_MANIFEST:?Set MARA_TEXT_MANIFEST or MARA_FINAL_MANIFEST to a frozen manifest path}}"
 NAME="${MARA_TEXT_SUITE_NAME:-${MARA_FINAL_SUITE_NAME:?Set MARA_TEXT_SUITE_NAME or MARA_FINAL_SUITE_NAME}}"
 ROUTE="${MARA_TEXT_ROUTE:-${MARA_FINAL_ROUTE:-all}}"
 LIMIT="${MARA_TEXT_LIMIT:-${MARA_FINAL_LIMIT:-10}}"
 SAMPLE_SEED="${MARA_TEXT_SAMPLE_SEED:-${MARA_FINAL_SAMPLE_SEED:-20260615}}"
+MAX_CONTEXT_LENGTH="${MARA_TEXT_MAX_CONTEXT_LENGTH:-3000}"
 ROUTE_TIMEOUT_SECONDS="${MARA_TEXT_ROUTE_TIMEOUT_SECONDS:-${MARA_FINAL_ROUTE_TIMEOUT_SECONDS:-240}}"
+SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
+SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
+SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
+CONTRACT_AUDITOR_BASE_URL="${MARA_QASPER_CONTRACT_AUDITOR_BASE_URL:-}"
+CONTRACT_AUDITOR_MODEL="${MARA_QASPER_CONTRACT_AUDITOR_MODEL:-}"
+ARTIFACT_DETAIL="${MARA_TEXT_ARTIFACT_DETAIL:-compact}"
+EXECUTION_CONTRACT="${MARA_EXECUTION_JOB_CONTRACT:-}"
+REQUIRE_CONTRACT_SMOKE="${MARA_REQUIRE_CONTRACT_SMOKE:-0}"
+REQUIRE_SEMANTIC_DEBUG_TRACE="${MARA_REQUIRE_SEMANTIC_DEBUG_TRACE:-0}"
+SEMANTIC_DEBUG_TRACE="${MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE:-0}"
+CONTRACT_SMOKE_SUITE_KIND="${MARA_CONTRACT_SMOKE_SUITE_KIND:-}"
 SUITE_NAME="${NAME}-${RUN_ID}"
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
 BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
 HEALTH_JSON="${HEALTH_ROOT}/${NAME}-${RUN_ID}.json"
+TOOL_CALL_SMOKE_JSON="${HEALTH_ROOT}/${NAME}-${RUN_ID}-tool-calls.json"
+TOOL_CALL_SMOKE_LOG="${LOG_ROOT}/tool-call-smoke.log"
+CONTRACT_PROBE_PATH="${MARA_QASPER_CONTRACT_PROBE_PATH:-${OUT_ROOT}/contract_probe_predictions.jsonl}"
+CONTRACT_PRE_AUDIT_PATH="${MARA_QASPER_CONTRACT_PRE_AUDIT_PATH:-${OUT_ROOT}/contract_pre_audit_predictions.jsonl}"
+CONTRACT_PROBE_AUDIT_PATH="${MARA_QASPER_CONTRACT_PROBE_AUDIT_PATH:-${OUT_ROOT}/contract_probe_audit.json}"
+RETRIEVAL_INDEX_MODE="${MARA_QASPER_RETRIEVAL_INDEX_MODE:-off}"
+RETRIEVAL_INDEX_ARTIFACT="${MARA_QASPER_RETRIEVAL_INDEX_ARTIFACT:-${OUT_ROOT}/retrieval-index-${RUN_ID}.json}"
+RETRIEVAL_INDEX_SNAPSHOT="${MARA_QASPER_RETRIEVAL_INDEX_SNAPSHOT:-${OUT_ROOT}/retrieval-index-${RUN_ID}}"
+RETRIEVAL_INDEX_RESTORE_AUDIT="${MARA_QASPER_RETRIEVAL_INDEX_RESTORE_AUDIT:-${OUT_ROOT}/retrieval-index-restore-${RUN_ID}.json}"
+NATURAL_PROBE_OUTPUT_DIR="${MARA_QASPER_NATURAL_PROBE_OUTPUT_DIR:-${OUT_ROOT}/natural-probe-${RUN_ID}}"
 
-export UV_CACHE_DIR="${UV_CACHE_DIR:-/users/tbczhang/fastscratch/cache/uv}"
-export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/users/tbczhang/fastscratch/cache/uv/python}"
-export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-/users/tbczhang/scratch/pre-commit-cache}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/mnt/fastscratch/users/tbczhang/cache/uv}"
+export UV_NO_CACHE="${UV_NO_CACHE:-1}"
+export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/mnt/fastscratch/users/tbczhang/python}"
+export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-/mnt/scratch/users/tbczhang/pre-commit-cache}"
 export HF_HOME="${HF_HOME:-/users/tbczhang/fastscratch/cache/huggingface}"
 export TIKTOKEN_CACHE_DIR="${TIKTOKEN_CACHE_DIR:-/users/tbczhang/fastscratch/cache/tiktoken}"
 export CODEX_HOME="${CODEX_HOME:-/users/tbczhang/fastscratch/.codex}"
+export MARA_TEXT_LLM_BASE_URL="$TEXT_LLM_BASE_URL"
+export MARA_RETRIEVAL_BASE_URL="$RETRIEVAL_BASE_URL"
+export MARA_LLM_BASE_URL="$TEXT_LLM_BASE_URL"
+export MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE="$SEMANTIC_DEBUG_TRACE"
+export MARA_REQUIRE_SEMANTIC_DEBUG_TRACE="$REQUIRE_SEMANTIC_DEBUG_TRACE"
+export MARA_REQUIRE_CONTRACT_SMOKE="$REQUIRE_CONTRACT_SMOKE"
+export MARA_CONTRACT_SMOKE_SUITE_KIND="$CONTRACT_SMOKE_SUITE_KIND"
+
+source "${PROJECT_ROOT}/scripts/slurm/service_runtime_preflight.sh"
+mara_preflight_service_runtime "$HPC_HOME" text
 
 SERVICE_PIDS=()
 
 log() {
   printf '[%s] %s\n' "$(date -Is)" "$*"
 }
+
+if [[ "$REQUIRE_SEMANTIC_DEBUG_TRACE" == "1" && "$SEMANTIC_DEBUG_TRACE" != "1" ]]; then
+  log "required semantic debug trace requires semantic proposition debug tracing"
+  exit 2
+fi
 
 require_path() {
   local label="$1"
@@ -57,7 +101,7 @@ require_path() {
 
 http_ok() {
   local url="$1"
-  curl -fsS --max-time 3 "$url" >/dev/null
+  curl -fsS --max-time 3 "$url" >/dev/null 2>&1
 }
 
 wait_http() {
@@ -86,12 +130,18 @@ start_service() {
 }
 
 cleanup() {
+  local trapped_status=$?
+  local producer_status="${1:-$trapped_status}"
   local pid
   for pid in "${SERVICE_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
     fi
   done
+  if [[ "${MARA_BENCHMARK_COMPLETION_RECORDED:-0}" != "1" ]]; then
+    mara_reconcile_benchmark_completion "$producer_status" ||
+      log "producer completion reconciliation failed; preserving runtime for audit"
+  fi
 }
 trap cleanup EXIT
 
@@ -101,8 +151,62 @@ require_path project "$PROJECT_ROOT" \
 require_path output "$OUT_ROOT" \
   "/mnt/scratch/users/tbczhang/outputs/MARA" \
   "/users/tbczhang/scratch/outputs/MARA"
+case "$RETRIEVAL_INDEX_MODE" in
+  off) ;;
+  produce)
+    [[ "$ROUTE" == "text_rag" ]] || {
+      log "retrieval index producer must run route=text_rag"
+      exit 2
+    }
+    [[ "$LIMIT" == "6" ]] || {
+      log "natural retrieval index producer must run the frozen six-sample lane"
+      exit 2
+    }
+    [[ "$REQUIRE_SEMANTIC_DEBUG_TRACE" == "1" && "$SEMANTIC_DEBUG_TRACE" == "1" ]] || {
+      log "retrieval index producer requires complete semantic debug traces"
+      exit 2
+    }
+    require_path retrieval-index-artifact "$RETRIEVAL_INDEX_ARTIFACT" \
+      "/mnt/scratch/users/tbczhang/outputs/MARA" \
+      "/users/tbczhang/scratch/outputs/MARA"
+    require_path retrieval-index-snapshot "$RETRIEVAL_INDEX_SNAPSHOT" \
+      "/mnt/scratch/users/tbczhang/outputs/MARA" \
+      "/users/tbczhang/scratch/outputs/MARA"
+    require_path natural-probe-output "$NATURAL_PROBE_OUTPUT_DIR" \
+      "/mnt/scratch/users/tbczhang/outputs/MARA" \
+      "/users/tbczhang/scratch/outputs/MARA"
+    ;;
+  consume)
+    require_path retrieval-index-artifact "$RETRIEVAL_INDEX_ARTIFACT" \
+      "/mnt/scratch/users/tbczhang/outputs/MARA" \
+      "/users/tbczhang/scratch/outputs/MARA"
+    require_path retrieval-index-snapshot "$RETRIEVAL_INDEX_SNAPSHOT" \
+      "/mnt/scratch/users/tbczhang/outputs/MARA" \
+      "/users/tbczhang/scratch/outputs/MARA"
+    require_path retrieval-index-restore-audit "$RETRIEVAL_INDEX_RESTORE_AUDIT" \
+      "/mnt/scratch/users/tbczhang/outputs/MARA" \
+      "/users/tbczhang/scratch/outputs/MARA"
+    test -s "$RETRIEVAL_INDEX_ARTIFACT"
+    test -d "$RETRIEVAL_INDEX_SNAPSHOT"
+    [[ ! -L "$RETRIEVAL_INDEX_SNAPSHOT" ]] || {
+      log "retrieval index snapshot must not be a symlink"
+      exit 2
+    }
+    ;;
+  *)
+    log "MARA_QASPER_RETRIEVAL_INDEX_MODE must be off, produce, or consume"
+    exit 2
+    ;;
+esac
+if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE" == "1" && "$RETRIEVAL_INDEX_MODE" != "consume" ]]; then
+  log "formal QASPER contract smoke requires retrieval index consume mode"
+  exit 2
+fi
 
 source "${PROJECT_ROOT}/scripts/slurm/benchmark_runtime_isolation.sh"
+mara_install_benchmark_runtime_cleanup
+# normalize_semantic_evaluator.py is invoked with the fresh interpreter below.
+# mara_bootstrap_benchmark_runtime performs uv sync --frozen --no-dev --extra mara
 mara_configure_benchmark_runtime "$SUITE_NAME"
 mara_assert_isolated_kh_app_data
 require_path runtime "$KH_APP_DATA_DIR" \
@@ -112,37 +216,141 @@ require_path runtime "$KH_APP_DATA_DIR" \
 mkdir -p "$OUT_ROOT" "$LOG_ROOT" "$HEALTH_ROOT" /mnt/scratch/users/tbczhang/outputs/MARA/slurm
 cd "$PROJECT_ROOT"
 
+GIT_COMMIT="$(git rev-parse HEAD)"
+GIT_STATUS="$(git status --porcelain --untracked-files=normal)"
+GIT_DIRTY=false
+if [[ -n "$GIT_STATUS" ]]; then
+  GIT_DIRTY=true
+fi
+if [[ -n "$GIT_STATUS" && "${MARA_ALLOW_DIRTY_BENCHMARK:-0}" != "1" ]]; then
+  log "refusing benchmark from dirty worktree; set MARA_ALLOW_DIRTY_BENCHMARK=1 only for an explicitly non-formal development run"
+  printf '%s\n' "$GIT_STATUS" >&2
+  exit 2
+fi
+export MARA_BENCHMARK_GIT_COMMIT="$GIT_COMMIT"
+export MARA_BENCHMARK_GIT_DIRTY="$GIT_DIRTY"
+mara_bootstrap_benchmark_runtime
+export MARA_BENCHMARK_INDEX_CONTRACT="$(
+  "$MARA_BENCHMARK_PYTHON" \
+    "${PROJECT_ROOT}/scripts/slurm/benchmark_index_contract.py" \
+    "$MANIFEST"
+)"
+
 log "repo=$(pwd)"
+log "git_commit=${GIT_COMMIT} git_dirty=${GIT_DIRTY}"
+log "index_contract=${MARA_BENCHMARK_INDEX_CONTRACT}"
 log "run_root=${RUN_ROOT}"
 log "kh_app_data_dir=${KH_APP_DATA_DIR}"
+log "theflow_settings_module=${THEFLOW_SETTINGS_MODULE}"
+log "theflow_settings_path=${MARA_BENCHMARK_FLOWSETTINGS_PATH}"
+log "theflow_storage_prefix=${MARA_BENCHMARK_STORAGE_PREFIX}"
+log "theflow_temp_path=${THEFLOW_TEMP_PATH}"
+log "uv_project_environment=${UV_PROJECT_ENVIRONMENT}"
+log "benchmark_python=${MARA_BENCHMARK_PYTHON}"
+log "runtime_contract=${MARA_BENCHMARK_RUNTIME_CONTRACT}"
 log "manifest=${MANIFEST}"
 log "output=${OUT_ROOT}"
 log "suite=${SUITE_NAME}"
-log "route=${ROUTE} limit=${LIMIT} sample_seed=${SAMPLE_SEED} route_timeout=${ROUTE_TIMEOUT_SECONDS}"
+log "route=${ROUTE} limit=${LIMIT} sample_seed=${SAMPLE_SEED} max_context=${MAX_CONTEXT_LENGTH} route_timeout=${ROUTE_TIMEOUT_SECONDS}"
+log "artifact_detail=${ARTIFACT_DETAIL} semantic_debug_trace=${SEMANTIC_DEBUG_TRACE} require_contract_smoke=${REQUIRE_CONTRACT_SMOKE} require_semantic_debug_trace=${REQUIRE_SEMANTIC_DEBUG_TRACE} contract_smoke_suite_kind=${CONTRACT_SMOKE_SUITE_KIND:-none}"
+log "execution_contract=${EXECUTION_CONTRACT:-none}"
+log "text_llm_base_url=${TEXT_LLM_BASE_URL}"
+log "contract_probe_auditor_base_url=${CONTRACT_AUDITOR_BASE_URL:-unset}"
+log "contract_probe_auditor_model=${CONTRACT_AUDITOR_MODEL:-unset}"
+log "contract_pre_audit_path=${CONTRACT_PRE_AUDIT_PATH}"
+log "retrieval_base_url=${RETRIEVAL_BASE_URL}"
 log "node=${SLURMD_NODENAME:-$(hostname)}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader || true
 
-mara_bootstrap_benchmark_runtime
+SEMANTIC_EVALUATOR="$(
+  "$MARA_BENCHMARK_PYTHON" \
+    "${PROJECT_ROOT}/scripts/slurm/normalize_semantic_evaluator.py" \
+    "$SEMANTIC_EVALUATOR"
+)"
+log "semantic_evaluator=${SEMANTIC_EVALUATOR}"
 
-if ! http_ok "http://127.0.0.1:8000/v1/models"; then
+export MARA_BENCHMARK_EMBEDDING_CONTRACT="$(
+  sha256sum \
+    "${HPC_HOME}/serve_retrieval.sh" \
+    "${HPC_HOME}/env-retrieval.sh" \
+    "${HPC_HOME}/local_retrieval_server.py" \
+    "${HPC_HOME}/configure_mara_local_models.py" |
+    sha256sum |
+    awk '{print $1}'
+)"
+export MARA_BENCHMARK_SERVICE_CONTRACT="$(
+  sha256sum \
+    "${HPC_HOME}/serve_qwen3_8b.sh" \
+    "${HPC_HOME}/serve_retrieval.sh" \
+    "${HPC_HOME}/configure_mara_local_models.py" |
+    sha256sum |
+    awk '{print $1}'
+)"
+log "embedding_contract=${MARA_BENCHMARK_EMBEDDING_CONTRACT}"
+log "service_contract=${MARA_BENCHMARK_SERVICE_CONTRACT}"
+
+if [[ "$RETRIEVAL_INDEX_MODE" == "consume" ]]; then
+  log "retrieval_index_restore source=${RETRIEVAL_INDEX_SNAPSHOT}"
+  RESTORE_STAGING="${KH_APP_DATA_DIR}.retrieval-index-restore"
+  BOOTSTRAP_APP_DATA="${KH_APP_DATA_DIR}.bootstrap-empty"
+  [[ ! -e "$RESTORE_STAGING" && ! -L "$RESTORE_STAGING" ]] || {
+    log "retrieval index restore staging path already exists: ${RESTORE_STAGING}"
+    exit 2
+  }
+  [[ ! -e "$BOOTSTRAP_APP_DATA" && ! -L "$BOOTSTRAP_APP_DATA" ]] || {
+    log "retrieval index bootstrap backup already exists: ${BOOTSTRAP_APP_DATA}"
+    exit 2
+  }
+  mkdir "$RESTORE_STAGING"
+  cp -a -- "$RETRIEVAL_INDEX_SNAPSHOT/." "$RESTORE_STAGING/"
+  mv -- "$KH_APP_DATA_DIR" "$BOOTSTRAP_APP_DATA"
+  mv -- "$RESTORE_STAGING" "$KH_APP_DATA_DIR"
+  mara_assert_isolated_kh_app_data
+  mara_benchmark_self_check
+  mkdir -p "$(dirname -- "$RETRIEVAL_INDEX_RESTORE_AUDIT")"
+  "$MARA_BENCHMARK_PYTHON" -m \
+    scripts.slurm.qasper_retrieval_index_artifact_cli verify \
+    --artifact "$RETRIEVAL_INDEX_ARTIFACT" \
+    --index-snapshot "$KH_APP_DATA_DIR" \
+    --code-sha "$GIT_COMMIT" \
+    --index-contract "$MARA_BENCHMARK_INDEX_CONTRACT" \
+    --embedding-contract "$MARA_BENCHMARK_EMBEDDING_CONTRACT" \
+    --output "$RETRIEVAL_INDEX_RESTORE_AUDIT"
+  test -s "$RETRIEVAL_INDEX_RESTORE_AUDIT"
+fi
+
+if ! http_ok "${TEXT_LLM_BASE_URL}/models"; then
   start_service qwen3_8b \
     env CUDA_VISIBLE_DEVICES="${MARA_TEXT_GPU:-0}" \
+    MARA_QWEN3_8B_PORT="$TEXT_LLM_PORT" \
     "${HPC_HOME}/serve_qwen3_8b.sh"
 fi
 
-if ! http_ok "http://127.0.0.1:8002/health"; then
+if ! http_ok "${RETRIEVAL_BASE_URL}/health"; then
   start_service retrieval \
     env CUDA_VISIBLE_DEVICES="${MARA_RETRIEVAL_GPU:-1}" \
+    MARA_RETRIEVAL_PORT="$RETRIEVAL_PORT" \
     MARA_RETRIEVAL_DEVICES="${MARA_RETRIEVAL_DEVICES:-cuda}" \
     "${HPC_HOME}/serve_retrieval.sh"
 fi
 
-wait_http text_llm "http://127.0.0.1:8000/v1/models" 600
-wait_http retrieval "http://127.0.0.1:8002/health" 240
+wait_http text_llm "${TEXT_LLM_BASE_URL}/models" 600
+wait_http retrieval "${RETRIEVAL_BASE_URL}/health" 240
 
-uv run --python 3.10 python "${HPC_HOME}/configure_mara_local_models.py"
+"$MARA_BENCHMARK_PYTHON" \
+  "${PROJECT_ROOT}/scripts/slurm/smoke_openai_tool_calls.py" \
+  --base-url "$TEXT_LLM_BASE_URL" \
+  --output "$TOOL_CALL_SMOKE_JSON" |
+  tee "$TOOL_CALL_SMOKE_LOG"
+grep -Fx "citation_tool_call_error_count=0" "$TOOL_CALL_SMOKE_LOG"
+grep -Fx "inline_structured_citation_path_executed=true" "$TOOL_CALL_SMOKE_LOG"
 
-uv run --python 3.10 python - "$HEALTH_JSON" <<'PY'
+"$MARA_BENCHMARK_PYTHON" "${HPC_HOME}/configure_mara_local_models.py"
+
+"$MARA_BENCHMARK_PYTHON" - \
+  "$HEALTH_JSON" \
+  "${TEXT_LLM_BASE_URL}/models" \
+  "${RETRIEVAL_BASE_URL}/health" <<'PY'
 import json
 import sys
 import urllib.request
@@ -150,6 +358,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 out = Path(sys.argv[1])
+text_llm_health_url = sys.argv[2]
+retrieval_health_url = sys.argv[3]
 
 def fetch_json(url: str) -> dict:
     with urllib.request.urlopen(url, timeout=5) as response:
@@ -157,12 +367,34 @@ def fetch_json(url: str) -> dict:
 
 payload = {
     "created_at": datetime.now(timezone.utc).isoformat(),
-    "text_llm": fetch_json("http://127.0.0.1:8000/v1/models"),
-    "retrieval": fetch_json("http://127.0.0.1:8002/health"),
+    "text_llm": fetch_json(text_llm_health_url),
+    "retrieval": fetch_json(retrieval_health_url),
 }
 out.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 print(f"health_json={out}")
 PY
+
+if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
+  log "running live QASPER contract probes; output=${CONTRACT_PROBE_PATH}"
+  "$MARA_BENCHMARK_PYTHON" -m \
+    scripts.slurm.qasper_debug_contract_probe \
+    --base-url "$TEXT_LLM_BASE_URL" \
+    --model "$SEMANTIC_EVALUATOR_MODEL" \
+    --auditor-base-url "$CONTRACT_AUDITOR_BASE_URL" \
+    --auditor-model "$CONTRACT_AUDITOR_MODEL" \
+    --output "$CONTRACT_PROBE_PATH" \
+    --pre-audit-output "$CONTRACT_PRE_AUDIT_PATH" \
+    --audit-output "$CONTRACT_PROBE_AUDIT_PATH" \
+    --timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"
+  test -s "$CONTRACT_PROBE_PATH"
+  test -s "$CONTRACT_PRE_AUDIT_PATH"
+  "$MARA_BENCHMARK_PYTHON" -m \
+    scripts.slurm.validate_qasper_contract_probe \
+    "$CONTRACT_PROBE_PATH" \
+    --pre-audit-predictions "$CONTRACT_PRE_AUDIT_PATH" \
+    --output "$CONTRACT_PROBE_AUDIT_PATH"
+  test -s "$CONTRACT_PROBE_AUDIT_PATH"
+fi
 
 NUM_SHARDS="${MARA_TEXT_NUM_SHARDS:-${MARA_FINAL_NUM_SHARDS:-}}"
 SHARD_INDEX="${MARA_TEXT_SHARD_INDEX:-${MARA_FINAL_SHARD_INDEX:-}}"
@@ -174,7 +406,8 @@ if [[ -n "$SHARD_INDEX" ]]; then
   SHARD_ARGS+=(--shard-index "$SHARD_INDEX")
 fi
 
-uv run --python 3.10 python -m benchmark run \
+# python -m benchmark run executes through the job-owned interpreter below.
+"$MARA_BENCHMARK_PYTHON" -m benchmark run \
   --manifest "$MANIFEST" \
   --suite-name "$SUITE_NAME" \
   --route "$ROUTE" \
@@ -182,11 +415,15 @@ uv run --python 3.10 python -m benchmark run \
   --sample-seed "$SAMPLE_SEED" \
   "${SHARD_ARGS[@]}" \
   --output-dir "$OUT_ROOT" \
-  --artifact-detail compact \
+  --artifact-detail "$ARTIFACT_DETAIL" \
   --benchmark-prompt-policy gold_answer_v1 \
   --benchmark-prompt-profile auto \
   --benchmark-answer-mode scoring_adapter_v1 \
   --benchmark-no-think \
+  --max-context-length "$MAX_CONTEXT_LENGTH" \
+  --semantic-evaluator "$SEMANTIC_EVALUATOR" \
+  --semantic-evaluator-model "$SEMANTIC_EVALUATOR_MODEL" \
+  --semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS" \
   --route-timeout-seconds "$ROUTE_TIMEOUT_SECONDS" \
   --docqa-citation-mode inline | tee "$BENCHMARK_LOG"
 
@@ -196,5 +433,135 @@ test -f "$RUN_DIR/summary.json"
 test -f "$RUN_DIR/route_metrics.csv"
 test -f "$RUN_DIR/predictions.jsonl"
 test -f "$RUN_DIR/report.md"
+test -f "$RUN_DIR/artifact_manifest.json"
+test -f "$RUN_DIR/artifact_complete.json"
+export MARA_BENCHMARK_ARTIFACT_DIR="$RUN_DIR"
+SEMANTIC_TRACE_GAP=0
+if [[ "$REQUIRE_SEMANTIC_DEBUG_TRACE" == "1" ]]; then
+  if test -f "$RUN_DIR/semantic_debug_traces.jsonl"; then
+    PREDICTION_ROW_COUNT="$(wc -l < "$RUN_DIR/predictions.jsonl")"
+    SEMANTIC_TRACE_ROW_COUNT="$(wc -l < "$RUN_DIR/semantic_debug_traces.jsonl")"
+    if [[ "$PREDICTION_ROW_COUNT" -ne "$SEMANTIC_TRACE_ROW_COUNT" ]]; then
+      SEMANTIC_TRACE_GAP=1
+      log "required semantic trace row count mismatch: ${SEMANTIC_TRACE_ROW_COUNT}/${PREDICTION_ROW_COUNT}"
+    fi
+  else
+    SEMANTIC_TRACE_GAP=1
+    log "required semantic debug trace is missing; contract smoke will publish the formal audit"
+  fi
+fi
 
+if [[ "$RETRIEVAL_INDEX_MODE" == "produce" ]]; then
+  test -s "$RUN_DIR/semantic_debug_traces.jsonl"
+  [[ ! -e "$RETRIEVAL_INDEX_SNAPSHOT" && ! -L "$RETRIEVAL_INDEX_SNAPSHOT" ]] || {
+    log "refusing to overwrite retrieval index snapshot: ${RETRIEVAL_INDEX_SNAPSHOT}"
+    exit 2
+  }
+  [[ ! -e "$RETRIEVAL_INDEX_ARTIFACT" && ! -L "$RETRIEVAL_INDEX_ARTIFACT" ]] || {
+    log "refusing to overwrite retrieval index artifact: ${RETRIEVAL_INDEX_ARTIFACT}"
+    exit 2
+  }
+  mkdir -p \
+    "$(dirname -- "$RETRIEVAL_INDEX_SNAPSHOT")" \
+    "$(dirname -- "$RETRIEVAL_INDEX_ARTIFACT")" \
+    "$NATURAL_PROBE_OUTPUT_DIR"
+  cp -a -- "$KH_APP_DATA_DIR" "$RETRIEVAL_INDEX_SNAPSHOT"
+  "$MARA_BENCHMARK_PYTHON" -m \
+    scripts.slurm.qasper_retrieval_index_artifact_cli create \
+    --predictions "$RUN_DIR/predictions.jsonl" \
+    --semantic-debug-traces "$RUN_DIR/semantic_debug_traces.jsonl" \
+    --index-snapshot "$RETRIEVAL_INDEX_SNAPSHOT" \
+    --output "$RETRIEVAL_INDEX_ARTIFACT" \
+    --code-sha "$GIT_COMMIT" \
+    --index-contract "$MARA_BENCHMARK_INDEX_CONTRACT" \
+    --embedding-contract "$MARA_BENCHMARK_EMBEDDING_CONTRACT" \
+    --route text_rag
+  test -s "$RETRIEVAL_INDEX_ARTIFACT"
+  "$MARA_BENCHMARK_PYTHON" -m \
+    scripts.slurm.qasper_natural_semantic_pack_probe \
+    --input "$RUN_DIR/predictions.jsonl" \
+    --semantic-debug-input "$RUN_DIR/semantic_debug_traces.jsonl" \
+    --output-dir "$NATURAL_PROBE_OUTPUT_DIR" \
+    --code-sha "$GIT_COMMIT" \
+    --route text_rag \
+    --expected-count 6 \
+    --retrieval-index-artifact "$RETRIEVAL_INDEX_ARTIFACT" \
+    --index-snapshot "$RETRIEVAL_INDEX_SNAPSHOT" \
+    --index-contract "$MARA_BENCHMARK_INDEX_CONTRACT" \
+    --embedding-contract "$MARA_BENCHMARK_EMBEDDING_CONTRACT"
+fi
+
+# Preserve provider-probe failures until validate_contract_smoke can publish the
+# formal failed audit for the run.
+if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" && "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
+  if [[ "$CONTRACT_PROBE_PATH" != "$RUN_DIR/contract_probe_predictions.jsonl" && -s "$CONTRACT_PROBE_PATH" ]]; then
+    cp "$CONTRACT_PROBE_PATH" "$RUN_DIR/contract_probe_predictions.jsonl"
+  fi
+  if [[ "$CONTRACT_PRE_AUDIT_PATH" != "$RUN_DIR/contract_pre_audit_predictions.jsonl" && -s "$CONTRACT_PRE_AUDIT_PATH" ]]; then
+    cp "$CONTRACT_PRE_AUDIT_PATH" "$RUN_DIR/contract_pre_audit_predictions.jsonl"
+  fi
+  if [[ "$CONTRACT_PROBE_AUDIT_PATH" != "$RUN_DIR/contract_probe_audit.json" && -s "$CONTRACT_PROBE_AUDIT_PATH" ]]; then
+    cp "$CONTRACT_PROBE_AUDIT_PATH" "$RUN_DIR/contract_probe_audit.json"
+  fi
+  cp -- "$RETRIEVAL_INDEX_ARTIFACT" "$RUN_DIR/retrieval_index_artifact.json"
+  cp -- "$RETRIEVAL_INDEX_RESTORE_AUDIT" \
+    "$RUN_DIR/retrieval_index_restore_audit.json"
+fi
+
+if [[ "$REQUIRE_CONTRACT_SMOKE" == "1" ]]; then
+  if [[ -z "$CONTRACT_SMOKE_SUITE_KIND" ]]; then
+    log "MARA_CONTRACT_SMOKE_SUITE_KIND is required for contract smoke validation"
+    exit 2
+  fi
+  CONTRACT_PROBE_VALIDATION_ARGS=()
+  if [[ "$CONTRACT_SMOKE_SUITE_KIND" == "qasper_debug" ]]; then
+    CONTRACT_PROBE_VALIDATION_ARGS+=(
+      --contract-probe-predictions
+      "$RUN_DIR/contract_probe_predictions.jsonl"
+      --retrieval-index-artifact
+      "$RETRIEVAL_INDEX_ARTIFACT"
+      --retrieval-index-restore-audit
+      "$RETRIEVAL_INDEX_RESTORE_AUDIT"
+    )
+  fi
+  "$MARA_BENCHMARK_PYTHON" \
+    "${PROJECT_ROOT}/scripts/slurm/validate_contract_smoke.py" \
+    "$RUN_DIR" \
+    --suite-kind "$CONTRACT_SMOKE_SUITE_KIND" \
+    "${CONTRACT_PROBE_VALIDATION_ARGS[@]}"
+fi
+
+if [[ -n "$EXECUTION_CONTRACT" ]]; then
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --expected-keys-file "$EXECUTION_CONTRACT"
+  )
+else
+  # Manual unsharded runs keep the full-manifest validator contract.
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --manifest "$MANIFEST"
+  )
+fi
+if [[ "${SUITE_NAME,,}" == *qasper* ]]; then
+  VALIDATION_ARGS+=(
+    --require-qasper-answerability
+    --qasper-manifest "$MANIFEST"
+  )
+fi
+"$MARA_BENCHMARK_PYTHON" \
+  "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
+  "$RUN_DIR/predictions.jsonl" \
+  "${VALIDATION_ARGS[@]}"
+if [[ "$SEMANTIC_TRACE_GAP" == "1" ]]; then
+  log "required semantic debug trace is incomplete"
+  exit 2
+fi
+
+mara_reconcile_benchmark_completion 0
 log "outputs=${RUN_DIR}"
+mara_cleanup_benchmark_runtime

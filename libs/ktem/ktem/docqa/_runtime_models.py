@@ -11,15 +11,19 @@ class DocQARequest:
     prompt: str
     controller_question: str = ""
     retrieval_query: str = ""
+    retrieval_slot_id: str = ""
+    retrieval_round_id: int = 0
     dataset_family: str = ""
     conversation_id: str = ""
     selected_file_ids: Optional[list[str]] = None
+    source_identity_crosswalk: Optional[list[dict[str, Any]]] = None
     selected_inputs: Optional[dict[int, Any]] = None
     qa_scope: str = "auto"
     active_file_id: str = ""
     active_file_name: str = ""
     page_number: Optional[int] = None
     selected_text: str = ""
+    selected_source_title: str = ""
     graph_context: dict[str, Any] = field(default_factory=dict)
     graph_source_ids: Optional[list[str]] = None
     settings: Optional[dict[str, Any]] = None
@@ -28,6 +32,8 @@ class DocQARequest:
     max_context_length: Optional[int] = None
     reasoning_type: Optional[str] = None
     task_type: Optional[str] = None
+    answer_type: Optional[str] = None
+    modality: Optional[str] = None
     agent_mode: Optional[str] = None
     artifact_type: Optional[str] = None
     note_ids: Optional[list[str]] = None
@@ -35,12 +41,17 @@ class DocQARequest:
     route_policy: Optional[str] = None
     planner_backend: Optional[str] = None
     planner_model: Optional[str] = None
+    planned_query_plan: Any = None
+    query_plan: Any = None
+    query_plan_id: str = ""
+    query_plan_state_version: int = 0
     allowed_routes: Optional[list[str]] = None
     verification_mode: Optional[str] = None
     verification_domain: Optional[str] = None
     graph_mode: Optional[str] = None
     visual_retriever_backend: Optional[str] = None
     visual_generator_backend: Optional[str] = None
+    reranker_name: Optional[str] = None
     page_image_records: Optional[list[dict[str, Any]]] = None
     element_index_records: Optional[list[dict[str, Any]]] = None
     llm: Optional[str] = None
@@ -48,6 +59,13 @@ class DocQARequest:
     use_citation: Optional[str] = None
     language: Optional[str] = None
     command_state: Optional[str] = None
+    route_timeout_seconds: Optional[float] = None
+    route_deadline_monotonic: Optional[float] = None
+    route_terminal_reserve_seconds: Optional[float] = None
+    generation_temperature: Optional[float] = None
+    generation_top_p: Optional[float] = None
+    generation_seed: Optional[int] = None
+    trace_context: dict[str, Any] = field(default_factory=dict)
     user_id: Any = None
     origin: str = "cli"
 
@@ -89,6 +107,14 @@ class DocQAResponse:
     workflow_plan: dict[str, Any] = field(default_factory=dict)
     backend_metadata: dict[str, Any] = field(default_factory=dict)
     artifact: Any = None
+    engine_terminal_answer: str = ""
+    engine_terminal_state: dict[str, Any] = field(default_factory=dict)
+    engine_verify_decision: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_guardrail_decision: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_evidence_bundle: dict[str, Any] = field(default_factory=dict)
+    engine_terminal_projection_hash: str = ""
+    engine_terminal_commit: dict[str, Any] = field(default_factory=dict)
+    terminal_semantic_commit: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

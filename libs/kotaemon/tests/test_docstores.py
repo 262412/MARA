@@ -331,6 +331,7 @@ def test_lancedb_scoped_fts_uses_postfilter():
                     "id": "chunk-1",
                     "text": "Quick ratio increased in the quarter.",
                     "attributes": "{}",
+                    "_score": 0.875,
                 }
             ]
             self.where_calls = []
@@ -372,6 +373,7 @@ def test_lancedb_scoped_fts_uses_postfilter():
     docs = store.query("quick ratio", doc_ids=["chunk-1"])
 
     assert [doc.doc_id for doc in docs] == ["chunk-1"]
+    assert docs[0].metadata["_sparse_retrieval_score"] == 0.875
     assert store.db_connection.collection.search_result.where_calls == [
         ("id in ('chunk-1')", False)
     ]
@@ -426,6 +428,90 @@ def test_lancedb_scoped_fts_falls_back_to_local_lexical_ranking():
     )
 
     assert [doc.doc_id for doc in docs] == ["chunk-1"]
+
+
+def test_lancedb_lexical_fallback_breaks_equal_scores_by_document_identity():
+    class FakeLanceSearch:
+        def __init__(self, docs):
+            self.docs = docs
+
+        def where(self, query_filter, prefilter=True):
+            return self
+
+        def limit(self, top_k):
+            self.docs = self.docs[:top_k]
+            return self
+
+        def to_list(self):
+            return self.docs
+
+    class FakeLanceCollection:
+        def __init__(self, docs):
+            self.docs = docs
+
+        def search(self, query=None, query_type=None):
+            if query_type == "fts":
+                return FakeLanceSearch([])
+            return FakeLanceSearch(list(self.docs))
+
+    class FakeLanceConnection:
+        def __init__(self, docs):
+            self.docs = docs
+
+        def open_table(self, collection_name):
+            return FakeLanceCollection(self.docs)
+
+    rows = [
+        {"id": "chunk-b", "text": "liquidity profile", "attributes": "{}"},
+        {"id": "chunk-a", "text": "liquidity profile", "attributes": "{}"},
+    ]
+
+    def run(values):
+        store = LanceDBDocumentStore.__new__(LanceDBDocumentStore)
+        store.collection_name = "docstore"
+        store.db_connection = FakeLanceConnection(values)
+        return store.query("liquidity profile", doc_ids=["chunk-a", "chunk-b"], top_k=1)
+
+    assert [doc.doc_id for doc in run(rows)] == ["chunk-a"]
+    assert [doc.doc_id for doc in run(list(reversed(rows)))] == ["chunk-a"]
+
+
+def test_elasticsearch_query_records_sparse_scores_and_stable_tie_sort():
+    class FakeClient:
+        def __init__(self):
+            self.body: dict[str, object] = {}
+
+        def search(self, *, index, body):
+            self.body = body
+            return {
+                "hits": {
+                    "hits": [
+                        {
+                            "_id": "chunk-b",
+                            "_score": 0.75,
+                            "_source": {"content": "B", "metadata": {}},
+                        },
+                        {
+                            "_id": "chunk-a",
+                            "_score": 0.75,
+                            "_source": {"content": "A", "metadata": {}},
+                        },
+                    ]
+                }
+            }
+
+    store = ElasticsearchDocumentStore.__new__(ElasticsearchDocumentStore)
+    store.index_name = "docstore"
+    store.client = FakeClient()
+
+    docs = store.query("liquidity", top_k=2)
+
+    assert [doc.doc_id for doc in docs] == ["chunk-a", "chunk-b"]
+    assert docs[0].metadata["_sparse_retrieval_score"] == 0.75
+    assert store.client.body["sort"] == [
+        {"_score": {"order": "desc"}},
+        {"id_sort": {"order": "asc"}},
+    ]
 
 
 @patch(

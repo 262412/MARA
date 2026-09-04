@@ -5,6 +5,7 @@ from typing import Any, cast
 import ktem.index.file.ui as file_ui_module
 import pandas as pd
 import pytest
+from gradio.helpers import special_args
 from ktem.index.file._deletion import FileIndexDeletionController
 from ktem.index.file._events import (
     register_file_index_events,
@@ -62,7 +63,7 @@ class _DeletionSpy(FileIndexDeletionController):
         super().__init__(index=SimpleNamespace(), selected_panel_false="Selected")
         self.deleted_ids: list[str] = []
 
-    def delete_event(self, file_id):
+    def delete_event(self, file_id, user_id=None, request=None):
         self.deleted_ids.append(file_id)
 
 
@@ -229,6 +230,50 @@ def test_delete_all_files_skips_placeholder_rows():
     assert controller.deleted_ids == ["file-1", "file-2"]
 
 
+def test_file_index_page_forwards_delete_identity_and_request():
+    calls = []
+
+    class _Controller:
+        def delete_event(self, file_id, user_id, request=None):
+            calls.append(("one", file_id, user_id, request))
+            return "deleted"
+
+        def delete_all_files(self, file_list, user_id, request=None):
+            calls.append(("all", file_list, user_id, request))
+            return "deleted-all"
+
+    page = cast(Any, FileIndexPage.__new__(FileIndexPage))
+    page._deletion_controller = _Controller()
+    request = SimpleNamespace(username="alice")
+    file_list = pd.DataFrame({"id": ["file-1"]})
+
+    assert page.delete_event("file-1", "browser-user", request) == "deleted"
+    assert page.delete_all_files(file_list, "browser-user", request) == "deleted-all"
+    assert calls == [
+        ("one", "file-1", "browser-user", request),
+        ("all", file_list, "browser-user", request),
+    ]
+
+
+def test_gradio_injects_request_into_registered_delete_facades():
+    page = cast(Any, FileIndexPage.__new__(FileIndexPage))
+    request = cast(Any, SimpleNamespace(username="alice"))
+
+    one_inputs, _, _ = special_args(
+        page.delete_event,
+        inputs=["file-1", "browser-user"],
+        request=request,
+    )
+    all_inputs, _, _ = special_args(
+        page.delete_all_files,
+        inputs=[pd.DataFrame({"id": ["file-1"]}), "browser-user"],
+        request=request,
+    )
+
+    assert one_inputs == ["file-1", "browser-user", request]
+    assert all_inputs[-1] is request
+
+
 def test_page_label_sort_key_handles_mixed_page_label_types():
     docs = [
         SimpleNamespace(metadata={"page_label": "appendix"}),
@@ -264,7 +309,7 @@ def test_register_file_index_events_wires_delete_chat_and_upload_flows():
         "click",
         {
             "fn": page.delete_event,
-            "inputs": [page.selected_file_id],
+            "inputs": [page.selected_file_id, page._app.user_id],
             "outputs": None,
         },
     )
@@ -272,6 +317,10 @@ def test_register_file_index_events_wires_delete_chat_and_upload_flows():
         delete_chain[1][1]["fn"],
         page.list_file,
         page.file_selected,
+    ]
+    assert delete_chain[3][1]["inputs"] == [
+        page.selected_file_id,
+        page._app.user_id,
     ]
     assert delete_chain[4] == ("then", {"fn": "public-event"})
 
@@ -294,6 +343,20 @@ def test_register_file_index_events_wires_delete_chat_and_upload_flows():
     assert upload_chain[4][1]["fn"] == page.collect_new_source_ids
     assert upload_chain[5][1]["fn"] == page.list_file
     assert upload_chain[6] == ("then", {"fn": "public-event"})
+
+    assert page.download_single_button.calls[0][1]["inputs"] == [
+        page.is_zipped_state,
+        page.selected_file_id,
+        page._app.user_id,
+    ]
+    assert page.group_chat_button.calls[0][1]["inputs"] == [
+        page.selected_group_id,
+        page._app.user_id,
+    ]
+    assert page.group_delete_button.calls[0][1]["inputs"] == [
+        page.selected_group_id,
+        page._app.user_id,
+    ]
 
 
 def test_register_file_index_events_keeps_graph_scope_tail_wired():
@@ -376,7 +439,7 @@ def test_file_index_page_listing_wrappers_delegate_to_active_helpers(monkeypatch
         lambda names: f"scope:{','.join(names)}",
     )
 
-    assert page.list_file("user-1", "budget") == ("rows", "frame")
+    assert page.list_file("user-1", None, "budget") == ("rows", "frame")
     assert page.list_file_names([{"id": "1"}]) == ("choices", [{"id": "1"}])
     assert file_index_page_cls._normalize_selected_ids_from_payload({"a": 1}) == [
         "normalized",
@@ -466,9 +529,9 @@ def test_layout_preserving_docx_conversion_routes_indexing_to_pdf(
     assert metadata["converted_pdf_path"] == str(converted_path.resolve())
 
 
-def test_layout_preserving_docx_conversion_falls_back_to_direct_text(
-    monkeypatch, tmp_path
-):
+def test_layout_preserving_docx_conversion_fails_strictly(monkeypatch, tmp_path):
+    from ktem.preview.errors import PreviewConversionError, PreviewErrorCode
+
     source_path = tmp_path / "layout.docx"
     source_path.write_bytes(b"docx")
 
@@ -483,22 +546,16 @@ def test_layout_preserving_docx_conversion_falls_back_to_direct_text(
     )
 
     pipeline = IndexDocumentPipeline(embedding=SimpleNamespace())
-    parse_path, metadata = pipeline.prepare_layout_preserving_parse_file(source_path)
+    with pytest.raises(PreviewConversionError) as caught:
+        pipeline.prepare_layout_preserving_parse_file(source_path)
 
-    assert parse_path == source_path
-    assert metadata is not None
-    assert metadata["source_file_name"] == "layout.docx"
-    assert metadata["source_file_extension"] == ".docx"
-    assert metadata["converted_from_office"] is False
-    assert metadata["layout_preserving_parse"] is False
-    assert metadata["direct_office_text_fallback"] is True
-    assert (
-        "Failed to convert layout.docx to PDF"
-        in metadata["office_pdf_conversion_error"]
-    )
+    assert caught.value.code is PreviewErrorCode.OUTPUT_MISSING
+    assert caught.value.stage == "output_validation"
 
 
 def test_layout_preserving_doc_conversion_fails_strictly(monkeypatch, tmp_path):
+    from ktem.preview.errors import PreviewConversionError, PreviewErrorCode
+
     source_path = tmp_path / "layout.doc"
     source_path.write_bytes(b"doc")
 
@@ -513,5 +570,8 @@ def test_layout_preserving_doc_conversion_fails_strictly(monkeypatch, tmp_path):
     )
 
     pipeline = IndexDocumentPipeline(embedding=SimpleNamespace())
-    with pytest.raises(RuntimeError, match="Failed to convert layout.doc to PDF"):
+    with pytest.raises(PreviewConversionError) as caught:
         pipeline.prepare_layout_preserving_parse_file(source_path)
+
+    assert caught.value.code is PreviewErrorCode.OUTPUT_MISSING
+    assert caught.value.stage == "output_validation"

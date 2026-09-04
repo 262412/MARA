@@ -1,0 +1,35 @@
+{
+  "baseline_id": "baseline_20260705",
+  "created_date": "2026-07-05",
+  "immutable": true,
+  "artifact_root": "/mnt/scratch/users/tbczhang/outputs/MARA/final_thesis_benchmark_statistical_20260705_fullsystem_postfix",
+  "complete_artifact_sets": 41,
+  "prediction_records": 3540,
+  "artifact_inventory": "09_synthesis/statistical_synthesis_input_manifest.csv",
+  "contract_sources": {
+    "datasets_routes_shards_models_prompts_indexes": "The 41 selected summary.json files listed by artifact_inventory are authoritative; heterogeneous route-specific runtime contracts are not collapsed into one synthetic value.",
+    "per_example_metrics": "09_synthesis/statistical_per_example_metric_records.csv",
+    "main_result_table": "09_synthesis/statistical_main_result_table.csv"
+  },
+  "metrics": {
+    "avg_f1": {
+      "contract": "token_f1_v1",
+      "value": 0.2284,
+      "aggregation": "global weighted"
+    },
+    "avg_native_score": {
+      "contract": "dataset_native_v1",
+      "redefinition_allowed": false
+    },
+    "avg_mara_score": {
+      "contract": "mara_oriented_existing",
+      "redefinition_allowed": false
+    }
+  },
+  "checksums": {
+    "statistical_synthesis_input_manifest.csv": "455d5e12d44b9a2ba91cd6530a937f912c1afd52074eb4161e62cdbcd331ae40",
+    "statistical_per_example_metric_records.csv": "ee232a80248daf90324d468aeeab6f327c5603babb0b5e405bb1e31f5acdf05e",
+    "statistical_main_result_table.csv": "6d92b079ca04a8874540d241aa4d0feca1b0f29b2e03287114ca567ecae2de64",
+    "statistical_synthesis_report.md": "ab7b9f4ab74e9a79abd1a22d112c19b42dcdd5a46b90833f139d77382f45a4c9"
+  }
+}

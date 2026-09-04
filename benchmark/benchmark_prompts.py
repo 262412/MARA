@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .ragtruth_source_context import ragtruth_source_context
 from .schemas import BenchmarkConfig, BenchmarkExample
 
 BENCHMARK_PROMPT_MARKER = "Benchmark prompt contract:"
@@ -11,11 +12,15 @@ GOLD_ANSWER_PROMPT_MARKER = "Benchmark gold-answer contract:"
 ALCE_PROMPT_SOURCE = "princeton-nlp/ALCE prompts/asqa_default.json"
 ALCE_QAMPARI_PROMPT_SOURCE = "princeton-nlp/ALCE prompts/qampari_default.json"
 RAGTRUTH_PROMPT_SOURCE = "ParticleMedia/RAGTruth baseline/dataset.py"
+RAGTRUTH_EVALUATION_QUESTION = (
+    "Which exact spans in the response are unsupported by the source?"
+)
 QASPER_PROMPT_SOURCE = "allenai/qasper-led-baseline dataset contract"
 FINANCEBENCH_PROMPT_SOURCE = "FinanceBench paper Table 3 prompt pattern"
 GENERIC_PROMPT_SOURCE = "MARA benchmark generic grounded QA contract"
 GOLD_ANSWER_PROMPT_SOURCE = "MARA benchmark gold-answer answer-only contract"
 MIN_PROMPT_TEXT_BUDGET_CHARS = 512
+RAGTRUTH_TASK_PROMPT_BUDGET_CHARS = 12000
 PROMPT_TEXT_TRUNCATION_NOTICE = "[truncated to fit benchmark prompt budget]"
 
 
@@ -64,12 +69,21 @@ def build_benchmark_prompt(
     )
     profile = _profile_for_example(example, config, dataset_name=dataset_name)
     if policy == "gold_answer_v1":
-        prompt_source = GOLD_ANSWER_PROMPT_SOURCE
-        runtime_prompt = _gold_answer_prompt(
-            benchmark_question,
-            profile,
-            dataset_name=dataset_name or config.suite_name,
-        )
+        dataset = str(dataset_name or config.suite_name or "").strip().lower()
+        if "ragtruth" in dataset:
+            prompt_source = RAGTRUTH_PROMPT_SOURCE
+            runtime_prompt = _ragtruth_prompt(
+                example,
+                benchmark_question,
+                prompt_budget_chars=prompt_budget_chars,
+            )
+        else:
+            prompt_source = GOLD_ANSWER_PROMPT_SOURCE
+            runtime_prompt = _gold_answer_prompt(
+                benchmark_question,
+                profile,
+                dataset_name=dataset,
+            )
     else:
         prompt_source, runtime_prompt = _runtime_prompt(
             example,
@@ -223,7 +237,10 @@ def _runtime_prompt(
     if "alce" in dataset:
         return ALCE_PROMPT_SOURCE, _alce_prompt(question)
     if "qasper" in dataset:
-        return QASPER_PROMPT_SOURCE, _qasper_prompt(question)
+        return QASPER_PROMPT_SOURCE, _qasper_prompt(
+            question,
+            typed_only="qasper_typed" in dataset,
+        )
     if "financebench" in dataset:
         return FINANCEBENCH_PROMPT_SOURCE, _financebench_prompt(question)
     return GENERIC_PROMPT_SOURCE, _generic_prompt(question, profile)
@@ -270,6 +287,11 @@ def _gold_answer_prompt(
         parts.append(
             "For QAMPARI-style examples, output a comma-separated answer list "
             "without a paragraph."
+        )
+    elif "qasper_typed" in dataset:
+        parts.append(
+            'For this typed QASPER suite, output exactly "yes", "no", or '
+            '"unanswerable".'
         )
     elif "qasper" in dataset:
         parts.append(
@@ -333,62 +355,109 @@ def _ragtruth_prompt(
     *,
     prompt_budget_chars: int,
 ) -> str:
+    prompt_budget_chars = max(
+        prompt_budget_chars,
+        RAGTRUTH_TASK_PROMPT_BUDGET_CHARS,
+    )
     metadata = _metadata(example)
-    source_info = _truncate_prompt_text(
-        _first_present(
-            metadata.get("source_info"),
-            metadata.get("reference"),
-            metadata.get("related_passages"),
-            _first_gold_evidence_span(example),
+    source_info = _first_present(
+        metadata.get("source_info"),
+        metadata.get("reference"),
+        metadata.get("related_passages"),
+        _first_gold_evidence_span(example),
+    )
+    response = _first_present(metadata.get("response"), _first_answer(example))
+    evaluation_question = str(
+        metadata.get("benchmark_question") or RAGTRUTH_EVALUATION_QUESTION
+    ).strip()
+    task_type = str(metadata.get("task_type") or "QA").strip().lower() or "qa"
+    labels = _ragtruth_block_labels(task_type)
+    instruction = (
+        "Detect exact response spans that conflict with the source or add "
+        "baseless information. Use only the source. Return JSON only as "
+        '{"hallucination list": ["exact unsupported span"]}; return an empty '
+        "list when every response claim is supported."
+    )
+    output_guard = 'Return exactly one JSON object with the key "hallucination list".'
+    fixed = (
+        _prompt_header(RAGTRUTH_PROMPT_SOURCE)
+        + instruction
+        + f"\n\n{labels[0]}{evaluation_question}"
+        + f"\n\n{labels[1]}\n\n{labels[2]}\n\n"
+        + output_guard
+        + "\nAnswer:"
+    )
+    available = max(0, prompt_budget_chars - len(fixed))
+    source_budget = int(available * 0.6)
+    response_budget = max(0, available - source_budget)
+    blocks = (
+        ragtruth_source_context(
+            source_info,
+            response,
+            budget=source_budget,
+            structured=task_type == "data2txt",
         ),
-        prompt_budget_chars,
+        _truncate_ragtruth_block(response, response_budget),
     )
-    response = _truncate_prompt_text(
-        _first_present(metadata.get("response"), _first_answer(example)),
-        prompt_budget_chars,
+    prompt = (
+        _prompt_header(RAGTRUTH_PROMPT_SOURCE)
+        + instruction
+        + f"\n\n{labels[0]}{evaluation_question}\n\n"
+        + f"{labels[1]}{blocks[0]}\n\n"
+        + f"{labels[2]}{blocks[1]}\n\n"
+        + output_guard
+        + "\nAnswer:"
     )
-    task_type = str(metadata.get("task_type") or "QA").strip() or "QA"
-    if task_type.lower() == "qa":
-        source_block = (
-            f"Below is a question:\n{question}\n\n"
-            f"Below are related passages:\n{source_info}\n\n"
-            f"Below is an answer:\n{response}\n\n"
+    return prompt[:prompt_budget_chars]
+
+
+def _ragtruth_block_labels(task_type: str) -> tuple[str, str, str]:
+    if task_type == "data2txt":
+        return (
+            "Below is a question:\n",
+            "Below is the structured JSON data:\n",
+            "Below is an overview of the data:\n",
         )
-    elif task_type.lower() == "data2txt":
-        source_block = (
-            f"Below is the structured JSON data:\n{source_info}\n\n"
-            f"Below is an overview of the data:\n{response}\n\n"
-        )
-    else:
-        source_block = (
-            f"Below is the original source:\n{source_info}\n\n"
-            f"Below is a summary or response:\n{response}\n\n"
+    if task_type == "qa":
+        return (
+            "Below is a question:\n",
+            "Below are related passages:\n",
+            "Below is an answer:\n",
         )
     return (
-        _prompt_header(RAGTRUTH_PROMPT_SOURCE)
-        + source_block
-        + "Your task is to determine whether the response contains either or "
-        "both of the following two types of hallucinations:\n"
-        "1. conflict: instances where the response presents direct "
-        "contradiction or opposition to the source;\n"
-        "2. baseless info: instances where the response includes information "
-        "which is not substantiated by or inferred from the source.\n"
-        "Then, compile the labeled hallucinated spans into a JSON dict with "
-        'a key "hallucination list" and its value as a list of hallucinated '
-        'spans. If hallucinations exist, output {"hallucination list": '
-        "[hallucination span1, hallucination span2, ...]}. Otherwise, output "
-        '{"hallucination list": []}.\n'
-        "Output:"
+        "Below is a question:\n",
+        "Below is the original source:\n",
+        "Below is a summary or response:\n",
     )
 
 
-def _qasper_prompt(question: str) -> str:
+def _truncate_ragtruth_block(value: Any, budget: int) -> str:
+    text = str(value or "").strip()
+    if budget <= 0:
+        return ""
+    return text[:budget].rstrip()
+
+
+def _qasper_prompt(question: str, *, typed_only: bool = False) -> str:
+    if typed_only:
+        answer_contract = (
+            'Return exactly one label: "yes", "no", or "unanswerable". '
+            "Do not return an answer span, number, list, or explanation."
+        )
+    else:
+        answer_contract = (
+            "Return only the answer span, yes/no value, or "
+            '"unanswerable" when the evidence does not answer the question. '
+            "Keep free-form answers short and do not add background commentary."
+        )
     return (
         _prompt_header(QASPER_PROMPT_SOURCE)
         + "Answer the question using only the provided research paper context "
-        "or evidence. Return only the answer span, yes/no value, or "
-        '"unanswerable" when the evidence does not answer the question. Keep '
-        "free-form answers short and do not add background commentary.\n\n"
+        f"or evidence. {answer_contract} For a yes/no question, do not default "
+        "to yes: choose either polarity only when an explicit paper statement "
+        "entails it. Phrases such as no, not, without, failed to, or did not "
+        "can directly support a no answer; mere absence from the retrieved "
+        "excerpt cannot.\n\n"
         f"Question: {question}\n\n"
         f"{_concise_answer_contract()}\n\n"
         "Answer:"

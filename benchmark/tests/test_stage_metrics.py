@@ -1,0 +1,567 @@
+from typing import Any
+
+from benchmark.stage_metrics import (
+    prediction_stage_metric_status,
+    prediction_stage_metrics,
+    stage_metric_summary,
+)
+
+
+def test_stage_metrics_report_retrieval_pages_dedup_slots_and_calculation():
+    prediction = {
+        "gold_pages": [2, 3],
+        "gold_evidence": [
+            {"source_id": "report", "page": 2, "element_id": "cell-a"},
+            {"source_id": "report", "page": 3, "element_id": "cell-b"},
+        ],
+        "predicted_pages": [2, 3],
+        "predicted_element_ids": ["cell-a", "cell-b"],
+        "evidence_metadata": {
+            "candidate_evidence": [
+                {"source_id": "report", "page_label": "2", "element_id": "cell-a"},
+                {"source_id": "other", "page_label": "9"},
+                {"source_id": "report", "page_label": "3", "element_id": "cell-b"},
+            ],
+            "generation_context_evidence": [
+                {"source_id": "report", "page_label": "2", "element_id": "cell-a"},
+                {"source_id": "report", "page_label": "3", "element_id": "cell-b"},
+            ],
+            "reranked_evidence": [
+                {"source_id": "report", "page_label": "3", "element_id": "cell-b"},
+                {"source_id": "report", "page_label": "2", "element_id": "cell-a"},
+            ],
+            "slot_coverage": 1.0,
+            "dedupe_trace": {"duplicate_ratio": 0.25},
+            "evidence_selection_trace": {"unique_pages": 2},
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "a"}, {"operand_id": "b"}],
+                    "steps": [{"step_id": "result", "operator": "ratio"}],
+                },
+                "calculation_verification": {
+                    "valid": True,
+                    "verified_operand_ids": ["a", "b"],
+                    "required_slot_ids": ["operand:a", "operand:b"],
+                    "verified_required_slot_ids": ["operand:a", "operand:b"],
+                    "errors": [],
+                },
+                "calculation_execution": {"status": "ok"},
+            },
+        },
+        "semantic_answer_evaluation": {"judge_status": "ok"},
+        "metrics": {"numeric_match": 1.0},
+        "answer_for_scoring": "4.5",
+        "answer_finalization": {"repetition_removed": True},
+        "controller_trace": [
+            {
+                "stage": "claim_aggregation",
+                "input_claim_count": 3,
+                "output_claim_count": 2,
+            }
+        ],
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["candidate_recall_at_50"] == 1.0
+    assert metrics["reranked_recall_at_10"] == 1.0
+    assert metrics["retrieval_mrr"] == 1.0
+    assert metrics["retrieval_ndcg"] is not None
+    assert metrics["retrieval_ndcg"] > 0.9
+    _assert_successful_stage_metrics(metrics)
+    assert (
+        prediction_stage_metric_status(prediction)["calculation_pipeline"][
+            "failure_stage"
+        ]
+        == "none"
+    )
+
+
+def _assert_successful_stage_metrics(metrics: dict[str, Any]) -> None:
+    expected = {
+        "all_gold_pages_hit": 1.0,
+        "gold_table_cell_recall": 1.0,
+        "slot_coverage": 1.0,
+        "retrieval_slot_coverage": 1.0,
+        "verified_slot_coverage": 1.0,
+        "unique_pages": 2.0,
+        "duplicate_ratio": 0.25,
+        "operand_accuracy": 1.0,
+        "all_operands_bound": 1.0,
+        "executor_activation_rate": 1.0,
+        "program_accuracy": 1.0,
+        "execution_accuracy": 1.0,
+        "binding_verifier_pass_rate": 1.0,
+        "program_validity_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "executed_answer_accuracy": 1.0,
+        "unit_accuracy": 1.0,
+        "successful_execution_unit_accuracy": 1.0,
+        "claim_duplicate_rate": 1 / 3,
+        "final_answer_duplicate_rate": 0.0,
+        "final_answer_repetition_repair_rate": 1.0,
+        "judge_failure_rate": 0.0,
+    }
+    assert {key: metrics[key] for key in expected} == expected
+
+
+def test_execution_success_does_not_imply_executed_answer_correctness():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "metrics": {"numeric_match": 0.0},
+        "evidence_metadata": {
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "a"}],
+                    "steps": [],
+                },
+                "calculation_verification": {
+                    "valid": True,
+                    "verified_operand_ids": ["a"],
+                    "errors": [],
+                },
+                "calculation_execution": {"status": "ok", "value": "460.8"},
+            }
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["execution_accuracy"] == 1.0
+    assert metrics["execution_success_rate"] == 1.0
+    assert metrics["executed_answer_accuracy"] == 0.0
+
+
+def test_finance_stage_metrics_expose_missing_executor_activation():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "evidence_metadata": {},
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+    status = prediction_stage_metric_status(prediction)
+
+    assert metrics["executor_activation_rate"] == 0.0
+    assert metrics["all_operands_bound"] == 0.0
+    assert status["calculation_pipeline"] == {
+        "status": "measured",
+        "failure_stage": "retrieval_or_plan",
+    }
+
+
+def test_finance_stage_metrics_read_numeric_applicability_from_query_plan():
+    prediction = {
+        "evidence_metadata": {
+            "query_plan": {
+                "answer_type": "numeric",
+                "constraints": {"verification_domain": "finance"},
+            }
+        }
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+    status = prediction_stage_metric_status(prediction)
+
+    assert metrics["executor_activation_rate"] == 0.0
+    assert metrics["all_operands_bound"] == 0.0
+    assert status["calculation_pipeline"] == {
+        "status": "measured",
+        "failure_stage": "retrieval_or_plan",
+    }
+
+
+def test_finance_stage_metrics_do_not_report_all_operands_for_invalid_plan():
+    prediction = {
+        "evidence_metadata": {
+            "query_plan": {
+                "answer_type": "numeric",
+                "constraints": {"verification_domain": "finance"},
+            },
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "a"}, {"operand_id": "b"}],
+                    "steps": [{"step_id": "result", "operator": "average"}],
+                },
+                "calculation_verification": {
+                    "valid": False,
+                    "verified_operand_ids": ["a", "b"],
+                    "errors": ["required_slot_missing:operand:value:2022"],
+                },
+                "calculation_execution": {
+                    "status": "error",
+                    "error": "verification_failed",
+                },
+            },
+        }
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["all_operands_bound"] == 0.0
+    assert metrics["program_accuracy"] == 0.0
+    assert metrics["execution_accuracy"] == 0.0
+    assert metrics["successful_execution_unit_accuracy"] is None
+
+
+def test_finance_stage_metrics_separate_retrieval_and_verified_slot_coverage():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "evidence_metadata": {
+            "slot_coverage": 1.0,
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "cogs"}],
+                    "steps": [],
+                },
+                "calculation_verification": {
+                    "valid": False,
+                    "required_slot_ids": [
+                        "operand:cogs",
+                        "operand:inventory:2018",
+                    ],
+                    "verified_required_slot_ids": ["operand:cogs"],
+                    "verified_operand_ids": ["cogs"],
+                    "errors": [
+                        "required_slot_missing:operand:inventory:2018",
+                    ],
+                },
+                "calculation_execution": {"status": "error"},
+            },
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["slot_coverage"] == 1.0
+    assert metrics["retrieval_slot_coverage"] == 1.0
+    assert metrics["verified_slot_coverage"] == 0.5
+
+
+def test_finance_stage_metrics_reject_rendered_scale_that_contradicts_plan():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "answer_for_scoring": "$5,818.0 billion",
+        "evidence_metadata": {
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [
+                        {"operand_id": "left"},
+                        {"operand_id": "right"},
+                    ],
+                    "steps": [{"step_id": "result", "operator": "subtract"}],
+                    "answer_scale": "million",
+                    "answer_unit": "",
+                },
+                "calculation_verification": {
+                    "valid": True,
+                    "verified_operand_ids": ["left", "right"],
+                    "errors": [],
+                },
+                "calculation_execution": {"status": "ok", "value": "5818.0"},
+            }
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+    status = prediction_stage_metric_status(prediction)
+
+    assert metrics["program_accuracy"] == 1.0
+    assert metrics["execution_accuracy"] == 1.0
+    assert metrics["unit_accuracy"] == 0.0
+    assert status["calculation_pipeline"] == {
+        "status": "measured",
+        "failure_stage": "rendered_unit",
+    }
+
+
+def test_finance_stage_metrics_count_cell_binding_mismatch_as_cell_error():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "evidence_metadata": {
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "current_assets"}],
+                    "steps": [],
+                },
+                "calculation_verification": {
+                    "valid": False,
+                    "verified_operand_ids": [],
+                    "errors": ["operand_cell_mismatch:current_assets"],
+                },
+                "calculation_execution": {"status": "error"},
+            }
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["cell_accuracy"] == 0.0
+    assert metrics["program_accuracy"] == 0.0
+
+
+def test_calculation_metrics_remain_bounded_with_multiple_errors_per_operand():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "numeric",
+        "evidence_metadata": {
+            "finance_numeric_trace": {
+                "calculation_plan": {
+                    "operands": [{"operand_id": "revenue"}],
+                    "steps": [{"step_id": "result", "operator": "add"}],
+                },
+                "calculation_verification": {
+                    "valid": False,
+                    "verified_operand_ids": [],
+                    "errors": [
+                        "operand_cell_mismatch:revenue",
+                        "operand_value_mismatch:revenue",
+                        "operand_period_mismatch:revenue",
+                        "invalid_operator_arity:result",
+                        "unsupported_operator:result",
+                    ],
+                },
+                "calculation_execution": {"status": "error"},
+            }
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["cell_accuracy"] == 0.0
+    assert metrics["operator_accuracy"] == 0.0
+
+
+def test_finance_stage_metrics_do_not_measure_long_form_query_plan_as_numeric():
+    prediction = {
+        "dataset_name": "financebench",
+        "answer_type": "long_form",
+        "evidence_metadata": {
+            "query_plan": {
+                "answer_type": "long_form",
+                "constraints": {"verification_domain": "finance"},
+            }
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+    status = prediction_stage_metric_status(prediction)
+
+    assert metrics["executor_activation_rate"] is None
+    assert metrics["all_operands_bound"] is None
+    assert status["calculation_pipeline"] == {
+        "status": "not_applicable",
+        "failure_stage": "not_applicable",
+    }
+
+
+def test_stage_metric_summary_preserves_null_when_trace_is_unavailable():
+    prediction: dict[str, Any] = {"stage_metrics": prediction_stage_metrics({})}
+    prediction["stage_metric_status"] = prediction_stage_metric_status(prediction)
+    predictions = [prediction]
+
+    summary = stage_metric_summary(predictions)
+
+    assert summary["avg_candidate_recall_at_50"] is None
+    assert summary["coverage_candidate_recall_at_50"] == 0.0
+    assert summary["avg_final_answer_duplicate_rate"] is None
+    assert summary["avg_judge_failure_rate"] is None
+
+
+def test_retrieval_metrics_distinguish_missing_trace_from_measured_empty_result():
+    base = {
+        "gold_pages": [2],
+        "gold_evidence": [{"document_id": "report", "page": 2}],
+    }
+    missing_trace = dict(base)
+    empty_trace = {
+        **base,
+        "evidence_metadata": {
+            "candidate_evidence": [],
+            "reranked_evidence": [],
+        },
+    }
+
+    missing_metrics = prediction_stage_metrics(missing_trace)
+    empty_metrics = prediction_stage_metrics(empty_trace)
+    missing_status = prediction_stage_metric_status(missing_trace)
+    empty_status = prediction_stage_metric_status(empty_trace)
+
+    assert missing_metrics["candidate_recall_at_50"] is None
+    assert missing_status["candidate_recall_at_50"]["status"] == "unavailable"
+    assert empty_metrics["candidate_recall_at_50"] == 0.0
+    assert empty_metrics["reranked_recall_at_10"] == 0.0
+    assert empty_status["candidate_recall_at_50"]["status"] == "measured"
+
+
+def test_reranked_metrics_are_unavailable_when_backend_explicitly_did_not_run():
+    prediction = {
+        "gold_evidence": [{"source_id": "report", "page_label": "2"}],
+        "evidence_metadata": {
+            "candidate_evidence": [{"source_id": "report", "page_label": "2"}],
+            "reranked_evidence": [{"source_id": "report", "page_label": "2"}],
+            "ranking_trace": {"backend_execution": False},
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+    status = prediction_stage_metric_status(prediction)
+
+    assert metrics["candidate_recall_at_50"] == 1.0
+    assert metrics["reranked_recall_at_10"] is None
+    assert status["reranked_recall_at_10"]["status"] == "unavailable"
+
+
+def test_candidate_evidence_recall_requires_gold_element_when_it_is_available():
+    prediction = {
+        "gold_pages": [4],
+        "gold_evidence": [
+            {
+                "document_id": "P18-1041",
+                "page": 4,
+                "element_id": "image5",
+            }
+        ],
+        "predicted_element_ids": [],
+        "evidence_metadata": {
+            "candidate_evidence": [
+                {
+                    "source_id": "runtime-uuid",
+                    "source_name": "P18-1041.pdf",
+                    "page_label": "4",
+                    "element_id": "",
+                }
+            ],
+            "reranked_evidence": [
+                {
+                    "source_id": "runtime-uuid",
+                    "source_name": "P18-1041.pdf",
+                    "page_label": "4",
+                    "element_id": "",
+                }
+            ],
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["candidate_recall_at_50"] == 0.0
+    assert metrics["reranked_recall_at_10"] == 0.0
+    assert metrics["candidate_page_coverage_at_50"] == 1.0
+    assert metrics["gold_table_cell_recall"] == 0.0
+
+
+def test_stage_metrics_keep_selected_used_verified_and_cited_evidence_distinct():
+    gold = {
+        "source_id": "report",
+        "page_label": "2",
+        "cell_id": "revenue-2023",
+        "identity": {
+            "source_id": "report",
+            "kind": "cell",
+            "local_id": "revenue-2023",
+        },
+    }
+    wrong = {
+        "source_id": "report",
+        "page_label": "8",
+        "cell_id": "expense-2023",
+    }
+    prediction = {
+        "gold_evidence": [gold],
+        "evidence_metadata": {
+            "candidate_evidence": [gold, wrong],
+            "fused_evidence": [gold],
+            "selected_evidence": [wrong],
+            "used_evidence": [gold],
+            "generation_context_evidence": [gold],
+            "execution_operand_evidence": [gold],
+            "verified_evidence": [gold],
+            "cited_evidence": [wrong],
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+    status = prediction_stage_metric_status(prediction)
+
+    assert metrics["candidate_recall_at_50"] == 1.0
+    assert metrics["fused_evidence_coverage"] == 1.0
+    assert metrics["reranked_recall_at_10"] is None
+    assert metrics["selected_evidence_coverage"] == 0.0
+    assert metrics["used_evidence_coverage"] == 1.0
+    assert metrics["generation_context_evidence_coverage"] == 1.0
+    assert metrics["execution_operand_evidence_coverage"] == 1.0
+    assert metrics["verified_evidence_coverage"] == 1.0
+    assert metrics["cited_evidence_coverage"] == 0.0
+    assert status["reranked_recall_at_10"]["status"] == "unavailable"
+    assert status["selected_evidence_coverage"]["status"] == "measured"
+
+
+def test_candidate_coverage_accepts_declared_equivalent_evidence_requirement():
+    prediction = {
+        "gold_evidence": [
+            {
+                "source_id": "report",
+                "page_label": "2",
+                "cell_id": "revenue-cell",
+            }
+        ],
+        "gold_evidence_requirements": [
+            {
+                "requirement_id": "operand:revenue",
+                "acceptable_evidence": [
+                    {
+                        "source_id": "report",
+                        "page_label": "2",
+                        "cell_id": "revenue-cell",
+                    },
+                    {
+                        "source_id": "report",
+                        "page_label": "3",
+                        "span_id": "revenue-narrative",
+                    },
+                ],
+            }
+        ],
+        "evidence_metadata": {
+            "candidate_evidence": [
+                {
+                    "source_id": "report",
+                    "page_label": "3",
+                    "span_id": "revenue-narrative",
+                }
+            ]
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["candidate_recall_at_50"] == 1.0
+    assert metrics["candidate_page_coverage_at_50"] == 0.0
+
+
+def test_retrieval_ndcg_counts_each_gold_identity_only_once():
+    prediction = {
+        "gold_pages": [4],
+        "gold_evidence": [{"document_id": "report", "page": 4}],
+        "evidence_metadata": {
+            "candidate_evidence": [
+                {"source_id": "report", "page_label": "4", "evidence_id": "a"},
+                {"source_id": "report", "page_label": "4", "evidence_id": "b"},
+                {"source_id": "report", "page_label": "4", "evidence_id": "c"},
+            ],
+            "reranked_evidence": [
+                {"source_id": "report", "page_label": "4", "evidence_id": "a"},
+                {"source_id": "report", "page_label": "4", "evidence_id": "b"},
+                {"source_id": "report", "page_label": "4", "evidence_id": "c"},
+            ],
+        },
+    }
+
+    metrics = prediction_stage_metrics(prediction)
+
+    assert metrics["retrieval_ndcg"] == 1.0

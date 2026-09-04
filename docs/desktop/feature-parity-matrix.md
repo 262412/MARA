@@ -1,0 +1,115 @@
+# MARA Desktop 功能对齐矩阵
+
+本矩阵是功能范围的唯一基线。`P0` 表示首个可用版本必须完成，`P1` 表示
+Beta 稳定化阶段，`Later` 表示不阻塞首发。状态在正式开发开始后使用
+`Not started / In progress / Verified / Deferred` 更新。
+
+## 1. 当前 Web UI 功能
+
+| 领域         | 当前能力                                                                                                      | Desktop 目标交互                            | 优先级 | 验收证据                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------ | ----------------------------------- |
+| 应用入口     | 首次设置、登录（启用用户管理时）、状态栏                                                                      | 首次启动向导；状态中心；保留可选登录语义    | P0     | 首启、重复启动和失败恢复 E2E        |
+| 工作台       | Chat 主页面                                                                                                   | 中间任务工作区；左侧历史；底部固定输入      | P0     | 典型任务截图和键盘 E2E              |
+| 文件导入     | 上传 PDF、Office、图片、Markdown、文本、表格、HTML/MHTML、CSV、ZIP                                            | 原生选择器、拖放、粘贴路径；显示导入计划    | P0     | 每类受支持格式的导入测试            |
+| 索引管理     | 文件列表、索引、删除                                                                                          | 文件页 + 后台任务进度；失败重试；批量操作   | P0     | 创建/取消/重试/删除集成测试         |
+| 来源范围     | 全部、上传、已选文件等来源范围                                                                                | Composer 上方来源胶囊；检查器来源页         | P0     | 请求载荷契约测试                    |
+| 问答范围     | 文档级、页级、多文档、选中文本                                                                                | 同一输入框，通过上下文胶囊明确范围          | P0     | 四类范围的回归用例                  |
+| 生成         | 流式答案、停止、重试、建议问题                                                                                | token 流、阶段状态、停止、重试和错误恢复    | P0     | 流中断、取消和重试测试              |
+| 引用         | 答案引用、引用面板、检索证据                                                                                  | 行内引用 + 右侧来源详情                     | P0     | 引用身份与点击定位契约测试          |
+| 推理信息     | 推理/检索过程面板                                                                                             | 右侧“运行”页，按阶段展示可公开轨迹          | P0     | 阶段事件顺序测试                    |
+| 页面预览     | PDF 页面预览与页码定位                                                                                        | 右侧 Preview；点击引用跳页并高亮            | P0     | PDF 引用跳转 E2E                    |
+| 非 PDF 预览  | 图片、文本、Office、演示文稿、表格预览                                                                        | 同一检查器内按类型切换渲染器                | P0     | 格式矩阵视觉验收                    |
+| 会话         | 新建、保存、恢复、历史会话                                                                                    | 左侧最近任务；重命名、删除、固定、搜索      | P0     | 重启后的状态恢复 E2E                |
+| 笔记         | 保存答案、检索证据、自定义笔记、重新索引笔记                                                                  | 检查器 Notes 页；保存、编辑、删除、再索引   | P0     | 笔记生命周期测试                    |
+| Studio       | 选择 artifact、生成、再生成、查看状态                                                                         | 任务内 Studio 面板，复用当前 artifact 语义  | P0     | 各 artifact 参数和状态契约测试      |
+| Studio 产物  | 学习指南、测验、闪卡、思维导图、幻灯片提纲、简报、FAQ、时间线、自定义报告、数据表、信息图、幻灯片、音视频概览 | 卡片式产物列表；类型相关预览                | P0     | 已支持类型逐项 smoke                |
+| 导出         | Markdown、HTML、JSON、CSV、SVG、PPTX、MP3、MP4 等                                                             | 原生“保存为”；完成后打开/显示所在位置       | P0     | 扩展名、内容和取消保存测试          |
+| 知识图谱     | 构建图谱/Mind Map、选择节点、节点驱动追问                                                                     | 中间画布或检查器视图；节点转上下文胶囊      | P0     | 构建、选择、追问 E2E                |
+| Files        | 索引文件浏览和管理                                                                                            | 左侧 Files 入口；表格/网格视图              | P0     | 与当前索引记录对齐测试              |
+| Resources    | Index、LLM、Embedding、Reranking、MCP、用户等资源管理                                                         | Resources 页面；按能力分组                  | P0     | 配置读写与敏感字段测试              |
+| Settings     | 应用和用户设置                                                                                                | Settings 页面；设备/数据/模型/外观/高级分组 | P0     | 默认值、持久化和升级测试            |
+| Help         | 本地帮助与版本信息                                                                                            | Help 页面和快捷键页，全部随包分发           | P0     | 断网可打开                          |
+| CLI 共用数据 | Web UI 与 `MARA docqa` 共用索引、会话和配置                                                                   | 显式选择/迁移已有数据空间；保持语义兼容     | P0     | 同一数据集 CLI/Desktop 双向读取测试 |
+
+当前能力映射主要来自：
+
+- `docs/about.md`
+- `libs/ktem/ktem/main.py`
+- `libs/ktem/ktem/pages/chat/`
+- `libs/ktem/ktem/docqa/`
+- `libs/ktem/ktem/pages/resources/`
+- `libs/ktem/ktem/pages/settings.py`
+
+## 2. 桌面端新增能力
+
+| 能力         | 首版行为                                             | 优先级 | 不接受的替代方案                   |
+| ------------ | ---------------------------------------------------- | ------ | ---------------------------------- |
+| 自包含运行时 | 安装包携带 Sidecar 和 Python 运行时                  | P0     | 要求用户安装 Python/uv             |
+| 原生文件交互 | 打开、拖放、保存为、显示所在位置                     | P0     | 在文本框手填绝对路径               |
+| 窗口与面板   | 单主窗口、可折叠侧栏和检查器、记忆布局               | P0     | 固定宽度导致 1024px 无法使用       |
+| 后台任务     | 索引和长生成离开当前页继续；可取消                   | P0     | 切页即中止且无记录                 |
+| 系统通知     | 用户离开窗口后通知长任务完成/失败                    | P1     | 每个 token 或短任务弹通知          |
+| 凭据存储     | 使用系统安全存储；不可用时明确降级为会话凭据         | P0     | 明文写入 JSON、日志或数据库        |
+| 更新         | Windows 应用内更新；Linux 明确包管理/下载流程        | P1     | 两个平台假装使用完全相同的更新机制 |
+| 诊断中心     | 版本、路径、端口隐藏后的进程状态、模型路由、日志导出 | P0     | 只显示“发生错误”                   |
+| 崩溃恢复     | Sidecar 可重启；未完成任务标记；写入事务保护         | P0     | 静默丢失任务或损坏数据库           |
+| 离线资源     | UI 字体、图标、帮助和 PDF 渲染器本地化               | P0     | 运行时加载 CDN                     |
+| 快捷键       | 新建、打开、查找、设置、切换检查器、聚焦输入         | P0     | 仅鼠标可用                         |
+| 安装/卸载    | 标准安装包、开始菜单/应用列表入口、卸载保留数据选项  | P0     | 解压脚本或命令行启动               |
+| 关联与深链   | `mara://` 内部导航和可选文件关联                     | Later  | 首版抢占通用文件扩展名             |
+| 多窗口       | 文档预览弹出或多工作区窗口                           | Later  | 首版引入跨窗口状态同步复杂度       |
+
+## 3. 不复制的 Codex/Cursor 能力
+
+- 终端、Shell 权限审批、代码执行会话。
+- Git 仓库、分支、提交、Pull Request 和代码审查。
+- 代码补全、编辑器协议、diff/patch 应用。
+- Codex 技能市场、代理沙箱或多代理编排。
+
+只有当这些能力未来成为独立的 MARA 产品需求并通过新的 PRD/ADR 时，才会
+进入本矩阵。
+
+## 4. Gate 2 纵向切片状态
+
+`Verified` 仍以两平台原生构建、打包后真实 smoke 和风险登记册中的平台证据为
+准。开发机或单一平台通过不能提前升级状态。
+
+| 切片     | 状态     | 当前证据                                                                                                                          | 升级为 Verified 仍需 |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Doctor   | Verified | CLI/application/Sidecar/IPC/React；启动等待回归；OpenAPI 漂移门；Windows Server 2022、Ubuntu 22/24 CI；Windows 10/11 干净 VM 验收 | —                    |
+| Files    | Verified | 真实记录且路径不进入 Renderer；四态；Windows、Ubuntu 22/24 非空打包 smoke；Windows 10/11 干净 VM 验收                             | —                    |
+| Sessions | Verified | 真实会话；左栏四态；Windows、Ubuntu 22/24 非空打包 smoke；Windows 10/11 干净 VM 验收                                              | —                    |
+
+详细命令、指标、已解决问题和剩余验收项见
+[Gate 2 纵向切片证据](gate-2-vertical-slice-evidence.md)。
+
+## 5. Gate 3 纵向切片状态
+
+Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开始。以下状态只表示该
+能力切片的进度，不代表未列出的 P0 功能或整个 Gate 3 已完成。
+
+| 能力                             | 状态        | 当前证据                                                                                         | 升级为 Verified 仍需                     |
+| -------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| 原生选择器导入                   | In progress | Main 持有原生路径；无 embedding 时导入/拖放禁用且不建任务；Windows/Ubuntu handoff 组合包通过     | Windows 10/11 原生选择器与真实 OS 拖放   |
+| 后台索引任务                     | In progress | 真实 DocQA runtime；稳定 indexing readiness/error；只写 Desktop cache；三平台原生 smoke 通过     | PDF、图片、DOC/XLS/PPT；Windows 10/11 VM |
+| Files 完成后刷新与删除           | In progress | 终态只刷新一次；真实 deletion coordinator；窄批量契约；当前 Windows/Ubuntu 组合包通过            | 当前包 Windows 10/11 产品 VM             |
+| 会话详情读取                     | In progress | 真实 `load_session()`；五态、重试与过期响应保护；Windows、Ubuntu 22/24 非空组合包通过            | 当前 Gate 3 包的 Windows 10/11 产品 VM   |
+| 会话新建、搜索、重命名与删除     | In progress | 真实 create/rename/delete；客户端搜索；认证、幂等、写互斥与窄 IPC；Windows、Ubuntu 22/24 包通过  | 当前包 Windows 10/11 VM；固定            |
+| 冷启动草稿与 Composer            | In progress | 启动不建空会话；首次发送幂等建会话/任务；IME、Enter、Alt+Enter、重复键与失败保留自动化通过       | Windows 10/11 VM；中文 IME 人工验收      |
+| Resources、Help、Settings 基线页 | In progress | 五类强类型页面；焦点/ARIA/标题；离线帮助；模型设置页和跨页后台任务连续性三平台包通过             | 完整 Resources/Settings P0；缩放人工验收 |
+| 模型设置与问答准备状态           | In progress | Electron route 唯一权威；旧库幂等迁移与密钥清理；revision/PID/fingerprint；真实 POST 捕获门      | 当前包 Windows 10/11 安全存储与迁移验收  |
+| 文档/多文档问答、流式与引用      | In progress | 真实 `stream_turn()`；64 来源；单调 SSE；未配置 LLM 不建任务；双文件 partial 取消/重试三平台通过 | Windows 10/11 VM；页/选中文本；引用定位  |
+
+当前 Gate 3 文件索引修复打包基线为
+`4112e99f5f9d6beccb06f67e5e4e3e160beb3129`。所有原生 smoke
+除业务断言外，还必须证明沙箱 Renderer 获得完整 `window.desktop`，并通过 Preload
+真实调用 Runtime、Doctor、Files 和 Sessions IPC；只从 Main 直接访问 Sidecar 不再视为
+充分的打包证据。
+
+实现、测试、包体测量与剩余风险见
+[Gate 3 文件索引纵向切片证据](gate-3-file-indexing-evidence.md)和
+[Gate 3 会话详情纵向切片证据](gate-3-session-detail-evidence.md)、
+[Gate 3 会话管理纵向切片证据](gate-3-session-management-evidence.md)和
+[Gate 3 会话新建纵向切片证据](gate-3-session-creation-evidence.md)、
+[Gate 3 真实问答纵向切片证据](gate-3-query-streaming-evidence.md)和
+[Gate 3 草稿、导航与模型准备纵向切片证据](gate-3-draft-navigation-and-model-settings-evidence.md)。

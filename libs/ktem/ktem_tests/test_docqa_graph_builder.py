@@ -461,9 +461,23 @@ class _PreviewForFileRecords:
         return f"{file_id}.pdf"
 
     @staticmethod
-    def resolve_selected_file(file_ids: list[str]):
+    def resolve_selected_file(file_ids: list[str], *, user_id=None):
+        assert user_id == "user-1"
         file_id = file_ids[0] if file_ids else ""
         return file_id, f"{file_id}.pdf" if file_id else "", ""
+
+    @staticmethod
+    def resolve_sources(file_ids: list[str], *, user_id=None, strict=False):
+        assert user_id == "user-1"
+        assert strict is True
+        return [
+            SimpleNamespace(
+                file_id=file_id,
+                name=f"{file_id}.pdf",
+                path=f"/resolved/{file_id}.pdf",
+            )
+            for file_id in file_ids
+        ]
 
     @staticmethod
     def get_page_context_text(_file_id: str, _file_name: str, _page_number: int) -> str:

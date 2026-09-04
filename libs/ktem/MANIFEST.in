@@ -1,5 +1,11 @@
+include LICENSE.txt
+include NOTICE
 include ktem/assets/css/*.css
+include ktem/assets/icons/*.svg
 include ktem/assets/img/*.svg
 include ktem/assets/img/*.png
 include ktem/assets/js/*.js
 include ktem/assets/md/*.md
+include ktem/assets/vendor/pdfjs/LICENSE.pdfjs
+include ktem/assets/vendor/pdfjs/manifest.json
+include ktem/assets/vendor/pdfjs/pdfjs-6.1.200-dist.zip

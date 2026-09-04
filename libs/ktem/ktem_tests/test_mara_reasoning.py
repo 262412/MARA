@@ -56,22 +56,24 @@ def test_mara_planner_decision_routes_global_compare_to_graph():
     }
 
 
-def test_mara_planner_decision_routes_visual_question_to_hybrid_evidence():
+def test_mara_planner_decision_routes_visual_question_to_page_image_evidence():
     decision = planner_decision(
         {"task_type": "qa", "modalities": ["figure"], "scope": "page"}
     )
 
-    assert decision["route"] == "hybrid"
-    assert decision["evidence_types"] == ["text", "page_image", "element"]
+    assert decision["route"] == "doc_page_image"
+    assert decision["evidence_types"] == ["page_image"]
+    assert decision["latency_budget_reason"] == "visual_intent_justifies_visual_route"
 
 
-def test_mara_planner_decision_routes_table_question_to_hybrid_evidence():
+def test_mara_planner_decision_routes_table_question_to_page_image_evidence():
     decision = planner_decision(
         {"task_type": "qa", "modalities": ["table"], "scope": "document"}
     )
 
-    assert decision["route"] == "hybrid"
-    assert decision["evidence_types"] == ["text", "page_image", "element"]
+    assert decision["route"] == "doc_page_image"
+    assert decision["evidence_types"] == ["page_image"]
+    assert decision["latency_budget_reason"] == "visual_intent_justifies_visual_route"
 
 
 def test_mara_pipeline_reads_agent_mode_from_settings():
@@ -217,7 +219,7 @@ def test_mara_text_evidence_metadata_exposes_standard_source_fields():
         "source_name": "annual-report.pdf",
         "page_label": "7",
         "element_type": "text",
-        "element_id": "",
+        "element_id": "doc-1",
         "bbox": None,
         "caption": "",
         "text": "Net sales were $10 million.",
@@ -515,15 +517,16 @@ def test_mara_stream_emits_planner_output_for_controller_trace(monkeypatch):
         and event.content.get("mara_channel") == "agent_trace"
     ]
 
-    assert {
-        "event": "planner_output",
-        "decision": {
-            "route": "graph_global",
-            "reason": "Global compare and study tasks use graph evidence.",
-            "evidence_types": ["graph"],
-            "verify": True,
-        },
-    } in trace_payloads
+    planner_payload = next(
+        payload
+        for payload in trace_payloads
+        if payload.get("event") == "planner_output"
+    )
+    assert planner_payload["decision"]["planner_route"] == "graph_global"
+    assert planner_payload["decision"]["route"] == "doc_text"
+    assert planner_payload["decision"]["route_selection_policy"] == (
+        "cost_aware_initial"
+    )
 
 
 def test_mara_graph_route_uses_graph_context_without_text_rag(monkeypatch):
@@ -555,22 +558,29 @@ def test_mara_graph_route_uses_graph_context_without_text_rag(monkeypatch):
     assert len(evidence_payloads) == 1
     metadata = evidence_payloads[0]
     assert metadata["requested_modalities"] == ["text"]
-    assert metadata["modality_counts"] == {"graph": 1}
+    assert metadata["modality_counts"] == {"graph": 2}
     assert metadata["page_coverage"] == ["2", "5"]
     assert metadata["source_ids"] == ["file-a", "file-b"]
     assert metadata["evidence_ids"] == ["graph:component::strategy"]
-    assert metadata["graph_evidence"] == [
-        {
-            "evidence_id": "graph:component::strategy",
-            "id": "component::strategy",
-            "label": "Strategy",
-            "summary": "Strategy connects pricing and product roadmap themes.",
-            "source_ids": ["file-a", "file-b"],
-            "support_pages": {"file-a": ["2"], "file-b": ["5"]},
-            "support_chunk_ids": {
-                "file-a": ["chunk-a"],
-                "file-b": ["chunk-b"],
-            },
-        }
+    graph_evidence = metadata["graph_evidence"]
+    assert len(graph_evidence) == 1
+    assert graph_evidence[0]["evidence_id"] == "graph:component::strategy"
+    assert graph_evidence[0]["summary"] == (
+        "Strategy connects pricing and product roadmap themes."
+    )
+    assert graph_evidence[0]["source_ids"] == ["file-a", "file-b"]
+    assert graph_evidence[0]["support_pages"] == {
+        "file-a": ["2"],
+        "file-b": ["5"],
+    }
+    assert [
+        (entry["query_id"], entry["slot_id"])
+        for entry in graph_evidence[0]["retrieval_lineage"]
+    ] == [
+        ("round1:support:left_subject", "support:left_subject"),
+        ("round1:support:right_subject", "support:right_subject"),
     ]
-    assert metadata["evidence"][0]["evidence_id"] == "graph:component::strategy"
+    assert {item["source_id"] for item in metadata["evidence"]} == {
+        "file-a",
+        "file-b",
+    }

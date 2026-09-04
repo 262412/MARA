@@ -4,16 +4,15 @@ from typing import Any
 
 from ktem.docqa.evidence_text import extract_final_answer_text
 
+from .answer_metric_core import core_answer_metrics
 from .citation_metrics import citation_precision_score, citation_recall_score
 from .element_locator_metrics import element_locator_hit_score
 from .engine_context import extract_citations
+from .indexed_citations import indexed_inline_citations
 from .metrics import (
-    anls_score,
     cross_page_evidence_hit_score,
     element_hit_score,
-    exact_match_score,
     false_abstention_score,
-    formula_normalized_match_score,
     hard_negative_rejection_score,
     image_quote_hit_score,
     is_abstention_answer,
@@ -21,18 +20,30 @@ from .metrics import (
     markdown_table_renderable_score,
     modality_hit_score,
     multimodal_support_score,
-    numeric_tolerance_score,
-    page_hit_score,
-    recall_score,
     span_recall_score,
-    token_f1_score,
 )
-from .page_alignment import evidence_aligned_page_hit_score
+from .page_metric_contract import page_metric_contract
+from .semantic_answer import SemanticJudge, semantic_answer_metrics
+from .terminal_outcome_contract import terminal_outcome_record
 from .verification_metrics import verification_metrics
 
 _TABLE_FORMATS = {"markdown_table", "markdown-table", "table"}
 _LATEX_FORMATS = {"latex", "math", "formula", "math_formula", "math-formula"}
 _TIMING_KEYS = (
+    "parse_seconds",
+    "index_seconds",
+    "retrieval_seconds",
+    "generation_seconds",
+    "pipeline_planning_seconds",
+    "pipeline_retrieval_seconds",
+    "pipeline_generation_seconds",
+    "pipeline_retry_seconds",
+    "pipeline_verification_seconds",
+    "pipeline_finalization_seconds",
+    "answerability_seconds",
+    "answer_finalization_seconds",
+)
+_TOTAL_TIMING_KEYS = (
     "parse_seconds",
     "index_seconds",
     "retrieval_seconds",
@@ -45,6 +56,7 @@ def score_prediction(
     prediction: dict[str, Any],
     *,
     answer_key: str | None = None,
+    semantic_judge: SemanticJudge | None = None,
 ) -> dict[str, float | None]:
     gold_answers = prediction["gold_answers"]
     expected_formats = _normalized_expected_formats(prediction)
@@ -68,43 +80,76 @@ def score_prediction(
         markdown_table_score = 0.0
     if expected_formats & _LATEX_FORMATS and latex_score is None:
         latex_score = 0.0
-    false_abstention = false_abstention_score(predicted_answer, gold_answers)
-    if abstained and any(str(answer or "").strip() for answer in gold_answers):
-        false_abstention = 1.0
+    false_abstention = _false_abstention_metric(
+        prediction,
+        predicted_answer,
+        gold_answers,
+        abstained=abstained,
+    )
 
-    page_hit = page_hit_score(prediction["predicted_pages"], prediction["gold_pages"])
-    if page_hit == 0.0:
-        page_hit = evidence_aligned_page_hit_score(
-            prediction["predicted_pages"],
-            prediction["gold_pages"],
-            gold_evidence=list(prediction.get("gold_evidence") or []),
-            evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
-            retrieved_hits=list(prediction.get("retrieved_hits") or []),
-        )
+    page_contract = page_metric_contract(prediction)
 
-    metrics = {
-        "em": exact_match_score(predicted_answer, gold_answers),
-        "f1": token_f1_score(predicted_answer, gold_answers),
-        "anls": anls_score(predicted_answer, gold_answers),
-        "formula_match": formula_normalized_match_score(predicted_answer, gold_answers),
-        "numeric_match": numeric_tolerance_score(predicted_answer, gold_answers),
-        "page_hit": page_hit,
-        "citation_recall": recall_score(
-            prediction["predicted_sources"], prediction["gold_sources"]
+    metrics = core_answer_metrics(
+        prediction,
+        predicted_answer=predicted_answer,
+        gold_answers=gold_answers,
+        abstained=abstained,
+        false_abstention=false_abstention,
+        page_scores=(
+            page_contract["legacy_page_hit"],
+            page_contract["strict_page_hit"],
+            page_contract["equivalent_page_hit"],
         ),
-        "abstained": float(abstained),
-        "false_abstention": false_abstention,
-        "markdown_table_renderable": markdown_table_score,
-        "latex_renderable": latex_score,
-        "rewrite_skipped": float(bool(claim_verification.get("rewrite_skipped"))),
-        "guardrail_expectation_match": _guardrail_expectation_match(
-            prediction, abstained
-        ),
-    }
+        format_scores=(markdown_table_score, latex_score),
+        rewrite_skipped=bool(claim_verification.get("rewrite_skipped")),
+    )
+    metrics.update(
+        {
+            key: page_contract[key]
+            for key in (
+                "strict_gold_page_coverage",
+                "canonical_mapped_page_coverage",
+                "equivalent_evidence_page_coverage",
+            )
+        }
+    )
+    prediction["page_mapping_trace"] = page_contract["mapping_trace"]
+    metrics["guardrail_expectation_match"] = _guardrail_expectation_match(
+        prediction, abstained
+    )
     _add_modality_metrics(metrics, prediction)
     metrics.update(verification_metrics(prediction))
     _add_gold_evidence_metrics(metrics, prediction, predicted_answer)
+    if answer_key in {None, "answer_for_scoring"}:
+        semantic_metrics, semantic_metadata = semantic_answer_metrics(
+            prediction,
+            judge=semantic_judge,
+        )
+        metrics.update(semantic_metrics)
+        prediction["semantic_answer_evaluation"] = semantic_metadata
     return metrics
+
+
+def _false_abstention_metric(
+    prediction: dict[str, Any],
+    predicted_answer: str,
+    gold_answers: list[Any],
+    *,
+    abstained: bool,
+) -> float:
+    value = false_abstention_score(predicted_answer, gold_answers)
+    if abstained and any(
+        str(answer or "").strip() and not is_abstention_answer(str(answer))
+        for answer in gold_answers
+    ):
+        value = 1.0
+    if terminal_outcome_record(prediction)["outcome"] in {
+        "execution_failed",
+        "timeout",
+        "cancelled",
+    }:
+        return 0.0
+    return value
 
 
 def _prediction_answer_text(
@@ -195,9 +240,48 @@ def _prediction_abstained(
 ) -> bool:
     return (
         bool(claim_verification.get("abstained"))
+        or _structured_abstention(prediction)
         or _guardrail_abstained(prediction)
         or is_abstention_answer(predicted_answer)
     )
+
+
+def _structured_abstention(prediction: dict[str, Any]) -> bool:
+    route = (
+        str(prediction.get("effective_route") or prediction.get("route") or "")
+        .strip()
+        .lower()
+    )
+    if route == "abstain":
+        return True
+    metadata = dict(prediction.get("evidence_metadata") or {})
+    trace = metadata.get("answerability_contract_trace")
+    if isinstance(trace, dict) and is_abstention_answer(
+        str(trace.get("post_contract_answer") or "")
+    ):
+        return True
+    qasper = metadata.get("qasper_answerability")
+    if isinstance(qasper, dict) and str(qasper.get("action") or "").startswith(
+        "abstained_"
+    ):
+        return True
+    for value in (
+        prediction.get("verify_decision"),
+        prediction.get("retrieval_decision"),
+        metadata.get("verify_decision"),
+        metadata.get("retrieval_decision"),
+    ):
+        if not isinstance(value, dict):
+            continue
+        action = str(value.get("action") or "").strip().lower()
+        status = str(value.get("status") or "").strip().lower()
+        if action == "abstain" or status in {
+            "insufficient",
+            "insufficient_evidence",
+            "not_enough_evidence",
+        }:
+            return True
+    return False
 
 
 def _guardrail_expectation_match(
@@ -246,7 +330,7 @@ def _add_gold_evidence_metrics(
         return
     inline_citations = _inline_citations_for_scoring(prediction)
     metadata_citations = _metadata_citations_for_scoring(prediction)
-    predicted_citations = inline_citations or metadata_citations
+    emitted_citations = _emitted_citations_for_scoring(prediction)
     metrics["element_hit"] = element_hit_score(
         prediction.get("predicted_element_ids", []), gold_evidence
     )
@@ -266,17 +350,19 @@ def _add_gold_evidence_metrics(
         gold_evidence=gold_evidence,
     )
     metrics["citation_recall"] = citation_recall_score(
-        predicted_citations,
+        emitted_citations,
         gold_evidence,
         evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
         retrieved_hits=list(prediction.get("retrieved_hits") or []),
     )
     metrics["citation_precision"] = citation_precision_score(
-        predicted_citations,
+        emitted_citations,
         gold_evidence,
         evidence_bundle=dict(prediction.get("evidence_bundle") or {}),
         retrieved_hits=list(prediction.get("retrieved_hits") or []),
     )
+    metrics["emitted_citation_recall"] = metrics["citation_recall"]
+    metrics["emitted_citation_precision"] = metrics["citation_precision"]
     _add_citation_group_metrics(
         metrics,
         "citation_inline",
@@ -291,9 +377,7 @@ def _add_gold_evidence_metrics(
         gold_evidence,
         prediction,
     )
-    _add_citation_locator_metrics(
-        metrics, prediction, gold_evidence, predicted_citations
-    )
+    _add_citation_locator_metrics(metrics, prediction, gold_evidence, emitted_citations)
     _add_citation_locator_metrics(
         metrics,
         prediction,
@@ -370,13 +454,52 @@ def _add_citation_group_metrics(
 
 
 def _inline_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
-    predicted_citations = list(prediction.get("predicted_citations") or [])
-    if predicted_citations:
-        return predicted_citations
-    structured_citations = _structured_citations_for_scoring(prediction)
-    if structured_citations:
-        return structured_citations
-    return extract_citations(str(prediction.get("predicted_answer") or ""))
+    answer = str(prediction.get("predicted_answer") or "")
+    citations = [
+        *extract_citations(answer),
+        *indexed_inline_citations(
+            answer,
+            list(prediction.get("retrieved_hits") or []),
+        ),
+    ]
+    return list(dict.fromkeys(citations))
+
+
+def _emitted_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
+    metadata = dict(prediction.get("evidence_metadata") or {})
+    bundle = prediction.get("evidence_bundle")
+    bundle_metadata = (
+        dict(bundle.get("metadata") or {}) if isinstance(bundle, dict) else {}
+    )
+    citations = [
+        *_structured_citations_for_scoring(prediction),
+        *_inline_citations_for_scoring(prediction),
+    ]
+    emitted_items = [
+        *(metadata.get("emitted_citation_evidence") or []),
+        *(bundle_metadata.get("emitted_citation_evidence") or []),
+    ]
+    for item in emitted_items:
+        if not isinstance(item, dict):
+            continue
+        refs = item.get("source_backrefs")
+        if isinstance(refs, str):
+            refs = [refs]
+        citations.extend(
+            str(value).strip() for value in refs or [] if str(value).strip()
+        )
+        source_id = str(
+            item.get("source_id")
+            or item.get("document_id")
+            or item.get("file_id")
+            or ""
+        ).strip()
+        page_label = str(item.get("page_label") or item.get("page") or "").strip()
+        if source_id and page_label:
+            citations.append(f"{source_id}#page:{page_label}")
+        elif source_id:
+            citations.append(f"{source_id}#source")
+    return list(dict.fromkeys(value for value in citations if value))
 
 
 def _metadata_citations_for_scoring(prediction: dict[str, Any]) -> list[str]:
@@ -442,9 +565,10 @@ def _normalize_cache_stats(stats: dict[str, Any] | None) -> dict[str, int]:
     return {key: int(source.get(key, 0) or 0) for key in _CACHE_KEYS}
 
 
-def _normalize_cache(cache: dict[str, Any] | None) -> dict[str, dict[str, int]]:
+def _normalize_cache(cache: dict[str, Any] | None) -> dict[str, Any]:
     source = cache or {}
     return {
+        **source,
         "parse": _normalize_cache_stats(source.get("parse")),
         "embedding": _normalize_cache_stats(source.get("embedding")),
     }
@@ -453,5 +577,8 @@ def _normalize_cache(cache: dict[str, Any] | None) -> dict[str, dict[str, int]]:
 def _performance_from_timings(timings: dict[str, float]) -> dict[str, Any]:
     return {
         **timings,
-        "total_seconds": round(sum(timings.values()), 4),
+        "total_seconds": round(
+            sum(timings.get(key, 0.0) for key in _TOTAL_TIMING_KEYS),
+            4,
+        ),
     }

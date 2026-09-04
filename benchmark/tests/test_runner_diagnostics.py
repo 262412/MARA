@@ -1,4 +1,6 @@
 import json
+from types import SimpleNamespace
+from typing import Any
 
 from benchmark.diagnostics import prediction_diagnostics
 from benchmark.runner import run_benchmark
@@ -50,6 +52,15 @@ class _DiagnosticEngine:
     def document_reports():
         return []
 
+    @staticmethod
+    def task_contract_llm():
+        return lambda *_args, **_kwargs: SimpleNamespace(
+            text=(
+                '{"verdict":"supported","evidence_quote":'
+                '"Revenue increased in 2026."}'
+            )
+        )
+
 
 def test_run_benchmark_adds_generic_route_diagnostics(monkeypatch, tmp_path):
     manifest_path = _write_diagnostic_manifest(tmp_path)
@@ -80,6 +91,7 @@ def test_run_benchmark_adds_generic_route_diagnostics(monkeypatch, tmp_path):
     assert diagnostics["citation_failure_type"] == "none"
     assert diagnostics["failure_class"] == "none"
     assert diagnostics["controller_selected_route"] == "doc_text"
+    assert diagnostics["pipeline_failure_class"] == "none"
     assert "doc_text" in diagnostics["recommended_routes"]
     assert report["summary"]["dataset_route_diagnostics"] == [
         {
@@ -132,6 +144,59 @@ def test_prediction_diagnostics_classifies_raw_retriever_zero():
     assert diagnostics["retrieval_failure_type"] == "raw_retriever_zero"
     assert diagnostics["citation_failure_type"] == "missing_citation_metadata"
     assert diagnostics["failure_class"] == "no_retrieved_hits"
+    assert diagnostics["pipeline_failure_class"] == "retrieval_miss"
+
+
+def test_prediction_diagnostics_uses_stage_failure_taxonomy():
+    cases: list[tuple[dict[str, Any], str]] = [
+        (
+            {
+                "answer_finalization": {"task_contract_status": "error"},
+                "predicted_answer": "bad json",
+            },
+            "task_contract_error",
+        ),
+        (
+            {
+                "semantic_answer_evaluation": {"judge_status": "error"},
+                "predicted_answer": "answer",
+            },
+            "judge_error",
+        ),
+        (
+            {
+                "evidence_metadata": {
+                    "finance_numeric_trace": {
+                        "calculation_execution": {"status": "error"}
+                    }
+                },
+                "predicted_answer": "",
+            },
+            "calculation_error",
+        ),
+        (
+            {
+                "retrieved_hits": [{"document_id": "doc", "text": "evidence"}],
+                "gold_evidence": [{"document_id": "doc", "text": "gold span"}],
+                "predicted_answer": "",
+            },
+            "coverage_miss",
+        ),
+        (
+            {
+                "retrieved_hits": [{"document_id": "doc", "text": "gold span"}],
+                "gold_evidence": [{"document_id": "doc", "text": "gold span"}],
+                "verify_decision": {"status": "unsupported"},
+                "predicted_answer": "answer",
+            },
+            "verification_error",
+        ),
+    ]
+
+    assert [
+        prediction_diagnostics(prediction)["pipeline_failure_class"]
+        for prediction, _expected in cases
+    ] == [expected for _prediction, expected in cases]
 
 
 def test_prediction_diagnostics_classifies_runtime_error_before_retrieval():
@@ -343,6 +408,83 @@ def test_prediction_diagnostics_classifies_missing_gold_span_after_source_hit():
     assert diagnostics["gold_span_hit"] == 0.0
     assert diagnostics["retrieval_failure_type"] == "gold_span_missing"
     assert diagnostics["failure_class"] == "gold_span_missing"
+
+
+def test_prediction_diagnostics_tracks_full_chunk_gold_span_stage():
+    gold_span = (
+        "The proposed method improves recall by reranking complete paper "
+        "paragraphs with a cross encoder."
+    )
+    diagnostics = prediction_diagnostics(
+        {
+            "retrieved_hits": [
+                {
+                    "document_id": "paper-1",
+                    "source_id": "paper-1",
+                    "text": "The proposed method improves recall...",
+                }
+            ],
+            "evidence_metadata": {
+                "candidate_evidence": [
+                    {"source_id": "paper-1", "text": gold_span},
+                ],
+                "reranked_evidence": [
+                    {"source_id": "paper-1", "text": gold_span},
+                ],
+                "evidence": [
+                    {"source_id": "paper-1", "text": gold_span},
+                ],
+            },
+            "context_preview": "The proposed method improves recall...",
+            "gold_evidence": [
+                {
+                    "document_id": "paper-1",
+                    "span": gold_span,
+                }
+            ],
+            "predicted_answer": "cross encoder",
+        }
+    )
+
+    assert diagnostics["gold_span_candidate_hit"] == 1.0
+    assert diagnostics["gold_span_reranked_hit"] == 1.0
+    assert diagnostics["gold_span_context_hit"] == 1.0
+    assert diagnostics["gold_span_preview_hit"] == 0.0
+    assert diagnostics["gold_span_observability_stage"] == "preview_projection"
+    assert diagnostics["gold_span_hit"] == 1.0
+    assert diagnostics["retrieval_failure_type"] == "none"
+
+
+def test_prediction_diagnostics_identifies_reranking_span_loss():
+    gold_span = "The gold paragraph contains the complete answer."
+    diagnostics = prediction_diagnostics(
+        {
+            "retrieved_hits": [
+                {
+                    "document_id": "paper-1",
+                    "source_id": "paper-1",
+                    "text": "An unrelated selected paragraph.",
+                }
+            ],
+            "evidence_metadata": {
+                "candidate_evidence": [{"text": gold_span}],
+                "reranked_evidence": [{"text": "An unrelated paragraph."}],
+                "evidence": [{"text": "An unrelated selected paragraph."}],
+            },
+            "gold_evidence": [
+                {
+                    "document_id": "paper-1",
+                    "span": gold_span,
+                }
+            ],
+            "predicted_answer": "unanswerable",
+        }
+    )
+
+    assert diagnostics["gold_span_candidate_hit"] == 1.0
+    assert diagnostics["gold_span_reranked_hit"] == 0.0
+    assert diagnostics["gold_span_context_hit"] == 0.0
+    assert diagnostics["gold_span_observability_stage"] == "reranking"
 
 
 def _write_diagnostic_manifest(tmp_path):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import signal
 from collections.abc import Callable
+from time import perf_counter
 from typing import TypeVar
 
 T = TypeVar("T")
@@ -36,3 +37,20 @@ def run_with_route_timeout(
     finally:
         setitimer(itimer_real, 0)
         signal.signal(sigalrm, previous_handler)
+
+
+def raise_if_route_budget_exceeded(
+    started_at: float,
+    timeout_seconds: float | None,
+) -> None:
+    if timeout_seconds and perf_counter() - started_at > timeout_seconds:
+        raise RouteExecutionTimeout(timeout_seconds)
+
+
+def route_timeout_seconds(
+    exc: Exception,
+    configured_seconds: float | None,
+) -> float | None:
+    if isinstance(exc, RouteExecutionTimeout):
+        return exc.seconds
+    return configured_seconds

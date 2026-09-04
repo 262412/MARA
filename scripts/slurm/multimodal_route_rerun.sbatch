@@ -12,6 +12,7 @@ source ~/.bashrc
 set -euo pipefail
 
 PROJECT_ROOT="${MARA_PROJECT_ROOT:-/mnt/scratch/users/tbczhang/projects/MARA}"
+export MARA_PROJECT_ROOT="$PROJECT_ROOT"
 HPC_HOME="${MARA_HPC_HOME:-/mnt/scratch/users/tbczhang/mara-hpc}"
 OUT_ROOT="${MARA_MULTIMODAL_OUTPUT_DIR:-${MARA_PHASE3_OUTPUT_DIR:-/mnt/scratch/users/tbczhang/outputs/MARA/multimodal_route_slurm}}"
 MANIFEST="${MARA_MULTIMODAL_MANIFEST:-${MARA_PHASE3_MANIFEST:-/mnt/scratch/users/tbczhang/outputs/MARA/manifests/plan5/current-direct-fix-20260621/slidevqa-test-shard0.multimodal.routes.json}}"
@@ -20,13 +21,21 @@ SUITE_NAME="${MARA_MULTIMODAL_SUITE_NAME:-${MARA_PHASE3_SUITE_NAME:-slidevqa-mul
 LOG_ROOT="${OUT_ROOT}/logs/${RUN_ID}"
 BENCHMARK_LOG="${LOG_ROOT}/benchmark.log"
 BACKEND_HEALTH_JSON="${LOG_ROOT}/backend-health.json"
+SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"
+SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"
+SEMANTIC_EVALUATOR_TIMEOUT_SECONDS="${MARA_SEMANTIC_EVALUATOR_TIMEOUT_SECONDS:-60}"
+REQUIRE_HYBRID_ELIGIBLE="${MARA_MULTIMODAL_REQUIRE_HYBRID_ELIGIBLE:-0}"
 
-export UV_CACHE_DIR="${UV_CACHE_DIR:-/users/tbczhang/fastscratch/cache/uv}"
-export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/users/tbczhang/fastscratch/cache/uv/python}"
-export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-/users/tbczhang/scratch/pre-commit-cache}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/mnt/fastscratch/users/tbczhang/cache/uv}"
+export UV_NO_CACHE="${UV_NO_CACHE:-1}"
+export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/mnt/fastscratch/users/tbczhang/python}"
+export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-/mnt/scratch/users/tbczhang/pre-commit-cache}"
 export HF_HOME="${HF_HOME:-/users/tbczhang/fastscratch/cache/huggingface}"
 export TIKTOKEN_CACHE_DIR="${TIKTOKEN_CACHE_DIR:-/users/tbczhang/fastscratch/cache/tiktoken}"
 export CODEX_HOME="${CODEX_HOME:-/users/tbczhang/fastscratch/.codex}"
+export MARA_TEXT_LLM_BASE_URL="${MARA_TEXT_LLM_BASE_URL:-http://127.0.0.1:8000/v1}"
+export MARA_RETRIEVAL_BASE_URL="${MARA_RETRIEVAL_BASE_URL:-http://127.0.0.1:8002}"
+export MARA_LLM_BASE_URL="${MARA_LLM_BASE_URL:-$MARA_TEXT_LLM_BASE_URL}"
 export MARA_VLM_BASE_URL="${MARA_VLM_BASE_URL:-http://127.0.0.1:8001/v1}"
 export MARA_VLM_API_KEY="${MARA_VLM_API_KEY:-local}"
 export MARA_VLM_MODEL="${MARA_VLM_MODEL:-Qwen/Qwen3-VL-8B-Instruct}"
@@ -43,6 +52,9 @@ export MARA_RETRIEVAL_DEVICES="${MARA_RETRIEVAL_DEVICES:-cpu}"
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
 MARA_VLM_SERVE_SCRIPT="${MARA_VLM_SERVE_SCRIPT:-serve_qwen3_vl_8b_4k.sh}"
+
+source "${PROJECT_ROOT}/scripts/slurm/service_runtime_preflight.sh"
+mara_preflight_service_runtime "$HPC_HOME" multimodal "$MARA_VLM_SERVE_SCRIPT"
 
 SERVICE_PIDS=()
 
@@ -65,7 +77,7 @@ require_path() {
 
 http_ok() {
   local url="$1"
-  curl -fsS --max-time 3 "$url" >/dev/null
+  curl -fsS --max-time 3 "$url" >/dev/null 2>&1
 }
 
 wait_http() {
@@ -94,12 +106,18 @@ start_service() {
 }
 
 cleanup() {
+  local trapped_status=$?
+  local producer_status="${1:-$trapped_status}"
   local pid
   for pid in "${SERVICE_PIDS[@]:-}"; do
     if kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
     fi
   done
+  if [[ "${MARA_BENCHMARK_COMPLETION_RECORDED:-0}" != "1" ]]; then
+    mara_reconcile_benchmark_completion "$producer_status" ||
+      log "producer completion reconciliation failed; preserving runtime for audit"
+  fi
 }
 trap cleanup EXIT
 
@@ -111,6 +129,9 @@ require_path output "$OUT_ROOT" \
   "/users/tbczhang/scratch/outputs/MARA"
 
 source "${PROJECT_ROOT}/scripts/slurm/benchmark_runtime_isolation.sh"
+mara_install_benchmark_runtime_cleanup
+# normalize_semantic_evaluator.py is invoked with the fresh interpreter below.
+# mara_bootstrap_benchmark_runtime performs uv sync --frozen --no-dev --extra mara
 mara_configure_benchmark_runtime "$SUITE_NAME"
 mara_assert_isolated_kh_app_data
 require_path runtime "$KH_APP_DATA_DIR" \
@@ -120,15 +141,71 @@ require_path runtime "$KH_APP_DATA_DIR" \
 mkdir -p "$OUT_ROOT" "$LOG_ROOT" /mnt/scratch/users/tbczhang/outputs/MARA/slurm
 cd "$PROJECT_ROOT"
 
+GIT_COMMIT="$(git rev-parse HEAD)"
+GIT_STATUS="$(git status --porcelain --untracked-files=normal)"
+GIT_DIRTY=false
+if [[ -n "$GIT_STATUS" ]]; then
+  GIT_DIRTY=true
+fi
+if [[ -n "$GIT_STATUS" && "${MARA_ALLOW_DIRTY_BENCHMARK:-0}" != "1" ]]; then
+  log "refusing benchmark from dirty worktree; set MARA_ALLOW_DIRTY_BENCHMARK=1 only for an explicitly non-formal development run"
+  printf '%s\n' "$GIT_STATUS" >&2
+  exit 2
+fi
+export MARA_BENCHMARK_GIT_COMMIT="$GIT_COMMIT"
+export MARA_BENCHMARK_GIT_DIRTY="$GIT_DIRTY"
+mara_bootstrap_benchmark_runtime
+export MARA_BENCHMARK_INDEX_CONTRACT="$(
+  "$MARA_BENCHMARK_PYTHON" \
+    "${PROJECT_ROOT}/scripts/slurm/benchmark_index_contract.py" \
+    "$MANIFEST"
+)"
+
 log "repo=$(pwd)"
+log "git_commit=${GIT_COMMIT} git_dirty=${GIT_DIRTY}"
+log "index_contract=${MARA_BENCHMARK_INDEX_CONTRACT}"
 log "kh_app_data_dir=${KH_APP_DATA_DIR}"
+log "theflow_settings_module=${THEFLOW_SETTINGS_MODULE}"
+log "theflow_settings_path=${MARA_BENCHMARK_FLOWSETTINGS_PATH}"
+log "theflow_storage_prefix=${MARA_BENCHMARK_STORAGE_PREFIX}"
+log "theflow_temp_path=${THEFLOW_TEMP_PATH}"
+log "uv_project_environment=${UV_PROJECT_ENVIRONMENT}"
+log "benchmark_python=${MARA_BENCHMARK_PYTHON}"
+log "runtime_contract=${MARA_BENCHMARK_RUNTIME_CONTRACT}"
 log "manifest=${MANIFEST}"
 log "output=${OUT_ROOT}"
 log "suite=${SUITE_NAME}"
 log "node=${SLURMD_NODENAME:-$(hostname)}"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader || true
 
-mara_bootstrap_benchmark_runtime
+SEMANTIC_EVALUATOR="$(
+  "$MARA_BENCHMARK_PYTHON" \
+    "${PROJECT_ROOT}/scripts/slurm/normalize_semantic_evaluator.py" \
+    "$SEMANTIC_EVALUATOR"
+)"
+log "semantic_evaluator=${SEMANTIC_EVALUATOR}"
+
+export MARA_BENCHMARK_EMBEDDING_CONTRACT="$(
+  sha256sum \
+    "${HPC_HOME}/serve_retrieval.sh" \
+    "${HPC_HOME}/env-retrieval.sh" \
+    "${HPC_HOME}/local_retrieval_server.py" \
+    "${HPC_HOME}/configure_mara_local_models.py" |
+    sha256sum |
+    awk '{print $1}'
+)"
+export MARA_BENCHMARK_SERVICE_CONTRACT="$(
+  sha256sum \
+    "${HPC_HOME}/serve_qwen3_8b.sh" \
+    "${HPC_HOME}/${MARA_VLM_SERVE_SCRIPT}" \
+    "${HPC_HOME}/serve_retrieval.sh" \
+    "${HPC_HOME}/serve_colvision.sh" \
+    "${HPC_HOME}/configure_mara_local_models.py" |
+    sha256sum |
+    awk '{print $1}'
+)"
+log "embedding_contract=${MARA_BENCHMARK_EMBEDDING_CONTRACT}"
+log "service_contract=${MARA_BENCHMARK_SERVICE_CONTRACT}"
 
 if ! http_ok "http://127.0.0.1:8000/v1/models"; then
   start_service qwen3_8b \
@@ -158,9 +235,9 @@ wait_http vlm "http://127.0.0.1:8001/v1/models" 600
 wait_http retrieval "http://127.0.0.1:8002/health" 240
 wait_http colvision "http://127.0.0.1:8003/health" 240
 
-uv run --python 3.10 python "${HPC_HOME}/configure_mara_local_models.py"
+"$MARA_BENCHMARK_PYTHON" "${HPC_HOME}/configure_mara_local_models.py"
 
-uv run --python 3.10 python - <<'PY'
+"$MARA_BENCHMARK_PYTHON" - <<'PY'
 from ktem.docqa.visual_backends import visual_backend_health
 
 print(
@@ -177,7 +254,7 @@ print(
 )
 PY
 
-uv run --python 3.10 python -m benchmark check-multimodal-backends \
+"$MARA_BENCHMARK_PYTHON" -m benchmark check-multimodal-backends \
   --output "$BACKEND_HEALTH_JSON" \
   --timeout-seconds "${MARA_MULTIMODAL_HEALTH_TIMEOUT_SECONDS:-3}" \
   --strict
@@ -196,8 +273,10 @@ ROUTE="${MARA_MULTIMODAL_ROUTE:-${MARA_PHASE3_ROUTE:-all}}"
 LIMIT="${MARA_MULTIMODAL_LIMIT:-${MARA_PHASE3_LIMIT:-20}}"
 SAMPLE_SEED="${MARA_MULTIMODAL_SAMPLE_SEED:-${MARA_PHASE3_SAMPLE_SEED:-0}}"
 ROUTE_TIMEOUT_SECONDS="${MARA_MULTIMODAL_ROUTE_TIMEOUT_SECONDS:-${MARA_PHASE3_ROUTE_TIMEOUT_SECONDS:-240}}"
+EXECUTION_CONTRACT="${MARA_EXECUTION_JOB_CONTRACT:-}"
 
-uv run --python 3.10 python -m benchmark run \
+# python -m benchmark run executes through the job-owned interpreter below.
+"$MARA_BENCHMARK_PYTHON" -m benchmark run \
   --manifest "$MANIFEST" \
   --suite-name "$SUITE_NAME" \
   --route "$ROUTE" \
@@ -209,17 +288,47 @@ uv run --python 3.10 python -m benchmark run \
   --benchmark-prompt-policy gold_answer_v1 \
   --benchmark-prompt-profile auto \
   --benchmark-no-think \
+  --semantic-evaluator "$SEMANTIC_EVALUATOR" \
+  --semantic-evaluator-model "$SEMANTIC_EVALUATOR_MODEL" \
+  --semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS" \
   --route-timeout-seconds "$ROUTE_TIMEOUT_SECONDS" \
   --backend-health-json "$BACKEND_HEALTH_JSON" \
   --docqa-citation-mode inline | tee "$BENCHMARK_LOG"
 
 RUN_DIR="$(awk '/Outputs written to/ {print $NF}' "$BENCHMARK_LOG" | tail -n 1)"
-if [[ -z "$RUN_DIR" || ! -f "$RUN_DIR/summary.json" ]]; then
+if [[ -z "$RUN_DIR" || ! -f "$RUN_DIR/summary.json" || ! -f "$RUN_DIR/predictions.jsonl" ]]; then
   log "benchmark finished but summary.json was not found; run_dir=${RUN_DIR:-missing}"
   exit 1
 fi
 
-uv run --python 3.10 python - "$RUN_DIR" <<'PY'
+test -f "$RUN_DIR/artifact_manifest.json"
+test -f "$RUN_DIR/artifact_complete.json"
+export MARA_BENCHMARK_ARTIFACT_DIR="$RUN_DIR"
+if [[ -n "$EXECUTION_CONTRACT" ]]; then
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --expected-keys-file "$EXECUTION_CONTRACT"
+  )
+else
+  # Manual unsharded runs keep the full-manifest validator contract.
+  VALIDATION_ARGS=(
+    --require-all-usable
+    --artifact-dir "$RUN_DIR"
+    --require-complete-marker
+    --manifest "$MANIFEST"
+  )
+fi
+if [[ "$REQUIRE_HYBRID_ELIGIBLE" == "1" ]]; then
+  VALIDATION_ARGS+=(--require-hybrid-eligible)
+fi
+"$MARA_BENCHMARK_PYTHON" \
+  "${PROJECT_ROOT}/scripts/slurm/validate_benchmark_predictions.py" \
+  "$RUN_DIR/predictions.jsonl" \
+  "${VALIDATION_ARGS[@]}"
+
+"$MARA_BENCHMARK_PYTHON" - "$RUN_DIR" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -237,3 +346,6 @@ print("page_image=", phase3.get("page_image"))
 print("element=", phase3.get("element"))
 print("hybrid=", phase3.get("hybrid"))
 PY
+
+mara_reconcile_benchmark_completion 0
+mara_cleanup_benchmark_runtime

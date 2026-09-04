@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from ktem.db.models import Conversation, engine
 from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
 from ktem.pages.chat.studio_note_actions import (
@@ -6,6 +8,14 @@ from ktem.pages.chat.studio_note_actions import (
     save_manual_note_update,
 )
 from sqlmodel import Session, select
+
+
+def _page():
+    runtime = SimpleNamespace(_resolve_user_id=lambda: "user-1")
+    return SimpleNamespace(
+        docqa=runtime,
+        _resolve_persist_user_id=lambda user_id, _request: user_id,
+    )
 
 
 def _cleanup_conversation(conversation_id: str) -> None:
@@ -62,7 +72,7 @@ def test_save_latest_artifact_note_update_persists_note_and_refreshes_panel():
         conversation_id = conversation.id
 
     try:
-        html = save_latest_artifact_note_update(conversation_id)
+        html = save_latest_artifact_note_update(_page(), conversation_id)
 
         assert "Launch briefing" in html
         with Session(engine) as session:
@@ -95,6 +105,7 @@ def test_save_latest_answer_note_update_persists_answer_note_and_refreshes_panel
 
     try:
         html = save_latest_answer_note_update(
+            _page(),
             conversation_id,
             [("Question one", ""), ("Question two", "Grounded answer.")],
             ["", "citation block"],
@@ -131,6 +142,7 @@ def test_save_manual_note_update_persists_note_and_refreshes_panel():
 
     try:
         html = save_manual_note_update(
+            _page(),
             conversation_id,
             "Manual insight",
             "This note should be available for artifact generation.",

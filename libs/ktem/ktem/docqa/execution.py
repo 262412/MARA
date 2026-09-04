@@ -1,82 +1,143 @@
 from __future__ import annotations
 
-import re
-from dataclasses import asdict, dataclass, field
-from typing import Any, Callable
+import logging
+from functools import partial
+from typing import Any
 
-from .controller import (
-    RetrieveDecision,
-    RouteDecision,
-    VerifyDecision,
-    _route_decision,
-    _verify_decision,
-    evaluate_retrieval_quality,
+from . import execution_results as _execution_results
+from .controller import RetrieveDecision, VerifyDecision
+from .engine_terminal_projection import (
+    engine_terminal_projection as _engine_terminal_projection,
 )
-from .evidence import EvidenceBundle, build_evidence_bundle
-from .evidence_text import extract_final_answer_text
-from .route_selection import (
-    ControllerDecision,
-    controller_decision_from_route,
-    mark_route_switch_recovery,
+from .engine_terminal_projection import (
+    normalized_candidate_label as _normalized_candidate_label,
 )
-from .workflow import build_workflow_plan, planner_payload_from_trace
-
-DIRECT_ANSWER_MESSAGE = (
-    "MARA can answer general questions, but document-specific answers require "
-    "retrieved evidence."
+from .evidence import EvidenceBundle
+from .execution_contracts import ABSTAIN_MESSAGE
+from .execution_contracts import CANONICAL_ROUTES as _CANONICAL_ROUTES
+from .execution_contracts import (
+    DIRECT_ANSWER_MESSAGE,
+    ENGINE_TERMINAL_STATE_CONTRACT,
+    RAGTRUTH_EMPTY_ANSWER,
 )
-ABSTAIN_MESSAGE = (
-    "MARA could not retrieve enough evidence to answer reliably. Select a "
-    "relevant source or page, or ask with more source-specific context."
+from .execution_models import (
+    GenerateFn,
+    GuardrailDecision,
+    RetrieveFn,
+    RewriteFn,
+    RouteExecutionResult,
+    VerifyFn,
 )
+from .execution_planning import (
+    build_execution_workflow_plan as _build_execution_workflow_plan,
+)
+from .execution_planning import controller_decision as _controller_decision
+from .execution_planning import planned_execution as _planned_execution
+from .execution_recovery import (
+    complete_verifier_recovery as _complete_verifier_recovery,
+)
+from .execution_recovery import (
+    recover_after_failed_retrieval as _recover_after_failed_retrieval,
+)
+from .execution_recovery import (
+    recover_after_failed_verification as _recover_after_failed_verification,
+)
+from .execution_recovery import (
+    required_typed_authority_missing as _required_typed_authority_missing,
+)
+from .execution_recovery import (
+    same_route_verifier_recovery_trace as _same_route_verifier_recovery_trace,
+)
+from .execution_recovery import (
+    switch_after_failed_retrieval as _switch_after_failed_retrieval,
+)
+from .execution_recovery import (
+    switch_after_failed_verification as _switch_after_failed_verification,
+)
+from .execution_recovery import verifier_recovery_policy as _verifier_recovery_policy
+from .execution_results import deadline_exhausted_result as _deadline_exhausted_result
+from .execution_results import guarded_result as _guarded_result
+from .execution_results import operational_failure_result as _operational_failure_result
+from .execution_results import result as _result
+from .execution_results import static_result as _static_result
+from .execution_results import verified_result as _verified_result
+from .execution_retrieval import retrieve_and_evaluate as _retrieve_and_evaluate
+from .pipeline_stage_timings import PipelineStageTimings
+from .query_plan_schema import slot_binding_state
+from .route_budget import RouteDeadlineExhausted, run_blocking_route_stage
+from .route_capabilities import (
+    route_switch_candidate_evaluation as _route_switch_candidate_evaluation,
+)
+from .route_capabilities import route_switch_candidates as _route_switch_candidates
+from .route_selection import ControllerDecision
+from .semantic_evidence_set_authority import PropositionVerifier
+from .verification import verify_decision as _verification_verify_decision
 
-RetrieveFn = Callable[[Any, "ControllerDecision"], dict[str, Any]]
-GenerateFn = Callable[[Any, "ControllerDecision", EvidenceBundle], str]
-RewriteFn = Callable[[Any, "ControllerDecision", EvidenceBundle, str], str]
+_controller_decision_from_payload = _controller_decision
+LOGGER = logging.getLogger(__name__)
 
-_CANONICAL_ROUTES = {
-    "direct": "direct_answer",
-    "doc_text": "text_rag",
-    "doc_page_image": "page_image_rag",
-    "doc_element": "element_rag",
-    "graph_global": "graph_rag",
-    "hybrid": "hybrid_rag",
-    "abstain": "abstain",
-}
+__all__ = [
+    "ABSTAIN_MESSAGE",
+    "DIRECT_ANSWER_MESSAGE",
+    "ENGINE_TERMINAL_STATE_CONTRACT",
+    "RAGTRUTH_EMPTY_ANSWER",
+    "ControllerDecision",
+    "EvidenceBundle",
+    "GenerateFn",
+    "GuardrailDecision",
+    "RetrieveDecision",
+    "RetrieveFn",
+    "RewriteFn",
+    "RouteExecutionResult",
+    "VerifyDecision",
+    "VerifyFn",
+    "_CANONICAL_ROUTES",
+    "_build_execution_workflow_plan",
+    "_complete_verifier_recovery",
+    "_controller_decision",
+    "_controller_decision_from_payload",
+    "_engine_terminal_projection",
+    "_guarded_result",
+    "_normalized_candidate_label",
+    "_planned_execution",
+    "_recover_after_failed_retrieval",
+    "_recover_after_failed_verification",
+    "_required_typed_authority_missing",
+    "_result",
+    "_retrieve_and_evaluate",
+    "_route_switch_candidate_evaluation",
+    "_route_switch_candidates",
+    "_same_route_verifier_recovery_trace",
+    "_static_result",
+    "_switch_after_failed_retrieval",
+    "_switch_after_failed_verification",
+    "_verified_result",
+    "_verifier_recovery_policy",
+    "execute_controller_turn",
+    "deadline_exhausted_controller_result",
+]
 
 
-@dataclass(frozen=True)
-class GuardrailDecision:
-    status: str
-    action: str
-    reason: str
-
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class RouteExecutionResult:
-    controller_decision: ControllerDecision
-    retrieve_decision: RetrieveDecision
-    verify_decision: VerifyDecision
-    guardrail_decision: GuardrailDecision
-    evidence_bundle: EvidenceBundle
-    workflow_plan: dict[str, Any] = field(default_factory=dict)
-    answer: str = ""
-    controller_trace: list[dict[str, Any]] = field(default_factory=list)
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "controller_decision": self.controller_decision.as_dict(),
-            "retrieve_decision": self.retrieve_decision.as_dict(),
-            "verify_decision": self.verify_decision.as_dict(),
-            "guardrail_decision": self.guardrail_decision.as_dict(),
-            "evidence_bundle": self.evidence_bundle.as_dict(),
-            "workflow_plan": dict(self.workflow_plan),
-            "answer": self.answer,
-            "controller_trace": list(self.controller_trace),
-        }
+def deadline_exhausted_controller_result(
+    request: Any,
+    error: RouteDeadlineExhausted,
+    *,
+    agent_trace: list[dict[str, Any]] | None = None,
+) -> RouteExecutionResult:
+    timings = PipelineStageTimings()
+    decision, workflow_plan = timings.measure(
+        "planning_seconds",
+        _planned_execution,
+        request,
+        agent_trace or [],
+    )
+    return _deadline_exhausted_result(
+        request,
+        decision,
+        workflow_plan,
+        error,
+        timings,
+    )
 
 
 def execute_controller_turn(
@@ -85,431 +146,278 @@ def execute_controller_turn(
     retrieve: RetrieveFn,
     generate: GenerateFn,
     rewrite: RewriteFn | None = None,
+    verify: VerifyFn | None = None,
+    proposition_verifier: PropositionVerifier | None = None,
     agent_trace: list[dict[str, Any]] | None = None,
 ) -> RouteExecutionResult:
-    planner_payload = planner_payload_from_trace(agent_trace or [])
-    route_decision = _route_decision(request, agent_trace or [])
-    controller_decision = _controller_decision(route_decision, planner_payload)
-    workflow_plan = _build_execution_workflow_plan(
-        request,
-        route_decision.route,
-        route_decision.policy,
-        route_decision.controller_mode,
-        agent_trace or [],
-    )
-    if controller_decision.route == "direct_answer":
-        return _static_result(
-            request, controller_decision, DIRECT_ANSWER_MESSAGE, workflow_plan
+    verify = _configured_verify(verify, proposition_verifier)
+    timings = PipelineStageTimings()
+    try:
+        decision, workflow_plan = timings.measure(
+            "planning_seconds",
+            _planned_execution,
+            request,
+            agent_trace or [],
         )
-    if controller_decision.route == "abstain":
-        return _static_result(
-            request, controller_decision, ABSTAIN_MESSAGE, workflow_plan
+    except Exception as error:
+        LOGGER.exception("DocQA planning failed before terminal commit")
+        return _operational_failure_result(
+            request,
+            None,
+            {},
+            error,
+            "planning",
+            timings,
+        )
+    if decision.route in {"direct_answer", "abstain"}:
+        answer = (
+            DIRECT_ANSWER_MESSAGE
+            if decision.route == "direct_answer"
+            else ABSTAIN_MESSAGE
+        )
+        return _static_result(request, decision, answer, workflow_plan, timings)
+    try:
+        return _execute_retrieval_turn(
+            request,
+            decision,
+            workflow_plan,
+            retrieve,
+            generate,
+            rewrite,
+            verify,
+            timings,
+        )
+    except RouteDeadlineExhausted as error:
+        return _deadline_exhausted_result(
+            request,
+            decision,
+            workflow_plan,
+            error,
+            timings,
+        )
+    except Exception as error:
+        LOGGER.exception("DocQA backend failed before terminal commit")
+        return _operational_failure_result(
+            request,
+            decision,
+            workflow_plan,
+            error,
+            "backend",
+            timings,
         )
 
-    evidence_bundle, retrieve_decision = _retrieve_and_evaluate(
+
+def _execute_retrieval_turn(
+    request: Any,
+    decision: ControllerDecision,
+    workflow_plan: dict[str, Any],
+    retrieve: RetrieveFn,
+    generate: GenerateFn,
+    rewrite: RewriteFn | None,
+    verify: VerifyFn,
+    timings: PipelineStageTimings,
+) -> RouteExecutionResult:
+    bundle, retrieve_decision = timings.measure(
+        "retrieval_seconds",
+        _retrieve_and_evaluate,
         request,
-        controller_decision,
+        decision,
         retrieve,
     )
-    route_switch_trace: list[dict[str, Any]] = []
+    (
+        decision,
+        bundle,
+        retrieve_decision,
+        workflow_plan,
+        route_switch_trace,
+    ) = _recover_after_failed_retrieval(
+        request,
+        decision,
+        retrieve_decision,
+        bundle,
+        workflow_plan,
+        retrieve,
+        timings,
+    )
     if retrieve_decision.status != "good":
-        switched = _switch_after_failed_retrieval(
+        return _poor_retrieval_result(
             request,
-            controller_decision,
+            decision,
             retrieve_decision,
-            retrieve,
-        )
-        if switched is not None:
-            (
-                controller_decision,
-                evidence_bundle,
-                retrieve_decision,
-                switch_event,
-            ) = switched
-            workflow_plan = _build_execution_workflow_plan(
-                request,
-                controller_decision.legacy_route,
-                controller_decision.policy,
-                controller_decision.controller_mode,
-                [],
-            )
-            route_switch_trace.append(switch_event)
-    if retrieve_decision.status != "good":
-        return _guarded_result(
-            request,
-            controller_decision,
-            retrieve_decision,
-            evidence_bundle,
+            bundle,
+            generate,
+            rewrite,
             workflow_plan,
             route_switch_trace,
+            timings,
+            verify,
         )
-
-    answer = generate(request, controller_decision, evidence_bundle)
-    return _verified_result(
+    answer = timings.measure(
+        "generation_seconds",
+        run_blocking_route_stage,
         request,
-        controller_decision,
+        "generation",
+        generate,
+        request,
+        decision,
+        bundle,
+        configured_timeout_seconds=getattr(request, "generation_timeout_seconds", None),
+    )
+    initial_result = _verified_result(
+        request,
+        decision,
         retrieve_decision,
-        evidence_bundle,
+        bundle,
         answer,
         rewrite,
         workflow_plan,
         route_switch_trace,
+        timings,
+        verify=verify,
     )
-
-
-def _build_execution_workflow_plan(
-    request: Any,
-    route: str,
-    policy: str,
-    controller_mode: str,
-    agent_trace: list[dict[str, Any]],
-) -> dict[str, Any]:
-    return build_workflow_plan(
-        route=route,
-        request=request,
-        planner_payload=planner_payload_from_trace(agent_trace),
-        policy=policy,
-        controller_mode=controller_mode,
-    ).as_dict()
-
-
-def _retrieve_and_evaluate(
-    request: Any,
-    decision: ControllerDecision,
-    retrieve: RetrieveFn,
-) -> tuple[EvidenceBundle, RetrieveDecision]:
-    evidence_metadata = retrieve(request, decision)
-    evidence_bundle = build_evidence_bundle(
-        decision.legacy_route, request, evidence_metadata
-    )
-    retrieve_decision = evaluate_retrieval_quality(
-        decision.legacy_route,
-        evidence_bundle.metadata,
-        prompt=str(getattr(request, "prompt", "") or ""),
-        verification_domain=getattr(request, "verification_domain", None),
-        origin=getattr(request, "origin", None),
-    )
-    if retrieve_decision.status != "ambiguous" or not retrieve_decision.retry:
-        return evidence_bundle, retrieve_decision
-
-    evidence_metadata = retrieve(request, decision)
-    evidence_bundle = build_evidence_bundle(
-        decision.legacy_route, request, evidence_metadata
-    )
-    retrieve_decision = evaluate_retrieval_quality(
-        decision.legacy_route,
-        evidence_bundle.metadata,
-        attempted_retry=True,
-        prompt=str(getattr(request, "prompt", "") or ""),
-        verification_domain=getattr(request, "verification_domain", None),
-        origin=getattr(request, "origin", None),
-    )
-    return evidence_bundle, retrieve_decision
-
-
-def _controller_decision(
-    route_decision: RouteDecision,
-    planner_payload: Any = None,
-) -> ControllerDecision:
-    return _controller_decision_from_payload(route_decision, planner_payload)
-
-
-def _controller_decision_from_payload(
-    route_decision: RouteDecision,
-    planner_payload: Any,
-) -> ControllerDecision:
-    return controller_decision_from_route(
-        route_decision,
-        canonical_routes=_CANONICAL_ROUTES,
-        planner_payload=planner_payload,
-    )
-
-
-def _switch_after_failed_retrieval(
-    request: Any,
-    decision: ControllerDecision,
-    failed_decision: RetrieveDecision,
-    retrieve: RetrieveFn,
-) -> tuple[ControllerDecision, EvidenceBundle, RetrieveDecision, dict[str, Any]] | None:
-    candidates = _route_switch_candidates(request, decision.legacy_route)
-    for route in candidates:
-        switched_decision = _controller_decision(
-            RouteDecision(
-                route=route,
-                policy="route_switch",
-                controller_mode=decision.controller_mode,
-                requires_retrieval=True,
-                reason=(
-                    f"Switched from {decision.legacy_route} after "
-                    f"{failed_decision.status} retrieval."
-                ),
-            )
-        )
-        switched_decision = mark_route_switch_recovery(
-            switched_decision,
-            initial_decision=decision,
-            candidates=candidates,
-        )
-        bundle, retrieve_decision = _retrieve_and_evaluate(
-            request,
-            switched_decision,
-            retrieve,
-        )
-        switch_event = {
-            "stage": "route_switch",
-            "from_route": decision.legacy_route,
-            "to_route": route,
-            "reason": failed_decision.reason,
-            "route_switch_used": True,
-            "route_switch_candidates": list(candidates),
-        }
-        if retrieve_decision.status == "good":
-            return switched_decision, bundle, retrieve_decision, switch_event
-    return None
-
-
-def _route_switch_candidates(request: Any, current_route: str) -> list[str]:
-    allowed_routes = list(getattr(request, "allowed_routes", []) or [])
-    preferred_order = _cost_aware_route_switch_order(request)
-    allowed = [route for route in preferred_order if route in allowed_routes]
-    allowed.extend(route for route in allowed_routes if route not in allowed)
-    return [
-        route
-        for route in allowed
-        if route in _CANONICAL_ROUTES
-        and route not in {current_route, "direct", "abstain"}
-    ]
-
-
-def _cost_aware_route_switch_order(request: Any) -> list[str]:
-    prompt = str(getattr(request, "prompt", "") or "").lower()
-    if _has_visual_route_intent(prompt):
-        return ["doc_page_image", "doc_text", "hybrid", "doc_element", "graph_global"]
-    return ["doc_text", "doc_page_image", "hybrid", "doc_element", "graph_global"]
-
-
-def _has_visual_route_intent(prompt: str) -> bool:
-    return bool(
-        re.search(
-            r"\b(chart|diagram|figure|graph|image|layout|plot|shown|slide|visual|visible)\b",
-            prompt,
-        )
-    )
-
-
-def _static_result(
-    request: Any,
-    decision: ControllerDecision,
-    answer: str,
-    workflow_plan: dict[str, Any],
-) -> RouteExecutionResult:
-    bundle = build_evidence_bundle(decision.legacy_route, request, {})
-    retrieve_decision = evaluate_retrieval_quality(decision.legacy_route, {})
-    verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
-    return _result(
-        decision,
-        retrieve_decision,
-        verify_decision,
-        GuardrailDecision("ok", "return", decision.reason),
-        bundle,
+    return _recover_after_failed_verification(
+        request,
+        initial_result,
+        retrieve,
+        rewrite,
         workflow_plan,
-        answer,
+        route_switch_trace,
+        timings,
+        verify,
+        generate=generate,
     )
 
 
-def _guarded_result(
+def _poor_retrieval_result(
     request: Any,
     decision: ControllerDecision,
     retrieve_decision: RetrieveDecision,
     bundle: EvidenceBundle,
-    workflow_plan: dict[str, Any],
-    trace_prefix: list[dict[str, Any]] | None = None,
-) -> RouteExecutionResult:
-    verify_decision = _verify_decision(request, retrieve_decision, bundle, "")
-    guardrail = GuardrailDecision(
-        status="not_enough_evidence",
-        action="abstain",
-        reason=retrieve_decision.reason,
-    )
-    return _result(
-        decision,
-        retrieve_decision,
-        verify_decision,
-        guardrail,
-        bundle,
-        workflow_plan,
-        ABSTAIN_MESSAGE,
-        trace_prefix,
-    )
-
-
-def _verified_result(
-    request: Any,
-    decision: ControllerDecision,
-    retrieve_decision: RetrieveDecision,
-    bundle: EvidenceBundle,
-    answer: str,
+    generate: GenerateFn,
     rewrite: RewriteFn | None,
     workflow_plan: dict[str, Any],
-    trace_prefix: list[dict[str, Any]] | None = None,
+    route_switch_trace: list[dict[str, Any]],
+    timings: PipelineStageTimings,
+    verify: VerifyFn,
 ) -> RouteExecutionResult:
-    if bundle.metadata.get("generation_backend") == "evidence_only_without_vlm":
-        verify_decision = _evidence_only_verify_decision(request, bundle)
-        guardrail = _verification_guardrail(verify_decision, request)
-        return _result(
+    if _typed_boolean_candidate_evidence_available(request, bundle, verify):
+        bundle.metadata["candidate_generation_admission"] = {
+            "contract_id": "qasper_candidate_generation_admission.v1",
+            "status": "admitted",
+            "reason": "retrieval_slots_filled_verification_slot_pending",
+        }
+        answer = timings.measure(
+            "generation_seconds",
+            run_blocking_route_stage,
+            request,
+            "generation",
+            generate,
+            request,
+            decision,
+            bundle,
+            configured_timeout_seconds=getattr(
+                request,
+                "generation_timeout_seconds",
+                None,
+            ),
+        )
+        return _verified_result(
+            request,
             decision,
             retrieve_decision,
-            verify_decision,
-            guardrail,
             bundle,
-            workflow_plan,
             answer,
-            trace_prefix,
-        )
-    if not extract_final_answer_text(answer).strip():
-        verify_decision = _empty_answer_verify_decision(request, bundle)
-        guardrail = _verification_guardrail(verify_decision, request)
-        return _result(
-            decision,
-            retrieve_decision,
-            verify_decision,
-            guardrail,
-            bundle,
+            rewrite,
             workflow_plan,
-            ABSTAIN_MESSAGE,
-            trace_prefix,
+            route_switch_trace,
+            timings,
+            verify=verify,
         )
-    verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
-    if verify_decision.action == "revise" and rewrite is not None:
-        answer = rewrite(request, decision, bundle, answer)
-        verify_decision = _verify_decision(request, retrieve_decision, bundle, answer)
-    guardrail = _verification_guardrail(verify_decision, request)
-    if guardrail.action == "abstain":
-        answer = ABSTAIN_MESSAGE
-    return _result(
+    return _guarded_result(
+        request,
         decision,
         retrieve_decision,
-        verify_decision,
-        guardrail,
         bundle,
         workflow_plan,
-        answer,
-        trace_prefix,
+        route_switch_trace,
+        timings,
+        verify=verify,
     )
 
 
-def _verification_guardrail(
-    verify_decision: VerifyDecision,
-    request: Any | None = None,
-) -> GuardrailDecision:
-    if verify_decision.status in {"supported", "not_requested", "not_required"}:
-        return GuardrailDecision("ok", "return", verify_decision.reason)
-    if verify_decision.action == "revise":
-        if _finance_benchmark_request(request):
-            return GuardrailDecision("unsupported", "revise", verify_decision.reason)
-        return GuardrailDecision("unsupported", "abstain", verify_decision.reason)
-    return GuardrailDecision(
-        verify_decision.status, verify_decision.action, verify_decision.reason
+def _typed_boolean_candidate_evidence_available(
+    request: Any,
+    bundle: EvidenceBundle,
+    verify: VerifyFn,
+) -> bool:
+    plan = getattr(request, "query_plan", None)
+    answer_type = (
+        plan.get("answer_type")
+        if isinstance(plan, dict)
+        else getattr(plan, "answer_type", None)
     )
-
-
-def _finance_benchmark_request(request: Any | None) -> bool:
-    if request is None:
+    domain = str(getattr(request, "verification_domain", "") or "").casefold()
+    if not (
+        bundle.items
+        and str(answer_type or getattr(request, "task_type", "")).casefold()
+        == "boolean"
+        and (domain == "qasper" or domain.startswith("qasper_"))
+        and getattr(verify, "_semantic_proposition_preflight", False)
+    ):
         return False
-    origin = str(getattr(request, "origin", "") or "").strip().lower()
-    domain = str(getattr(request, "verification_domain", "") or "").strip().lower()
-    return origin == "benchmark" and domain in {"finance", "financial"}
-
-
-def _evidence_only_verify_decision(
-    request: Any,
-    bundle: EvidenceBundle,
-) -> VerifyDecision:
-    mode = str(getattr(request, "verification_mode", None) or "off").strip().lower()
-    if mode not in {"off", "light", "strict"}:
-        mode = "off"
-    return VerifyDecision(
-        mode=mode,
-        status="not_required",
-        reason="Evidence-only visual route did not invoke a VLM generator.",
-        verified_citations=[
-            str(item.get("evidence_id") or "")
-            for item in bundle.items
-            if str(item.get("evidence_id") or "")
-        ],
-    )
-
-
-def _empty_answer_verify_decision(
-    request: Any,
-    bundle: EvidenceBundle,
-) -> VerifyDecision:
-    mode = str(getattr(request, "verification_mode", None) or "off").strip().lower()
-    if mode not in {"off", "light", "strict"}:
-        mode = "off"
-    return VerifyDecision(
-        mode=mode,
-        status="not_enough_evidence",
-        reason=f"{mode.title()} verification found no final answer to verify.",
-        action="abstain",
-        verified_citations=_bundle_citation_ids(bundle),
-    )
-
-
-def _bundle_citation_ids(bundle: EvidenceBundle) -> list[str]:
-    citations: list[str] = []
-    for item in bundle.items:
-        evidence_id = str(item.get("evidence_id") or "").strip()
-        if evidence_id and evidence_id not in citations:
-            citations.append(evidence_id)
-    return citations
-
-
-def _result(
-    decision: ControllerDecision,
-    retrieve_decision: RetrieveDecision,
-    verify_decision: VerifyDecision,
-    guardrail_decision: GuardrailDecision,
-    bundle: EvidenceBundle,
-    workflow_plan: dict[str, Any],
-    answer: str,
-    trace_prefix: list[dict[str, Any]] | None = None,
-) -> RouteExecutionResult:
-    return RouteExecutionResult(
-        controller_decision=decision,
-        retrieve_decision=retrieve_decision,
-        verify_decision=verify_decision,
-        guardrail_decision=guardrail_decision,
-        evidence_bundle=bundle,
-        workflow_plan=workflow_plan,
-        answer=answer,
-        controller_trace=list(trace_prefix or [])
-        + _trace(
-            decision,
-            workflow_plan,
-            retrieve_decision,
-            guardrail_decision,
-            verify_decision,
+    metadata_plan = next(
+        (
+            bundle.metadata.get(key)
+            for key in ("bound_query_plan", "query_plan")
+            if isinstance(bundle.metadata.get(key), dict)
         ),
+        None,
+    )
+    slots = metadata_plan.get("evidence_slots") if metadata_plan else None
+    if not isinstance(slots, list):
+        return False
+    retrieval_slots = [
+        slot
+        for slot in slots
+        if isinstance(slot, dict) and bool(slot.get("required_for_retrieval"))
+    ]
+    pending_verification_slots = [
+        slot
+        for slot in slots
+        if isinstance(slot, dict)
+        and bool(slot.get("required_for_verification"))
+        and not bool(slot.get("required_for_retrieval"))
+        and slot_binding_state(slot) != "filled"
+    ]
+    return bool(
+        pending_verification_slots
+        and all(slot_binding_state(slot) == "filled" for slot in retrieval_slots)
     )
 
 
-def _trace(
-    decision: ControllerDecision,
-    workflow_plan: dict[str, Any],
+def _configured_verify(
+    verify: VerifyFn | None,
+    proposition_verifier: PropositionVerifier | None,
+) -> VerifyFn:
+    if proposition_verifier is None:
+        return verify or _default_verify
+    configured = partial(
+        _verification_verify_decision,
+        proposition_verifier=proposition_verifier,
+    )
+    setattr(configured, "_semantic_proposition_preflight", True)
+    return configured
+
+
+def _default_verify(
+    request: Any,
     retrieve_decision: RetrieveDecision,
-    guardrail_decision: GuardrailDecision,
-    verify_decision: VerifyDecision,
-) -> list[dict[str, Any]]:
-    return [
-        {"stage": "planner", **decision.as_dict()},
-        {
-            "stage": "workflow_plan",
-            "strategy": workflow_plan.get("strategy", ""),
-            "step_count": len(workflow_plan.get("steps") or []),
-            "total_cost_units": workflow_plan.get("total_cost_units", 0),
-        },
-        {"stage": "retrieval_evaluator", **retrieve_decision.as_dict()},
-        {"stage": "guardrail", **guardrail_decision.as_dict()},
-        {"stage": "verifier", **verify_decision.as_dict()},
-    ]
+    bundle: EvidenceBundle,
+    answer: str,
+) -> VerifyDecision:
+    return _execution_results._verify_decision(
+        request,
+        retrieve_decision,
+        bundle,
+        answer,
+    )

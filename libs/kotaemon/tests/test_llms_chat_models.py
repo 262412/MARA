@@ -4,7 +4,8 @@ from unittest.mock import patch
 import pytest
 
 from kotaemon.base.schema import AIMessage, HumanMessage, LLMInterface, SystemMessage
-from kotaemon.llms import AzureChatOpenAI, LlamaCppChat
+from kotaemon.llms import AzureChatOpenAI, EndpointChatLLM, LlamaCppChat
+from kotaemon.llms.chats import endpoint_based
 
 try:
     pass
@@ -56,6 +57,7 @@ def test_azureopenai_model(openai_completion):
     assert isinstance(
         output, LLMInterface
     ), "Output for single text is not LLMInterface"
+    assert output.additional_kwargs["finish_reason"] == "stop"
     openai_completion.assert_called()
 
     # test for list[message] input - stream mode
@@ -71,6 +73,28 @@ def test_azureopenai_model(openai_completion):
         output, LLMInterface
     ), "Output for single text is not LLMInterface"
     openai_completion.assert_called()
+
+
+@patch.object(endpoint_based.requests, "post")
+def test_endpoint_chat_model_forwards_generation_kwargs(post):
+    post.return_value.json.return_value = {
+        "choices": [{"message": {"content": "answer"}}],
+        "usage": {
+            "completion_tokens": 1,
+            "prompt_tokens": 2,
+            "total_tokens": 3,
+        },
+    }
+    model = EndpointChatLLM(endpoint_url="http://localhost:8000/v1/chat/completions")
+
+    model("question", temperature=0, top_p=1, seed=20260724)
+
+    assert post.call_args.kwargs["json"] == {
+        "messages": [{"content": "question", "role": "user"}],
+        "temperature": 0,
+        "top_p": 1,
+        "seed": 20260724,
+    }
 
 
 @skip_llama_cpp_not_installed

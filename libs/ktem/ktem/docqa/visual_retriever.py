@@ -4,6 +4,9 @@ import re
 from copy import deepcopy
 from typing import Any, Protocol
 
+from .deterministic_ranking import quantized_score
+from .evidence_identity import identity_of
+
 
 class VisualRetrieverBackend(Protocol):
     name: str
@@ -48,16 +51,11 @@ def rank_page_image_records(
     retriever: VisualRetrieverBackend | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, float]]:
     backend = retriever or LocalLateInteractionVisualRetriever()
-    scored = [
-        (score, index, record)
-        for index, (score, record) in enumerate(
-            zip(_score_records(backend, query, records), records)
-        )
-    ]
-    scored.sort(key=lambda item: (-item[0], item[1]))
+    scored = list(zip(_score_records(backend, query, records), records))
+    scored.sort(key=lambda item: (-quantized_score(item[0]), identity_of(item[1]).key))
     scores = {
         str(record.get("evidence_id") or "").strip(): score
-        for score, _, record in scored
+        for score, record in scored
         if str(record.get("evidence_id") or "").strip()
     }
     ranked = [
@@ -67,7 +65,7 @@ def rank_page_image_records(
             backend.name,
             getattr(backend, "backend_type", "custom"),
         )
-        for score, _, record in scored
+        for score, record in scored
     ]
     return ranked, scores
 

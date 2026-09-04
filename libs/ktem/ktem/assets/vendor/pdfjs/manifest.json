@@ -1,0 +1,13 @@
+{
+  "archive": "pdfjs-6.1.200-dist.zip",
+  "license": "LICENSE.pdfjs",
+  "release_url": "https://github.com/mozilla/pdf.js/releases/download/v6.1.200/pdfjs-6.1.200-dist.zip",
+  "runtime_files": {
+    "build/pdf.mjs": "506017c72d304788a1139393988a74c6c23c2f077a3558ac5f67555aee966950",
+    "web/viewer.html": "b81716acf3653f38ded0696768a91e2b1bd1a3208786b008120cc553f1d5ac05"
+  },
+  "sha256": "9e1584d768ed099aa4be27ea423f89a038c2005f1ee417ea4f35ba4591ec1846",
+  "upstream": "https://github.com/mozilla/pdf.js",
+  "version": "6.1.200",
+  "version_dist": "pdfjs-6.1.200-dist"
+}

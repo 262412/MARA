@@ -1,3 +1,4 @@
+import html
 import logging
 import os
 
@@ -5,6 +6,8 @@ import markdown
 from fast_langdetect import detect
 
 from kotaemon.base import RetrievedDocument
+
+from .html_sanitizer import sanitize_html
 
 BASE_PATH = os.environ.get("GR_FILE_ROOT_PATH", "")
 logger = logging.getLogger(__name__)
@@ -41,12 +44,19 @@ class Render:
     """Default text rendering into HTML for the UI"""
 
     @staticmethod
+    def escape_text(value: object, *, quote: bool = True) -> str:
+        """Escape untrusted text for a fixed HTML template."""
+        return html.escape(str(value or ""), quote=quote)
+
+    @staticmethod
     def collapsible(header, content, open: bool = False) -> str:
         """Render an HTML friendly collapsible section"""
         o = " open" if open else ""
+        safe_header = sanitize_html(header)
+        safe_content = sanitize_html(content)
         return (
             f"<details class='evidence' {o}><summary>"
-            f"{header}</summary>{content}"
+            f"{safe_header}</summary>{safe_content}"
             "</details><br>"
         )
 
@@ -54,24 +64,27 @@ class Render:
     def table(text: str) -> str:
         """Render table from markdown format into HTML"""
         text = replace_mardown_header(text)
-        return markdown.markdown(
+        return sanitize_html(
+            markdown.markdown(
+                text,
+                extensions=[
+                    "markdown.extensions.tables",
+                    "markdown.extensions.fenced_code",
+                ],
+            )
+        )
+
+    @staticmethod
+    def table_preserve_linebreaks(text: str) -> str:
+        """Render table from markdown format into HTML"""
+        rendered = markdown.markdown(
             text,
             extensions=[
                 "markdown.extensions.tables",
                 "markdown.extensions.fenced_code",
             ],
         )
-
-    @staticmethod
-    def table_preserve_linebreaks(text: str) -> str:
-        """Render table from markdown format into HTML"""
-        return markdown.markdown(
-            text,
-            extensions=[
-                "markdown.extensions.tables",
-                "markdown.extensions.fenced_code",
-            ],
-        ).replace("\n", "<br>")
+        return sanitize_html(rendered).replace("\n", "<br>")
 
     @staticmethod
     def preview(
@@ -79,6 +92,7 @@ class Render:
         doc: RetrievedDocument,
         highlight_text: str | None = None,
     ) -> str:
+        html_content = sanitize_html(html_content)
         text = doc.content
         pdf_path = doc.metadata.get("file_path", "")
 
@@ -122,27 +136,30 @@ class Render:
         else:
             phrase = "true"
 
-        return f"""
+        preview = f"""
         {html_content}
-        <a href="#" class="pdf-link" data-src="{BASE_PATH}/file={pdf_path}" data-page="{page_idx}" data-search="{highlight_text}" data-phrase="{phrase}">
+        <a href="#" class="pdf-link" data-src="{html.escape(f'{BASE_PATH}/file={pdf_path}', quote=True)}" data-page="{page_idx}" data-search="{html.escape(str(highlight_text or ''), quote=True)}" data-phrase="{phrase}">
             [Preview]
         </a>
         """  # noqa
+        return sanitize_html(preview)
 
     @staticmethod
     def highlight(text: str, elem_id: str | None = None) -> str:
         """Highlight text"""
-        id_text = f" id='mark-{elem_id}'" if elem_id else ""
-        return f"<mark{id_text}>{text}</mark>"
+        id_text = (
+            f" id='mark-{html.escape(str(elem_id), quote=True)}'" if elem_id else ""
+        )
+        return sanitize_html(f"<mark{id_text}>{html.escape(str(text))}</mark>")
 
     @staticmethod
     def image(url: str, text: str = "") -> str:
         """Render an image"""
-        img = f'<img src="{url}"><br>'
+        img = f'<img src="{html.escape(str(url or ""), quote=True)}"><br>'
         if text:
-            caption = f"<p>{text}</p>"
-            return f"<figure>{img}{caption}</figure><br>"
-        return img
+            caption = f"<p>{html.escape(str(text))}</p>"
+            return sanitize_html(f"<figure>{img}{caption}</figure><br>")
+        return sanitize_html(img)
 
     @staticmethod
     def collapsible_with_header(
@@ -150,8 +167,9 @@ class Render:
         open_collapsible: bool = False,
     ) -> str:
         header = f"<i>{get_header(doc)}</i>"
-        if doc.metadata.get("type", "") == "image":
-            doc_content = Render.image(url=doc.metadata["image_origin"], text=doc.text)
+        image_source = doc.metadata.get("image_origin")
+        if doc.metadata.get("type", "") == "image" and image_source:
+            doc_content = Render.image(url=image_source, text=doc.text)
         elif doc.metadata.get("type", "") == "table_raw":
             doc_content = Render.table_preserve_linebreaks(doc.text)
         else:
@@ -216,9 +234,10 @@ class Render:
         )
 
         text = doc.text if not override_text else override_text
-        if doc.metadata.get("type", "") == "image":
+        image_source = doc.metadata.get("image_origin")
+        if doc.metadata.get("type", "") == "image" and image_source:
             rendered_doc_content = Render.image(
-                url=doc.metadata["image_origin"],
+                url=image_source,
                 text=text,
             )
         elif doc.metadata.get("type", "") == "table_raw":

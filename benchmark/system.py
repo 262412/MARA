@@ -13,7 +13,7 @@ from ktem.rerankings.manager import reranking_models_manager
 
 from kotaemon.base import Document, RetrievedDocument
 from kotaemon.embeddings import FastEmbedEmbeddings
-from kotaemon.indices import VectorIndexing, VectorRetrieval
+from kotaemon.indices import VectorRetrieval
 from kotaemon.indices.ingests.files import (
     KH_DEFAULT_FILE_EXTRACTORS,
     adobe_reader,
@@ -21,13 +21,18 @@ from kotaemon.indices.ingests.files import (
     docling_reader,
     unstructured,
 )
-from kotaemon.indices.parse_cache import load_data_with_parse_cache
 from kotaemon.indices.qa.format_context import PrepareEvidencePipeline
+from kotaemon.indices.reranker_execution_trace import stable_reranker_output
+from kotaemon.indices.retrieval_identity import (
+    deterministic_ranking_contract,
+    stable_scored_documents,
+)
 from kotaemon.indices.splitters import TokenSplitter
 from kotaemon.storages import InMemoryDocumentStore, InMemoryVectorStore
 
 from .benchmark_prompts import generation_prompt_for, retrieval_query_for
 from .evidence_metadata import _evidence_metadata
+from .generation_contract import benchmark_generation_config
 from .schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 
 TOKEN_RE = re.compile(r"[\w\u4e00-\u9fff]+", flags=re.UNICODE)
@@ -52,6 +57,26 @@ def _sum_cache_stats(items: list[dict[str, int]]) -> dict[str, int]:
         for key in total:
             total[key] += int(item.get(key, 0) or 0)
     return total
+
+
+def _retrieved_hit_report(
+    hit: RetrievedDocument,
+    *,
+    fallback_file_name: str,
+) -> dict[str, Any]:
+    return {
+        "doc_id": hit.doc_id,
+        "document_id": hit.metadata.get("file_id")
+        or hit.metadata.get("source_id")
+        or hit.metadata.get("file_name"),
+        "score": round(float(hit.score), 4) if hit.score is not None else None,
+        "page_label": hit.metadata.get("page_label"),
+        "element_id": hit.metadata.get("element_id"),
+        "element_type": hit.metadata.get("element_type") or hit.metadata.get("type"),
+        "file_name": hit.metadata.get("file_name", fallback_file_name),
+        "text": hit.text or "",
+        "text_preview": (hit.text or "")[:400],
+    }
 
 
 @dataclass(slots=True)
@@ -184,89 +209,9 @@ class KotaemonTextRAGSystem:
     def _build_index(self, document: BenchmarkDocument) -> ParsedIndex:
         if document.document_id in self._cache:
             return self._cache[document.document_id]
+        from .system_indexing import build_parsed_index
 
-        parse_start = time.perf_counter()
-        reader = self._get_reader(document.path)
-        loaded = load_data_with_parse_cache(
-            reader,
-            document.path,
-            extra_info={
-                "file_id": document.document_id,
-                "collection_name": "benchmark",
-            },
-            cache_dir=self._parse_cache_dir(),
-            reader_policy={
-                "benchmark_reader_mode": self.config.reader_mode,
-                "benchmark_cache_schema": 1,
-            },
-        )
-        parsed_docs = loaded.documents
-        parse_seconds = time.perf_counter() - parse_start
-
-        index_docs = self._split_docs(parsed_docs)
-        unique_pages = {
-            str(doc.metadata.get("page_label"))
-            for doc in parsed_docs
-            if doc.metadata.get("page_label") is not None
-        }
-        page_count = len(unique_pages) or 1
-        extracted_characters = sum(len(doc.text or "") for doc in parsed_docs)
-        non_text_count = sum(
-            1 for doc in parsed_docs if doc.metadata.get("type", "text") != "text"
-        )
-
-        doc_store = InMemoryDocumentStore()
-        vector_store = InMemoryVectorStore()
-
-        index_start = time.perf_counter()
-        embedding_cache_stats = _empty_cache_stats()
-        indexing_status = None
-        if self.embedding is not None:
-            embedding_cache_dir = self._embedding_cache_dir()
-            indexer = VectorIndexing(
-                vector_store=vector_store,
-                doc_store=doc_store,
-                embedding=self.embedding,
-                embedding_cache_dir=(
-                    str(embedding_cache_dir) if embedding_cache_dir else None
-                ),
-            )
-            indexer.add_to_docstore(index_docs)
-            if index_docs:
-                indexer.add_to_vectorstore(index_docs)
-            embedding_cache_stats = dict(indexer.last_embedding_cache_stats)
-            indexing_status = indexer.last_indexing_status
-        else:
-            doc_store.add(index_docs)
-            indexing_status = {
-                "status": "completed",
-                "stages": {
-                    "docstore_write": {
-                        "status": "completed",
-                        "count": len(index_docs),
-                    },
-                    "embed": {"status": "skipped", "count": 0},
-                    "vector_write": {"status": "skipped", "count": 0},
-                },
-            }
-        index_seconds = time.perf_counter() - index_start
-
-        parsed_index = ParsedIndex(
-            document=document,
-            parsed_documents=parsed_docs,
-            index_documents=index_docs,
-            page_count=page_count,
-            extracted_characters=extracted_characters,
-            non_text_count=non_text_count,
-            parse_seconds=parse_seconds,
-            index_seconds=index_seconds,
-            doc_store=doc_store,
-            vector_store=vector_store,
-            parse_cache_stats=dict(loaded.stats),
-            parse_cache_hit=loaded.cache_hit,
-            embedding_cache_stats=embedding_cache_stats,
-            indexing_status=indexing_status,
-        )
+        parsed_index = build_parsed_index(self, document)
         self._cache[document.document_id] = parsed_index
         return parsed_index
 
@@ -295,8 +240,7 @@ class KotaemonTextRAGSystem:
             score = overlap / max(len(query_set), 1)
             hits.append(RetrievedDocument(**doc.to_dict(), score=score))
 
-        hits.sort(key=lambda item: item.score, reverse=True)
-        return hits[:limit]
+        return stable_scored_documents(hits)[:limit]
 
     def _combine_hits(
         self,
@@ -304,6 +248,8 @@ class KotaemonTextRAGSystem:
         vector_hits: list[RetrievedDocument],
         lexical_hits: list[RetrievedDocument],
     ) -> list[RetrievedDocument]:
+        vector_hits = stable_scored_documents(vector_hits)
+        lexical_hits = stable_scored_documents(lexical_hits)
         if self.config.retrieval_mode == "vector":
             combined = vector_hits
         elif self.config.retrieval_mode == "text":
@@ -325,10 +271,14 @@ class KotaemonTextRAGSystem:
             for doc_id, hit in merged.items():
                 hit.score = scores[doc_id]
                 combined.append(hit)
-            combined.sort(key=lambda item: item.score, reverse=True)
+            combined = stable_scored_documents(combined)
 
         if self.reranker and combined:
             combined = self.reranker.run(combined, query=query)
+            combined, _score_field = stable_reranker_output(
+                combined,
+                self.reranker,
+            )
 
         return combined[: self.config.top_k]
 
@@ -377,6 +327,7 @@ class KotaemonTextRAGSystem:
                     "top_doc_ids": [
                         hit.doc_id for hit in lexical_hits[: self.config.top_k]
                     ],
+                    "deterministic_ranking": deterministic_ranking_contract(),
                 }
             )
 
@@ -390,6 +341,7 @@ class KotaemonTextRAGSystem:
                 "lexical_candidate_count": len(lexical_hits),
                 "returned_count": len(hits),
                 "top_doc_ids": [hit.doc_id for hit in hits],
+                "deterministic_ranking": deterministic_ranking_contract(),
             }
         )
         return hits, time.perf_counter() - start, trace
@@ -418,8 +370,10 @@ class KotaemonTextRAGSystem:
             context=evidence,
             dataset_name=self.config.suite_name,
         )
-        response = self.llm(prompt)
+        generation_contract = benchmark_generation_config()
+        response = self.llm(prompt, **generation_contract)
         answer = getattr(response, "text", "") or str(response)
+        evidence_metadata["generation_contract"] = generation_contract
         return answer.strip(), evidence, time.perf_counter() - start, evidence_metadata
 
     def run_example(
@@ -458,10 +412,7 @@ class KotaemonTextRAGSystem:
                 }
             )
             retrieval_trace.extend(trace)
-        retrieval_hits.sort(
-            key=lambda hit: float(hit.score) if hit.score is not None else 0.0,
-            reverse=True,
-        )
+        retrieval_hits = stable_scored_documents(retrieval_hits)
         retrieval_hits = retrieval_hits[: self.config.top_k]
         answer, evidence, generation_seconds, evidence_metadata = self._generate_answer(
             example, retrieval_hits
@@ -510,30 +461,24 @@ class KotaemonTextRAGSystem:
         return {
             "example_id": example.example_id,
             "document_id": example.document_id,
+            "document_ids": list(example.document_ids or [example.document_id]),
             "question": example.question,
             "gold_answers": example.answers,
             "gold_pages": example.evidence_pages,
             "gold_sources": example.evidence_sources,
+            "gold_source_ids": example.gold_source_ids,
+            "gold_evidence_texts": example.gold_evidence_texts,
+            "gold_evidence": example.gold_evidence,
+            "gold_evidence_records": example.gold_evidence_records,
             "predicted_answer": answer,
             "predicted_pages": predicted_pages,
             "predicted_sources": predicted_sources,
             "predicted_element_ids": predicted_element_ids,
             "retrieved_hits": [
-                {
-                    "doc_id": hit.doc_id,
-                    "document_id": hit.metadata.get("file_id")
-                    or hit.metadata.get("source_id")
-                    or hit.metadata.get("file_name"),
-                    "score": (
-                        round(float(hit.score), 4) if hit.score is not None else None
-                    ),
-                    "page_label": hit.metadata.get("page_label"),
-                    "element_id": hit.metadata.get("element_id"),
-                    "element_type": hit.metadata.get("element_type")
-                    or hit.metadata.get("type"),
-                    "file_name": hit.metadata.get("file_name", documents[0].path.name),
-                    "text_preview": (hit.text or "")[:400],
-                }
+                _retrieved_hit_report(
+                    hit,
+                    fallback_file_name=documents[0].path.name,
+                )
                 for hit in retrieval_hits
             ],
             "retrieval_trace": retrieval_trace,

@@ -1,6 +1,12 @@
 from types import SimpleNamespace
 
-from kotaemon.indices.qa.citation import CitationPipeline
+import pytest
+
+from kotaemon.indices.qa.citation import (
+    CitationPipeline,
+    CitationToolCallConfigurationError,
+)
+from kotaemon.llms import ChatLLM
 
 
 def test_citation_pipeline_disables_deepseek_v4_thinking_for_forced_tool_choice():
@@ -31,3 +37,20 @@ def test_citation_pipeline_keeps_standard_tool_params_for_other_openai_models():
 
     assert llm_kwargs["tool_choice"] == "required"
     assert "extra_body" not in llm_kwargs
+
+
+def test_citation_pipeline_surfaces_tool_call_configuration_errors():
+    class ToolCallBadRequest(Exception):
+        status_code = 400
+
+    class MisconfiguredLLM(ChatLLM):
+        def invoke(self, _messages, **_kwargs):
+            raise ToolCallBadRequest(
+                'tool_choice="required" requires --tool-call-parser to be set'
+            )
+
+    with pytest.raises(CitationToolCallConfigurationError):
+        CitationPipeline(llm=MisconfiguredLLM()).invoke(
+            "Alpha evidence.",
+            "What evidence is available?",
+        )

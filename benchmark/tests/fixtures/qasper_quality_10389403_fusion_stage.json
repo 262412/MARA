@@ -1,0 +1,30 @@
+{
+  "contract_id": "qasper_quality_10389403_fusion_stage_characterization.v1",
+  "source": {
+    "job_id": "10389403",
+    "sha": "0ed2ad85ddb4b54a91485b0e84519f20ab7dddfc",
+    "predictions": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_quality_0ed2ad85ddb4b54a91485b0e84519f20ab7dddfc_20260831/quality/debug/qasper/20260831_080532_focused-0ed2ad8-qasper-semantic-quality-10389403/predictions.jsonl",
+    "semantic_debug_traces": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_quality_0ed2ad85ddb4b54a91485b0e84519f20ab7dddfc_20260831/quality/debug/qasper/20260831_080532_focused-0ed2ad8-qasper-semantic-quality-10389403/semantic_debug_traces.jsonl",
+    "observed_candidate_stage": "post_fusion"
+  },
+  "rows": [
+    {"example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65", "route": "text_rag", "canonical_count": 8, "ranked_count": 8, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e", "route": "text_rag", "canonical_count": 8, "ranked_count": 8, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": false, "terminal_outcome": "safe_abstention"},
+    {"example_id": "f2155dc4aeab86bf31a838c8ff388c85440fce6e", "route": "text_rag", "canonical_count": 6, "ranked_count": 6, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "7cd22ca9e107d2b13a7cc94252aaa9007976b338", "route": "text_rag", "canonical_count": 9, "ranked_count": 9, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": false, "terminal_outcome": "execution_failed"},
+    {"example_id": "25c1c4a91f5dedd4e06d14121af3b5921db125e9", "route": "text_rag", "canonical_count": 4, "ranked_count": 4, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "e97186c51d4af490dba6faaf833d269c8256426c", "route": "text_rag", "canonical_count": 13, "ranked_count": 13, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65", "route": "controller_auto", "canonical_count": 11, "ranked_count": 11, "fused_count": 11, "hybrid_trace": true, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e", "route": "controller_auto", "canonical_count": 8, "ranked_count": 8, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": false, "terminal_outcome": "safe_abstention"},
+    {"example_id": "f2155dc4aeab86bf31a838c8ff388c85440fce6e", "route": "controller_auto", "canonical_count": 7, "ranked_count": 7, "fused_count": 7, "hybrid_trace": true, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "7cd22ca9e107d2b13a7cc94252aaa9007976b338", "route": "controller_auto", "canonical_count": 9, "ranked_count": 9, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": false, "terminal_outcome": "execution_failed"},
+    {"example_id": "25c1c4a91f5dedd4e06d14121af3b5921db125e9", "route": "controller_auto", "canonical_count": 8, "ranked_count": 8, "fused_count": 8, "hybrid_trace": true, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "e97186c51d4af490dba6faaf833d269c8256426c", "route": "controller_auto", "canonical_count": 16, "ranked_count": 16, "fused_count": 16, "hybrid_trace": true, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65", "route": "crag_guarded", "canonical_count": 9, "ranked_count": 9, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "6568a31241167f618ef5ede939053feaa2fb0d7e", "route": "crag_guarded", "canonical_count": 8, "ranked_count": 8, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": false, "terminal_outcome": "safe_abstention"},
+    {"example_id": "f2155dc4aeab86bf31a838c8ff388c85440fce6e", "route": "crag_guarded", "canonical_count": 6, "ranked_count": 6, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "7cd22ca9e107d2b13a7cc94252aaa9007976b338", "route": "crag_guarded", "canonical_count": 9, "ranked_count": 9, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": false, "terminal_outcome": "execution_failed"},
+    {"example_id": "25c1c4a91f5dedd4e06d14121af3b5921db125e9", "route": "crag_guarded", "canonical_count": 4, "ranked_count": 4, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"},
+    {"example_id": "e97186c51d4af490dba6faaf833d269c8256426c", "route": "crag_guarded", "canonical_count": 13, "ranked_count": 13, "fused_count": 0, "hybrid_trace": false, "expected_ambiguity_safe_abstention": true, "terminal_outcome": "safe_abstention"}
+  ]
+}

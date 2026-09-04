@@ -1,4 +1,4 @@
 from sqlmodel import create_engine
 from theflow.settings import settings
 
-engine = create_engine(settings.KH_DATABASE)
+engine = create_engine(settings.KH_DATABASE, hide_parameters=True)

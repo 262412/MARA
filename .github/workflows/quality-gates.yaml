@@ -1,0 +1,505 @@
+name: Quality gates
+
+"on":
+  workflow_call:
+    inputs:
+      base_ref:
+        description: Trusted comparison base for release and manual callers
+        required: false
+        type: string
+  pull_request:
+    branches: [main, Dev]
+  push:
+    branches: [main, Dev]
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Trusted comparison base (defaults to the default branch)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MARA_PYTEST_RUNTIME_PARENT: /tmp/mara-pytest
+  UV_CACHE_DIR: /tmp/mara-uv-cache
+  PRE_COMMIT_HOME: /tmp/mara-pre-commit
+
+jobs:
+  static:
+    name: Static, hygiene, and baseline ratchet
+    runs-on: ubuntu-24.04
+    env:
+      MARA_BASE_REF: ${{ inputs.base_ref || github.event.pull_request.base.sha || (github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || format('origin/{0}', github.event.repository.default_branch) }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+          enable-cache: true
+      - name: Sync locked development environment
+        run: uv sync --frozen --python 3.10
+      - name: Validate lock and repository hooks
+        run: |
+          uv lock --check
+          uv lock --project docker --check --python 3.10
+          uv run python scripts/sync_locked_constraints.py --check
+          uv run python scripts/check_container_lock_parity.py
+          uv run pre-commit run --show-diff-on-failure --all-files
+      - name: Enforce static and hygiene checks
+        run: |
+          uv run ruff check . --exclude '*.pyi' --exclude .playwright-cli --exclude .superpowers
+          uv run python scripts/check_codebase_hygiene.py
+          uv run python scripts/check_hygiene_baseline.py
+          uv run python scripts/check_supply_chain_policy.py
+
+  dependency-audit:
+    name: Dependency audit ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    env:
+      UV_PYTHON_DOWNLOADS: never
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - label: root-py310
+            project: .
+            python-version: "3.10"
+          - label: root-py311
+            project: .
+            python-version: "3.11"
+          - label: container-py310
+            project: docker
+            python-version: "3.10"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Fail on known Python dependency vulnerabilities
+        run: |
+          python scripts/check_dependency_audit.py \
+            --profile "${{ matrix.label }}" \
+            --project "${{ matrix.project }}" \
+            --python-version "${{ matrix.python-version }}" \
+            --python-platform x86_64-unknown-linux-gnu
+
+  collection:
+    name: Unified pytest collection
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Sync locked environment
+        run: uv sync --frozen --python 3.10
+      - name: Collect the unified repository suite
+        run: uv run python scripts/check_pytest_collection.py --minimum 1260
+
+  secret-scan:
+    name: Repository and image secret scans
+    uses: ./.github/workflows/secret-scan.yaml
+
+  kotaemon:
+    name: kotaemon Python ${{ matrix.python-version }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+          enable-cache: true
+      - name: Sync locked environment
+        run: uv sync --frozen --python ${{ matrix.python-version }}
+      - name: Install document test utilities
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils tesseract-ocr
+      - name: Run kotaemon tests
+        run: uv run --python ${{ matrix.python-version }} pytest -q libs/kotaemon
+
+  ktem:
+    name: ktem isolated runtime
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Sync locked environment
+        run: uv sync --frozen --python 3.10
+      - name: Run ktem tests
+        run: uv run pytest -q libs/ktem/ktem_tests
+
+  slide-cli:
+    name: slide_cli
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Sync locked environment
+        run: uv sync --frozen --python 3.10
+      - name: Run slide_cli tests
+        run: uv run pytest -q libs/slide_cli
+
+  benchmark-root:
+    name: Benchmark and root contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Sync locked environment
+        run: uv sync --all-packages --frozen --python 3.10
+      - name: Run benchmark and root tests
+        run: uv run pytest -q benchmark/tests tests
+
+  frontend-browser:
+    name: Frontend and browser security
+    runs-on: ubuntu-24.04
+    env:
+      KH_APP_DATA_DIR: /tmp/mara-browser/ktem_app_data
+      XDG_CACHE_HOME: /tmp/mara-browser/cache
+      XDG_CONFIG_HOME: /tmp/mara-browser/config
+      XDG_DATA_HOME: /tmp/mara-browser/data
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Sync locked environment
+        run: uv sync --frozen --python 3.10
+      - name: Install locked Node dependencies
+        run: npm ci --ignore-scripts
+      - name: Run 19 frontend tests
+        run: node --test libs/ktem/ktem/assets/js/*.test.js
+      - name: Install locked Chromium runtime
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Run malicious-content browser smoke
+        run: ./node_modules/.bin/playwright test --config tests/browser/playwright.config.mjs
+
+  coverage:
+    name: Coverage floors and production diff
+    runs-on: ubuntu-24.04
+    env:
+      MARA_BASE_REF: ${{ inputs.base_ref || github.event.pull_request.base.sha || (github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || format('origin/{0}', github.event.repository.default_branch) }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Sync locked environment
+        run: uv sync --all-packages --frozen --python 3.10
+      - name: Run package coverage floors
+        run: uv run python scripts/run_coverage_gates.py --output-dir coverage-artifacts
+      - name: Enforce production diff coverage
+        run: |
+          uv run python scripts/check_diff_coverage.py \
+            --coverage-json coverage-artifacts/coverage.json \
+            --minimum 90
+      - name: Upload coverage evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-evidence
+          path: coverage-artifacts/
+          if-no-files-found: error
+
+  wheel-smoke:
+    name: Four clean wheel installations
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Sync locked environment
+        run: uv sync --frozen --python 3.10
+      - name: Build and check four distributions
+        run: |
+          uv run python scripts/publish_packages.py check \
+            --rebuild --outdir dist/quality-gates
+      - name: Install wheels in a clean environment
+        run: |
+          uv run python scripts/run_clean_wheel_smoke.py \
+            --dist-root dist/quality-gates
+
+  container-supply-chain:
+    name: Container ${{ matrix.target }} supply chain
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [lite, full, ollama]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        with:
+          version: v0.34.1
+          driver-opts: image=moby/buildkit:v0.30.0@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
+      - name: Build immutable OCI target with attestations
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: false
+          outputs: type=oci,dest=/tmp/mara-${{ matrix.target }}.oci.tar
+          tags: mara-quality:${{ matrix.target }}-${{ github.sha }}
+          sbom: true
+          provenance: mode=max
+          no-cache: true
+      - name: Validate and retain BuildKit provenance
+        env:
+          BUILD_METADATA: ${{ steps.build.outputs.metadata }}
+        run: |
+          python scripts/generate_container_attestation.py \
+            --target "${{ matrix.target }}" \
+            --output-dir container-evidence
+      - name: Load and smoke the actual built runtime
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends skopeo
+          skopeo copy \
+            --override-os linux \
+            --override-arch amd64 \
+            oci-archive:/tmp/mara-${{ matrix.target }}.oci.tar \
+            docker-daemon:mara-quality:${{ matrix.target }}-${{ github.sha }}
+          MARA_SECRET_DIR="$(mktemp -d)"
+          MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
+          trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
+          install -m 0600 /dev/null "$MARA_SECRET_FILE"
+          python -c 'import base64, os; print("Aa1!" + base64.urlsafe_b64encode(os.urandom(32)).decode())' >"$MARA_SECRET_FILE"
+          chmod 0444 "$MARA_SECRET_FILE"
+          python scripts/smoke_container_runtime.py \
+            --image mara-quality:${{ matrix.target }}-${{ github.sha }} \
+            --target "${{ matrix.target }}" \
+            --secret-file "$MARA_SECRET_FILE"
+      - name: Scan fixable high and critical image findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mara-quality:${{ matrix.target }}-${{ github.sha }}
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: json
+          output: container-evidence/${{ matrix.target }}.trivy.json
+          hide-progress: true
+          timeout: 15m
+      - name: Enforce frozen container vulnerability baseline
+        run: |
+          python scripts/check_container_vulnerability_baseline.py \
+            --target "${{ matrix.target }}" \
+            --report container-evidence/${{ matrix.target }}.trivy.json \
+            --baseline scripts/container_vulnerability_baseline.json
+      - name: Generate SPDX image SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mara-quality:${{ matrix.target }}-${{ github.sha }}
+          scanners: vuln
+          format: spdx-json
+          output: container-evidence/${{ matrix.target }}.spdx.json
+          hide-progress: true
+          timeout: 15m
+      - name: Generate CycloneDX image SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mara-quality:${{ matrix.target }}-${{ github.sha }}
+          scanners: vuln
+          format: cyclonedx
+          output: container-evidence/${{ matrix.target }}.cdx.json
+          hide-progress: true
+          timeout: 15m
+      - name: Upload container evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: container-supply-chain-${{ matrix.target }}
+          path: container-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  python-supply-chain:
+    name: Python distribution supply chain
+    runs-on: ubuntu-24.04
+    env:
+      REQUIRED_DISTRIBUTIONS: ktem,kotaemon,mara-research-cli,mara-app
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.10"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
+      - name: Sync locked build environment
+        run: uv sync --frozen --python 3.10
+      - name: Build and validate all four distributions
+        run: |
+          uv run python scripts/publish_packages.py check \
+            --rebuild --outdir dist/supply-chain
+      - name: Generate distribution SBOM and provenance
+        run: |
+          uv run python scripts/generate_distribution_attestations.py \
+            --dist-root dist/supply-chain \
+            --output-dir distribution-evidence \
+            --commit "$GITHUB_SHA" \
+            --builder-id "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          uv run python scripts/generate_distribution_attestations.py \
+            --dist-root dist/supply-chain \
+            --output-dir distribution-evidence \
+            --verify
+      - name: Upload distribution evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: python-distribution-supply-chain
+          path: |
+            dist/supply-chain/
+            distribution-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  required:
+    name: Required quality gates
+    if: ${{ always() }}
+    needs:
+      - static
+      - dependency-audit
+      - collection
+      - secret-scan
+      - kotaemon
+      - ktem
+      - slide-cli
+      - benchmark-root
+      - frontend-browser
+      - coverage
+      - wheel-smoke
+      - container-supply-chain
+      - python-supply-chain
+    runs-on: ubuntu-24.04
+    env:
+      STATIC_RESULT: ${{ needs.static.result }}
+      DEPENDENCY_AUDIT_RESULT: ${{ needs['dependency-audit'].result }}
+      COLLECTION_RESULT: ${{ needs.collection.result }}
+      SECRET_SCAN_RESULT: ${{ needs['secret-scan'].result }}
+      KOTAEMON_RESULT: ${{ needs.kotaemon.result }}
+      KTEM_RESULT: ${{ needs.ktem.result }}
+      SLIDE_RESULT: ${{ needs['slide-cli'].result }}
+      BENCHMARK_RESULT: ${{ needs['benchmark-root'].result }}
+      FRONTEND_RESULT: ${{ needs['frontend-browser'].result }}
+      COVERAGE_RESULT: ${{ needs.coverage.result }}
+      WHEEL_RESULT: ${{ needs['wheel-smoke'].result }}
+      CONTAINER_RESULT: ${{ needs['container-supply-chain'].result }}
+      PYTHON_SUPPLY_RESULT: ${{ needs['python-supply-chain'].result }}
+    steps:
+      - name: Require every gate to succeed
+        run: |
+          for result in \
+            "$STATIC_RESULT" "$DEPENDENCY_AUDIT_RESULT" "$COLLECTION_RESULT" "$SECRET_SCAN_RESULT" \
+            "$KOTAEMON_RESULT" "$KTEM_RESULT" "$SLIDE_RESULT" \
+            "$BENCHMARK_RESULT" "$FRONTEND_RESULT" "$COVERAGE_RESULT" "$WHEEL_RESULT" \
+            "$CONTAINER_RESULT" "$PYTHON_SUPPLY_RESULT"
+          do
+            test "$result" = success
+          done

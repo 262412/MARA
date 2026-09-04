@@ -46,6 +46,14 @@ def build_mara_evidence_metadata(
         "evidence_ids": evidence_ids,
         "evidence": evidence,
     }
+    reranker_traces = [
+        dict(trace) for doc in docs for trace in _document_reranker_traces(doc)
+    ]
+    if reranker_traces:
+        reranker_traces = _unique_reranker_traces(reranker_traces)
+        metadata["reranker_execution_traces"] = reranker_traces
+        metadata["reranker_execution_trace"] = reranker_traces[-1]
+        metadata["reranker_backend"] = str(reranker_traces[-1].get("backend") or "")
     _add_multimodal_index_records(
         metadata,
         docs,
@@ -54,24 +62,53 @@ def build_mara_evidence_metadata(
     return metadata
 
 
+def _document_reranker_traces(doc: RetrievedDocument) -> list[dict[str, Any]]:
+    metadata = dict(getattr(doc, "metadata", {}) or {})
+    traces = metadata.get("reranker_execution_traces")
+    if isinstance(traces, list):
+        return [dict(trace) for trace in traces if isinstance(trace, dict)]
+    trace = metadata.get("reranker_execution_trace")
+    return [dict(trace)] if isinstance(trace, dict) else []
+
+
+def _unique_reranker_traces(
+    traces: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for trace in traces:
+        key = repr(sorted(trace.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(trace)
+    return output
+
+
 def _evidence_item(doc: RetrievedDocument) -> dict[str, Any]:
     metadata = _merged_doc_metadata(doc)
     file_id = str(metadata.get("file_id") or "").strip()
     file_name = str(metadata.get("file_name") or "").strip()
+    evidence_id = str(getattr(doc, "doc_id", "") or "").strip()
+    page_label = str(metadata.get("page_label") or "").strip()
+    element_type = str(
+        metadata.get("element_type")
+        or metadata.get("type")
+        or metadata.get("modality")
+        or "text"
+    )
+    element_id = str(metadata.get("element_id") or "").strip()
+    if not element_id and element_type == "text" and page_label:
+        element_id = evidence_id
     return {
-        "evidence_id": str(getattr(doc, "doc_id", "") or "").strip(),
+        "evidence_id": evidence_id,
         "file_id": file_id,
         "source_id": file_id,
         "file_name": file_name,
         "source_name": file_name,
-        "page_label": str(metadata.get("page_label") or "").strip(),
-        "element_type": str(
-            metadata.get("element_type")
-            or metadata.get("type")
-            or metadata.get("modality")
-            or "text"
-        ),
-        "element_id": str(metadata.get("element_id") or "").strip(),
+        "page_label": page_label,
+        "element_type": element_type,
+        "element_id": element_id,
         "bbox": metadata.get("bbox"),
         "caption": str(metadata.get("caption") or "").strip(),
         "text": str(getattr(doc, "text", "") or getattr(doc, "content", "") or ""),

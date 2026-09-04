@@ -1,0 +1,43 @@
+{
+  "contract_id": "qasper_stage8_model_response_characterization.v1",
+  "source": {
+    "artifact": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_trace_canary_0ef20e45_20260830/quality/debug/qasper/20260830_225837_qasper-trace-canary-0ef20e4-10388470/predictions.jsonl",
+    "example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65",
+    "job_id": "10388470",
+    "route": "text_rag",
+    "sha": "0ef20e45f18bb580541cf3e53ec4d7548210bbe3"
+  },
+  "online_candidate_response": {
+    "actual_input_token_count": 3319,
+    "cleaned_response": "{\n\n\n    \"candidate\": \"yes\"\n}",
+    "completion_tokens": 10,
+    "finish_reason": "stop",
+    "output_digest": "c4bb9b1b4017596e162facd2a9ad340e4f4b6b28553d7c9b3785d69660f9950a",
+    "raw_response": "{\n\n\n    \"candidate\": \"yes\"\n}",
+    "raw_response_digest": "49ee055255d2866e25ef3b503cc43b9f5055b5e2ff67f518c443c45b393f5148",
+    "raw_response_truncated": false,
+    "status": "parsed",
+    "typed_candidate": "yes",
+    "typed_candidate_digest": "6c76a9331e7f5ff9db2754d119a61395717be0c0877d0d8bd462197dff961e4c"
+  },
+  "online_verifier_stop": {
+    "audit_reason": "release_conclusion_auditor_not_independent",
+    "audit_status": "not_started",
+    "candidate_verification_status": "pre_audit_failed",
+    "proposal_transaction": {},
+    "reason": "release_conclusion_auditor_not_independent",
+    "status": "failed"
+  },
+  "observed_stage8_failure": {
+    "local_incompleteness_reasons": [
+      "candidate_raw_response_missing",
+      "proposal_attempt_missing"
+    ],
+    "reference_incompleteness_reasons": [
+      "proposal_attempt_missing"
+    ],
+    "stage": "model_response_and_parser",
+    "stage_index": 8
+  },
+  "root_cause": "replay_dropped_the_frozen_candidate_response_and_trace_required_a_proposal_after_a_typed_pre_audit_stop"
+}

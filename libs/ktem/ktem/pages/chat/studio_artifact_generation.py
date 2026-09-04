@@ -72,7 +72,7 @@ def run_studio_artifact_turn(
         raise ValueError(f"Unknown Studio artifact type '{normalized_type}'.")
 
     selected_note_ids = _split_note_ids(note_ids)
-    note_records = _notebook_note_records(conversation_id, selected_note_ids)
+    note_records = _notebook_note_records(conversation_id, selected_note_ids, user_id)
     request = build_web_docqa_request(
         prompt=build_studio_artifact_prompt(
             normalized_type,
@@ -236,12 +236,16 @@ def _split_note_ids(value: Any) -> list[str]:
 def _notebook_note_records(
     conversation_id: str,
     note_ids: list[str],
+    user_id: Any,
 ) -> list[dict[str, Any]]:
     if not note_ids:
         return []
     from ktem.docqa import _runtime_notebook as notebook_service
 
-    notebook = notebook_service.get_notebook(str(conversation_id or "").strip())
+    notebook = notebook_service.get_notebook(
+        str(conversation_id or "").strip(),
+        user_id=user_id,
+    )
     notes = [item for item in notebook.get("notes", []) if isinstance(item, dict)]
     by_id = {str(item.get("note_id") or ""): item for item in notes}
     missing = [note_id for note_id in note_ids if note_id not in by_id]

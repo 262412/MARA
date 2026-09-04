@@ -203,6 +203,8 @@ def test_local_qwen3_vl_generator_calls_openai_compatible_endpoint(monkeypatch):
     assert generator.generate(request, bundle) == "The chart shows revenue growth."
     assert captured["model"] == "Qwen/Qwen3-VL-8B-Instruct"
     assert captured["temperature"] == 0
+    assert captured["top_p"] == 1
+    assert captured["seed"] == 20260724
     content = captured["messages"][0]["content"]
     assert content[0]["type"] == "text"
     assert "What does the chart show?" in content[0]["text"]

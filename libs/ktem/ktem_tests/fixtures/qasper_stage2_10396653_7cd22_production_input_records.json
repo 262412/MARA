@@ -1,0 +1,1247 @@
+{
+  "contract_id": "qasper_stage2_production_input_characterization.v1",
+  "source": {
+    "job_id": "10396653",
+    "code_sha": "1eb19b866cfdf130ae03939d4ef1f9f67ea3f2fe",
+    "artifact_contract_id": "qasper_retrieval_index_artifact.v1",
+    "artifact_digest": "84a904ced2b37ca365cbb58ff1e67ad6284e5650d50491c2b57e0f1a947a0140",
+    "serializer_identity": "canonical_json_utf8_v1",
+    "example_id": "7cd22ca9e107d2b13a7cc94252aaa9007976b338",
+    "route": "text_rag"
+  },
+  "question": "Do they inspect their model to see if their model learned to associate image parts with words related to entities?",
+  "digests": {
+    "raw_retrieval": "b82eaf1003664d5bb0da82a264df6c73c6d88376dd5f07b1dff53403211edb18",
+    "ranking": "cda500b3c637031a99774e90f24a9a58df3b7760ba2d5366cb939e1cf3bfd7d1",
+    "stage2_comparison": "c3d83a65336fb102de91ef5b1a2a1617b99f15aa01607a6e521f650b1e7d54f3",
+    "stage2_payload": "c93c6d1b141f46c3be701335ec33d78021fb0b9d4ec42b4d7ab606177ed6e89c",
+    "production_input_records": "f63a7fe09e1254e1e164180896d9dbaba3086396a86e977bf9dc16613cafb89d"
+  },
+  "production_input_record_count": 8,
+  "production_input_records": [
+    {
+      "bbox": null,
+      "block_id": null,
+      "canonical_id": "evidence:7642b03f-823e-4bbd-bc1a-16334b3b92ee:stable-chunk%3A3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+      "caption": "",
+      "cell_id": "",
+      "chunk_end": null,
+      "chunk_start": null,
+      "column_index": null,
+      "column_label": null,
+      "continuation_id": "",
+      "currency": null,
+      "duplicate_evidence_ids": [],
+      "element_id": "",
+      "evidence_id": "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+      "evidence_level": "page",
+      "financial_scope": null,
+      "identity": {
+        "kind": "evidence",
+        "local_id": "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+        "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee"
+      },
+      "metadata": {
+        "_sparse_retrieval_score": 9.095391273498535,
+        "collection_name": "default",
+        "creation_date": "2026-08-10",
+        "file_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "file_name": "1802_07862.txt",
+        "file_path": "/mnt/scratch/users/tbczhang/outputs/MARA/revalidation_20260810_formal_b7cda0b/manifests/documents/1802_07862.txt",
+        "file_size": 26878,
+        "file_type": "text/plain",
+        "last_modified_date": "2026-08-10",
+        "reranker_backend": "TeiFastReranking",
+        "reranker_execution_trace": {
+          "backend": "TeiFastReranking",
+          "configured": true,
+          "executed": true,
+          "failure_reason": "",
+          "input_count": 9,
+          "input_identities": [
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30"
+          ],
+          "loaded": true,
+          "model": "TeiFastReranking",
+          "output_count": 9,
+          "output_identities": [
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b"
+          ],
+          "score_field": "reranking_score"
+        },
+        "reranker_input_identity": "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+        "reranker_model": "TeiFastReranking",
+        "reranker_rank": 7,
+        "reranker_score": 0.0010775025886693322,
+        "reranking_score": 0.0010775025886693322
+      },
+      "modality": "text",
+      "neighbor_element_ids": [],
+      "normalized_text_hash": "1136252ebeb401adc8e29de4aadc8df58aeb1b8cd0c2351c318e3f7993f75cd5",
+      "ocr_text": "",
+      "page_label": "",
+      "parent_element_id": "",
+      "period": null,
+      "period_kind": null,
+      "representations": [
+        {
+          "field": "text",
+          "modality": "text",
+          "text": "# Multimodal Named Entity Recognition for Short Social Media Posts\n\nWe introduce a new task called Multimodal Named Entity Recognition (MNER) for noisy user-generated data such as tweets or Snapchat captions, which comprise short text with accompanying images. These social media posts often come in inconsistent or incomplete syntax and lexical notations with very limited surrounding textual contexts, bringing significant challenges for NER. To this end, we create a new dataset for MNER called SnapCaptions (Snapchat image-caption pairs submitted to public and crowd-sourced stories with fully annotated named entities). We then build upon the state-of-the-art Bi-LSTM word/character based NER models with 1) a deep image network which incorporates relevant visual context to augment textual information, and 2) a generic modality-attention module which learns to attenuate irrelevant modalities while amplifying the most informative ones to extract contexts from, adaptive to each sample and token. The proposed MNER model with modality attention significantly outperforms the state-of-the-art text-only NER models by successfully leveraging provided visual contexts, opening up potential applications of MNER on myriads of social media platforms.\n\n## Introduction\n\nSocial media with abundant user-generated posts provide a rich platform for understanding events, opinions and preferences of groups and individuals. These insights are primarily hidden in unstructured forms of social media posts, such as in free-form text or images without tags. Named entity recognition (NER), the task of recognizing named entities from free-form text, is thus a critical step for building structural information, allowing for its use in personalized assistance, recommendations, advertisement, etc.\n\nWhile many previous approaches BIBREF0 , BIBREF1 , BIBREF2 , BIBREF3 on NER have shown success for well-formed text in recognizing named entities via word context resolution (e.g. LSTM with word embeddings) combined with character-level features (e.g. CharLSTM/CNN), several additional challenges remain for recognizing named entities from extremely short and coarse text found in social media posts. For instance, short social media posts often do not provide enough textual contexts to resolve polysemous entities (e.g. “monopoly is da best \", where `monopoly' may refer to a board game (named entity) or a term in economics). In addition, noisy text includes a huge number of unknown tokens due to inconsistent lexical notations and frequent mentions of various newly trending entities (e.g. “xoxo Marshmelloooo \", where `Marshmelloooo' is a mis-spelling of a known entity `Marshmello', a music producer), making word embeddings based neural networks NER models vulnerable.\n\nTo address the challenges above for social media posts, we build upon the state-of-the-art neural architecture for NER with the following two novel approaches (Figure FIGREF1 ). First, we propose to leverage auxiliary modalities for additional context resolution of entities. For example, many popular social media platforms now provide ways to compose a post in multiple modalities - specifically image and text (e.g. Snapchat captions, Twitter posts with image URLs), from which we can obtain additional context for understanding posts. While “monopoly\" in the previous example is ambiguous in its textual form, an accompanying snap image of a board game can help disambiguate among polysemous entities, thereby correctly recognizing it as a named entity."
+        }
+      ],
+      "reranker_observations": [
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+          "model": "TeiFastReranking",
+          "query_id": "round1:primary",
+          "rank": 7,
+          "round_id": 1,
+          "score": 0.0010775025886693322,
+          "slot_id": ""
+        },
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+          "model": "TeiFastReranking",
+          "query_id": "round2:support:boolean_proposition",
+          "rank": 8,
+          "round_id": 2,
+          "score": 0.0010775025886693322,
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "retrieval_lineage": [
+        {
+          "query_id": "round1:primary",
+          "raw_rank": 7,
+          "raw_score": 0.0010775025886693322,
+          "retriever_name": "text",
+          "round_id": 1,
+          "score_type": "score",
+          "slot_id": ""
+        },
+        {
+          "query_id": "round2:support:boolean_proposition",
+          "raw_rank": 8,
+          "raw_score": 0.000788545769594649,
+          "retriever_name": "text",
+          "round_id": 2,
+          "score_type": "score",
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "row_index": null,
+      "row_label": null,
+      "scale": null,
+      "section_id": "",
+      "source_aliases": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "1802_07862.txt",
+        "1802_07862"
+      ],
+      "source_backrefs": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee#source"
+      ],
+      "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+      "source_name": "1802_07862.txt",
+      "span_id": "",
+      "statement_kind": null,
+      "table_group_id": null,
+      "table_id": "",
+      "table_instance_id": null,
+      "text": "# Multimodal Named Entity Recognition for Short Social Media Posts\n\nWe introduce a new task called Multimodal Named Entity Recognition (MNER) for noisy user-generated data such as tweets or Snapchat captions, which comprise short text with accompanying images. These social media posts often come in inconsistent or incomplete syntax and lexical notations with very limited surrounding textual contexts, bringing significant challenges for NER. To this end, we create a new dataset for MNER called SnapCaptions (Snapchat image-caption pairs submitted to public and crowd-sourced stories with fully annotated named entities). We then build upon the state-of-the-art Bi-LSTM word/character based NER models with 1) a deep image network which incorporates relevant visual context to augment textual information, and 2) a generic modality-attention module which learns to attenuate irrelevant modalities while amplifying the most informative ones to extract contexts from, adaptive to each sample and token. The proposed MNER model with modality attention significantly outperforms the state-of-the-art text-only NER models by successfully leveraging provided visual contexts, opening up potential applications of MNER on myriads of social media platforms.\n\n## Introduction\n\nSocial media with abundant user-generated posts provide a rich platform for understanding events, opinions and preferences of groups and individuals. These insights are primarily hidden in unstructured forms of social media posts, such as in free-form text or images without tags. Named entity recognition (NER), the task of recognizing named entities from free-form text, is thus a critical step for building structural information, allowing for its use in personalized assistance, recommendations, advertisement, etc.\n\nWhile many previous approaches BIBREF0 , BIBREF1 , BIBREF2 , BIBREF3 on NER have shown success for well-formed text in recognizing named entities via word context resolution (e.g. LSTM with word embeddings) combined with character-level features (e.g. CharLSTM/CNN), several additional challenges remain for recognizing named entities from extremely short and coarse text found in social media posts. For instance, short social media posts often do not provide enough textual contexts to resolve polysemous entities (e.g. “monopoly is da best \", where `monopoly' may refer to a board game (named entity) or a term in economics). In addition, noisy text includes a huge number of unknown tokens due to inconsistent lexical notations and frequent mentions of various newly trending entities (e.g. “xoxo Marshmelloooo \", where `Marshmelloooo' is a mis-spelling of a known entity `Marshmello', a music producer), making word embeddings based neural networks NER models vulnerable.\n\nTo address the challenges above for social media posts, we build upon the state-of-the-art neural architecture for NER with the following two novel approaches (Figure FIGREF1 ). First, we propose to leverage auxiliary modalities for additional context resolution of entities. For example, many popular social media platforms now provide ways to compose a post in multiple modalities - specifically image and text (e.g. Snapchat captions, Twitter posts with image URLs), from which we can obtain additional context for understanding posts. While “monopoly\" in the previous example is ambiguous in its textual form, an accompanying snap image of a board game can help disambiguate among polysemous entities, thereby correctly recognizing it as a named entity.",
+      "unit": null,
+      "value": null,
+      "vlm_text": ""
+    },
+    {
+      "bbox": null,
+      "block_id": null,
+      "canonical_id": "evidence:7642b03f-823e-4bbd-bc1a-16334b3b92ee:stable-chunk%3A825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+      "caption": "",
+      "cell_id": "",
+      "chunk_end": null,
+      "chunk_start": null,
+      "column_index": null,
+      "column_label": null,
+      "continuation_id": "",
+      "currency": null,
+      "duplicate_evidence_ids": [],
+      "element_id": "",
+      "evidence_id": "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+      "evidence_level": "page",
+      "financial_scope": null,
+      "identity": {
+        "kind": "evidence",
+        "local_id": "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+        "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee"
+      },
+      "metadata": {
+        "_sparse_retrieval_score": 9.97288990020752,
+        "collection_name": "default",
+        "creation_date": "2026-08-10",
+        "file_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "file_name": "1802_07862.txt",
+        "file_path": "/mnt/scratch/users/tbczhang/outputs/MARA/revalidation_20260810_formal_b7cda0b/manifests/documents/1802_07862.txt",
+        "file_size": 26878,
+        "file_type": "text/plain",
+        "last_modified_date": "2026-08-10",
+        "reranker_backend": "TeiFastReranking",
+        "reranker_execution_trace": {
+          "backend": "TeiFastReranking",
+          "configured": true,
+          "executed": true,
+          "failure_reason": "",
+          "input_count": 9,
+          "input_identities": [
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30"
+          ],
+          "loaded": true,
+          "model": "TeiFastReranking",
+          "output_count": 9,
+          "output_identities": [
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b"
+          ],
+          "score_field": "reranking_score"
+        },
+        "reranker_input_identity": "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+        "reranker_model": "TeiFastReranking",
+        "reranker_rank": 3,
+        "reranker_score": 0.006513498559668185,
+        "reranking_score": 0.006513498559668185
+      },
+      "modality": "text",
+      "neighbor_element_ids": [],
+      "normalized_text_hash": "5ab2dd4c3ce87fa699046f8c6e4b5f80eb572bf8b1fa337a0de2789d7085f3d3",
+      "ocr_text": "",
+      "page_label": "",
+      "parent_element_id": "",
+      "period": null,
+      "period_kind": null,
+      "representations": [
+        {
+          "field": "text",
+          "modality": "text",
+          "text": "To address the challenges above for social media posts, we build upon the state-of-the-art neural architecture for NER with the following two novel approaches (Figure FIGREF1 ). First, we propose to leverage auxiliary modalities for additional context resolution of entities. For example, many popular social media platforms now provide ways to compose a post in multiple modalities - specifically image and text (e.g. Snapchat captions, Twitter posts with image URLs), from which we can obtain additional context for understanding posts. While “monopoly\" in the previous example is ambiguous in its textual form, an accompanying snap image of a board game can help disambiguate among polysemous entities, thereby correctly recognizing it as a named entity.\n\nSecond, we also propose a general modality attention module which chooses per decoding step the most informative modality among available ones (in our case, word embeddings, character embeddings, or visual features) to extract context from. For example, the modality attention module lets the decoder attenuate the word-level signals for unknown word tokens (“Marshmellooooo\" with trailing `o's) and amplifies character-level features intsead (capitalized first letter, lexical similarity to other known named entity token `Marshmello', etc.), thereby suppressing noise information (“UNK\" token embedding) in decoding steps. Note that most of the previous literature in NER or other NLP tasks combine word and character-level information with naive concatenation, which is vulnerable to noisy social media posts. When an auxiliary image is available, the modality attention module determines to amplify this visual context in disambiguating polysemous entities, or to attenuate visual contexts when they are irrelevant to target named entities, selfies, etc. Note that the proposed modality attention module is distinct from how attention is used in other sequence-to-sequence literature (e.g. attending to a specific token within an input sequence). Section SECREF2 provides the detailed literature review.\n\nOur contributions are three-fold: we propose (1) an LSTM-CNN hybrid multimodal NER network that takes as input both image and text for recognition of a named entity in text input. To the best of our knowledge, our approach is the first work to incorporate visual contexts for named entity recognition tasks. (2) We propose a general modality attention module that selectively chooses modalities to extract primary context from, maximizing information gain and suppressing irrelevant contexts from each modality (we treat words, characters, and images as separate modalities). (3) We show that the proposed approaches outperform the state-of-the-art NER models (both with and without using additional visual contexts) on our new MNER dataset SnapCaptions, a large collection of informal and extremely short social media posts paired with unique images.\n\n## Related Work\n\nNeural models for NER have been recently proposed, producing state-of-the-art performance on standard NER tasks. For example, some of the end-to-end NER systems BIBREF4 , BIBREF2 , BIBREF3 , BIBREF0 , BIBREF1 use a recurrent neural network usually with a CRF BIBREF5 , BIBREF6 for sequence labeling, accompanied with feature extractors for words and characters (CNN, LSTMs, etc.), and achieve the state-of-the-art performance mostly without any use of gazetteers information. Note that most of these work aggregate textual contexts via concatenation of word embeddings and character embeddings. Recently, several work have addressed the NER task specifically on noisy short text segments such as Tweets, etc. BIBREF7 , BIBREF8 . They report performance gains from leveraging external sources of information such as lexical information (POS tags, etc.) and/or from several preprocessing steps (token substitution, etc.). Our model builds upon these state-of-the-art neural models for NER tasks, and improves the model in two critical ways: (1) incorporation of visual contexts to provide auxiliary information for short media posts, and (2) addition of the modality attention module, which better incorporates word embeddings and character embeddings, especially when there are many missing tokens in the given word embedding matrix. Note that we do not explore the use of gazetteers information or other auxiliary information (POS tags, etc.) BIBREF9 as it is not the focus of our study."
+        }
+      ],
+      "reranker_observations": [
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+          "model": "TeiFastReranking",
+          "query_id": "round1:primary",
+          "rank": 3,
+          "round_id": 1,
+          "score": 0.006513498559668185,
+          "slot_id": ""
+        },
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+          "model": "TeiFastReranking",
+          "query_id": "round2:support:boolean_proposition",
+          "rank": 4,
+          "round_id": 2,
+          "score": 0.006513498559668185,
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "retrieval_lineage": [
+        {
+          "query_id": "round1:primary",
+          "raw_rank": 3,
+          "raw_score": 0.006513498559668185,
+          "retriever_name": "text",
+          "round_id": 1,
+          "score_type": "score",
+          "slot_id": ""
+        },
+        {
+          "query_id": "round2:support:boolean_proposition",
+          "raw_rank": 4,
+          "raw_score": 0.02310927773615126,
+          "retriever_name": "text",
+          "round_id": 2,
+          "score_type": "score",
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "row_index": null,
+      "row_label": null,
+      "scale": null,
+      "section_id": "",
+      "source_aliases": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "1802_07862.txt",
+        "1802_07862"
+      ],
+      "source_backrefs": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee#source"
+      ],
+      "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+      "source_name": "1802_07862.txt",
+      "span_id": "",
+      "statement_kind": null,
+      "table_group_id": null,
+      "table_id": "",
+      "table_instance_id": null,
+      "text": "To address the challenges above for social media posts, we build upon the state-of-the-art neural architecture for NER with the following two novel approaches (Figure FIGREF1 ). First, we propose to leverage auxiliary modalities for additional context resolution of entities. For example, many popular social media platforms now provide ways to compose a post in multiple modalities - specifically image and text (e.g. Snapchat captions, Twitter posts with image URLs), from which we can obtain additional context for understanding posts. While “monopoly\" in the previous example is ambiguous in its textual form, an accompanying snap image of a board game can help disambiguate among polysemous entities, thereby correctly recognizing it as a named entity.\n\nSecond, we also propose a general modality attention module which chooses per decoding step the most informative modality among available ones (in our case, word embeddings, character embeddings, or visual features) to extract context from. For example, the modality attention module lets the decoder attenuate the word-level signals for unknown word tokens (“Marshmellooooo\" with trailing `o's) and amplifies character-level features intsead (capitalized first letter, lexical similarity to other known named entity token `Marshmello', etc.), thereby suppressing noise information (“UNK\" token embedding) in decoding steps. Note that most of the previous literature in NER or other NLP tasks combine word and character-level information with naive concatenation, which is vulnerable to noisy social media posts. When an auxiliary image is available, the modality attention module determines to amplify this visual context in disambiguating polysemous entities, or to attenuate visual contexts when they are irrelevant to target named entities, selfies, etc. Note that the proposed modality attention module is distinct from how attention is used in other sequence-to-sequence literature (e.g. attending to a specific token within an input sequence). Section SECREF2 provides the detailed literature review.\n\nOur contributions are three-fold: we propose (1) an LSTM-CNN hybrid multimodal NER network that takes as input both image and text for recognition of a named entity in text input. To the best of our knowledge, our approach is the first work to incorporate visual contexts for named entity recognition tasks. (2) We propose a general modality attention module that selectively chooses modalities to extract primary context from, maximizing information gain and suppressing irrelevant contexts from each modality (we treat words, characters, and images as separate modalities). (3) We show that the proposed approaches outperform the state-of-the-art NER models (both with and without using additional visual contexts) on our new MNER dataset SnapCaptions, a large collection of informal and extremely short social media posts paired with unique images.\n\n## Related Work\n\nNeural models for NER have been recently proposed, producing state-of-the-art performance on standard NER tasks. For example, some of the end-to-end NER systems BIBREF4 , BIBREF2 , BIBREF3 , BIBREF0 , BIBREF1 use a recurrent neural network usually with a CRF BIBREF5 , BIBREF6 for sequence labeling, accompanied with feature extractors for words and characters (CNN, LSTMs, etc.), and achieve the state-of-the-art performance mostly without any use of gazetteers information. Note that most of these work aggregate textual contexts via concatenation of word embeddings and character embeddings. Recently, several work have addressed the NER task specifically on noisy short text segments such as Tweets, etc. BIBREF7 , BIBREF8 . They report performance gains from leveraging external sources of information such as lexical information (POS tags, etc.) and/or from several preprocessing steps (token substitution, etc.). Our model builds upon these state-of-the-art neural models for NER tasks, and improves the model in two critical ways: (1) incorporation of visual contexts to provide auxiliary information for short media posts, and (2) addition of the modality attention module, which better incorporates word embeddings and character embeddings, especially when there are many missing tokens in the given word embedding matrix. Note that we do not explore the use of gazetteers information or other auxiliary information (POS tags, etc.) BIBREF9 as it is not the focus of our study.",
+      "unit": null,
+      "value": null,
+      "vlm_text": ""
+    },
+    {
+      "bbox": null,
+      "block_id": null,
+      "canonical_id": "evidence:7642b03f-823e-4bbd-bc1a-16334b3b92ee:stable-chunk%3A32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+      "caption": "",
+      "cell_id": "",
+      "chunk_end": null,
+      "chunk_start": null,
+      "column_index": null,
+      "column_label": null,
+      "continuation_id": "",
+      "currency": null,
+      "duplicate_evidence_ids": [],
+      "element_id": "",
+      "evidence_id": "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+      "evidence_level": "page",
+      "financial_scope": null,
+      "identity": {
+        "kind": "evidence",
+        "local_id": "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+        "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee"
+      },
+      "metadata": {
+        "_sparse_retrieval_score": 12.101720809936523,
+        "collection_name": "default",
+        "creation_date": "2026-08-10",
+        "file_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "file_name": "1802_07862.txt",
+        "file_path": "/mnt/scratch/users/tbczhang/outputs/MARA/revalidation_20260810_formal_b7cda0b/manifests/documents/1802_07862.txt",
+        "file_size": 26878,
+        "file_type": "text/plain",
+        "last_modified_date": "2026-08-10",
+        "reranker_backend": "TeiFastReranking",
+        "reranker_execution_trace": {
+          "backend": "TeiFastReranking",
+          "configured": true,
+          "executed": true,
+          "failure_reason": "",
+          "input_count": 9,
+          "input_identities": [
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30"
+          ],
+          "loaded": true,
+          "model": "TeiFastReranking",
+          "output_count": 9,
+          "output_identities": [
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b"
+          ],
+          "score_field": "reranking_score"
+        },
+        "reranker_input_identity": "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+        "reranker_model": "TeiFastReranking",
+        "reranker_rank": 5,
+        "reranker_score": 0.005730246514992078,
+        "reranking_score": 0.005730246514992078
+      },
+      "modality": "text",
+      "neighbor_element_ids": [],
+      "normalized_text_hash": "98351f89b231508c824bf585e30570760412e9eba2c8daeee9b6aee6ae2f0f95",
+      "ocr_text": "",
+      "page_label": "",
+      "parent_element_id": "",
+      "period": null,
+      "period_kind": null,
+      "representations": [
+        {
+          "field": "text",
+          "modality": "text",
+          "text": "Attention modules are widely applied in several deep learning tasks BIBREF10 , BIBREF11 , BIBREF12 , BIBREF13 . For example, they use an attention module to attend to a subset within a single input (a part/region of an image, a specific token in an input sequence of tokens, etc.) at each decoding step in an encoder-decoder framework for image captioning tasks, etc. BIBREF14 explore various attention mechanisms in NLP tasks, but do not incorporate visual components or investigate the impact of such models on noisy social media data. BIBREF15 propose to use attention for a subset of discrete source samples in transfer learning settings. Our modality attention differs from the previous approaches in that we attenuate or amplifies each modality input as a whole among multiple available modalities, and that we use the attention mechanism essentially to map heterogeneous modalities in a single joint embedding space. Our approach also allows for re-use of the same model for predicting labels even when some of the modalities are missing in input, as other modalities would still preserve the same semantics in the embeddings space.\n\nMultimodal learning is studied in various domains and applications, aimed at building a joint model that extracts contextual information from multiple modalities (views) of parallel datasets.\n\nThe most relevant task to our multimodal NER system is the task of multimodal machine translation BIBREF16 , BIBREF17 , which aims at building a better machine translation system by taking as input a sentence in a source language as well as a corresponding image. Several standard sequence-to-sequence architectures are explored (a target-language LSTM decoder that takes as input an image first). Other previous literature include study of Canonical Correlation Analysis (CCA) BIBREF18 to learn feature correlations among multiple modalities, which is widely used in many applications. Other applications include image captioning BIBREF10 , audio-visual recognition BIBREF19 , visual question answering systems BIBREF20 , etc.\n\nTo the best of our knowledge, our approach is the first work to incorporate visual contexts for named entity recognition tasks.\n\n## Proposed Methods\n\nFigure FIGREF2 illustrates the proposed multimodal NER (MNER) model. First, we obtain word embeddings, character embeddings, and visual features (Section SECREF3 ). A Bi-LSTM-CRF model then takes as input a sequence of tokens, each of which comprises a word token, a character sequence, and an image, in their respective representation (Section SECREF4 ). At each decoding step, representations from each modality are combined via the modality attention module to produce an entity label for each token ( SECREF5 ). We formulate each component of the model in the following subsections.\n\nNotations: Let INLINEFORM0 a sequence of input tokens with length INLINEFORM1 , with a corresponding label sequence INLINEFORM2 indicating named entities (e.g. in standard BIO formats). Each input token is composed of three modalities: INLINEFORM3 for word embeddings, character embeddings, and visual embeddings representations, respectively.\n\n## Features\n\nSimilar to the state-of-the-art NER approaches BIBREF0 , BIBREF1 , BIBREF8 , BIBREF4 , BIBREF2 , BIBREF3 , we use both word embeddings and character embeddings.\n\nWord embeddings are obtained from an unsupervised learning model that learns co-occurrence statistics of words from a large external corpus, yielding word embeddings as distributional semantics BIBREF21 . Specifically, we use pre-trained embeddings from GloVE BIBREF22 .\n\nCharacter embeddings are obtained from a Bi-LSTM which takes as input a sequence of characters of each token, similarly to BIBREF0 . An alternative approach for obtaining character embeddings is using a convolutional neural network as in BIBREF1 , but we find that Bi-LSTM representation of characters yields empirically better results in our experiments."
+        }
+      ],
+      "reranker_observations": [
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+          "model": "TeiFastReranking",
+          "query_id": "round1:primary",
+          "rank": 5,
+          "round_id": 1,
+          "score": 0.005730246514992078,
+          "slot_id": ""
+        },
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+          "model": "TeiFastReranking",
+          "query_id": "round2:support:boolean_proposition",
+          "rank": 6,
+          "round_id": 2,
+          "score": 0.005730246514992078,
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "retrieval_lineage": [
+        {
+          "query_id": "round1:primary",
+          "raw_rank": 5,
+          "raw_score": 0.005730246514992078,
+          "retriever_name": "text",
+          "round_id": 1,
+          "score_type": "score",
+          "slot_id": ""
+        },
+        {
+          "query_id": "round2:support:boolean_proposition",
+          "raw_rank": 6,
+          "raw_score": 0.0032603461032026495,
+          "retriever_name": "text",
+          "round_id": 2,
+          "score_type": "score",
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "row_index": null,
+      "row_label": null,
+      "scale": null,
+      "section_id": "",
+      "source_aliases": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "1802_07862.txt",
+        "1802_07862"
+      ],
+      "source_backrefs": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee#source"
+      ],
+      "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+      "source_name": "1802_07862.txt",
+      "span_id": "",
+      "statement_kind": null,
+      "table_group_id": null,
+      "table_id": "",
+      "table_instance_id": null,
+      "text": "Attention modules are widely applied in several deep learning tasks BIBREF10 , BIBREF11 , BIBREF12 , BIBREF13 . For example, they use an attention module to attend to a subset within a single input (a part/region of an image, a specific token in an input sequence of tokens, etc.) at each decoding step in an encoder-decoder framework for image captioning tasks, etc. BIBREF14 explore various attention mechanisms in NLP tasks, but do not incorporate visual components or investigate the impact of such models on noisy social media data. BIBREF15 propose to use attention for a subset of discrete source samples in transfer learning settings. Our modality attention differs from the previous approaches in that we attenuate or amplifies each modality input as a whole among multiple available modalities, and that we use the attention mechanism essentially to map heterogeneous modalities in a single joint embedding space. Our approach also allows for re-use of the same model for predicting labels even when some of the modalities are missing in input, as other modalities would still preserve the same semantics in the embeddings space.\n\nMultimodal learning is studied in various domains and applications, aimed at building a joint model that extracts contextual information from multiple modalities (views) of parallel datasets.\n\nThe most relevant task to our multimodal NER system is the task of multimodal machine translation BIBREF16 , BIBREF17 , which aims at building a better machine translation system by taking as input a sentence in a source language as well as a corresponding image. Several standard sequence-to-sequence architectures are explored (a target-language LSTM decoder that takes as input an image first). Other previous literature include study of Canonical Correlation Analysis (CCA) BIBREF18 to learn feature correlations among multiple modalities, which is widely used in many applications. Other applications include image captioning BIBREF10 , audio-visual recognition BIBREF19 , visual question answering systems BIBREF20 , etc.\n\nTo the best of our knowledge, our approach is the first work to incorporate visual contexts for named entity recognition tasks.\n\n## Proposed Methods\n\nFigure FIGREF2 illustrates the proposed multimodal NER (MNER) model. First, we obtain word embeddings, character embeddings, and visual features (Section SECREF3 ). A Bi-LSTM-CRF model then takes as input a sequence of tokens, each of which comprises a word token, a character sequence, and an image, in their respective representation (Section SECREF4 ). At each decoding step, representations from each modality are combined via the modality attention module to produce an entity label for each token ( SECREF5 ). We formulate each component of the model in the following subsections.\n\nNotations: Let INLINEFORM0 a sequence of input tokens with length INLINEFORM1 , with a corresponding label sequence INLINEFORM2 indicating named entities (e.g. in standard BIO formats). Each input token is composed of three modalities: INLINEFORM3 for word embeddings, character embeddings, and visual embeddings representations, respectively.\n\n## Features\n\nSimilar to the state-of-the-art NER approaches BIBREF0 , BIBREF1 , BIBREF8 , BIBREF4 , BIBREF2 , BIBREF3 , we use both word embeddings and character embeddings.\n\nWord embeddings are obtained from an unsupervised learning model that learns co-occurrence statistics of words from a large external corpus, yielding word embeddings as distributional semantics BIBREF21 . Specifically, we use pre-trained embeddings from GloVE BIBREF22 .\n\nCharacter embeddings are obtained from a Bi-LSTM which takes as input a sequence of characters of each token, similarly to BIBREF0 . An alternative approach for obtaining character embeddings is using a convolutional neural network as in BIBREF1 , but we find that Bi-LSTM representation of characters yields empirically better results in our experiments.",
+      "unit": null,
+      "value": null,
+      "vlm_text": ""
+    },
+    {
+      "bbox": null,
+      "block_id": null,
+      "canonical_id": "evidence:7642b03f-823e-4bbd-bc1a-16334b3b92ee:stable-chunk%3A7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+      "caption": "",
+      "cell_id": "",
+      "chunk_end": null,
+      "chunk_start": null,
+      "column_index": null,
+      "column_label": null,
+      "continuation_id": "",
+      "currency": null,
+      "duplicate_evidence_ids": [],
+      "element_id": "",
+      "evidence_id": "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+      "evidence_level": "page",
+      "financial_scope": null,
+      "identity": {
+        "kind": "evidence",
+        "local_id": "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+        "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee"
+      },
+      "metadata": {
+        "_sparse_retrieval_score": 7.873573303222656,
+        "collection_name": "default",
+        "creation_date": "2026-08-10",
+        "file_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "file_name": "1802_07862.txt",
+        "file_path": "/mnt/scratch/users/tbczhang/outputs/MARA/revalidation_20260810_formal_b7cda0b/manifests/documents/1802_07862.txt",
+        "file_size": 26878,
+        "file_type": "text/plain",
+        "last_modified_date": "2026-08-10",
+        "reranker_backend": "TeiFastReranking",
+        "reranker_execution_trace": {
+          "backend": "TeiFastReranking",
+          "configured": true,
+          "executed": true,
+          "failure_reason": "",
+          "input_count": 9,
+          "input_identities": [
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30"
+          ],
+          "loaded": true,
+          "model": "TeiFastReranking",
+          "output_count": 9,
+          "output_identities": [
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b"
+          ],
+          "score_field": "reranking_score"
+        },
+        "reranker_input_identity": "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+        "reranker_model": "TeiFastReranking",
+        "reranker_rank": 4,
+        "reranker_score": 0.0062170781422503756,
+        "reranking_score": 0.0062170781422503756
+      },
+      "modality": "text",
+      "neighbor_element_ids": [],
+      "normalized_text_hash": "33d32ccdc14e82dc849cb5d46fa2b91e4f11fc6beddde78d30eab944bcc62dfe",
+      "ocr_text": "",
+      "page_label": "",
+      "parent_element_id": "",
+      "period": null,
+      "period_kind": null,
+      "representations": [
+        {
+          "field": "text",
+          "modality": "text",
+          "text": "Notations: Let INLINEFORM0 a sequence of input tokens with length INLINEFORM1 , with a corresponding label sequence INLINEFORM2 indicating named entities (e.g. in standard BIO formats). Each input token is composed of three modalities: INLINEFORM3 for word embeddings, character embeddings, and visual embeddings representations, respectively.\n\n## Features\n\nSimilar to the state-of-the-art NER approaches BIBREF0 , BIBREF1 , BIBREF8 , BIBREF4 , BIBREF2 , BIBREF3 , we use both word embeddings and character embeddings.\n\nWord embeddings are obtained from an unsupervised learning model that learns co-occurrence statistics of words from a large external corpus, yielding word embeddings as distributional semantics BIBREF21 . Specifically, we use pre-trained embeddings from GloVE BIBREF22 .\n\nCharacter embeddings are obtained from a Bi-LSTM which takes as input a sequence of characters of each token, similarly to BIBREF0 . An alternative approach for obtaining character embeddings is using a convolutional neural network as in BIBREF1 , but we find that Bi-LSTM representation of characters yields empirically better results in our experiments.\n\nVisual embeddings: To extract features from an image, we take the final hidden layer representation of a modified version of the convolutional network model called Inception (GoogLeNet) BIBREF23 , BIBREF24 trained on the ImageNet dataset BIBREF25 to classify multiple objects in the scene. Our implementation of the Inception model has deep 22 layers, training of which is made possible via “network in network\" principles and several dimension reduction techniques to improve computing resource utilization. The final layer representation encodes discriminative information describing what objects are shown in an image, which provide auxiliary contexts for understanding textual tokens and entities in accompanying captions.\n\nIncorporating this visual information onto the traditional NER system is an open challenge, and multiple approaches can be considered. For instance, one may provide visual contexts only as an initial input to decoder as in some encoder-decoder image captioning systems BIBREF26 . However, we empirically observe that an NER decoder which takes as input the visual embeddings at every decoding step (Section SECREF4 ), combined with the modality attention module (Section SECREF5 ), yields better results.\n\nLastly, we add a transform layer for each feature INLINEFORM0 before it is fed to the NER entity LSTM.\n\n## Bi-LSTM + CRF for Multimodal NER\n\nOur MNER model is built on a Bi-LSTM and CRF hybrid model. We use the following implementation for the entity Bi-LSTM.\n\n it = (Wxiht-1 + Wcict-1)\n\nct = (1-it) ct-1\n\n + it tanh(Wxcxt + Whcht-1)\n\not = (Wxoxt + Whoht-1 + Wcoct)\n\nht = LSTM(xt)\n\n= ot tanh(ct)\n\nwhere INLINEFORM0 is a weighted average of three modalities INLINEFORM1 via the modality attention module, which will be defined in Section SECREF5 . Bias terms for gates are omitted here for simplicity of notation.\n\nWe then obtain bi-directional entity token representations INLINEFORM0 by concatenating its left and right context representations. To enforce structural correlations between labels in sequence decoding, INLINEFORM1 is then passed to a conditional random field (CRF) to produce a label for each token maximizing the following objective. y* = y p(y|h; WCRF)\n\np(y|h; WCRF) = t t (yt-1,yt;h) y' t t (y't-1,y't;h)\n\nwhere INLINEFORM0 is a potential function, INLINEFORM1 is a set of parameters that defines the potential functions and weight vectors for label pairs ( INLINEFORM2 ). Bias terms are omitted for brevity of formulation.\n\nThe model can be trained via log-likelihood maximization for the training set INLINEFORM0 :\n\n L(WCRF) = i p(y|h; W)\n\n## Modality Attention"
+        }
+      ],
+      "reranker_observations": [
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+          "model": "TeiFastReranking",
+          "query_id": "round1:primary",
+          "rank": 4,
+          "round_id": 1,
+          "score": 0.0062170781422503756,
+          "slot_id": ""
+        },
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+          "model": "TeiFastReranking",
+          "query_id": "round2:support:boolean_proposition",
+          "rank": 3,
+          "round_id": 2,
+          "score": 0.0062170781422503756,
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "retrieval_lineage": [
+        {
+          "query_id": "round1:primary",
+          "raw_rank": 4,
+          "raw_score": 0.0062170781422503756,
+          "retriever_name": "text",
+          "round_id": 1,
+          "score_type": "score",
+          "slot_id": ""
+        },
+        {
+          "query_id": "round2:support:boolean_proposition",
+          "raw_rank": 3,
+          "raw_score": 0.09653531477640952,
+          "retriever_name": "text",
+          "round_id": 2,
+          "score_type": "score",
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "row_index": null,
+      "row_label": null,
+      "scale": null,
+      "section_id": "",
+      "source_aliases": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "1802_07862.txt",
+        "1802_07862"
+      ],
+      "source_backrefs": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee#source"
+      ],
+      "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+      "source_name": "1802_07862.txt",
+      "span_id": "",
+      "statement_kind": null,
+      "table_group_id": null,
+      "table_id": "",
+      "table_instance_id": null,
+      "text": "Notations: Let INLINEFORM0 a sequence of input tokens with length INLINEFORM1 , with a corresponding label sequence INLINEFORM2 indicating named entities (e.g. in standard BIO formats). Each input token is composed of three modalities: INLINEFORM3 for word embeddings, character embeddings, and visual embeddings representations, respectively.\n\n## Features\n\nSimilar to the state-of-the-art NER approaches BIBREF0 , BIBREF1 , BIBREF8 , BIBREF4 , BIBREF2 , BIBREF3 , we use both word embeddings and character embeddings.\n\nWord embeddings are obtained from an unsupervised learning model that learns co-occurrence statistics of words from a large external corpus, yielding word embeddings as distributional semantics BIBREF21 . Specifically, we use pre-trained embeddings from GloVE BIBREF22 .\n\nCharacter embeddings are obtained from a Bi-LSTM which takes as input a sequence of characters of each token, similarly to BIBREF0 . An alternative approach for obtaining character embeddings is using a convolutional neural network as in BIBREF1 , but we find that Bi-LSTM representation of characters yields empirically better results in our experiments.\n\nVisual embeddings: To extract features from an image, we take the final hidden layer representation of a modified version of the convolutional network model called Inception (GoogLeNet) BIBREF23 , BIBREF24 trained on the ImageNet dataset BIBREF25 to classify multiple objects in the scene. Our implementation of the Inception model has deep 22 layers, training of which is made possible via “network in network\" principles and several dimension reduction techniques to improve computing resource utilization. The final layer representation encodes discriminative information describing what objects are shown in an image, which provide auxiliary contexts for understanding textual tokens and entities in accompanying captions.\n\nIncorporating this visual information onto the traditional NER system is an open challenge, and multiple approaches can be considered. For instance, one may provide visual contexts only as an initial input to decoder as in some encoder-decoder image captioning systems BIBREF26 . However, we empirically observe that an NER decoder which takes as input the visual embeddings at every decoding step (Section SECREF4 ), combined with the modality attention module (Section SECREF5 ), yields better results.\n\nLastly, we add a transform layer for each feature INLINEFORM0 before it is fed to the NER entity LSTM.\n\n## Bi-LSTM + CRF for Multimodal NER\n\nOur MNER model is built on a Bi-LSTM and CRF hybrid model. We use the following implementation for the entity Bi-LSTM.\n\n it = (Wxiht-1 + Wcict-1)\n\nct = (1-it) ct-1\n\n + it tanh(Wxcxt + Whcht-1)\n\not = (Wxoxt + Whoht-1 + Wcoct)\n\nht = LSTM(xt)\n\n= ot tanh(ct)\n\nwhere INLINEFORM0 is a weighted average of three modalities INLINEFORM1 via the modality attention module, which will be defined in Section SECREF5 . Bias terms for gates are omitted here for simplicity of notation.\n\nWe then obtain bi-directional entity token representations INLINEFORM0 by concatenating its left and right context representations. To enforce structural correlations between labels in sequence decoding, INLINEFORM1 is then passed to a conditional random field (CRF) to produce a label for each token maximizing the following objective. y* = y p(y|h; WCRF)\n\np(y|h; WCRF) = t t (yt-1,yt;h) y' t t (y't-1,y't;h)\n\nwhere INLINEFORM0 is a potential function, INLINEFORM1 is a set of parameters that defines the potential functions and weight vectors for label pairs ( INLINEFORM2 ). Bias terms are omitted for brevity of formulation.\n\nThe model can be trained via log-likelihood maximization for the training set INLINEFORM0 :\n\n L(WCRF) = i p(y|h; W)\n\n## Modality Attention",
+      "unit": null,
+      "value": null,
+      "vlm_text": ""
+    },
+    {
+      "bbox": null,
+      "block_id": null,
+      "canonical_id": "evidence:7642b03f-823e-4bbd-bc1a-16334b3b92ee:stable-chunk%3Adf8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+      "caption": "",
+      "cell_id": "",
+      "chunk_end": null,
+      "chunk_start": null,
+      "column_index": null,
+      "column_label": null,
+      "continuation_id": "",
+      "currency": null,
+      "duplicate_evidence_ids": [],
+      "element_id": "",
+      "evidence_id": "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+      "evidence_level": "page",
+      "financial_scope": null,
+      "identity": {
+        "kind": "evidence",
+        "local_id": "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+        "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee"
+      },
+      "metadata": {
+        "_sparse_retrieval_score": 7.9329118728637695,
+        "collection_name": "default",
+        "creation_date": "2026-08-10",
+        "file_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "file_name": "1802_07862.txt",
+        "file_path": "/mnt/scratch/users/tbczhang/outputs/MARA/revalidation_20260810_formal_b7cda0b/manifests/documents/1802_07862.txt",
+        "file_size": 26878,
+        "file_type": "text/plain",
+        "last_modified_date": "2026-08-10",
+        "reranker_backend": "TeiFastReranking",
+        "reranker_execution_trace": {
+          "backend": "TeiFastReranking",
+          "configured": true,
+          "executed": true,
+          "failure_reason": "",
+          "input_count": 9,
+          "input_identities": [
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30"
+          ],
+          "loaded": true,
+          "model": "TeiFastReranking",
+          "output_count": 9,
+          "output_identities": [
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b"
+          ],
+          "score_field": "reranking_score"
+        },
+        "reranker_input_identity": "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+        "reranker_model": "TeiFastReranking",
+        "reranker_rank": 8,
+        "reranker_score": 0.00041406952838583545,
+        "reranking_score": 0.00041406952838583545
+      },
+      "modality": "text",
+      "neighbor_element_ids": [],
+      "normalized_text_hash": "b32809fb4cebd5c21ca3b4bedb4183a6663b4df70e69cce9e9dde71f3330a8f6",
+      "ocr_text": "",
+      "page_label": "",
+      "parent_element_id": "",
+      "period": null,
+      "period_kind": null,
+      "representations": [
+        {
+          "field": "text",
+          "modality": "text",
+          "text": "ht = LSTM(xt)\n\n= ot tanh(ct)\n\nwhere INLINEFORM0 is a weighted average of three modalities INLINEFORM1 via the modality attention module, which will be defined in Section SECREF5 . Bias terms for gates are omitted here for simplicity of notation.\n\nWe then obtain bi-directional entity token representations INLINEFORM0 by concatenating its left and right context representations. To enforce structural correlations between labels in sequence decoding, INLINEFORM1 is then passed to a conditional random field (CRF) to produce a label for each token maximizing the following objective. y* = y p(y|h; WCRF)\n\np(y|h; WCRF) = t t (yt-1,yt;h) y' t t (y't-1,y't;h)\n\nwhere INLINEFORM0 is a potential function, INLINEFORM1 is a set of parameters that defines the potential functions and weight vectors for label pairs ( INLINEFORM2 ). Bias terms are omitted for brevity of formulation.\n\nThe model can be trained via log-likelihood maximization for the training set INLINEFORM0 :\n\n L(WCRF) = i p(y|h; W)\n\n## Modality Attention\n\nThe modality attention module learns a unified representation space for multiple available modalities (words, characters, images, etc.), and produces a single vector representation with aggregated knowledge among multiple modalities, based on their weighted importance. We motivate this module from the following observations.\n\nA majority of the previous literature combine the word and character-level contexts by simply concatenating the word and character embeddings at each decoding step, e.g. INLINEFORM0 in Eq. SECREF4 . However, this naive concatenation of two modalities (word and characters) results in inaccurate decoding, specifically for unknown word token embeddings (an all-zero vector INLINEFORM1 or a random vector INLINEFORM2 is assigned for any unknown token INLINEFORM3 , thus INLINEFORM4 or INLINEFORM5 ). While this concatenation approach does not cause significant errors for well-formatted text, we observe that it induces performance degradation for our social media post datasets which contain a significant number of missing tokens.\n\nSimilarly, naive merging of textual and visual information ( INLINEFORM0 ) yields suboptimal results as each modality is treated equally informative, whereas in our datasets some of the images may contain irrelevant contexts to textual modalities. Hence, ideally there needs a mechanism in which the model can effectively turn the switch on and off the modalities adaptive to each sample.\n\nTo this end, we propose a general modality attention module, which adaptively attenuates or emphasizes each modality as a whole at each decoding step INLINEFORM0 , and produces a soft-attended context vector INLINEFORM1 as an input token for the entity LSTM. [at(w),at(c),at(v)] = (Wm[xt(w); xt(c); xt(v)] + bm )\n\nt(m) = (at(m))m'{w,c,v}(at(m')) m {w,c,v}\n\nxt = m{w,c,v} t(m)xt(m)\n\nwhere INLINEFORM0 is an attention vector at each decoding step INLINEFORM1 , and INLINEFORM2 is a final context vector at INLINEFORM3 that maximizes information gain for INLINEFORM4 . Note that the optimization of the objective function (Eq. SECREF4 ) with modality attention (Eq. SECREF5 ) requires each modality to have the same dimension ( INLINEFORM5 ), and that the transformation via INLINEFORM6 essentially enforces each modality to be mapped into the same unified subspace, where the weighted average of which encodes discrimitive features for recognition of named entities.\n\nWhen visual context is not provided with each token (as in the traditional NER task), we can define the modality attention for word and character embeddings only in a similar way: [at(w),at(c)] = (Wm[xt(w); xt(c)] + bm )\n\nt(m) = (at(m))m'{w,c}(at(m')) m {w,c}\n\nxt = m{w,c} t(m)xt(m)"
+        }
+      ],
+      "reranker_observations": [
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+          "model": "TeiFastReranking",
+          "query_id": "round1:primary",
+          "rank": 8,
+          "round_id": 1,
+          "score": 0.00041406952838583545,
+          "slot_id": ""
+        },
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+          "model": "TeiFastReranking",
+          "query_id": "round2:support:boolean_proposition",
+          "rank": 7,
+          "round_id": 2,
+          "score": 0.00041406952838583545,
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "retrieval_lineage": [
+        {
+          "query_id": "round1:primary",
+          "raw_rank": 8,
+          "raw_score": 0.00041406952838583545,
+          "retriever_name": "text",
+          "round_id": 1,
+          "score_type": "score",
+          "slot_id": ""
+        },
+        {
+          "query_id": "round2:support:boolean_proposition",
+          "raw_rank": 7,
+          "raw_score": 0.0014325365947100792,
+          "retriever_name": "text",
+          "round_id": 2,
+          "score_type": "score",
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "row_index": null,
+      "row_label": null,
+      "scale": null,
+      "section_id": "",
+      "source_aliases": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "1802_07862.txt",
+        "1802_07862"
+      ],
+      "source_backrefs": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee#source"
+      ],
+      "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+      "source_name": "1802_07862.txt",
+      "span_id": "",
+      "statement_kind": null,
+      "table_group_id": null,
+      "table_id": "",
+      "table_instance_id": null,
+      "text": "ht = LSTM(xt)\n\n= ot tanh(ct)\n\nwhere INLINEFORM0 is a weighted average of three modalities INLINEFORM1 via the modality attention module, which will be defined in Section SECREF5 . Bias terms for gates are omitted here for simplicity of notation.\n\nWe then obtain bi-directional entity token representations INLINEFORM0 by concatenating its left and right context representations. To enforce structural correlations between labels in sequence decoding, INLINEFORM1 is then passed to a conditional random field (CRF) to produce a label for each token maximizing the following objective. y* = y p(y|h; WCRF)\n\np(y|h; WCRF) = t t (yt-1,yt;h) y' t t (y't-1,y't;h)\n\nwhere INLINEFORM0 is a potential function, INLINEFORM1 is a set of parameters that defines the potential functions and weight vectors for label pairs ( INLINEFORM2 ). Bias terms are omitted for brevity of formulation.\n\nThe model can be trained via log-likelihood maximization for the training set INLINEFORM0 :\n\n L(WCRF) = i p(y|h; W)\n\n## Modality Attention\n\nThe modality attention module learns a unified representation space for multiple available modalities (words, characters, images, etc.), and produces a single vector representation with aggregated knowledge among multiple modalities, based on their weighted importance. We motivate this module from the following observations.\n\nA majority of the previous literature combine the word and character-level contexts by simply concatenating the word and character embeddings at each decoding step, e.g. INLINEFORM0 in Eq. SECREF4 . However, this naive concatenation of two modalities (word and characters) results in inaccurate decoding, specifically for unknown word token embeddings (an all-zero vector INLINEFORM1 or a random vector INLINEFORM2 is assigned for any unknown token INLINEFORM3 , thus INLINEFORM4 or INLINEFORM5 ). While this concatenation approach does not cause significant errors for well-formatted text, we observe that it induces performance degradation for our social media post datasets which contain a significant number of missing tokens.\n\nSimilarly, naive merging of textual and visual information ( INLINEFORM0 ) yields suboptimal results as each modality is treated equally informative, whereas in our datasets some of the images may contain irrelevant contexts to textual modalities. Hence, ideally there needs a mechanism in which the model can effectively turn the switch on and off the modalities adaptive to each sample.\n\nTo this end, we propose a general modality attention module, which adaptively attenuates or emphasizes each modality as a whole at each decoding step INLINEFORM0 , and produces a soft-attended context vector INLINEFORM1 as an input token for the entity LSTM. [at(w),at(c),at(v)] = (Wm[xt(w); xt(c); xt(v)] + bm )\n\nt(m) = (at(m))m'{w,c,v}(at(m')) m {w,c,v}\n\nxt = m{w,c,v} t(m)xt(m)\n\nwhere INLINEFORM0 is an attention vector at each decoding step INLINEFORM1 , and INLINEFORM2 is a final context vector at INLINEFORM3 that maximizes information gain for INLINEFORM4 . Note that the optimization of the objective function (Eq. SECREF4 ) with modality attention (Eq. SECREF5 ) requires each modality to have the same dimension ( INLINEFORM5 ), and that the transformation via INLINEFORM6 essentially enforces each modality to be mapped into the same unified subspace, where the weighted average of which encodes discrimitive features for recognition of named entities.\n\nWhen visual context is not provided with each token (as in the traditional NER task), we can define the modality attention for word and character embeddings only in a similar way: [at(w),at(c)] = (Wm[xt(w); xt(c)] + bm )\n\nt(m) = (at(m))m'{w,c}(at(m')) m {w,c}\n\nxt = m{w,c} t(m)xt(m)",
+      "unit": null,
+      "value": null,
+      "vlm_text": ""
+    },
+    {
+      "bbox": null,
+      "block_id": null,
+      "canonical_id": "evidence:7642b03f-823e-4bbd-bc1a-16334b3b92ee:stable-chunk%3Afdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+      "caption": "",
+      "cell_id": "",
+      "chunk_end": null,
+      "chunk_start": null,
+      "column_index": null,
+      "column_label": null,
+      "continuation_id": "",
+      "currency": null,
+      "duplicate_evidence_ids": [],
+      "element_id": "",
+      "evidence_id": "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+      "evidence_level": "page",
+      "financial_scope": null,
+      "identity": {
+        "kind": "evidence",
+        "local_id": "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+        "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee"
+      },
+      "metadata": {
+        "_sparse_retrieval_score": 5.758237838745117,
+        "collection_name": "default",
+        "creation_date": "2026-08-10",
+        "file_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "file_name": "1802_07862.txt",
+        "file_path": "/mnt/scratch/users/tbczhang/outputs/MARA/revalidation_20260810_formal_b7cda0b/manifests/documents/1802_07862.txt",
+        "file_size": 26878,
+        "file_type": "text/plain",
+        "last_modified_date": "2026-08-10",
+        "reranker_backend": "TeiFastReranking",
+        "reranker_execution_trace": {
+          "backend": "TeiFastReranking",
+          "configured": true,
+          "executed": true,
+          "failure_reason": "",
+          "input_count": 9,
+          "input_identities": [
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30"
+          ],
+          "loaded": true,
+          "model": "TeiFastReranking",
+          "output_count": 9,
+          "output_identities": [
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b"
+          ],
+          "score_field": "reranking_score"
+        },
+        "reranker_input_identity": "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+        "reranker_model": "TeiFastReranking",
+        "reranker_rank": 6,
+        "reranker_score": 0.002521268321045645,
+        "reranking_score": 0.002521268321045645
+      },
+      "modality": "text",
+      "neighbor_element_ids": [],
+      "normalized_text_hash": "94929f76ad603aea4bfa12f3ddd68600dd84de31a0e983b98011c2d12e38ce66",
+      "ocr_text": "",
+      "page_label": "",
+      "parent_element_id": "",
+      "period": null,
+      "period_kind": null,
+      "representations": [
+        {
+          "field": "text",
+          "modality": "text",
+          "text": "Bi-LSTM/CRF (W only): only takes word token embeddings (Stanford GloVE) as input. The rest of the architecture is kept the same.\n\nBi-LSTM/CRF + Bi-CharLSTM (C only): only takes a character sequence of each word token as input. (No word embeddings)\n\nBi-LSTM/CRF + Bi-CharLSTM (W+C) BIBREF0 : takes as input both word embeddings and character embeddings extracted from a Bi-CharLSTM. Entity LSTM takes concatenated vectors of word and character embeddings as input tokens.\n\nBi-LSTM/CRF + CharCNN (W+C) BIBREF1 : uses character embeddings extracted from a CNN instead.\n\nBi-LSTM/CRF + CharCNN (W+C) + Multi-task BIBREF8 : trains the model to perform both recognition (into multiple entity types) as well as segmentation (binary) tasks.\n\n(proposed) Bi-LSTM/CRF + Bi-CharLSTM with modality attention (W+C): uses the modality attention to merge word and character embeddings.\n\n(proposed) Bi-LSTM/CRF + Bi-CharLSTM + Inception (W+C+V): takes as input visual contexts extracted from InceptionNet as well, concatenated with word and char vectors.\n\n(proposed) Bi-LSTM/CRF + Bi-CharLSTM + Inception with modality attention (W+C+V): uses the modality attention to merge word, character, and visual embeddings as input to entity LSTM.\n\n## Results: SnapCaptions Dataset\n\nTable TABREF6 shows the NER performance on the Snap Captions dataset. We report both entity types recognition (PER, LOC, ORG, MISC) and named entity segmentation (named entity or not) results.\n\nParameters: We tune the parameters of each model with the following search space (bold indicate the choice for our final model): character embeddings dimension: {25, 50, 100, 150, 200, 300}, word embeddings size: {25, 50, 100, 150, 200, 300}, LSTM hidden states: {25, 50, 100, 150, 200, 300}, and INLINEFORM0 dimension: {25, 50, 100, 150, 200, 300}. We optimize the parameters with Adagrad BIBREF28 with batch size 10, learning rate 0.02, epsilon INLINEFORM1 , and decay 0.0.\n\nMain Results: When visual context is available (W+C+V), we see that the model performance greatly improves over the textual models (W+C), showing that visual contexts are complimentary to textual information in named entity recognition tasks. In addition, it can be seen that the modality attention module further improves the entity type recognition performance for (W+C+V). This result indicates that the modality attention is able to focus on the most effective modality (visual, words, or characters) adaptive to each sample to maximize information gain. Note that our text-only model (W+C) with the modality attention module also significantly outperform the state-of-the-art baselines BIBREF8 , BIBREF1 , BIBREF0 that use the same textual modalities (W+C), showing the effectiveness of the modality attention module for textual models as well."
+        }
+      ],
+      "reranker_observations": [
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+          "model": "TeiFastReranking",
+          "query_id": "round1:primary",
+          "rank": 6,
+          "round_id": 1,
+          "score": 0.002521268321045645,
+          "slot_id": ""
+        },
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+          "model": "TeiFastReranking",
+          "query_id": "round2:support:boolean_proposition",
+          "rank": 2,
+          "round_id": 2,
+          "score": 0.002521268321045645,
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "retrieval_lineage": [
+        {
+          "query_id": "round1:primary",
+          "raw_rank": 6,
+          "raw_score": 0.002521268321045645,
+          "retriever_name": "text",
+          "round_id": 1,
+          "score_type": "score",
+          "slot_id": ""
+        },
+        {
+          "query_id": "round2:support:boolean_proposition",
+          "raw_rank": 2,
+          "raw_score": 0.10356715633550771,
+          "retriever_name": "text",
+          "round_id": 2,
+          "score_type": "score",
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "row_index": null,
+      "row_label": null,
+      "scale": null,
+      "section_id": "",
+      "source_aliases": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "1802_07862.txt",
+        "1802_07862"
+      ],
+      "source_backrefs": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee#source"
+      ],
+      "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+      "source_name": "1802_07862.txt",
+      "span_id": "",
+      "statement_kind": null,
+      "table_group_id": null,
+      "table_id": "",
+      "table_instance_id": null,
+      "text": "Bi-LSTM/CRF (W only): only takes word token embeddings (Stanford GloVE) as input. The rest of the architecture is kept the same.\n\nBi-LSTM/CRF + Bi-CharLSTM (C only): only takes a character sequence of each word token as input. (No word embeddings)\n\nBi-LSTM/CRF + Bi-CharLSTM (W+C) BIBREF0 : takes as input both word embeddings and character embeddings extracted from a Bi-CharLSTM. Entity LSTM takes concatenated vectors of word and character embeddings as input tokens.\n\nBi-LSTM/CRF + CharCNN (W+C) BIBREF1 : uses character embeddings extracted from a CNN instead.\n\nBi-LSTM/CRF + CharCNN (W+C) + Multi-task BIBREF8 : trains the model to perform both recognition (into multiple entity types) as well as segmentation (binary) tasks.\n\n(proposed) Bi-LSTM/CRF + Bi-CharLSTM with modality attention (W+C): uses the modality attention to merge word and character embeddings.\n\n(proposed) Bi-LSTM/CRF + Bi-CharLSTM + Inception (W+C+V): takes as input visual contexts extracted from InceptionNet as well, concatenated with word and char vectors.\n\n(proposed) Bi-LSTM/CRF + Bi-CharLSTM + Inception with modality attention (W+C+V): uses the modality attention to merge word, character, and visual embeddings as input to entity LSTM.\n\n## Results: SnapCaptions Dataset\n\nTable TABREF6 shows the NER performance on the Snap Captions dataset. We report both entity types recognition (PER, LOC, ORG, MISC) and named entity segmentation (named entity or not) results.\n\nParameters: We tune the parameters of each model with the following search space (bold indicate the choice for our final model): character embeddings dimension: {25, 50, 100, 150, 200, 300}, word embeddings size: {25, 50, 100, 150, 200, 300}, LSTM hidden states: {25, 50, 100, 150, 200, 300}, and INLINEFORM0 dimension: {25, 50, 100, 150, 200, 300}. We optimize the parameters with Adagrad BIBREF28 with batch size 10, learning rate 0.02, epsilon INLINEFORM1 , and decay 0.0.\n\nMain Results: When visual context is available (W+C+V), we see that the model performance greatly improves over the textual models (W+C), showing that visual contexts are complimentary to textual information in named entity recognition tasks. In addition, it can be seen that the modality attention module further improves the entity type recognition performance for (W+C+V). This result indicates that the modality attention is able to focus on the most effective modality (visual, words, or characters) adaptive to each sample to maximize information gain. Note that our text-only model (W+C) with the modality attention module also significantly outperform the state-of-the-art baselines BIBREF8 , BIBREF1 , BIBREF0 that use the same textual modalities (W+C), showing the effectiveness of the modality attention module for textual models as well.",
+      "unit": null,
+      "value": null,
+      "vlm_text": ""
+    },
+    {
+      "bbox": null,
+      "block_id": null,
+      "canonical_id": "evidence:7642b03f-823e-4bbd-bc1a-16334b3b92ee:stable-chunk%3A3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+      "caption": "",
+      "cell_id": "",
+      "chunk_end": null,
+      "chunk_start": null,
+      "column_index": null,
+      "column_label": null,
+      "continuation_id": "",
+      "currency": null,
+      "duplicate_evidence_ids": [],
+      "element_id": "",
+      "evidence_id": "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+      "evidence_level": "page",
+      "financial_scope": null,
+      "identity": {
+        "kind": "evidence",
+        "local_id": "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+        "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee"
+      },
+      "metadata": {
+        "_sparse_retrieval_score": 11.936365127563477,
+        "collection_name": "default",
+        "creation_date": "2026-08-10",
+        "file_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "file_name": "1802_07862.txt",
+        "file_path": "/mnt/scratch/users/tbczhang/outputs/MARA/revalidation_20260810_formal_b7cda0b/manifests/documents/1802_07862.txt",
+        "file_size": 26878,
+        "file_type": "text/plain",
+        "last_modified_date": "2026-08-10",
+        "reranker_backend": "TeiFastReranking",
+        "reranker_execution_trace": {
+          "backend": "TeiFastReranking",
+          "configured": true,
+          "executed": true,
+          "failure_reason": "",
+          "input_count": 9,
+          "input_identities": [
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30"
+          ],
+          "loaded": true,
+          "model": "TeiFastReranking",
+          "output_count": 9,
+          "output_identities": [
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b"
+          ],
+          "score_field": "reranking_score"
+        },
+        "reranker_input_identity": "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+        "reranker_model": "TeiFastReranking",
+        "reranker_rank": 1,
+        "reranker_score": 0.09602548878779378,
+        "reranking_score": 0.09602548878779378
+      },
+      "modality": "text",
+      "neighbor_element_ids": [],
+      "normalized_text_hash": "ac7cb5f0501dd78ba9a16b1c9fb9fd4135ee8f0c3f83d009aef3b6cfe3ccc7db",
+      "ocr_text": "",
+      "page_label": "",
+      "parent_element_id": "",
+      "period": null,
+      "period_kind": null,
+      "representations": [
+        {
+          "field": "text",
+          "modality": "text",
+          "text": "Main Results: When visual context is available (W+C+V), we see that the model performance greatly improves over the textual models (W+C), showing that visual contexts are complimentary to textual information in named entity recognition tasks. In addition, it can be seen that the modality attention module further improves the entity type recognition performance for (W+C+V). This result indicates that the modality attention is able to focus on the most effective modality (visual, words, or characters) adaptive to each sample to maximize information gain. Note that our text-only model (W+C) with the modality attention module also significantly outperform the state-of-the-art baselines BIBREF8 , BIBREF1 , BIBREF0 that use the same textual modalities (W+C), showing the effectiveness of the modality attention module for textual models as well.\n\nError Analysis: Table TABREF17 shows example cases where incorporation of visual contexts affects prediction of named entities. For example, the token `curry' in the caption “The curry's \" is polysemous and may refer to either a type of food or a famous basketball player `Stephen Curry', and the surrounding textual contexts do not provide enough information to disambiguate it. On the other hand, visual contexts (visual tags: `parade', `urban area', ...) provide similarities to the token's distributional semantics from other training examples (snaps from “NBA Championship Parade Story\"), and thus the model successfully predicts the token as a named entity. Similarly, while the text-only model erroneously predicts `Apple' in the caption “Grandma w dat lit Apple Crisp\" as an organization (Apple Inc.), the visual contexts (describing objects related to food) help disambiguate the token, making the model predict it correctly as a non-named entity (a fruit). Trending entities (musicians or DJs such as `CID', `Duke Dumont', `Marshmello', etc.) are also recognized correctly with strengthened contexts from visual information (describing concert scenes) despite lack of surrounding textual contexts. A few cases where visual contexts harmed the performance mostly include visual tags that are unrelated to a token or its surrounding textual contexts.\n\nVisualization of Modality Attention: Figure FIGREF19 visualizes the modality attention module at each decoding step (each column), where amplified modality is represented with darker color, and attenuated modality is represented with lighter color.\n\nFor the image-aided model (W+C+V; upper row in Figure FIGREF19 ), we confirm that the modality attention successfully attenuates irrelevant signals (selfies, etc.) and amplifies relevant modality-based contexts in prediction of a given token. In the example of “disney word essential = coffee\" with visual tags selfie, phone, person, the modality attention successfully attenuates distracting visual signals and focuses on textual modalities, consequently making correct predictions. The named entities in the examples of “Beautiful night atop The Space Needle\" and “Splash Mountain\" are challenging to predict because they are composed of common nouns (space, needle, splash, mountain), and thus they often need additional contexts to correctly predict. In the training data, visual contexts make stronger indicators for these named entities (space needle, splash mountain), and the modality attention module successfully attends more to stronger signals.\n\nFor text-only model (W+C), we observe that performance gains mostly come from the modality attention module better handling tokens unseen during training or unknown tokens from the pre-trained word embeddings matrix. For example, while WaRriOoOrs and Kooler Matic are missing tokens in the word embeddings matrix, it successfully amplifies character-based contexts (capitalized first letters, similarity to known entities `Golden State Warriors') and suppresses word-based contexts (word embeddings for unknown tokens `WaRriOoOrs'), leading to correct predictions. This result is significant because it shows performance of the model, with an almost identical architecture, can still improve without having to scale the word embeddings matrix indefinitely.\n\nFigure FIGREF19 (b) shows the cases where the modality attention led to incorrect predictions. For example, the model predicts missing tokens HUUUGE and Shampooer incorrectly as named entities by amplifying misleading character-based contexts (capitalized first letters) or visual contexts (concert scenes, associated contexts of which often include named entities in the training dataset)."
+        }
+      ],
+      "reranker_observations": [
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+          "model": "TeiFastReranking",
+          "query_id": "round1:primary",
+          "rank": 1,
+          "round_id": 1,
+          "score": 0.09602548878779378,
+          "slot_id": ""
+        },
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+          "model": "TeiFastReranking",
+          "query_id": "round2:support:boolean_proposition",
+          "rank": 1,
+          "round_id": 2,
+          "score": 0.09602548878779378,
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "retrieval_lineage": [
+        {
+          "query_id": "round1:primary",
+          "raw_rank": 1,
+          "raw_score": 0.09602548878779378,
+          "retriever_name": "text",
+          "round_id": 1,
+          "score_type": "score",
+          "slot_id": ""
+        },
+        {
+          "query_id": "round2:support:boolean_proposition",
+          "raw_rank": 1,
+          "raw_score": 0.21485611246057648,
+          "retriever_name": "text",
+          "round_id": 2,
+          "score_type": "score",
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "row_index": null,
+      "row_label": null,
+      "scale": null,
+      "section_id": "",
+      "source_aliases": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "1802_07862.txt",
+        "1802_07862"
+      ],
+      "source_backrefs": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee#source"
+      ],
+      "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+      "source_name": "1802_07862.txt",
+      "span_id": "",
+      "statement_kind": null,
+      "table_group_id": null,
+      "table_id": "",
+      "table_instance_id": null,
+      "text": "Main Results: When visual context is available (W+C+V), we see that the model performance greatly improves over the textual models (W+C), showing that visual contexts are complimentary to textual information in named entity recognition tasks. In addition, it can be seen that the modality attention module further improves the entity type recognition performance for (W+C+V). This result indicates that the modality attention is able to focus on the most effective modality (visual, words, or characters) adaptive to each sample to maximize information gain. Note that our text-only model (W+C) with the modality attention module also significantly outperform the state-of-the-art baselines BIBREF8 , BIBREF1 , BIBREF0 that use the same textual modalities (W+C), showing the effectiveness of the modality attention module for textual models as well.\n\nError Analysis: Table TABREF17 shows example cases where incorporation of visual contexts affects prediction of named entities. For example, the token `curry' in the caption “The curry's \" is polysemous and may refer to either a type of food or a famous basketball player `Stephen Curry', and the surrounding textual contexts do not provide enough information to disambiguate it. On the other hand, visual contexts (visual tags: `parade', `urban area', ...) provide similarities to the token's distributional semantics from other training examples (snaps from “NBA Championship Parade Story\"), and thus the model successfully predicts the token as a named entity. Similarly, while the text-only model erroneously predicts `Apple' in the caption “Grandma w dat lit Apple Crisp\" as an organization (Apple Inc.), the visual contexts (describing objects related to food) help disambiguate the token, making the model predict it correctly as a non-named entity (a fruit). Trending entities (musicians or DJs such as `CID', `Duke Dumont', `Marshmello', etc.) are also recognized correctly with strengthened contexts from visual information (describing concert scenes) despite lack of surrounding textual contexts. A few cases where visual contexts harmed the performance mostly include visual tags that are unrelated to a token or its surrounding textual contexts.\n\nVisualization of Modality Attention: Figure FIGREF19 visualizes the modality attention module at each decoding step (each column), where amplified modality is represented with darker color, and attenuated modality is represented with lighter color.\n\nFor the image-aided model (W+C+V; upper row in Figure FIGREF19 ), we confirm that the modality attention successfully attenuates irrelevant signals (selfies, etc.) and amplifies relevant modality-based contexts in prediction of a given token. In the example of “disney word essential = coffee\" with visual tags selfie, phone, person, the modality attention successfully attenuates distracting visual signals and focuses on textual modalities, consequently making correct predictions. The named entities in the examples of “Beautiful night atop The Space Needle\" and “Splash Mountain\" are challenging to predict because they are composed of common nouns (space, needle, splash, mountain), and thus they often need additional contexts to correctly predict. In the training data, visual contexts make stronger indicators for these named entities (space needle, splash mountain), and the modality attention module successfully attends more to stronger signals.\n\nFor text-only model (W+C), we observe that performance gains mostly come from the modality attention module better handling tokens unseen during training or unknown tokens from the pre-trained word embeddings matrix. For example, while WaRriOoOrs and Kooler Matic are missing tokens in the word embeddings matrix, it successfully amplifies character-based contexts (capitalized first letters, similarity to known entities `Golden State Warriors') and suppresses word-based contexts (word embeddings for unknown tokens `WaRriOoOrs'), leading to correct predictions. This result is significant because it shows performance of the model, with an almost identical architecture, can still improve without having to scale the word embeddings matrix indefinitely.\n\nFigure FIGREF19 (b) shows the cases where the modality attention led to incorrect predictions. For example, the model predicts missing tokens HUUUGE and Shampooer incorrectly as named entities by amplifying misleading character-based contexts (capitalized first letters) or visual contexts (concert scenes, associated contexts of which often include named entities in the training dataset).",
+      "unit": null,
+      "value": null,
+      "vlm_text": ""
+    },
+    {
+      "bbox": null,
+      "block_id": null,
+      "canonical_id": "evidence:7642b03f-823e-4bbd-bc1a-16334b3b92ee:stable-chunk%3A13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+      "caption": "",
+      "cell_id": "",
+      "chunk_end": null,
+      "chunk_start": null,
+      "column_index": null,
+      "column_label": null,
+      "continuation_id": "",
+      "currency": null,
+      "duplicate_evidence_ids": [],
+      "element_id": "",
+      "evidence_id": "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+      "evidence_level": "page",
+      "financial_scope": null,
+      "identity": {
+        "kind": "evidence",
+        "local_id": "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+        "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee"
+      },
+      "metadata": {
+        "_sparse_retrieval_score": 9.68246841430664,
+        "collection_name": "default",
+        "creation_date": "2026-08-10",
+        "file_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "file_name": "1802_07862.txt",
+        "file_path": "/mnt/scratch/users/tbczhang/outputs/MARA/revalidation_20260810_formal_b7cda0b/manifests/documents/1802_07862.txt",
+        "file_size": 26878,
+        "file_type": "text/plain",
+        "last_modified_date": "2026-08-10",
+        "reranker_backend": "TeiFastReranking",
+        "reranker_execution_trace": {
+          "backend": "TeiFastReranking",
+          "configured": true,
+          "executed": true,
+          "failure_reason": "",
+          "input_count": 9,
+          "input_identities": [
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30"
+          ],
+          "loaded": true,
+          "model": "TeiFastReranking",
+          "output_count": 9,
+          "output_identities": [
+            "stable-chunk:3806ab5c7c7bee89c044213283a35d117fee31a5c12bda899ef2232d5fba6a6c",
+            "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+            "stable-chunk:825fb3587963a9c7bb2bec78a748b3a2ac4966a6e313c95a0610fdde382aa9e9",
+            "stable-chunk:7cb1939866e172c5ff472a70ca3e81dbe60f9a8754f6cb4397c592226795e793",
+            "stable-chunk:32ec669e2ca85a4c6b1fa8b994a1e8f1ce4044b563e59e47e93827cf7cbd9c2a",
+            "stable-chunk:fdf44119edc5154e9be698cf5378490e5df94f91e2c173f2c3c411b187433c30",
+            "stable-chunk:3e69fcd06ecc3c68c085864ded2161165464b6155dbb42518006e7fff0ebf755",
+            "stable-chunk:df8fd0495bc0af63cf1bd4c0bc5a56e3d249c23710784f9da7e7f80e6bc9a5d0",
+            "stable-chunk:a05d23c3575a8f056b3e4c82c37b33f01951341ec4842d3618b8937d523e2a8b"
+          ],
+          "score_field": "reranking_score"
+        },
+        "reranker_input_identity": "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+        "reranker_model": "TeiFastReranking",
+        "reranker_rank": 2,
+        "reranker_score": 0.03339982193331559,
+        "reranking_score": 0.03339982193331559
+      },
+      "modality": "text",
+      "neighbor_element_ids": [],
+      "normalized_text_hash": "f90d92c5e3ba7f7be5f4176828b2b0b726b85f1c369efa2f53504cf6bde33255",
+      "ocr_text": "",
+      "page_label": "",
+      "parent_element_id": "",
+      "period": null,
+      "period_kind": null,
+      "representations": [
+        {
+          "field": "text",
+          "modality": "text",
+          "text": "For text-only model (W+C), we observe that performance gains mostly come from the modality attention module better handling tokens unseen during training or unknown tokens from the pre-trained word embeddings matrix. For example, while WaRriOoOrs and Kooler Matic are missing tokens in the word embeddings matrix, it successfully amplifies character-based contexts (capitalized first letters, similarity to known entities `Golden State Warriors') and suppresses word-based contexts (word embeddings for unknown tokens `WaRriOoOrs'), leading to correct predictions. This result is significant because it shows performance of the model, with an almost identical architecture, can still improve without having to scale the word embeddings matrix indefinitely.\n\nFigure FIGREF19 (b) shows the cases where the modality attention led to incorrect predictions. For example, the model predicts missing tokens HUUUGE and Shampooer incorrectly as named entities by amplifying misleading character-based contexts (capitalized first letters) or visual contexts (concert scenes, associated contexts of which often include named entities in the training dataset).\n\nSensitivity to Word Embeddings Vocabulary Size: In order to isolate the effectiveness of the modality attention module on textual models in handling missing tokens, we report the performance with varying word embeddings vocabulary sizes in Table TABREF20 . By increasing the number of missing tokens artificially by randomly removing words from the word embeddings matrix (original vocab size: 400K), we observe that while the overall performance degrades, the modality attention module is able to suppress the peformance degradation. Note also that the performance gap generally gets bigger as we decrease the vocabulary size of the word embeddings matrix. This result is significant in that the modality attention is able to improve the model more robust to missing tokens without having to train an indefinitely large word embeddings matrix for arbitrarily noisy social media text datasets.\n\n## Conclusions\n\nWe proposed a new multimodal NER (MNER: image + text) task on short social media posts. We demonstrated for the first time an effective MNER system, where visual information is combined with textual information to outperform traditional text-based NER baselines. Our work can be applied to myriads of social media posts or other articles across multiple platforms which often include both text and accompanying images. In addition, we proposed the modality attention module, a new neural mechanism which learns optimal integration of different modes of correlated information. In essence, the modality attention learns to attenuate irrelevant or uninformative modal information while amplifying the primary modality to extract better overall representations. We showed that the modality attention based model outperforms other state-of-the-art baselines when text was the only modality available, by better combining word and character level information."
+        }
+      ],
+      "reranker_observations": [
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+          "model": "TeiFastReranking",
+          "query_id": "round1:primary",
+          "rank": 2,
+          "round_id": 1,
+          "score": 0.03339982193331559,
+          "slot_id": ""
+        },
+        {
+          "backend": "TeiFastReranking",
+          "input_identity": "stable-chunk:13cce574995cc288b955909590d9d9e368b51d0d9c20922a9406beabdc168204",
+          "model": "TeiFastReranking",
+          "query_id": "round2:support:boolean_proposition",
+          "rank": 5,
+          "round_id": 2,
+          "score": 0.03339982193331559,
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "retrieval_lineage": [
+        {
+          "query_id": "round1:primary",
+          "raw_rank": 2,
+          "raw_score": 0.03339982193331559,
+          "retriever_name": "text",
+          "round_id": 1,
+          "score_type": "score",
+          "slot_id": ""
+        },
+        {
+          "query_id": "round2:support:boolean_proposition",
+          "raw_rank": 5,
+          "raw_score": 0.014447852533602465,
+          "retriever_name": "text",
+          "round_id": 2,
+          "score_type": "score",
+          "slot_id": "support:boolean_proposition"
+        }
+      ],
+      "row_index": null,
+      "row_label": null,
+      "scale": null,
+      "section_id": "",
+      "source_aliases": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+        "1802_07862.txt",
+        "1802_07862"
+      ],
+      "source_backrefs": [
+        "7642b03f-823e-4bbd-bc1a-16334b3b92ee#source"
+      ],
+      "source_id": "7642b03f-823e-4bbd-bc1a-16334b3b92ee",
+      "source_name": "1802_07862.txt",
+      "span_id": "",
+      "statement_kind": null,
+      "table_group_id": null,
+      "table_id": "",
+      "table_instance_id": null,
+      "text": "For text-only model (W+C), we observe that performance gains mostly come from the modality attention module better handling tokens unseen during training or unknown tokens from the pre-trained word embeddings matrix. For example, while WaRriOoOrs and Kooler Matic are missing tokens in the word embeddings matrix, it successfully amplifies character-based contexts (capitalized first letters, similarity to known entities `Golden State Warriors') and suppresses word-based contexts (word embeddings for unknown tokens `WaRriOoOrs'), leading to correct predictions. This result is significant because it shows performance of the model, with an almost identical architecture, can still improve without having to scale the word embeddings matrix indefinitely.\n\nFigure FIGREF19 (b) shows the cases where the modality attention led to incorrect predictions. For example, the model predicts missing tokens HUUUGE and Shampooer incorrectly as named entities by amplifying misleading character-based contexts (capitalized first letters) or visual contexts (concert scenes, associated contexts of which often include named entities in the training dataset).\n\nSensitivity to Word Embeddings Vocabulary Size: In order to isolate the effectiveness of the modality attention module on textual models in handling missing tokens, we report the performance with varying word embeddings vocabulary sizes in Table TABREF20 . By increasing the number of missing tokens artificially by randomly removing words from the word embeddings matrix (original vocab size: 400K), we observe that while the overall performance degrades, the modality attention module is able to suppress the peformance degradation. Note also that the performance gap generally gets bigger as we decrease the vocabulary size of the word embeddings matrix. This result is significant in that the modality attention is able to improve the model more robust to missing tokens without having to train an indefinitely large word embeddings matrix for arbitrarily noisy social media text datasets.\n\n## Conclusions\n\nWe proposed a new multimodal NER (MNER: image + text) task on short social media posts. We demonstrated for the first time an effective MNER system, where visual information is combined with textual information to outperform traditional text-based NER baselines. Our work can be applied to myriads of social media posts or other articles across multiple platforms which often include both text and accompanying images. In addition, we proposed the modality attention module, a new neural mechanism which learns optimal integration of different modes of correlated information. In essence, the modality attention learns to attenuate irrelevant or uninformative modal information while amplifying the primary modality to extract better overall representations. We showed that the modality attention based model outperforms other state-of-the-art baselines when text was the only modality available, by better combining word and character level information.",
+      "unit": null,
+      "value": null,
+      "vlm_text": ""
+    }
+  ]
+}

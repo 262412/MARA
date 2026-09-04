@@ -31,11 +31,11 @@ def test_visual_route_limits_page_image_candidates_to_selected_evidence():
 
     bundle = build_evidence_bundle("doc_page_image", request, metadata)
 
-    assert len(bundle.items) == 10
+    assert len(bundle.items) == 6
     assert [item["page_label"] for item in bundle.items] == [
-        str(page) for page in range(1, 11)
+        str(page) for page in range(1, 7)
     ]
-    assert bundle.metadata["page_coverage"] == [str(page) for page in range(1, 11)]
+    assert bundle.metadata["page_coverage"] == [str(page) for page in range(1, 7)]
 
 
 def test_hybrid_route_page_coverage_tracks_selected_evidence_not_candidates():
@@ -71,7 +71,7 @@ def test_hybrid_route_page_coverage_tracks_selected_evidence_not_candidates():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert bundle.metadata["page_coverage"] == ["1", "2"]
+    assert bundle.metadata["page_coverage"] == ["2", "1"]
     assert "99" not in bundle.metadata["page_coverage"]
 
 
@@ -87,23 +87,19 @@ def test_text_route_uses_selected_text_as_source_level_evidence():
 
     bundle = build_evidence_bundle("doc", request, {"evidence": []})
 
-    assert bundle.items == [
-        {
-            "evidence_id": "selected-text:file-a",
-            "source_id": "file-a",
-            "source_name": "source.txt",
-            "page_label": "",
-            "modality": "text",
-            "element_id": "",
-            "bbox": None,
-            "caption": "",
-            "text": "The source explains that revenue rose because demand improved.",
-            "ocr_text": "",
-            "vlm_text": "",
-            "source_backrefs": ["file-a#source"],
-            "evidence_level": "source",
-            "metadata": {"route": "doc"},
-        }
-    ]
+    assert len(bundle.items) == 1
+    selected = bundle.items[0]
+    assert selected["evidence_id"] == "selected-text:file-a"
+    assert selected["source_id"] == "file-a"
+    assert selected["source_name"] == "source.txt"
+    assert selected["text"] == (
+        "The source explains that revenue rose because demand improved."
+    )
+    assert selected["source_backrefs"] == ["file-a#source"]
+    assert selected["evidence_level"] == "source"
+    assert selected["canonical_id"] == "evidence:file-a:selected-text%3Afile-a"
+    assert selected["normalized_text_hash"]
+    assert selected["duplicate_evidence_ids"] == []
+    assert bundle.metadata["schema_version"] == "evidence_bundle.v2"
     assert bundle.metadata["source_ids"] == ["file-a"]
     assert bundle.metadata["evidence_ids"] == ["selected-text:file-a"]

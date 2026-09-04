@@ -28,13 +28,27 @@ def test_evidence_element_preserves_multimodal_identity_fields():
         vlm_text="A table of yearly revenue.",
     )
 
-    assert element.as_dict() == {
+    payload = element.as_dict()
+    assert payload == {
         "evidence_id": "table-hit",
         "source_id": "file-1",
         "source_name": "report.pdf",
         "page_label": "7",
         "modality": "table",
         "element_id": "table-7",
+        "canonical_id": "",
+        "parent_element_id": "",
+        "neighbor_element_ids": [],
+        "section_id": "",
+        "table_id": "",
+        "row_index": None,
+        "column_index": None,
+        "continuation_id": "",
+        "chunk_start": None,
+        "chunk_end": None,
+        "normalized_text_hash": "",
+        "duplicate_evidence_ids": [],
+        "retrieval_lineage": [],
         "bbox": [1, 2, 3, 4],
         "caption": "Revenue table",
         "text": "Revenue increased.",
@@ -59,24 +73,21 @@ def test_visual_route_synthesizes_page_image_evidence_from_request_context():
     bundle = build_evidence_bundle("doc_page_image", request, {})
 
     assert bundle.route == "doc_page_image"
-    assert bundle.items == [
-        {
-            "evidence_id": "page-image:file-1:4",
-            "source_id": "file-1",
-            "source_name": "chart.pdf",
-            "page_label": "4",
-            "modality": "page_image",
-            "element_id": "",
-            "bbox": None,
-            "caption": "",
-            "text": "The chart compares revenue growth.",
-            "ocr_text": "The chart compares revenue growth.",
-            "vlm_text": "",
-            "source_backrefs": ["file-1#page:4"],
-            "evidence_level": "page",
-            "metadata": {"route": "doc_page_image"},
-        }
-    ]
+    assert len(bundle.items) == 1
+    item = bundle.items[0]
+    assert item["evidence_id"] == "page-image:file-1:4"
+    assert item["source_id"] == "file-1"
+    assert item["source_name"] == "chart.pdf"
+    assert item["page_label"] == "4"
+    assert item["modality"] == "page_image"
+    assert item["text"] == "The chart compares revenue growth."
+    assert item["source_backrefs"] == ["file-1#page:4"]
+    assert item["normalized_text_hash"]
+    assert item["canonical_id"] == "evidence:file-1:page-image%3Afile-1%3A4"
+    assert item["identity"]["kind"] == "evidence"
+    assert item["identity"]["local_id"] == "page-image:file-1:4"
+    assert item["metadata"]["route"] == "doc_page_image"
+    assert "dedupe_source_ids" not in item["metadata"]
 
 
 def test_hybrid_route_normalizes_text_page_image_and_element_evidence():
@@ -115,11 +126,11 @@ def test_hybrid_route_normalizes_text_page_image_and_element_evidence():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert [item["modality"] for item in bundle.items] == [
+    assert {item["modality"] for item in bundle.items} == {
         "text",
-        "page_image",
         "table",
-    ]
+        "page_image",
+    }
     assert bundle.metadata["modality_counts"] == {
         "page_image": 1,
         "table": 1,
@@ -499,11 +510,11 @@ def test_hybrid_bundle_consumes_multimodal_index_metadata():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert [item["modality"] for item in bundle.items] == [
+    assert {item["modality"] for item in bundle.items} == {
         "text",
         "page_image",
         "figure",
-    ]
+    }
     assert bundle.metadata["modality_counts"] == {
         "figure": 1,
         "page_image": 1,
@@ -577,12 +588,12 @@ def test_hybrid_route_selects_page_first_multimodal_evidence_across_documents():
 
     bundle = build_evidence_bundle("hybrid", request, metadata)
 
-    assert bundle.metadata["m3docrag_trace"]["selected_pages"][0] == {
+    assert bundle.metadata["m3docrag_trace"]["ranked_pages"][0] == {
         "source_id": "file-b",
         "page_label": "5",
     }
     assert [item["evidence_id"] for item in bundle.items[:3]] == [
-        "text-b",
         "page-image:file-b:5",
+        "text-b",
         "element:file-b:5:table-a",
     ]

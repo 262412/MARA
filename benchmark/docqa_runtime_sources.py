@@ -3,10 +3,66 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
+from ktem.docqa.evidence_identity import EvidenceIdentity, identity_of
+from ktem.docqa.source_identity_crosswalk import (
+    SourceIdentityCrosswalk,
+    canonicalize_evidence_source,
+)
+
 from .schemas import BenchmarkDocument
 
 SHORT_SOURCE_TEXT_MAX_CHARS = 4096
 TEXT_FORMAT_TYPES = {"txt", "text", "md", "markdown", "json", "jsonl", "csv"}
+
+
+def source_identity_crosswalk(
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for index, document in enumerate(documents):
+        runtime_file_id = (
+            str(selected_file_ids[index]).strip()
+            if index < len(selected_file_ids)
+            else ""
+        )
+        path = Path(document.path)
+        records.append(
+            SourceIdentityCrosswalk(
+                canonical_dataset_id=document.document_id,
+                runtime_file_id=runtime_file_id,
+                runtime_source_id=runtime_file_id,
+                document_path=str(path),
+                filename=path.name,
+                aliases=(path.stem,),
+            ).as_dict()
+        )
+    return records
+
+
+def canonicalize_docqa_evidence_metadata(
+    metadata: dict[str, Any],
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> dict[str, Any]:
+    normalized = dict(metadata)
+    crosswalk = source_identity_crosswalk(documents, selected_file_ids)
+    for key, value in list(normalized.items()):
+        if not isinstance(value, list) or not all(
+            isinstance(item, dict) for item in value
+        ):
+            continue
+        if key.endswith("_evidence") or key in {
+            "evidence",
+            "candidate_evidence",
+            "element_index",
+            "page_image_index",
+        }:
+            normalized[key] = [
+                canonicalize_evidence_source(item, crosswalk) for item in value
+            ]
+    normalized["source_identity_crosswalk"] = crosswalk
+    return normalized
 
 
 def document_paths(documents: list[BenchmarkDocument]) -> list[str]:
@@ -45,6 +101,21 @@ def has_search_index(runtime: Any, file_id: str) -> bool:
     if index_ready is None:
         return True if checker_ready is None else checker_ready
     return index_ready
+
+
+def has_element_index(runtime: Any, file_id: str) -> bool:
+    file_index = getattr(runtime, "file_index", None)
+    if file_index is None:
+        return False
+    try:
+        resources = getattr(file_index, "_resources")
+        index_table = resources["Index"]
+        rows = _index_relation_rows(index_table, file_id)
+    except (AttributeError, ImportError, KeyError, RuntimeError, TypeError, ValueError):
+        return False
+    return any(
+        str(getattr(row, "relation_type", "") or "") == "element_index" for row in rows
+    )
 
 
 def _file_index_search_ready(file_index: Any, file_id: str) -> bool | None:
@@ -119,6 +190,20 @@ def selected_source_fallback_text(
 ) -> str:
     hits = selected_source_fallback_hits(documents, selected_file_ids)
     return str(hits[0].get("text") or "") if hits else ""
+
+
+def selected_source_title(
+    documents: list[BenchmarkDocument],
+    selected_file_ids: list[str],
+) -> str:
+    if len(documents) != 1 or len(selected_file_ids) != 1:
+        return ""
+    if not str(selected_file_ids[0] or "").strip():
+        return ""
+    title = documents[0].metadata.get("title")
+    if not isinstance(title, str):
+        return ""
+    return " ".join(title.split())
 
 
 def _index_relation_rows(index_table: Any, file_id: str) -> list[Any]:
@@ -206,30 +291,25 @@ def _docqa_source_aliases(
     documents: list[BenchmarkDocument],
     selected_file_ids: list[str],
 ) -> dict[str, str]:
-    aliases: dict[str, str] = {}
-    for document, file_id in zip(documents, selected_file_ids):
-        _add_source_alias(aliases, file_id, document.document_id)
-    for document in documents:
-        path = Path(document.path)
-        for alias in (
-            document.document_id,
-            str(path),
-            str(path.resolve()),
-            path.name,
-            path.stem,
+    targets: dict[str, set[str]] = {}
+    for record in source_identity_crosswalk(documents, selected_file_ids):
+        canonical = str(record["canonical_dataset_id"])
+        for value in (
+            canonical,
+            record.get("runtime_file_id"),
+            record.get("runtime_source_id"),
+            record.get("document_path"),
+            record.get("filename"),
+            *(record.get("aliases") or []),
         ):
-            _add_source_alias(aliases, alias, document.document_id)
-    return aliases
-
-
-def _add_source_alias(
-    aliases: dict[str, str],
-    alias: Any,
-    document_id: str,
-) -> None:
-    key = _source_alias_key(alias)
-    if key:
-        aliases[key] = document_id
+            key = _source_alias_key(value)
+            if key:
+                targets.setdefault(key, set()).add(canonical)
+    return {
+        alias: next(iter(canonical_ids))
+        for alias, canonical_ids in targets.items()
+        if len(canonical_ids) == 1
+    }
 
 
 def _canonicalize_docqa_hit(
@@ -241,19 +321,78 @@ def _canonicalize_docqa_hit(
     if not canonical_id:
         return normalized
 
-    runtime_source_id = str(
-        normalized.get("source_id") or normalized.get("document_id") or ""
-    ).strip()
-    if runtime_source_id and runtime_source_id != canonical_id:
-        normalized["runtime_source_id"] = runtime_source_id
-    normalized["source_id"] = canonical_id
+    runtime_source_id = _runtime_hit_source_id(normalized) or canonical_id
+    runtime_identity = _canonical_hit_identity(normalized, runtime_source_id)
+    evaluation_identity = EvidenceIdentity(
+        canonical_id,
+        runtime_identity.kind,
+        runtime_identity.local_id,
+    )
+    normalized["runtime_source_id"] = runtime_source_id
+    normalized["evaluation_source_id"] = canonical_id
+    normalized["source_id"] = runtime_source_id
     normalized["document_id"] = canonical_id
-    normalized["source_backrefs"] = _canonical_source_backrefs(
+    original_backrefs = [
+        str(value).strip()
+        for value in normalized.get("source_backrefs") or []
+        if str(value).strip()
+    ]
+    evaluation_backrefs = _canonical_source_backrefs(
         normalized,
         aliases,
         canonical_id,
     )
+    normalized["runtime_source_backrefs"] = original_backrefs
+    normalized["source_backrefs"] = evaluation_backrefs
+    normalized["evaluation_source_backrefs"] = evaluation_backrefs
+    source_aliases = [
+        str(value).strip()
+        for value in normalized.get("source_aliases") or []
+        if str(value).strip()
+    ]
+    if runtime_source_id and runtime_source_id not in source_aliases:
+        source_aliases.append(runtime_source_id)
+    if canonical_id not in source_aliases:
+        source_aliases.append(canonical_id)
+    if source_aliases:
+        normalized["source_aliases"] = source_aliases
+    normalized["runtime_identity"] = runtime_identity.key
+    normalized["evaluation_identity"] = evaluation_identity.key
+    normalized["identity"] = runtime_identity.as_dict()
+    normalized["canonical_id"] = runtime_identity.key
     return normalized
+
+
+def _runtime_hit_source_id(hit: dict[str, Any]) -> str:
+    value = str(
+        hit.get("runtime_source_id")
+        or hit.get("source_id")
+        or hit.get("document_id")
+        or ""
+    ).strip()
+    if value:
+        return value
+    for ref in hit.get("source_backrefs") or []:
+        source, _separator, _suffix = str(ref or "").strip().partition("#")
+        if source:
+            return source
+    return ""
+
+
+def _canonical_hit_identity(
+    hit: dict[str, Any],
+    canonical_source_id: str,
+) -> EvidenceIdentity:
+    existing = hit.get("identity")
+    if isinstance(existing, dict):
+        kind = str(existing.get("kind") or "").strip()
+        local_id = str(existing.get("local_id") or "").strip()
+        if kind and local_id:
+            return EvidenceIdentity(canonical_source_id, kind, local_id)
+    identity_input = dict(hit)
+    identity_input.pop("identity", None)
+    identity_input.pop("canonical_id", None)
+    return identity_of(identity_input)
 
 
 def _hit_canonical_document_id(

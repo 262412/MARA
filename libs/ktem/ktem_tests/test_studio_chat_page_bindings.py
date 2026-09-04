@@ -129,7 +129,11 @@ def test_chat_page_binds_studio_generate_after_notebook_refresh():
         "            *page._indices_input,\n"
         "        ]" in controls
     )
-    assert ".then(\n        partial(generate_studio_artifact_panel_update" in controls
+    assert (
+        ".then(\n"
+        "        bind_page_callback(generate_studio_artifact_panel_update, page)"
+        in controls
+    )
     assert "generate_studio_artifact_panel_update" in controls
     assert "inputs=studio_generate_inputs(page)" in controls
     assert "outputs=studio_generate_outputs(page)" in controls
@@ -170,11 +174,11 @@ def test_chat_page_binds_studio_save_note_without_moving_notebook_refresh():
     assert chat_page.index(
         "self.chat_control.conversation_id.change"
     ) < chat_page.index("bind_studio_artifact_events(self)")
-    assert ".click(\n        save_latest_answer_note_update" in controls
+    assert "bind_page_callback(save_latest_answer_note_update, page)" in controls
     assert "page.state_retrieval_history" in controls
-    assert ".click(\n        save_latest_artifact_note_update" in controls
-    assert ".click(\n        save_manual_note_update" in controls
-    assert ".click(\n        partial(convert_note_to_source_update" in controls
+    assert "bind_page_callback(save_latest_artifact_note_update, page)" in controls
+    assert "bind_page_callback(save_manual_note_update, page)" in controls
+    assert "bind_page_callback(convert_note_to_source_update, page)" in controls
     assert "outputs=[page.notebook_panel]" in controls
 
 
@@ -185,7 +189,7 @@ def test_chat_page_binds_studio_delete_without_moving_notebook_refresh():
     assert chat_page.index(
         "self.chat_control.conversation_id.change"
     ) < chat_page.index("bind_studio_artifact_events(self)")
-    assert ".click(\n        delete_latest_artifact_update" in controls
+    assert "bind_page_callback(delete_latest_artifact_root, page)" in controls
     assert "outputs=[page.notebook_panel]" in controls
 
 
@@ -196,7 +200,7 @@ def test_chat_page_binds_studio_export_without_moving_notebook_refresh():
     assert chat_page.index(
         "self.chat_control.conversation_id.change"
     ) < chat_page.index("bind_studio_artifact_events(self)")
-    assert ".click(\n        export_latest_artifact_update" in controls
+    assert "bind_page_callback(export_latest_artifact_root, page)" in controls
     assert (
         "inputs=[page.chat_control.conversation_id, page.studio_export_format]"
         in controls
@@ -216,8 +220,9 @@ def test_chat_page_binds_studio_regenerate_without_moving_notebook_refresh():
     assert "inputs=[page.chat_control.conversation_id]" in controls
     assert "regenerate_latest_studio_artifact_panel_update" in controls
     assert (
-        ".then(\n        partial(regenerate_latest_studio_artifact_panel_update"
-        in controls
+        ".then(\n"
+        "        bind_page_callback("
+        "regenerate_latest_studio_artifact_panel_update, page)" in controls
     )
     assert "inputs=studio_regenerate_inputs(page)" in controls
     assert "outputs=studio_generate_outputs(page)" in controls

@@ -1,0 +1,11 @@
+{
+  "name": "mara-quality-gates",
+  "private": true,
+  "scripts": {
+    "test:frontend": "node --test libs/ktem/ktem/assets/js/*.test.js",
+    "test:browser": "playwright test --config tests/browser/playwright.config.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "contract_id": "qasper_stage9_verifier_auditor_characterization.v1",
+  "source": {
+    "artifact": "/mnt/scratch/users/tbczhang/outputs/MARA/qasper_trace_canary_0ef20e45_20260830/quality/debug/qasper/20260830_225837_qasper-trace-canary-0ef20e4-10388470/predictions.jsonl",
+    "example_id": "e330e162ec29722f5ec9f83853d129c9e0693d65",
+    "job_id": "10388470",
+    "route": "text_rag",
+    "sha": "0ef20e45f18bb580541cf3e53ec4d7548210bbe3"
+  },
+  "online_verifier_execution": {
+    "actual_model_call_count": 0,
+    "audit_model_call_count": 0,
+    "audit_reason": "release_conclusion_auditor_not_independent",
+    "audit_status": "not_started",
+    "auditor_relationship": "distinct_instance_same_model",
+    "candidate_verification_status": "pre_audit_failed",
+    "proposal_model_call_count": 0,
+    "reason": "release_conclusion_auditor_not_independent",
+    "status": "failed",
+    "transaction": {}
+  },
+  "observed_stage9": {
+    "event_input_digest": "ec1090962db43073cea3e6683a88b2f6dd78decf8ab3c1b28cd634c62cefacc8",
+    "incompleteness_reasons": [
+      "verifier_input_missing"
+    ],
+    "local_comparison_digest": "02cd526402078f856e9ceabbf9e0f9f361102aba5185fcc102276e1f042d8a20",
+    "local_payload_digest": "02cd526402078f856e9ceabbf9e0f9f361102aba5185fcc102276e1f042d8a20",
+    "reference_comparison_digest": "02cd526402078f856e9ceabbf9e0f9f361102aba5185fcc102276e1f042d8a20",
+    "reference_payload_digest": "02cd526402078f856e9ceabbf9e0f9f361102aba5185fcc102276e1f042d8a20",
+    "stage": "verifier_and_auditor",
+    "stage_index": 9
+  },
+  "root_cause": "stage_nine_treated_an_explicit_zero_call_typed_pre_audit_stop_as_a_missing_verifier_input"
+}

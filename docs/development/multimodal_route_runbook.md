@@ -64,6 +64,21 @@ The wrapper logs `kh_app_data_dir=...` at job start. Treat a missing log line,
 or a path ending exactly in `/mara_runtime/ktem_app_data`, as a failed
 preflight and do not use that run for final thesis results.
 
+When a producer is launched from a frozen execution plan, its completion trap
+first verifies the artifact marker and the plan's expected
+`(example_id, route)` keys. It records this producer observation before runtime
+cleanup without pretending that the still-running Slurm job is terminal. The
+downstream synthesis job then cross-checks that immutable observation against
+the real Slurm terminal state and exit code. The durable ledger is
+`09_synthesis/benchmark_execution_plan.json` plus
+`slurm_submission_jobs.tsv`; each producer row records the artifact manifest
+digest and directory, while synthesis records the terminal result. Both also
+bind a SHA-256-digested runtime contract under
+`09_synthesis/runtime_contracts/`. That contract binds the clean source SHA,
+Slurm job ID, execution job key, isolated interpreter, module origins, and
+TheFlow storage paths. A missing or conflicting observation remains failed and
+preserves the runtime for audit.
+
 ## Submit Slurm Job
 
 Create the Slurm log directory before `sbatch`; Slurm opens stdout before the

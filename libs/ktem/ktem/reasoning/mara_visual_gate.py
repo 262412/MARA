@@ -2,18 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-VISUAL_GENERATION_TERMS = (
-    "chart",
-    "diagram",
-    "figure",
-    "image",
-    "layout",
-    "plot",
-    "shown",
-    "slide",
-    "visual",
-    "visible",
-)
+from .mara_visual_intent import has_explicit_visual_intent
 
 
 def hybrid_should_use_visual_generator(
@@ -38,7 +27,7 @@ def hybrid_should_use_visual_generator(
             str(getattr(decision, "reason", "") or ""),
         ]
     ).lower()
-    if any(term in prompt for term in VISUAL_GENERATION_TERMS):
+    if has_explicit_visual_intent(prompt):
         bundle.metadata["visual_generation_gate"] = "visual_intent"
         return True
     bundle.metadata["visual_generation_gate"] = "skipped_text_strong"

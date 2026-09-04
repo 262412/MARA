@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from llama_index.core.schema import Document as LlamaDocument
+
 from kotaemon.base import Document
 from kotaemon.indices.parse_cache import load_data_with_parse_cache
 from kotaemon.indices.vision_cache import cached_model_result
@@ -21,6 +23,46 @@ class _FakeLoader:
             **(extra_info or {}),
         }
         return [Document(text=f"parsed-{self.calls}", id_="doc-1", metadata=metadata)]
+
+
+class _LlamaDocumentLoader:
+    parser_version = "v1"
+
+    def load_data(self, file_path, extra_info=None):
+        text = (
+            "Consolidated Statement of Cash Flows. "
+            + ("Full page finance text must survive parsing. " * 30)
+            + "Capital spending (4,625)."
+        )
+        return [
+            LlamaDocument(
+                text=text,
+                id_="pdf-page-63",
+                metadata={"page_label": "63"},
+            )
+        ]
+
+
+def test_parse_cache_miss_preserves_llama_document_text_id_and_page_metadata(tmp_path):
+    input_file = tmp_path / "filing.pdf"
+    input_file.write_bytes(b"%PDF-1.4")
+
+    result = load_data_with_parse_cache(
+        _LlamaDocumentLoader(),
+        input_file,
+        extra_info={"file_id": "filing-1", "file_name": "filing.pdf"},
+        cache_dir=tmp_path / "parse-cache",
+        reader_policy={"reader_mode": "default"},
+    )
+
+    document = result.documents[0]
+    assert result.cache_hit is False
+    assert document.doc_id == "pdf-page-63"
+    assert document.metadata["page_label"] == "63"
+    assert document.metadata["file_id"] == "filing-1"
+    assert "Capital spending (4,625)." in document.text
+    assert len(document.text) > 400
+    assert not document.text.startswith("Doc ID:")
 
 
 def test_parse_cache_reuses_file_hash_and_reapplies_runtime_metadata(tmp_path):

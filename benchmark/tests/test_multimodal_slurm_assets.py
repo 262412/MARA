@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,6 +12,19 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/multimodal_route_rerun.sbatch"
 TEXT_SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/text_route_rerun.sbatch"
 RUNTIME_HELPER = PROJECT_ROOT / "scripts/slurm/benchmark_runtime_isolation.sh"
+ARTIFACT_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_benchmark_predictions.py"
+EXECUTION_PLAN_BUILDER = (
+    PROJECT_ROOT / "scripts/slurm/build_benchmark_execution_plan.py"
+)
+SUBMIT_FULLSYSTEM = PROJECT_ROOT / "scripts/slurm/submit_fullsystem_jobs.sh"
+CLEANUP_BARRIER = PROJECT_ROOT / "scripts/slurm/benchmark_cleanup_barrier.sbatch"
+SYNTHESIS_SCRIPT = PROJECT_ROOT / "scripts/slurm/synthesize_benchmark_run.sbatch"
+CONTRACT_SMOKE_VALIDATOR = PROJECT_ROOT / "scripts/slurm/validate_contract_smoke.py"
+INDEX_CONTRACT = PROJECT_ROOT / "scripts/slurm/benchmark_index_contract.py"
+SEMANTIC_EVALUATOR_NORMALIZER = (
+    PROJECT_ROOT / "scripts/slurm/normalize_semantic_evaluator.py"
+)
+TOOL_CALL_SMOKE = PROJECT_ROOT / "scripts/slurm/smoke_openai_tool_calls.py"
 RUNBOOK = PROJECT_ROOT / "docs/development/multimodal_route_runbook.md"
 
 
@@ -34,6 +49,28 @@ def test_multimodal_slurm_script_is_parseable_and_uses_safe_storage_layout():
     assert "/mnt/scratch/users/tbczhang/outputs/MARA" in text
     assert "/mnt/data2/users/tbczhang" not in text
     assert "projects/MARA/outputs" not in text
+
+
+def test_fullsystem_submission_uses_wave_dependencies_and_cleanup_barriers():
+    _require_posix_bash()
+    for script in (SUBMIT_FULLSYSTEM, CLEANUP_BARRIER):
+        result = subprocess.run(
+            ["bash", "-n", str(script)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+    text = SUBMIT_FULLSYSTEM.read_text(encoding="utf-8")
+    assert "MARA_FULLSYSTEM_WAVE_SIZE" in text
+    assert "MARA_FULLSYSTEM_MIN_FREE_INODES" in text
+    assert "lfs quota -u" in text
+    assert "afterany:" in text
+    assert "afterok:${PREVIOUS_BARRIER}" in text
+    assert CLEANUP_BARRIER.name in text
+    assert "MARA_RUNTIME_DIR_LIST" in text
+    assert EXECUTION_PLAN_BUILDER.name in text
+    assert SYNTHESIS_SCRIPT.name in text
 
 
 def test_multimodal_slurm_script_health_checks_backends_and_runs_no_think_routes():
@@ -140,6 +177,19 @@ def test_text_route_slurm_script_requires_isolated_benchmark_runtime():
         "configure_mara_local_models.py"
     )
     assert "--docqa-citation-mode inline" in text
+    assert 'SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"' in text
+    assert (
+        'SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"'
+        in text
+    )
+    assert '--semantic-evaluator "$SEMANTIC_EVALUATOR"' in text
+    assert '--semantic-evaluator-model "$SEMANTIC_EVALUATOR_MODEL"' in text
+    assert (
+        '--semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"'
+        in text
+    )
+    assert 'MAX_CONTEXT_LENGTH="${MARA_TEXT_MAX_CONTEXT_LENGTH:-3000}"' in text
+    assert '--max-context-length "$MAX_CONTEXT_LENGTH"' in text
     assert (
         'KH_APP_DATA_DIR="${KH_APP_DATA_DIR:-/users/tbczhang/fastscratch/mara_runtime/ktem_app_data}"'
         not in text
@@ -147,12 +197,264 @@ def test_text_route_slurm_script_requires_isolated_benchmark_runtime():
     assert "${MARA_RUNTIME_DIR}/ktem_app_data" not in text
 
 
+def test_text_route_slurm_script_can_emit_and_validate_full_contract_artifacts():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'ARTIFACT_DETAIL="${MARA_TEXT_ARTIFACT_DETAIL:-compact}"' in text
+    assert '--artifact-detail "$ARTIFACT_DETAIL"' in text
+    assert 'REQUIRE_CONTRACT_SMOKE="${MARA_REQUIRE_CONTRACT_SMOKE:-0}"' in text
+    assert (
+        'REQUIRE_SEMANTIC_DEBUG_TRACE="${MARA_REQUIRE_SEMANTIC_DEBUG_TRACE:-0}"' in text
+    )
+    assert 'SEMANTIC_DEBUG_TRACE="${MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE:-0}"' in text
+    assert (
+        'export MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE="$SEMANTIC_DEBUG_TRACE"' in text
+    )
+    assert 'test -f "$RUN_DIR/semantic_debug_traces.jsonl"' in text
+    assert str(CONTRACT_SMOKE_VALIDATOR.name) in text
+    assert '--suite-kind "$CONTRACT_SMOKE_SUITE_KIND"' in text
+    assert text.index(CONTRACT_SMOKE_VALIDATOR.name) < text.index(
+        "mara_cleanup_benchmark_runtime"
+    )
+
+
+def test_text_route_slurm_script_scopes_qasper_answerability_with_manifest():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "--require-qasper-answerability" in text
+    assert '--qasper-manifest "$MANIFEST"' in text
+
+
+def test_text_route_slurm_script_hard_checks_tool_calls_before_benchmark():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert TOOL_CALL_SMOKE.name in text
+    assert "citation_tool_call_error_count=0" in text
+    assert "inline_structured_citation_path_executed=true" in text
+    assert text.index(TOOL_CALL_SMOKE.name) < text.index("python -m benchmark run")
+
+
+def test_semantic_evaluator_normalizer_maps_local_alias_and_rejects_invalid_values():
+    local = subprocess.run(
+        [sys.executable, str(SEMANTIC_EVALUATOR_NORMALIZER), "local"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    invalid = subprocess.run(
+        [sys.executable, str(SEMANTIC_EVALUATOR_NORMALIZER), "not-a-backend"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert local.returncode == 0, local.stderr
+    assert local.stdout.strip() == "local_qwen3_8b"
+    assert invalid.returncode == 2
+    assert "semantic evaluator must be" in invalid.stderr
+
+
+def test_slurm_scripts_validate_semantic_evaluator_before_runtime_and_services():
+    for script in (TEXT_SLURM_SCRIPT, SLURM_SCRIPT):
+        text = script.read_text(encoding="utf-8")
+        assert "normalize_semantic_evaluator.py" in text
+        assert text.index("normalize_semantic_evaluator.py") < text.index(
+            "mara_bootstrap_benchmark_runtime"
+        )
+        assert text.index("normalize_semantic_evaluator.py") < text.index(
+            "start_service qwen3_8b"
+        )
+
+
+def test_text_route_slurm_script_uses_job_scoped_service_ports():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "PORT_OFFSET=$((10#${SLURM_JOB_ID:-$$} % 10000))" in text
+    assert 'TEXT_LLM_PORT="${MARA_TEXT_LLM_PORT:-$((20000 + PORT_OFFSET))}"' in text
+    assert 'RETRIEVAL_PORT="${MARA_RETRIEVAL_PORT:-$((40000 + PORT_OFFSET))}"' in text
+    assert 'MARA_QWEN3_8B_PORT="$TEXT_LLM_PORT"' in text
+    assert 'MARA_RETRIEVAL_PORT="$RETRIEVAL_PORT"' in text
+    assert 'MARA_TEXT_LLM_BASE_URL="$TEXT_LLM_BASE_URL"' in text
+    assert 'MARA_RETRIEVAL_BASE_URL="$RETRIEVAL_BASE_URL"' in text
+    assert 'MARA_LLM_BASE_URL="$TEXT_LLM_BASE_URL"' in text
+
+
+def test_multimodal_slurm_script_exports_complete_runtime_topology():
+    text = SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert (
+        'MARA_TEXT_LLM_BASE_URL="${MARA_TEXT_LLM_BASE_URL:-http://127.0.0.1:8000/v1}"'
+        in text
+    )
+    assert (
+        'MARA_RETRIEVAL_BASE_URL="${MARA_RETRIEVAL_BASE_URL:-http://127.0.0.1:8002}"'
+        in text
+    )
+    assert 'MARA_LLM_BASE_URL="${MARA_LLM_BASE_URL:-$MARA_TEXT_LLM_BASE_URL}"' in text
+    assert (
+        'MARA_COLVISION_ENDPOINT="${MARA_COLVISION_ENDPOINT:-http://127.0.0.1:8003/visual-score}"'
+        in text
+    )
+
+
+def test_text_route_slurm_script_rejects_all_failed_artifacts():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "validate_benchmark_predictions.py" in text
+    assert text.index("validate_benchmark_predictions.py") < text.index(
+        "mara_cleanup_benchmark_runtime"
+    )
+
+
+def test_route_wrappers_require_published_artifacts_and_scoped_contracts():
+    for script in (TEXT_SLURM_SCRIPT, SLURM_SCRIPT):
+        text = script.read_text(encoding="utf-8")
+        assert "MARA_EXECUTION_JOB_CONTRACT" in text
+        assert "artifact_manifest.json" in text
+        assert "artifact_complete.json" in text
+        assert "--require-complete-marker" in text
+        assert "--expected-keys-file" in text
+        assert '--manifest "$MANIFEST"' in text
+
+
+def test_multimodal_slurm_script_forwards_offline_semantic_evaluator_contract():
+    text = SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'SEMANTIC_EVALUATOR="${MARA_SEMANTIC_EVALUATOR:-off}"' in text
+    assert (
+        'SEMANTIC_EVALUATOR_MODEL="${MARA_SEMANTIC_EVALUATOR_MODEL:-Qwen/Qwen3-8B}"'
+        in text
+    )
+    assert '--semantic-evaluator "$SEMANTIC_EVALUATOR"' in text
+    assert '--semantic-evaluator-model "$SEMANTIC_EVALUATOR_MODEL"' in text
+    assert (
+        '--semantic-evaluator-timeout-seconds "$SEMANTIC_EVALUATOR_TIMEOUT_SECONDS"'
+        in text
+    )
+
+
+def test_multimodal_slurm_script_can_enforce_required_hybrid_eligibility():
+    text = SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "MARA_MULTIMODAL_REQUIRE_HYBRID_ELIGIBLE" in text
+    assert "--require-hybrid-eligible" in text
+    assert "validate_benchmark_predictions.py" in text
+    assert text.index("validate_benchmark_predictions.py") < text.index(
+        "mara_cleanup_benchmark_runtime"
+    )
+
+
 def test_benchmark_runtime_isolation_helper_bootstraps_empty_runtime():
     text = RUNTIME_HELPER.read_text(encoding="utf-8")
 
     assert "mara_bootstrap_benchmark_runtime" in text
+    assert "mara_cleanup_benchmark_runtime" in text
     assert "create_docqa_runtime" in text
     assert "mara_assert_isolated_kh_app_data" in text
+
+
+def test_text_route_slurm_script_records_and_enforces_clean_git_contract():
+    text = TEXT_SLURM_SCRIPT.read_text(encoding="utf-8")
+
+    assert "git rev-parse HEAD" in text
+    assert "git status --porcelain" in text
+    assert "MARA_ALLOW_DIRTY_BENCHMARK" in text
+    assert "MARA_BENCHMARK_SERVICE_CONTRACT" in text
+
+
+def test_slurm_scripts_export_content_digest_index_contract():
+    for script in (TEXT_SLURM_SCRIPT, SLURM_SCRIPT):
+        text = script.read_text(encoding="utf-8")
+        assert "benchmark_index_contract.py" in text
+        assert "MARA_BENCHMARK_INDEX_CONTRACT" in text
+        assert text.index("benchmark_index_contract.py") < text.index(
+            "python -m benchmark run"
+        )
+
+
+def test_slurm_scripts_export_exact_embedding_service_contract():
+    for script in (TEXT_SLURM_SCRIPT, SLURM_SCRIPT):
+        text = script.read_text(encoding="utf-8")
+        assert "MARA_BENCHMARK_EMBEDDING_CONTRACT" in text
+        assert "local_retrieval_server.py" in text
+        assert "env-retrieval.sh" in text
+        assert text.index("MARA_BENCHMARK_EMBEDDING_CONTRACT") < text.index(
+            "python -m benchmark run"
+        )
+
+
+def test_index_contract_changes_when_document_content_changes(tmp_path):
+    document = tmp_path / "document.txt"
+    manifest = tmp_path / "manifest.json"
+    document.write_text("version one", encoding="utf-8")
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "documents": [{"document_id": "doc", "path": str(document)}],
+                "examples": [],
+                "routes": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    first = subprocess.run(
+        [sys.executable, str(INDEX_CONTRACT), str(manifest)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    document.write_text("version two", encoding="utf-8")
+    second = subprocess.run(
+        [sys.executable, str(INDEX_CONTRACT), str(manifest)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    assert first.stdout.startswith("sha256:")
+    assert first.stdout != second.stdout
+
+
+def test_benchmark_runtime_cleanup_removes_only_configured_job_runtime(tmp_path):
+    _require_posix_bash()
+    runtime_root = tmp_path / "benchmark_runs_test"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            (
+                "set -euo pipefail; "
+                f"source {RUNTIME_HELPER}; "
+                f"MARA_BENCHMARK_RUNTIME_ROOT={runtime_root} "
+                "mara_configure_benchmark_runtime 'cleanup suite'; "
+                'touch "$KH_APP_DATA_DIR/sentinel"; '
+                "mara_cleanup_benchmark_runtime; "
+                'test ! -e "$MARA_BENCHMARK_RUNTIME_DIR"'
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_slurm_scripts_cleanup_runtime_only_after_artifact_validation():
+    validation_markers = {
+        TEXT_SLURM_SCRIPT: 'test -f "$RUN_DIR/summary.json"',
+        SLURM_SCRIPT: '! -f "$RUN_DIR/summary.json"',
+    }
+    for script, validation_marker in validation_markers.items():
+        text = script.read_text(encoding="utf-8")
+        assert "mara_cleanup_benchmark_runtime" in text
+        assert text.index(validation_marker) < text.index(
+            "mara_cleanup_benchmark_runtime"
+        )
 
 
 def test_multimodal_runbook_documents_submission_and_evidence_locations():

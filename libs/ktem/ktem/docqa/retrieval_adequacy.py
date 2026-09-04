@@ -2,6 +2,50 @@ from __future__ import annotations
 
 from typing import Any
 
+from .finance_calculation_recovery import missing_required_calculation_slot_ids
+from .finance_typed_adequacy import typed_calculation_adequacy
+
+
+def missing_qasper_verification_slot_count(
+    evidence_metadata: dict[str, Any],
+    *,
+    domain: str | None = None,
+) -> int:
+    """Count QASPER proposition slots with no compatible local evidence.
+
+    Boolean proposition slots are verification-only by design, so they are not
+    part of the ordinary retrieval-slot count.  A genuinely missing proposition
+    must nevertheless keep a non-empty graph/hybrid result from being declared
+    adequate; a retrieved-but-unverified proposition remains eligible for the
+    verifier and is therefore not counted here.
+    """
+
+    normalized_domain = str(domain or "").strip().casefold()
+    if not (normalized_domain == "qasper" or normalized_domain.startswith("qasper_")):
+        return 0
+    plan = next(
+        (
+            evidence_metadata.get(key)
+            for key in ("bound_query_plan", "query_plan")
+            if isinstance(evidence_metadata.get(key), dict)
+        ),
+        None,
+    )
+    if not isinstance(plan, dict):
+        return 0
+    slots = plan.get("evidence_slots")
+    if not isinstance(slots, list):
+        return 0
+    return sum(
+        str(slot.get("statement_kind") or "")
+        in {"answer_relation", "boolean_proposition"}
+        and bool(slot.get("required_for_verification"))
+        and not bool(slot.get("required_for_retrieval"))
+        and str(slot.get("status") or "missing") == "missing"
+        for slot in slots
+        if isinstance(slot, dict)
+    )
+
 
 def retrieval_adequacy_issue(
     prompt: str,
@@ -9,6 +53,58 @@ def retrieval_adequacy_issue(
     *,
     domain: str | None = None,
     require_page_scoped: bool = True,
+) -> str:
+    heuristic_issue = _heuristic_adequacy_issue(
+        prompt,
+        evidence_metadata,
+        domain=domain,
+        require_page_scoped=require_page_scoped,
+    )
+    typed_status, typed_reason = typed_calculation_adequacy(
+        evidence_metadata,
+        domain=domain,
+    )
+    missing_calculation_slots = missing_required_calculation_slot_ids(evidence_metadata)
+    calculation_issue = (
+        "Typed calculation is missing required slot(s): "
+        + ", ".join(missing_calculation_slots)
+        + "."
+        if missing_calculation_slots
+        else ""
+    )
+    final_issue = "" if typed_status == "good" else calculation_issue or heuristic_issue
+    heuristic_status = "ambiguous" if heuristic_issue else "good"
+    typed_overrides = typed_status == "good" and bool(heuristic_issue)
+    evidence_metadata.update(
+        {
+            "typed_adequacy_status": typed_status,
+            "heuristic_adequacy_status": heuristic_status,
+            "final_adequacy_status": ("ambiguous" if final_issue else "good"),
+            "adequacy_decision_authority": (
+                "typed_calculation"
+                if typed_status == "good"
+                else "query_plan"
+                if calculation_issue
+                else "general_heuristic"
+            ),
+            "heuristic_overridden": typed_overrides,
+            "heuristic_override_reason": (
+                "verified_typed_execution_supersedes_legacy_text_heuristic"
+                if typed_overrides
+                else ""
+            ),
+            "typed_adequacy_reason": typed_reason,
+        }
+    )
+    return final_issue
+
+
+def _heuristic_adequacy_issue(
+    prompt: str,
+    evidence_metadata: dict[str, Any],
+    *,
+    domain: str | None,
+    require_page_scoped: bool,
 ) -> str:
     if not _finance_domain_enabled(domain):
         return ""
@@ -23,8 +119,7 @@ def retrieval_adequacy_issue(
     ]
     if require_page_scoped and not _has_page_scoped_evidence(evidence_metadata):
         return "Retrieved evidence lacks page-scoped financial statement support."
-    present_count = len(requirements) - len(missing)
-    if missing and present_count <= 0:
+    if missing:
         return (
             "Retrieved evidence lacks financial statement fields needed for "
             f"generation: {', '.join(missing)}."
@@ -128,7 +223,7 @@ def _turnover_and_receivable_requirements(
 
 
 def _capital_asset_requirements(value: str) -> list[tuple[str, tuple[str, ...]]]:
-    if _has_any(value, ("capital expenditure", "capex")):
+    if _has_any(value, ("capital expenditure", "capital spending", "capex")):
         return [
             (
                 "cash flow statement",
@@ -143,6 +238,7 @@ def _capital_asset_requirements(value: str) -> list[tuple[str, tuple[str, ...]]]
                 (
                     "capital expenditures",
                     "capital expenditure",
+                    "capital spending",
                     "purchases of property, plant and equipment",
                     "purchase of property, plant and equipment",
                 ),
@@ -164,6 +260,7 @@ def _capital_asset_requirements(value: str) -> list[tuple[str, tuple[str, ...]]]
                 (
                     "capital expenditures",
                     "capital expenditure",
+                    "capital spending",
                     "purchases of property, plant and equipment",
                     "purchase of property, plant and equipment",
                 ),
@@ -189,6 +286,25 @@ def _operating_segment_requirements(value: str) -> list[tuple[str, tuple[str, ..
         return [
             ("net sales", ("net sales", "net revenue", "net revenues")),
             ("operating income", ("operating income", "operating profit")),
+        ]
+    if "segment" in value and _has_any(
+        value,
+        ("increase", "decrease", "proportional", "proportionally"),
+    ):
+        return [
+            (
+                "reporting segment",
+                ("reporting segment", "business segment", "by segment"),
+            ),
+            (
+                "segment sales",
+                (
+                    "net sales by segment",
+                    "net revenue by segment",
+                    "net sales",
+                    "net revenue",
+                ),
+            ),
         ]
     if "segment" in value and _has_any(
         value,

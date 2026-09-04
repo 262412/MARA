@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 from .dataset_profiles import profile_for_manifest
 from .default_routes import CONTROLLER_AUTO_ALLOWED_ROUTES, DEFAULT_MARA_ROUTES
+from .jsonl import read_jsonl
 from .manifest_legacy_adapters import legacy_evidence_from_source
 from .schemas import (
     BenchmarkDocument,
@@ -22,6 +23,19 @@ __all__ = [
     "DEFAULT_MARA_ROUTES",
     "load_manifest",
     "write_manifest",
+]
+
+EvidenceFields = tuple[
+    list[Any],
+    list[str],
+    list[str],
+    list[str],
+    list[dict[str, Any]],
+]
+InitialEvidenceFields = tuple[
+    list[dict[str, Any]],
+    list[str],
+    list[tuple[str, dict[str, Any] | None]],
 ]
 
 
@@ -66,8 +80,62 @@ def _coerce_evidence_fields(
     *,
     dataset_name: str,
     document_id: str,
+    document_ids: list[str] | None = None,
     document_path: Path | None = None,
-) -> tuple[list[Any], list[str], list[dict[str, Any]]]:
+) -> EvidenceFields:
+    gold_evidence, raw_sources, legacy_items = _initial_evidence_fields(
+        record,
+        dataset_name=dataset_name,
+        document_id=document_id,
+        document_path=document_path,
+    )
+    legacy_evidence = [item for _source, item in legacy_items if item is not None]
+    if legacy_evidence and not gold_evidence:
+        gold_evidence = legacy_evidence
+
+    evidence_pages = _evidence_pages(record, gold_evidence)
+    evidence_sources = _evidence_sources(
+        raw_sources,
+        legacy_items,
+        legacy_evidence,
+        gold_evidence,
+    )
+    gold_evidence_texts = _gold_evidence_texts(record, gold_evidence)
+    if "qasper" in dataset_name.casefold() and gold_evidence:
+        prose_sources = set(gold_evidence_texts)
+        evidence_sources = [
+            source for source in evidence_sources if source not in prose_sources
+        ]
+    if not evidence_sources:
+        for item in gold_evidence:
+            citation = str(item.get("citation") or "").strip()
+            if citation:
+                _append_unique(evidence_sources, citation)
+
+    source_documents = document_ids or [document_id]
+    gold_source_ids = _gold_source_ids(
+        record,
+        gold_evidence,
+        evidence_sources,
+        document_ids=source_documents,
+    )
+    _validate_gold_source_ids(gold_source_ids, document_ids=source_documents)
+    return (
+        evidence_pages,
+        evidence_sources,
+        gold_source_ids,
+        gold_evidence_texts,
+        gold_evidence,
+    )
+
+
+def _initial_evidence_fields(
+    record: dict[str, Any],
+    *,
+    dataset_name: str,
+    document_id: str,
+    document_path: Path | None,
+) -> InitialEvidenceFields:
     gold_evidence = [
         dict(item)
         for item in _ensure_list(record.get("gold_evidence"))
@@ -91,10 +159,13 @@ def _coerce_evidence_fields(
         )
         for source in raw_sources
     ]
-    legacy_evidence = [item for _source, item in legacy_items if item is not None]
-    if legacy_evidence and not gold_evidence:
-        gold_evidence = legacy_evidence
+    return gold_evidence, raw_sources, legacy_items
 
+
+def _evidence_pages(
+    record: dict[str, Any],
+    gold_evidence: list[dict[str, Any]],
+) -> list[Any]:
     evidence_pages = list(_ensure_list(record.get("evidence_pages")))
     if not evidence_pages:
         for item in gold_evidence:
@@ -103,7 +174,15 @@ def _coerce_evidence_fields(
                 page = item.get("page_number")
             if page is not None:
                 _append_unique(evidence_pages, _normalize_page_value(page))
+    return evidence_pages
 
+
+def _evidence_sources(
+    raw_sources: list[str],
+    legacy_items: list[tuple[str, dict[str, Any] | None]],
+    legacy_evidence: list[dict[str, Any]],
+    gold_evidence: list[dict[str, Any]],
+) -> list[str]:
     if legacy_evidence:
         evidence_sources: list[str] = []
         for item in gold_evidence:
@@ -113,16 +192,68 @@ def _coerce_evidence_fields(
         for source, legacy_item in legacy_items:
             if legacy_item is None:
                 _append_unique(evidence_sources, source)
-    else:
-        evidence_sources = list(raw_sources)
+        return evidence_sources
+    return list(raw_sources)
 
-    if not evidence_sources:
+
+def _gold_source_ids(
+    record: dict[str, Any],
+    gold_evidence: list[dict[str, Any]],
+    evidence_sources: list[str],
+    *,
+    document_ids: list[str],
+) -> list[str]:
+    values: list[str] = []
+    for value in _ensure_list(record.get("gold_source_ids")):
+        _append_unique(values, str(value).strip())
+    if not values:
         for item in gold_evidence:
-            citation = str(item.get("citation") or "").strip()
-            if citation:
-                _append_unique(evidence_sources, citation)
+            source = str(item.get("source_id") or item.get("document_id") or "").strip()
+            _append_unique(values, source)
+    if not values:
+        for citation in evidence_sources:
+            source_id = str(citation).split("#", 1)[0].strip()
+            if source_id in document_ids:
+                _append_unique(values, source_id)
+    if not values and len(document_ids) == 1:
+        values.append(document_ids[0])
+    return values
 
-    return evidence_pages, evidence_sources, gold_evidence
+
+def _gold_evidence_texts(
+    record: dict[str, Any],
+    gold_evidence: list[dict[str, Any]],
+) -> list[str]:
+    values: list[str] = []
+    for value in _ensure_list(record.get("gold_evidence_texts")):
+        _append_unique(values, str(value).strip())
+    if values:
+        return values
+    for item in gold_evidence:
+        for field in ("span", "text", "evidence_text", "quote"):
+            value = str(item.get(field) or "").strip()
+            if value:
+                _append_unique(values, value)
+                break
+    return values
+
+
+def _validate_gold_source_ids(
+    gold_source_ids: list[str],
+    *,
+    document_ids: list[str],
+) -> None:
+    allowed = {str(value).strip() for value in document_ids if str(value).strip()}
+    invalid = [
+        source_id
+        for source_id in gold_source_ids
+        if source_id not in allowed or len(source_id) > 160
+    ]
+    if invalid:
+        raise ValueError(
+            "gold_source_schema_invalid: gold_source_ids must be document IDs "
+            f"from the example document_ids; invalid={invalid!r}"
+        )
 
 
 def _resolve_path(manifest_path: Path, document_path: str) -> Path:
@@ -184,10 +315,17 @@ def _coerce_examples(
             if answer:
                 answers = [answer]
 
-        evidence_pages, evidence_sources, gold_evidence = _coerce_evidence_fields(
+        (
+            evidence_pages,
+            evidence_sources,
+            gold_source_ids,
+            gold_evidence_texts,
+            gold_evidence,
+        ) = _coerce_evidence_fields(
             record,
             dataset_name=record_dataset_name,
             document_id=document_id,
+            document_ids=[document_id],
             document_path=document_path,
         )
 
@@ -203,7 +341,10 @@ def _coerce_examples(
                 answers=answers,
                 evidence_pages=evidence_pages,
                 evidence_sources=evidence_sources,
+                gold_source_ids=gold_source_ids,
+                gold_evidence_texts=gold_evidence_texts,
                 gold_evidence=gold_evidence,
+                gold_evidence_records=list(gold_evidence),
                 expected_formats=_coerce_expected_formats(record),
                 expected_guardrails=_coerce_expected_guardrails(record),
                 metadata=dict(record.get("metadata") or {}),
@@ -333,10 +474,17 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
             if answer:
                 answers = [answer]
 
-        evidence_pages, evidence_sources, gold_evidence = _coerce_evidence_fields(
+        (
+            evidence_pages,
+            evidence_sources,
+            gold_source_ids,
+            gold_evidence_texts,
+            gold_evidence,
+        ) = _coerce_evidence_fields(
             record,
             dataset_name=dataset_name,
             document_id=document_ids[0],
+            document_ids=document_ids,
             document_path=documents[document_ids[0]].path,
         )
 
@@ -354,7 +502,10 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
                 answers=answers,
                 evidence_pages=evidence_pages,
                 evidence_sources=evidence_sources,
+                gold_source_ids=gold_source_ids,
+                gold_evidence_texts=gold_evidence_texts,
                 gold_evidence=gold_evidence,
+                gold_evidence_records=list(gold_evidence),
                 expected_formats=_coerce_expected_formats(record),
                 expected_guardrails=_coerce_expected_guardrails(record),
                 metadata=dict(record.get("metadata") or {}),
@@ -382,11 +533,11 @@ def _coerce_v2_manifest(payload: dict[str, Any], manifest_path: Path) -> Manifes
 def load_manifest(manifest_path: str | Path) -> ManifestBundle:
     manifest_path = Path(manifest_path).resolve()
     suffix = manifest_path.suffix.lower()
-    raw = manifest_path.read_text(encoding="utf-8-sig")
-
     if suffix == ".jsonl":
-        records = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        records = [dict(value) for value in read_jsonl(manifest_path)]
         return _coerce_examples(records, manifest_path)
+
+    raw = manifest_path.read_text(encoding="utf-8-sig")
 
     payload = json.loads(raw)
     if isinstance(payload, list):

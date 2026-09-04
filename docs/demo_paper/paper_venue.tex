@@ -1,0 +1,53 @@
+\documentclass[11pt]{article}
+
+% Venue-facing single-blind/preprint version.
+\usepackage[preprint]{acl}
+
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[table]{xcolor}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{tikz}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{}
+\usetikzlibrary{arrows.meta,positioning,fit}
+
+\Urlmuskip=0mu plus 2mu\relax
+\setlist[itemize]{leftmargin=*,itemsep=1pt,topsep=2pt}
+\setlist[enumerate]{leftmargin=*,itemsep=1pt,topsep=2pt}
+\newcounter{algorithm}
+\newif\ifmaraanonymous
+\newif\ifmaramsc
+\newif\ifmaravenue
+\maraanonymousfalse
+\maramscfalse
+\maravenuetrue
+
+\author{
+Chenghao Zhang \\
+\texttt{tbczhang@liverpool.ac.uk} \\
+School of Computer Science and Informatics, University of Liverpool
+}
+
+\title{MARA: A Local-First Multimodal Document QA Workbench with Self-RAG-Inspired Routing}
+
+\begin{document}
+\maketitle
+
+\input{paper_body}
+
+\raggedbottom
+\bibliography{references}
+
+\appendix
+\input{appendix}
+
+\end{document}

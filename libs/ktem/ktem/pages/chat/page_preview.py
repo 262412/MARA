@@ -1,8 +1,10 @@
 import logging
 import os
 from pathlib import Path
+from typing import cast
 
 import gradio as gr
+from ktem.preview.context import PreviewAccess
 from sqlmodel import Session, select
 
 from kotaemon.loaders.pdf_loader import get_page_thumbnails
@@ -10,6 +12,11 @@ from kotaemon.loaders.pdf_loader import get_page_thumbnails
 from ...db.models import engine
 from . import page_preview_cache
 from .generation_store import has_in_progress, make_page_key, set_current_view
+from .page_preview_callbacks import (
+    normalize_preview_tick,
+    poll_office_conversion,
+    resolve_preview_access,
+)
 
 # Import preview handlers for different file types
 from .page_preview_document import (
@@ -44,6 +51,7 @@ MINDMAP_PLACEHOLDER_HTML = ""
 # Message shown when no answer is available yet
 ANSWER_PLACEHOLDER_TEXT = "Ask a question about the current page to generate an answer."
 logger = logging.getLogger(__name__)
+_DIRECT_CALL_REQUEST = cast(gr.Request, object())
 
 
 class ChatPagePreviewController:
@@ -150,11 +158,15 @@ class ChatPagePreviewController:
             file_id, file_name, file_path, page
         )
 
-    def _resolve_file_path_by_file_id(self, file_id: str) -> str:
-        return self._file_resolver.resolve_file_path_by_id(file_id)
+    def _resolve_file_path_by_file_id(
+        self, file_id: str, *, access: PreviewAccess | None = None
+    ) -> str:
+        return self._file_resolver.resolve_file_path_by_id(file_id, access=access)
 
-    def _resolve_file_name_by_file_id(self, file_id: str) -> str:
-        return self._file_resolver.resolve_file_name_by_id(file_id)
+    def _resolve_file_name_by_file_id(
+        self, file_id: str, *, access: PreviewAccess | None = None
+    ) -> str:
+        return self._file_resolver.resolve_file_name_by_id(file_id, access=access)
 
     @staticmethod
     def _paginate_plain_text(text: str, max_chars_per_page: int = 2200) -> list[str]:
@@ -295,16 +307,43 @@ class ChatPagePreviewController:
     def _schedule_office_pdf_conversion(self, file_path: str, file_name: str):
         self._office_conversion.schedule_conversion(file_path, file_name)
 
-    def resolve_pdf_source(self, first_selector_choices, selected_file_ids):
+    def resolve_pdf_source(
+        self,
+        first_selector_choices,
+        selected_file_ids,
+        *,
+        access: PreviewAccess | None = None,
+    ):
         return self._file_resolver.resolve_selected_file(
-            first_selector_choices, selected_file_ids
+            first_selector_choices, selected_file_ids, access=access
         )
 
     def is_office_file(self, file_name: str, file_path: str = "") -> bool:
         return self._is_office_source(file_name, file_path)
 
-    def resolve_file_path(self, file_id: str) -> str:
-        return self._resolve_file_path_by_file_id(file_id)
+    def resolve_file_path(
+        self, file_id: str, *, access: PreviewAccess | None = None
+    ) -> str:
+        return self._resolve_file_path_by_file_id(file_id, access=access)
+
+    def resolve_sources(
+        self,
+        file_ids,
+        *,
+        access: PreviewAccess,
+        strict: bool = True,
+    ):
+        return self._file_resolver.resolve_sources(
+            file_ids, access=access, strict=strict
+        )
+
+    def _resolve_callback_source(self, file_id: str, request: gr.Request):
+        source = self._file_resolver.resolve_source(
+            file_id,
+            access=resolve_preview_access(self._app, request, _DIRECT_CALL_REQUEST),
+        )
+        preview_path = ensure_pdf_preview_copy(str(source.path), source.name)
+        return source.name, preview_path
 
     def get_cached_office_pdf(self, file_path: str) -> str:
         return self._get_cached_office_pdf_preview(file_path)
@@ -403,10 +442,12 @@ class ChatPagePreviewController:
         first_selector_choices,
         selected_file_ids,
         page_outputs_cache,
-        request: gr.Request | None = None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         file_id, file_name, file_path = self.resolve_pdf_source(
-            first_selector_choices, selected_file_ids
+            first_selector_choices,
+            selected_file_ids,
+            access=resolve_preview_access(self._app, request, _DIRECT_CALL_REQUEST),
         )
         self._force_first_page_file_id = file_id or ""
         if file_id:
@@ -417,11 +458,7 @@ class ChatPagePreviewController:
             preview_src,
             preview_notice,
         ) = self._build_preview_payload(file_id, file_name, file_path, 1, 1)
-        session_key = (
-            request.session_hash
-            if request is not None and request.session_hash
-            else "default"
-        )
+        session_key = getattr(request, "session_hash", None) or "default"
         if session_key:
             set_current_view(session_key, make_page_key(file_id, page_number))
         page_outputs = self.get_cached_page_outputs(
@@ -449,14 +486,11 @@ class ChatPagePreviewController:
         file_path,
         page_outputs_cache,
         total_pages,
-        request: gr.Request | None = None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        del file_path
         lock_key = file_id or "default"
-        session_key = (
-            request.session_hash
-            if request is not None and request.session_hash
-            else "default"
-        )
+        session_key = getattr(request, "session_hash", None) or "default"
         if session_key and has_in_progress(
             session_key, make_page_key(file_id, current_page)
         ):
@@ -486,13 +520,13 @@ class ChatPagePreviewController:
         try:
             self._page_change_lock[lock_key] = True
 
-            if not file_id or not file_path:
+            if not file_id:
                 (
                     _,
                     total_pages,
                     preview_src,
                     preview_notice,
-                ) = self._build_preview_payload(file_id, "", file_path, 1, 1)
+                ) = self._build_preview_payload(file_id, "", "", 1, 1)
                 if session_key:
                     set_current_view(session_key, make_page_key(file_id, 1))
                 return (
@@ -508,7 +542,7 @@ class ChatPagePreviewController:
                     ),
                 )
 
-            file_name = self._resolve_file_name_by_file_id(file_id)
+            file_name, file_path = self._resolve_callback_source(file_id, request)
             requested_page = int(current_page or 1) + int(delta or 0)
             (
                 next_page,
@@ -546,7 +580,7 @@ class ChatPagePreviewController:
         file_path,
         page_outputs_cache,
         total_pages,
-        request: gr.Request | None = None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         return self.on_page_change(
             current_page,
@@ -565,7 +599,7 @@ class ChatPagePreviewController:
         file_path,
         page_outputs_cache,
         total_pages,
-        request: gr.Request | None = None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         return self.on_page_change(
             current_page,
@@ -584,14 +618,11 @@ class ChatPagePreviewController:
         file_path,
         page_outputs_cache,
         total_pages,
-        request: gr.Request | None = None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        del file_path
         lock_key = file_id or "default"
-        session_key = (
-            request.session_hash
-            if request is not None and request.session_hash
-            else "default"
-        )
+        session_key = getattr(request, "session_hash", None) or "default"
 
         if self._page_change_lock.get(lock_key, False):
             logger.debug(f"Page set ignored for file {lock_key}, page={current_page}")
@@ -612,13 +643,13 @@ class ChatPagePreviewController:
         try:
             self._page_change_lock[lock_key] = True
 
-            if not file_id or not file_path:
+            if not file_id:
                 (
                     _,
                     total_pages,
                     preview_src,
                     preview_notice,
-                ) = self._build_preview_payload(file_id, "", file_path, 1, 1)
+                ) = self._build_preview_payload(file_id, "", "", 1, 1)
                 if session_key:
                     set_current_view(session_key, make_page_key(file_id, 1))
                 return (
@@ -634,7 +665,7 @@ class ChatPagePreviewController:
                     ),
                 )
 
-            file_name = self._resolve_file_name_by_file_id(file_id)
+            file_name, file_path = self._resolve_callback_source(file_id, request)
             (
                 next_page,
                 total_pages,
@@ -665,10 +696,17 @@ class ChatPagePreviewController:
             self._page_change_lock[lock_key] = False
 
     def refresh_selected_file_preview(
-        self, first_selector_choices, selected_file_ids, current_page, total_pages
+        self,
+        first_selector_choices,
+        selected_file_ids,
+        current_page,
+        total_pages,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         file_id, file_name, file_path = self.resolve_pdf_source(
-            first_selector_choices, selected_file_ids
+            first_selector_choices,
+            selected_file_ids,
+            access=resolve_preview_access(self._app, request, _DIRECT_CALL_REQUEST),
         )
         next_file_id, must_force_first, target_page = self._resolve_target_page(
             file_id, current_page
@@ -696,14 +734,30 @@ class ChatPagePreviewController:
             preview_notice,
         )
 
-    def on_preview_tick(self, *args):
-        # Gradio Timer payload shape can vary across versions/runtime.
-        # Accept both the expected 7 inputs and an extra leading timer value.
-        values = list(args)
-        if len(values) >= 8:
-            values = values[-7:]
-        if len(values) < 7:
-            return gr.skip(), gr.skip(), gr.skip(), gr.skip()
+    def on_preview_tick(
+        self,
+        file_id=None,
+        file_name=None,
+        file_path=None,
+        current_page=None,
+        total_pages=None,
+        current_preview_src=None,
+        current_preview_notice=None,
+        request: gr.Request = _DIRECT_CALL_REQUEST,
+    ):
+        values, request = normalize_preview_tick(
+            [
+                file_id,
+                file_name,
+                file_path,
+                current_page,
+                total_pages,
+                current_preview_src,
+                current_preview_notice,
+            ],
+            request,
+            _DIRECT_CALL_REQUEST,
+        )
         (
             file_id,
             file_name,
@@ -712,11 +766,12 @@ class ChatPagePreviewController:
             total_pages,
             current_preview_src,
             current_preview_notice,
-        ) = values[:7]
+        ) = values
 
-        # Skip if no valid file is selected (prevent unnecessary processing)
-        if not file_id or not file_path:
+        if not file_id:
             return gr.skip(), gr.skip(), gr.skip(), gr.skip()
+
+        file_name, file_path = self._resolve_callback_source(str(file_id), request)
 
         # Skip PDF files - they don't need polling
         if file_name and file_name.lower().endswith(".pdf"):
@@ -728,25 +783,7 @@ class ChatPagePreviewController:
         ):
             return gr.skip(), gr.skip(), gr.skip(), gr.skip()
 
-        # Check Office conversion status, but still update if PDF is ready
-        # Don't skip just because conversion is done - we need to check if preview has been updated to PDF
-        is_office_file = file_name and file_name.lower().endswith(
-            (".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx")
-        )
-        if is_office_file and file_path:
-            try:
-                job_status = self._get_office_job_status(file_path)
-                if job_status == "done":
-                    # Check if we already have the converted PDF
-                    cached_pdf = self._get_cached_office_pdf_preview(file_path)
-                    if cached_pdf and os.path.isfile(cached_pdf):
-                        pass
-                        # Continue to build preview payload with the PDF
-                    else:
-                        # Conversion done but PDF not found, continue checking
-                        pass
-            except Exception:
-                pass  # Continue processing if status check fails
+        poll_office_conversion(self, file_name, file_path)
 
         next_file_id, must_force_first, target_page = self._resolve_target_page(
             file_id, current_page

@@ -4,6 +4,12 @@ from typing import Any
 
 import gradio as gr
 
+from .chat_gradio_adapters import (
+    ChatConversationPorts,
+    chat_conversation_ports,
+    conversation_rename_ports,
+)
+
 
 def bind_chat_conversation_events(
     page: Any,
@@ -13,16 +19,18 @@ def bind_chat_conversation_events(
     clear_bot_message_selection_js: str,
     pdfview_js: str,
 ) -> None:
+    ports = chat_conversation_ports(page, demo_mode=demo_mode)
     page.chat_control.btn_chat_expand.click(
         fn=None, inputs=None, js="function() {toggleChatColumn();}"
     )
     if demo_mode:
-        _bind_demo_conversation_events(page, chat_input_focus_js)
+        _bind_demo_conversation_events(page, ports, chat_input_focus_js)
     else:
-        _bind_standard_conversation_events(page, chat_input_focus_js)
-        _bind_delete_conversation_events(page)
+        _bind_standard_conversation_events(page, ports, chat_input_focus_js)
+        _bind_delete_conversation_events(page, ports)
     _bind_conversation_select_event(
         page,
+        ports,
         demo_mode=demo_mode,
         chat_input_focus_js=chat_input_focus_js,
         clear_bot_message_selection_js=clear_bot_message_selection_js,
@@ -30,163 +38,131 @@ def bind_chat_conversation_events(
     )
 
 
-def _conversation_outputs(page: Any) -> list[Any]:
-    return [
-        page.chat_control.conversation_id,
-        page.chat_control.conversation,
-        page.chat_control.conversation_rn,
-        page.chat_panel.chatbot,
-        page.followup_questions,
-        page.info_panel,
-        page.state_plot_panel,
-        page.state_retrieval_history,
-        page.state_plot_history,
-        page.chat_control.cb_is_public,
-        page.state_chat,
-    ] + page._indices_input
-
-
-def _suggest_chat_inputs(page: Any) -> list[Any]:
-    return [
-        page._app.settings_state,
-        page.language,
-        page.chat_panel.chatbot,
-        page._use_suggestion,
-    ]
-
-
-def _suggest_chat_outputs(page: Any) -> list[Any]:
-    return [page.followup_questions_ui, page.followup_questions]
-
-
-def _bind_demo_conversation_events(page: Any, chat_input_focus_js: str) -> None:
+def _bind_demo_conversation_events(
+    page: Any, ports: ChatConversationPorts, chat_input_focus_js: str
+) -> None:
     page.chat_control.btn_demo_logout.click(fn=None, js=page.chat_control.logout_js)
     page.chat_control.btn_new.click(
-        fn=lambda: page.chat_control.select_conv("", None),
-        outputs=_conversation_outputs(page),
+        fn=page.chat_control.clear_conv,
+        outputs=ports.selection.gradio_outputs,
     ).then(
         lambda: (gr.update(visible=False), gr.update(visible=True)),
-        outputs=[page.paper_list.accordion, page.chat_settings],
+        outputs=ports.demo_visibility.gradio_outputs,
     ).then(
         fn=lambda: "",
-        outputs=[page.answer_panel],
+        outputs=ports.clear_answer.gradio_outputs,
     ).then(
         fn=page.render_latest_citations_card,
-        inputs=[page.state_retrieval_history],
-        outputs=[page.citations_panel],
+        inputs=ports.citations.gradio_inputs,
+        outputs=ports.citations.gradio_outputs,
     ).then(
         fn=page.render_latest_reasoning_trace,
-        inputs=[page.chat_panel.chatbot, page.state_retrieval_history],
-        outputs=[page.reasoning_trace_panel],
+        inputs=ports.reasoning.gradio_inputs,
+        outputs=ports.reasoning.gradio_outputs,
     ).then(
         fn=lambda: "",
-        outputs=[page._last_question],
+        outputs=ports.last_question.gradio_outputs,
     ).then(
         fn=page.suggest_chat_conv,
-        inputs=_suggest_chat_inputs(page),
-        outputs=_suggest_chat_outputs(page),
+        inputs=ports.suggestions.gradio_inputs,
+        outputs=ports.suggestions.gradio_outputs,
     ).then(
         fn=None, inputs=None, js=chat_input_focus_js
     )
 
 
-def _bind_standard_conversation_events(page: Any, chat_input_focus_js: str) -> None:
+def _bind_standard_conversation_events(
+    page: Any, ports: ChatConversationPorts, chat_input_focus_js: str
+) -> None:
     page.chat_control.btn_new.click(
         page.chat_control.new_conv,
-        inputs=page._app.user_id,
-        outputs=[page.chat_control.conversation_id, page.chat_control.conversation],
+        inputs=ports.new_conversation.gradio_inputs,
+        outputs=ports.new_conversation.gradio_outputs,
         show_progress="hidden",
     ).then(
         page.chat_control.select_conv,
-        inputs=[page.chat_control.conversation, page._app.user_id],
-        outputs=_conversation_outputs(page),
+        inputs=ports.selection.gradio_inputs,
+        outputs=ports.selection.gradio_outputs,
         show_progress="hidden",
     ).then(
         fn=page._json_to_plot,
-        inputs=page.state_plot_panel,
-        outputs=page.plot_panel,
+        inputs=ports.plot.gradio_inputs,
+        outputs=ports.plot.gradio_outputs,
     ).then(
         fn=lambda: "",
-        outputs=[page.answer_panel],
+        outputs=ports.clear_answer.gradio_outputs,
     ).then(
         fn=page.render_latest_citations_card,
-        inputs=[page.state_retrieval_history],
-        outputs=[page.citations_panel],
+        inputs=ports.citations.gradio_inputs,
+        outputs=ports.citations.gradio_outputs,
     ).then(
         fn=page.render_latest_reasoning_trace,
-        inputs=[page.chat_panel.chatbot, page.state_retrieval_history],
-        outputs=[page.reasoning_trace_panel],
+        inputs=ports.reasoning.gradio_inputs,
+        outputs=ports.reasoning.gradio_outputs,
     ).then(
         fn=lambda: "",
-        outputs=[page._last_question],
+        outputs=ports.last_question.gradio_outputs,
     ).then(
         fn=page.suggest_chat_conv,
-        inputs=_suggest_chat_inputs(page),
-        outputs=_suggest_chat_outputs(page),
+        inputs=ports.suggestions.gradio_inputs,
+        outputs=ports.suggestions.gradio_outputs,
     ).then(
         fn=None, inputs=None, js=chat_input_focus_js
     )
 
 
-def _bind_delete_conversation_events(page: Any) -> None:
+def _bind_delete_conversation_events(page: Any, ports: ChatConversationPorts) -> None:
     page.chat_control.btn_del.click(
         lambda conv_id: page.toggle_delete(conv_id),
-        inputs=[page.chat_control.conversation_id],
-        outputs=[page.chat_control._new_delete, page.chat_control._delete_confirm],
+        inputs=ports.toggle_delete.gradio_inputs,
+        outputs=ports.toggle_delete.gradio_outputs,
     )
     page.chat_control.btn_del_conf.click(
         page.chat_control.delete_conv,
-        inputs=[page.chat_control.conversation_id, page._app.user_id],
-        outputs=[page.chat_control.conversation_id, page.chat_control.conversation],
+        inputs=ports.delete_conversation.gradio_inputs,
+        outputs=ports.delete_conversation.gradio_outputs,
         show_progress="hidden",
     ).then(
         page.chat_control.select_conv,
-        inputs=[page.chat_control.conversation, page._app.user_id],
-        outputs=_conversation_outputs(page),
+        inputs=ports.selection.gradio_inputs,
+        outputs=ports.selection.gradio_outputs,
         show_progress="hidden",
     ).then(
         fn=page._json_to_plot,
-        inputs=page.state_plot_panel,
-        outputs=page.plot_panel,
+        inputs=ports.plot.gradio_inputs,
+        outputs=ports.plot.gradio_outputs,
     ).then(
         fn=page.render_latest_citations_card,
-        inputs=[page.state_retrieval_history],
-        outputs=[page.citations_panel],
+        inputs=ports.citations.gradio_inputs,
+        outputs=ports.citations.gradio_outputs,
     ).then(
         fn=page.render_latest_reasoning_trace,
-        inputs=[page.chat_panel.chatbot, page.state_retrieval_history],
-        outputs=[page.reasoning_trace_panel],
+        inputs=ports.reasoning.gradio_inputs,
+        outputs=ports.reasoning.gradio_outputs,
     ).then(
         lambda: page.toggle_delete(""),
-        outputs=[page.chat_control._new_delete, page.chat_control._delete_confirm],
+        outputs=ports.toggle_delete.gradio_outputs,
     )
     page.chat_control.btn_del_cnl.click(
         lambda: page.toggle_delete(""),
-        outputs=[page.chat_control._new_delete, page.chat_control._delete_confirm],
+        outputs=ports.toggle_delete.gradio_outputs,
     )
     page.chat_control.btn_conversation_rn.click(
         lambda: gr.update(visible=True),
         outputs=[page.chat_control.conversation_rn],
     )
+    rename_ports = conversation_rename_ports(page, gr.State(value=True))
     page.chat_control.conversation_rn.submit(
         page.chat_control.rename_conv,
-        inputs=[
-            page.chat_control.conversation_id,
-            page.chat_control.conversation_rn,
-            gr.State(value=True),
-            page._app.user_id,
-        ],
-        outputs=[
-            page.chat_control.conversation,
-            page.chat_control.conversation,
-            page.chat_control.conversation_rn,
-        ],
+        inputs=rename_ports.gradio_inputs,
+        outputs=rename_ports.gradio_outputs,
         show_progress="hidden",
     )
 
 
 def _bind_conversation_select_event(
     page: Any,
+    ports: ChatConversationPorts,
     *,
     demo_mode: bool,
     chat_input_focus_js: str,
@@ -196,34 +172,35 @@ def _bind_conversation_select_event(
     on_conv_select = (
         page.chat_control.conversation.select(
             page.chat_control.select_conv,
-            inputs=[page.chat_control.conversation, page._app.user_id],
-            outputs=_conversation_outputs(page),
+            inputs=ports.selection.gradio_inputs,
+            outputs=ports.selection.gradio_outputs,
             show_progress="hidden",
         )
         .then(
             fn=page._json_to_plot,
-            inputs=page.state_plot_panel,
-            outputs=page.plot_panel,
+            inputs=ports.plot.gradio_inputs,
+            outputs=ports.plot.gradio_outputs,
         )
         .then(
             lambda: page.toggle_delete(""),
-            outputs=[page.chat_control._new_delete, page.chat_control._delete_confirm],
+            outputs=ports.toggle_delete.gradio_outputs,
         )
         .then(
             fn=page.suggest_chat_conv,
-            inputs=_suggest_chat_inputs(page),
-            outputs=_suggest_chat_outputs(page),
+            inputs=ports.suggestions.gradio_inputs,
+            outputs=ports.suggestions.gradio_outputs,
         )
     )
 
     if demo_mode:
         on_conv_select = on_conv_select.then(
             lambda: (gr.update(visible=False), gr.update(visible=True)),
-            outputs=[page.paper_list.accordion, page.chat_settings],
+            outputs=ports.demo_visibility.gradio_outputs,
         )
 
     _append_conversation_preview_refresh(
         page,
+        ports,
         on_conv_select,
         chat_input_focus_js=chat_input_focus_js,
         clear_bot_message_selection_js=clear_bot_message_selection_js,
@@ -233,6 +210,7 @@ def _bind_conversation_select_event(
 
 def _append_conversation_preview_refresh(
     page: Any,
+    ports: ChatConversationPorts,
     event_chain: Any,
     *,
     chat_input_focus_js: str,
@@ -241,69 +219,45 @@ def _append_conversation_preview_refresh(
 ) -> None:
     event_chain.then(
         fn=page.page_preview.refresh_selected_file_preview,
-        inputs=[
-            page.first_selector_choices,
-            page._indices_input[1],
-            page.chat_panel.page_number,
-            page._active_file_total_pages,
-        ],
-        outputs=[
-            page._active_file_id,
-            page._active_file_name,
-            page._active_file_path,
-            page.chat_panel.page_number,
-            page._active_file_total_pages,
-            page.chat_panel.pdf_preview_src,
-            page.chat_panel.pdf_preview_notice,
-        ],
+        inputs=ports.preview.gradio_inputs,
+        outputs=ports.preview.gradio_outputs,
         show_progress="hidden",
     ).then(
         fn=page.refresh_page_context_view,
-        inputs=[
-            page._active_file_id,
-            page._active_file_name,
-            page._active_file_path,
-            page.chat_panel.page_number,
-            page._active_file_total_pages,
-            page.page_strip_search,
-        ],
-        outputs=[
-            page.page_strip_file_summary,
-            page.page_thumbnail_strip,
-            page.page_metadata_strip,
-        ],
+        inputs=ports.context.gradio_inputs,
+        outputs=ports.context.gradio_outputs,
         show_progress="hidden",
     ).then(
         fn=lambda: True,
         js=clear_bot_message_selection_js,
     ).then(
         fn=lambda: "",
-        outputs=[page._selected_page_text],
+        outputs=ports.clear_selection.gradio_outputs,
         show_progress="hidden",
     ).then(
         fn=lambda: True,
         inputs=None,
-        outputs=[page._preview_links],
+        outputs=ports.pdf_refresh.gradio_outputs,
         js=pdfview_js,
     ).then(
         fn=lambda history: history[-1][1] if history else "",
-        inputs=[page.chat_panel.chatbot],
-        outputs=[page.answer_panel],
+        inputs=ports.answer.gradio_inputs,
+        outputs=ports.answer.gradio_outputs,
         show_progress="hidden",
     ).then(
         fn=lambda history: history[-1][0] if history else "",
-        inputs=[page.chat_panel.chatbot],
-        outputs=[page._last_question],
+        inputs=ports.answer.gradio_inputs,
+        outputs=ports.last_question.gradio_outputs,
         show_progress="hidden",
     ).then(
         fn=page.render_latest_citations_card,
-        inputs=[page.state_retrieval_history],
-        outputs=[page.citations_panel],
+        inputs=ports.citations.gradio_inputs,
+        outputs=ports.citations.gradio_outputs,
         show_progress="hidden",
     ).then(
         fn=page.render_latest_reasoning_trace,
-        inputs=[page.chat_panel.chatbot, page.state_retrieval_history],
-        outputs=[page.reasoning_trace_panel],
+        inputs=ports.reasoning.gradio_inputs,
+        outputs=ports.reasoning.gradio_outputs,
         show_progress="hidden",
     ).then(
         fn=None, inputs=None, outputs=None, js=chat_input_focus_js

@@ -1,12 +1,15 @@
 import gradio as gr
 from ktem.app import BasePage
-from ktem.db.models import User, engine
+from ktem.auth.authorization import (
+    CALLBACK_REQUEST,
+    CallbackAuthorizationError,
+    require_admin,
+)
 from ktem.embeddings.ui import EmbeddingManagement
 from ktem.index.ui import IndexManagement
 from ktem.llms.ui import LLMManagement
 from ktem.mcp.ui import MCPManagement
 from ktem.rerankings.ui import RerankingManagement
-from sqlmodel import Session, select
 
 from .user import UserManagement
 
@@ -58,11 +61,14 @@ class ResourcesTab(BasePage):
                 },
             )
 
-    def toggle_user_management(self, user_id):
+    def toggle_user_management(
+        self,
+        user_id,
+        request: gr.Request = CALLBACK_REQUEST,
+    ):
         """Show/hide the user management, depending on the user's role"""
-        with Session(engine) as session:
-            user = session.exec(select(User).where(User.id == user_id)).first()
-            if user and user.admin:
-                return gr.update(visible=True)
-
+        try:
+            require_admin(user_id, request)
+        except CallbackAuthorizationError:
             return gr.update(visible=False)
+        return gr.update(visible=True)

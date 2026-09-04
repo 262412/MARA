@@ -1,31 +1,60 @@
 from __future__ import annotations
 
-import re
-from dataclasses import asdict, dataclass, field
+from copy import deepcopy
+from dataclasses import replace
 from typing import Any
 
-from .claim_filtering import answer_claims
-from .domain_verifiers import (
-    domain_claim_supported,
-    domain_verification_claims,
-    normalize_verification_domain,
-)
+from .boolean_authoritative_conflict import BOOLEAN_AUTHORITATIVE_CONFLICT_CONTRACT
+from .calculation_claim_verification import calculation_claim_result
+from .calculation_evidence_identity import calculation_evidence_lookup
+from .claim_clauses import split_claim_clauses
+from .claim_support import claim_supported
+from .domain_verifiers import normalize_verification_domain
 from .evidence import EvidenceBundle
-from .evidence_text import evidence_text, extract_final_answer_text
-
-
-@dataclass(frozen=True)
-class VerifyDecision:
-    mode: str
-    status: str
-    reason: str
-    action: str = "generate"
-    claims: list[str] = field(default_factory=list)
-    unsupported_claims: list[str] = field(default_factory=list)
-    verified_citations: list[str] = field(default_factory=list)
-
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+from .evidence_identity import identity_of
+from .query_plan_schema import QueryPlan, slot_binding_state
+from .query_planning import request_planning_question
+from .semantic_evidence_set_authority import PropositionVerifier
+from .semantic_proposition_verification import (
+    boolean_authority_required,
+    semantic_boolean_verification,
+    verified_boolean_candidate_decision,
+)
+from .typed_proposition_authority import (
+    TYPED_PROPOSITION_AUTHORITY_CONTRACT,
+    resolve_typed_proposition_authority_transaction,
+    with_missing_boolean_authority,
+    with_qasper_missing_authority,
+)
+from .typed_proposition_authority_slots import typed_slot_bindings
+from .verification_evidence_mapping import (
+    blocking_verification_slots,
+    claim_support_identities_by_claim,
+    pending_verification_slots,
+    verification_slots,
+)
+from .verification_logic import VerifiedClaim  # noqa: F401
+from .verification_logic import verify_claim  # noqa: F401
+from .verification_logic import (
+    VerifyDecision,
+    _boolean_verification,
+    _calculation_verification_results,
+    _can_verify_available_evidence,
+    _decision_for_claim_results,
+    _domain_verification,
+    _verification_context,
+    _verify_claims,
+    normalize_verification_mode,
+)
+from .verification_slot_support import (
+    claim_aware_slot_support,
+    conflict_aware_slot_support,
+    enforce_verification_slot_support,
+    slot_value,
+)
+from .visual_evidence_authority import TYPED_VISUAL_EVIDENCE_PATH_CONTRACT
+from .visual_final_binding_projection import final_visual_binding_projection
+from .visual_verification import visual_verification_decision
 
 
 def verify_decision(
@@ -33,11 +62,90 @@ def verify_decision(
     retrieve_decision: Any,
     evidence_bundle: EvidenceBundle,
     answer: str = "",
+    *,
+    proposition_verifier: PropositionVerifier | None = None,
 ) -> VerifyDecision:
     mode = normalize_verification_mode(getattr(request, "verification_mode", None))
+    preflight = _verification_preflight(
+        request,
+        retrieve_decision,
+        evidence_bundle,
+        answer=answer,
+        mode=mode,
+        proposition_verifier=proposition_verifier,
+    )
+    if preflight is not None:
+        return preflight
+    visual_decision = visual_verification_decision(
+        request,
+        retrieve_decision,
+        evidence_bundle,
+        mode=mode,
+        answer=answer,
+    )
+    if visual_decision is not None:
+        return visual_decision
+    prompt, domain, claims = _verification_context(request, answer)
+    if retrieve_decision.status != "good" and not _can_verify_available_evidence(
+        evidence_bundle,
+        claims,
+    ):
+        return _insufficient_retrieval_decision(
+            request,
+            retrieve_decision,
+            mode=mode,
+            prompt=prompt,
+            answer=answer,
+            domain=domain,
+            typed_boolean_verifier=proposition_verifier is not None,
+        )
+    claims, results = _verification_results(
+        evidence_bundle,
+        answer=answer,
+        claims=claims,
+        prompt=prompt,
+        domain=domain,
+        request=request,
+        proposition_verifier=proposition_verifier,
+    )
+    decision = _decision_for_claim_results(
+        mode,
+        retrieve_decision.status,
+        claims,
+        results,
+        evidence_bundle.items,
+        prompt=prompt,
+        domain=domain,
+    )
+    typed_decision = resolve_typed_proposition_authority_transaction(
+        request,
+        decision,
+        evidence_bundle,
+        question=prompt,
+        answer=answer,
+        domain=domain,
+    )
+    if typed_decision is not None:
+        return typed_decision
+    return enforce_verification_slot_support(
+        request, decision, evidence_bundle, prompt=prompt, domain=domain
+    )
+
+
+def _verification_preflight(
+    request: Any,
+    retrieve_decision: Any,
+    evidence_bundle: EvidenceBundle,
+    *,
+    answer: str,
+    mode: str,
+    proposition_verifier: PropositionVerifier | None,
+) -> VerifyDecision | None:
     if mode == "off":
         return VerifyDecision(
-            mode=mode, status="not_requested", reason="Verification disabled."
+            mode=mode,
+            status="not_requested",
+            reason="Verification disabled.",
         )
     if retrieve_decision.status == "not_required":
         return VerifyDecision(
@@ -45,416 +153,437 @@ def verify_decision(
             status="not_required",
             reason="Direct route does not require evidence verification.",
         )
-    citations = verified_citations(evidence_bundle)
-    prompt = str(getattr(request, "prompt", "") or "")
+    candidate_decision = (
+        verified_boolean_candidate_decision(
+            request,
+            retrieve_decision,
+            evidence_bundle,
+            answer=answer,
+            mode=mode,
+            proposition_verifier=proposition_verifier,
+        )
+        if proposition_verifier is not None
+        else None
+    )
+    if candidate_decision is not None:
+        return candidate_decision
+    missing_slots = blocking_verification_slots(request, evidence_bundle)
+    if missing_slots:
+        return _missing_slot_decision(
+            request,
+            retrieve_decision,
+            mode,
+            answer,
+            missing_slots,
+            typed_boolean_verifier=proposition_verifier is not None,
+        )
+    return None
+
+
+def _missing_slot_decision(
+    request: Any,
+    retrieve_decision: Any,
+    mode: str,
+    answer: str,
+    missing_slots: list[str],
+    *,
+    typed_boolean_verifier: bool = False,
+) -> VerifyDecision:
     domain = normalize_verification_domain(
         getattr(request, "verification_domain", None)
     )
-    cleaned_answer = extract_final_answer_text(answer)
-    claims = domain_verification_claims(
-        domain,
-        answer_claims(cleaned_answer),
-        prompt=prompt,
+    decision = VerifyDecision(
+        mode=mode,
+        status="not_enough_evidence",
+        reason=(
+            "Verification-required evidence slots are missing: "
+            + ", ".join(missing_slots)
+        ),
+        action="retry" if retrieve_decision.retry else "abstain",
     )
-    if retrieve_decision.status != "good" and not _can_verify_available_evidence(
-        evidence_bundle,
-        claims,
-    ):
-        action = "retry" if retrieve_decision.retry else "abstain"
-        return VerifyDecision(
-            mode=mode,
-            status="not_enough_evidence",
-            reason=(
-                f"{mode.title()} verification requested without sufficient evidence."
-            ),
-            action=action,
-        )
+    authority_projection = (
+        with_missing_boolean_authority
+        if typed_boolean_verifier and boolean_authority_required(request)
+        else with_qasper_missing_authority
+    )
+    return authority_projection(
+        request,
+        decision,
+        question=request_planning_question(request),
+        answer=answer,
+        domain=domain,
+        reason="required_evidence_slot_missing",
+    )
 
-    unsupported = [
-        claim
-        for claim in claims
-        if _claim_unsupported_after_calibration(
-            claim,
+
+def _insufficient_retrieval_decision(
+    request: Any,
+    retrieve_decision: Any,
+    *,
+    mode: str,
+    prompt: str,
+    answer: str,
+    domain: str,
+    typed_boolean_verifier: bool = False,
+) -> VerifyDecision:
+    decision = VerifyDecision(
+        mode=mode,
+        status="not_enough_evidence",
+        reason=f"{mode.title()} verification requested without sufficient evidence.",
+        action="retry" if retrieve_decision.retry else "abstain",
+    )
+    authority_projection = (
+        with_missing_boolean_authority
+        if typed_boolean_verifier and boolean_authority_required(request)
+        else with_qasper_missing_authority
+    )
+    return authority_projection(
+        request,
+        decision,
+        question=prompt,
+        answer=answer,
+        domain=domain,
+        reason="retrieval_evidence_insufficient",
+    )
+
+
+def _verification_results(
+    evidence_bundle: EvidenceBundle,
+    *,
+    answer: str,
+    claims: list[str],
+    prompt: str,
+    domain: str,
+    request: Any,
+    proposition_verifier: PropositionVerifier | None = None,
+) -> tuple[list[str], list[VerifiedClaim]]:
+    calculation_claims = split_claim_clauses(claims) if domain == "finance" else claims
+    typed_calculation = calculation_claim_result(
+        evidence_bundle, answer, calculation_claims, domain=domain, prompt=prompt
+    )
+    if typed_calculation is not None:
+        return calculation_claims, _calculation_verification_results(
+            typed_calculation,
+            calculation_claims,
             evidence_bundle.items,
             prompt=prompt,
             domain=domain,
-            mode=mode,
         )
-    ]
-    if unsupported:
-        return VerifyDecision(
-            mode=mode,
-            status="unsupported",
-            reason=f"{mode.title()} verification found unsupported claims.",
-            action="revise",
-            claims=claims,
-            unsupported_claims=unsupported,
-            verified_citations=citations,
+    typed_domain = _domain_verification(
+        claims,
+        evidence_bundle.items,
+        prompt=prompt,
+        domain=domain,
+    )
+    if typed_domain is not None:
+        return claims, typed_domain
+    typed_boolean = _boolean_verification(
+        prompt,
+        answer,
+        evidence_bundle.items,
+        allow_missing_polarity=boolean_authority_required(request),
+    )
+    if typed_boolean is not None:
+        semantic = semantic_boolean_verification(
+            request,
+            prompt,
+            answer,
+            evidence_bundle,
+            typed_boolean,
+            proposition_verifier,
         )
+        if semantic is not None:
+            return semantic
+        return typed_boolean
+    return claims, _verify_claims(claims, evidence_bundle.items, prompt, domain)
 
-    return VerifyDecision(
-        mode=mode,
-        status="supported",
-        reason=_supported_reason(mode, retrieve_decision.status),
-        claims=claims,
-        verified_citations=citations,
+
+def with_verification_evidence(
+    bundle: EvidenceBundle,
+    decision: VerifyDecision,
+    request: Any | None = None,
+) -> EvidenceBundle:
+    if decision.status not in {
+        "supported",
+        "unsupported",
+        "unknown",
+        "verified_conflict",
+    }:
+        return bundle
+    citation_ids = {
+        str(citation).strip()
+        for citation in decision.verified_citations
+        if str(citation).strip()
+    }
+    lookup = calculation_evidence_lookup(bundle.items)
+    verified = []
+    seen: set[str] = set()
+    for citation_id in citation_ids:
+        item = lookup.get(citation_id)
+        if item is None:
+            continue
+        identity = identity_of(item).key
+        if identity not in seen:
+            seen.add(identity)
+            verified.append(item)
+    metadata = dict(bundle.metadata)
+    metadata["verified_evidence"] = verified
+    metadata["verified_claim_support_evidence"] = list(verified)
+    metadata["verified_claim_support_by_claim"] = claim_support_identities_by_claim(
+        decision.claim_results,
+        lookup,
+    )
+    verified_spans = [
+        dict(span)
+        for result in decision.claim_results
+        if str(result.get("status") or "") == "supported"
+        for span in result.get("supporting_evidence_spans") or []
+        if isinstance(span, dict)
+    ]
+    if verified_spans:
+        metadata["verified_claim_support_spans"] = verified_spans
+    if decision.canonical_answer_polarity:
+        metadata["boolean_authority"] = _boolean_authority_metadata(decision)
+    if decision.status == "verified_conflict":
+        metadata["boolean_authoritative_conflict"] = dict(
+            decision.authoritative_conflict
+        )
+    if decision.typed_authority:
+        metadata["typed_authority"] = dict(decision.typed_authority)
+    if request is not None:
+        verified_ids = {identity_of(item).key for item in verified}
+        reconciled_slots = _reconciled_verification_slots(
+            request,
+            decision,
+            bundle,
+        )
+        metadata["verification_slot_states"] = _verification_slot_states(
+            request,
+            verified_ids,
+            reconciled_slots=reconciled_slots,
+            verification_status=decision.status,
+        )
+        pending_slots = pending_verification_slots(request, bundle)
+        if pending_slots:
+            metadata["pending_verification_slot_ids"] = pending_slots
+        _synchronize_verified_claim_query_plan(
+            request,
+            metadata,
+            decision,
+            reconciled_slots,
+        )
+        projection = final_visual_binding_projection(bundle, decision, request)
+        if projection is not None:
+            metadata["final_binding_projection"] = projection
+    metadata["verify_decision"] = decision.as_dict()
+    return EvidenceBundle(route=bundle.route, items=bundle.items, metadata=metadata)
+
+
+def _reconciled_verification_slots(
+    request: Any,
+    decision: VerifyDecision,
+    bundle: EvidenceBundle,
+) -> dict[str, tuple[str, ...]]:
+    if decision.typed_authority.get("contract_id") in {
+        TYPED_PROPOSITION_AUTHORITY_CONTRACT,
+        TYPED_VISUAL_EVIDENCE_PATH_CONTRACT,
+    }:
+        return typed_slot_bindings(decision)
+    if decision.status == "verified_conflict":
+        return conflict_aware_slot_support(request, decision, bundle)
+    return claim_aware_slot_support(
+        request,
+        decision,
+        bundle,
+        prompt=request_planning_question(request),
+        domain=normalize_verification_domain(
+            getattr(request, "verification_domain", None)
+        ),
     )
 
 
-def normalize_verification_mode(value: Any) -> str:
-    mode = str(value or "off").strip().lower()
-    return mode if mode in {"off", "light", "strict"} else "off"
+def _boolean_authority_metadata(decision: VerifyDecision) -> dict[str, Any]:
+    return {
+        "status": decision.boolean_authority_status,
+        "input_answer_polarity": decision.input_answer_polarity,
+        "canonical_answer_polarity": decision.canonical_answer_polarity,
+        "semantic_correction_applied": decision.semantic_correction_applied,
+        "evidence_id": decision.authoritative_evidence_id,
+        "evidence_ref": decision.authoritative_evidence_ref,
+        "span_id": decision.authoritative_span_id,
+        "quote": decision.authoritative_quote,
+        "span_start": decision.authoritative_span_start,
+        "span_end": decision.authoritative_span_end,
+        "canonical_start": decision.authoritative_canonical_start,
+        "canonical_end": decision.authoritative_canonical_end,
+        "actor": decision.actor,
+        "section_scope": decision.section_scope,
+        "relation": decision.relation,
+        "object": decision.object,
+        "predicate": decision.relation,
+        "arguments": list(decision.predicate_arguments),
+        "qualifier": decision.qualifier,
+        "scope": decision.section_scope,
+        "quantifier": decision.quantifier,
+        "authority_derivations": [
+            deepcopy(value) for value in decision.authority_derivations
+        ],
+        "selected_derivation_id": decision.selected_derivation_id,
+    }
 
 
-def verified_citations(evidence_bundle: EvidenceBundle) -> list[str]:
+def _verification_slot_states(
+    request: Any,
+    verified_evidence_ids: set[str],
+    *,
+    reconciled_slots: dict[str, tuple[str, ...]] | None = None,
+    verification_status: str = "supported",
+) -> list[dict[str, Any]]:
+    states: list[dict[str, Any]] = []
+    reconciled_slots = reconciled_slots or {}
+    for slot in verification_slots(request):
+        slot_id = str(slot_value(slot, "slot_id") or "")
+        reconciled_ids = reconciled_slots.get(slot_id, ())
+        evidence_ids = (
+            list(reconciled_ids)
+            if reconciled_ids
+            else list(slot_value(slot, "evidence_ids") or ())
+        )
+        states.append(
+            {
+                "slot_id": slot_id,
+                "status": (
+                    "verified_conflict"
+                    if verification_status == "verified_conflict" and reconciled_ids
+                    else (
+                        "verified_support"
+                        if set(evidence_ids) & verified_evidence_ids
+                        else str(slot_value(slot, "status") or "missing")
+                    )
+                ),
+                "evidence_ids": evidence_ids,
+            }
+        )
+    return states
+
+
+def _synchronize_verified_claim_query_plan(
+    request: Any,
+    metadata: dict[str, Any],
+    decision: VerifyDecision,
+    reconciled_slots: dict[str, tuple[str, ...]],
+) -> None:
+    plan = getattr(request, "query_plan", None)
+    if decision.status not in {"supported", "verified_conflict"} or not isinstance(
+        plan, QueryPlan
+    ):
+        return
+    visual_contract = decision.typed_authority.get("contract_id")
+    visual_typed = visual_contract == TYPED_VISUAL_EVIDENCE_PATH_CONTRACT
+    verification_support_slots = [
+        slot
+        for slot in plan.evidence_slots
+        if slot.required_for_verification
+        and (slot.role == "support" or (visual_typed and slot.role == "operand"))
+    ]
+    if not verification_support_slots or any(
+        not reconciled_slots.get(slot.slot_id) for slot in verification_support_slots
+    ):
+        return
+    verified_status = (
+        "verified_conflict"
+        if decision.status == "verified_conflict"
+        else "verified_support"
+    )
+    already_committed = all(
+        slot.status == verified_status
+        and slot.evidence_ids == reconciled_slots[slot.slot_id]
+        for slot in verification_support_slots
+    )
+    authoritative = (
+        plan
+        if already_committed
+        else replace(
+            plan,
+            evidence_slots=tuple(
+                (
+                    replace(
+                        slot,
+                        status=verified_status,
+                        evidence_ids=reconciled_slots[slot.slot_id],
+                    )
+                    if slot in verification_support_slots
+                    else slot
+                )
+                for slot in plan.evidence_slots
+            ),
+        )
+    )
+    current_version = int(getattr(request, "query_plan_state_version", 0) or 0)
+    state_version = current_version if already_committed else current_version + 1
+    if not already_committed:
+        request.query_plan = authoritative
+        request.query_plan_id = authoritative.plan_id
+        request.query_plan_state_version = state_version
+    payload = authoritative.as_dict()
+    payload.update(
+        {
+            "stage": "verified",
+            "state_version": state_version,
+            "state_authority": (
+                BOOLEAN_AUTHORITATIVE_CONFLICT_CONTRACT
+                if decision.status == "verified_conflict"
+                else "verified_claim_support.v1"
+            ),
+            "authority_projection_contract": str(
+                decision.typed_authority.get("contract_id") or ""
+            ),
+        }
+    )
+    metadata["query_plan"] = payload
+    metadata["bound_query_plan"] = payload
+    metadata["query_plan_id"] = authoritative.plan_id
+    metadata["missing_required_slot_count"] = sum(
+        slot.required_for_retrieval and slot_binding_state(slot) != "filled"
+        for slot in authoritative.evidence_slots
+    )
+
+
+def verified_citations(
+    evidence_bundle: EvidenceBundle,
+    *,
+    claims: list[str] | None = None,
+    prompt: str = "",
+    domain: str = "",
+) -> list[str]:
+    if claims is None:
+        return []
     citations: list[str] = []
-    for item in evidence_bundle.items:
-        evidence_id = str(item.get("evidence_id") or "").strip()
-        if evidence_id and evidence_id not in citations:
-            citations.append(evidence_id)
+    for claim in claims:
+        supporting_items = [
+            item
+            for item in evidence_bundle.items
+            if claim_supported(claim, [item], prompt=prompt, domain=domain)
+        ]
+        for item in supporting_items:
+            evidence_id = identity_of(item).key
+            if evidence_id and evidence_id not in citations:
+                citations.append(evidence_id)
     return citations
 
 
-def _can_verify_available_evidence(
-    evidence_bundle: EvidenceBundle,
-    claims: list[str],
-) -> bool:
-    return bool(claims and evidence_bundle.items)
-
-
-def _supported_reason(mode: str, retrieve_status: str) -> str:
-    if retrieve_status == "good":
-        return (
-            f"{mode.title()} verification requested; current verifier observed "
-            "evidence."
-        )
-    return (
-        f"{mode.title()} verification used available evidence despite "
-        f"{retrieve_status} retrieval status."
-    )
-
-
-def claim_supported(
-    claim: str,
-    evidence_items: list[dict[str, Any]],
+def _enforce_verification_slot_support(
+    request: Any,
+    decision: VerifyDecision,
+    evidence_bundle: EvidenceBundle | None = None,
     *,
     prompt: str = "",
     domain: str = "",
-) -> bool:
-    domain_supported = domain_claim_supported(
-        domain,
-        claim,
-        evidence_items,
-        prompt=prompt,
-    )
-    if domain_supported is not None:
-        return domain_supported
-
-    if _claim_contradicts_evidence(claim, evidence_items):
-        return False
-    if _semantic_evidence_supports_claim(claim, evidence_items):
-        return True
-
-    claim_tokens = meaningful_tokens(claim)
-    if not claim_tokens:
-        return True
-    evidence_tokens = meaningful_tokens(evidence_text(evidence_items))
-    if _short_evidence_supports_claim(evidence_tokens, claim_tokens):
-        return True
-    overlap = claim_tokens & evidence_tokens
-    if len(overlap) >= min(2, len(claim_tokens)):
-        return True
-    return _source_summary_supports_claim(prompt, overlap, evidence_tokens)
-
-
-def _claim_unsupported_after_calibration(
-    claim: str,
-    evidence_items: list[dict[str, Any]],
-    *,
-    prompt: str,
-    domain: str,
-    mode: str,
-) -> bool:
-    if claim_supported(claim, evidence_items, prompt=prompt, domain=domain):
-        return False
-    return _unsupported_confidence(
-        claim,
-        evidence_items,
+) -> VerifyDecision:
+    return enforce_verification_slot_support(
+        request,
+        decision,
+        evidence_bundle,
         prompt=prompt,
         domain=domain,
-        mode=mode,
-    ) >= _unsupported_threshold(mode=mode, domain=domain)
-
-
-def _unsupported_threshold(*, mode: str, domain: str) -> float:
-    if domain == "finance":
-        return 0.9
-    if mode == "strict":
-        return 0.75
-    return 0.85
-
-
-def _unsupported_confidence(
-    claim: str,
-    evidence_items: list[dict[str, Any]],
-    *,
-    prompt: str,
-    domain: str,
-    mode: str,
-) -> float:
-    domain_supported = domain_claim_supported(
-        domain,
-        claim,
-        evidence_items,
-        prompt=prompt,
     )
-    if domain_supported is False:
-        return 1.0
-    if _claim_contradicts_evidence(claim, evidence_items):
-        return 0.95
-    claim_tokens = meaningful_tokens(claim)
-    evidence_tokens = meaningful_tokens(evidence_text(evidence_items))
-    if (
-        _is_source_summary_prompt(prompt)
-        and claim_tokens
-        and not (claim_tokens & evidence_tokens)
-    ):
-        return 0.85
-    if (
-        mode == "strict"
-        and domain != "finance"
-        and _direction_markers(claim)
-        and _direction_markers(evidence_text(evidence_items))
-        and not (claim_tokens & evidence_tokens)
-    ):
-        return 0.78
-    if not evidence_tokens and claim_tokens:
-        return 0.8
-    return 0.55
-
-
-def _short_evidence_supports_claim(
-    evidence_tokens: set[str],
-    claim_tokens: set[str],
-) -> bool:
-    if not evidence_tokens or len(evidence_tokens) > 2:
-        return False
-    return evidence_tokens <= claim_tokens
-
-
-def _claim_contradicts_evidence(
-    claim: str, evidence_items: list[dict[str, Any]]
-) -> bool:
-    return any(
-        _text_contradicts_claim(claim, evidence_text([item])) for item in evidence_items
-    )
-
-
-def _text_contradicts_claim(claim: str, evidence: str) -> bool:
-    return _year_conflict(claim, evidence) or _direction_conflict(claim, evidence)
-
-
-def _semantic_evidence_supports_claim(
-    claim: str,
-    evidence_items: list[dict[str, Any]],
-) -> bool:
-    return any(
-        _semantic_text_supports_claim(claim, evidence_text([item]))
-        for item in evidence_items
-    )
-
-
-def _semantic_text_supports_claim(claim: str, evidence: str) -> bool:
-    claim_concepts = _semantic_concepts(claim)
-    evidence_concepts = _semantic_concepts(evidence)
-    if not claim_concepts or claim_concepts.isdisjoint(evidence_concepts):
-        return False
-
-    claim_direction = _direction_markers(claim)
-    evidence_direction = _direction_markers(evidence)
-    return bool(claim_direction and claim_direction & evidence_direction)
-
-
-def _semantic_concepts(value: str) -> set[str]:
-    tokens = meaningful_tokens(value)
-    return {
-        concept
-        for concept, concept_tokens in _SEMANTIC_CONCEPT_TOKENS.items()
-        if tokens & concept_tokens
-    }
-
-
-def _year_conflict(claim: str, evidence: str) -> bool:
-    claim_years = _years(claim)
-    evidence_years = _years(evidence)
-    return bool(
-        claim_years
-        and evidence_years
-        and not claim_years.issubset(evidence_years)
-        and _shared_claim_context(claim, evidence)
-    )
-
-
-def _direction_conflict(claim: str, evidence: str) -> bool:
-    claim_direction = _direction_markers(claim)
-    evidence_direction = _direction_markers(evidence)
-    return bool(
-        claim_direction
-        and evidence_direction
-        and claim_direction.isdisjoint(evidence_direction)
-        and _shared_claim_context(claim, evidence)
-    )
-
-
-def _shared_claim_context(claim: str, evidence: str) -> bool:
-    claim_tokens = meaningful_tokens(claim) - _DIRECTION_CONTEXT_TOKENS
-    evidence_tokens = meaningful_tokens(evidence) - _DIRECTION_CONTEXT_TOKENS
-    return bool(claim_tokens & evidence_tokens)
-
-
-def _source_summary_supports_claim(
-    prompt: str,
-    overlap: set[str],
-    evidence_tokens: set[str],
-) -> bool:
-    if not _is_source_summary_prompt(prompt) or len(evidence_tokens) < 20:
-        return False
-    return bool(overlap - _SUMMARY_GENERIC_TOKENS)
-
-
-def _is_source_summary_prompt(prompt: str) -> bool:
-    lowered = str(prompt or "").lower()
-    return any(
-        marker in lowered
-        for marker in (
-            "summarize",
-            "summarise",
-            "summary",
-            "overview",
-            "based only on the provided",
-            "based only on the structured data",
-        )
-    )
-
-
-def _years(value: str) -> set[str]:
-    return set(re.findall(r"\b(?:19|20)\d{2}\b", str(value or "")))
-
-
-def _direction_markers(value: str) -> set[str]:
-    tokens = {
-        _normalize_token(token)
-        for token in re.findall(r"[a-zA-Z0-9]+", _token_text(value).lower())
-    }
-    markers: set[str] = set()
-    if tokens & _POSITIVE_DIRECTION_TOKENS:
-        markers.add("positive")
-    if tokens & _NEGATIVE_DIRECTION_TOKENS:
-        markers.add("negative")
-    return markers
-
-
-def meaningful_tokens(value: str) -> set[str]:
-    stop_words = {
-        "about",
-        "after",
-        "before",
-        "does",
-        "from",
-        "have",
-        "that",
-        "this",
-        "with",
-    }
-    return {
-        normalized
-        for token in re.findall(r"[a-zA-Z0-9]+", _token_text(value).lower())
-        if (normalized := _normalize_token(token))
-        and len(normalized) > 3
-        and normalized not in stop_words
-    }
-
-
-def _token_text(value: str) -> str:
-    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(value or ""))
-    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
-    return text.replace("_", " ").replace("-", " ")
-
-
-def _normalize_token(token: str) -> str:
-    value = str(token or "").lower()
-    if len(value) > 4 and value.endswith("ies"):
-        return f"{value[:-3]}y"
-    if len(value) > 4 and value.endswith("s") and not value.endswith("ss"):
-        return value[:-1]
-    return value
-
-
-_SUMMARY_GENERIC_TOKENS = {
-    "article",
-    "business",
-    "customer",
-    "experience",
-    "include",
-    "including",
-    "overview",
-    "overall",
-    "provide",
-    "review",
-    "source",
-    "summary",
-}
-
-_POSITIVE_DIRECTION_TOKENS = {
-    "gain",
-    "gained",
-    "grow",
-    "grew",
-    "growth",
-    "higher",
-    "improve",
-    "improved",
-    "improves",
-    "increase",
-    "increased",
-    "increases",
-    "rise",
-    "rises",
-    "rising",
-    "rose",
-    "up",
-}
-
-_NEGATIVE_DIRECTION_TOKENS = {
-    "decline",
-    "declined",
-    "declines",
-    "decrease",
-    "decreased",
-    "decreases",
-    "drop",
-    "dropped",
-    "drops",
-    "fall",
-    "falls",
-    "fell",
-    "lower",
-    "loss",
-    "lost",
-    "reduce",
-    "reduced",
-    "reduces",
-    "worse",
-}
-
-_DIRECTION_CONTEXT_TOKENS = _POSITIVE_DIRECTION_TOKENS | _NEGATIVE_DIRECTION_TOKENS
-
-_SEMANTIC_CONCEPT_TOKENS = {
-    "profitability": {
-        "earning",
-        "income",
-        "margin",
-        "profit",
-        "profitability",
-    },
-}

@@ -1,0 +1,377 @@
+from __future__ import annotations
+
+import hashlib
+from copy import deepcopy
+from typing import Any, cast
+
+from ktem.docqa.boolean_evidence_scope import evidence_item_text
+from ktem.docqa.evidence_identity import identity_of
+
+from benchmark.qasper_causal_evidence_chain_utils import canonical_digest
+from benchmark.tests.qasper_natural_semantic_pack_fixture import CODE_SHA as _CODE_SHA
+from benchmark.tests.qasper_natural_semantic_pack_fixture import (
+    attach_replay_context as _attach_replay_context,
+)
+from benchmark.tests.qasper_natural_semantic_pack_fixture import row as _row
+from benchmark.tests.test_qasper_causal_transaction import _run_context
+from scripts.slurm import qasper_natural_semantic_pack_probe as probe
+from scripts.slurm import qasper_natural_semantic_schema_probe as schema_probe
+from scripts.slurm.qasper_natural_causal_transaction import (
+    _causal_transaction,
+    causal_replay_run_context,
+)
+from scripts.slurm.qasper_natural_semantic_pack_probe import probe_prediction
+from scripts.slurm.qasper_natural_semantic_pack_replay import candidate_replay_context
+
+
+def _matched_retrieval_index_binding(count: int) -> dict[str, Any]:
+    return {
+        "contract_id": "qasper_retrieval_index_binding_audit.v1",
+        "status": "matched",
+        "hard_rule": "stop_at_first_divergence",
+        "expected_record_count": count,
+        "matched_record_count": count,
+        "violations": [],
+    }
+
+
+def _probe_prediction(row: dict[str, Any], *, code_sha: str) -> dict[str, Any]:
+    reference = _causal_transaction(
+        row,
+        origin="fixture_online_reference",
+        run_context=_run_context(),
+    )
+    return probe_prediction(
+        row,
+        code_sha=code_sha,
+        run_context=causal_replay_run_context(row, reference),
+    )
+
+
+def test_natural_probe_reuses_one_plan_across_pack_schema_parser_and_constraint() -> (
+    None
+):
+    result = _probe_prediction(_row(), code_sha=_CODE_SHA)
+
+    assert result["status"] == "passed"
+    assert result["binding_state"] == "relation_bound_support"
+    assert result["schema_parser"]["schema_accepted"] is True
+    assert result["schema_parser"]["parser_accepted"] is True
+    assert result["schema_parser"]["downstream_status"] == "passed"
+    assert result["plan_construction_trace"]["candidate_count"] >= 1
+    assert result["plan_construction_trace"]["bounded_selector_refs"]
+    assert result["packing_observation"]["contract_id"] == (
+        "qasper_source_packing_observation.v1"
+    )
+    assert result["packing_observation"]["record_count"] >= 1
+    assert result["packing_observation"]["selector_count"] >= 1
+    assert result["packing_observation"]["source_records"]
+    assert result["packing_observation"]["source_records"][0]["stop_stage"]
+    assert result["checks"]["causal_trace_prefix_complete"] is True
+    assert result["checks"]["production_candidate_path_replayed"] is True
+    assert result["checks"]["candidate_request_input_replayed"] is True
+    assert result["checks"]["online_local_causal_prefix_matched"] is True
+    terminal_lineage = result["production_path"]["typed_authority_terminal_lineage"]
+    assert terminal_lineage["typed_authority_state"] == "verified_support"
+    assert terminal_lineage["verified_citations"]
+    assert (
+        terminal_lineage["verified_citations"]
+        == terminal_lineage["verified_evidence_ids"]
+    )
+    assert (
+        terminal_lineage["verified_citations"]
+        == terminal_lineage["terminal_authoritative_evidence_ids"]
+    )
+    assert (
+        terminal_lineage["verified_citations"] == terminal_lineage["terminal_citations"]
+    )
+    assert terminal_lineage["citation_terminal_lineage_closed"] is True
+    causal_replay = result["causal_transaction_replay"]
+    assert causal_replay["status"] == "matched"
+    assert causal_replay["through_stage_index"] == 12
+    assert causal_replay["through_stage"] == "run_provenance_and_artifact"
+    assert causal_replay["comparison"]["status"] == "matched"
+    assert causal_replay["comparison"]["later_stages_evaluated"] is True
+    assert result["candidate_path_replay"]["stage_sequence"][-1] == (
+        "canonical_pack_freeze"
+    )
+    assert all(result["checks"].values())
+
+
+def test_natural_probe_fails_closed_on_a_tampered_trace_digest(monkeypatch) -> None:
+    original = probe.qasper_causal_evidence_chain_prefix_complete
+
+    def tampered_prefix(row: dict[str, Any]) -> bool:
+        lineage = row["semantic_verifier"]["semantic_data_lineage"]
+        lineage["source_packing"]["source_decisions_digest"] = "0" * 64
+        return original(row)
+
+    monkeypatch.setattr(
+        probe,
+        "qasper_causal_evidence_chain_prefix_complete",
+        tampered_prefix,
+    )
+
+    result = _probe_prediction(_row(), code_sha=_CODE_SHA)
+
+    assert result["checks"]["causal_trace_prefix_complete"] is False
+    assert result["status"] == "failed"
+
+
+def test_natural_probe_rejects_the_first_inconsistent_online_candidate_stage() -> None:
+    row = _row()
+    reference = _causal_transaction(
+        row,
+        origin="fixture_online_reference",
+        run_context=_run_context(),
+    )
+    replay_run_context = causal_replay_run_context(row, reference)
+    generator = cast(
+        dict[str, Any],
+        cast(dict[str, Any], row["evidence_metadata"])["qasper_candidate_generation"],
+    )
+    messages = deepcopy(generator["message_stack"])
+    messages[1]["content"] += "\nTAMPERED ONLINE INPUT"
+    generator["message_stack"] = messages
+    generator["message_stack_digest"] = canonical_digest(messages)
+    generator["input_digest"] = canonical_digest(
+        {
+            "messages": messages,
+            "response_schema_digest": generator["response_schema_digest"],
+            "seed": generator["effective_seed"],
+            "route": row["route"],
+            "benchmark_route_id": generator["benchmark_route_id"],
+        }
+    )
+    terminal_metadata = cast(
+        dict[str, Any],
+        cast(dict[str, Any], row["engine_terminal_evidence_bundle"])["metadata"],
+    )
+    terminal_metadata["qasper_candidate_generation"] = deepcopy(generator)
+
+    result = probe.probe_prediction(
+        row,
+        code_sha=_CODE_SHA,
+        run_context=replay_run_context,
+    )
+
+    comparison = result["causal_transaction_replay"]["comparison"]
+    assert comparison["status"] == "invalid"
+    assert comparison["first_divergence"]["stage_index"] == 3
+    assert comparison["first_divergence"]["stage"] == "candidate_input"
+    assert comparison["first_divergence"]["reason"] == "reference_stage_incomplete"
+    assert comparison["later_stages_evaluated"] is False
+    assert "later_divergences" not in comparison
+
+
+def test_natural_probe_rejects_unambiguous_unresolved_zero_plan() -> None:
+    row = _row()
+    row["evidence_bundle"] = {
+        "items": [
+            {
+                "evidence_id": "natural-probe-evidence",
+                "source_id": "paper",
+                "text": "The paper discusses comparisons between systems.",
+            }
+        ]
+    }
+    _attach_replay_context(row)
+
+    result = _probe_prediction(row, code_sha=_CODE_SHA)
+
+    assert result["binding_state"] == "unresolved"
+    assert result["canonical_plan_count"] == 0
+    assert result["ambiguity"]["ambiguous"] is False
+    assert result["checks"]["unambiguous_zero_plan_rejected"] is False
+    assert result["status"] == "failed"
+
+
+def test_natural_probe_rejects_a_plan_that_fails_the_audit_constraint(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        schema_probe,
+        "semantic_relation_evidence_set_constraint",
+        lambda *_args, **_kwargs: {
+            "status": "rejected",
+            "reason": "audit_invalid_plan",
+        },
+    )
+
+    result = _probe_prediction(deepcopy(_row()), code_sha=_CODE_SHA)
+
+    assert result["schema_parser"]["downstream_status"] == "rejected"
+    assert result["checks"]["canonical_plan_audit_valid"] is False
+    assert result["status"] == "failed"
+
+
+def test_natural_probe_keeps_ambiguous_and_unambiguous_denominators_separate() -> None:
+    ambiguous = _row()
+    base_bundle = cast(dict[str, Any], _row()["evidence_bundle"])
+    base_items = cast(list[dict[str, Any]], base_bundle["items"])
+    ambiguous["evidence_bundle"] = {
+        "items": [
+            *base_items,
+            {
+                "evidence_id": "natural-probe-contradiction",
+                "source_id": "paper",
+                "text": "The authors did not compare the two systems.",
+            },
+        ]
+    }
+    ambiguous["qasper_annotation_diagnostics"] = {
+        "ambiguous": True,
+        "ambiguity_reasons": ["annotation_answer_disagreement"],
+        "boolean_no_evidence_semantics": {},
+    }
+    _attach_replay_context(ambiguous)
+
+    audit = probe.build_audit(
+        [
+            _probe_prediction(_row(), code_sha=_CODE_SHA),
+            _probe_prediction(ambiguous, code_sha=_CODE_SHA),
+        ],
+        code_sha=_CODE_SHA,
+        input_path=__import__("pathlib").Path(__file__),
+        expected_count=2,
+        retrieval_index_binding=_matched_retrieval_index_binding(2),
+    )
+
+    assert audit["ambiguity_denominator"] == {
+        "ambiguous": 1,
+        "unambiguous": 1,
+    }
+    assert audit["hard_gates"]["ambiguity_denominator_complete"] is True
+
+
+def test_six_sample_probe_requires_the_frozen_four_two_denominator() -> None:
+    prediction = _probe_prediction(_row(), code_sha=_CODE_SHA)
+    audit = probe.build_audit(
+        [deepcopy(prediction) for _index in range(6)],
+        code_sha=_CODE_SHA,
+        input_path=__import__("pathlib").Path(__file__),
+        expected_count=6,
+        retrieval_index_binding=_matched_retrieval_index_binding(6),
+    )
+
+    assert audit["ambiguity_denominator"] == {"unambiguous": 6}
+    assert audit["hard_gates"]["six_sample_ambiguity_denominator_4_2"] is False
+    assert audit["status"] == "failed"
+
+
+def test_six_sample_probe_accepts_four_ambiguous_two_unambiguous() -> None:
+    prediction = _probe_prediction(_row(), code_sha=_CODE_SHA)
+    predictions = [deepcopy(prediction) for _index in range(6)]
+    for value in predictions[:4]:
+        value["ambiguity"] = {
+            "ambiguous": True,
+            "reasons": ["boolean_no_requires_closed_world_inference"],
+            "denominator": "ambiguous",
+        }
+    audit = probe.build_audit(
+        predictions,
+        code_sha=_CODE_SHA,
+        input_path=__import__("pathlib").Path(__file__),
+        expected_count=6,
+        retrieval_index_binding=_matched_retrieval_index_binding(6),
+    )
+
+    assert audit["ambiguity_denominator"] == {
+        "ambiguous": 4,
+        "unambiguous": 2,
+    }
+    assert audit["hard_gates"]["six_sample_ambiguity_denominator_4_2"] is True
+
+
+def test_probe_code_identity_gate_rejects_dirty_or_non_sha_runs() -> None:
+    prediction = _probe_prediction(_row(), code_sha=_CODE_SHA)
+    dirty = probe.build_audit(
+        [prediction],
+        code_sha=_CODE_SHA,
+        input_path=__import__("pathlib").Path(__file__),
+        expected_count=1,
+        retrieval_index_binding=_matched_retrieval_index_binding(1),
+        runtime_code_sha=_CODE_SHA,
+        runtime_worktree_clean=False,
+    )
+    labeled_dirty = probe.build_audit(
+        [{**prediction, "code_sha": f"{_CODE_SHA}-dirty"}],
+        code_sha=f"{_CODE_SHA}-dirty",
+        input_path=__import__("pathlib").Path(__file__),
+        expected_count=1,
+        retrieval_index_binding=_matched_retrieval_index_binding(1),
+    )
+
+    assert dirty["hard_gates"]["single_clean_code_identity"] is False
+    assert labeled_dirty["hard_gates"]["single_clean_code_identity"] is False
+
+
+def test_natural_probe_cannot_pass_with_an_old_retrieval_snapshot() -> None:
+    prediction = _probe_prediction(_row(), code_sha=_CODE_SHA)
+    binding = _matched_retrieval_index_binding(1)
+    binding.update(
+        {
+            "status": "failed",
+            "matched_record_count": 0,
+            "violations": ["retrieval_index_artifact_code_sha_mismatch"],
+        }
+    )
+
+    audit = probe.build_audit(
+        [prediction],
+        code_sha=_CODE_SHA,
+        input_path=__import__("pathlib").Path(__file__),
+        expected_count=1,
+        retrieval_index_binding=binding,
+    )
+
+    assert audit["hard_gates"]["real_retrieval_index_artifact_bound"] is False
+    assert audit["retrieval_index_binding_audit"] == binding
+    assert audit["status"] == "failed"
+
+
+def test_legacy_replay_uses_candidate_stage_rank_not_late_bundle_rank() -> None:
+    row = _row()
+    bundle = cast(dict[str, Any], row["evidence_bundle"])
+    items = cast(list[dict[str, Any]], bundle["items"])
+    items.append(
+        {
+            "evidence_id": "late-rank-evidence",
+            "source_id": "paper",
+            "text": "The paper discusses unrelated implementation details.",
+        }
+    )
+    _attach_replay_context(row)
+    metadata = cast(dict[str, Any], row["evidence_metadata"])
+    pack = cast(dict[str, Any], metadata["qasper_canonical_semantic_pack"])
+    source = cast(dict[str, Any], pack["source_packing_observation"])
+    del source["source_input_snapshot"]
+    observations = []
+    for position, item in enumerate(reversed(items)):
+        text = evidence_item_text(item)
+        observations.append(
+            {
+                "evidence_id": identity_of(item).key,
+                "text_digest": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                "text_chars": len(text),
+                "priority": [0, position],
+            }
+        )
+    source["source_records"] = observations
+    bundle["metadata"] = {
+        "candidate_ranked_evidence": [
+            {"canonical_id": identity_of(item).key} for item in items
+        ]
+    }
+
+    replay = candidate_replay_context(row)
+
+    assert replay.observation["complete"] is False
+    assert replay.observation["context_source"] == ("legacy_source_priority_projection")
+    assert (
+        "legacy_replay_not_causally_verifiable"
+        in replay.observation["incompleteness_reasons"]
+    )
+    assert [row["canonical_id"] for row in replay.observation["ranked_evidence"]] == [
+        identity_of(item).key for item in reversed(items)
+    ]

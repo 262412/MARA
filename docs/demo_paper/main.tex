@@ -14,6 +14,7 @@
 \IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage[table]{xcolor}
 \usepackage{tabularx}
 \usepackage{array}
 \usepackage{amsmath}
@@ -27,7 +28,11 @@
 \setlist[enumerate]{leftmargin=*,itemsep=1pt,topsep=2pt}
 \newcounter{algorithm}
 \newif\ifmaraanonymous
+\newif\ifmaramsc
+\newif\ifmaravenue
 \maraanonymousfalse
+\maramsctrue
+\maravenuefalse
 
 \author{
 Chenghao Zhang \\
@@ -46,6 +51,7 @@ Supervisor: Meng Fang \\
 
 \input{paper_body}
 
+\raggedbottom
 \bibliography{references}
 
 \appendix

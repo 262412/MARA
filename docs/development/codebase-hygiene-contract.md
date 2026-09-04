@@ -68,8 +68,10 @@ Use this workflow for every non-trivial change.
    Follow `docs/development/storage-layout-contract.md` before running `uv`,
    `pip`, tests, `MARA app init`, DocQA indexing, dataset syncs, Slurm jobs,
    model downloads, or any task that may create many files.
-   `~/scratch/projects/MARA/.venv` must be a symlink to
-   `~/fastscratch/envs/mara`; caches, Codex state, and MARA runtime data must
+   The primary `~/scratch/projects/MARA/.venv` must be a symlink to
+   `~/fastscratch/envs/mara`; linked worktrees must use the repository `.venv`
+   sentinel and `scripts/run_with_canonical_env.sh`, never the primary
+   environment. Caches, Codex state, and MARA runtime data must
    stay on `fastscratch`. Important source datasets must stay in
    `~/data/datasets/MARA`, and compute-time dataset copies or outputs must stay
    in `~/scratch/datasets/MARA`, `~/scratch/outputs/MARA`, or
@@ -188,7 +190,7 @@ allowing incremental work to continue.
 To intentionally refresh the baseline after an accepted change:
 
 ```powershell
-uv run --python 3.10 python scripts/check_codebase_hygiene.py --update-baseline
+uv run --no-sync --python 3.10 python scripts/check_codebase_hygiene.py --update-baseline
 ```
 
 Do not refresh the baseline just to make the gate pass.
@@ -261,29 +263,31 @@ readlink -f .venv
 readlink -f .venv/bin/python
 df -h .venv ktem_app_data
 printf 'PRE_COMMIT_HOME=%s\n' "$PRE_COMMIT_HOME"
+printf 'UV_NO_CACHE=%s\n' "$UV_NO_CACHE"
 lfs quota -h -u tbczhang /mnt/fastscratch
 quota -s
 test ! -e data
 test ! -e datasets
 test ! -e outputs
+test ! -e .theflow
 ```
 
 Always before changing or committing Python files:
 
 ```powershell
-uv run --python 3.10 python scripts/check_codebase_hygiene.py <changed-files>
+uv run --no-sync --python 3.10 python scripts/check_codebase_hygiene.py <changed-files>
 ```
 
 Always for changed Python files:
 
 ```powershell
-uv run --python 3.10 python -m pre_commit run --files <changed-files>
+uv run --no-sync --python 3.10 python -m pre_commit run --files <changed-files>
 ```
 
 For the public MARA CLI entrypoints:
 
 ```powershell
-uv run --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.10 python -m pytest -q
 ```
 
 Run from:
@@ -295,7 +299,7 @@ D:\PythonProject\MARA\libs\slide_cli
 For the GitHub Actions unit-test path:
 
 ```powershell
-uv run --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.10 python -m pytest -q
 ```
 
 Run from:
@@ -307,19 +311,33 @@ D:\PythonProject\MARA\libs\kotaemon
 For knowledge graph changes:
 
 ```powershell
-uv run --python 3.10 python -m pytest libs/ktem/ktem_tests/test_knowledge_graph_service.py libs/ktem/ktem_tests/test_chat_knowledge_graph_bindings.py -q
+uv run --no-sync --python 3.10 python -m pytest libs/ktem/ktem_tests/test_knowledge_graph_service.py libs/ktem/ktem_tests/test_chat_knowledge_graph_bindings.py -q
 ```
 
 For file index UI/event changes:
 
 ```powershell
-uv run --python 3.10 python -m pytest libs/ktem/ktem_tests/test_file_index_page_extraction.py -q
+uv run --no-sync --python 3.10 python -m pytest libs/ktem/ktem_tests/test_file_index_page_extraction.py -q
 ```
 
 For MCP / agent tool changes:
 
 ```powershell
-uv run --python 3.10 python -m pytest libs/kotaemon/tests/test_mcp_tools.py libs/kotaemon/tests/test_mcp_manager.py -q
+uv run --no-sync --python 3.10 python -m pytest libs/kotaemon/tests/test_mcp_tools.py libs/kotaemon/tests/test_mcp_manager.py -q
+```
+
+Before any QASPER Provider probe, natural probe, or 6x3 submission, the
+QASPER pre-provider gate is mandatory:
+
+```powershell
+uv run --no-sync --python 3.10 python scripts/run_qasper_local_gate.py
+```
+
+From a linked worktree, run the same gate through the canonical-environment
+wrapper instead:
+
+```powershell
+scripts/run_with_canonical_env.sh scripts/run_qasper_local_gate.py
 ```
 
 Do not use repository-root `pytest -q` as the default readiness signal until

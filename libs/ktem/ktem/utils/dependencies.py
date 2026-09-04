@@ -85,16 +85,20 @@ class DependencyChecker:
             Tuple of (is_available, path_or_error_message)
         """
         try:
-            from ktem.assets import PDFJS_PREBUILT_DIR
+            from ktem.assets import get_pdfjs_runtime_dir
+            from theflow.settings import settings as flowsettings
 
-            if not PDFJS_PREBUILT_DIR.exists():
-                return False, f"Directory not found: {PDFJS_PREBUILT_DIR}"
+            pdfjs_dir = get_pdfjs_runtime_dir(
+                getattr(flowsettings, "KH_APP_DATA_DIR", None)
+            )
+            if not pdfjs_dir.exists():
+                return False, f"Directory not found: {pdfjs_dir}"
 
-            viewer_html = PDFJS_PREBUILT_DIR / "web" / "viewer.html"
+            viewer_html = pdfjs_dir / "web" / "viewer.html"
             if not viewer_html.exists():
                 return False, f"viewer.html not found: {viewer_html}"
 
-            return True, str(PDFJS_PREBUILT_DIR)
+            return True, str(pdfjs_dir)
 
         except Exception as e:
             return False, str(e)
@@ -123,7 +127,7 @@ class DependencyChecker:
         guide.append("   - macOS:   brew install --cask libreoffice")
 
         guide.append("\nPDF.js (Built-in, no installation required)")
-        guide.append("   Location: libs/ktem/ktem/assets/prebuilt/pdfjs-4.0.379-dist/")
+        guide.append("   Run `MARA app init` to materialize the bundled offline asset.")
 
         guide.append("\n" + "=" * 60)
 

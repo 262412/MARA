@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from .evidence_identity import identity_of
 from .visual_retriever import LocalLateInteractionVisualRetriever
 
 
@@ -135,13 +136,19 @@ class QwenVLVisualGenerator:
                 ),
             }
         ]
-        content.extend(_image_parts(items, limit=self.max_images))
+        image_items = _image_items(items, limit=self.max_images)
+        content.extend(_image_parts(image_items, limit=len(image_items)))
+        generation_contract = _generation_contract(request)
         response = self._client().chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": content}],
-            temperature=0,
+            **generation_contract,
             max_tokens=_effective_max_output_tokens(request, self.max_output_tokens),
         )
+        metadata = getattr(bundle, "metadata", None)
+        if isinstance(metadata, dict):
+            metadata["generation_contract"] = generation_contract
+            metadata["visual_generation_evidence_ids"] = _identity_keys(image_items)
         return str(response.choices[0].message.content or "").strip()
 
     def _client(self):
@@ -152,6 +159,17 @@ class QwenVLVisualGenerator:
             base_url=self.base_url,
             timeout=self.timeout,
         )
+
+
+def _generation_contract(request: Any) -> dict[str, float | int]:
+    temperature = getattr(request, "generation_temperature", None)
+    top_p = getattr(request, "generation_top_p", None)
+    seed = getattr(request, "generation_seed", None)
+    return {
+        "temperature": 0 if temperature is None else float(temperature),
+        "top_p": 1 if top_p is None else float(top_p),
+        "seed": 20260724 if seed is None else int(seed),
+    }
 
 
 _RETRIEVERS: dict[str, VisualBackendSpec] = {
@@ -466,17 +484,38 @@ def _truncate_text(text: str, limit: int) -> str:
 
 
 def _image_parts(items: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
-    parts: list[dict[str, Any]] = []
+    return [
+        {"type": "image_url", "image_url": {"url": _image_url(item)}}
+        for item in _image_items(items, limit=limit)
+    ]
+
+
+def _image_items(items: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    selected: list[dict[str, Any]] = []
     for item in items:
         if str(item.get("modality") or "") != "page_image":
             continue
         image_url = _image_url(item)
         if not image_url:
             continue
-        parts.append({"type": "image_url", "image_url": {"url": image_url}})
-        if len(parts) >= limit:
+        selected.append(item)
+        if len(selected) >= limit:
             break
-    return parts
+    return selected
+
+
+def _identity_keys(items: list[dict[str, Any]]) -> list[str]:
+    output: list[str] = []
+    for item in items:
+        try:
+            identity = identity_of(item).key
+        except ValueError:
+            continue
+        if identity and identity not in output:
+            output.append(identity)
+    return output
 
 
 def _image_url(item: dict[str, Any]) -> str:

@@ -105,6 +105,60 @@ def route_win_loss_tie_rows(
     ]
 
 
+def paired_run_delta_rows(
+    baseline_records: list[dict[str, Any]],
+    candidate_records: list[dict[str, Any]],
+    *,
+    metric: str,
+) -> list[dict[str, Any]]:
+    baseline = _run_records_by_key(baseline_records)
+    candidate = _run_records_by_key(candidate_records)
+    rows: list[dict[str, Any]] = []
+    for dataset, example_id, route in sorted(set(baseline) & set(candidate)):
+        baseline_value = _metric_value(baseline[(dataset, example_id, route)], metric)
+        candidate_value = _metric_value(candidate[(dataset, example_id, route)], metric)
+        rows.append(
+            {
+                "dataset": dataset,
+                "example_id": example_id,
+                "route": route,
+                f"baseline_{metric}": baseline_value,
+                f"candidate_{metric}": candidate_value,
+                f"delta_{metric}": round(candidate_value - baseline_value, 4),
+            }
+        )
+    return rows
+
+
+def run_win_loss_tie_rows(
+    baseline_records: list[dict[str, Any]],
+    candidate_records: list[dict[str, Any]],
+    *,
+    metric: str,
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], dict[str, int]] = defaultdict(
+        lambda: {"wins": 0, "losses": 0, "ties": 0}
+    )
+    for row in paired_run_delta_rows(
+        baseline_records,
+        candidate_records,
+        metric=metric,
+    ):
+        delta = float(row[f"delta_{metric}"])
+        bucket = "wins" if delta > 0 else "losses" if delta < 0 else "ties"
+        grouped[(str(row["dataset"]), str(row["route"]))][bucket] += 1
+    return [
+        {
+            "dataset": dataset,
+            "route": route,
+            "metric": metric,
+            **counts,
+            "n": sum(counts.values()),
+        }
+        for (dataset, route), counts in sorted(grouped.items())
+    ]
+
+
 def controller_oracle_regret_rows(
     records: list[dict[str, Any]],
     *,
@@ -184,6 +238,16 @@ def _records_by_dataset_example_route(
     }
 
 
+def _run_records_by_key(
+    records: list[dict[str, Any]],
+) -> dict[tuple[str, str, str], dict[str, Any]]:
+    return {
+        (_dataset(record), _example_id(record), str(record.get("route") or "")): record
+        for record in records
+        if _example_id(record) and str(record.get("route") or "")
+    }
+
+
 def _dataset(record: dict[str, Any]) -> str:
     return str(record.get("dataset") or record.get("dataset_name") or "").strip()
 
@@ -193,8 +257,11 @@ def _example_id(record: dict[str, Any]) -> str:
 
 
 def _metric_value(record: dict[str, Any], metric: str) -> float:
+    value: Any = record
+    for key in metric.split("."):
+        value = value.get(key) if isinstance(value, dict) else None
     try:
-        return round(float(record.get(metric) or 0.0), 4)
+        return round(float(value or 0.0), 4)
     except (TypeError, ValueError):
         return 0.0
 

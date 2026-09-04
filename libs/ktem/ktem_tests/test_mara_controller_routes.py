@@ -329,6 +329,8 @@ def test_mara_controller_off_ignores_planner_and_uses_route_policy(monkeypatch):
         "grounded answer"
     ]
     assert captured["request"].controller_mode == "off"
+    assert captured["request"].controller_question == "What changed?"
+    assert captured["request"].retrieval_query == "What changed?"
     assert captured["result"].controller_decision.legacy_route == "doc_text"
 
 
@@ -352,7 +354,11 @@ def test_mara_text_route_adds_answer_format_requirements(monkeypatch):
                 RetrievedDocument(
                     text="Attention uses Q, K, V matrices.",
                     id_="doc-1",
-                    metadata={"file_id": "file-1", "page_label": "7"},
+                    metadata={
+                        "file_id": "file-1",
+                        "page_label": "7",
+                        "modality": "table",
+                    },
                 )
             ],
             [],

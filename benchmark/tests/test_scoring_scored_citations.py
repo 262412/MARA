@@ -47,8 +47,8 @@ def test_score_prediction_uses_scored_metadata_citations_when_available():
 
     assert metrics["citation_metadata_recall"] == 1.0
     assert metrics["citation_metadata_precision"] == 1.0
-    assert metrics["citation_recall"] == 1.0
-    assert metrics["citation_precision"] == 1.0
+    assert metrics["citation_recall"] == 0.0
+    assert metrics["citation_precision"] is None
 
 
 def test_score_prediction_uses_structured_citations_as_inline_citations():
@@ -91,5 +91,7 @@ def test_score_prediction_uses_structured_citations_as_inline_citations():
         }
     )
 
-    assert metrics["citation_inline_recall"] == 1.0
-    assert metrics["citation_inline_precision"] == 1.0
+    assert metrics["citation_recall"] == 1.0
+    assert metrics["citation_precision"] == 1.0
+    assert metrics["citation_inline_recall"] == 0.0
+    assert metrics["citation_inline_precision"] is None

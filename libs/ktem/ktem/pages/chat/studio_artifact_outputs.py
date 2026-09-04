@@ -18,6 +18,7 @@ def generation_panel_outputs(
     fallback_conversation_id: str,
     fallback_active_file_id: str,
     fallback_page_number: int,
+    user_id: Any,
 ):
     messages = list(getattr(response, "messages", []) or [])
     latest_prompt, latest_answer = _latest_exchange(messages, response)
@@ -48,17 +49,24 @@ def generation_panel_outputs(
         answer_html,
         page._render_citations_card_html(references_html),
         trace_html,
-        render_conversation_notebook_panel_html(conversation_id),
+        render_conversation_notebook_panel_html(
+            conversation_id,
+            user_id=user_id,
+        ),
         list(getattr(response, "graph_source_ids", []) or []),
         gr.update(visible=False, value=""),
         {"html": viewer_html},
     )
 
 
-def latest_notebook_artifact(conversation_id: str) -> dict[str, Any] | None:
+def latest_notebook_artifact(
+    conversation_id: str,
+    *,
+    user_id: Any,
+) -> dict[str, Any] | None:
     from ktem.docqa import _runtime_notebook as notebook_service
 
-    notebook = notebook_service.get_notebook(conversation_id)
+    notebook = notebook_service.get_notebook(conversation_id, user_id=user_id)
     artifacts = [
         item for item in notebook.get("artifacts", []) if isinstance(item, dict)
     ]

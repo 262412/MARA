@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import re
+
+
+def json_structure_repair_prompt(
+    response: str,
+    *,
+    allowed_values: tuple[str, ...],
+    include_evidence_ref: bool = False,
+    include_revised_answer: bool = False,
+    evidence_context: str = "",
+    allowed_evidence_refs: tuple[str, ...] = (),
+    preserve_evidence_ref: bool = True,
+) -> str:
+    values = ", ".join(f'"{value}"' for value in allowed_values)
+    keys = ["verdict"]
+    if include_evidence_ref:
+        keys.append("evidence_ref")
+    keys.append("evidence_quote")
+    if include_revised_answer:
+        keys.append("revised_answer")
+    rendered_keys = ", ".join(f'"{key}"' for key in keys[:-1])
+    if rendered_keys:
+        rendered_keys = f"{rendered_keys}, and "
+    rendered_keys = f'{rendered_keys}"{keys[-1]}"'
+    ref_instruction = (
+        " Preserve the original evidence_ref exactly when present."
+        if include_evidence_ref and preserve_evidence_ref
+        else ""
+    )
+    allowed_ref_instruction = (
+        " Select evidence_ref only from: " + ", ".join(allowed_evidence_refs) + "."
+        if allowed_evidence_refs
+        else ""
+    )
+    evidence_instruction = (
+        " Use only the bounded verifier context and evidence_ref labels below; "
+        "do not invent or combine references.\n\nBOUNDED VERIFIER CONTEXT:\n"
+        + evidence_context
+        if evidence_context
+        else ""
+    )
+    return (
+        "/no_think\n"
+        "Repair only the JSON structure of the verifier response below. "
+        "Do not reconsider the evidence, question, candidate, verdict, or "
+        "evidence quote. Preserve the original verdict and quote exactly when "
+        f"they are present.{ref_instruction}{allowed_ref_instruction} Return one JSON object with exactly "
+        f"the keys {rendered_keys}. The allowed verdict values are: "
+        f"{values}.\n\n"
+        f"VERIFIER RESPONSE:\n{response}{evidence_instruction}"
+    )
+
+
+def answerability_prompt(
+    *,
+    question: str,
+    evidence: str,
+    candidate_answer: str,
+) -> str:
+    return (
+        "/no_think\n"
+        "You are a QASPER evidence-sufficiency verifier. Decide whether the "
+        "retrieved paper evidence supports the core answer to the question. "
+        "Separate the supported core answer from optional explanations or "
+        "unsupported extensions. Topic overlap alone is not sufficient. "
+        "Return supported when the complete candidate is supported. Return "
+        "supported_with_pruning when the core answer is supported but extra "
+        "claims must be removed, and put the shortest sufficient core answer "
+        "in revised_answer. Return partially_supported only when a usable core "
+        "answer can be stated in revised_answer. Topic overlap or a plausible "
+        "answer is not sufficient. Return conflicting_core when evidence "
+        "contradicts the core answer, and insufficient_core_evidence when the "
+        "core relation is not established. For a positive verdict, quote "
+        "the shortest exact evidence span, at most 20 words, that states the "
+        "question-candidate relation, and copy the stable evidence_ref label "
+        "attached to that exact span. Never combine text from different refs. "
+        "If no such exact span exists, return insufficient_core_evidence with "
+        "an empty evidence_ref and evidence_quote.\n\n"
+        f"QUESTION:\n{question}\n\n"
+        f"RETRIEVED PAPER EVIDENCE:\n{evidence}\n\n"
+        f"CANDIDATE ANSWER:\n{candidate_answer}\n\n"
+        'Return exactly {"verdict":"supported","evidence_ref":"E1:S1",'
+        '"evidence_quote":"...","revised_answer":""}, '
+        '{"verdict":"supported_with_pruning","evidence_ref":"E1:S1",'
+        '"evidence_quote":"...","revised_answer":"..."}, '
+        '{"verdict":"partially_supported","evidence_ref":"E1:S1",'
+        '"evidence_quote":"...","revised_answer":"..."}, '
+        '{"verdict":"conflicting_core","evidence_ref":"E1:S1",'
+        '"evidence_quote":"...","revised_answer":""}, or '
+        '{"verdict":"insufficient_core_evidence","evidence_ref":"",'
+        '"evidence_quote":"","revised_answer":""}.'
+    )
+
+
+def boolean_answerability_prompt(*, question: str, evidence: str) -> str:
+    modal_instruction = (
+        "Modal relations are strict: evidence that a method can be used, is "
+        "compatible, or works as a drop-in component does not prove that it is "
+        "required. Conversely, 'without fine-tuning' or 'not required' supports "
+        "no for a requirement question.\n\n"
+        if _requires_requirement_guard(question)
+        else ""
+    )
+    return (
+        "/no_think\n"
+        "You are a QASPER proposition verifier. Compare the complete yes/no "
+        "question proposition with the retrieved paper evidence. A complete "
+        "match requires the same subject, relation, object, scope, qualifiers, "
+        "and polarity. Distinguish a process from its outcome, mentioning from "
+        "performing, creating from experimenting, and controlling experimental "
+        "collection from validating the quality of the resulting data.\n\n"
+        f"{modal_instruction}"
+        "Return yes_complete or no_complete only when one polarity of that "
+        "complete proposition is explicitly established. Return yes_partial "
+        "or no_partial when the evidence supports that polarity only for a "
+        "related or incomplete proposition. Return insufficient_evidence when "
+        "neither polarity is established. Absence of a statement never proves "
+        "no. For complete or partial verdicts, include the shortest exact "
+        "contiguous evidence span, at most 60 words, that supports the verdict. "
+        "Copy the stable evidence_ref label attached to that exact span. Never "
+        "combine text from different refs. Use empty evidence_ref and "
+        "evidence_quote only for insufficient_evidence.\n\n"
+        f"QUESTION:\n{question}\n\n"
+        f"RETRIEVED PAPER EVIDENCE:\n{evidence}\n\n"
+        'Return exactly {"verdict":"yes_complete","evidence_ref":"E1:S1",'
+        '"evidence_quote":"..."}, {"verdict":"no_complete",'
+        '"evidence_ref":"E1:S1","evidence_quote":"..."}, '
+        '{"verdict":"yes_partial","evidence_ref":"E1:S1",'
+        '"evidence_quote":"..."}, {"verdict":"no_partial",'
+        '"evidence_ref":"E1:S1","evidence_quote":"..."}, or '
+        '{"verdict":"insufficient_evidence","evidence_ref":"",'
+        '"evidence_quote":""}.'
+    )
+
+
+def _requires_requirement_guard(question: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:require|required|requires|necessary|must)\b",
+            str(question or ""),
+            flags=re.IGNORECASE,
+        )
+    )

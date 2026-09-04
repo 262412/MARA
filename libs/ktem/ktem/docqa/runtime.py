@@ -1,34 +1,37 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 from copy import deepcopy
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Iterator, Optional, cast
+from typing import Any, Iterator, Optional
 
+from ktem.auth.passwords import hash_password
+from ktem.auth.policy import (
+    NO_MANAGED_USER_DIAGNOSTIC,
+    AuthConfigurationError,
+    resolve_legacy_bootstrap_credentials,
+)
 from ktem.components import reasonings
-from ktem.db.models import Conversation, Settings, User, engine
+from ktem.db.models import User, engine
 from ktem.embeddings.manager import embedding_models_manager
 from ktem.index.file import FileIndex
+from ktem.index.file.deletion import DeletionCoordinator
 from ktem.llms.manager import llms
 from ktem.rerankings.manager import reranking_models_manager
 from ktem.utils.commands import WEB_SEARCH_COMMAND
-from ktem.utils.conversation import sync_retrieval_n_message
 from sqlmodel import Session, select
 from theflow.settings import settings as flowsettings
 from theflow.utils.modules import import_dotted_string
 
 from . import _runtime_doctor as _doctor
 from . import _runtime_elements, _runtime_graph
-from . import _runtime_indexing as _indexing
 from . import _runtime_mara as _mara
 from . import _runtime_notebook as _nb
 from . import _runtime_pipeline as _pipeline
+from . import _runtime_preview
 from . import _runtime_selection as _selection
-from . import _runtime_sessions as _sessions
 from . import _runtime_turn as _turn
 from ._runtime_app import _DocQAPreviewService, _RuntimeAppContext
+from ._runtime_file_service import RuntimeFileService
 from ._runtime_models import (
     DocQADoctorResult,
     DocQAFileRecord,
@@ -40,10 +43,12 @@ from ._runtime_models import (
     DocQATurnUpdate,
     _PreparedPipeline,
 )
+from ._runtime_session_facade import RuntimeSessionMutationFacade
+from ._runtime_session_service import RuntimeSessionService
 from ._runtime_utils import _html_to_text, _serialize_value
+from .evidence_record_identity import isolate_evidence_records
 
 logger = logging.getLogger(__name__)
-DEFAULT_SETTING, STATE = "(default)", {"app": {"regen": False}}
 
 
 def _build_turn_response(
@@ -91,13 +96,6 @@ def _build_turn_response(
             )
         ),
     )
-
-
-def _preview_value(preview: Any, method_name: str, file_id: str) -> str:
-    method = getattr(preview, method_name, None)
-    if method is None:
-        return ""
-    return str(method(file_id) or "")
 
 
 def _graph_context_with_local_index(
@@ -154,21 +152,9 @@ def _apply_request_element_index_records(pipeline: Any, request: DocQARequest) -
     request_records = [
         dict(item) for item in request.element_index_records if isinstance(item, dict)
     ]
-    pipeline.element_index_records = _unique_element_records(
-        existing_records + request_records
-    )
-
-
-def _unique_element_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    output: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for record in records:
-        evidence_id = str(record.get("evidence_id") or "").strip()
-        if not evidence_id or evidence_id in seen:
-            continue
-        seen.add(evidence_id)
-        output.append(record)
-    return output
+    ingestion = isolate_evidence_records(existing_records + request_records)
+    pipeline.element_index_records = list(ingestion.accepted_records)
+    pipeline.element_ingestion_trace = ingestion.as_trace()
 
 
 def _artifact_source_scope(
@@ -193,7 +179,26 @@ def _artifact_source_scope(
     return scope
 
 
-class DocQARuntime:
+def _save_turn_artifact(
+    conversation_id: str,
+    request: DocQARequest,
+    prepared: _PreparedPipeline,
+    graph_source_ids: list[str],
+    stream_result: _turn.TurnStreamResult,
+    *,
+    user_id: Any,
+) -> None:
+    _nb.save_captured_artifact(
+        conversation_id,
+        stream_result.capture.artifact,
+        user_id=user_id,
+        artifact_type=request.artifact_type or request.task_type,
+        prompt=request.prompt,
+        source_scope=_artifact_source_scope(request, prepared, graph_source_ids),
+    )
+
+
+class DocQARuntime(RuntimeSessionMutationFacade):
     def __init__(self, app=None, user_id: Any = None):
         self._app = app or _RuntimeAppContext()
         self._owns_app = app is None
@@ -221,22 +226,19 @@ class DocQARuntime:
 
     def _ensure_default_managed_user(self) -> str:
         configured_username = str(
-            getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "admin")
-            or "admin"
+            getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "") or ""
         ).strip()
-        configured_password = str(
-            getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_PASSWORD", "admin")
-            or "admin"
-        )
-        username_lookup = configured_username.lower()
 
         try:
             with Session(engine) as session:
-                existing = session.exec(
-                    select(User).where(User.username_lower == username_lookup)
-                ).first()
-                if existing is not None:
-                    return str(existing.id)
+                if configured_username:
+                    existing = session.exec(
+                        select(User).where(
+                            User.username_lower == configured_username.lower()
+                        )
+                    ).first()
+                    if existing is not None:
+                        return str(existing.id)
 
                 fallback_admin = session.exec(
                     select(User).where(User.admin.is_(True))
@@ -244,13 +246,20 @@ class DocQARuntime:
                 if fallback_admin is not None:
                     return str(fallback_admin.id)
 
-                hashed_password = hashlib.sha256(
-                    configured_password.encode()
-                ).hexdigest()
+                try:
+                    credentials = resolve_legacy_bootstrap_credentials(flowsettings)
+                except AuthConfigurationError as exc:
+                    logger.warning("Managed default user was not created: %s", exc)
+                    return ""
+                if credentials is None:
+                    logger.warning(NO_MANAGED_USER_DIAGNOSTIC)
+                    return ""
+
+                username, password = credentials
                 created = User(
-                    username=configured_username,
-                    username_lower=username_lookup,
-                    password=hashed_password,
+                    username=username,
+                    username_lower=username.lower(),
+                    password=hash_password(password),
                     admin=True,
                 )
                 session.add(created)
@@ -290,6 +299,24 @@ class DocQARuntime:
     def _resolve_user_id(self, user_id: Any = None):
         return self._user_id if user_id is None else user_id
 
+    def _get_session_service(self) -> RuntimeSessionService:
+        return RuntimeSessionService(
+            app=self._app,
+            file_index=self.file_index,
+            engine=engine,
+            resolve_user_id=self._resolve_user_id,
+        )
+
+    def _get_file_service(self) -> RuntimeFileService:
+        return RuntimeFileService(
+            file_index=self.file_index,
+            engine=engine,
+            resolve_user_id=self._resolve_user_id,
+            load_settings=self.load_settings,
+            zip_input_dir=flowsettings.KH_ZIP_INPUT_DIR,
+            deletion_coordinator_cls=DeletionCoordinator,
+        )
+
     def _load_web_search_cls(self):
         backend = getattr(flowsettings, "KH_WEB_SEARCH_BACKEND", None)
         if not backend:
@@ -301,131 +328,30 @@ class DocQARuntime:
             return None
 
     def load_settings(self, user_id: Any = None) -> dict[str, Any]:
-        resolved_user_id = self._resolve_user_id(user_id)
-        settings = deepcopy(self._app.default_settings.flatten())
-        with Session(engine) as session:
-            statement = select(Settings).where(Settings.user == resolved_user_id)
-            result = session.exec(statement).all()
-            if result:
-                settings.update(result[0].setting)
-        return settings
+        return self._get_session_service().load_settings(user_id)
 
     def list_sessions(self, user_id: Any = None) -> list[DocQASessionSummary]:
-        resolved_user_id = self._resolve_user_id(user_id)
-        with Session(engine) as session:
-            statement = (
-                select(Conversation)
-                .where(
-                    (Conversation.user == resolved_user_id)
-                    | Conversation.is_public.is_(True)
-                )
-                .order_by(Conversation.date_created.desc())  # type: ignore[attr-defined]
-            )
-            rows = session.exec(statement).all()
+        return self._get_session_service().list_sessions(user_id)
 
-        summaries = []
-        for row in rows:
-            data_source = dict(row.data_source or {})
-            messages = data_source.get("messages", []) or []
-            graph_source_ids = self._normalize_selected_file_ids(
-                data_source.get("graph_source_ids", [])
-            )
-            summaries.append(
-                DocQASessionSummary(
-                    conversation_id=row.id,
-                    name=row.name,
-                    message_count=len(messages),
-                    graph_source_count=len(graph_source_ids),
-                    origin=str(data_source.get("origin", "") or ""),
-                    is_public=bool(row.is_public),
-                    date_created=row.date_created,
-                    date_updated=row.date_updated,
-                )
-            )
-        return summaries
-
-    def load_session(self, conversation_id: str) -> Optional[DocQASession]:
-        if not conversation_id:
-            return None
-
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == conversation_id)
-            row = session.exec(statement).one_or_none()
-
-        if not row:
-            return None
-
-        data_source = dict(row.data_source or {})
-        messages = [tuple(item) for item in (data_source.get("messages", []) or [])]
-        retrieval_messages = list(data_source.get("retrieval_messages", []) or [])
-        plot_history = list(data_source.get("plot_history", []) or [])
-        state = deepcopy(data_source.get("state", STATE) or STATE)
-        selected_mapping = dict(data_source.get("selected", {}) or {})
-        graph_source_ids = self._normalize_selected_file_ids(
-            data_source.get("graph_source_ids", [])
-        )
-        if not graph_source_ids:
-            graph_source_ids = self._extract_selected_ids_from_data_source(data_source)
-
-        return DocQASession(
-            conversation_id=row.id,
-            name=row.name,
-            user_id=row.user,
-            is_public=bool(row.is_public),
-            data_source=data_source,
-            messages=messages,
-            retrieval_messages=sync_retrieval_n_message(
-                [list(item) for item in messages], retrieval_messages
-            ),
-            plot_history=plot_history,
-            state=state,
-            selected_mapping=selected_mapping,
-            graph_source_ids=graph_source_ids,
-            origin=str(data_source.get("origin", "") or ""),
-            date_created=row.date_created,
-            date_updated=row.date_updated,
+    def load_session(
+        self, conversation_id: str, user_id: Any = None
+    ) -> Optional[DocQASession]:
+        return self._get_session_service().load_session(
+            conversation_id, user_id=user_id
         )
 
     def create_session(
         self, name: str | None = None, user_id: Any = None
     ) -> DocQASession:
-        resolved_user_id = self._resolve_user_id(user_id)
-        with Session(engine) as session:
-            row = Conversation(user=resolved_user_id)
-            if name:
-                row.name = name
-            row.data_source = {"origin": "cli"}
-            session.add(row)
-            session.commit()
-            session.refresh(row)
-        session_info = self.load_session(row.id)
-        assert session_info is not None
-        return session_info
+        return self._get_session_service().create_session(name, user_id)
 
     def list_files(self, user_id: Any = None) -> list[DocQAFileRecord]:
-        if not self.file_index:
-            return []
-
-        resolved_user_id = self._resolve_user_id(user_id)
-        rows = self.file_index.list_source_rows(resolved_user_id)
-        return [
-            DocQAFileRecord(
-                file_id=str(row.get("id", "") or ""),
-                name=str(row.get("name", "") or ""),
-                size=int(row.get("size", 0) or 0),
-                tokens=int((row.get("note", {}) or {}).get("tokens", 0) or 0),
-                loader=str((row.get("note", {}) or {}).get("loader", "") or ""),
-                path=str(row.get("path", "") or ""),
-                date_created=row.get("date_created"),
-            )
-            for row in rows
-        ]
+        return self._get_file_service().list_files(user_id)
 
     def resolve_file_refs(
         self, refs: list[str], user_id: Any = None
     ) -> list[DocQAFileRecord]:
-        records = self.list_files(user_id=user_id)
-        return cast(list[DocQAFileRecord], _selection.resolve_file_refs(records, refs))
+        return self._get_file_service().resolve_file_refs(refs, user_id)
 
     def _selected_file_records_for_retrieval(
         self,
@@ -436,18 +362,14 @@ class DocQARuntime:
         file_ids = self._merge_unique_file_ids(selected_file_ids, [active_file_id])
         if not file_ids:
             return []
-        del user_id
+        sources = self._preview.resolve_sources(file_ids, user_id=user_id, strict=True)
         return [
             {
-                "file_id": file_id,
-                "file_name": _preview_value(
-                    self._preview,
-                    "resolve_file_name",
-                    file_id,
-                ),
-                "path": _preview_value(self._preview, "resolve_file_path", file_id),
+                "file_id": source.file_id,
+                "file_name": source.name,
+                "path": str(source.path),
             }
-            for file_id in file_ids
+            for source in sources
         ]
 
     def _build_selected_mapping(
@@ -457,32 +379,12 @@ class DocQARuntime:
         user_id: Any,
         existing_mapping: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        mapping = dict(existing_mapping or {})
-        for index in getattr(self._app.index_manager, "indices", []):
-            selected_input = None
-            if isinstance(selected_inputs, dict):
-                selected_input = selected_inputs.get(index.id)
-
-            if index is self.file_index:
-                if selected_input is None:
-                    mode = "select" if selected_file_ids else "all"
-                    selected_input = [mode, selected_file_ids, user_id]
-                elif (
-                    isinstance(selected_input, (list, tuple))
-                    and len(selected_input) >= 3
-                    and selected_input[0] in {"disabled", "select", "all"}
-                ):
-                    selected_input = list(selected_input[:3])
-                else:
-                    normalized_ids = self.file_index.resolve_selected_ids(
-                        user_id, selected_input
-                    )
-                    mode = "select" if normalized_ids else "all"
-                    selected_input = [mode, normalized_ids, user_id]
-                mapping[str(index.id)] = selected_input
-            elif selected_input is not None:
-                mapping[str(index.id)] = selected_input
-        return mapping
+        return self._get_session_service().build_selected_mapping(
+            selected_inputs,
+            selected_file_ids,
+            user_id,
+            existing_mapping,
+        )
 
     def persist_conversation_state(
         self,
@@ -499,49 +401,20 @@ class DocQARuntime:
         selected_file_ids: Optional[list[str]] = None,
         origin: Optional[str] = None,
     ) -> tuple[list[str], list[Any]]:
-        if not conversation_id:
-            raise ValueError("No conversation selected")
-
-        selected_file_ids = self._normalize_selected_file_ids(selected_file_ids)
-        normalized_graph_ids = self._normalize_selected_file_ids(graph_source_ids)
-        histories = _sessions.prepare_conversation_histories(
-            retrieval_message=retrieval_message,
-            plot_data=plot_data,
-            retrieval_history=retrieval_history,
-            plot_history=plot_history,
-            state=state,
+        return self._get_session_service().persist_conversation_state(
+            conversation_id,
+            user_id,
+            retrieval_message,
+            plot_data,
+            retrieval_history,
+            plot_history,
+            messages,
+            state,
+            graph_source_ids,
+            selected_inputs,
+            selected_file_ids,
+            origin,
         )
-
-        with Session(engine) as session:
-            statement = select(Conversation).where(Conversation.id == conversation_id)
-            row = session.exec(statement).one()
-
-            data_source = dict(row.data_source or {})
-            is_owner = row.user == user_id
-            selected_mapping = self._build_selected_mapping(
-                selected_inputs=selected_inputs,
-                selected_file_ids=selected_file_ids,
-                user_id=user_id,
-                existing_mapping=data_source.get("selected", {}),
-            )
-
-            updated_data_source = _sessions.build_conversation_data_source(
-                data_source=data_source,
-                selected_mapping=selected_mapping,
-                is_owner=is_owner,
-                messages=messages,
-                retrieval_history=histories.retrieval_history,
-                plot_history=histories.plot_history,
-                state=histories.state,
-                graph_source_ids=normalized_graph_ids,
-                origin=origin,
-            )
-            row.data_source = updated_data_source
-            row.date_updated = datetime.now()
-            session.add(row)
-            session.commit()
-
-        return histories.retrieval_history, histories.plot_history
 
     def _resolve_selected_inputs(
         self, request: DocQARequest, session_info: Optional[DocQASession]
@@ -576,10 +449,10 @@ class DocQARuntime:
     def _prepare_pipeline(self, request: DocQARequest) -> _PreparedPipeline:
         resolved_user_id = self._resolve_user_id(request.user_id)
         settings = deepcopy(request.settings or self.load_settings(resolved_user_id))
-        state = deepcopy(request.state or STATE)
+        state = deepcopy(request.state or {"app": {"regen": False}})
         selected_inputs = dict(request.selected_inputs or {})
 
-        if request.reasoning_type in (DEFAULT_SETTING, None):
+        if request.reasoning_type in ("(default)", None):
             reasoning_mode = settings["reasoning.use"]
         else:
             reasoning_mode = request.reasoning_type
@@ -618,31 +491,26 @@ class DocQARuntime:
                 resolved_user_id, selected_input
             )
 
-            if active_file_id and not active_file_name:
-                active_file_name = self._preview.resolve_file_name(active_file_id)
-
-            if not active_file_name:
-                inferred_id, inferred_name, _ = self._preview.resolve_selected_file(
-                    selected_file_ids
-                )
-                active_file_id = active_file_id or inferred_id
-                active_file_name = active_file_name or inferred_name
+            active_file_id, active_file_name = _runtime_preview.resolve_active_source(
+                self._preview,
+                selected_file_ids,
+                active_file_id,
+                active_file_name,
+                user_id=resolved_user_id,
+            )
 
         normalized_page_number = self._normalize_page_number(request.page_number)
         qa_scope = self._normalize_qa_scope(request.qa_scope, normalized_page_number)
         selected_text = str(request.selected_text or "").strip()
-        if (
-            qa_scope == "page"
-            and (not selected_text)
-            and normalized_page_number is not None
-            and active_file_id
-            and active_file_name
-        ):
-            selected_text = self._preview.get_page_context_text(
-                active_file_id,
-                active_file_name,
-                normalized_page_number,
-            )
+        selected_text = _runtime_preview.resolve_page_text(
+            self._preview,
+            qa_scope,
+            normalized_page_number,
+            active_file_id,
+            active_file_name,
+            selected_text,
+            user_id=resolved_user_id,
+        )
 
         graph_context = (
             request.graph_context if isinstance(request.graph_context, dict) else {}
@@ -665,6 +533,9 @@ class DocQARuntime:
         )
         _apply_request_page_image_records(pipeline, request)
         graph_source_ids = self._normalize_selected_file_ids(request.graph_source_ids)
+        _runtime_preview.validate_sources(
+            self._preview, graph_source_ids, user_id=resolved_user_id
+        )
         graph_context = _apply_multimodal_runtime_indexes(
             pipeline,
             self.file_index,
@@ -731,7 +602,14 @@ class DocQARuntime:
             stream_result=stream_result,
         )
 
-    def stream_turn(self, request: DocQARequest) -> Iterator[DocQATurnUpdate]:
+    def stream_turn(
+        self,
+        request: DocQARequest,
+        *,
+        cancel_event: Any = None,
+    ) -> Iterator[DocQATurnUpdate]:
+        if cancel_event is not None and cancel_event.is_set():
+            return
         (
             resolved_user_id,
             session_info,
@@ -740,6 +618,8 @@ class DocQARuntime:
             prepared,
             history,
         ) = self._prepare_turn_execution(request)
+        if cancel_event is not None and cancel_event.is_set():
+            return
         stream_result = _turn.create_stream_result(request_to_run)
 
         for event in _turn.consume_stream_result(
@@ -749,6 +629,8 @@ class DocQARuntime:
             history=history,
             result=stream_result,
         ):
+            if cancel_event is not None and cancel_event.is_set():
+                return
             partial_answer = _turn.partial_answer_text(stream_result.text)
             yield DocQATurnUpdate(
                 event=dict(event),
@@ -759,7 +641,11 @@ class DocQARuntime:
                 state=_serialize_value(stream_result.state),
                 stream_events=list(stream_result.stream_events),
             )
+            if cancel_event is not None and cancel_event.is_set():
+                return
 
+        if cancel_event is not None and cancel_event.is_set():
+            return
         _turn.finalize_stream_result(stream_result, self._empty_chat_message())
         response = self._finalize_turn_response(
             original_request=request,
@@ -789,7 +675,7 @@ class DocQARuntime:
     ]:
         resolved_user_id = self._resolve_user_id(request.user_id)
         session_info = (
-            self.load_session(request.conversation_id)
+            self.load_session(request.conversation_id, user_id=resolved_user_id)
             if request.conversation_id
             else None
         )
@@ -847,18 +733,19 @@ class DocQARuntime:
             retrieval_history=session_info.retrieval_messages,
             plot_history=session_info.plot_history,
             messages=messages,
-            state=stream_result.state,
+            state=_turn.state_with_stream_terminal_commit(stream_result, len(history)),
             graph_source_ids=graph_source_ids,
             selected_inputs=selected_inputs,
             selected_file_ids=prepared.selected_file_ids,
             origin=original_request.origin,
         )
-        self._save_turn_artifact(
+        _save_turn_artifact(
             session_info.conversation_id,
             request_to_run,
             prepared,
             graph_source_ids,
             stream_result,
+            user_id=resolved_user_id,
         )
 
         selected_mapping = self._build_selected_mapping(
@@ -882,22 +769,6 @@ class DocQARuntime:
         return response
 
     @staticmethod
-    def _save_turn_artifact(
-        conversation_id: str,
-        request: DocQARequest,
-        prepared: _PreparedPipeline,
-        graph_source_ids: list[str],
-        stream_result: _turn.TurnStreamResult,
-    ) -> None:
-        _nb.save_captured_artifact(
-            conversation_id,
-            stream_result.capture.artifact,
-            artifact_type=request.artifact_type or request.task_type,
-            prompt=request.prompt,
-            source_scope=_artifact_source_scope(request, prepared, graph_source_ids),
-        )
-
-    @staticmethod
     def _empty_chat_message() -> str:
         return getattr(
             flowsettings,
@@ -906,18 +777,10 @@ class DocQARuntime:
         )
 
     def _expand_zip_inputs(self, paths: list[str]) -> list[str]:
-        return _indexing.expand_zip_inputs(
-            self.file_index,
-            paths,
-            zip_input_dir=flowsettings.KH_ZIP_INPUT_DIR,
-        )
+        return self._get_file_service().expand_zip_inputs(paths)
 
     def _expand_index_inputs(self, paths: list[str]) -> list[str]:
-        return _indexing.expand_index_inputs(
-            self.file_index,
-            paths,
-            zip_input_dir=flowsettings.KH_ZIP_INPUT_DIR,
-        )
+        return self._get_file_service().expand_index_inputs(paths)
 
     def index_paths(
         self,
@@ -926,78 +789,17 @@ class DocQARuntime:
         user_id: Any = None,
         settings: Optional[dict[str, Any]] = None,
     ) -> DocQAIndexResult:
-        return _indexing.index_paths(
-            self.file_index,
+        return self._get_file_service().index_paths(
             paths,
-            reindex=reindex,
-            settings=settings,
-            load_settings=self.load_settings,
-            resolve_user_id=self._resolve_user_id,
-            user_id=user_id,
-            zip_input_dir=flowsettings.KH_ZIP_INPUT_DIR,
+            reindex,
+            user_id,
+            settings,
         )
 
     def delete_files(
         self, refs: list[str], user_id: Any = None
     ) -> list[DocQAFileRecord]:
-        if not self.file_index:
-            return []
-
-        resolved_user_id = self._resolve_user_id(user_id)
-        matches = self.resolve_file_refs(refs, user_id=resolved_user_id)
-        source_table = cast(Any, self.file_index._resources["Source"])
-        index_table = cast(Any, self.file_index._resources["Index"])
-        vector_store = cast(Any, self.file_index._resources["VectorStore"])
-        doc_store = cast(Any, self.file_index._resources["DocStore"])
-        file_storage_path = cast(Any, self.file_index._resources.get("FileStoragePath"))
-
-        for match in matches:
-            stored_rel_path = ""
-            vector_ids: list[str] = []
-            document_ids: list[str] = []
-
-            with Session(engine) as session:
-                source_row = session.exec(
-                    select(source_table).where(source_table.id == match.file_id)
-                ).one_or_none()
-                if source_row is None:
-                    continue
-
-                stored_rel_path = str(getattr(source_row, "path", "") or "")
-                session.delete(source_row)
-
-                index_rows = session.exec(
-                    select(index_table).where(index_table.source_id == match.file_id)
-                ).all()
-                for row in index_rows:
-                    relation_type = str(getattr(row, "relation_type", "") or "")
-                    target_id = str(getattr(row, "target_id", "") or "")
-                    if relation_type == "vector" and target_id:
-                        vector_ids.append(target_id)
-                    elif relation_type == "document" and target_id:
-                        document_ids.append(target_id)
-                    session.delete(row)
-
-                session.commit()
-
-            if vector_ids and vector_store:
-                vector_store.delete(vector_ids)
-            if document_ids:
-                doc_store.delete(document_ids)
-
-            if stored_rel_path:
-                candidate_paths = []
-                if file_storage_path:
-                    candidate_paths.append(Path(file_storage_path) / stored_rel_path)
-                candidate_paths.append(Path(stored_rel_path))
-                for candidate in candidate_paths:
-                    try:
-                        if candidate.is_file():
-                            candidate.unlink()
-                            break
-                    except Exception:
-                        continue
-        return matches
+        return self._get_file_service().delete_files(refs, user_id)
 
     def doctor(self, user_id: Any = None) -> DocQADoctorResult:
         resolved_user_id = self._resolve_user_id(user_id)

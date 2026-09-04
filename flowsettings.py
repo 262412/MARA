@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from ktem.runtime_bootstrap import get_runtime_paths
 from ktem.runtime_defaults import build_kotaemon_settings
 from theflow.settings.default import *  # noqa
 
@@ -17,5 +18,10 @@ globals().update(
         mode="dev",
     )
 )
+
+STORAGE = {
+    "__type__": "theflow.storage.LocalStorage",
+    "prefix": str(get_runtime_paths().cache_dir / "theflow"),
+}
 
 KH_SETTINGS_SOURCE = "workspace-flowsettings"

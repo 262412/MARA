@@ -38,6 +38,7 @@ def test_doc_element_evidence_bundle_limits_selected_ranked_items():
         {"element_index": records, "element_retriever_scores": {}},
     )
 
-    assert len(bundle.items) == 10
+    assert len(bundle.items) == 8
+    assert bundle.metadata["evidence_selection_trace"]["max_items"] == 8
     assert bundle.items[0]["element_id"] == "table-2"
     assert "table-1" not in {item["element_id"] for item in bundle.items}

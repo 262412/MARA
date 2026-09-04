@@ -1,3 +1,4 @@
+import benchmark.system as system_module
 from benchmark.schemas import BenchmarkConfig, BenchmarkDocument, BenchmarkExample
 from benchmark.system import KotaemonTextRAGSystem, _evidence_metadata
 from kotaemon.base import Document, RetrievedDocument
@@ -16,13 +17,37 @@ class _CountingReader:
         return [document]
 
 
+class _StaticReader:
+    def __init__(self, text):
+        self.text = text
+
+    def load_data(self, path, extra_info=None, **kwargs):
+        del path, kwargs
+        document = Document(self.text, metadata={"page_label": "1"})
+        if extra_info:
+            document.metadata.update(extra_info)
+        return [document]
+
+
 class _PromptRecordingLLM:
     def __init__(self):
         self.prompts: list[str] = []
+        self.calls = []
 
-    def __call__(self, prompt: str) -> str:
+    def __call__(self, prompt: str, **kwargs) -> str:
         self.prompts.append(prompt)
+        self.calls.append((prompt, kwargs))
         return "alpha"
+
+
+class _SequenceLLM:
+    def __init__(self, responses):
+        self.responses = iter(responses)
+        self.calls = []
+
+    def __call__(self, prompt: str, **kwargs):
+        self.calls.append((prompt, kwargs))
+        return next(self.responses)
 
 
 def test_text_rag_system_uses_parse_cache_for_same_file_across_documents(
@@ -57,6 +82,36 @@ def test_text_rag_system_uses_parse_cache_for_same_file_across_documents(
     assert second.parsed_documents[0].metadata["file_id"] == "doc-b"
 
 
+def test_text_rag_parse_cache_partitions_chunking_contract(monkeypatch, tmp_path):
+    doc_path = tmp_path / "doc.txt"
+    doc_path.write_text("alpha", encoding="utf-8")
+    reader = _CountingReader()
+
+    def build(chunk_size):
+        system = KotaemonTextRAGSystem(
+            BenchmarkConfig(
+                suite_name="cache",
+                output_dir=tmp_path / "out",
+                retrieval_mode="text",
+                use_generation=False,
+                cache_mode="warm",
+                chunk_size=chunk_size,
+                chunk_overlap=8,
+            )
+        )
+        monkeypatch.setattr(system, "_get_reader", lambda _path: reader)
+        return system._build_index(
+            BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt")
+        )
+
+    first = build(64)
+    second = build(128)
+
+    assert reader.calls == 2
+    assert first.parse_cache_hit is False
+    assert second.parse_cache_hit is False
+
+
 def test_text_rag_system_bypasses_parse_cache_when_requested(monkeypatch, tmp_path):
     doc_path = tmp_path / "doc.txt"
     doc_path.write_text("alpha", encoding="utf-8")
@@ -84,6 +139,177 @@ def test_text_rag_system_bypasses_parse_cache_when_requested(monkeypatch, tmp_pa
     assert second.parse_cache_hit is False
     assert first.parse_cache_stats == {"hits": 0, "misses": 0, "writes": 0}
     assert second.parse_cache_stats == {"hits": 0, "misses": 0, "writes": 0}
+
+
+def test_text_rag_system_runs_multi_document_text_retrieval(monkeypatch, tmp_path):
+    first_path = tmp_path / "first.txt"
+    second_path = tmp_path / "second.txt"
+    first_path.write_text("alpha", encoding="utf-8")
+    second_path.write_text("beta", encoding="utf-8")
+    readers = {
+        first_path: _CountingReader(),
+        second_path: _CountingReader(),
+    }
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="coverage",
+            output_dir=tmp_path / "out",
+            retrieval_mode="text",
+            use_generation=False,
+            cache_mode="warm",
+            top_k=2,
+        )
+    )
+    monkeypatch.setattr(system, "_get_reader", readers.__getitem__)
+    documents = [
+        BenchmarkDocument(document_id="doc-a", path=first_path, format_type="txt"),
+        BenchmarkDocument(document_id="doc-b", path=second_path, format_type="txt"),
+    ]
+    example = BenchmarkExample(
+        example_id="example-a",
+        document_id="doc-a",
+        question="Where is cached alpha text?",
+        answers=["cached alpha text"],
+        evidence_pages=["1"],
+    )
+
+    result = system.run_example_documents(documents, example)
+
+    assert result["example_id"] == "example-a"
+    assert result["predicted_answer"] == "cached alpha text"
+    assert result["predicted_pages"] == ["1", "1"]
+    assert result["predicted_sources"] == [
+        "first.txt#page:1",
+        "first.txt#page:1",
+    ]
+    assert result["performance"]["num_documents"] == 2
+    assert result["performance"]["num_chunks"] == 2
+    assert result["cache"]["parse"] == {"hits": 0, "misses": 2, "writes": 2}
+    assert [item["document_id"] for item in system.document_reports()] == [
+        "doc-a",
+        "doc-b",
+    ]
+    assert all(reader.calls == 1 for reader in readers.values())
+
+
+def test_text_rag_system_preserves_full_retrieved_text_for_diagnostics(
+    monkeypatch, tmp_path
+):
+    doc_path = tmp_path / "long.txt"
+    full_text = "alpha " + ("padding " * 100) + "gold evidence after preview"
+    doc_path.write_text(full_text, encoding="utf-8")
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="diagnostic coverage",
+            output_dir=tmp_path / "out",
+            retrieval_mode="text",
+            use_generation=False,
+            top_k=1,
+        )
+    )
+    monkeypatch.setattr(system, "_get_reader", lambda _path: _StaticReader(full_text))
+
+    result = system.run_example(
+        BenchmarkDocument(document_id="doc", path=doc_path, format_type="txt"),
+        BenchmarkExample(
+            example_id="example",
+            document_id="doc",
+            question="Where is the gold evidence?",
+            answers=["gold evidence after preview"],
+            evidence_pages=["1"],
+        ),
+    )
+
+    hit = result["retrieved_hits"][0]
+    assert "gold evidence after preview" not in hit["text_preview"]
+    assert "gold evidence after preview" in hit["text"]
+    assert len(hit["text"]) > 400
+
+
+def test_text_rag_system_lexical_helpers_cover_empty_and_ranked_queries(tmp_path):
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="coverage",
+            output_dir=tmp_path / "out",
+            retrieval_mode="text",
+            use_generation=False,
+            top_k=1,
+        )
+    )
+    documents = [
+        Document("alpha alpha beta", doc_id="one"),
+        Document("beta gamma", doc_id="two"),
+        Document("", doc_id="empty"),
+    ]
+
+    assert system._lexical_hits("", documents, 3) == []
+    assert system._lexical_hits("missing", documents, 3) == []
+    hits = system._lexical_hits("alpha beta", documents, 3)
+
+    assert [hit.doc_id for hit in hits] == ["one", "two"]
+    assert system._combine_hits("alpha beta", [], hits) == [hits[0]]
+
+
+def test_text_rag_ranking_quantizes_near_ties_and_uses_canonical_identity(tmp_path):
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="determinism",
+            output_dir=tmp_path / "out",
+            retrieval_mode="hybrid",
+            use_generation=False,
+            top_k=1,
+        )
+    )
+    first = RetrievedDocument(
+        text="same relevance a",
+        id_="doc-a",
+        metadata={"source_id": "paper", "element_id": "a"},
+        score=0.90000041,
+    )
+    second = RetrievedDocument(
+        text="same relevance b",
+        id_="doc-b",
+        metadata={"source_id": "paper", "element_id": "b"},
+        score=0.90000049,
+    )
+
+    forward = system._combine_hits("query", [second, first], [])
+    reverse = system._combine_hits("query", [first, second], [])
+
+    assert [hit.doc_id for hit in forward] == ["doc-a"]
+    assert [hit.doc_id for hit in reverse] == ["doc-a"]
+
+
+def test_text_rag_system_selects_configured_pdf_reader_and_cold_cache(tmp_path):
+    expected_readers = {
+        "adobe": system_module.adobe_reader,
+        "azure-di": system_module.azure_reader,
+        "docling": system_module.docling_reader,
+    }
+
+    for reader_mode, expected_reader in expected_readers.items():
+        system = KotaemonTextRAGSystem(
+            BenchmarkConfig(
+                suite_name="reader coverage",
+                route="text route",
+                output_dir=tmp_path / "out",
+                retrieval_mode="text",
+                use_generation=False,
+                reader_mode=reader_mode,
+                cache_mode="cold",
+            )
+        )
+
+        assert system._get_reader(tmp_path / "document.pdf") is expected_reader
+        assert (
+            system._get_reader(tmp_path / "document.unknown")
+            is system_module.unstructured
+        )
+        cache_dir = system._embedding_cache_dir()
+        assert cache_dir is not None
+        assert cache_dir.name == "embedding"
+        assert cache_dir.parent.name.startswith("cold-")
+        assert cache_dir.parent.parent.name == "text-route"
 
 
 def test_text_rag_generation_uses_benchmark_prompt_not_user_template(
@@ -128,6 +354,51 @@ def test_text_rag_generation_uses_benchmark_prompt_not_user_template(
     assert "USER SIDE TEMPLATE" not in prompt
     assert "Use the following context" not in prompt
     assert "Return the final answer as Markdown" not in prompt
+    assert llm.calls[0][1] == {
+        "temperature": 0,
+        "top_p": 1,
+        "seed": 20260724,
+    }
+    assert _metadata["generation_contract"] == llm.calls[0][1]
+
+
+def test_qasper_text_rag_defers_answerability_to_runner_task_contract(
+    monkeypatch,
+    tmp_path,
+):
+    llm = _SequenceLLM(["The baseline was NDCG 55.46."])
+    monkeypatch.setattr(KotaemonTextRAGSystem, "_resolve_llm", lambda *_args: llm)
+    system = KotaemonTextRAGSystem(
+        BenchmarkConfig(
+            suite_name="qasper-typed",
+            output_dir=tmp_path / "out",
+            retrieval_mode="text",
+            use_generation=True,
+        )
+    )
+
+    answer, _evidence, _seconds, metadata = system._generate_answer(
+        BenchmarkExample(
+            example_id="ex",
+            document_id="paper",
+            question="What was the baseline?",
+            answer_type="unanswerable",
+            answers=["unanswerable"],
+        ),
+        [
+            RetrievedDocument(
+                text=(
+                    "The proposed system reports NDCG 55.46. No baseline is identified."
+                ),
+                metadata={"file_name": "paper.txt"},
+                score=1.0,
+            )
+        ],
+    )
+
+    assert answer == "The baseline was NDCG 55.46."
+    assert len(llm.calls) == 1
+    assert "qasper_answerability" not in metadata
 
 
 def test_evidence_metadata_marks_visual_and_formula_context():

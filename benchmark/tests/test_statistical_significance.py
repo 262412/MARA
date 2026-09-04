@@ -2,7 +2,9 @@ from benchmark.statistical_significance import (
     bootstrap_ci_by_dataset_route,
     controller_oracle_regret_rows,
     paired_route_delta_rows,
+    paired_run_delta_rows,
     route_win_loss_tie_rows,
+    run_win_loss_tie_rows,
 )
 
 
@@ -113,3 +115,58 @@ def test_controller_oracle_regret_rows_compare_to_best_fixed_route():
     }
     assert rows[1]["oracle_route"] == "page_image_rag_vlm"
     assert rows[1]["regret_f1"] == 0.5
+
+
+def test_paired_run_report_aligns_artifacts_and_counts_nested_metric_deltas():
+    baseline = [
+        {
+            "dataset": "financebench",
+            "example_id": "a",
+            "route": "text_rag",
+            "metrics": {"native_score": 1.0},
+        },
+        {
+            "dataset": "financebench",
+            "example_id": "b",
+            "route": "text_rag",
+            "metrics": {"native_score": 0.0},
+        },
+    ]
+    candidate = [
+        {
+            "dataset": "financebench",
+            "example_id": "a",
+            "route": "text_rag",
+            "metrics": {"native_score": 0.0},
+        },
+        {
+            "dataset": "financebench",
+            "example_id": "b",
+            "route": "text_rag",
+            "metrics": {"native_score": 1.0},
+        },
+    ]
+
+    rows = paired_run_delta_rows(
+        baseline,
+        candidate,
+        metric="metrics.native_score",
+    )
+    counts = run_win_loss_tie_rows(
+        baseline,
+        candidate,
+        metric="metrics.native_score",
+    )
+
+    assert [row["delta_metrics.native_score"] for row in rows] == [-1.0, 1.0]
+    assert counts == [
+        {
+            "dataset": "financebench",
+            "route": "text_rag",
+            "metric": "metrics.native_score",
+            "wins": 1,
+            "losses": 1,
+            "ties": 0,
+            "n": 2,
+        }
+    ]

@@ -46,7 +46,8 @@ def test_build_workflow_plan_accepts_planner_multi_step_workflow():
         controller_mode="llm",
     ).as_dict()
 
-    assert plan["strategy"] == "planner_workflow"
+    assert plan["strategy"] == "planned_trace"
+    assert plan["execution_control"] == "fixed_state_machine"
     assert plan["total_cost_units"] == 8
     assert plan["reward_features"] == {
         "cost_units": 8,
@@ -122,16 +123,25 @@ def test_execute_controller_turn_records_workflow_plan_and_trace():
         ],
     )
 
-    assert result.workflow_plan["strategy"] == "planner_workflow"
+    assert result.workflow_plan["strategy"] == "planned_trace"
+    assert result.workflow_plan["execution_control"] == "fixed_state_machine"
     assert [step["executor"] for step in result.workflow_plan["steps"]] == [
         "retrieve_text",
         "retrieve_page_image",
         "fuse_evidence",
         "generate_docqa_answer",
     ]
-    assert result.controller_trace[1] == {
+    workflow_event = next(
+        event
+        for event in result.controller_trace
+        if event.get("stage") == "workflow_plan"
+    )
+    assert workflow_event == {
         "stage": "workflow_plan",
-        "strategy": "planner_workflow",
+        "strategy": "planned_trace",
+        "agent_mode": "auto",
+        "verification_mode": "off",
+        "execution_control": "fixed_state_machine",
         "step_count": 4,
         "total_cost_units": 6,
     }

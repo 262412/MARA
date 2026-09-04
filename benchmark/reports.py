@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import csv
-import json
+import io
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .artifact_publication import atomic_write_jsonl, atomic_write_text
+from .artifact_requirements import (
+    normalize_artifact_detail,
+    report_context,
+    write_report_artifacts,
+    write_report_outputs,
+)
+from .baseline_registry import assert_writable_benchmark_output
 from .dataset_decision_report import (
     phase2_failure_counts_markdown,
     phase2_summary_markdown,
@@ -17,19 +25,27 @@ from .report_benchmark_taxonomy import (
     routing_taxonomy_markdown,
 )
 from .report_compaction_fields import TEXT_FIELDS
+from .report_csv_schema import _CSV_FIELD_ORDER
 from .report_external_evaluators import (
     external_evaluator_by_route_markdown,
     external_evaluator_markdown,
 )
 from .report_headline import headline_score_lines
+from .report_identity_compaction import (
+    IDENTITY_TRACE_LIMITS,
+    compact_identity_evidence_list,
+)
+from .report_qasper_authority import qasper_authority_diagnostics_markdown
 from .report_route_metrics import route_metrics_markdown
 from .report_route_rankings import route_ranking_markdown
+from .report_summary_metrics import diagnostic_metric_lines
 from .report_verifier_observability import verifier_observability_markdown
 
 ARTIFACT_LIMITS = {
     "max_evidence_text_chars": 2000,
     "max_prediction_evidence_items": 10,
     "max_trace_events": 20,
+    **IDENTITY_TRACE_LIMITS,
 }
 _TRACE_FIELDS = {
     "agent_trace",
@@ -39,11 +55,13 @@ _TRACE_FIELDS = {
     "events",
 }
 _EVIDENCE_LIST_FIELDS = {
+    "candidate_evidence",
     "element_index",
     "evidence",
     "graph_evidence",
     "items",
     "page_image_index",
+    "reranked_evidence",
     "retrieved_hits",
 }
 _SCORE_MAP_FIELDS = {
@@ -64,54 +82,6 @@ _COMPACT_DROP_FIELDS = {
     "rendered_page_image",
     "visual_embedding",
 }
-_CSV_FIELD_ORDER = [
-    "dataset_name",
-    "route",
-    "num_predictions",
-    "avg_mara_score",
-    "avg_native_score",
-    "avg_mara_proxy_score",
-    "avg_em",
-    "avg_f1",
-    "product_avg_em",
-    "product_avg_f1",
-    "avg_answer_for_user_tokens",
-    "avg_answer_for_scoring_tokens",
-    "avg_mara_answer_score",
-    "avg_mara_evidence_score",
-    "avg_mara_citation_score",
-    "avg_mara_groundedness_score",
-    "avg_mara_abstention_score",
-    "avg_mara_controller_score",
-    "avg_mara_format_score",
-    "avg_anls",
-    "avg_page_hit",
-    "avg_citation_recall",
-    "avg_citation_precision",
-    "avg_citation_metadata_recall",
-    "avg_citation_metadata_precision",
-    "avg_citation_inline_recall",
-    "avg_citation_inline_precision",
-    "avg_citation_recall_source",
-    "avg_citation_precision_source",
-    "avg_citation_recall_page",
-    "avg_citation_precision_page",
-    "avg_citation_recall_span",
-    "avg_citation_precision_span",
-    "avg_unsupported_claim_rate",
-    "avg_abstention_rate",
-    "num_true_abstention",
-    "num_false_abstention",
-    "num_unsupported_claim",
-    "total_unsupported_claim_count",
-    "num_retry",
-    "total_retry_count",
-    "num_route_switch",
-    "total_route_switch_count",
-    "avg_multimodal_answer_support",
-    "avg_total_seconds",
-    "benchmark_role",
-]
 
 
 def _to_slug(text: str) -> str:
@@ -121,8 +91,7 @@ def _to_slug(text: str) -> str:
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    text = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
-    path.write_text(text, encoding="utf-8")
+    atomic_write_jsonl(path, rows)
 
 
 def _derive_retrieval_traces(predictions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -152,6 +121,9 @@ def _derive_retrieval_traces(predictions: list[dict[str, Any]]) -> list[dict[str
             "claim_verification",
             "verifier_observability",
             "presentation",
+            "engine_terminal_state",
+            "engine_terminal_commit",
+            "terminal_semantic_commit",
         ):
             if key in prediction:
                 trace[key] = prediction[key]
@@ -163,6 +135,16 @@ def _derive_retrieval_traces(predictions: list[dict[str, Any]]) -> list[dict[str
             trace["cache"] = prediction["cache"]
         if "cost" in prediction:
             trace["cost"] = prediction["cost"]
+        for key in (
+            "engine_terminal_answer",
+            "engine_terminal_projection_hash",
+            "terminal_outcome",
+            "terminal_outcome_reason",
+            "terminal_outcome_classification",
+            "terminal_outcome_contract_violation",
+        ):
+            if key in prediction:
+                trace[key] = prediction[key]
         traces.append(trace)
     return traces
 
@@ -183,10 +165,25 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         f"- Documents: `{summary.get('num_documents')}`",
     ]
     lines.extend(headline_score_lines(summary))
+    outcome_counts = summary.get("terminal_outcome_counts")
+    if isinstance(outcome_counts, dict):
+        lines.append(
+            "- Terminal outcomes (answered/true abstention/false abstention/"
+            "execution failed/timeout/cancelled/unclassified): "
+            f"`{outcome_counts.get('answered', 0)}/"
+            f"{outcome_counts.get('true_abstention', 0)}/"
+            f"{outcome_counts.get('false_abstention', 0)}/"
+            f"{outcome_counts.get('execution_failed', 0)}/"
+            f"{outcome_counts.get('timeout', 0)}/"
+            f"{outcome_counts.get('cancelled', 0)}/"
+            f"{outcome_counts.get('unclassified', 0)}`"
+        )
     lines.extend(
         [
             f"- Diagnostic EM: `{summary.get('avg_em')}`",
             f"- Diagnostic F1: `{summary.get('avg_f1')}`",
+            f"- Semantic Answer F1: `{summary.get('avg_semantic_answer_f1')}`",
+            f"- Semantic Judge Coverage: `{summary.get('semantic_judge_coverage')}`",
             f"- Product Diagnostic EM: `{summary.get('product_avg_em')}`",
             f"- Product Diagnostic F1: `{summary.get('product_avg_f1')}`",
             "- Avg Answer Tokens User/Scoring: "
@@ -212,47 +209,7 @@ def _summary_markdown_lines(summary: dict[str, Any], suite_name: str) -> list[st
         )
     lines.extend(phase2_summary_markdown(summary))
     lines.extend(phase3_summary_markdown(summary))
-    lines.extend(
-        [
-            f"- ANLS: `{summary.get('avg_anls')}`",
-            f"- Page Hit: `{summary.get('avg_page_hit')}`",
-            f"- Citation Recall: `{summary.get('avg_citation_recall')}`",
-            "- Citation Metadata Recall: "
-            f"`{summary.get('avg_citation_metadata_recall')}`",
-            "- Citation Metadata Precision: "
-            f"`{summary.get('avg_citation_metadata_precision')}`",
-            "- Citation Inline Recall: "
-            f"`{summary.get('avg_citation_inline_recall')}`",
-            "- Citation Inline Precision: "
-            f"`{summary.get('avg_citation_inline_precision')}`",
-            f"- Element Hit: `{summary.get('avg_element_hit')}`",
-            f"- Element Locator Hit: `{summary.get('avg_element_locator_hit')}`",
-            f"- Table Hit: `{summary.get('avg_table_hit')}`",
-            f"- Figure Hit: `{summary.get('avg_figure_hit')}`",
-            f"- Formula Hit: `{summary.get('avg_formula_hit')}`",
-            f"- Slide Hit: `{summary.get('avg_slide_hit')}`",
-            f"- Span Recall: `{summary.get('avg_span_recall')}`",
-            f"- Formula Match: `{summary.get('avg_formula_match')}`",
-            f"- Numeric Match: `{summary.get('avg_numeric_match')}`",
-            f"- Abstention Rate: `{summary.get('avg_abstention_rate')}`",
-            f"- False Abstention: `{summary.get('avg_false_abstention')}`",
-            "- Markdown Table Renderable: "
-            f"`{summary.get('avg_markdown_table_renderable')}`",
-            f"- LaTeX Renderable: `{summary.get('avg_latex_renderable')}`",
-            f"- Rewrite Skipped: `{summary.get('avg_rewrite_skipped')}`",
-            "- Guardrail Expectation Match: "
-            f"`{summary.get('avg_guardrail_expectation_match')}`",
-            f"- Avg Parse Seconds: `{summary.get('avg_parse_seconds')}`",
-            f"- Avg Index Seconds: `{summary.get('avg_index_seconds')}`",
-            f"- Avg Retrieval Seconds: `{summary.get('avg_retrieval_seconds')}`",
-            f"- Avg Generation Seconds: `{summary.get('avg_generation_seconds')}`",
-            f"- Cache Mode: `{summary.get('cache_mode')}`",
-            f"- Parse Cache Hit Rate: `{summary.get('parse_cache_hit_rate')}`",
-            f"- Embedding Cache Hit Rate: `{summary.get('embedding_cache_hit_rate')}`",
-            f"- Executed Routes: `{summary.get('num_executed_routes')}`",
-            f"- Skipped Routes: `{summary.get('num_skipped_routes')}`",
-        ]
-    )
+    lines.extend(diagnostic_metric_lines(summary))
     return lines
 
 
@@ -263,11 +220,14 @@ def write_reports(
     *,
     artifact_detail: str = "compact",
 ) -> Path:
-    artifact_detail = _normalize_artifact_detail(artifact_detail)
+    artifact_detail = normalize_artifact_detail(artifact_detail)
     output_dir = Path(output_dir).resolve()
+    assert_writable_benchmark_output(output_dir)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = output_dir / f"{timestamp}_{_to_slug(suite_name)}"
-    run_dir.mkdir(parents=True, exist_ok=True)
+    if run_dir.exists():
+        raise FileExistsError(f"Benchmark report directory already exists: {run_dir}")
+    run_dir.mkdir(parents=True)
 
     summary_path = run_dir / "summary.json"
     predictions_path = run_dir / "predictions.jsonl"
@@ -275,14 +235,21 @@ def write_reports(
     retrieval_traces_path = run_dir / "retrieval_traces.jsonl"
     markdown_path = run_dir / "report.md"
     route_metrics_path = run_dir / "route_metrics.csv"
+    semantic_debug_path = run_dir / "semantic_debug_traces.jsonl"
 
-    summary = {
-        **dict(report.get("summary", {}) or {}),
-        "artifact_detail": artifact_detail,
-        "artifact_limits": dict(ARTIFACT_LIMITS),
-    }
-    config = report.get("config", {})
-    predictions = _artifact_rows(report.get("predictions", []), artifact_detail)
+    (
+        source_predictions,
+        run_requirements,
+        semantic_debug_required,
+        semantic_debug_rows,
+        summary,
+        config,
+    ) = report_context(
+        report,
+        artifact_detail,
+        ARTIFACT_LIMITS,
+    )
+    predictions = _artifact_rows(source_predictions, artifact_detail)
     documents = _artifact_rows(report.get("documents", []), artifact_detail)
     retrieval_traces = report.get("retrieval_traces")
     if retrieval_traces is None:
@@ -290,46 +257,39 @@ def write_reports(
     else:
         retrieval_traces = _artifact_rows(retrieval_traces, artifact_detail)
 
-    _write_jsonl(predictions_path, predictions)
-    documents_path.write_text(
-        json.dumps(documents, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    route_metric_table = write_report_artifacts(
+        (
+            predictions_path,
+            semantic_debug_path,
+            documents_path,
+            retrieval_traces_path,
+            route_metrics_path,
+        ),
+        predictions,
+        semantic_debug_rows,
+        semantic_debug_required,
+        documents,
+        retrieval_traces,
+        summary,
+        _write_csv,
+        _write_jsonl,
     )
-    _write_jsonl(retrieval_traces_path, retrieval_traces)
-    route_metric_table = _route_metric_table(summary)
-    if route_metric_table:
-        _write_csv(route_metrics_path, route_metric_table)
 
-    markdown = _summary_markdown_lines(summary, suite_name)
-    for label, key in (("Engine", "engine"), ("Route", "route"), ("Scope", "scope")):
-        value = _first_present(summary, config, key=key)
-        if value is not None:
-            markdown.append(f"- {label}: `{value}`")
-    markdown += [
-        "",
-        "## Files",
-        "",
-        "- Summary: `summary.json`",
-        "- Predictions: `predictions.jsonl`",
-        "- Documents: `documents.json`",
-        "- Retrieval Traces: `retrieval_traces.jsonl`",
-    ]
-    if route_metric_table:
-        markdown.append("- Route Metrics: `route_metrics.csv`")
-    markdown += _report_markdown_sections(summary, route_metric_table)
-    markdown_path.write_text("\n".join(markdown), encoding="utf-8")
-    summary_path.write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    write_report_outputs(
+        run_dir,
+        markdown_path,
+        summary_path,
+        summary,
+        suite_name,
+        config,
+        route_metric_table,
+        semantic_debug_rows,
+        run_requirements,
+        _summary_markdown_lines,
+        _report_markdown_sections,
+        _first_present,
     )
     return run_dir
-
-
-def _normalize_artifact_detail(artifact_detail: str) -> str:
-    value = str(artifact_detail or "compact").strip().lower()
-    if value not in {"compact", "full"}:
-        raise ValueError("artifact_detail must be one of 'compact' or 'full'.")
-    return value
 
 
 def _artifact_rows(rows: Any, artifact_detail: str) -> list[dict[str, Any]]:
@@ -349,6 +309,9 @@ def _compact_value(value: Any, key: str = "") -> Any:
             if item_key not in _COMPACT_DROP_FIELDS
         }
     if isinstance(value, list):
+        identity_items = compact_identity_evidence_list(value, key)
+        if identity_items is not None:
+            return identity_items
         return [_compact_value(item) for item in _compact_list(value, key)]
     if key in TEXT_FIELDS and isinstance(value, str):
         return value[: ARTIFACT_LIMITS["max_evidence_text_chars"]]
@@ -411,6 +374,10 @@ def _report_markdown_sections(
         ]
     for title, lines in (
         ("Route Ranking", route_ranking_markdown(summary)),
+        (
+            "QASPER Authority Diagnostics",
+            qasper_authority_diagnostics_markdown(summary),
+        ),
         *phase3_report_sections(summary),
         ("Skipped Routes", _skipped_route_markdown(summary)),
         ("Multimodal Backend Health", _backend_health_markdown(summary)),
@@ -505,16 +472,26 @@ def _diagnostic_failure_counts_markdown(summary: dict[str, Any]) -> list[str]:
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fieldnames = _csv_fieldnames(rows)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(
+        output,
+        fieldnames=fieldnames,
+        extrasaction="raise",
+    )
+    writer.writeheader()
+    writer.writerows(rows)
+    atomic_write_text(path, output.getvalue())
 
 
 def _csv_fieldnames(rows: list[dict[str, Any]]) -> list[str]:
-    keys = list(rows[0])
+    keys = {key for row in rows for key in row}
     fieldnames = [key for key in _CSV_FIELD_ORDER if key in keys]
-    fieldnames.extend(key for key in keys if key not in fieldnames)
+    seen = set(fieldnames)
+    for row in rows:
+        for key in row:
+            if key not in seen:
+                fieldnames.append(key)
+                seen.add(key)
     return fieldnames
 
 

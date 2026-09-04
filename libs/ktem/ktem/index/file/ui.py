@@ -1,41 +1,39 @@
-import html
-import json
 import os
-import shutil
 import tempfile
 import zipfile
-from copy import deepcopy
 from pathlib import Path
-from typing import Generator
+from typing import Generator, TypeAlias
 
 import gradio as gr
-import pandas as pd
 from gradio.data_classes import FileData
 from gradio.utils import NamedString
 from ktem.app import BasePage
 from ktem.db.engine import engine
-from ktem.utils.render import Render
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 from theflow.settings import settings as flowsettings
 
-from ...utils.commands import WEB_SEARCH_COMMAND
 from ...utils.rate_limit import check_rate_limit
 from ._deletion import FileIndexDeletionController
 from ._events import register_file_index_events, register_quick_upload_events
+from ._group_service import FileGroupService
+from ._identity import MISSING_REQUEST, resolve_file_index_user_id
+from ._indexing_service import FileIndexingService
 from ._listing import (
     FileIndexListingController,
     extract_conversation_file_ids,
     format_conversation_scope,
     normalize_selected_ids_from_payload,
 )
+from ._scoped_page import ScopedFileIndexPageMixin
+from ._selection_service import FileSelectionService
+from ._selector_ui import FileSelector
+from .archive import extract_supported_zip_files
 from .utils import download_arxiv_pdf, is_arxiv_url
 
+__all__ = ["DirectoryUpload", "File", "FileIndexPage", "FileSelector"]
 KH_DEMO_MODE = getattr(flowsettings, "KH_DEMO_MODE", False)
 KH_SSO_ENABLED = getattr(flowsettings, "KH_SSO_ENABLED", False)
 DOWNLOAD_MESSAGE = "Start download"
-MAX_FILENAME_LENGTH = 20
-MAX_FILE_COUNT = 200
+Request: TypeAlias = gr.Request
 
 
 def _page_label_sort_key(doc):
@@ -60,39 +58,9 @@ function() {
 chat_input_focus_js_with_submit = """
 function() {
     let chatInput = document.querySelector("#chat-input textarea");
-    // Only focus the input, don't auto-submit
     chatInput.focus();
 }
 """
-
-update_file_list_js = """
-function(file_list) {
-    var values = [];
-    for (var i = 0; i < file_list.length; i++) {
-        values.push({
-            key: file_list[i][0],
-            value: '"' + file_list[i][0] + '"',
-        });
-    }
-
-    // manually push web search tag
-    values.push({
-        key: "web_search",
-        value: '"web_search"',
-    });
-
-    var tribute = new Tribute({
-        values: values,
-        noMatchTemplate: "",
-        allowSpaces: true,
-    })
-    input_box = document.querySelector('#chat-input textarea');
-    tribute.detach(input_box);
-    tribute.attach(input_box);
-}
-""".replace(
-    "web_search", WEB_SEARCH_COMMAND
-)
 
 
 class File(gr.File):
@@ -152,7 +120,7 @@ class DirectoryUpload(BasePage):
             self.upload_button = gr.Button("Upload and Index")
 
 
-class FileIndexPage(BasePage):
+class FileIndexPage(ScopedFileIndexPageMixin, BasePage):
     def __init__(self, app, index):
         super().__init__(app)
         self._index = index
@@ -426,136 +394,21 @@ class FileIndexPage(BasePage):
     def _list_source_ids_for_user(self, user_id) -> list[str]:
         return self._listing_controller._list_source_ids_for_user(user_id)
 
-    def snapshot_source_ids(self, user_id) -> list[str]:
-        return self._listing_controller.snapshot_source_ids(user_id)
-
-    def collect_new_source_ids(self, before_source_ids, user_id) -> list[str]:
-        return self._listing_controller.collect_new_source_ids(
-            before_source_ids, user_id
+    def _get_file_selection_service(self) -> FileSelectionService:
+        return FileSelectionService(
+            index=self._index,
+            engine=engine,
+            sort_key=_page_label_sort_key,
         )
 
-    def file_selected(self, file_id):
-        chunks = []
-        if file_id is not None:
-            # get the chunks
-
-            Index = self._index._resources["Index"]
-            with Session(engine) as session:
-                matches = session.execute(
-                    select(Index).where(
-                        Index.source_id == file_id,
-                        Index.relation_type == "document",
-                    )
-                )
-                doc_ids = [doc.target_id for (doc,) in matches]
-                docs = self._index._docstore.get(doc_ids)
-                docs = sorted(docs, key=_page_label_sort_key)
-
-                for idx, doc in enumerate(docs):
-                    title = html.escape(
-                        f"{doc.text[:50]}..." if len(doc.text) > 50 else doc.text
-                    )
-                    doc_type = doc.metadata.get("type", "text")
-                    content = ""
-                    if doc_type == "text":
-                        content = html.escape(doc.text)
-                    elif doc_type == "table":
-                        content = Render.table(doc.text)
-                    elif doc_type == "image":
-                        content = Render.image(
-                            url=doc.metadata.get("image_origin", ""), text=doc.text
-                        )
-
-                    header_prefix = f"[{idx+1}/{len(docs)}]"
-                    if doc.metadata.get("page_label"):
-                        header_prefix += f" [Page {doc.metadata['page_label']}]"
-
-                    chunks.append(
-                        Render.collapsible(
-                            header=f"{header_prefix} {title}",
-                            content=content,
-                        )
-                    )
-        return (
-            gr.update(value="".join(chunks), visible=file_id is not None),
-            gr.update(visible=file_id is not None),
-            gr.update(visible=file_id is not None),
-            gr.update(visible=file_id is not None),
-            gr.update(visible=file_id is not None),
-        )
-
-    def delete_event(self, file_id):
-        return self._deletion_controller.delete_event(file_id)
+    def delete_event(self, file_id, user_id, request: gr.Request):
+        return self._deletion_controller.delete_event(file_id, user_id, request)
 
     def delete_no_event(self):
         return (
             gr.update(visible=True),
             gr.update(visible=False),
         )
-
-    def download_single_file(self, is_zipped_state, file_id):
-        with Session(engine) as session:
-            source = session.execute(
-                select(self._index._resources["Source"]).where(
-                    self._index._resources["Source"].id == file_id
-                )
-            ).first()
-        if source:
-            target_file_name = Path(source[0].name)
-        zip_files = []
-        for file_name in os.listdir(flowsettings.KH_CHUNKS_OUTPUT_DIR):
-            if target_file_name.stem in file_name:
-                zip_files.append(
-                    os.path.join(flowsettings.KH_CHUNKS_OUTPUT_DIR, file_name)
-                )
-        for file_name in os.listdir(flowsettings.KH_MARKDOWN_OUTPUT_DIR):
-            if target_file_name.stem in file_name:
-                zip_files.append(
-                    os.path.join(flowsettings.KH_MARKDOWN_OUTPUT_DIR, file_name)
-                )
-        zip_file_path = os.path.join(
-            flowsettings.KH_ZIP_OUTPUT_DIR, target_file_name.stem
-        )
-        with zipfile.ZipFile(f"{zip_file_path}.zip", "w") as zipMe:
-            for file in zip_files:
-                zipMe.write(file, arcname=os.path.basename(file))
-
-        if is_zipped_state:
-            new_button = gr.DownloadButton(label="Download", value=None)
-        else:
-            new_button = gr.DownloadButton(
-                label=DOWNLOAD_MESSAGE, value=f"{zip_file_path}.zip"
-            )
-
-        return not is_zipped_state, new_button
-
-    def download_single_file_simple(self, is_zipped_state, file_html, file_id):
-        with Session(engine) as session:
-            source = session.execute(
-                select(self._index._resources["Source"]).where(
-                    self._index._resources["Source"].id == file_id
-                )
-            ).first()
-        if source:
-            target_file_name = Path(source[0].name)
-
-        # create a temporary file with a path to export
-        output_file_path = os.path.join(
-            flowsettings.KH_ZIP_OUTPUT_DIR, target_file_name.stem + ".html"
-        )
-        with open(output_file_path, "w") as f:
-            f.write(file_html)
-
-        if is_zipped_state:
-            new_button = gr.DownloadButton(label="Download", value=None)
-        else:
-            # export the file path
-            new_button = gr.DownloadButton(
-                label=DOWNLOAD_MESSAGE,
-                value=output_file_path,
-            )
-
-        return not is_zipped_state, new_button
 
     def download_all_files(self):
         if self._index.config.get("private", False):
@@ -575,8 +428,8 @@ class FileIndexPage(BasePage):
                 zipMe.write(file, arcname=arcname.name)
         return gr.DownloadButton(label=DOWNLOAD_MESSAGE, value=f"{zip_file_path}.zip")
 
-    def delete_all_files(self, file_list):
-        return self._deletion_controller.delete_all_files(file_list)
+    def delete_all_files(self, file_list, user_id, request: gr.Request):
+        return self._deletion_controller.delete_all_files(file_list, user_id, request)
 
     def set_file_id_selector(self, selected_file_id):
         return self._deletion_controller.set_file_id_selector(selected_file_id)
@@ -620,149 +473,44 @@ class FileIndexPage(BasePage):
         )
 
     def _may_extract_zip(self, files, zip_dir: str):
-        """Handle zip files"""
-        zip_files = [file for file in files if file.endswith(".zip")]
-        remaining_files = [file for file in files if not file.endswith("zip")]
-        errors: list[str] = []
-
-        # Clean-up <zip_dir> before unzip to remove old files
-        shutil.rmtree(zip_dir, ignore_errors=True)
-
-        # Unzip
-        for zip_file in zip_files:
-            # Prepare new zip output dir, separated for each files
-            basename = os.path.splitext(os.path.basename(zip_file))[0]
-            zip_out_dir = os.path.join(zip_dir, basename)
-            os.makedirs(zip_out_dir, exist_ok=True)
-
-            with zipfile.ZipFile(zip_file, "r") as zip_ref:
-                zip_ref.extractall(zip_out_dir)
-
-        n_zip_file = 0
-        for root, dirs, files in os.walk(zip_dir):
-            for file in files:
-                ext = os.path.splitext(file)[1]
-
-                # only allow supported file-types ( not zip )
-                if ext not in [".zip"] and ext in self._supported_file_types:
-                    remaining_files += [os.path.join(root, file)]
-                    n_zip_file += 1
-
-        if n_zip_file > 0:
-            print(f"Update zip files: {n_zip_file}")
-
-        return remaining_files, errors
+        return self._get_indexing_service(zip_input_dir=zip_dir).extract_archives(files)
 
     def index_fn(
-        self, files, urls, reindex: bool, settings, user_id
-    ) -> Generator[tuple[str, str], None, None]:
-        """Upload and index the files
-
-        Args:
-            files: the list of files to be uploaded
-            urls: list of web URLs to be indexed
-            reindex: whether to reindex the files
-            selected_files: the list of files already selected
-            settings: the settings of the app
-        """
-        if urls:
-            files = [it.strip() for it in urls.split("\n")]
-            errors = self.validate_urls(files)
-        else:
-            if not files:
-                gr.Info("No uploaded file")
-                yield "", ""
-                return
-            files, unzip_errors = self._may_extract_zip(
-                files, flowsettings.KH_ZIP_INPUT_DIR
+        self,
+        files,
+        urls,
+        reindex: bool,
+        settings,
+        user_id,
+        request: Request = MISSING_REQUEST,
+    ) -> Generator[tuple[str, str], None, list[str] | None]:
+        user_id = resolve_file_index_user_id(user_id, request)
+        return (
+            yield from self._get_indexing_service().index(
+                files,
+                urls,
+                reindex=reindex,
+                settings=settings,
+                user_id=user_id,
             )
-            errors = self.validate_files(files)
-            errors.extend(unzip_errors)
-
-        if errors:
-            gr.Warning(", ".join(errors))
-            yield "", ""
-            return
-
-        gr.Info(f"Start indexing {len(files)} files...")
-
-        # get the pipeline
-        indexing_pipeline = self._index.get_indexing_pipeline(settings, user_id)
-
-        outputs, debugs = [], []
-        # stream the output
-        output_stream = indexing_pipeline.stream(files, reindex=reindex)
-        try:
-            while True:
-                response = next(output_stream)
-                if response is None:
-                    continue
-                if response.channel == "index":
-                    if response.content["status"] == "success":
-                        outputs.append(f"\u2705 | {response.content['file_name']}")
-                    elif response.content["status"] == "failed":
-                        outputs.append(
-                            f"\u274c | {response.content['file_name']}: "
-                            f"{response.content['message']}"
-                        )
-                elif response.channel == "debug":
-                    debugs.append(response.text)
-                yield "\n".join(outputs), "\n".join(debugs)
-        except StopIteration as e:
-            results, index_errors, docs = e.value
-        except Exception as e:
-            debugs.append(f"Error: {e}")
-            yield "\n".join(outputs), "\n".join(debugs)
-            return
-
-        n_successes = len([_ for _ in results if _])
-        if n_successes:
-            gr.Info(f"Successfully index {n_successes} files")
-        n_errors = len([_ for _ in errors if _])
-        if n_errors:
-            gr.Warning(f"Have errors for {n_errors} files")
-
-        return results
+        )
 
     def index_fn_file_with_default_loaders(
-        self, files, reindex: bool, settings, user_id
+        self,
+        files,
+        reindex: bool,
+        settings,
+        user_id,
+        request: Request = MISSING_REQUEST,
     ) -> list["str"]:
-        """Function for quick upload with default loaders
-
-        Args:
-            files: the list of files to be uploaded
-            reindex: whether to reindex the files
-            selected_files: the list of files already selected
-            settings: the settings of the app
-        """
+        user_id = resolve_file_index_user_id(user_id, request)
         print("Overriding with default loaders")
-        exist_ids = []
-        to_process_files = []
-        for str_file_path in files:
-            file_path = Path(str(str_file_path))
-            exist_id = (
-                self._index.get_indexing_pipeline(settings, user_id)
-                .route(file_path)
-                .get_id_if_exists(file_path)
-            )
-            if exist_id:
-                exist_ids.append(exist_id)
-            else:
-                to_process_files.append(str_file_path)
-
-        returned_ids = []
-        settings = deepcopy(settings)
-        settings[f"index.options.{self._index.id}.reader_mode"] = "default"
-        settings[f"index.options.{self._index.id}.quick_index_mode"] = True
-        if to_process_files:
-            _iter = self.index_fn(to_process_files, [], reindex, settings, user_id)
-            try:
-                while next(_iter):
-                    pass
-            except StopIteration as e:
-                returned_ids = e.value
-
-        return exist_ids + returned_ids
+        return self._get_indexing_service().index_files_with_default_loaders(
+            files,
+            reindex=reindex,
+            settings=settings,
+            user_id=user_id,
+        )
 
     def index_fn_url_with_default_loaders(
         self,
@@ -770,136 +518,55 @@ class FileIndexPage(BasePage):
         reindex: bool,
         settings,
         user_id,
-        request: gr.Request,
+        request: Request = MISSING_REQUEST,
     ):
+        user_id = resolve_file_index_user_id(user_id, request)
         if KH_DEMO_MODE:
             check_rate_limit("file_upload", request)
-
-        returned_ids: list[str] = []
-        settings = deepcopy(settings)
-        settings[f"index.options.{self._index.id}.reader_mode"] = "default"
-        settings[f"index.options.{self._index.id}.quick_index_mode"] = True
-
-        if KH_DEMO_MODE:
-            urls_splitted = urls.split("\n")
-            if not all(is_arxiv_url(url) for url in urls_splitted):
-                raise ValueError("All URLs must be valid arXiv URLs")
-
-            output_files = [
-                download_arxiv_pdf(
-                    url,
-                    output_path=os.environ.get("GRADIO_TEMP_DIR", "/tmp"),
-                )
-                for url in urls_splitted
-            ]
-
-            exist_ids = []
-            to_process_files = []
-            for str_file_path in output_files:
-                file_path = Path(str_file_path)
-                exist_id = (
-                    self._index.get_indexing_pipeline(settings, user_id)
-                    .route(file_path)
-                    .get_id_if_exists(file_path)
-                )
-                if exist_id:
-                    exist_ids.append(exist_id)
-                else:
-                    to_process_files.append(str_file_path)
-
-            returned_ids = []
-            if to_process_files:
-                _iter = self.index_fn(to_process_files, [], reindex, settings, user_id)
-                try:
-                    while next(_iter):
-                        pass
-                except StopIteration as e:
-                    returned_ids = e.value
-
-            returned_ids = exist_ids + returned_ids
-        else:
-            if urls:
-                _iter = self.index_fn([], urls, reindex, settings, user_id)
-                try:
-                    while next(_iter):
-                        pass
-                except StopIteration as e:
-                    returned_ids = e.value
-
-        return returned_ids
+        return self._get_indexing_service().index_urls_with_default_loaders(
+            urls,
+            reindex=reindex,
+            settings=settings,
+            user_id=user_id,
+        )
 
     def index_files_from_dir(
-        self, folder_path, reindex, settings, user_id
-    ) -> Generator[tuple[str, str], None, None]:
-        """This should be constructable by users
+        self,
+        folder_path,
+        reindex,
+        settings,
+        user_id,
+        request: Request = MISSING_REQUEST,
+    ) -> Generator[tuple[str, str], None, list[str] | None]:
+        user_id = resolve_file_index_user_id(user_id, request)
+        return (
+            yield from self._get_indexing_service().index_directory(
+                folder_path,
+                reindex=reindex,
+                settings=settings,
+                user_id=user_id,
+            )
+        )
 
-        It means that the users can build their own index.
-        Build your own index:
-            - Input:
-                - Type: based on the type, then there are ranges of. Use can select
-                multiple panels:
-                    - Panels
-                    - Data sources
-                    - Include patterns
-                    - Exclude patterns
-                - Indexing functions. Can be a list of indexing functions. Each declared
-                function is:
-                    - Condition (the source that will go through this indexing function)
-                    - Function (the pipeline that run this)
-            - Output: artifacts that can be used to -> this is the artifacts that we
-            wish
-                - Build the UI
-                    - Upload page: fixed standard, based on the type
-                    - Read page: fixed standard, based on the type
-                    - Delete page: fixed standard, based on the type
-                - Build the index function
-                - Build the chat function
+    def _get_indexing_service(self, *, zip_input_dir=None) -> FileIndexingService:
+        return FileIndexingService(
+            index=self._index,
+            supported_file_types=self._supported_file_types,
+            zip_input_dir=zip_input_dir or flowsettings.KH_ZIP_INPUT_DIR,
+            engine=engine,
+            demo_mode=KH_DEMO_MODE,
+            notify=self._notify_index_status,
+            archive_extractor=extract_supported_zip_files,
+            arxiv_downloader=download_arxiv_pdf,
+            arxiv_validator=is_arxiv_url,
+        )
 
-        Step:
-            1. Decide on the artifacts
-            2. Implement the transformation from artifacts to UI
-        """
-        if not folder_path:
-            yield "", ""
-            return
-
-        import fnmatch
-        from pathlib import Path
-
-        include_patterns: list[str] = []
-        exclude_patterns: list[str] = ["*.png", "*.gif", "*/.*"]
-        if include_patterns and exclude_patterns:
-            raise ValueError("Cannot have both include and exclude patterns")
-
-        # clean up the include patterns
-        for idx in range(len(include_patterns)):
-            if include_patterns[idx].startswith("*"):
-                include_patterns[idx] = str(Path.cwd() / "**" / include_patterns[idx])
-            else:
-                include_patterns[idx] = str(
-                    Path.cwd() / include_patterns[idx].strip("/")
-                )
-
-        # clean up the exclude patterns
-        for idx in range(len(exclude_patterns)):
-            if exclude_patterns[idx].startswith("*"):
-                exclude_patterns[idx] = str(Path.cwd() / "**" / exclude_patterns[idx])
-            else:
-                exclude_patterns[idx] = str(
-                    Path.cwd() / exclude_patterns[idx].strip("/")
-                )
-
-        # get the files
-        files: list[str] = [str(p) for p in Path(folder_path).glob("**/*.*")]
-        if include_patterns:
-            for p in include_patterns:
-                files = fnmatch.filter(names=files, pat=p)
-
-        if exclude_patterns:
-            for p in exclude_patterns:
-                files = [f for f in files if not fnmatch.fnmatch(name=f, pat=p)]
-
-        yield from self.index_fn(files, [], reindex, settings, user_id)
+    @staticmethod
+    def _notify_index_status(level: str, message: str) -> None:
+        if level == "warning":
+            gr.Warning(message)
+        else:
+            gr.Info(message)
 
     def format_size_human_readable(self, num: float | str, suffix="B"):
         try:
@@ -924,147 +591,11 @@ class FileIndexPage(BasePage):
     def _format_conversation_scope(conversation_names: list[str]) -> str:
         return format_conversation_scope(conversation_names)
 
-    def list_file(self, user_id, name_pattern=""):
-        return self._listing_controller.list_file(user_id, name_pattern)
-
     def list_file_names(self, file_list_state):
         return self._listing_controller.list_file_names(file_list_state)
 
-    def list_group(self, user_id, file_list):
-        # supply file_list to display the file names in the group
-        if file_list:
-            file_id_to_name = {item["id"]: item["name"] for item in file_list}
-        else:
-            file_id_to_name = {}
-
-        if user_id is None:
-            # not signed in
-            return [], pd.DataFrame.from_records(
-                [
-                    {
-                        "id": "-",
-                        "name": "-",
-                        "files": "-",
-                        "date_created": "-",
-                    }
-                ]
-            )
-
-        FileGroup = self._index._resources["FileGroup"]
-        with Session(engine) as session:
-            statement = select(FileGroup)
-            if self._index.config.get("private", False):
-                statement = statement.where(FileGroup.user == user_id)
-
-            results = [
-                {
-                    "id": each[0].id,
-                    "name": each[0].name,
-                    "files": each[0].data.get("files", []),
-                    "date_created": each[0].date_created.strftime("%Y-%m-%d %H:%M:%S"),
-                }
-                for each in session.execute(statement).all()
-            ]
-
-        if results:
-            formated_results = deepcopy(results)
-            for item in formated_results:
-                file_names = [
-                    file_id_to_name.get(file_id, "-") for file_id in item["files"]
-                ]
-                item["files"] = ", ".join(
-                    f"'{it[:MAX_FILENAME_LENGTH]}..'"
-                    if len(it) > MAX_FILENAME_LENGTH
-                    else f"'{it}'"
-                    for it in file_names
-                )
-                item_count = len(file_names)
-                item_postfix = "s" if item_count > 1 else ""
-                item["files"] = f"[{item_count} item{item_postfix}] " + item["files"]
-
-            group_list = pd.DataFrame.from_records(formated_results)
-        else:
-            group_list = pd.DataFrame.from_records(
-                [
-                    {
-                        "id": "-",
-                        "name": "-",
-                        "files": "-",
-                        "date_created": "-",
-                    }
-                ]
-            )
-
-        return results, group_list
-
-    def set_group_id_selector(self, selected_group_id):
-        FileGroup = self._index._resources["FileGroup"]
-
-        # check if group_name exist
-        with Session(engine) as session:
-            current_group = (
-                session.query(FileGroup).filter_by(id=selected_group_id).first()
-            )
-
-        file_ids = [json.dumps(current_group.data["files"])]
-        return [file_ids, "select", gr.Tabs(selected="chat-tab")]
-
-    def save_group(self, group_id, group_name, group_files, user_id):
-        FileGroup = self._index._resources["FileGroup"]
-        current_group = None
-
-        # check if group_name exist
-        with Session(engine) as session:
-            if group_id:
-                current_group = session.query(FileGroup).filter_by(id=group_id).first()
-                # update current group with new info
-                current_group.name = group_name
-                current_group.data["files"] = group_files  # Update the files
-                session.commit()
-            else:
-                current_group = (
-                    session.query(FileGroup)
-                    .filter_by(
-                        name=group_name,
-                        user=user_id,
-                    )
-                    .first()
-                )
-                if current_group:
-                    raise gr.Error(f"Group {group_name} already exists")
-
-                current_group = FileGroup(
-                    name=group_name,
-                    data={"files": group_files},  # type: ignore
-                    user=user_id,
-                )
-                session.add(current_group)
-                session.commit()
-
-            group_id = current_group.id
-
-        gr.Info(f"Group {group_name} has been saved")
-        return group_id
-
-    def delete_group(self, group_id):
-        if not group_id:
-            raise gr.Error("No group is selected")
-
-        FileGroup = self._index._resources["FileGroup"]
-        with Session(engine) as session:
-            group = session.execute(
-                select(FileGroup).where(FileGroup.id == group_id)
-            ).first()
-            if group:
-                item = group[0]
-                group_name = item.name
-                session.delete(item)
-                session.commit()
-                gr.Info(f"Group {group_name} has been deleted")
-            else:
-                raise gr.Error("No group found")
-
-        return None
+    def _get_group_service(self) -> FileGroupService:
+        return FileGroupService(index=self._index, engine=engine)
 
     def interact_file_list(self, list_files, ev: gr.SelectData):
         if ev.value == "-" and ev.index[0] == 0:
@@ -1093,192 +624,7 @@ class FileIndexPage(BasePage):
         )
 
     def validate_files(self, files: list[str]):
-        """Validate if the files are valid"""
-        paths = [Path(file) for file in files]
-        errors = []
-        if max_file_size := self._index.config.get("max_file_size", 0):
-            errors_max_size = []
-            for path in paths:
-                if path.stat().st_size > max_file_size * 1e6:
-                    errors_max_size.append(path.name)
-            if errors_max_size:
-                str_errors = ", ".join(errors_max_size)
-                if len(str_errors) > 60:
-                    str_errors = str_errors[:55] + "..."
-                errors.append(
-                    f"Maximum file size ({max_file_size} MB) exceeded: {str_errors}"
-                )
-
-        if max_number_of_files := self._index.config.get("max_number_of_files", 0):
-            with Session(engine) as session:
-                current_num_files = session.query(
-                    self._index._resources["Source"].id
-                ).count()
-            if len(paths) + current_num_files > max_number_of_files:
-                errors.append(
-                    f"Maximum number of files ({max_number_of_files}) will be exceeded"
-                )
-
-        return errors
+        return self._get_indexing_service().validate_files(files)
 
     def validate_urls(self, urls: list[str]):
-        """Validate if the urls are valid"""
-        errors = []
-        for url in urls:
-            if not url.startswith("http") and not url.startswith("https"):
-                errors.append(f"Invalid url `{url}`")
-        return errors
-
-
-class FileSelector(BasePage):
-    """File selector UI in the Chat page"""
-
-    def __init__(self, app, index):
-        super().__init__(app)
-        self._index = index
-        self.on_building_ui()
-
-    def default(self):
-        if self._app.f_user_management:
-            return "disabled", [], -1
-        return "disabled", [], 1
-
-    def on_building_ui(self):
-        default_mode, default_selector, user_id = self.default()
-
-        self.mode = gr.Radio(
-            value=default_mode,
-            choices=[
-                ("Search All", "all"),
-                ("Search In File(s)", "select"),
-            ],
-            container=False,
-        )
-        self.selector = gr.Dropdown(
-            label="Files",
-            value=default_selector,
-            choices=[],
-            multiselect=True,
-            container=False,
-            interactive=True,
-            visible=False,
-        )
-        self.selector_user_id = gr.State(value=user_id)
-        self.selector_choices = gr.JSON(
-            value=[],
-            visible=False,
-        )
-
-    def on_register_events(self):
-        self.mode.change(
-            fn=lambda mode, user_id: (gr.update(visible=mode == "select"), user_id),
-            inputs=[self.mode, self._app.user_id],
-            outputs=[self.selector, self.selector_user_id],
-        )
-        # attach special event for the first index
-        if self._index.id == 1:
-            self.selector_choices.change(
-                fn=None,
-                inputs=[self.selector_choices],
-                js=update_file_list_js,
-                show_progress="hidden",
-            )
-
-    def as_gradio_component(self):
-        return [self.mode, self.selector, self.selector_user_id]
-
-    def get_selected_ids(self, components):
-        mode, selected, user_id = components[0], components[1], components[2]
-        if user_id is None:
-            return []
-
-        if mode == "disabled":
-            return []
-        elif mode == "select":
-            return selected
-
-        file_ids = []
-        with Session(engine) as session:
-            statement = select(self._index._resources["Source"].id)
-            if self._index.config.get("private", False):
-                statement = statement.where(
-                    self._index._resources["Source"].user == user_id
-                )
-            results = session.execute(statement).all()
-            for (id,) in results:
-                file_ids.append(id)
-
-        return file_ids
-
-    def load_files(self, selected_files, user_id):
-        options: list = []
-        available_ids = []
-        if user_id is None:
-            # not signed in
-            return gr.update(value=selected_files, choices=options), options
-
-        with Session(engine) as session:
-            # get file list from Source table
-            statement = select(self._index._resources["Source"])
-            if self._index.config.get("private", False):
-                statement = statement.where(
-                    self._index._resources["Source"].user == user_id
-                )
-
-            if KH_DEMO_MODE:
-                # limit query by MAX_FILE_COUNT
-                statement = statement.limit(MAX_FILE_COUNT)
-
-            results = session.execute(statement).all()
-            for result in results:
-                available_ids.append(result[0].id)
-                options.append((result[0].name, result[0].id))
-
-            # get group list from FileGroup table
-            FileGroup = self._index._resources["FileGroup"]
-            statement = select(FileGroup)
-            if self._index.config.get("private", False):
-                statement = statement.where(FileGroup.user == user_id)
-            results = session.execute(statement).all()
-            for result in results:
-                item = result[0]
-                options.append(
-                    (f"group: '{item.name}'", json.dumps(item.data.get("files", [])))
-                )
-
-        if selected_files:
-            available_ids_set = set(available_ids)
-            selected_files = [
-                each for each in selected_files if each in available_ids_set
-            ]
-
-        return gr.update(value=selected_files, choices=options), options
-
-    def _on_app_created(self):
-        self._app.app.load(
-            self.load_files,
-            inputs=[self.selector, self._app.user_id],
-            outputs=[self.selector, self.selector_choices],
-        )
-
-    def on_subscribe_public_events(self):
-        self._app.subscribe_event(
-            name=f"onFileIndex{self._index.id}Changed",
-            definition={
-                "fn": self.load_files,
-                "inputs": [self.selector, self._app.user_id],
-                "outputs": [self.selector, self.selector_choices],
-                "show_progress": "hidden",
-            },
-        )
-        if self._app.f_user_management:
-            for event_name in ["onSignIn", "onSignOut"]:
-                self._app.subscribe_event(
-                    name=event_name,
-                    definition={
-                        "fn": self.load_files,
-                        "inputs": [self.selector, self._app.user_id],
-                        "outputs": [self.selector, self.selector_choices],
-                        "show_progress": "hidden",
-                    },
-                )
+        return self._get_indexing_service().validate_urls(urls)

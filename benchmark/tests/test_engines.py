@@ -1,11 +1,13 @@
 import sys
 import types
+from types import SimpleNamespace
 
 import pytest
 
 from benchmark.benchmark_direct_answer import BenchmarkDirectAnswerEngine
 from benchmark.engines import (
     DirectPasteEngine,
+    DocQARuntimeEngine,
     EngineRunResult,
     OraclePageEngine,
     get_engine,
@@ -75,6 +77,61 @@ def _install_fake_docqa_runtime(monkeypatch, doc_path):
         ),
     )
     return fake_runtime
+
+
+def _assert_runtime_request_contract(request):
+    assert request.selected_file_ids == ["file-1"]
+    assert "Benchmark prompt contract:" in request.prompt
+    assert "Answer formatting requirements:" not in request.prompt
+    assert "Return the final answer as Markdown" not in request.prompt
+    assert request.qa_scope == "document"
+    assert request.max_context_length == 3000
+    assert request.llm == "Deepseek"
+    assert request.use_citation == "off"
+    assert request.reasoning_type == "mara"
+    assert request.agent_mode == "thorough"
+    assert request.task_type == "quiz"
+    assert request.artifact_type == "quiz"
+    assert request.controller_mode == "llm"
+    assert request.route_policy == "graph"
+    assert request.planner_backend == "heuristic_local"
+    assert request.planner_model == "gpt-4o-mini"
+    assert request.allowed_routes == ["doc_text", "graph_global"]
+    assert request.verification_mode == "strict"
+    assert request.verification_domain == "finance"
+    assert request.graph_mode == "global"
+    assert request.route_timeout_seconds == 45
+    assert request.generation_temperature == 0
+    assert request.generation_top_p == 1
+    assert request.generation_seed == 20260724
+
+
+def _assert_runtime_result_contract(result):
+    assert result.answer == "runtime answer"
+    assert result.predicted_pages == ["1"]
+    assert result.predicted_sources == ["doc#page:1"]
+    assert result.agent_trace == [{"stage": "planner", "decision": "retrieve"}]
+    assert result.evidence_metadata["has_formula_evidence"] is True
+    assert result.controller_trace == [{"stage": "planner", "route": "graph_global"}]
+    assert result.controller_decision == {"route": "graph_rag"}
+    assert result.route_decision == {"route": "graph_global"}
+    assert result.retrieve_decision == {"status": "good"}
+    assert result.verify_decision == {"status": "supported"}
+    assert result.guardrail_decision == {"status": "ok", "action": "return"}
+    assert result.evidence_bundle == {"route": "graph_global", "items": []}
+    assert result.workflow_plan == {
+        "route": "graph_global",
+        "steps": [{"executor": "retrieve_graph"}],
+    }
+    assert result.claim_verification == {"rewrite_skipped": True}
+    assert result.presentation == {"markdown_normalized": True}
+    expected_generation = {"temperature": 0, "top_p": 1, "seed": 20260724}
+    assert (
+        result.evidence_metadata["benchmark_generation_config"] == expected_generation
+    )
+    assert (
+        result.retrieval_trace[-1]["benchmark_generation_config"] == expected_generation
+    )
 
 
 def test_engine_run_result_exposes_phase_two_fields():
@@ -255,8 +312,12 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
             verification_mode="strict",
             verification_domain="finance",
             graph_mode="global",
+            route_timeout_seconds=45,
         ),
     )
+    deadline = 1234.5
+    assert isinstance(engine, DocQARuntimeEngine)
+    engine.set_route_deadline_monotonic(deadline)
 
     result = engine.run(
         example=BenchmarkExample(
@@ -272,44 +333,48 @@ def test_docqa_runtime_engine_indexes_documents_and_runs_turn(monkeypatch, tmp_p
     )
 
     assert fake_runtime.indexed == [([str(doc_path)], False)]
-    assert fake_runtime.requests[0].selected_file_ids == ["file-1"]
-    assert "Benchmark prompt contract:" in fake_runtime.requests[0].prompt
-    assert "Answer formatting requirements:" not in fake_runtime.requests[0].prompt
-    assert "Return the final answer as Markdown" not in fake_runtime.requests[0].prompt
-    assert fake_runtime.requests[0].qa_scope == "document"
-    assert fake_runtime.requests[0].max_context_length == 3000
-    assert fake_runtime.requests[0].llm == "Deepseek"
-    assert fake_runtime.requests[0].use_citation == "off"
-    assert fake_runtime.requests[0].reasoning_type == "mara"
-    assert fake_runtime.requests[0].agent_mode == "thorough"
-    assert fake_runtime.requests[0].task_type == "quiz"
-    assert fake_runtime.requests[0].artifact_type == "quiz"
-    assert fake_runtime.requests[0].controller_mode == "llm"
-    assert fake_runtime.requests[0].route_policy == "graph"
-    assert fake_runtime.requests[0].planner_backend == "heuristic_local"
-    assert fake_runtime.requests[0].planner_model == "gpt-4o-mini"
-    assert fake_runtime.requests[0].allowed_routes == ["doc_text", "graph_global"]
-    assert fake_runtime.requests[0].verification_mode == "strict"
-    assert fake_runtime.requests[0].verification_domain == "finance"
-    assert fake_runtime.requests[0].graph_mode == "global"
-    assert result.answer == "runtime answer"
-    assert result.predicted_pages == ["1"]
-    assert result.predicted_sources == ["doc#page:1"]
-    assert result.agent_trace == [{"stage": "planner", "decision": "retrieve"}]
-    assert result.evidence_metadata == {"has_formula_evidence": True}
-    assert result.controller_trace == [{"stage": "planner", "route": "graph_global"}]
-    assert result.controller_decision == {"route": "graph_rag"}
-    assert result.route_decision == {"route": "graph_global"}
-    assert result.retrieve_decision == {"status": "good"}
-    assert result.verify_decision == {"status": "supported"}
-    assert result.guardrail_decision == {"status": "ok", "action": "return"}
-    assert result.evidence_bundle == {"route": "graph_global", "items": []}
-    assert result.workflow_plan == {
-        "route": "graph_global",
-        "steps": [{"executor": "retrieve_graph"}],
-    }
-    assert result.claim_verification == {"rewrite_skipped": True}
-    assert result.presentation == {"markdown_normalized": True}
+    _assert_runtime_request_contract(fake_runtime.requests[0])
+    assert fake_runtime.requests[0].route_deadline_monotonic == deadline
+    _assert_runtime_result_contract(result)
+
+
+def test_docqa_runtime_engine_reuses_prepared_document_identity(monkeypatch, tmp_path):
+    doc_path = tmp_path / "prepared-doc.txt"
+    doc_path.write_text("runtime text", encoding="utf-8")
+    fake_runtime = _install_fake_docqa_runtime(monkeypatch, doc_path)
+    document = BenchmarkDocument(
+        document_id="prepared-doc",
+        path=doc_path,
+        format_type="txt",
+    )
+    example = BenchmarkExample(
+        example_id="ex",
+        document_id="prepared-doc",
+        document_ids=["prepared-doc"],
+        question="Question?",
+        answers=["runtime answer"],
+    )
+    engine = DocQARuntimeEngine(
+        BenchmarkConfig(
+            suite_name="prepared-runtime",
+            output_dir=tmp_path / "out",
+        )
+    )
+
+    engine.prepare_examples(
+        SimpleNamespace(documents={"prepared-doc": document}),
+        [example],
+    )
+    result = engine.run(example=example, documents=[document])
+
+    assert fake_runtime.indexed == [([str(doc_path)], False)]
+    assert result.cache["document_index"]["hits"] == 1
+    assert result.cache["document_index"]["misses"] == 0
+    assert result.cache["document_index"]["identities"][0]["document_id"] == (
+        "prepared-doc"
+    )
+    assert result.retrieval_trace[0]["stage"] == "document_index_resolution"
+    assert result.retrieval_trace[0]["status"] == "completed"
 
 
 def test_docqa_runtime_engine_passes_controller_question_and_dataset_family(
@@ -336,6 +401,7 @@ def test_docqa_runtime_engine_passes_controller_question_and_dataset_family(
             document_ids=["doc"],
             question="How did revenue change in 2020?",
             answers=["runtime answer"],
+            evidence_pages=[7],
             metadata={"dataset_family": "multimodal_doc_qa"},
         ),
         documents=[
@@ -349,6 +415,7 @@ def test_docqa_runtime_engine_passes_controller_question_and_dataset_family(
     assert request.retrieval_query == "How did revenue change in 2020?"
     assert request.dataset_family == "mmdocrag"
     assert request.verification_domain == "mmdocrag"
+    assert request.page_number is None
 
 
 def test_docqa_runtime_engine_passes_visual_backend_config(monkeypatch, tmp_path):

@@ -4,9 +4,16 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .controller_trace import build_controller_output_trace
 from .evidence import build_evidence_bundle
-from .retrieval_adequacy import retrieval_adequacy_issue
-from .verification import VerifyDecision, verify_decision
+from .query_plan_schema import slot_binding_state
+from .query_planning import ensure_request_query_plan, request_planning_question
+from .retrieval_adequacy import (
+    missing_qasper_verification_slot_count,
+    retrieval_adequacy_issue,
+)
+from .retrieval_stop import record_missing_slot_stop, static_retrieval_outcome
+from .verification import VerifyDecision, verify_decision, with_verification_evidence
 from .workflow import build_workflow_plan
 from .workflow import executor_registry as workflow_executor_registry
 from .workflow import planner_payload_from_trace
@@ -157,6 +164,10 @@ def build_controller_outputs(
     evidence_metadata: dict[str, Any],
     answer: str = "",
 ) -> dict[str, Any]:
+    ensure_request_query_plan(
+        request,
+        planner_payload=planner_payload_from_trace(agent_trace or []),
+    )
     route_decision = _route_decision(request, agent_trace)
     workflow_plan = build_workflow_plan(
         route=route_decision.route,
@@ -173,7 +184,7 @@ def build_controller_outputs(
     retrieve_decision = evaluate_retrieval_quality(
         route_decision.route,
         evidence_bundle.metadata,
-        prompt=str(getattr(request, "prompt", "") or ""),
+        prompt=request_planning_question(request),
         verification_domain=getattr(request, "verification_domain", None),
         origin=getattr(request, "origin", None),
     )
@@ -183,32 +194,17 @@ def build_controller_outputs(
         evidence_bundle,
         answer,
     )
+    evidence_bundle = with_verification_evidence(
+        evidence_bundle, verify_decision, request
+    )
     controller_trace = ControllerTrace(
-        [
-            {
-                "stage": "planner",
-                "controller_mode": route_decision.controller_mode,
-                "route": route_decision.route,
-                "policy": route_decision.policy,
-            },
-            {
-                "stage": "workflow_plan",
-                "strategy": workflow_plan["strategy"],
-                "step_count": len(workflow_plan["steps"]),
-                "total_cost_units": workflow_plan["total_cost_units"],
-            },
-            {
-                "stage": "retrieval_evaluator",
-                "status": retrieve_decision.status,
-                "retry": retrieve_decision.retry,
-            },
-            {
-                "stage": "verifier",
-                "mode": verify_decision.mode,
-                "status": verify_decision.status,
-            },
-            *list(agent_trace or []),
-        ]
+        build_controller_output_trace(
+            route_decision,
+            workflow_plan,
+            retrieve_decision,
+            verify_decision,
+            agent_trace,
+        )
     )
     return {
         "controller_decision": _controller_decision_payload(route_decision),
@@ -261,17 +257,9 @@ def evaluate_retrieval_quality(
     verification_domain: str | None = None,
     origin: str | None = None,
 ) -> RetrieveDecision:
-    if route == "direct":
-        return RetrieveDecision(
-            status="not_required",
-            reason="Direct route does not require retrieval.",
-        )
-    if route == "abstain":
-        return RetrieveDecision(
-            status="poor",
-            reason="Route abstained before retrieval.",
-            retry=False,
-        )
+    static_outcome = static_retrieval_outcome(route)
+    if static_outcome is not None:
+        return RetrieveDecision(*static_outcome)
     if _evidence_count(evidence_metadata) > 0:
         adequacy_issue = retrieval_adequacy_issue(
             prompt,
@@ -282,9 +270,37 @@ def evaluate_retrieval_quality(
                 origin,
             ),
         )
+        missing_required_slots = _missing_retrieval_slot_count(evidence_metadata)
+        missing_qasper_slots = missing_qasper_verification_slot_count(
+            evidence_metadata,
+            domain=verification_domain,
+        )
+        missing_required_slots += missing_qasper_slots
+        typed_execution_is_authoritative = (
+            evidence_metadata.get("typed_adequacy_status") == "good"
+            and evidence_metadata.get("adequacy_decision_authority")
+            == "typed_calculation"
+        )
+        if missing_required_slots and not typed_execution_is_authoritative:
+            evidence_metadata["final_adequacy_status"] = "ambiguous"
+            evidence_metadata["adequacy_decision_authority"] = "query_plan"
+            evidence_metadata["heuristic_overridden"] = False
+            stop_reason = record_missing_slot_stop(
+                evidence_metadata,
+                attempted_retry=attempted_retry,
+            )
+            return RetrieveDecision(
+                status="poor" if attempted_retry else "ambiguous",
+                reason=(
+                    "Retrieved evidence does not fill "
+                    f"{missing_required_slots} required QueryPlan slot(s)."
+                    + (f" stop_reason={stop_reason}." if stop_reason else "")
+                ),
+                retry=not attempted_retry,
+            )
         if adequacy_issue:
             return RetrieveDecision(
-                status="ambiguous",
+                status="poor" if attempted_retry else "ambiguous",
                 reason=adequacy_issue,
                 retry=not attempted_retry,
             )
@@ -317,6 +333,24 @@ def _finance_benchmark_origin(
     }
 
 
+def _missing_retrieval_slot_count(evidence_metadata: dict[str, Any]) -> int:
+    for key in ("bound_query_plan", "query_plan"):
+        plan = evidence_metadata.get(key)
+        if not isinstance(plan, dict) or not isinstance(
+            plan.get("evidence_slots"), list
+        ):
+            continue
+        slots = [slot for slot in plan["evidence_slots"] if isinstance(slot, dict)]
+        if not any("required_for_retrieval" in slot for slot in slots):
+            continue
+        return sum(
+            bool(slot.get("required_for_retrieval"))
+            and slot_binding_state(slot) != "filled"
+            for slot in slots
+        )
+    return int(evidence_metadata.get("missing_required_slot_count") or 0)
+
+
 def _route_decision(
     request: Any, agent_trace: list[dict[str, Any]] | None = None
 ) -> RouteDecision:
@@ -331,7 +365,7 @@ def _route_decision(
             allowed_routes=getattr(request, "allowed_routes", None),
         )
 
-    route = _resolve_route(policy)
+    route = _auto_route(request) if policy == "auto" else _resolve_route(policy)
     route = _constrain_route(route, getattr(request, "allowed_routes", None))
     return RouteDecision(
         route=route,
@@ -405,6 +439,39 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "requested_modalities",
         "retrieval_attempts",
         "retrieval_info_count",
+        "schema_version",
+        "dedupe_trace",
+        "query_plan",
+        "query_plan_id",
+        "planned_query_plan",
+        "bound_query_plan",
+        "evidence_selection_trace",
+        "structure_metadata_coverage",
+        "slot_coverage",
+        "missing_required_slot_count",
+        "second_round_queries",
+        "second_round_requests",
+        "retrieval_rounds",
+        "retrieval_query_contracts",
+        "ranking_trace",
+        "reranker_aggregate_trace",
+        "materialization_trace",
+        "selected_evidence",
+        "generation_context_evidence",
+        "used_evidence",
+        "stage_aliases",
+        "fused_evidence",
+        "candidate_ranked_evidence",
+        "candidate_ranking_contract",
+        "canonical_candidate_count",
+        "pre_rerank_required_slot_candidates_restored",
+        "reranker_input_contract",
+        "reranker_input_evidence",
+        "source_page_locators",
+        "visual_typed_projection",
+        "fusion_stage_snapshot",
+        "pipeline_stage_timings",
+        "rejected_route_switch_candidates",
     }
     ignored_empty_keys = {"evidence", "evidence_ids", "modality_counts"}
     for key, value in evidence_metadata.items():
@@ -435,6 +502,11 @@ def _constrain_route(route: str, allowed_routes: Any) -> str:
 
 def _route_reason(policy: str, route: str) -> str:
     if policy == "auto":
+        if route == "hybrid":
+            return (
+                "Automatic risk routing selected hybrid evidence for a numeric, "
+                "multi-page, multi-table, or visual question."
+            )
         return "Automatic route policy selected the document text route."
     labels = {
         "direct": "direct",
@@ -446,6 +518,18 @@ def _route_reason(policy: str, route: str) -> str:
         "abstain": "abstain",
     }
     return f"Requested {labels.get(route, route)} route."
+
+
+def _auto_route(request: Any) -> str:
+    plan = ensure_request_query_plan(request)
+    if plan.answer_type == "numeric" or plan.question_type in {
+        "cross_page",
+        "multi_period_numeric",
+        "numeric",
+        "visual",
+    }:
+        return "hybrid"
+    return "doc_text"
 
 
 def _controller_decision_payload(route_decision: RouteDecision) -> dict[str, Any]:

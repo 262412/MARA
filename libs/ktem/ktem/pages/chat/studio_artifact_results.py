@@ -51,8 +51,10 @@ def render_studio_artifacts_html(artifact: dict[str, Any] | None = None) -> str:
 def render_conversation_studio_results_html(
     conversation_id: str | None,
     fallback_artifact: dict[str, Any] | None = None,
+    *,
+    user_id: Any,
 ) -> str:
-    artifacts = _conversation_artifacts(conversation_id)
+    artifacts = _conversation_artifacts(conversation_id, user_id=user_id)
     if not artifacts and isinstance(fallback_artifact, dict):
         artifacts = [fallback_artifact]
     return render_studio_artifacts_html({"artifacts": artifacts})
@@ -511,23 +513,25 @@ def _open_graph_viewer_html(graph_html: str) -> str:
     return f"<div class='studio-kg-viewer-scope'>{graph_html}</div>"
 
 
-def _conversation_artifacts(conversation_id: str | None) -> list[dict[str, Any]]:
+def _conversation_artifacts(
+    conversation_id: str | None,
+    *,
+    user_id: Any,
+) -> list[dict[str, Any]]:
     conversation_id = str(conversation_id or "").strip()
     if not conversation_id:
         return []
-    from ktem.db.models import Conversation, engine
-    from ktem.docqa._runtime_notebook import NOTEBOOK_KEY
-    from sqlmodel import Session, select
+    from ktem.docqa import _runtime_notebook as notebook_service
 
-    with Session(engine) as session:
-        row = session.exec(
-            select(Conversation).where(Conversation.id == conversation_id)
-        ).one_or_none()
-    if row is None:
+    try:
+        notebook = notebook_service.get_notebook(
+            conversation_id,
+            user_id=user_id,
+            allow_public=True,
+        )
+    except notebook_service.NotebookAccessError:
         return []
-    data_source = row.data_source if isinstance(row.data_source, dict) else {}
-    notebook = data_source.get(NOTEBOOK_KEY, {})
-    artifacts = notebook.get("artifacts") if isinstance(notebook, dict) else []
+    artifacts = notebook.get("artifacts")
     return [item for item in artifacts or [] if isinstance(item, dict)]
 
 

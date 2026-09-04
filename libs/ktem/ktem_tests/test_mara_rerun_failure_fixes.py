@@ -2,7 +2,10 @@ import json
 from types import SimpleNamespace
 
 import ktem.reasoning.mara_controller as mara_controller
-from ktem.docqa.execution import _route_switch_candidates
+from ktem.docqa.execution import (
+    _route_switch_candidate_evaluation,
+    _route_switch_candidates,
+)
 from ktem.reasoning.mara import MaraAgentPipeline
 from ktem.reasoning.mara_route_probe import controller_route_probe
 from ktem.reasoning.mara_visual_gate import hybrid_should_use_visual_generator
@@ -227,12 +230,74 @@ def test_route_switch_candidates_follow_cost_aware_order_for_visual_questions():
     request = SimpleNamespace(
         prompt="What slogan is shown on the slide?",
         allowed_routes=["graph_global", "hybrid", "doc_text", "doc_page_image"],
+        visual_generator_backend="local_qwen3_vl",
     )
 
     assert _route_switch_candidates(request, "graph_global") == [
         "doc_page_image",
         "doc_text",
         "hybrid",
+    ]
+
+
+def test_nonvisual_route_switch_skips_page_generation_without_vlm_backend():
+    request = SimpleNamespace(
+        prompt="Calculate the inventory turnover ratio.",
+        allowed_routes=["graph_global", "hybrid", "doc_text", "doc_page_image"],
+        visual_generator_backend="",
+    )
+
+    assert _route_switch_candidates(request, "graph_global") == [
+        "doc_text",
+        "hybrid",
+    ]
+
+
+def test_financial_statement_amount_routes_hybrid_without_visual_intent():
+    question = (
+        "What is the FY2021 capital expenditure amount for PepsiCo? "
+        "Use only the details shown within the statement of cash flows."
+    )
+    decision = mara_controller.planner_decision(
+        {
+            "task_type": "qa",
+            "modalities": ["text"],
+            "available_modalities": ["page_image"],
+            "scope": "document",
+        },
+        question=question,
+        allowed_routes=["graph_global", "hybrid", "doc_text", "doc_page_image"],
+    )
+
+    assert decision["route"] == "hybrid"
+    assert decision["routing_features"]["visual_intent"] is False
+    assert decision["routing_features"]["structured_calculation"] is True
+
+
+def test_financial_statement_source_constraint_skips_unavailable_page_switch():
+    request = SimpleNamespace(
+        prompt=(
+            "What is the FY2021 capital expenditure amount for PepsiCo? "
+            "Use only the details shown within the statement of cash flows."
+        ),
+        allowed_routes=["graph_global", "hybrid", "doc_text", "doc_page_image"],
+        visual_generator_backend="",
+    )
+
+    assert _route_switch_candidates(request, "graph_global") == [
+        "doc_text",
+        "hybrid",
+    ]
+    available, rejected = _route_switch_candidate_evaluation(
+        request,
+        "graph_global",
+    )
+    assert available == ["doc_text", "hybrid"]
+    assert rejected == [
+        {
+            "route": "doc_page_image",
+            "reason": "backend_unavailable:visual_generator",
+        }
     ]
 
 

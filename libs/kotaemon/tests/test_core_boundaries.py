@@ -7,7 +7,9 @@ from pathlib import Path
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "kotaemon"
 ALLOWED_KTEM_IMPORT_FILES = {
     "__init__.py",
+    "app_init.py",
     "cli.py",
+    "docqa_request_adapters.py",
     "indices/qa/citation_qa.py",
     "indices/rankings/cohere.py",
 }

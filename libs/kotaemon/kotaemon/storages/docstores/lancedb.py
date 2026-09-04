@@ -80,10 +80,13 @@ LEXICAL_FALLBACK_STOPWORDS = frozenset(
 
 
 def _document_from_lancedb_row(row: dict) -> Document:
+    metadata = json.loads(row["attributes"])
+    if row.get("_score") is not None:
+        metadata["_sparse_retrieval_score"] = float(row["_score"])
     return Document(
         id_=row["id"],
         text=row["text"] if row["text"] else "<empty>",
-        metadata=json.loads(row["attributes"]),
+        metadata=metadata,
     )
 
 
@@ -105,8 +108,8 @@ def _rank_docs_by_query_tokens(
     if not query_tokens:
         return []
 
-    ranked: list[tuple[int, int, int, Document]] = []
-    for order, doc in enumerate(docs):
+    ranked: list[tuple[int, int, str, Document]] = []
+    for doc in docs:
         doc_tokens = Counter(TOKEN_PATTERN.findall(doc.text.lower()))
         unique_matches = 0
         total_matches = 0
@@ -116,10 +119,20 @@ def _rank_docs_by_query_tokens(
                 unique_matches += 1
                 total_matches += count
         if unique_matches:
-            ranked.append((unique_matches, total_matches, -order, doc))
+            ranked.append((unique_matches, total_matches, str(doc.doc_id), doc))
 
-    ranked.sort(reverse=True, key=lambda item: (item[0], item[1], item[2]))
-    return [doc for *_, doc in ranked[:top_k]]
+    ranked.sort(key=lambda item: (-item[0], -item[1], item[2]))
+    output: list[Document] = []
+    for unique_matches, total_matches, _identity, doc in ranked[:top_k]:
+        doc.metadata = {
+            **dict(doc.metadata or {}),
+            "_sparse_retrieval_score": round(
+                float(unique_matches) + float(total_matches) / 1000.0,
+                6,
+            ),
+        }
+        output.append(doc)
+    return output
 
 
 class LanceDBDocumentStore(BaseDocumentStore):
@@ -198,10 +211,29 @@ class LanceDBDocumentStore(BaseDocumentStore):
                 )
         except (ValueError, FileNotFoundError):
             docs = []
-        if query_filter and not docs:
+        output = [_document_from_lancedb_row(doc) for doc in docs]
+        if query_filter and len(output) < min(top_k, len(doc_ids or [])):
             scoped_doc_ids = cast(list[str], doc_ids)
-            return _rank_docs_by_query_tokens(query, self.get(scoped_doc_ids), top_k)
-        return [_document_from_lancedb_row(doc) for doc in docs]
+            scoped_docs = _rank_docs_by_query_tokens(
+                query,
+                self.get(scoped_doc_ids),
+                top_k,
+            )
+            output_ids = {str(doc.doc_id) for doc in output}
+            for doc in scoped_docs:
+                if str(doc.doc_id) in output_ids:
+                    continue
+                output.append(doc)
+                output_ids.add(str(doc.doc_id))
+                if len(output) >= top_k:
+                    break
+        return sorted(
+            output,
+            key=lambda doc: (
+                -round(float(doc.metadata.get("_sparse_retrieval_score", -1.0)), 6),
+                str(doc.doc_id),
+            ),
+        )[:top_k]
 
     def get(self, ids: Union[List[str], str]) -> List[Document]:
         """Get document by id"""

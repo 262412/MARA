@@ -4,6 +4,9 @@ from kotaemon.indices import VectorIndexing, VectorRetrieval
 
 class _CountingEmbedding:
     model = "counting-embedding"
+    model_revision = "revision-1"
+    precision = "float32"
+    determinism = "deterministic"
 
     def __init__(self):
         self.calls = 0
@@ -93,6 +96,129 @@ def test_vector_indexing_reuses_embedding_cache_across_runs(tmp_path):
         "misses": 0,
         "writes": 0,
     }
+
+
+def test_vector_indexing_cache_uses_normalized_chunk_text(tmp_path):
+    embedding = _CountingEmbedding()
+    pipeline = VectorIndexing(
+        vector_store=_RecordingVectorStore(),
+        doc_store=_RecordingDocStore(),
+        embedding=embedding,
+        embedding_cache_dir=str(tmp_path),
+        index_contract="index-v1",
+    )
+
+    pipeline(text=Document(text="same\tchunk\ntext", id_="doc-1"))
+    pipeline(text=Document(text="same chunk text", id_="doc-2"))
+
+    assert embedding.calls == 1
+    assert pipeline.last_embedding_cache_stats == {
+        "hits": 1,
+        "misses": 0,
+        "writes": 0,
+    }
+
+
+def test_vector_indexing_cache_partitions_exact_embedding_and_index_contracts(
+    tmp_path,
+):
+    class _RevisionTwoEmbedding(_CountingEmbedding):
+        model_revision = "revision-2"
+
+    first_embedding = _CountingEmbedding()
+    first = VectorIndexing(
+        vector_store=_RecordingVectorStore(),
+        doc_store=_RecordingDocStore(),
+        embedding=first_embedding,
+        embedding_cache_dir=str(tmp_path),
+        index_contract="index-v1",
+    )
+    first(text=Document(text="contract chunk", id_="doc-1"))
+
+    revised_embedding = _RevisionTwoEmbedding()
+    revised = VectorIndexing(
+        vector_store=_RecordingVectorStore(),
+        doc_store=_RecordingDocStore(),
+        embedding=revised_embedding,
+        embedding_cache_dir=str(tmp_path),
+        index_contract="index-v1",
+    )
+    revised(text=Document(text="contract chunk", id_="doc-2"))
+
+    revised_index_embedding = _RevisionTwoEmbedding()
+    revised_index = VectorIndexing(
+        vector_store=_RecordingVectorStore(),
+        doc_store=_RecordingDocStore(),
+        embedding=revised_index_embedding,
+        embedding_cache_dir=str(tmp_path),
+        index_contract="index-v2",
+    )
+    revised_index(text=Document(text="contract chunk", id_="doc-3"))
+
+    assert first_embedding.calls == 1
+    assert revised_embedding.calls == 1
+    assert revised_index_embedding.calls == 1
+
+
+def test_sparse_tie_order_is_independent_of_docstore_return_order():
+    docs = [
+        Document(
+            text="Alpha result",
+            id_="alpha",
+            metadata={"_sparse_retrieval_score": 0.75},
+        ),
+        Document(
+            text="Beta result",
+            id_="beta",
+            metadata={"_sparse_retrieval_score": 0.75},
+        ),
+    ]
+
+    def run(values):
+        retrieval = VectorRetrieval(
+            vector_store=_RecordingVectorStore(),
+            doc_store=_RecordingDocStore(values),
+            embedding=_CountingEmbedding(),
+            retrieval_mode="text",
+            top_k=1,
+        )
+        return retrieval(text="result", scope=["alpha", "beta"], sparse_top_k=2)
+
+    forward = run(docs)
+    reversed_result = run(list(reversed(docs)))
+
+    assert [doc.doc_id for doc in forward] == [doc.doc_id for doc in reversed_result]
+    assert forward[0].retrieval_metadata["sparse_score"] == 0.75
+
+
+def test_hybrid_sparse_tie_order_is_independent_of_docstore_return_order():
+    docs = [
+        Document(
+            text="Alpha result",
+            id_="alpha",
+            metadata={"_sparse_retrieval_score": 0.75},
+        ),
+        Document(
+            text="Beta result",
+            id_="beta",
+            metadata={"_sparse_retrieval_score": 0.75},
+        ),
+    ]
+
+    def run(values):
+        retrieval = VectorRetrieval(
+            vector_store=_RecordingVectorStore(),
+            doc_store=_RecordingDocStore(values),
+            embedding=_CountingEmbedding(),
+            retrieval_mode="hybrid",
+            top_k=1,
+        )
+        return retrieval(text="result", scope=["alpha", "beta"], sparse_top_k=2)
+
+    forward = run(docs)
+    reversed_result = run(list(reversed(docs)))
+
+    assert [doc.doc_id for doc in forward] == [doc.doc_id for doc in reversed_result]
 
 
 def test_vector_indexing_refreshes_after_batch_and_records_status(tmp_path):

@@ -47,10 +47,11 @@ class ElasticsearchDocumentStore(BaseDocumentStore):
         }
         mappings = {
             "properties": {
+                "id_sort": {"type": "keyword"},
                 "content": {
                     "type": "text",
                     "similarity": "custom_bm25",  # Use the custom BM25 similarity
-                }
+                },
             }
         }
 
@@ -90,6 +91,7 @@ class ElasticsearchDocumentStore(BaseDocumentStore):
                 "content": text,
                 "metadata": metadata,
                 "_id": doc_id,
+                "id_sort": str(doc_id),
             }
             requests.append(request)
 
@@ -112,11 +114,14 @@ class ElasticsearchDocumentStore(BaseDocumentStore):
         res = self.client.search(index=self.index_name, body=query)
         docs = []
         for r in res["hits"]["hits"]:
+            metadata = dict(r["_source"]["metadata"] or {})
+            if r.get("_score") is not None:
+                metadata["_sparse_retrieval_score"] = float(r["_score"])
             docs.append(
                 Document(
                     id_=r["_id"],
                     text=r["_source"]["content"],
-                    metadata=r["_source"]["metadata"],
+                    metadata=metadata,
                 )
             )
         return docs
@@ -137,15 +142,29 @@ class ElasticsearchDocumentStore(BaseDocumentStore):
         query_dict: dict = {"match": {"content": query}}
         if doc_ids is not None:
             query_dict = {"bool": {"must": [query_dict, {"terms": {"_id": doc_ids}}]}}
-        query_dict = {"query": query_dict, "size": top_k}
-        return self.query_raw(query_dict)
+        query_dict = {
+            "query": query_dict,
+            "size": top_k,
+            "sort": [
+                {"_score": {"order": "desc"}},
+                {"id_sort": {"order": "asc"}},
+            ],
+        }
+        return sorted(
+            self.query_raw(query_dict),
+            key=lambda doc: (
+                -round(float(doc.metadata.get("_sparse_retrieval_score", -1.0)), 6),
+                str(doc.doc_id),
+            ),
+        )
 
     def get(self, ids: Union[List[str], str]) -> List[Document]:
         """Get document by id"""
         if not isinstance(ids, list):
             ids = [ids]
         query_dict = {"query": {"terms": {"_id": ids}}, "size": 10000}
-        return self.query_raw(query_dict)
+        docs_by_id = {str(doc.doc_id): doc for doc in self.query_raw(query_dict)}
+        return [docs_by_id[str(doc_id)] for doc_id in ids if str(doc_id) in docs_by_id]
 
     def count(self) -> int:
         """Count number of documents"""

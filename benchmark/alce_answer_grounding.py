@@ -1,0 +1,343 @@
+from __future__ import annotations
+
+import json
+import re
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+from .generation_contract import benchmark_generation_config
+
+ALCE_ANSWER_GROUNDING_CONTRACT = "alce_short_answer_grounding.v2"
+ALCE_ANSWER_GROUNDING_SEED = 20260724
+ALCE_MAX_GROUNDING_EVIDENCE = 8
+ALCE_MAX_EVIDENCE_CHARS = 1800
+ALCE_MAX_GROUNDING_PROMPT_CHARS = 12000
+
+ALCE_ANSWER_GROUNDING_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "alce_short_answer_grounding",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "verdict": {
+                    "type": "string",
+                    "enum": ["supported", "corrected", "insufficient_evidence"],
+                },
+                "answer": {"type": "string"},
+                "evidence_index": {"type": "integer"},
+            },
+            "required": ["verdict", "answer", "evidence_index"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+_WORD_RE = re.compile(r"[A-Za-z0-9]+")
+_EXPLICIT_FINAL_ANSWER_RE = re.compile(
+    r"(?:^|[\n.!?]\s+)(?:final\s+answer|answer)\s*[:：]\s*" r"(?P<answer>[^\n]+?)\s*$",
+    re.IGNORECASE,
+)
+_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "answer",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "the",
+    "to",
+    "was",
+    "were",
+}
+
+
+@dataclass(frozen=True)
+class AlceGroundingResult:
+    answer: str
+    trace: dict[str, Any]
+
+
+def apply_alce_answer_grounding(
+    *,
+    suite_name: str,
+    llm_factory: Callable[[], Any],
+    question: str,
+    candidate_answer: str,
+    evidence_items: list[dict[str, Any]],
+) -> tuple[str, dict[str, Any], float]:
+    normalized_suite = str(suite_name or "").lower()
+    if "alce" not in normalized_suite or "qampari" in normalized_suite:
+        return candidate_answer, {}, 0.0
+    start = time.perf_counter()
+    result = ground_alce_short_answer(
+        llm_factory(),
+        question=question,
+        candidate_answer=candidate_answer,
+        evidence_items=evidence_items,
+    )
+    return result.answer, result.trace, time.perf_counter() - start
+
+
+def alce_grounding_stage_event(
+    trace: dict[str, Any],
+    seconds: float,
+) -> dict[str, Any]:
+    return {
+        "stage": "alce_answer_grounding",
+        "status": trace.get("status", ""),
+        "seconds": round(seconds, 4),
+    }
+
+
+def ground_alce_short_answer(
+    llm: Any,
+    *,
+    question: str,
+    candidate_answer: str,
+    evidence_items: list[dict[str, Any]],
+) -> AlceGroundingResult:
+    evidence = list(evidence_items[:ALCE_MAX_GROUNDING_EVIDENCE])
+    if not evidence:
+        return AlceGroundingResult(
+            answer=candidate_answer,
+            trace=_trace("not_required"),
+        )
+    generation_contract = benchmark_generation_config()
+    response = llm(
+        _grounding_prompt(
+            question=question,
+            candidate_answer=candidate_answer,
+            evidence_items=evidence,
+        ),
+        max_tokens=192,
+        response_format=ALCE_ANSWER_GROUNDING_RESPONSE_FORMAT,
+        **generation_contract,
+    )
+    payload = _grounding_payload(getattr(response, "text", "") or str(response))
+    if payload is None:
+        return AlceGroundingResult(
+            answer=candidate_answer,
+            trace=_trace("error"),
+        )
+    return _result_from_grounding_payload(payload, candidate_answer, evidence)
+
+
+def _result_from_grounding_payload(
+    payload: dict[str, Any],
+    candidate_answer: str,
+    evidence: list[dict[str, Any]],
+) -> AlceGroundingResult:
+    verdict = str(payload["verdict"])
+    if verdict == "insufficient_evidence":
+        if not _is_abstention(candidate_answer):
+            return AlceGroundingResult(
+                answer=candidate_answer,
+                trace=_trace(
+                    "advisory_insufficient_evidence",
+                    verdict=verdict,
+                ),
+            )
+        return AlceGroundingResult(
+            answer="unanswerable",
+            trace=_trace(
+                "ok",
+                verdict=verdict,
+                answer_changed=_normalized(candidate_answer) != "unanswerable",
+            ),
+        )
+    evidence_index = int(payload["evidence_index"])
+    grounded_answer = str(payload["answer"]).strip()
+    if (
+        evidence_index < 0
+        or evidence_index >= len(evidence)
+        or not grounded_answer
+        or not _answer_traceable(
+            grounded_answer, _evidence_text(evidence[evidence_index])
+        )
+    ):
+        return AlceGroundingResult(
+            answer=candidate_answer,
+            trace=_trace("rejected_ungrounded_answer"),
+        )
+    evidence_id = str(
+        evidence[evidence_index].get("evidence_id")
+        or evidence[evidence_index].get("canonical_id")
+        or ""
+    )
+    if verdict == "supported" and not _supported_answer_consistent(
+        grounded_answer,
+        candidate_answer,
+    ):
+        return AlceGroundingResult(
+            answer=candidate_answer,
+            trace=_trace(
+                "rejected_inconsistent_supported_answer",
+                verdict=verdict,
+                evidence_id=evidence_id,
+            ),
+        )
+    if verdict == "corrected" and not _is_abstention(candidate_answer):
+        return AlceGroundingResult(
+            answer=candidate_answer,
+            trace=_trace(
+                "rejected_unsafe_correction",
+                verdict=verdict,
+                evidence_id=evidence_id,
+            ),
+        )
+    return AlceGroundingResult(
+        answer=(candidate_answer if verdict == "supported" else grounded_answer),
+        trace=_trace(
+            "ok",
+            verdict=verdict,
+            evidence_id=evidence_id,
+            answer_changed=(
+                verdict != "supported"
+                and _normalized(grounded_answer) != _normalized(candidate_answer)
+            ),
+            grounded_answer=grounded_answer,
+        ),
+    )
+
+
+def _grounding_prompt(
+    *,
+    question: str,
+    candidate_answer: str,
+    evidence_items: list[dict[str, Any]],
+) -> str:
+    prefix = (
+        "/no_think\n"
+        "You are a short factual answer grounding verifier. Resolve every "
+        "entity, role, date range, episode, location, quantity, qualifier, and "
+        "list constraint in the question against one selected evidence item. "
+        "Do not prefer a prominent competing entity that matches only part of "
+        "the question. If the candidate is fully supported, return supported. "
+        "If a selected item directly resolves the question but binds it to a "
+        "different answer, return corrected. If no selected item directly "
+        "resolves all required constraints, return insufficient_evidence. The "
+        "answer must be the shortest complete value copied or directly "
+        "extractable from the chosen evidence item. evidence_index is zero "
+        "based; use -1 only for insufficient_evidence.\n\n"
+        f"QUESTION:\n{str(question or '')[:1200]}\n\n"
+        f"CANDIDATE ANSWER:\n{str(candidate_answer or '')[:600]}\n\n"
+        "SELECTED EVIDENCE:\n"
+    )
+    suffix = "\n\nReturn only the required JSON object."
+    evidence_budget = max(
+        0,
+        ALCE_MAX_GROUNDING_PROMPT_CHARS - len(prefix) - len(suffix),
+    )
+    evidence = _bounded_evidence_text(evidence_items, evidence_budget)
+    return prefix + evidence + suffix
+
+
+def _bounded_evidence_text(
+    evidence_items: list[dict[str, Any]],
+    budget: int,
+) -> str:
+    if not evidence_items or budget <= 0:
+        return ""
+    separator_chars = len("\n\n") * (len(evidence_items) - 1)
+    label_chars = sum(len(f"[{index}] ") for index in range(len(evidence_items)))
+    content_budget = max(0, budget - separator_chars - label_chars)
+    item_budget = min(
+        ALCE_MAX_EVIDENCE_CHARS,
+        content_budget // len(evidence_items),
+    )
+    return "\n\n".join(
+        f"[{index}] {_evidence_text(item)[:item_budget]}"
+        for index, item in enumerate(evidence_items)
+    )
+
+
+def _grounding_payload(answer: str) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(str(answer or ""))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    verdict = str(payload.get("verdict") or "")
+    if verdict not in {"supported", "corrected", "insufficient_evidence"}:
+        return None
+    if not isinstance(payload.get("answer"), str):
+        return None
+    if not isinstance(payload.get("evidence_index"), int):
+        return None
+    return payload
+
+
+def _answer_traceable(answer: str, evidence: str) -> bool:
+    answer_tokens = {token for token in _tokens(answer) if token not in _STOPWORDS}
+    evidence_tokens = set(_tokens(evidence))
+    return bool(answer_tokens) and answer_tokens <= evidence_tokens
+
+
+def _evidence_text(item: dict[str, Any]) -> str:
+    return " ".join(
+        str(item.get(field) or "").strip()
+        for field in ("text", "ocr_text", "vlm_text", "caption")
+        if str(item.get(field) or "").strip()
+    )
+
+
+def _tokens(text: str) -> list[str]:
+    return [token.lower() for token in _WORD_RE.findall(str(text or ""))]
+
+
+def _normalized(text: str) -> str:
+    return " ".join(_tokens(text))
+
+
+def _supported_answer_consistent(grounded_answer: str, candidate_answer: str) -> bool:
+    if _normalized(grounded_answer) == _normalized(candidate_answer):
+        return True
+    match = _EXPLICIT_FINAL_ANSWER_RE.search(str(candidate_answer or ""))
+    return bool(
+        match and _normalized(match.group("answer")) == _normalized(grounded_answer)
+    )
+
+
+def _is_abstention(text: str) -> bool:
+    return _normalized(text) in {
+        "",
+        "unanswerable",
+        "insufficient evidence",
+        "not enough evidence",
+    }
+
+
+def _trace(
+    status: str,
+    *,
+    verdict: str = "",
+    evidence_id: str = "",
+    answer_changed: bool = False,
+    grounded_answer: str = "",
+) -> dict[str, Any]:
+    trace = {
+        "contract_id": ALCE_ANSWER_GROUNDING_CONTRACT,
+        "status": status,
+        "verdict": verdict,
+        "evidence_id": evidence_id,
+        "answer_changed": answer_changed,
+        "generation_contract": benchmark_generation_config(),
+    }
+    if grounded_answer:
+        trace["grounded_answer"] = grounded_answer
+    return trace

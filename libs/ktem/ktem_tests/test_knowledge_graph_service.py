@@ -123,7 +123,7 @@ def test_get_graph_view_does_not_auto_build_without_force_rebuild(
     monkeypatch.setattr(
         service,
         "_load_sources",
-        lambda source_ids: {
+        lambda source_ids, **_kwargs: {
             "file-a": {
                 "id": "file-a",
                 "name": "Alpha.pdf",
@@ -190,7 +190,7 @@ def test_get_graph_view_returns_focus_html_and_prunes_missing_sources(
     monkeypatch.setattr(
         service,
         "_load_sources",
-        lambda source_ids: {
+        lambda source_ids, **_kwargs: {
             "file-a": {
                 "id": "file-a",
                 "name": "Alpha.pdf",
@@ -1148,7 +1148,7 @@ def test_get_graph_view_marks_legacy_cache_stale_even_when_manifest_matches(
     monkeypatch.setattr(
         service,
         "_load_sources",
-        lambda source_ids: {
+        lambda source_ids, **_kwargs: {
             "file-a": {
                 "id": "file-a",
                 "name": "Alpha.pdf",
@@ -1202,7 +1202,7 @@ def test_get_graph_view_rebuilds_stale_graph_to_ready_when_forced(
     monkeypatch.setattr(
         service,
         "_load_sources",
-        lambda source_ids: {
+        lambda source_ids, **_kwargs: {
             "file-a": {
                 "id": "file-a",
                 "name": "Alpha.pdf",
@@ -1300,7 +1300,7 @@ def test_get_graph_view_ready_status_mentions_split_maps(monkeypatch, tmp_path):
     monkeypatch.setattr(
         service,
         "_load_sources",
-        lambda source_ids: {
+        lambda source_ids, **_kwargs: {
             "file-a": {
                 "id": "file-a",
                 "name": "Alpha.pdf",

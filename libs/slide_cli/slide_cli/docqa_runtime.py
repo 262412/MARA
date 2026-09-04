@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import click
+from slide_cli.runtime_assets import (
+    ensure_llama_index_nltk_cache,
+    ensure_tiktoken_cache,
+)
 
 if TYPE_CHECKING:
     from ktem.docqa import DocQARuntime
@@ -82,28 +86,14 @@ def _load_json_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
-def _find_bundled_llama_index_nltk_cache() -> Path | None:
-    for entry in sys.path:
-        if not entry:
-            continue
-        candidate = (
-            Path(entry).resolve() / "llama_index" / "core" / "_static" / "nltk_cache"
-        )
-        if candidate.is_dir():
-            return candidate
-    return None
-
-
-def ensure_llama_index_nltk_cache() -> None:
-    cache_dir = _find_bundled_llama_index_nltk_cache()
-    if cache_dir is None:
-        return
-
-    os.environ.setdefault("NLTK_DATA", str(cache_dir))
-
-
-def create_docqa_runtime() -> "DocQARuntime":
+def create_docqa_runtime(
+    *,
+    include_query_features: bool = True,
+    include_file_artifacts: bool | None = None,
+    reasoning_paths: tuple[str, ...] | None = None,
+) -> "DocQARuntime":
     ensure_llama_index_nltk_cache()
+    ensure_tiktoken_cache()
     os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
     os.environ.setdefault("GLOG_minloglevel", "3")
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
@@ -121,6 +111,13 @@ def create_docqa_runtime() -> "DocQARuntime":
     from ktem.runtime_bootstrap import bootstrap_runtime_settings
 
     bootstrap_runtime_settings()
+    from .docqa_runtime_profile import configure_docqa_runtime_profile
+
+    configure_docqa_runtime_profile(
+        include_query_features=include_query_features,
+        include_file_artifacts=include_file_artifacts,
+        reasoning_paths=reasoning_paths,
+    )
     from ktem.docqa import DocQARuntime
 
     return DocQARuntime()
@@ -130,19 +127,23 @@ def _resolve_default_user_id(flowsettings, engine, user_model) -> tuple[str, lis
     if not getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT", False):
         return "default", []
 
+    from ktem.auth.policy import NO_MANAGED_USER_DIAGNOSTIC
+
     configured_username = str(
-        getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "admin") or "admin"
+        getattr(flowsettings, "KH_FEATURE_USER_MANAGEMENT_ADMIN", "") or ""
     ).strip()
-    username_lookup = configured_username.lower()
 
     from sqlmodel import Session, select
 
     with Session(engine) as session:
-        existing = session.exec(
-            select(user_model).where(user_model.username_lower == username_lookup)
-        ).first()
-        if existing is not None:
-            return str(existing.id), []
+        if configured_username:
+            existing = session.exec(
+                select(user_model).where(
+                    user_model.username_lower == configured_username.lower()
+                )
+            ).first()
+            if existing is not None:
+                return str(existing.id), []
 
         fallback_admin = session.exec(
             select(user_model).where(user_model.admin.is_(True))
@@ -150,7 +151,7 @@ def _resolve_default_user_id(flowsettings, engine, user_model) -> tuple[str, lis
         if fallback_admin is not None:
             return str(fallback_admin.id), []
 
-    return "", ["Default managed DocQA user does not exist yet."]
+    return "", [NO_MANAGED_USER_DIAGNOSTIC]
 
 
 def _pick_default_model_name(
@@ -276,6 +277,14 @@ def _resolve_file_index_definition(
 
     issues: list[str] = ["No default FileIndex is available."]
     return configured_name, None, configured_private, issues
+
+
+def collect_docqa_import_capabilities() -> dict[str, list[str]]:
+    from .docqa_import_capabilities import (
+        collect_docqa_import_capabilities as _collect_docqa_import_capabilities,
+    )
+
+    return _collect_docqa_import_capabilities()
 
 
 def _count_indexed_files(

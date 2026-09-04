@@ -36,9 +36,17 @@ def render_studio_artifact_running_update(
     )
 
 
-def render_studio_artifact_regenerating_update(conversation_id: str) -> tuple[Any, Any]:
+def render_studio_artifact_regenerating_update(
+    conversation_id: str,
+    *,
+    user_id: Any,
+) -> tuple[Any, Any]:
     normalized_id = str(conversation_id or "").strip()
-    artifact = _latest_notebook_artifact(normalized_id) if normalized_id else None
+    artifact = (
+        _latest_notebook_artifact(normalized_id, user_id=user_id)
+        if normalized_id
+        else None
+    )
     artifact_type = artifact.get("type") if artifact else "study_guide"
     return (
         render_studio_artifacts_html(
@@ -54,6 +62,7 @@ def render_studio_artifact_regenerating_update(conversation_id: str) -> tuple[An
 def save_failed_studio_artifact(
     *,
     conversation_id: str,
+    user_id: Any,
     artifact_type: str,
     prompt: str,
     qa_scope: str,
@@ -90,6 +99,7 @@ def save_failed_studio_artifact(
 
     return notebook_service.save_artifact_to_conversation(
         normalized_id,
+        user_id=user_id,
         artifact_type=normalized_type,
         payload=payload,
         title=title,
@@ -105,11 +115,14 @@ def failed_studio_artifact_panel_outputs(
     *,
     failed_artifact: dict[str, Any],
     conversation_id: str,
+    user_id: Any,
     chat_history: list,
     chat_state: dict,
 ) -> tuple[Any, ...]:
     plot_html = render_conversation_studio_results_html(
-        conversation_id, failed_artifact
+        conversation_id,
+        failed_artifact,
+        user_id=user_id,
     )
     viewer_html = render_studio_artifact_viewer_html(failed_artifact)
     return (
@@ -121,7 +134,7 @@ def failed_studio_artifact_panel_outputs(
         "",
         page._render_citations_card_html(""),
         plot_html,
-        render_conversation_notebook_panel_html(conversation_id),
+        render_conversation_notebook_panel_html(conversation_id, user_id=user_id),
         [],
         gr.update(visible=False, value=""),
         {"html": viewer_html},
@@ -132,6 +145,7 @@ def failed_generation_studio_artifact_outputs(
     page: Any,
     *,
     conversation_id: str,
+    user_id: Any,
     artifact_type: str,
     prompt: str,
     qa_scope: str,
@@ -145,6 +159,7 @@ def failed_generation_studio_artifact_outputs(
 ) -> tuple[Any, ...]:
     failed_artifact = save_failed_studio_artifact(
         conversation_id=conversation_id,
+        user_id=user_id,
         artifact_type=artifact_type,
         prompt=prompt,
         qa_scope=qa_scope,
@@ -158,6 +173,7 @@ def failed_generation_studio_artifact_outputs(
         page,
         failed_artifact=failed_artifact,
         conversation_id=conversation_id,
+        user_id=user_id,
         chat_history=chat_history,
         chat_state=chat_state,
     )
@@ -167,6 +183,7 @@ def failed_regeneration_studio_artifact_outputs(
     page: Any,
     *,
     conversation_id: str,
+    user_id: Any,
     artifact: dict[str, Any],
     active_file_id: str,
     error: str,
@@ -178,6 +195,7 @@ def failed_regeneration_studio_artifact_outputs(
     return failed_generation_studio_artifact_outputs(
         page,
         conversation_id=conversation_id,
+        user_id=user_id,
         artifact_type=str(artifact.get("type") or "study_guide"),
         prompt=str(artifact.get("prompt") or ""),
         qa_scope=str(source_scope.get("mode") or "document"),
@@ -211,10 +229,14 @@ def _failed_source_scope(
     return scope
 
 
-def _latest_notebook_artifact(conversation_id: str) -> dict[str, Any] | None:
+def _latest_notebook_artifact(
+    conversation_id: str,
+    *,
+    user_id: Any,
+) -> dict[str, Any] | None:
     from ktem.docqa import _runtime_notebook as notebook_service
 
-    notebook = notebook_service.get_notebook(conversation_id)
+    notebook = notebook_service.get_notebook(conversation_id, user_id=user_id)
     artifacts = [
         item for item in notebook.get("artifacts", []) if isinstance(item, dict)
     ]

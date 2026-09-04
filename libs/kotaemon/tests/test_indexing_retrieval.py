@@ -110,6 +110,24 @@ def _retrieved_doc(doc_id: str, score: float = 0.0) -> RetrievedDocument:
     return RetrievedDocument(text=f"Document {doc_id}", id_=doc_id, score=score)
 
 
+def _structured_retrieved_doc(
+    doc_id: str,
+    *,
+    source_id: str = "report",
+    page_label: str = "4",
+) -> RetrievedDocument:
+    return RetrievedDocument(
+        text="Revenue was $10 million.",
+        id_=doc_id,
+        score=0.5,
+        metadata={
+            "file_id": source_id,
+            "page_label": page_label,
+            "element_id": "revenue-cell",
+        },
+    )
+
+
 def test_rrf_fusion_deduplicates_and_sums_rank_signals():
     fused = VectorRetrieval._reciprocal_rank_fuse(
         vector_docs=[_retrieved_doc("shared", score=0.91)],
@@ -137,12 +155,64 @@ def test_rrf_fusion_orders_by_combined_rank_not_append_order():
     assert fused[0].score == (1 / 63) + (1 / 61)
 
 
+def test_rrf_equal_scores_use_canonical_identity_not_path_order():
+    first = RetrievedDocument(
+        text="First distinct span.",
+        id_="runtime-b",
+        score=0.5,
+        metadata={"file_id": "report", "element_id": "b"},
+    )
+    second = RetrievedDocument(
+        text="Second distinct span.",
+        id_="runtime-a",
+        score=0.5,
+        metadata={"file_id": "report", "element_id": "a"},
+    )
+
+    forward = VectorRetrieval._reciprocal_rank_fuse([first], [second])
+    reverse = VectorRetrieval._reciprocal_rank_fuse([second], [first])
+
+    assert [item.metadata["element_id"] for item in forward] == ["a", "b"]
+    assert [item.metadata["element_id"] for item in reverse] == ["a", "b"]
+
+
 def test_rrf_fusion_keeps_single_path_modes_unchanged():
     vector_docs = [_retrieved_doc("vector-only", score=0.42)]
     text_docs = [_retrieved_doc("text-only", score=-1.0)]
 
     assert VectorRetrieval._reciprocal_rank_fuse(vector_docs, []) == vector_docs
     assert VectorRetrieval._reciprocal_rank_fuse([], text_docs) == text_docs
+
+
+def test_rrf_canonicalizes_structure_before_adding_rank_signals():
+    fused = VectorRetrieval._reciprocal_rank_fuse(
+        vector_docs=[
+            _structured_retrieved_doc("dense-primary"),
+            _structured_retrieved_doc("dense-overlap"),
+        ],
+        text_docs=[_structured_retrieved_doc("sparse-primary")],
+    )
+
+    assert len(fused) == 1
+    assert fused[0].score == (1 / 61) + (1 / 61)
+    assert fused[0].retrieval_metadata["canonical_id"].startswith("element:")
+    assert fused[0].retrieval_metadata["duplicate_doc_ids"] == [
+        "dense-overlap",
+        "sparse-primary",
+    ]
+
+
+def test_rrf_canonical_text_merge_preserves_cross_source_backrefs():
+    dense = _structured_retrieved_doc("dense-source-a", source_id="source-a")
+    sparse = _structured_retrieved_doc("sparse-source-b", source_id="source-b")
+    sparse.metadata["element_id"] = "different-cell-id"
+
+    [fused] = VectorRetrieval._reciprocal_rank_fuse([dense], [sparse])
+
+    assert fused.retrieval_metadata["source_backrefs"] == [
+        "source-a#page:4",
+        "source-b#page:4",
+    ]
 
 
 class _RecordingEmbedding:
@@ -205,6 +275,28 @@ class _RecordingReranker(BaseReranking):
         return self._received_doc_ids
 
 
+class _MetadataScoreReranker(BaseReranking):
+    def run(self, documents, query):
+        for document in documents:
+            document.metadata["local_reranking_score"] = (
+                1.0 if document.doc_id == "doc-b" else 0.0
+            )
+        return list(reversed(documents))
+
+
+def test_hybrid_retrieval_defaults_match_wide_recall_contract():
+    retrieval = VectorRetrieval(
+        vector_store=_RecordingVectorStore([]),
+        doc_store=_RecordingDocStore([]),
+        embedding=_RecordingEmbedding(),
+    )
+
+    assert retrieval.dense_top_k == 50
+    assert retrieval.sparse_top_k == 50
+    assert retrieval.rerank_top_k == 80
+    assert retrieval.rrf_k == 60
+
+
 def test_hybrid_retrieval_uses_configured_dense_and_sparse_first_round_limits():
     vector_ids = [f"vector-{idx}" for idx in range(120)]
     text_ids = [f"text-{idx}" for idx in range(120)]
@@ -245,6 +337,35 @@ def test_hybrid_retrieval_limits_documents_before_local_reranking():
 
     assert len(reranker.received_doc_ids) == 50
     assert len(result) == 5
+    assert retrieval.last_trace is not None
+    trace = retrieval.last_trace["metadata"]["reranker_execution"]
+    assert trace["configured"] is True
+    assert trace["loaded"] is True
+    assert trace["executed"] is True
+    assert trace["input_count"] == 50
+    assert trace["output_count"] == 50
+    assert trace["input_identities"] == reranker.received_doc_ids
+    assert all(doc.metadata["reranker_input_identity"] for doc in result)
+    assert all(doc.metadata["reranker_rank"] > 0 for doc in result)
+
+
+def test_reranker_score_remains_authoritative_over_original_retrieval_score():
+    ids = ["doc-a", "doc-b"]
+    retrieval = VectorRetrieval(
+        vector_store=_RecordingVectorStore(ids),
+        doc_store=_RecordingDocStore(ids),
+        embedding=_RecordingEmbedding(),
+        retrieval_mode="vector",
+        rerankers=[_MetadataScoreReranker()],
+        dense_top_k=2,
+        rerank_top_k=2,
+        top_k=1,
+    )
+
+    result = retrieval(text="query", scope=ids, do_extend=True)
+
+    assert [doc.doc_id for doc in result] == ["doc-b"]
+    assert result[0].metadata["reranker_score"] == 1.0
 
 
 def test_hybrid_retrieval_boosts_query_routed_element_types():

@@ -1,9 +1,11 @@
+import threading
 from types import SimpleNamespace
 from typing import Any, cast
 
 import ktem.docqa.runtime as runtime_module
 from ktem.docqa import _runtime_turn as turn_module
 from ktem.docqa.runtime import DocQARuntime
+from ktem.docqa.terminal_session_state import terminal_semantic_commit_for_message
 
 from kotaemon.base import Document
 
@@ -105,16 +107,23 @@ def _make_runtime():
     )
     runtime.load_session = lambda _conversation_id: None
     runtime.create_session = lambda user_id=None: session_info
-    runtime.persist_conversation_state = lambda **_kwargs: ([], [])
+    runtime.persisted_states = []
+
+    def persist_conversation_state(**kwargs):
+        runtime.persisted_states.append(kwargs["state"])
+        return [], []
+
+    runtime.persist_conversation_state = persist_conversation_state
     return runtime
 
 
 def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch):
+    saved_metadata = []
     monkeypatch.setattr(runtime_module, "reasonings", {"mara": _StreamingMaraReasoning})
     monkeypatch.setattr(
         runtime_module._nb,
         "save_captured_artifact",
-        lambda _conversation_id, _artifact, **_metadata: None,
+        lambda _conversation_id, _artifact, **metadata: saved_metadata.append(metadata),
     )
 
     runtime = _make_runtime()
@@ -128,6 +137,7 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
     )
 
     event_updates = [update for update in updates if not update.is_final]
+    assert saved_metadata[0]["user_id"] == "user-1"
     assert [update.event["channel"] for update in event_updates] == [
         "debug",
         "chat",
@@ -167,8 +177,31 @@ def test_runtime_stream_turn_yields_live_updates_and_final_response(monkeypatch)
     }
     assert final.response.retrieve_decision["status"] == "good"
     assert final.response.verify_decision["status"] == "supported"
-    assert final.response.evidence_bundle["items"] == [expected_reference_evidence]
+    [bundle_item] = final.response.evidence_bundle["items"]
+    expected_bundle_fields = {
+        key: value
+        for key, value in expected_reference_evidence.items()
+        if key != "source_backrefs"
+    }
+    assert {
+        key: bundle_item[key] for key in expected_bundle_fields
+    } == expected_bundle_fields
+    assert bundle_item["source_backrefs"] == ["refs#source"]
+    assert bundle_item["canonical_id"] == "evidence:refs:citation-refs"
+    assert bundle_item["normalized_text_hash"]
+    assert final.response.evidence_bundle["metadata"]["schema_version"] == (
+        "evidence_bundle.v2"
+    )
     assert final.stream_events[-1]["channel"] == "info"
+    _assert_persisted_terminal_commit(runtime, final)
+
+
+def _assert_persisted_terminal_commit(runtime: Any, final: Any) -> None:
+    persisted_commit = terminal_semantic_commit_for_message(
+        runtime.persisted_states[-1],
+        0,
+    )
+    assert persisted_commit == final.response.engine_terminal_commit
 
 
 def test_runtime_stream_turn_does_not_replace_substantial_answer_with_late_label(
@@ -200,6 +233,32 @@ def test_runtime_stream_turn_does_not_replace_substantial_answer_with_late_label
     assert final.response is not None
     assert "local-first document question-answering workbench" in final.response.answer
     assert "Short answer." not in final.response.answer
+
+
+def test_runtime_stream_turn_cancellation_skips_finalization_and_persistence(
+    monkeypatch,
+):
+    monkeypatch.setattr(runtime_module, "reasonings", {"mara": _StreamingMaraReasoning})
+    monkeypatch.setattr(
+        runtime_module._nb,
+        "save_captured_artifact",
+        lambda *_args, **_kwargs: None,
+    )
+    runtime = _make_runtime()
+    runtime._finalize_turn_response = lambda **_kwargs: (_ for _ in ()).throw(
+        AssertionError("A cancelled turn must not be finalized")
+    )
+    cancelled = threading.Event()
+    updates = runtime.stream_turn(
+        runtime_module.DocQARequest(prompt="Summarize this source."),
+        cancel_event=cancelled,
+    )
+
+    first = next(updates)
+    cancelled.set()
+
+    assert first.is_final is False
+    assert list(updates) == []
 
 
 def test_finalize_stream_result_ignores_trailing_unclosed_think_block():

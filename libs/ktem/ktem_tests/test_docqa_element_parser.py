@@ -29,6 +29,11 @@ def test_element_index_records_parse_declared_table_without_element_id():
             "page_label": "4",
             "element_id": "table-table-doc",
             "modality": "table",
+            "evidence_level": "element",
+            "table_id": "table-table-doc",
+            "table_instance_id": "table-table-doc",
+            "table_group_id": "table-table-doc",
+            "block_id": "table-doc",
             "bbox": None,
             "caption": "Regional revenue",
             "text": "Table: Regional revenue\nNorth 10\nSouth 12",
@@ -65,6 +70,257 @@ def test_element_index_records_parse_formula_from_text_without_element_metadata(
     assert records[0]["metadata"]["element_schema_version"] == "1.0"
 
 
+def test_element_index_records_infer_plain_text_financial_table():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "Table of Contents\n"
+                "ITEM 6. Selected Financial Data (In millions)\n"
+                "2021 2020 2019\n"
+                "Net sales $ 67,044 $ 65,398 $ 59,812\n"
+                "Total current assets 19,815 19,378 17,095\n"
+                "Total current liabilities 13,997 13,933 13,972\n"
+            ),
+            id_="finance-page-30",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "annual-report.pdf",
+                "page_label": "30",
+                "type": "image",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+
+    table_records = [
+        record for record in records if record["evidence_level"] == "element"
+    ]
+    assert len(table_records) == 1
+    assert table_records[0]["modality"] == "table"
+    assert table_records[0]["element_id"] == "table-finance-page-30"
+    assert table_records[0]["page_label"] == "30"
+
+
+def test_inferred_financial_elements_split_page_into_real_table_blocks():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "CONSOLIDATED STATEMENTS OF INCOME (in millions)\n"
+                "2022 2021\n"
+                "Net sales 100 90\n"
+                "Cost of products sold 60 55\n"
+                "Management discussion between tables must not become a table row.\n"
+                "CONSOLIDATED BALANCE SHEETS (in millions)\n"
+                "2022 2021\n"
+                "Inventories 30 25\n"
+                "Total current assets 80 70\n"
+            ),
+            id_="mixed-finance-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "annual-report.pdf",
+                "page_label": "41",
+                "type": "image",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+
+    tables = [record for record in records if record["evidence_level"] == "element"]
+    assert len(tables) == 2
+    assert tables[0]["element_id"] != tables[1]["element_id"]
+    assert "Inventories" not in tables[0]["text"]
+    assert "Net sales" not in tables[1]["text"]
+    assert tables[0]["metadata"]["statement_kind"] == "income_statement"
+    assert tables[1]["metadata"]["statement_kind"] == "balance_sheet"
+    assert all(
+        record["metadata"]["financial_scope"] == "consolidated" for record in tables
+    )
+
+
+def test_financial_table_element_emits_atomic_cell_identity_records():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "CONSOLIDATED STATEMENTS OF CASH FLOWS (in millions)\n"
+                "2022 2021\n"
+                "Net cash provided by operating activities 3,676.2 3,100.0\n"
+                "Capital expenditures 460.8 420.0\n"
+            ),
+            id_="cash-flow-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "annual-report.pdf",
+                "page_label": "17",
+                "type": "image",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+    table = next(record for record in records if record["evidence_level"] == "element")
+    cells = [record for record in records if record["evidence_level"] == "cell"]
+
+    assert table["table_id"] == table["element_id"]
+    assert len(cells) == 4
+    assert all(cell["table_id"] == table["table_id"] for cell in cells)
+    assert all(cell["cell_id"] for cell in cells)
+    assert {(cell["row_label"], cell["period"], cell["value"]) for cell in cells} == {
+        ("Net cash provided by operating activities", "2022", "3676.2"),
+        ("Net cash provided by operating activities", "2021", "3100.0"),
+        ("Capital expenditures", "2022", "460.8"),
+        ("Capital expenditures", "2021", "420.0"),
+    }
+
+
+def test_explicit_layout_element_still_emits_financial_cells():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "CONSOLIDATED BALANCE SHEETS (in millions)\n"
+                "2019 2018\n"
+                "Inventories 2,750 2,500\n"
+                "Total current assets 20,000 19,000\n"
+            ),
+            id_="layout-table-doc",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "annual-report.pdf",
+                "page_label": "52",
+                "element_id": "layout-table-52",
+                "element_type": "table",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+
+    cells = [record for record in records if record.get("evidence_level") == "cell"]
+    assert {(cell["row_label"], cell["period"], cell["value"]) for cell in cells} == {
+        ("Inventories", "2019", "2750"),
+        ("Inventories", "2018", "2500"),
+        ("Total current assets", "2019", "20000"),
+        ("Total current assets", "2018", "19000"),
+    }
+    assert all(cell["table_id"] == "layout-table-52" for cell in cells)
+
+
+def test_financial_narrative_emits_distinct_atomic_amount_spans():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "The 2023 364 Day Credit Agreement enables PepsiCo to borrow "
+                "up to $4,200,000,000. The 2023 Five Year Credit Agreement "
+                "enables PepsiCo to borrow up to $4,200,000,000."
+            ),
+            id_="credit-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "credit-agreements.pdf",
+                "page_label": "2",
+                "element_id": "page-text-2",
+                "element_type": "text",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+
+    spans = [record for record in records if record.get("evidence_level") == "span"]
+    assert len(spans) == 2
+    assert len({span["evidence_id"] for span in spans}) == 2
+    assert {span["row_label"] for span in spans} == {"revolving credit capacity"}
+    assert {span["period"] for span in spans} == {"2023"}
+    assert {span["value"] for span in spans} == {"4200000000"}
+    assert all(span["source_backrefs"] == ["file-1#page:2"] for span in spans)
+
+
+def test_revolving_credit_spans_retain_facility_lifecycle_identity():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "On May 26, 2023, PepsiCo terminated its $3.8 billion 364-day "
+                "revolving credit agreement, which had enabled it to borrow up "
+                "to $3.8 billion. On May 26, 2023, PepsiCo entered into a new "
+                "$4.2 billion 364-day revolving credit agreement that enables "
+                "it to borrow up to $4.2 billion. On the same date it terminated "
+                "its $3.8 billion five-year revolving credit agreement, which had "
+                "enabled it to borrow up to $3.8 billion. It then entered into a "
+                "new $4.2 billion five-year revolving credit agreement that "
+                "enables it to borrow up to $4.2 billion."
+            ),
+            id_="credit-lifecycle-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "credit-agreements.pdf",
+                "page_label": "2",
+                "element_id": "page-text-2",
+                "element_type": "text",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+    spans = [record for record in records if record.get("evidence_level") == "span"]
+    active = [
+        span
+        for span in spans
+        if span["metadata"].get("agreement_lifecycle_status") == "active"
+    ]
+    inactive = [
+        span
+        for span in spans
+        if span["metadata"].get("agreement_lifecycle_status") == "terminated"
+    ]
+
+    assert {span["metadata"]["facility_type"] for span in active} == {
+        "364_day",
+        "five_year",
+    }
+    assert {span["value"] for span in active} == {"4.2"}
+    assert {span["value"] for span in inactive} == {"3.8"}
+    assert {span["scale"] for span in spans} == {"billion"}
+    assert all(span["metadata"]["effective_date"] == "2023-05-26" for span in active)
+
+
+def test_financial_narrative_restores_pdf_soft_wrap_before_span_split():
+    docs = [
+        RetrievedDocument(
+            text=(
+                "On May 26, 2023, PepsiCo entered into a new $4,200,000,000 "
+                "364 day unsecured revolving credit agreement (the 2023 Credit\n"
+                "Agreement) among PepsiCo and its lenders. The 2023 Credit\n"
+                "Agreement enables PepsiCo to borrow up to $4,200,000,000 "
+                "in U.S. Dollars and Euros."
+            ),
+            id_="soft-wrapped-credit-page",
+            metadata={
+                "file_id": "file-1",
+                "file_name": "credit-agreements.pdf",
+                "page_label": "2",
+                "element_id": "page-text-2",
+                "element_type": "text",
+            },
+        )
+    ]
+
+    records = element_records_from_documents(docs)
+    spans = [
+        record
+        for record in records
+        if record.get("evidence_level") == "span"
+        and record.get("value") == "4200000000"
+    ]
+
+    assert len(spans) == 1
+    assert spans[0]["metadata"]["facility_type"] == "364_day"
+    assert spans[0]["metadata"]["agreement_lifecycle_status"] == "active"
+    assert all(span["parent_element_id"] == "page-text-2" for span in spans)
+    assert all(span["source_backrefs"] == ["file-1#page:2"] for span in spans)
+
+
 def test_element_index_documents_round_trip_records_for_persistence():
     docs = [
         RetrievedDocument(
@@ -94,31 +350,18 @@ def test_element_index_documents_round_trip_records_for_persistence():
     assert persisted_docs[0].metadata["element_index_relation_type"] == (
         "element_index"
     )
-    assert multimodal_index_module.element_records_from_index_documents(
+    [record] = multimodal_index_module.element_records_from_index_documents(
         persisted_docs
-    ) == [
-        {
-            "evidence_id": "element:file-1:4:table-table-doc",
-            "file_id": "file-1",
-            "source_id": "file-1",
-            "file_name": "report.pdf",
-            "page_label": "4",
-            "page_number": 4,
-            "element_id": "table-table-doc",
-            "element_type": "table",
-            "modality": "table",
-            "bbox": None,
-            "caption": "Regional revenue",
-            "text": "Table: Regional revenue\nNorth 10\nSouth 12",
-            "source_backrefs": ["file-1#page:4"],
-            "metadata": {
-                "element_schema_version": "1.0",
-                "index_source": "docstore_document",
-                "parser_backend": "local_element_parser_v1",
-                "parser_source_doc_id": "table-doc",
-            },
-        }
-    ]
+    )
+    assert record["evidence_id"] == "element:file-1:4:table-table-doc"
+    assert record["source_id"] == "file-1"
+    assert record["file_id"] == "file-1"
+    assert record["page_label"] == "4"
+    assert record["page_number"] == 4
+    assert record["element_id"] == "table-table-doc"
+    assert record["table_id"] == "table-table-doc"
+    assert record["evidence_level"] == "element"
+    assert record["canonical_id"] == "element:file-1:table-table-doc"
 
 
 def test_persisted_element_records_normalize_locator_aliases():
