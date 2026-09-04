@@ -9,6 +9,10 @@ from ktem.docqa.boolean_authority_schema import (
 from ktem.docqa.controller import RetrieveDecision
 from ktem.docqa.evidence import EvidenceBundle
 from ktem.docqa.evidence_identity import identity_of
+from ktem.docqa.question_proposition import (
+    applicable_proposition_evidence_slots,
+    build_question_proposition,
+)
 from ktem.docqa.verification import verify_decision
 from ktem_tests.semantic_entailment_test_helpers import audited_verdict
 from ktem_tests.test_docqa_semantic_evidence_set_authority import _item, _request
@@ -16,6 +20,9 @@ from ktem_tests.test_docqa_semantic_evidence_set_authority import _item, _reques
 
 def test_debug_trace_preserves_audit_verified_then_authority_rejected_stages() -> None:
     question = "Does Atlas contain private datasets for its 50 tasks?"
+    proposition_slots = list(
+        applicable_proposition_evidence_slots(build_question_proposition(question))
+    )
     items = [
         _item("atlas-public", "Atlas contains public datasets."),
         _item("atlas-tasks", "Atlas focuses on 50 tasks."),
@@ -51,6 +58,7 @@ def test_debug_trace_preserves_audit_verified_then_authority_rejected_stages() -
                         "quote": item["text"],
                         "proposition_fragment": f"positive premise {index}",
                         "supports_slot_ids": [slot_id],
+                        "binds_proposition_slots": proposition_slots,
                     }
                     for index, item in enumerate(items, start=1)
                 ],
@@ -75,7 +83,7 @@ def test_debug_trace_preserves_audit_verified_then_authority_rejected_stages() -
     assert decision.status != "supported"
     authority = bundle.metadata["semantic_proposition_authority"]
     assert authority["status"] == "rejected"
-    assert authority["reason"] == "local_semantic_explicit_contradiction_missing"
+    assert authority["reason"] == "semantic_entailment_proposition_binding_unbound"
     assert authority["polarity_contradiction_check"]["status"] == (
         "contradiction_detected"
     )
@@ -84,6 +92,6 @@ def test_debug_trace_preserves_audit_verified_then_authority_rejected_stages() -
         {
             "stage": "header",
             "status": "rejected",
-            "reason": "local_semantic_explicit_contradiction_missing",
+            "reason": "semantic_entailment_proposition_binding_unbound",
         },
     ]

@@ -50,7 +50,8 @@ _REPAIR_RELATIONS: tuple[tuple[str, str], ...] = (
     (
         "evaluate",
         r"\b(?:evaluat(?:e|es|ed|ing)|assess(?:es|ed|ing)?|"
-        r"experiment(?:ed|ing)|experiment\s+with)\b",
+        r"experiment(?:ed|ing)|experiment\s+with|"
+        r"conduct(?:s|ed|ing)?\s+(?:an?\s+)?experiments?(?:\s+(?:on|with))?)\b",
     ),
     ("use", r"\b(?:use|uses|used|using)\b"),
     ("train", r"\btrain(?:s|ed|ing)?\b"),

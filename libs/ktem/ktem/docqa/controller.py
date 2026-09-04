@@ -300,7 +300,7 @@ def evaluate_retrieval_quality(
             )
         if adequacy_issue:
             return RetrieveDecision(
-                status="ambiguous",
+                status="poor" if attempted_retry else "ambiguous",
                 reason=adequacy_issue,
                 retry=not attempted_retry,
             )
@@ -468,6 +468,10 @@ def _has_retrieval_metadata(evidence_metadata: dict[str, Any]) -> bool:
         "reranker_input_contract",
         "reranker_input_evidence",
         "source_page_locators",
+        "visual_typed_projection",
+        "fusion_stage_snapshot",
+        "pipeline_stage_timings",
+        "rejected_route_switch_candidates",
     }
     ignored_empty_keys = {"evidence", "evidence_ids", "modality_counts"}
     for key, value in evidence_metadata.items():

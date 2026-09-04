@@ -95,6 +95,7 @@ def resolve_typed_proposition_authority_transaction(
             answer=answer,
             required_slots=required_slots,
             required_slot_ids=required_slot_ids,
+            require_canonical_plan=_qasper_domain(domain),
         )
     return _resolve_free_text_transaction(
         request,
@@ -119,23 +120,26 @@ def _resolve_boolean_transaction(
     answer: str,
     required_slots: list[Any],
     required_slot_ids: list[str],
+    require_canonical_plan: bool,
 ) -> VerifyDecision:
-    (
-        canonical_plan_projection,
-        projection_reason,
-    ) = semantic_authority_plan_projection_from_decision(
-        question,
-        evidence_bundle,
-        decision,
-    )
-    if projection_reason:
-        return _boolean_failure(
-            decision,
-            question,
-            answer,
-            required_slot_ids,
+    canonical_plan_projection = None
+    if require_canonical_plan:
+        (
+            canonical_plan_projection,
             projection_reason,
+        ) = semantic_authority_plan_projection_from_decision(
+            question,
+            evidence_bundle,
+            decision,
         )
+        if projection_reason:
+            return _boolean_failure(
+                decision,
+                question,
+                answer,
+                required_slot_ids,
+                projection_reason,
+            )
     atoms = _exact_boolean_atoms(
         decision,
         evidence_bundle,

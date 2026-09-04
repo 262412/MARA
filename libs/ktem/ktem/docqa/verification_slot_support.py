@@ -420,6 +420,9 @@ def _typed_authority_value(result: dict[str, Any], key: str) -> Any:
 
 
 def _requires_typed_boolean_authority(request: Any) -> bool:
+    domain = str(getattr(request, "verification_domain", "") or "").lower()
+    if domain in {"finance", "financial"}:
+        return False
     plan = getattr(request, "query_plan", None)
     answer_type = slot_value(plan, "answer_type")
     if str(answer_type or getattr(request, "task_type", "")).lower() == "boolean":

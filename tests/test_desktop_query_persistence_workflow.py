@@ -3,6 +3,7 @@ from pathlib import Path
 import yaml
 
 WORKFLOW_PATH = Path(".github/workflows/desktop-gate2.yaml")
+MAIN_PATH = Path("apps/desktop/electron/main.ts")
 
 
 def _commands(job: dict) -> str:
@@ -28,6 +29,13 @@ def test_native_packages_cover_query_journal_recovery_and_single_instance() -> N
             "renderer_markdown=heading,list,table,code,blockquote,katex,citations,safe-links"
             in commands
         )
+
+
+def test_query_persistence_smoke_requires_the_current_journal_schema() -> None:
+    source = MAIN_PATH.read_text(encoding="utf-8")
+
+    assert "journal.journal_version !== 3" in source
+    assert "v3 success journal" in source
 
 
 def test_windows_uploads_query_journal_and_two_launch_diagnostics() -> None:

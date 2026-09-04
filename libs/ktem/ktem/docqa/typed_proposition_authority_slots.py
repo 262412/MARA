@@ -101,7 +101,9 @@ def _single_or_composite_slot_bindings(
             proposition_selection = proof_ids
         else:
             if not candidate_ids:
-                return None, None, None
+                if len(atom_by_id) != 1:
+                    return None, None, None
+                candidate_ids = tuple(atom_by_id)
             proposition_selection = (candidate_ids[0],)
         bindings[str(slot.slot_id)] = proposition_selection
         selected_ids.extend(proposition_selection)

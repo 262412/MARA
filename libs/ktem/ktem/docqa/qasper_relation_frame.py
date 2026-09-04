@@ -23,7 +23,8 @@ _PREDICATE_PATTERNS = {
     "recruit": r"\brecruit(?:s|ed|ing)?\b",
     "evaluate": (
         r"\b(?:evaluat(?:e|es|ed|ing)|assess(?:es|ed|ing)?|"
-        r"experiment(?:ed|ing)|experiment\s+with)\b"
+        r"experiment(?:ed|ing)|experiment\s+with|"
+        r"conduct(?:s|ed|ing)?\s+(?:an?\s+)?experiments?(?:\s+(?:on|with))?)\b"
     ),
     "train": r"\btrain(?:s|ed|ing)?\b",
     "improve": r"\b(?:improv(?:e|es|ed|ing|ement)|better|outperform(?:s|ed|ing)?|"

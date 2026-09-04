@@ -15,7 +15,11 @@ from .finance_query_planning import (
     finance_operand_specs,
     is_finance_segment_comparison,
 )
-from .finance_retrieval_focus import finance_retrieval_focus_terms
+from .finance_retrieval_focus import (
+    finance_comparison_operands_required,
+    finance_retrieval_focus_terms,
+    with_finance_retrieval_focus,
+)
 from .financial_statement_identity import required_financial_identity
 from .heuristic_query_slots import heuristic_slots, mmdoc_visual_time_series_slots
 from .query_classification import (
@@ -165,12 +169,14 @@ def _heuristic_evidence_slots(
     )
     if visual_slots:
         return visual_slots, False, False
+    finance_domain_requested = "finance" in str(verification_domain or "").lower()
     inferred_finance_specs = (
-        finance_operand_specs(text, periods) if normalized_type == "numeric" else ()
+        finance_operand_specs(text, periods)
+        if normalized_type == "numeric"
+        or finance_comparison_operands_required(text, periods, verification_domain)
+        else ()
     )
-    finance_domain = "finance" in str(verification_domain or "").lower() or bool(
-        inferred_finance_specs
-    )
+    finance_domain = finance_domain_requested or bool(inferred_finance_specs)
     segment_comparison = finance_domain and is_finance_segment_comparison(text)
     finance_specs = inferred_finance_specs if finance_domain else ()
     formula_status = (
@@ -221,6 +227,8 @@ def _heuristic_evidence_slots(
             )
             for slot in slots
         )
+    if finance_domain:
+        slots = with_finance_retrieval_focus(slots, text)
     slots = _apply_fiscal_quarter_qualifiers(text, slots)
     return slots, finance_domain, segment_comparison
 

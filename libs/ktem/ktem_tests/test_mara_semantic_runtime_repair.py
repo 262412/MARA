@@ -45,7 +45,7 @@ def _request(question: str) -> DocQARequest:
             verification_domain="qasper",
         ),
         generation_seed=17,
-        origin="benchmark",
+        origin="unit_test",
     )
 
 
@@ -259,14 +259,14 @@ def test_independent_polarity_rejection_stops_without_reanswering() -> None:
 def test_local_actor_scope_rejection_stops_when_semantic_state_is_unchanged() -> None:
     question = "Does the model have attention?"
     request = _request(question)
-    prior_text = "Prior work has an attention mechanism in its baseline system."
+    prior_text = "The authors' model has an attention mechanism in prior work."
     current_text = "The authors' current system has an attention mechanism."
     verifier, proposal_llm, audit_llm = _release_verifier(
         [
             _proposal(
                 request,
                 "E1:S1",
-                "prior work has an attention mechanism in its baseline system",
+                "the authors' model has an attention mechanism in prior work",
             ),
             _proposal(
                 request,
@@ -292,12 +292,13 @@ def test_local_actor_scope_rejection_stops_when_semantic_state_is_unchanged() ->
     assert result is not None and result["verdict"] == "insufficient_evidence"
     assert result["candidate_verification_audit"]["status"] == "failed"
     trace = bundle.metadata["semantic_proposition_verifier"]
-    assert trace["audit_semantic_rejection"] is True
-    assert trace["audit_reason"] == "local_semantic_slot_span_unbound"
+    assert trace["runtime_authority_rejection_reason"] == (
+        "semantic_premise_scope_rejected"
+    )
     transition = next(
         value
         for value in trace["recovery_transitions"]
-        if value["from"] == "independent_semantic_constraint"
+        if value["from"] == "runtime_authority_contract"
     )
     assert transition["to"] == "stop_without_reverify"
     assert transition["outcome"] == "recovery_no_progress"
@@ -311,11 +312,11 @@ def test_local_actor_scope_rejection_stops_when_semantic_state_is_unchanged() ->
 def test_terminal_runtime_rejection_remains_a_bound_insufficient_response() -> None:
     question = "Does the model have attention?"
     request = _request(question)
-    evidence_text = "Prior work has an attention mechanism in its baseline system."
+    evidence_text = "The authors' model has an attention mechanism in prior work."
     rejected = _proposal(
         request,
         "E1:S1",
-        "prior work has an attention mechanism in its baseline system",
+        "the authors' model has an attention mechanism in prior work",
     )
     verifier, proposal_llm, audit_llm = _release_verifier(
         [rejected, rejected],

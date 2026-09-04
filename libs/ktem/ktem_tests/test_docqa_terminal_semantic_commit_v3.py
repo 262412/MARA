@@ -260,13 +260,18 @@ def test_v3_commit_copies_nested_projection_inputs() -> None:
 def test_engine_projection_exposes_v3_without_changing_normal_semantics() -> None:
     verify, guardrail, bundle = _verified_projection()
 
-    answer, state, projected_verify, projected_guardrail, projected_bundle, _ = (
-        engine_terminal_projection(
-            "The method uses direct evidence. [1]",
-            verify,
-            guardrail,
-            bundle,
-        )
+    (
+        answer,
+        state,
+        projected_verify,
+        projected_guardrail,
+        projected_bundle,
+        _,
+    ) = engine_terminal_projection(
+        "The method uses direct evidence. [1]",
+        verify,
+        guardrail,
+        bundle,
     )
 
     assert answer == "The method uses direct evidence. [1]"

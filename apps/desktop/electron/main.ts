@@ -1015,10 +1015,10 @@ async function runQueryPersistenceSmoke(): Promise<void> {
     ),
   ) as { journal_version?: number; tasks?: Array<{ status?: string }> };
   if (
-    journal.journal_version !== 2 ||
+    journal.journal_version !== 3 ||
     !journal.tasks?.some((task) => task.status === "success")
   ) {
-    throw new Error("Query persistence recovery did not commit a v2 success journal");
+    throw new Error("Query persistence recovery did not commit a v3 success journal");
   }
   process.stdout.write(
     "query_persistence=partial,typed_error,blocked_retry,recovery,single_turn error_code=query_state_permission_denied status_success\n",

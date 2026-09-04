@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any
+
+from ktem.docqa.question_proposition import build_question_proposition
 
 from .mara_qasper_candidate_evidence import candidate_selector_options_with_trace
 from .mara_qasper_candidate_identity import candidate_digest
@@ -95,9 +98,46 @@ def _record_canonical_priorities(
             }
         ],
     )
+    object_contribution_refs = [
+        str(option.get("evidence_ref") or "")
+        for option in projection["eligible_options"]
+        if _cross_record_object_contribution(option, question)
+    ]
     return (
         list(trace.get("selected_plan_refs") or []),
-        list(trace.get("selector_universe_refs") or []),
+        list(
+            dict.fromkeys(
+                [
+                    *(trace.get("selector_universe_refs") or []),
+                    *object_contribution_refs,
+                ]
+            )
+        ),
+    )
+
+
+def _cross_record_object_contribution(option: dict[str, Any], question: str) -> bool:
+    hints = set(option.get("slot_hints") or [])
+    if "object" not in hints or option.get("relation_bearing") is not True:
+        return False
+    if (
+        "predicate" in hints
+        and "actor" not in hints
+        and option.get("local_relation_state") == "affirmative_assertion"
+    ):
+        return True
+    object_surface = build_question_proposition(question).object_surface
+    components = [
+        value.strip().casefold()
+        for value in re.split(r"\band\b", object_surface, flags=re.IGNORECASE)
+        if value.strip()
+    ]
+    text = str(option.get("text") or "").casefold()
+    return (
+        len(components) > 1
+        and "actor" in hints
+        and "predicate" not in hints
+        and any(component in text for component in components)
     )
 
 

@@ -188,7 +188,7 @@ def check_secret_scan(root: Path) -> list[ContractIssue]:
             ContractIssue(
                 Path(".gitleaksignore"),
                 "gitleaks-fingerprint-baseline",
-                "only the nine triaged historical fingerprints are allowed",
+                "only the 28 triaged historical and current-tree fingerprints are allowed",
             )
         )
     config_path = root / ".gitleaks.toml"
@@ -239,7 +239,8 @@ def check_trusted_review(root: Path) -> list[ContractIssue]:
         )
     for token in (
         "pull_request.head.sha",
-        "pull_request.changed_files",
+        'api_item(f"/pulls/{number}")',
+        'pull_request["changed_files"]',
         "len(files) != expected_file_count",
         "author_association",
         'review.get("state") == "APPROVED"',
@@ -257,6 +258,14 @@ def check_trusted_review(root: Path) -> list[ContractIssue]:
     if "actions/checkout@" in source:
         issues.append(
             ContractIssue(path, "trusted-review-checkout", "checkout is forbidden")
+        )
+    if "CHANGED_FILES" in source:
+        issues.append(
+            ContractIssue(
+                path,
+                "trusted-review-file-count",
+                "changed file count must come from the pull request API",
+            )
         )
     return issues
 

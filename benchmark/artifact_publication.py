@@ -393,9 +393,7 @@ def _semantic_stages_valid(
         expected_status = "complete" if not payload_reasons else "incomplete"
         if status != expected_status or payload.get("status") != expected_status:
             return False
-        transaction_reasons.extend(
-            f"{name}:{reason}" for reason in payload_reasons
-        )
+        transaction_reasons.extend(f"{name}:{reason}" for reason in payload_reasons)
         if stage.get("previous_chain_digest") != previous_chain_digest:
             return False
         payload_digest = stage.get("payload_digest")
@@ -432,11 +430,11 @@ def _semantic_stages_valid(
     if transaction.get("terminal_chain_digest") != previous_chain_digest:
         return False
     transaction_payload = {
-        key: value
-        for key, value in transaction.items()
-        if key != "transaction_digest"
+        key: value for key, value in transaction.items() if key != "transaction_digest"
     }
-    return canonical_digest(transaction_payload) == transaction.get("transaction_digest")
+    return canonical_digest(transaction_payload) == transaction.get(
+        "transaction_digest"
+    )
 
 
 def verify_artifact_contract(run_dir: str | Path) -> dict[str, Any]:

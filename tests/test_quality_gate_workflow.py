@@ -499,7 +499,7 @@ def test_supply_chain_pin_changes_require_trusted_context_owner_review():
     assert "author_association" in source
     assert "APPROVED" in source
     assert "COLLABORATOR" in source
-    assert "pull_request.changed_files" in source
+    assert 'pull_request["changed_files"]' in source and "CHANGED_FILES" not in source
     assert "len(files) != expected_file_count" in source
     for protected in (
         ".dockerignore",

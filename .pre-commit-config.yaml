@@ -88,6 +88,6 @@ repos:
     rev: ec0f41b9573937aebab66e3ca5b00d00a7b339fa # v2.2.4
     hooks:
       - id: codespell
-        exclude: "((^|/)package-lock\\.json$|^benchmark/tests/fixtures/qasper_golden_replay_v1\\.jsonl$)"
+        exclude: "((^|/)package-lock\\.json$|^benchmark/tests/fixtures/qasper_golden_replay_v1\\.jsonl$|^libs/ktem/ktem_tests/fixtures/qasper_stage2_10396653_7cd22_production_input_records\\.json$)"
         additional_dependencies:
           - tomli==2.2.1
