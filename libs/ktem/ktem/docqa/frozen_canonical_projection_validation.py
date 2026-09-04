@@ -144,7 +144,6 @@ def _alignment_reason(
         not in {"proposition_support", "explicit_contradiction", "undetermined"}
         or token_tuple(alignment.get("required_object_tokens"))
         != expected_required_tokens
-        or not covered
         or not set(covered) <= set(expected_required_tokens)
         or observed_refs != {slot: selector_id for slot in expected_slots}
     ):

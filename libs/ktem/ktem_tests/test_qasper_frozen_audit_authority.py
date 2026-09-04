@@ -121,6 +121,60 @@ def _frozen_case() -> tuple[EvidenceBundle, Any, list[dict[str, Any]], dict[str,
     return bundle, frozen, frozen_slots, {"plans": plans, "projection": projection}
 
 
+def _multi_selector_frozen_case() -> tuple[
+    EvidenceBundle, Any, list[dict[str, Any]], dict[str, Any]
+]:
+    bundle = EvidenceBundle(
+        route="doc_text",
+        items=[
+            {
+                "evidence_id": "chunk-1",
+                "source_id": "paper",
+                "text": (
+                    "This study compares language. "
+                    "The authors discussed the two systems."
+                ),
+            }
+        ],
+    )
+    slots = required_semantic_proposition_slots(_request())
+    source = pack_semantic_proposition_evidence(
+        _request(),
+        QUESTION,
+        slots,
+        bundle,
+        candidate_priority=True,
+    )
+    frozen = freeze_qasper_canonical_semantic_pack(
+        bundle,
+        question=QUESTION,
+        slots=slots,
+        source_packing=source,
+        records=prepare_qasper_canonical_records(QUESTION, source.records),
+        candidate_transaction_id="candidate-transaction-1",
+    )
+    frozen_slots = deepcopy(bundle.metadata["qasper_canonical_semantic_pack"]["slots"])
+    plans = qasper_canonical_evidence_plans(bundle)
+    assert plans is not None
+    plan_id = next(iter(plans))
+    plan = plans[plan_id]
+    support_by_ref, reason = frozen_slot_support_by_ref(
+        plan["span_refs"],
+        frozen_slots,
+    )
+    assert reason == ""
+    proposition = build_question_proposition(QUESTION)
+    projection, reason = frozen_canonical_plan_projection_from_bundle(
+        bundle,
+        plan_id=plan_id,
+        proposition=proposition,
+        expected_slots=applicable_proposition_evidence_slots(proposition),
+        slot_support_by_ref=support_by_ref,
+    )
+    assert reason == "" and projection is not None
+    return bundle, frozen, frozen_slots, {"plans": plans, "projection": projection}
+
+
 def _audit_with_fragment_disagreement(
     projection: Any,
     *,
@@ -278,6 +332,41 @@ def test_frozen_plan_projection_rejects_an_unasserted_selector() -> None:
 
     assert projection is None
     assert reason == "canonical_plan_projection_selector_invalid"
+
+
+def test_frozen_plan_projection_uses_plan_level_object_token_union() -> None:
+    _bundle, frozen, frozen_slots, case = _multi_selector_frozen_case()
+    plan = next(iter(case["plans"].values()))
+    assert any(
+        not selector["semantic_alignment"]["covered_object_tokens"]
+        for record in frozen.records
+        for selector in record["selectors"]
+    )
+    assert set(plan["covered_object_tokens"]) == {
+        token
+        for record in frozen.records
+        for selector in record["selectors"]
+        for token in selector["semantic_alignment"]["covered_object_tokens"]
+    }
+
+    support_by_ref, reason = frozen_slot_support_by_ref(
+        plan["span_refs"],
+        frozen_slots,
+    )
+    assert reason == ""
+    projection, reason = frozen_canonical_plan_projection_from_bundle(
+        _bundle,
+        plan_id=plan["plan_id"],
+        proposition=build_question_proposition(QUESTION),
+        expected_slots=applicable_proposition_evidence_slots(
+            build_question_proposition(QUESTION)
+        ),
+        slot_support_by_ref=support_by_ref,
+    )
+
+    assert reason == ""
+    assert projection is not None
+    assert projection.covered_object_tokens == tuple(plan["covered_object_tokens"])
 
 
 def test_semantic_auditor_denial_cannot_be_overridden_by_the_frozen_plan() -> None:

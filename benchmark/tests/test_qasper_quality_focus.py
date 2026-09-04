@@ -24,9 +24,29 @@ def _source_manifest() -> dict:
                 "example_id": case["example_id"],
                 "document_ids": [f"doc-{index}"],
                 "gold_answers": (
-                    ["unanswerable"]
+                    ["false"]
+                    if case["failure_class"] == "explicit_negative_control"
+                    else ["unanswerable"]
                     if case["gold_class"] == "unanswerable"
                     else ["an answer"]
+                ),
+                "gold_evidence": (
+                    [{"span": case["negative_control_evidence"]}]
+                    if case["failure_class"] == "explicit_negative_control"
+                    else []
+                ),
+                "metadata": (
+                    {
+                        "qasper_answer_annotations": [
+                            {
+                                "yes_no": False,
+                                "unanswerable": False,
+                                "evidence": [case["negative_control_evidence"]],
+                            }
+                        ]
+                    }
+                    if case["failure_class"] == "explicit_negative_control"
+                    else {}
                 ),
             }
             for index, case in enumerate(QASPER_QUALITY_FOCUS_CASES, start=1)
@@ -53,11 +73,11 @@ def test_quality_focus_manifest_is_new_six_by_three_diagnostic_matrix() -> None:
     ] == [case["failure_class"] for case in QASPER_QUALITY_FOCUS_CASES]
 
 
-def test_quality_focus_uses_observed_recovery_and_safe_negative_control() -> None:
-    recovery_case = next(
+def test_quality_focus_uses_explicit_negative_and_safe_unanswerable_controls() -> None:
+    explicit_negative_case = next(
         case
         for case in QASPER_QUALITY_FOCUS_CASES
-        if case["failure_class"] == "retrieval_recovery_new_evidence"
+        if case["failure_class"] == "explicit_negative_control"
     )
     negative_case = next(
         case
@@ -65,15 +85,33 @@ def test_quality_focus_uses_observed_recovery_and_safe_negative_control() -> Non
         if case["failure_class"] == "unanswerable_control"
     )
 
-    recovery = recovery_case["recovery_expectation"]
-    assert recovery["stage"] == "targeted_retrieval"
-    assert recovery["action"] == "targeted_slot_retrieval"
-    assert recovery["observed_new_evidence"] >= recovery["minimum_new_evidence"] >= 1
-    assert recovery_case["example_id"] == "1f085b9bb7bfd0d6c8cba1a9d73f08fcf2da7590"
+    assert (
+        explicit_negative_case["example_id"]
+        == "c0bee6539eb6956a7347daa9d2419b367bd02064"
+    )
+    assert explicit_negative_case["negative_control_basis"] == (
+        "explicit_source_negation"
+    )
+    assert explicit_negative_case["negative_control_evidence"] == (
+        "has not improved the scores"
+    )
     assert negative_case["example_id"] == "c34e80fbbfda0f1786d3b00e06cef5ada78a3f3c"
     assert negative_case["negative_control_basis"] == (
         "empty_gold_evidence_and_no_source_conclusion"
     )
+
+
+def test_quality_focus_rejects_explicit_negative_case_without_negated_evidence() -> None:
+    source = _source_manifest()
+    explicit_negative = next(
+        example
+        for example in source["examples"]
+        if example["example_id"] == "c0bee6539eb6956a7347daa9d2419b367bd02064"
+    )
+    explicit_negative["gold_evidence"] = [{"span": "The study compares systems."}]
+
+    with pytest.raises(ValueError, match="explicit negative control"):
+        build_qasper_quality_focus_manifest(source)
 
 
 def test_quality_focus_manifest_fails_closed_on_route_drift() -> None:

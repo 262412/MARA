@@ -37,6 +37,10 @@ _ANSWER_CALL_WRAPPER_RE = re.compile(
     r"^\s*answer\s*\(\s*(?P<answer>.*?)\s*\)\s*$",
     re.IGNORECASE | re.DOTALL,
 )
+_MIXED_LATEX_ANSWER_OPEN_RE = re.compile(
+    r"(?P<opener>\$\$|\\\[|\\\()\s*\\text\s*\{\s*" r"(?:final\s+)?answer\s*[:：]\s*",
+    re.IGNORECASE,
+)
 _INITIAL_PERIOD_TOKEN = "__MARA_INITIAL_PERIOD__"
 _INITIAL_PERIOD_RE = re.compile(r"\b([A-Z])\.")
 _ABBREVIATION_PERIOD_TOKEN = "__MARA_ABBREVIATION_PERIOD__"
@@ -65,11 +69,16 @@ def clean_answer_text(answer: str) -> str:
 def _answer_text(answer: str) -> str:
     text = _THINK_BLOCK_RE.sub(" ", str(answer or ""))
     text = _THOUGHT_DETAILS_RE.sub(" ", text)
-    marker = _last_discardable_answer_marker(text)
-    if marker:
-        text = text[marker.end() :]
-    elif _UNTAGGED_THOUGHT_PREFIX_RE.search(text):
-        return ""
+    mixed_latex_answer = _mixed_latex_answer(text)
+    marker = None
+    if mixed_latex_answer is not None:
+        text = mixed_latex_answer
+    else:
+        marker = _last_discardable_answer_marker(text)
+        if marker:
+            text = text[marker.end() :]
+        elif _UNTAGGED_THOUGHT_PREFIX_RE.search(text):
+            return ""
     text = _drop_late_answer_marker_rewrite(text)
     text = re.sub(r"<[^>]+>", " ", text)
     text = _drop_incomplete_trailing_markup(text)
@@ -79,6 +88,28 @@ def _answer_text(answer: str) -> str:
     if marker or wrapped:
         text = _unwrap_answer_latex(text)
     return _remove_inner_abstain_text(text)
+
+
+def _mixed_latex_answer(text: str) -> str | None:
+    answer = None
+    for match in _MIXED_LATEX_ANSWER_OPEN_RE.finditer(str(text or "")):
+        opener = match.group("opener")
+        closer = {"$$": "$$", r"\[": r"\]", r"\(": r"\)"}[opener]
+        depth = 1
+        body_end = None
+        for index in range(match.end(), len(text)):
+            character = text[index]
+            if character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+                if depth == 0:
+                    body_end = index
+                    break
+        if body_end is None or not text[body_end + 1 :].lstrip().startswith(closer):
+            continue
+        answer = text[match.end() : body_end].strip()
+    return answer
 
 
 def _drop_incomplete_trailing_markup(text: str) -> str:

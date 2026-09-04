@@ -1,12 +1,12 @@
 """Build the QASPER quality-focused 6x3 diagnostic manifest.
 
 The cases are deliberately selected from the 2026-09-02 full run.  The
-answerable rows cover distinct failure boundaries, including a Boolean case
-whose full-run trace performed targeted retrieval and added evidence.  The
-unanswerable control is a question for which the source annotation has no
+answerable rows cover distinct failure boundaries, including a Boolean
+negative control whose source evidence explicitly contradicts the proposition.
+The unanswerable control is a question for which the source annotation has no
 supporting evidence and the paper does not state the requested conclusion.
-The manifest therefore tests the same three routes without reusing the
-legacy six-row sample.
+The manifest therefore tests the same three routes without reusing the legacy
+six-row sample.
 """
 
 from __future__ import annotations
@@ -61,16 +61,12 @@ QASPER_QUALITY_FOCUS_CASES: tuple[dict[str, Any], ...] = (
         "diagnostic_target": "question predicate must be resolved before abstention",
     },
     {
-        "example_id": "1f085b9bb7bfd0d6c8cba1a9d73f08fcf2da7590",
-        "failure_class": "retrieval_recovery_new_evidence",
+        "example_id": "c0bee6539eb6956a7347daa9d2419b367bd02064",
+        "failure_class": "explicit_negative_control",
         "gold_class": "answerable",
-        "diagnostic_target": "targeted recovery must add evidence before re-verification",
-        "recovery_expectation": {
-            "stage": "targeted_retrieval",
-            "action": "targeted_slot_retrieval",
-            "minimum_new_evidence": 1,
-            "observed_new_evidence": 2,
-        },
+        "diagnostic_target": "explicit source negation must support a negative answer",
+        "negative_control_basis": "explicit_source_negation",
+        "negative_control_evidence": "has not improved the scores",
     },
     {
         "example_id": "c34e80fbbfda0f1786d3b00e06cef5ada78a3f3c",
@@ -157,6 +153,36 @@ def _validate_case_contract(
             raise ValueError("recovery case must target targeted_retrieval")
         if str(expectation.get("action") or "") != "targeted_slot_retrieval":
             raise ValueError("recovery case must target targeted_slot_retrieval")
+    elif failure_class == "explicit_negative_control":
+        answers = example.get("gold_answers")
+        if answers is None:
+            answers = example.get("answers")
+        if not any(
+            " ".join(str(answer or "").casefold().split()) == "false"
+            for answer in answers or ()
+        ):
+            raise ValueError("explicit negative control must be annotated false")
+        annotations = (example.get("metadata") or {}).get("qasper_answer_annotations")
+        if not any(
+            isinstance(annotation, Mapping)
+            and annotation.get("yes_no") is False
+            and annotation.get("unanswerable") is False
+            for annotation in annotations or ()
+        ):
+            raise ValueError("explicit negative control must have a false annotation")
+        phrase = str(case.get("negative_control_evidence") or "").strip()
+        evidence_texts = []
+        for raw in (
+            example.get("gold_evidence") or example.get("evidence_sources") or ()
+        ):
+            if isinstance(raw, Mapping):
+                evidence_texts.append(str(raw.get("span") or raw.get("text") or ""))
+            else:
+                evidence_texts.append(str(raw))
+        if not phrase or not any(phrase in text for text in evidence_texts):
+            raise ValueError(
+                "explicit negative control requires matching explicit negative evidence"
+            )
     elif failure_class == "unanswerable_control":
         if example.get("gold_evidence") or example.get("evidence_sources"):
             raise ValueError(
