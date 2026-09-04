@@ -7,10 +7,6 @@ from typing import Any
 
 from benchmark.artifact_publication import atomic_write_json, file_sha256
 from benchmark.jsonl import read_jsonl
-from scripts.slurm.qasper_debug_contract import (
-    qasper_debug_audit_extensions,
-    qasper_debug_behavior_violations,
-)
 from scripts.slurm.qasper_debug_contract_probe_artifact import (
     _assert_live_coverage,
     _assert_pre_audit_case,
@@ -201,9 +197,10 @@ def _evaluate_probe(
     failure_evidence: dict[str, Any] | None,
     pre_audit_channel: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    extensions = qasper_debug_audit_extensions(
-        [],
-        contract_probe_predictions=predictions,
+    from scripts.slurm import qasper_debug_contract as debug_contract
+
+    extensions = debug_contract.qasper_debug_audit_extensions(
+        [], contract_probe_predictions=predictions
     )
     metrics = dict(extensions.get("debug_gate_metrics") or {})
     hard_gates, coverage_failure = _hard_gates(metrics, predictions)
@@ -219,9 +216,8 @@ def _evaluate_probe(
     failed_gates = [
         name for name, result in hard_gates.items() if result["passed"] is not True
     ]
-    violations = qasper_debug_behavior_violations(
-        [],
-        contract_probe_predictions=predictions,
+    violations = debug_contract.qasper_debug_behavior_violations(
+        [], contract_probe_predictions=predictions
     )
     lane_audit = dict(extensions.get("contract_probe_audit") or {})
     combined_failure_evidence = _probe_failure_evidence(
