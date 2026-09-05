@@ -1343,7 +1343,7 @@ jobs:
           path: apps/desktop/release/windows-defender.txt
           if-no-files-found: warn
       - name: Upload Windows package evidence
-        if: ${{ always() && hashFiles('apps/desktop/release/MARA-win32-x64/**') != '' }}
+        if: ${{ success() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mara-desktop-windows-build

@@ -10,7 +10,6 @@ from benchmark.qasper_causal_transaction import QASPER_CAUSAL_TRANSACTION_STAGES
 from benchmark.qasper_semantic_debug_artifact import qasper_semantic_debug_rows
 from benchmark.reports import write_reports
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TEXT_SLURM_SCRIPT = PROJECT_ROOT / "scripts/slurm/text_route_rerun.sbatch"
 SUBMIT_FULLSYSTEM = PROJECT_ROOT / "scripts/slurm/submit_fullsystem_jobs.sh"
@@ -52,10 +51,12 @@ def test_formal_qasper_launcher_enables_and_requires_semantic_trace_capture():
     launcher = SUBMIT_FULLSYSTEM.read_text(encoding="utf-8")
 
     assert 'if [[ "$dataset" == "qasper" ]]; then' in launcher
-    assert 'semantic_trace_exports=",MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE=1,' in launcher
+    assert (
+        'semantic_trace_exports=",MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE=1,' in launcher
+    )
     assert "MARA_REQUIRE_SEMANTIC_DEBUG_TRACE=1" in launcher
     assert "MARA_SEMANTIC_PROPOSITION_DEBUG_TRACE=1" in launcher
-    assert 'MARA_TEXT_ARTIFACT_DETAIL=compact${semantic_trace_exports}' in launcher
+    assert "MARA_TEXT_ARTIFACT_DETAIL=compact${semantic_trace_exports}" in launcher
 
 
 def test_text_runner_fails_closed_when_trace_is_required_but_disabled():
@@ -77,9 +78,9 @@ def test_required_qasper_trace_has_one_transaction_row_per_prediction(
         _pre_verifier_failure_prediction(),
         _pre_route_failure_prediction(),
     ]
-    assert [
-        row["example_id"] for row in qasper_semantic_debug_rows(predictions)
-    ] == ["pre-verifier"]
+    assert [row["example_id"] for row in qasper_semantic_debug_rows(predictions)] == [
+        "pre-verifier"
+    ]
     rows = qasper_semantic_debug_rows(predictions, include_missing=True)
 
     assert [row["example_id"] for row in rows] == [
@@ -134,8 +135,7 @@ def test_required_qasper_trace_has_one_transaction_row_per_prediction(
     traces = read_jsonl(run_dir / "semantic_debug_traces.jsonl")
     assert len(traces) == len(predictions)
     assert [(row["example_id"], row["route"]) for row in traces] == [
-        (prediction["example_id"], prediction["route"])
-        for prediction in predictions
+        (prediction["example_id"], prediction["route"]) for prediction in predictions
     ]
     marker = json.loads((run_dir / "artifact_complete.json").read_text())
     assert marker["complete"] is True
@@ -253,9 +253,7 @@ def test_publisher_rejects_tampered_stage_payload_chain_or_status(tmp_path):
         )
         tampered = deepcopy(traces[0])
         if name == "payload":
-            tampered["causal_transaction"]["stages"][0]["payload"][
-                "tampered"
-            ] = True
+            tampered["causal_transaction"]["stages"][0]["payload"]["tampered"] = True
         elif name == "chain":
             tampered["causal_transaction"]["stages"][0]["chain_digest"] = "0" * 64
         else:

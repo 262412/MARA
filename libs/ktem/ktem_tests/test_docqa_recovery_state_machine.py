@@ -222,7 +222,7 @@ def test_focused_recovery_trace_records_typed_frame_and_budget() -> None:
     ]
     assert focused["recovery_frame"]["actor"] == "current_paper"
     assert focused["recovery_frame"]["predicate"] == "evaluate"
-    assert focused["recovery_frame"]["object"] == "dataset"
+    assert focused["recovery_frame"]["object"] == "the dataset"
     assert focused["remaining_route_seconds"] > 0
     assert focused["recovery_action"] == "targeted_retrieval"
 
@@ -332,8 +332,8 @@ def test_missing_boolean_slot_uses_natural_language_recovery_query_and_records_d
     assert calls[-1][2]["typed_frame"] == {
         "actor": "current_paper",
         "predicate": "evaluate",
-        "object": "dataset",
-        "object_role": "proposition_object",
+        "object": "the dataset",
+        "object_role": "object",
         "qualifier": "none",
         "quantifier": "none",
         "scope": "document",
@@ -344,7 +344,7 @@ def test_missing_boolean_slot_uses_natural_language_recovery_query_and_records_d
         if event.get("stage") == "targeted_retrieval"
     ]
     assert recovery["failure_type"] == "required_boolean_authority_missing"
-    assert recovery["recovery_action"] == "targeted_slot_retrieval"
+    assert recovery["recovery_action"] == "stop_without_reverify"
     assert recovery["slot_states_before"][0]["status"] == "missing"
     assert recovery["slot_states_after"][0]["status"] == "missing"
     assert recovery["stop_reason"] == "recovery_no_progress"

@@ -18,7 +18,10 @@ from .mara_candidate_unknown_audit import (
 )
 from .mara_semantic_audit_preflight import audit_preflight_failure_reason
 from .mara_semantic_auditor_serialization import call_canonical_semantic_auditor
-from .mara_semantic_entailment_audit import parse_semantic_entailment_audit
+from .mara_semantic_entailment_audit import (
+    parse_semantic_entailment_audit,
+    semantic_entailment_audit_response_format,
+)
 from .mara_semantic_proposition_debug import (
     provider_failure,
     response_completion_tokens,
@@ -129,6 +132,7 @@ def audit_stage(
             seed=seed,
             premise_slot_expectations=premise_slot_expectations,
             premise_slot_evidence=premise_slot_evidence,
+            response_format_factory=semantic_entailment_audit_response_format,
         )
 
     def parse(response: Any) -> Any:

@@ -73,7 +73,7 @@ def test_write_reports_handles_heterogeneous_route_metric_rows(tmp_path):
 def test_write_csv_removes_temporary_file_when_atomic_replace_fails(
     tmp_path, monkeypatch
 ):
-    from benchmark import reports
+    from benchmark import artifact_publication, reports
 
     path = tmp_path / "route_metrics.csv"
     path.write_text("existing\n", encoding="utf-8")
@@ -81,7 +81,7 @@ def test_write_csv_removes_temporary_file_when_atomic_replace_fails(
     def fail_replace(source, destination):
         raise RuntimeError(f"simulated replace failure: {source} -> {destination}")
 
-    monkeypatch.setattr(reports.os, "replace", fail_replace)
+    monkeypatch.setattr(artifact_publication.os, "replace", fail_replace)
 
     with pytest.raises(RuntimeError, match="simulated replace failure"):
         reports._write_csv(path, [{"dataset_name": "sample"}])

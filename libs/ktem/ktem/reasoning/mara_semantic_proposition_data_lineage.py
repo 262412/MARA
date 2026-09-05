@@ -400,11 +400,8 @@ def _attempt_lineage(stage: Any) -> list[dict[str, Any]]:
             "parse_failure_reason": str(attempt.parse_failure_reason or ""),
             "provider_failure_reason": str(attempt.provider_failure_reason or ""),
         }
-        snapshot = (
-            attempt.request_snapshot
-            if isinstance(attempt.request_snapshot, Mapping)
-            else {}
-        )
+        request_snapshot = getattr(attempt, "request_snapshot", None)
+        snapshot = request_snapshot if isinstance(request_snapshot, Mapping) else {}
         serialization = snapshot.get("serialization")
         if isinstance(serialization, Mapping):
             record.update(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 
 from .query_plan_schema import EvidenceSlot, QueryPlan, with_plan_id
@@ -122,5 +123,43 @@ def apply_finance_retrieval_focus_to_slots(
         )
         if slot.query
         else slot
+        for slot in slots
+    )
+
+
+def finance_comparison_operands_required(
+    question: str,
+    periods: list[str],
+    verification_domain: str,
+) -> bool:
+    return (
+        "finance" in str(verification_domain or "").lower()
+        and len(periods) > 1
+        and bool(
+            re.search(
+                r"\b(?:change|decrease|difference|drop|fell|increase|rose)\b",
+                question,
+                flags=re.IGNORECASE,
+            )
+        )
+    )
+
+
+def with_finance_retrieval_focus(
+    slots: tuple[EvidenceSlot, ...], question: str
+) -> tuple[EvidenceSlot, ...]:
+    focus = finance_retrieval_focus_terms(question)
+    if not focus:
+        return slots
+    return tuple(
+        replace(
+            slot,
+            query=" ".join(
+                (
+                    str(slot.query or question).strip(),
+                    *(term for term in focus if term not in str(slot.query or "")),
+                )
+            ).strip(),
+        )
         for slot in slots
     )

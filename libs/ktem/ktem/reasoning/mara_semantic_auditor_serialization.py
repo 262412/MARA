@@ -7,7 +7,7 @@ import logging
 from collections.abc import Collection
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from ktem.docqa.canonical_serialization import (
     CANONICAL_SERIALIZER_IDENTITY,
@@ -64,9 +64,12 @@ def call_canonical_semantic_auditor(
     seed: int,
     premise_slot_expectations: dict[str, Collection[str]] | None,
     premise_slot_evidence: dict[str, dict[str, Any]] | None,
+    response_format_factory: Callable[..., dict[str, Any]] = (
+        semantic_entailment_audit_response_format
+    ),
 ) -> StageCallResult:
     try:
-        response_format = semantic_entailment_audit_response_format(
+        response_format = response_format_factory(
             premise_labels,
             premise_slot_expectations=premise_slot_expectations,
             premise_slot_evidence=premise_slot_evidence,
@@ -231,7 +234,7 @@ def _canonical_utf8_token_estimate(
         "message_tokens": message_tokens,
         "schema_tokens": schema_tokens,
         "tokenizer_identity": "fallback:canonical_utf8_quarter_estimate_v1",
-        "tokenizer_method": "canonical_utf8_bytes_ceiling_div4",
+        "tokenizer_method": "canonical_utf8_bytes_ceiling_div4",  # gitleaks:allow
         "tokenizer_exact": False,
         "tokenizer_endpoint": "",
         "tokenizer_failed": False,

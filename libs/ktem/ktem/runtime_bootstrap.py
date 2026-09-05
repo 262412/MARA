@@ -119,7 +119,22 @@ def _synchronize_theflow_settings(settings_source: str) -> None:
     flowsettings._initialized = True
 
 
+def ensure_llama_index_nltk_cache() -> None:
+    for entry in sys.path:
+        if not entry:
+            continue
+        cache_dir = (
+            Path(entry).resolve() / "llama_index" / "core" / "_static" / "nltk_cache"
+        )
+        if not cache_dir.is_dir():
+            continue
+        (cache_dir / "tokenizers" / "punkt").mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("NLTK_DATA", str(cache_dir))
+        return
+
+
 def bootstrap_runtime_settings() -> str:
+    ensure_llama_index_nltk_cache()
     explicit_module = str(os.environ.get("THEFLOW_SETTINGS_MODULE", "") or "").strip()
     if explicit_module:
         _synchronize_theflow_settings(explicit_module)

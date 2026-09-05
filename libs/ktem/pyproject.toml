@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 include-package-data = true
 packages.find.exclude = ["ktem_tests*", "env*"]
-packages.find.include = ["ktem*"]
+packages.find.include = ["ktem*", "ktem_contracts*"]
 
 [tool.setuptools-git-versioning]
 enabled = true

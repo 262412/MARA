@@ -127,7 +127,8 @@ def project_visual_evidence(
     items: list[dict[str, Any]], metadata: dict[str, Any]
 ) -> list[dict[str, Any]]:
     projected, projection = project_visual_evidence_to_typed_items(items)
-    metadata["visual_typed_projection"] = projection
+    if projection["parent_count"]:
+        metadata["visual_typed_projection"] = projection
     return projected
 
 

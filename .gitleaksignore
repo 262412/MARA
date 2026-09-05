@@ -15,3 +15,29 @@ c6dd01e8203aacdecd01541cac8429c596fe889a:.gitsecret/paths/mapping.cfg:generic-ap
 # Removed PromptUI tunnel credential from 2023. Keep this exact historical
 # fingerprint quarantined without weakening scans of the current tree or new commits.
 aab982ddc4ab882155fcdac89cc3de480d184069:knowledgehub/contribs/promptui/tunnel.py:mara-promptui-frp-token:100
+
+# Semantic-audit serializer metadata. tokenizer_method is a method fingerprint,
+# not an API credential.
+a65fc4d746329d04a86362511b8522c99112a4e5:libs/ktem/ktem/reasoning/mara_semantic_auditor_serialization.py:generic-api-key:234
+
+# QASPER replay integrity records. These values are SHA-256 fixture digests,
+# not credentials. Keep both historical commits because the fixture was
+# regenerated, and the exact current-tree fingerprints for the directory scan.
+1e2998f869964d27ab077e9162a1de4f73d983dc:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:353
+1e2998f869964d27ab077e9162a1de4f73d983dc:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:368
+1e2998f869964d27ab077e9162a1de4f73d983dc:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1095
+1e2998f869964d27ab077e9162a1de4f73d983dc:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1109
+1e2998f869964d27ab077e9162a1de4f73d983dc:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1122
+1e2998f869964d27ab077e9162a1de4f73d983dc:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1136
+b37d2f9153832af3e6bc859ef99130cff0fa3dde:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:353
+b37d2f9153832af3e6bc859ef99130cff0fa3dde:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:368
+b37d2f9153832af3e6bc859ef99130cff0fa3dde:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1095
+b37d2f9153832af3e6bc859ef99130cff0fa3dde:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1109
+b37d2f9153832af3e6bc859ef99130cff0fa3dde:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1122
+b37d2f9153832af3e6bc859ef99130cff0fa3dde:benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1136
+/repo/benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:353
+/repo/benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:368
+/repo/benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1095
+/repo/benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1109
+/repo/benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1122
+/repo/benchmark/tests/fixtures/qasper_golden_replay_v1.json:generic-api-key:1136

@@ -240,6 +240,11 @@ def _relation_aligned_selector_refs(
         return []
     selected = anchors[:_MAX_SELECTOR_UNIVERSE]
     covered = {slot for value in selected for slot in value.get("slot_hints", [])}
+    covered_object_tokens = {
+        token
+        for value in selected
+        for token in set(value.get("object_tokens") or []) & required_object_tokens
+    }
     anchor_records = {str(value.get("evidence_id") or "") for value in selected}
     ranked = sorted(
         selectors,
@@ -258,10 +263,12 @@ def _relation_aligned_selector_refs(
         object_overlap = required_object_tokens & set(
             selector.get("object_tokens") or []
         )
+        new_object_tokens = object_overlap - covered_object_tokens
         same_record = str(selector.get("evidence_id") or "") in anchor_records
-        if object_overlap and (slots - covered or same_record):
+        if object_overlap and (slots - covered or new_object_tokens or same_record):
             selected.append(selector)
             covered.update(slots)
+            covered_object_tokens.update(object_overlap)
     return [str(value["selector_id"]) for value in selected]
 
 

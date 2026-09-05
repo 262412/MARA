@@ -262,9 +262,7 @@ def test_run_requirements_are_preserved_across_republication(tmp_path, requireme
         json.dumps({"artifact_detail": "full"}), encoding="utf-8"
     )
     prediction = (
-        _pre_verifier_prediction()
-        if requirement == "semantic_debug_traces"
-        else {}
+        _pre_verifier_prediction() if requirement == "semantic_debug_traces" else {}
     )
     (run_dir / "predictions.jsonl").write_text(
         json.dumps(prediction) + "\n", encoding="utf-8"
