@@ -18,8 +18,8 @@ from .metrics import (
     round_metric,
 )
 
-SEMANTIC_ANSWER_CONTRACT = "semantic_answer_claim_f1_v1"
-SEMANTIC_JUDGE_PROMPT_CONTRACT = "semantic_claim_judge_prompt_v2"
+SEMANTIC_ANSWER_CONTRACT = "semantic_answer_core_extensions_v1"
+SEMANTIC_JUDGE_PROMPT_CONTRACT = "semantic_core_extensions_judge_prompt_v1"
 DEFAULT_SEMANTIC_JUDGE_MODEL = "Qwen/Qwen3-8B"
 DEFAULT_SEMANTIC_JUDGE_BASE_URL = "http://localhost:8000/v1"
 
@@ -209,41 +209,25 @@ def semantic_answer_metrics(
         metadata.update(judge_status="error", error=str(exc))
         return _empty_metrics(), metadata
 
-    return _claim_metrics(result, metadata)
+    return _core_extension_metrics(result, metadata)
 
 
-def _claim_metrics(
+def _core_extension_metrics(
     result: dict[str, Any],
     metadata: dict[str, Any],
 ) -> tuple[dict[str, float | None], dict[str, Any]]:
-    zero_predicted_claims = (
-        result["predicted_relevant_claim_count"] == 0 and result["gold_claim_count"] > 0
-    )
-    if zero_predicted_claims:
-        precision = recall = f1 = 0.0
-    else:
-        precision = _ratio(
-            result["supported_predicted_claim_count"],
-            result["predicted_relevant_claim_count"],
-        )
-        recall = _ratio(
-            result["supported_gold_claim_count"],
-            result["gold_claim_count"],
-        )
-        f1 = _harmonic_mean(precision, recall)
+    score = float(result["core_answer_supported"])
     if result["core_contradiction"]:
-        precision = recall = f1 = 0.0
+        score = 0.0
     metadata.update(
         judge_status="ok",
+        core_answer_supported=result["core_answer_supported"],
         core_contradiction=result["core_contradiction"],
-        zero_predicted_claims=zero_predicted_claims,
-        claim_counts={key: result[key] for key in _COUNT_FIELDS},
+        supported_extension_count=result["supported_extension_count"],
+        unsupported_extension_count=result["unsupported_extension_count"],
+        has_unsupported_extension=result["unsupported_extension_count"] > 0,
     )
-    return {
-        "semantic_answer_precision": round_metric(precision),
-        "semantic_answer_recall": round_metric(recall),
-        "semantic_answer_f1": round_metric(f1),
-    }, metadata
+    return _uniform_metrics(score), metadata
 
 
 def _answer_type(prediction: dict[str, Any]) -> str:
@@ -332,37 +316,35 @@ def _judge_payload(prediction: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-_COUNT_FIELDS = (
-    "gold_claim_count",
-    "supported_gold_claim_count",
-    "predicted_relevant_claim_count",
-    "supported_predicted_claim_count",
+_EXTENSION_COUNT_FIELDS = (
+    "supported_extension_count",
+    "unsupported_extension_count",
 )
 
 
 def _validated_judge_result(result: Any) -> dict[str, Any]:
     if not isinstance(result, dict):
         raise ValueError("Semantic judge result must be a JSON object.")
-    expected_fields = {*_COUNT_FIELDS, "core_contradiction"}
+    expected_fields = {
+        "core_answer_supported",
+        *_EXTENSION_COUNT_FIELDS,
+        "core_contradiction",
+    }
     if set(result) != expected_fields:
         raise ValueError(
             "Semantic judge result fields do not match the prompt contract."
         )
     output: dict[str, Any] = {}
-    for field in _COUNT_FIELDS:
+    if not isinstance(result.get("core_answer_supported"), bool):
+        raise ValueError("Semantic judge core_answer_supported must be boolean.")
+    output["core_answer_supported"] = result["core_answer_supported"]
+    for field in _EXTENSION_COUNT_FIELDS:
         value = result.get(field)
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ValueError(
                 f"Semantic judge field {field} must be a non-negative int."
             )
         output[field] = value
-    if output["supported_gold_claim_count"] > output["gold_claim_count"]:
-        raise ValueError("Supported gold claims exceed gold claim count.")
-    if (
-        output["supported_predicted_claim_count"]
-        > output["predicted_relevant_claim_count"]
-    ):
-        raise ValueError("Supported predicted claims exceed predicted claim count.")
     if not isinstance(result.get("core_contradiction"), bool):
         raise ValueError("Semantic judge core_contradiction must be boolean.")
     output["core_contradiction"] = result["core_contradiction"]
@@ -499,12 +481,6 @@ def _list_items(text: str) -> set[str]:
     }
 
 
-def _ratio(numerator: int, denominator: int) -> float:
-    if denominator <= 0:
-        return 0.0
-    return numerator / denominator
-
-
 def _harmonic_mean(precision: float, recall: float) -> float:
     if precision + recall == 0:
         return 0.0
@@ -531,17 +507,17 @@ def _empty_metrics() -> dict[str, float | None]:
 _JUDGE_SYSTEM_PROMPT = """/no_think
 You are a benchmark evaluator, not an answer generator.
 Compare the predicted answer with the question, gold answers, and gold evidence.
-Decompose both answers into atomic propositions keyed by subject, relation,
-value, unit, time, scope, and polarity. Count every distinct entity-value or
-entity-relation pair separately; never merge several rows, periods, entities, or
-numbers into one broad claim. A gold claim is covered only when every material
-field is entailed. Missing gold propositions reduce recall. A predicted claim is
-supported only when it is entailed by a gold answer or gold evidence. Extra
-unsupported relevant facts reduce precision. A wrong core value, direction,
-time, unit, scope, entity, or polarity is a core contradiction. If the predicted
-answer has no relevant factual claim, both supported claim counts must be zero.
+Decompose the prediction into one core answer and optional extensions. The core
+answer may be a concise answer or a faithful paraphrase, and is supported only
+when its material subject, relation, value, unit, time, scope, entity, and
+polarity are entailed by a gold answer or gold evidence. Count each additional
+supported sentence or proposition as a supported extension. Count each
+relevant but unentailed additional sentence or proposition as an unsupported
+extension. Unsupported extensions are excluded from answer credit and must not
+make an otherwise supported core answer fail. A wrong core value, direction,
+time, unit, scope, entity, or polarity is a core contradiction and is always
+fatal. If there is no supported core answer, set core_answer_supported to false.
 Return JSON only with exactly:
-{"gold_claim_count": int, "supported_gold_claim_count": int,
- "predicted_relevant_claim_count": int,
- "supported_predicted_claim_count": int, "core_contradiction": bool}.
+{"core_answer_supported": bool, "supported_extension_count": int,
+ "unsupported_extension_count": int, "core_contradiction": bool}.
 """

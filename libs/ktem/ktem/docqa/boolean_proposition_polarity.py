@@ -22,6 +22,7 @@ from .boolean_relations import (
     boolean_relation_lemma,
     boolean_relation_lemmas,
     boolean_relations_align,
+    explicit_non_winning_ranking_evidence,
     primary_boolean_relation,
 )
 
@@ -106,6 +107,8 @@ def _target_relation_polarity(question: str, text: str) -> bool | None:
         return annotation_polarity
     target = primary_boolean_relation(question)
     lowered = str(text or "").lower()
+    if explicit_non_winning_ranking_evidence(question, lowered):
+        return True
     containment_polarity = containment_marker_polarity(question, lowered)
     if containment_polarity is not None:
         return containment_polarity

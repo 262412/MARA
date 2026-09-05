@@ -340,13 +340,17 @@ def test_same_model_all_true_audit_cannot_promote_a_meta_mention() -> None:
     prompt_payload = json.loads(
         audit_prompt.split("AUDIT THIS PROOF PROPOSAL:\n", maxsplit=1)[1]
     )
-    slot_refs = prompt_payload["premises"][0]["proposition_slot_evidence_refs"]
+    slot_refs = prompt_payload["premises"][0]["local_proposition_slot_contributions"]
     assert set(slot_refs) == {"actor", "predicate", "object"}
-    assert all(value["text"] != FALSE_PASS_QUOTE for value in slot_refs.values())
-    assert all(
-        FALSE_PASS_QUOTE[value["span_start"] : value["span_end"]] == value["text"]
-        for value in slot_refs.values()
-    )
+    assert all(value["source_span_ref"] == "P1:quote" for value in slot_refs.values())
+    assert {
+        slot: (value["relative_start"], value["relative_end"])
+        for slot, value in slot_refs.items()
+    } == {
+        "actor": (0, 11),
+        "predicate": (12, 20),
+        "object": (21, 25),
+    }
 
 
 def test_same_model_false_pass_cannot_reach_boolean_authority() -> None:

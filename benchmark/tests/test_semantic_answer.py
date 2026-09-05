@@ -5,6 +5,68 @@ from benchmark.semantic_answer import semantic_answer_metrics
 from benchmark.summary import add_mara_summary_fields
 
 
+def _judge_result(**overrides):
+    result = {
+        "core_answer_supported": True,
+        "supported_extension_count": 0,
+        "unsupported_extension_count": 0,
+        "core_contradiction": False,
+    }
+    result.update(overrides)
+    return result
+
+
+def test_free_text_semantic_score_gives_full_credit_to_supported_paraphrase():
+    calls = []
+
+    def judge(payload):
+        calls.append(payload)
+        return _judge_result()
+
+    metrics, metadata = semantic_answer_metrics(
+        {
+            "question": "What happened to revenue?",
+            "answer_type": "free_text",
+            "predicted_answer": "Revenue grew.",
+            "gold_answers": ["Revenue increased."],
+            "gold_evidence": [{"span": "Revenue increased year over year."}],
+        },
+        judge=judge,
+    )
+
+    assert metrics == {
+        "semantic_answer_precision": 1.0,
+        "semantic_answer_recall": 1.0,
+        "semantic_answer_f1": 1.0,
+    }
+    assert calls[0]["contract_id"] == "semantic_answer_core_extensions_v1"
+    assert metadata["core_answer_supported"] is True
+    assert metadata["unsupported_extension_count"] == 0
+
+
+def test_free_text_semantic_score_flags_unsupported_extension_without_failing_core():
+    def judge(_payload):
+        return _judge_result(unsupported_extension_count=1)
+
+    metrics, metadata = semantic_answer_metrics(
+        {
+            "question": "What happened to revenue?",
+            "answer_type": "free_text",
+            "predicted_answer": (
+                "Revenue increased. It won an industry award the next year."
+            ),
+            "gold_answers": ["Revenue increased"],
+            "gold_evidence": [{"span": "Revenue increased year over year."}],
+        },
+        judge=judge,
+    )
+
+    assert metrics["semantic_answer_f1"] == 1.0
+    assert metadata["core_answer_supported"] is True
+    assert metadata["unsupported_extension_count"] == 1
+    assert metadata["has_unsupported_extension"] is True
+
+
 def test_boolean_semantic_score_accepts_qasper_boolean_aliases():
     metrics, metadata = semantic_answer_metrics(
         {
@@ -20,7 +82,7 @@ def test_boolean_semantic_score_accepts_qasper_boolean_aliases():
         "semantic_answer_recall": 1.0,
         "semantic_answer_f1": 1.0,
     }
-    assert metadata["contract_id"] == "semantic_answer_claim_f1_v1"
+    assert metadata["contract_id"] == "semantic_answer_core_extensions_v1"
     assert metadata["method"] == "deterministic_boolean"
     assert metadata["judge_status"] == "not_required"
 
@@ -37,13 +99,7 @@ def test_local_qwen_judge_uses_fixed_deterministic_json_contract(monkeypatch):
 
         @staticmethod
         def read():
-            result = {
-                "gold_claim_count": 1,
-                "supported_gold_claim_count": 1,
-                "predicted_relevant_claim_count": 1,
-                "supported_predicted_claim_count": 1,
-                "core_contradiction": False,
-            }
+            result = _judge_result()
             return json.dumps(
                 {"choices": [{"message": {"content": json.dumps(result)}}]}
             ).encode()
@@ -63,6 +119,11 @@ def test_local_qwen_judge_uses_fixed_deterministic_json_contract(monkeypatch):
     assert captured["body"]["temperature"] == 0
     assert captured["body"]["response_format"] == {"type": "json_object"}
     assert captured["body"]["messages"][0]["content"].startswith("/no_think")
+    assert '"core_answer_supported": bool' in captured["body"]["messages"][0]["content"]
+    assert (
+        '"unsupported_extension_count": int'
+        in captured["body"]["messages"][0]["content"]
+    )
     assert captured["timeout"] == 12
 
 
@@ -80,13 +141,7 @@ def test_semantic_judge_backend_accepts_on_alias():
 
 def test_free_text_semantic_score_rewards_supported_explanation():
     def judge(_payload):
-        return {
-            "gold_claim_count": 1,
-            "supported_gold_claim_count": 1,
-            "predicted_relevant_claim_count": 2,
-            "supported_predicted_claim_count": 2,
-            "core_contradiction": False,
-        }
+        return _judge_result(supported_extension_count=1)
 
     metrics, metadata = semantic_answer_metrics(
         {
@@ -106,7 +161,9 @@ def test_free_text_semantic_score_rewards_supported_explanation():
     assert metrics["semantic_answer_f1"] == 1.0
     assert metadata["method"] == "local_claim_entailment"
     assert metadata["judge_status"] == "ok"
-    assert metadata["prompt_contract"] == "semantic_claim_judge_prompt_v2"
+    assert metadata["prompt_contract"] == "semantic_core_extensions_judge_prompt_v1"
+    assert metadata["supported_extension_count"] == 1
+    assert metadata["has_unsupported_extension"] is False
 
 
 def test_numeric_semantic_score_rejects_conflicting_unit_or_scale():
@@ -124,13 +181,10 @@ def test_numeric_semantic_score_rejects_conflicting_unit_or_scale():
 
 def test_free_text_semantic_score_rejects_core_contradiction():
     def judge(_payload):
-        return {
-            "gold_claim_count": 1,
-            "supported_gold_claim_count": 0,
-            "predicted_relevant_claim_count": 1,
-            "supported_predicted_claim_count": 0,
-            "core_contradiction": True,
-        }
+        return _judge_result(
+            core_answer_supported=True,
+            core_contradiction=True,
+        )
 
     metrics, metadata = semantic_answer_metrics(
         {
@@ -146,15 +200,9 @@ def test_free_text_semantic_score_rejects_core_contradiction():
     assert metadata["core_contradiction"] is True
 
 
-def test_free_text_zero_predicted_claims_cannot_receive_perfect_score():
+def test_free_text_unsupported_core_cannot_receive_perfect_score():
     def judge(_payload):
-        return {
-            "gold_claim_count": 1,
-            "supported_gold_claim_count": 1,
-            "predicted_relevant_claim_count": 0,
-            "supported_predicted_claim_count": 0,
-            "core_contradiction": False,
-        }
+        return _judge_result(core_answer_supported=False)
 
     metrics, metadata = semantic_answer_metrics(
         {
@@ -172,7 +220,7 @@ def test_free_text_zero_predicted_claims_cannot_receive_perfect_score():
         "semantic_answer_f1": 0.0,
     }
     assert metadata["judge_status"] == "ok"
-    assert metadata["zero_predicted_claims"] is True
+    assert metadata["core_answer_supported"] is False
 
 
 def test_execution_error_prediction_is_not_semantically_scored():
@@ -233,13 +281,7 @@ def test_finance_metrics_generated_example_uses_deterministic_numeric_score():
 
 def test_descriptive_answer_containing_year_is_not_inferred_as_date():
     def judge(_payload):
-        return {
-            "gold_claim_count": 1,
-            "supported_gold_claim_count": 1,
-            "predicted_relevant_claim_count": 1,
-            "supported_predicted_claim_count": 1,
-            "core_contradiction": False,
-        }
+        return _judge_result()
 
     metrics, metadata = semantic_answer_metrics(
         {
@@ -259,6 +301,26 @@ def test_descriptive_answer_containing_year_is_not_inferred_as_date():
 def test_free_text_judge_failure_is_null_not_token_f1_fallback():
     def judge(_payload):
         raise ValueError("invalid judge JSON")
+
+    metrics, metadata = semantic_answer_metrics(
+        {
+            "question": "What happened?",
+            "answer_type": "free_text",
+            "predicted_answer": "Revenue increased.",
+            "gold_answers": ["Revenue increased."],
+        },
+        judge=judge,
+    )
+
+    assert metrics["semantic_answer_precision"] is None
+    assert metrics["semantic_answer_recall"] is None
+    assert metrics["semantic_answer_f1"] is None
+    assert metadata["judge_status"] == "error"
+
+
+def test_free_text_judge_schema_failure_is_null_and_fail_closed():
+    def judge(_payload):
+        return _judge_result(unexpected_field=True)
 
     metrics, metadata = semantic_answer_metrics(
         {
@@ -312,7 +374,7 @@ def test_summary_reports_semantic_score_and_judge_coverage_without_replacing_f1(
     assert summary["avg_semantic_answer_f1"] == 1.0
     assert summary["semantic_judge_coverage"] == 0.5
     assert summary["quality_avg_semantic_answer_f1"] == 1.0
-    assert summary["answer_quality_contract"] == "semantic_answer_claim_f1_v1"
+    assert summary["answer_quality_contract"] == "semantic_answer_core_extensions_v1"
 
 
 def test_summary_counts_execution_error_as_uncovered_semantic_row():

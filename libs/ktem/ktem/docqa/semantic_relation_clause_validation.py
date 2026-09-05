@@ -8,7 +8,11 @@ from typing import Any
 from .boolean_proposition_arguments import _question_argument_tokens
 from .boolean_proposition_context import normalized_object_tokens
 from .boolean_proposition_tokens import _relation_surface_tokens
-from .boolean_relations import primary_boolean_relation
+from .boolean_relations import (
+    best_performance_question_subject,
+    explicit_non_winning_ranking_evidence,
+    primary_boolean_relation,
+)
 from .canonical_proposition_evidence_constraint import semantic_constraint_observation
 from .frozen_semantic_relation_projection import (  # noqa: F401 - compatibility re-export
     LOCAL_SEMANTIC_RELATION_CONSTRAINT,
@@ -47,6 +51,7 @@ from .semantic_relation_clause_lexical import predicate_spans as _predicate_span
 from .semantic_relation_clause_lexical import (
     proposition_assertion_scope as _proposition_assertion_scope,
 )
+from .semantic_relation_clause_lexical import ranking_scope_span as _ranking_scope_span
 from .semantic_relation_clause_lexical import (
     semantic_content_token_set as _semantic_content_token_set,
 )
@@ -279,6 +284,8 @@ def semantic_required_argument_tokens(question: str) -> tuple[str, ...]:
     """Return the deterministic argument contract for semantic authority."""
 
     relation = primary_boolean_relation(question) or "entails"
+    if relation == "rank" and best_performance_question_subject(question):
+        return tuple(sorted(_semantic_content_token_set("best performance")))
     tokens = {
         _canonical_semantic_token(token)
         for token in _question_argument_tokens(
@@ -338,23 +345,26 @@ def _clause_analysis(
         offset=start,
     )
     actor_span, actor_matches = _actor_span(clause, proposition, offset=start)
+    ranking_contradiction, object_tokens, quantifier_span = _ranking_clause_context(
+        clause,
+        proposition,
+        object_tokens,
+        start=start,
+    )
     candidates: dict[str, dict[str, Any] | None] = {
         "actor": actor_span,
         "predicate": predicate_spans[0] if predicate_spans else None,
         "object": object_span,
-        "quantifier": _literal_span(clause, proposition.quantifier, offset=start),
+        "quantifier": quantifier_span,
     }
     clause_ref = f"C{index}"
-    slot_evidence = {
-        slot: {
-            **span,
-            "clause_ref": clause_ref,
-            "clause_start": start,
-            "clause_end": end,
-        }
-        for slot in declared_slots
-        if (span := candidates.get(slot)) is not None
-    }
+    slot_evidence = _clause_slot_evidence(
+        declared_slots,
+        candidates,
+        clause_ref=clause_ref,
+        start=start,
+        end=end,
+    )
     predicate_span = predicate_spans[0] if predicate_spans else None
     meta_scope, relation_negated, assertion_scope = _clause_relation_scope(
         clause,
@@ -363,16 +373,16 @@ def _clause_analysis(
         contextual_predicate=contextual_predicate,
         proposition_negated=proposition.negated,
     )
+    if ranking_contradiction and meta_scope is not True:
+        relation_negated = True
     binding_validity = {
         "actor": actor_matches,
         "predicate": bool(predicate_spans)
         and _predicate_actor_order_valid(
-            proposition,
-            actor_span=actor_span,
-            predicate_span=predicate_span,
+            proposition, actor_span=actor_span, predicate_span=predicate_span
         ),
         "object": bool(required_object_tokens and object_tokens),
-        "quantifier": candidates["quantifier"] is not None,
+        "quantifier": quantifier_span is not None,
     }
     return {
         "clause_ref": clause_ref,
@@ -394,6 +404,47 @@ def _clause_analysis(
         "meta_scope": meta_scope,
         "direct_relation_negated": relation_negated,
     }
+
+
+def _clause_slot_evidence(
+    declared_slots: list[str],
+    candidates: Mapping[str, Mapping[str, Any] | None],
+    *,
+    clause_ref: str,
+    start: int,
+    end: int,
+) -> dict[str, dict[str, Any]]:
+    return {
+        slot: {
+            **span,
+            "clause_ref": clause_ref,
+            "clause_start": start,
+            "clause_end": end,
+        }
+        for slot in declared_slots
+        if (span := candidates.get(slot)) is not None
+    }
+
+
+def _ranking_clause_context(
+    clause: str,
+    proposition: QuestionProposition,
+    object_tokens: set[str],
+    *,
+    start: int,
+) -> tuple[bool, set[str], dict[str, Any] | None]:
+    ranking_contradiction = bool(
+        proposition.relation_kind == "ranking"
+        and explicit_non_winning_ranking_evidence(proposition.surface, clause)
+    )
+    if ranking_contradiction and "best" in object_tokens:
+        # A stated non-winning position is a performance comparison even when
+        # the source sentence omits the noun ``performance``.
+        object_tokens.add("performance")
+    quantifier_span = _literal_span(clause, proposition.quantifier, offset=start)
+    if quantifier_span is None and ranking_contradiction:
+        quantifier_span = _ranking_scope_span(clause, offset=start)
+    return ranking_contradiction, object_tokens, quantifier_span
 
 
 def _clause_relation_scope(

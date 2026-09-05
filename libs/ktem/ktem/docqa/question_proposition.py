@@ -6,6 +6,7 @@ import re
 from dataclasses import asdict, dataclass, replace
 from typing import Any, Mapping
 
+from .boolean_relations import best_performance_question_subject
 from .qasper_relation_frame import question_relation_frame
 
 QUESTION_PROPOSITION_CONTRACT = "question_proposition.v1"
@@ -204,6 +205,9 @@ def _initial_question_proposition(question: str) -> QuestionProposition:
     surface = " ".join(str(question or "").split())
     frame = question_relation_frame(surface)
     subject_surface, object_surface = _surface_arguments(surface, frame.predicate)
+    if ranking_subject := best_performance_question_subject(surface):
+        subject_surface = ranking_subject
+        object_surface = "best performance"
     actor = frame.actor
     if actor == "unknown" and _named_subject(subject_surface):
         actor = subject_surface

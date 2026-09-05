@@ -231,6 +231,19 @@ def predicate_spans(
             "validate",
             "verify",
         },
+        "rank": {
+            "behind",
+            "below",
+            "best",
+            "improv",
+            "place",
+            "position",
+            "rank",
+            "second",
+            "score",
+            "winner",
+            _token_stem("winning"),
+        },
     }.get(str(predicate or "").casefold(), set())
     output = []
     for match in _TOKEN_RE.finditer(clause):
@@ -341,6 +354,31 @@ def direct_relation_negated(clause: str, relation_start: int) -> bool:
     )
 
 
+def ranking_scope_span(
+    clause: str,
+    *,
+    offset: int,
+) -> dict[str, Any] | None:
+    """Return the exact local span that expresses a non-winning rank."""
+
+    match = re.search(
+        r"\b(?:behind|below)\b[^.!?]{0,100}\b(?:winner|winning|best)\b|"
+        r"\b(?:second\s+(?:position|place)|rank(?:ed|s)?\s+second)\b|"
+        r"\b(?:not|isn't|is\s+not)\s+(?:the\s+)?(?:best|top|winner)\b|"
+        r"\b(?:did|does|has|have|had)\s+not\s+"
+        r"(?:reach|achieve|attain)\b[^.!?]{0,80}\b(?:best|winner|top)\b|"
+        r"\b(?:has|have|had|does|did|do)\s+not\s+improv(?:e|es|ed|ing)\b"
+        r"[^.!?]{0,120}\b(?:winner|winning|best|scores?|performance)\b",
+        clause,
+        flags=re.IGNORECASE,
+    )
+    return (
+        _span_payload(clause, match.start(), match.end(), offset=offset)
+        if match is not None
+        else None
+    )
+
+
 def proposition_assertion_scope(clause: str, relation_start: int) -> str:
     """Classify whether the target relation is asserted in this exact clause."""
 
@@ -419,6 +457,16 @@ def canonical_semantic_token(value: str) -> str:
         "construct": "construct",
         _CONTROL_STEM: "control",
         "system": "component",
+        "best": "best",
+        "winner": "best",
+        _token_stem("winning"): "best",
+        "behind": "best",
+        "below": "best",
+        "place": "best",
+        "position": "best",
+        "rank": "best",
+        "score": "performance",
+        "second": "best",
         "visual": "image",
     }.get(stem, stem)
 

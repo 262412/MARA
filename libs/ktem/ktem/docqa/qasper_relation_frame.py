@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .boolean_relations import best_performance_question_subject
+
 _TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 _NUMBER_RE = re.compile(
     r"(?<![a-z0-9])(?:\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|"
@@ -68,15 +70,16 @@ def question_relation_frame(question: str) -> QuestionRelationFrame:
     quantifier = _question_quantifier(question)
     object_type = _expected_object_type(question)
     scope = _question_scope(question)
-    qualification = _qualification_frame(
+    special = _special_relation_frame(
+        question,
         lowered,
         actor=actor,
         scope=scope,
         qualifier=qualifier,
         quantifier=quantifier,
     )
-    if qualification is not None:
-        return qualification
+    if special is not None:
+        return special
     for relation_builder in (_account_for_frame, _typed_relation_frame):
         relation = relation_builder(
             lowered,
@@ -160,6 +163,15 @@ def relation_is_explicit(
                 lowered,
             )
         )
+    if frame.relation_kind == "ranking":
+        return bool(
+            re.search(
+                r"\b(?:best\s+performance|rank(?:ed|s|ing)?|"
+                r"second\s+(?:position|place)|behind|below|winner|winning|"
+                r"improv(?:e|es|ed|ing)|scores?)\b",
+                lowered,
+            )
+        )
     predicate_explicit = _predicate_is_explicit(frame.predicate, lowered)
     if frame.predicate == "use" and re.search(
         r"\blanguages?\b", frame.expected_object_type, re.IGNORECASE
@@ -230,6 +242,33 @@ def _frame(
     )
 
 
+def _special_relation_frame(
+    question: str,
+    lowered: str,
+    *,
+    actor: str,
+    scope: str,
+    qualifier: str,
+    quantifier: str,
+) -> QuestionRelationFrame | None:
+    qualification = _qualification_frame(
+        lowered,
+        actor=actor,
+        scope=scope,
+        qualifier=qualifier,
+        quantifier=quantifier,
+    )
+    if qualification is not None:
+        return qualification
+    return _ranking_frame(
+        question,
+        actor=actor,
+        scope=scope,
+        qualifier=qualifier,
+        quantifier=quantifier,
+    )
+
+
 def _qualification_frame(
     question: str,
     *,
@@ -253,6 +292,28 @@ def _qualification_frame(
         qualifier,
         quantifier,
         "qualification",
+    )
+
+
+def _ranking_frame(
+    question: str,
+    *,
+    actor: str,
+    scope: str,
+    qualifier: str,
+    quantifier: str,
+) -> QuestionRelationFrame | None:
+    if not best_performance_question_subject(question):
+        return None
+    return _frame(
+        actor,
+        "rank",
+        "ranking_target",
+        "performance",
+        scope,
+        qualifier,
+        quantifier,
+        "ranking",
     )
 
 

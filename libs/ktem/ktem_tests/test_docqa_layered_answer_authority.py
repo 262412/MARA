@@ -313,13 +313,32 @@ def test_finance_explanatory_boolean_answer_is_not_rejected_by_qasper_gate() -> 
     ),
     ids=("alce", "finance"),
 )
+@pytest.mark.parametrize(
+    ("route_policy", "agent_mode"),
+    (
+        ("doc", None),
+        ("auto", None),
+        ("auto", "thorough"),
+    ),
+    ids=("text_rag", "controller_auto", "crag_guarded"),
+)
 def test_cross_dataset_runtime_accepts_supported_paraphrase(
     domain: str,
     question: str,
     answer: str,
     evidence: str,
+    route_policy: str,
+    agent_mode: str | None,
 ) -> None:
-    result = _run(question, answer, [_item(evidence)], domain=domain)
+    result = _run(
+        question,
+        answer,
+        [_item(evidence)],
+        domain=domain,
+        route_policy=route_policy,
+        allowed_routes=["doc_text", "hybrid"],
+        agent_mode=agent_mode,
+    )
 
     assert result.engine_terminal_answer == answer
     assert result.verify_decision.status == "supported"
@@ -327,14 +346,53 @@ def test_cross_dataset_runtime_accepts_supported_paraphrase(
     assert result.verify_decision.verified_citations
 
 
-def test_cross_dataset_runtime_retains_supported_multi_sentence_extension() -> None:
-    question = "What is the main benefit of the method?"
-    answer = "The approach is more robust to noise. It also lowers annotation cost."
-    evidence = [
-        _item("The method improves robustness to noise. It reduces annotation cost.")
-    ]
-
-    result = _run(question, answer, evidence, domain="alce")
+@pytest.mark.parametrize(
+    ("domain", "question", "answer", "evidence"),
+    (
+        (
+            "alce",
+            "What is the main benefit of the method?",
+            "The approach is more robust to noise. It also lowers annotation cost.",
+            "The method improves robustness to noise. It reduces annotation cost.",
+        ),
+        (
+            "finance",
+            "What drove the reduction in SG&A expense as a percent of net sales in FY2023?",
+            "The decrease was caused by lower compensation and benefits. "
+            "It also reflected lower travel expenses.",
+            "SG&A expenses as a percentage of net sales decreased in FY2023 "
+            "primarily due to lower compensation and benefits. The decrease also "
+            "reflected lower travel expenses.",
+        ),
+    ),
+    ids=("alce", "finance"),
+)
+@pytest.mark.parametrize(
+    ("route_policy", "agent_mode"),
+    (
+        ("doc", None),
+        ("auto", None),
+        ("auto", "thorough"),
+    ),
+    ids=("text_rag", "controller_auto", "crag_guarded"),
+)
+def test_cross_dataset_runtime_retains_supported_multi_sentence_extension(
+    domain: str,
+    question: str,
+    answer: str,
+    evidence: str,
+    route_policy: str,
+    agent_mode: str | None,
+) -> None:
+    result = _run(
+        question,
+        answer,
+        [_item(evidence)],
+        domain=domain,
+        route_policy=route_policy,
+        allowed_routes=["doc_text", "hybrid"],
+        agent_mode=agent_mode,
+    )
 
     assert result.engine_terminal_answer == answer.replace(". ", ".\n")
     assert result.verify_decision.status == "supported"
@@ -342,14 +400,54 @@ def test_cross_dataset_runtime_retains_supported_multi_sentence_extension() -> N
     assert result.verify_decision.unknown_claims == []
 
 
-def test_cross_dataset_runtime_removes_unconfirmed_extension_and_reverifies() -> None:
-    question = "What is the main benefit of the method?"
-    answer = "The approach is more robust to noise. It was invented on Mars."
-    evidence = [_item("The method improves robustness to noise.")]
+@pytest.mark.parametrize(
+    ("domain", "question", "answer", "evidence"),
+    (
+        (
+            "alce",
+            "What is the main benefit of the method?",
+            "The approach is more robust to noise. It was invented on Mars.",
+            "The method improves robustness to noise.",
+        ),
+        (
+            "finance",
+            "What drove the reduction in SG&A expense as a percent of net sales in FY2023?",
+            "The decrease was caused by lower compensation and benefits. "
+            "It was invented on Mars.",
+            "SG&A expenses as a percentage of net sales decreased in FY2023 "
+            "primarily due to lower compensation and benefits.",
+        ),
+    ),
+    ids=("alce", "finance"),
+)
+@pytest.mark.parametrize(
+    ("route_policy", "agent_mode"),
+    (
+        ("doc", None),
+        ("auto", None),
+        ("auto", "thorough"),
+    ),
+    ids=("text_rag", "controller_auto", "crag_guarded"),
+)
+def test_cross_dataset_runtime_removes_unconfirmed_extension_and_reverifies(
+    domain: str,
+    question: str,
+    answer: str,
+    evidence: str,
+    route_policy: str,
+    agent_mode: str | None,
+) -> None:
+    result = _run(
+        question,
+        answer,
+        [_item(evidence)],
+        domain=domain,
+        route_policy=route_policy,
+        allowed_routes=["doc_text", "hybrid"],
+        agent_mode=agent_mode,
+    )
 
-    result = _run(question, answer, evidence, domain="alce")
-
-    assert result.engine_terminal_answer == "The approach is more robust to noise."
+    assert result.engine_terminal_answer == answer.split(". ", maxsplit=1)[0] + "."
     assert result.verify_decision.status == "supported"
     assert any(
         event.get("stage") == "claim_level_revision"
@@ -357,7 +455,19 @@ def test_cross_dataset_runtime_removes_unconfirmed_extension_and_reverifies() ->
     )
 
 
-def test_cross_dataset_runtime_rejects_contradictory_extension() -> None:
+@pytest.mark.parametrize(
+    ("route_policy", "agent_mode"),
+    (
+        ("doc", None),
+        ("auto", None),
+        ("auto", "thorough"),
+    ),
+    ids=("text_rag", "controller_auto", "crag_guarded"),
+)
+def test_cross_dataset_runtime_rejects_contradictory_extension(
+    route_policy: str,
+    agent_mode: str | None,
+) -> None:
     question = "What is the main benefit of the method?"
     answer = "The approach is more robust to noise. The method is not robust to noise."
     evidence = [
@@ -365,7 +475,15 @@ def test_cross_dataset_runtime_rejects_contradictory_extension() -> None:
         _item("The method is not robust to noise.", evidence_id="contradiction"),
     ]
 
-    result = _run(question, answer, evidence, domain="alce")
+    result = _run(
+        question,
+        answer,
+        evidence,
+        domain="alce",
+        route_policy=route_policy,
+        allowed_routes=["doc_text", "hybrid"],
+        agent_mode=agent_mode,
+    )
 
     assert result.engine_terminal_answer == "unanswerable"
     assert result.verify_decision.status == "unknown"

@@ -7,7 +7,10 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .boolean_proposition_polarity import _target_relation_polarity
-from .boolean_relations import primary_boolean_relation
+from .boolean_relations import (
+    explicit_non_winning_ranking_evidence,
+    primary_boolean_relation,
+)
 from .question_proposition import build_question_proposition
 from .semantic_relation_clause_lexical import (
     clause_spans,
@@ -74,7 +77,11 @@ def qasper_no_evidence_set_analysis(
     reason = "no_auditable_support_or_contradiction"
     admissible = False
 
-    if any(_relation_explicitly_negated(question, text) for text in texts):
+    if any(explicit_non_winning_ranking_evidence(question, text) for text in texts):
+        classification = "explicit_ranking_contradiction"
+        reason = "explicit_non_winning_system_comparison"
+        admissible = True
+    elif any(_relation_explicitly_negated(question, text) for text in texts):
         classification = "explicit_negation"
         reason = "target_relation_explicitly_negated"
         admissible = True

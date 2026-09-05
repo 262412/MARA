@@ -29,6 +29,18 @@ _RELATION_SURFACES = {
         "different",
         "difference",
     },
+    "rank": {
+        "best",
+        "place",
+        "placed",
+        "position",
+        "positions",
+        "rank",
+        "ranked",
+        "ranking",
+        "winner",
+        "winning",
+    },
     "contain": {
         "combine",
         "combined",
