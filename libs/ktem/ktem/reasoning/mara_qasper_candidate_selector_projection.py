@@ -57,17 +57,14 @@ def prioritized_candidate_prompt_evidence(
             }
         )
 
+    priorities = _canonical_priorities(
+        projections,
+        question,
+        candidate_transaction_id=candidate_transaction_id,
+    )
     output: list[dict[str, Any]] = []
-    for projection in projections:
-        (
-            selected_plan_refs,
-            canonical_refs,
-            canonical_selectors,
-        ) = _record_canonical_priorities(
-            projection,
-            question,
-            candidate_transaction_id=candidate_transaction_id,
-        )
+    for projection, priority in zip(projections, priorities):
+        selected_plan_refs, canonical_refs, canonical_selectors = priority
         options, proposition_bearing_refs = _prioritized_proposition_bearing_options(
             projection["eligible_options"],
             selected_plan_refs=selected_plan_refs,
@@ -90,6 +87,52 @@ def prioritized_candidate_prompt_evidence(
         )
         output.append(projected)
     return output
+
+
+def _canonical_priorities(
+    projections: list[dict[str, Any]],
+    question: str,
+    *,
+    candidate_transaction_id: str = "",
+) -> list[tuple[list[str], list[str], dict[str, dict[str, Any]]]]:
+    """Preserve local plans; validate missing contributions against joint evidence."""
+
+    priorities = [
+        _record_canonical_priorities(
+            projection, question, candidate_transaction_id=candidate_transaction_id
+        )
+        for projection in projections
+    ]
+    if all(ref in selectors for _, refs, selectors in priorities for ref in refs):
+        return priorities
+
+    canonical_records, _ = prepare_qasper_canonical_records_with_trace(
+        question,
+        [
+            {
+                **projection["record"],
+                "selectors": _candidate_selectors_from_options(
+                    projection["eligible_options"]
+                ),
+            }
+            for projection in projections
+        ],
+        candidate_transaction_id=candidate_transaction_id,
+    )
+    joint_selectors = {
+        str(selector.get("selector_id") or ""): deepcopy(selector)
+        for record in canonical_records
+        for selector in record.get("selectors") or []
+        if str(selector.get("selector_id") or "")
+    }
+    for _, refs, selectors in priorities:
+        refs[:] = [ref for ref in refs if ref in selectors or ref in joint_selectors]
+        selectors.update(
+            (ref, deepcopy(joint_selectors[ref]))
+            for ref in refs
+            if ref not in selectors
+        )
+    return priorities
 
 
 def _record_canonical_priorities(
