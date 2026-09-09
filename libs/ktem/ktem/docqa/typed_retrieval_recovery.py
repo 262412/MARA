@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .boolean_evidence_scope import boolean_retrieval_query
@@ -99,7 +100,19 @@ def _recovery_document_context(request: Any) -> dict[str, str]:
     generic_baseline = (
         frame.predicate == "baseline" and frame.expected_object_type == "answer object"
     )
-    if frame.actor != "unknown" or (frame.predicate and not generic_baseline):
+    # A passive type question gets a synthetic "define" predicate, but still
+    # needs the selected paper to identify the context of "considered".
+    generic_type = frame.relation_kind == "definition" and bool(
+        re.fullmatch(
+            r"\s*(?:what|which)\s+(?:type|kind|sort)\s+of\b.+"
+            r"\b(?:is|are|was|were)\s+considered\s*\??\s*",
+            question,
+            re.IGNORECASE,
+        )
+    )
+    if frame.actor != "unknown" or (
+        frame.predicate and not (generic_baseline or generic_type)
+    ):
         return {}
     selected_file_ids = {
         str(value).strip()
