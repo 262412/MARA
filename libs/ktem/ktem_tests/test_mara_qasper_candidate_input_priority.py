@@ -82,10 +82,17 @@ def test_candidate_packing_prioritizes_relation_and_quantifier_over_record_id() 
         candidate_priority=True,
     )
 
-    assert verifier_packing.records[0]["evidence_id"] == preferred_id
-    assert [record["evidence_id"] for record in candidate_packing.records[:2]] == [
+    # Verifier polarity precedes declared IDs; within equal polarity, the
+    # preferred record still comes before the quantified record.
+    assert [record["evidence_id"] for record in verifier_packing.records] == [
+        "evidence:paper:relation",
+        preferred_id,
+        "evidence:paper:quantified",
+    ]
+    assert [record["evidence_id"] for record in candidate_packing.records] == [
         "evidence:paper:relation",
         "evidence:paper:quantified",
+        preferred_id,
     ]
 
 

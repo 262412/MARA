@@ -222,7 +222,7 @@ def test_runtime_path_characterization_reaches_barrier_with_fake_sbatch(tmp_path
 
 def test_runtime_helper_writes_producer_owned_receipt(tmp_path):
     _require_posix_bash()
-    runtime_root = tmp_path / "benchmark-runtime"
+    runtime_root = tmp_path / "benchmark_runtime"
     receipt_dir = tmp_path / "runtime-receipts"
     result = subprocess.run(
         [
@@ -254,7 +254,7 @@ def test_runtime_helper_writes_producer_owned_receipt(tmp_path):
 
 def test_producer_runtime_receipt_reaches_barrier_and_fails_closed(tmp_path):
     _require_posix_bash()
-    runtime_root = tmp_path / "benchmark-runtime"
+    runtime_root = tmp_path / "benchmark_runtime"
     receipt_dir = tmp_path / "runtime-receipts"
     producer = subprocess.run(
         [
