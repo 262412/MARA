@@ -1,6 +1,6 @@
 import pytest
-from ktem.docqa.claim_filtering import answer_claims, clean_answer_text
 from ktem.docqa._runtime_models import DocQARequest
+from ktem.docqa.claim_filtering import answer_claims, clean_answer_text
 from ktem.docqa.execution import execute_controller_turn
 from ktem.docqa.qasper_answer_relation import resolve_qasper_answer_relation
 from ktem.docqa.qasper_relation_frame import (

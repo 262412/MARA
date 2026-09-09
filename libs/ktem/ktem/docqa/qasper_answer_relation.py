@@ -232,7 +232,11 @@ def _answer_relation_candidate(
     anchors = quote_tokens & question_anchors
     anchors.update(_item_question_anchors(item, question_anchors))
     if _language_dataset_relation(question, quote, clause):
-        anchors.update(question_anchors & {"language", "languages", "languag", "use"})
+        anchors.update(
+            # _stem removes "es" from the plural language token.
+            question_anchors
+            & {"language", "languages", _stem("languages"), "use"}
+        )
     actor = _resolved_actor(item, quote, question, clause, anchors, previous_actor)
     if actor == "unknown" or (
         _requires_current_paper_actor(question) and actor != "current_paper"
