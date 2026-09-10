@@ -1,6 +1,398 @@
 # MARA refactor status — 2026-09-10
 
-## Decision and protected baseline
+## Current round: review of 7496c6ae
+
+**The user-listed R0 gates passed. R1 is complete and its applicable gates passed.**
+The R1 source is `c693160e6e5f0e6c05edd8d507219679aad120d2`, normally pushed to
+`origin/codex/r0-r1-safe-refactor`; local and remote HEAD were verified equal at
+that source push.
+[Quality gates 34445819877, attempt 1](https://github.com/262412/MARA/actions/runs/34445819877)
+was dispatched once for that SHA with the explicit original Dev base. It is
+complete with overall **failure**: six NLTK audit jobs failed, so the required
+aggregate also failed. All full suites, static/hygiene, packaging, security
+smoke/secret scans and coverage gates passed. No R2 work has started.
+
+The final report-only commit does not change the validated Python or workflow
+source and is not dispatched again. `evidence-summary-final.json` records the
+actual final local/remote HEAD, the validated source SHA and the report-only
+delta. The workflow as a whole remains NO-GO because of the six audit failures.
+
+The accepted R0 source is
+`8cc9e9403b92f87b15db82b000c24c65c47b84db`, pushed normally to
+`origin/codex/r0-r1-safe-refactor`. Its full Ubuntu validation completed as
+[Quality gates 34440810480, attempt 1](https://github.com/262412/MARA/actions/runs/34440810480),
+with original Dev `base_ref=adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+The overall workflow conclusion is **failure** because the NLTK dependency/
+container audits failed and the image secret scan timed out. All R0-source
+full suites, static/hygiene checks, package coverage floors, exports and the
+90% production diff gate passed. The R1 entry conditions are recorded separately
+from that overall workflow conclusion.
+
+This round explicitly permits small commits, normal same-branch pushes and the
+existing workflow dispatch. The historical statements below about an unpushed
+follow-up or remote `89d99551` describe the earlier authorization boundary;
+they are no longer current blockers. No new branch/worktree, history rewrite,
+force push, merge, release, key change, WSL installation or local environment
+synchronization has been performed. The pre-existing untracked `NUL` remains.
+
+### Changes and affected surfaces
+
+The affected surfaces are startup resource/config selection, test-owned
+filesystem/storage lifecycle, shared file selection imports and CI coverage
+artifacts. Public CLI names and options, database formats,
+DocQA routing, prompts, UI event chains and production deadline budgets are
+unchanged. The earlier deadline/cancellation fixes remain in history.
+
+- `6eab0f90`: treat `NLTK_DATA` as an ordered search list. Ordinary startup does
+  not prepare resource directories; test mode validates every nonempty entry
+  and prepares only its first owned directory. Empty test lists select the
+  owned cache. Configuration discovery and explicit loading validate the
+  resolved file before reading/executing it, then validate returned storage/DB
+  paths. Owned module names resolve without executing unchecked parent
+  packages. A small initial settings bridge lets TheFlow validate the actual
+  custom settings before creating its global storage instance.
+- `857d70d0`: validate session ownership before accepting pytest basetemp.
+  Reject the session root, aliases, outside directories and overlap with
+  config/cache/data/output/temp state. Tests invoke pytest's real basetemp
+  clearing and verify the owner marker and state sentinels survive.
+- `ea406f8e`: the fixtures that create Chroma stores also stop their owned
+  Chroma systems before session cleanup. They remove only matching owned
+  registry entries. Tests delete the released native-index directory and
+  continue writing through another live instance. A fresh pytest child must
+  return zero and remove its session directory after unconfigure.
+- `0b8f18c7`: give app-init hardening fixtures their own complete runtime and
+  seed the config directory actually used by the CLI. The old fixture inherited
+  the parent test root while checking a different config directory.
+- `331f9c8e`: read the Windows-specific error code with `getattr` in the two
+  new symlink test helpers. The intermediate Ubuntu static job exposed that
+  Linux mypy does not define `OSError.winerror`; this is a test portability
+  correction and does not weaken the native symlink assertions.
+- `cd12795d`: exclude pytest-owned `session-*` fixtures from coverage collection
+  and exports under the configured runtime parent (or the existing default).
+  A deleted test `flowsettings.py` had the same module name as a root production
+  file, so XML export attempted to read it after successful session cleanup.
+  Synthetic-data regressions reproduce the original export error, retain all
+  four production packages and four root files in XML/JSON, retain uncovered
+  statements, and still fail if real production source is missing. No coverage
+  collector is started by these local export regressions.
+- `8cc9e940`: merge package-relative subprocess coverage paths into their
+  canonical repository files before reporting. Six independent cases cover
+  all three library packages and both slash styles; they require measurements
+  from both paths to survive, one missing line to remain missing, and valid
+  XML/JSON. The existing artifact upload now retains hidden coverage data for
+  diagnosis. Tests finalize their own Coverage instance, including mapped
+  SQLite copies retained internally by its reporting API.
+- `26d8e873`: commit 140 fixed-expectation characterization cases before moving
+  either production function. Both old import paths, class static methods,
+  actual patch consumers, graph composition and DocQA artifact scope are tested.
+- `c693160e`: move only `normalize_selected_file_ids` and
+  `merge_unique_file_ids` into `ktem_contracts/file_selection.py`. Both old
+  modules bind those same function objects under the existing names; all other
+  selection/UI logic and the class wrappers remain unchanged. Include
+  `ktem_contracts` in the existing ktem coverage floor and production diff gate,
+  and verify the new module in built wheels/sdists and clean wheel smoke imports.
+
+The before-fix independent boundary run failed 20 cases. Separate regressions
+also reproduced the app fixture mismatch and rejection of an owned benchmark
+module name. The real Chroma child previously passed its assertion but exited
+nonzero during cleanup with a locked HNSW file. All original assertions were
+retained. During repair, a real custom-storage check caught an intermediate
+initialization-order error; the final bridge preserves agreement between the
+selected settings and the actual storage instance, including a fresh child.
+
+### Local evidence for the pushed source
+
+Evidence is retained outside Git under
+`D:\PythonProject\MARA-refactor-review-20260910-01a086ff\next-round`.
+`execution.jsonl` records commands, source hashes, cwd, timestamps and exit
+codes; failed attempts remain separate from final results.
+
+| Check                                                                                                  | Result                                                                               | Evidence                              |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------- |
+| Combined boundary, real subprocess, cleanup, Chroma, app-init, deadline/cancellation and CLI contracts | Exit 0; 139 passed, 10 symlink skips, 2 app-init symlink cases deselected for Ubuntu | `final-focused-runtime-lifecycle.log` |
+| Changed Python pre-commit, including mypy                                                              | Exit 0                                                                               | `precommit-final-code-pass.log`       |
+| Full Ruff and hygiene                                                                                  | Exit 0                                                                               | `final-ruff.log`, `final-hygiene.log` |
+| Hygiene baseline against exact original Dev                                                            | Exit 0; baseline not widened                                                         | `final-baseline.log`                  |
+| Normal push                                                                                            | `7496c6ae..0b8f18c7`; remote SHA verified                                            | `push-0b8f18c7.log`                   |
+
+The 02:49 UTC snapshot preceded this round's tests. At 07:27 UTC, after the R1
+local tests, artifact checks and report verification, the canonical
+environment still had the same 98,823 entries and identical metadata hash;
+the retained user cache had the same 614 entries and identical metadata hash.
+Known profile config/SQLite and repository SQLite size/mtime records are also
+identical. See `preserved-before.json` and `preserved-final.json`.
+The final 19-test coverage regression run exits zero and removes its own runtime
+directory. Two directories from earlier failed synthetic-data tests remain:
+`D:\MARA-next-pytest-01a086ff\session-_tt6h466` and
+`D:\MARA-next-pytest-01a086ff\session-n97o375r`. Those attempts exposed retained
+SQLite handles before the instance cleanup was fixed. Automatic approval
+rejected the subsequent recursive cleanup command with `blocked by policy`.
+A narrower plan enumerated and hashed 80 regular files (587,882 bytes) and 98
+directories, checked that no reparse points existed, and proposed deleting only
+those files followed by nonrecursive deletion of empty directories. Automatic
+approval rejected that plan too with the same reason; neither cleanup command
+ran. No further deletion was attempted. The exact remaining files are recorded
+in `runtime-inventory-after-coverage-paths.json` and
+`owned-coverage-orphans-manifest.json`.
+The post-R1 read-only inventory in `runtime-inventory-after-r1.json` confirms
+only those two older directories remain. No `subcover*.pth` files exist.
+These are metadata comparisons, not a recovery of the original pre-incident
+configuration. The historical real-user configuration/cache incidents and
+after-event copies documented below remain part of the record.
+
+No local full coverage was rerun. Subprocess coverage remains enabled in the
+Ubuntu workflow, and all four package floors plus the 90% production
+diff floor remain required. No dependency or audit/hygiene baseline was changed.
+
+### Ubuntu evidence and R1 decision
+
+The review input `7496c6ae5b7823174cff3e7cc9ea318c0a841fb0` had no existing
+Quality gates run, so it was dispatched once with the explicit branch/base.
+[Run 34430620710, attempt 1](https://github.com/262412/MARA/actions/runs/34430620710)
+completed with **failure** at that exact SHA. Its ktem suite passed 2,644 tests;
+both kotaemon versions failed the one config-symlink fixture assertion. Root/
+benchmark and coverage each failed four benchmark runtime module-selection
+cases. The failures were read before applying the targeted repairs above.
+
+All three dependency profiles rejected nine NLTK 3.10.0 advisory IDs, and all
+three container profiles rejected seven NLTK CVE findings. Raw job logs and
+the complete job/run JSON are retained as `ci-34430620710-job-*.log` and
+`quality-34430620710-*.json`; exact IDs remain in those logs. These are the
+scanner findings from the actual run, not a separate exploitability assessment.
+Upgrading dependencies or suppressing findings is not authorized in this round.
+
+The intermediate run `34432962143`, attempt 1, tested
+`0b8f18c7175c23d3aac23ee9fa621561f1ba86aa`. Both kotaemon versions passed
+371 tests / 10 optional dependency skips, including the real config symlink
+tests. Static analysis failed only on the two new `OSError.winerror` accesses.
+The portable correction passed Linux-targeted mypy using the existing cached
+hook environment and the local 33-test boundary suite (10 native symlink
+skips). See `portable-symlink-cached-mypy-linux.log`,
+`portable-symlink-precommit.log`, `portable-symlink-regressions.log` and
+`push-portable-symlinks.log`. The push succeeded; its first follow-up direct
+remote query timed out. A read-only query through the existing proxy verified
+the new remote SHA without changing Git configuration.
+
+Run `34433661997`, attempt 1, tested `331f9c8ef67012653be81fd2d7daad75288912eb`;
+`dispatch-331f9c8e.json` and `quality-runs-331f9c8e-started.json` record dispatch
+and run identity. The existing workflow concurrency policy replaced the
+intermediate run, whose final conclusion is **cancelled**; unfinished gates
+from that run are not counted as passes.
+It completed with **failure**. The completed jobs at that revision have these
+results; they are not presented as the subsequent source's completed CI:
+
+| Ubuntu check at `331f9c8e`                                                                                        | Result                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Static hooks, full Ruff, hygiene and baseline ratchet                                                             | Passed; comparison uses the exact original Dev SHA                                                   |
+| kotaemon Python 3.10 and 3.11                                                                                     | Each passed 371 tests, with 10 optional dependency skips                                             |
+| ktem                                                                                                              | 2,644 passed                                                                                         |
+| benchmark and root contracts                                                                                      | 1,609 passed, including the four previously failing module-selection contracts                       |
+| slide_cli                                                                                                         | Passed; 131 passing progress markers in the successful job                                           |
+| Unified collection                                                                                                | Passed; 4,927 tests collected                                                                        |
+| Four clean wheel installations, frontend/browser security, Python distribution supply chain and both secret scans | Passed                                                                                               |
+| Three dependency audit profiles                                                                                   | Failed: nine NLTK 3.10.0 GHSA findings per profile                                                   |
+| Three container profiles                                                                                          | Build/runtime smoke completed; audit failed on seven NLTK CVE findings per profile                   |
+| Package coverage floors                                                                                           | All passed: benchmark 90.22% / 90%; slide_cli 75.57% / 70%; kotaemon 70.11% / 60%; ktem 80.89% / 50% |
+| Coverage XML/JSON export and production diff                                                                      | XML export failed on removed test settings; JSON and the 90% production diff gate did not run        |
+
+The raw logs for that source use `ci-34433661997-job-*.log`; job snapshots
+use `quality-34433661997-jobs-*.json`.
+`dependency-audit-findings-331f9c8e.json` retains all nine GHSA and seven CVE
+IDs, their exact log lines and the six affected jobs. The two scanner ID
+namespaces are not added together as a distinct vulnerability count.
+The coverage-instrumented test suites also passed before export: root/benchmark
+1,609; kotaemon 371 plus 10 skips; ktem 2,644; and slide_cli's complete passing
+progress output. The failure was `No source for code` for a removed test-session
+`flowsettings.py`, not a package threshold violation. The uploaded coverage
+artifact `10136434812` is only 336 bytes. Downloading and inspecting the ZIP
+confirmed that it contains only `coverage.ini`; upload success is not accepted
+as valid XML/JSON output. See
+`coverage-export-failure-331f9c8e.json` and job `102734405186`'s raw log.
+
+The targeted export repair was committed and pushed as `cd12795d`. Its 13 local
+quality-script tests pass, using synthetic data without starting a coverage
+collector or installing `.pth` files. Changed-file hooks, the exact existing CI
+Ruff command, hygiene and the original-Dev baseline comparison also pass. The
+first broader Ruff invocation omitted the workflow's pre-existing exclusions
+and reported two existing `.pyi` issues; those files and exclusions were not
+changed. See `coverage-export-tests-verified.log`,
+`coverage-export-hooks-verified.log`, `coverage-export-ci-ruff.log`,
+`coverage-export-hygiene.log`, `coverage-export-baseline.log` and
+`push-cd12795d.json`.
+
+[Run 34437287461, attempt 1](https://github.com/262412/MARA/actions/runs/34437287461)
+tested exact head `cd12795debafac148f7e7b230e30ad3c6f0b22ec`.
+It was dispatched once after checking that this new SHA had no existing run,
+using the same explicit branch and original Dev `base_ref`. It completed with
+**failure**; these are its final results, not results for the later path fix:
+
+| Ubuntu check at `cd12795d`                                                                                        | Result                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Static hooks, full CI Ruff, hygiene and original-Dev baseline comparison                                          | Passed                                                                                               |
+| kotaemon Python 3.10 and 3.11                                                                                     | Each passed 371 tests, with 10 optional dependency skips                                             |
+| ktem                                                                                                              | 2,644 passed                                                                                         |
+| benchmark and root contracts                                                                                      | 1,611 passed                                                                                         |
+| slide_cli                                                                                                         | Passed                                                                                               |
+| Unified collection                                                                                                | Passed; 4,929 tests collected                                                                        |
+| Four clean wheel installations, frontend/browser security, Python distribution supply chain and both secret scans | Passed                                                                                               |
+| Three dependency audit profiles                                                                                   | Failed: nine NLTK 3.10.0 GHSA findings per profile                                                   |
+| Three container audit profiles                                                                                    | Failed: seven NLTK CVE findings per profile                                                          |
+| Package coverage floors                                                                                           | All passed: benchmark 90.22% / 90%; slide_cli 75.57% / 70%; kotaemon 70.11% / 60%; ktem 80.89% / 50% |
+| XML/JSON and production diff                                                                                      | XML failed on `kotaemon/__init__.py`; JSON and diff did not run                                      |
+
+No dependency or audit baseline was changed. `dependency-audit-findings-cd12795d.json`
+records the exact findings and raw log lines for all six audit jobs at that SHA.
+Raw logs and final snapshots use `ci-34437287461-job-*.log` and
+`quality-34437287461-*.json`. All instrumented suites passed before export:
+root/benchmark 1,611; kotaemon 371 plus 10 skips; ktem 2,644; slide_cli passed.
+The path error came from package-directory subprocess measurements, and the
+downloaded artifact `10137660368` again contained only `coverage.ini`. Its SHA256
+matches GitHub's artifact digest; see `coverage-artifact-cd12795d-inspection.json`.
+
+The path-mapping correction passed `coverage-paths-tests-verified.log` (19 tests,
+exit zero including unconfigure), `coverage-paths-hooks-verified.log`,
+`coverage-paths-ci-ruff.log`, `coverage-paths-hygiene.log` and
+`coverage-paths-baseline.log`. Its before-fix six-case failure and intermediate
+cleanup failures remain in the evidence directory; see
+`command-remediation-coverage-paths.json`. Normal push of `8cc9e940` is verified
+in `push-8cc9e940-normalized.json`.
+
+[Run 34440810480, attempt 1](https://github.com/262412/MARA/actions/runs/34440810480)
+validated `8cc9e9403b92f87b15db82b000c24c65c47b84db`. A query found no
+existing run for that SHA before dispatch; the explicit branch and original Dev
+base are recorded in `dispatch-8cc9e940.json`. Its final overall result is failure.
+
+| Ubuntu check at `8cc9e940`                                                                                             | Result                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Static hooks, full CI Ruff, hygiene and original-Dev baseline comparison                                               | Passed                                                                                               |
+| kotaemon Python 3.10 and 3.11                                                                                          | Each passed 371 tests, with 10 optional dependency skips                                             |
+| ktem                                                                                                                   | 2,644 passed                                                                                         |
+| benchmark and root contracts                                                                                           | 1,617 passed                                                                                         |
+| slide_cli                                                                                                              | Passed                                                                                               |
+| Unified collection                                                                                                     | Passed; 4,935 tests collected                                                                        |
+| Four clean wheel installations, frontend/browser security, Python distribution supply chain and repository secret scan | Passed                                                                                               |
+| Three dependency audit profiles                                                                                        | Failed: nine NLTK 3.10.0 GHSA findings per profile                                                   |
+| Three container audit profiles                                                                                         | Build and runtime smoke passed; seven NLTK CVE findings per profile                                  |
+| Built-image secret scan                                                                                                | Incomplete: Trivy reached its deadline after approximately five minutes                              |
+| Coverage floors                                                                                                        | All passed: benchmark 90.22% / 90%; slide_cli 75.57% / 70%; kotaemon 70.11% / 60%; ktem 80.89% / 50% |
+| XML/JSON and production diff                                                                                           | Passed; production diff 93.90% (154/164 statements)                                                  |
+
+All completed jobs' raw logs are retained as `ci-34440810480-job-*.log`, plus
+`ci-34440810480-aggregate.log`.
+`dependency-audit-findings-8cc9e940.json` records the six NLTK audit failures.
+The image secret job built the image successfully, then failed inside Trivy
+while acquiring its analysis semaphore (`context deadline exceeded`). It did
+not produce a completed secret-scan verdict; this is neither a clean scan nor
+a secret-detection finding. See `image-secret-scan-timeout-8cc9e940.json` and
+job `102755280292`'s complete log. No scanner timeout, scope or failure policy
+was changed, and no unchanged-source rerun was dispatched.
+
+Coverage artifact `10138960793` was downloaded and its SHA256 matched the GitHub
+digest. It contains `.coverage`, `coverage.ini`, valid XML and valid JSON. The
+996 raw file records have no remaining package-relative aliases, and no removed
+test-runtime files appear in the JSON. Artifact-derived package totals match the
+job log. See `coverage-artifact-8cc9e940/inspection.json` and
+`quality-34440810480-final.json` / `quality-34440810480-jobs-final.json`.
+
+The user-listed isolation, lifecycle, current full-suite, static and coverage
+conditions for R1 are now verified at `8cc9e940`. R1 began with 140 fixed-expectation
+tests against the untouched old implementations, including the two module
+paths, both classes' static methods, real patch consumers and graph/DocQA
+callers. That run exited zero, including unconfigure; see
+`r1-characterization-old-implementation.log` and the formatted, committed
+`r1-characterization-old-verified.log`. No R1 production change preceded those
+passing old-implementation tests.
+
+### R1 implementation and current-source validation
+
+The extraction retains duplicates, whitespace, zero/False, tuple conversion,
+ordering and exception propagation. Old module imports expose the shared
+function objects with their original signatures; existing static methods and
+their real module-global patch lookups are unchanged. The two selector
+extraction implementations, UI selector, `chat_submit_sources`, routes,
+prompts and persisted representations are unchanged. `r1-ast-equivalence.log`
+compares the two shared function ASTs against both originals at `8cc9e940`,
+checks all other top-level code in those modules, and verifies the DocQA/chat
+consumer files are unchanged.
+
+The current source passed these local gates, including process exit and pytest
+unconfigure, using the existing environment without synchronization:
+
+- `r1-caller-contracts-verified.log`: 214 passed, including 142 extraction
+  contracts and the existing DocQA, chat, graph and CLI caller checks.
+- `r1-boundaries-packaging-verified.log`: 37 passed. The isolated `python -I -B`
+  cold-import probe rejects runtime/UI imports and writes nothing in its fake
+  working directory. Four distribution builds verify legal metadata as before;
+  the actual ktem wheel and sdist must include `file_selection.py`.
+- `r1-extraction-hooks-verified.log`, `r1-ci-ruff.log`, `r1-hygiene.log` and
+  `r1-hygiene-baseline.log`: all exit zero; original Dev comparison is unchanged.
+
+The coverage policy previously did not count `ktem_contracts`. An independent
+negative case showed a changed statement there being ignored (0/0). The shared
+module is now collected and counted in ktem's existing 50% floor and the same
+90% production diff gate. Synthetic XML/JSON tests retain uncovered statements,
+and path-combine tests now cover this fourth library root too. No local coverage
+collector was started; the tests explicitly reject `Coverage.start`.
+
+`push-c693160e.json` records the successful normal push and matching remote SHA.
+The SHA had no existing run before dispatch. `dispatch-c693160e.json` and
+`quality-runs-c693160e-started.json` record run `34445819877`, attempt 1, on that
+exact head and original Dev base. The completed Ubuntu jobs at this SHA are:
+
+| Ubuntu check at `c693160e`                                                                                        | Result                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Static hooks, full CI Ruff, hygiene and original-Dev baseline comparison                                          | Passed                                                                                                                    |
+| kotaemon Python 3.10 and 3.11                                                                                     | Each passed 371 tests, with 10 optional dependency skips                                                                  |
+| ktem                                                                                                              | 2,786 passed                                                                                                              |
+| benchmark and root contracts                                                                                      | 1,622 passed                                                                                                              |
+| slide_cli                                                                                                         | Passed                                                                                                                    |
+| Unified collection                                                                                                | Passed; 5,082 tests collected                                                                                             |
+| Four clean wheel installations, frontend/browser security, Python distribution supply chain and both secret scans | Passed                                                                                                                    |
+| Three dependency audit profiles                                                                                   | Failed: nine NLTK 3.10.0 GHSA findings per profile                                                                        |
+| Three container audit profiles                                                                                    | Build/runtime smoke passed; seven NLTK CVE findings per profile                                                           |
+| Coverage floors                                                                                                   | Passed: benchmark 90.22% / 90%; slide_cli 75.57% / 70%; kotaemon 70.11% / 60%; ktem including ktem_contracts 80.93% / 50% |
+| XML/JSON exports and production diff                                                                              | Passed; production diff 94.82% (183/193 statements) against original Dev                                                  |
+
+`dependency-audit-findings-c693160e.json` records the actual six failing jobs
+and confirms the GHSA/CVE identifier sets are identical to R0. The image
+secret scan completed successfully on this SHA; its earlier timeout is not
+reported as a current failure. These are scanner findings, not an exploitability
+assessment. No dependency upgrade or audit suppression was made.
+
+The instrumented suites also completed successfully: root/benchmark 1,622;
+kotaemon 371 plus 10 skips; ktem 2,786; and the complete slide_cli run. Raw logs
+for all 20 jobs are retained as `ci-34445819877-job-*.log`. The aggregate job
+`102782491452` records success for every required group except dependency and
+container audits. Final run/job metadata are in `quality-34445819877-final.json`
+and `quality-34445819877-jobs-final.json`.
+
+[Coverage artifact 10141027869](https://github.com/262412/MARA/actions/runs/34445819877/artifacts/10141027869)
+was downloaded and inspected. Its 623,616-byte ZIP matches GitHub's SHA256
+`c4159163cafb92b458a64a51b1ac13888487687fc75fd4d567d7e03afc808966`.
+It contains the combined `.coverage` data, `coverage.ini`, valid XML and valid
+JSON. Its 1,001 raw file records contain no package-relative aliases; no removed
+test-runtime files appear in the JSON. Artifact-derived package totals match
+the CI log. The new `ktem_contracts/file_selection.py` has 22/22 covered
+statements and no exclusions or missing statements. Both shared functions have
+100% statement coverage. See `coverage-artifact-c693160e/inspection.json`.
+`r1-downloaded-diff-coverage.log` independently recomputes the same 94.82%
+production diff from that JSON against original Dev, without starting coverage
+collection locally.
+
+R1's fixed old-behavior characterization, exact two-function extraction,
+legacy import/signature/staticmethod/patch compatibility, real callers, cold
+import, distribution membership and applicable current-source gates are now
+verified. The remaining six NLTK audit failures keep the complete Quality gates
+workflow red; dependency changes and baseline suppression remain outside this
+round's authorization. The two historical test directories remain because
+automatic approval rejected their cleanup, as recorded above.
+No R2 work is included.
+
+## Historical evidence through 7496c6ae
+
+All sections below preserve the earlier review and follow-up record. Their
+NO-GO, unstarted R1 and unpushed statements apply to those historical snapshots;
+the current decision, source SHA and completed CI results are recorded above.
 
 **R0 remains NO-GO; R1 has not started.** The follow-up below repairs test
 isolation, deterministic deadline checks and two confirmed Windows path-boundary
@@ -45,7 +437,7 @@ no pre-run snapshot of this cache, so this report does **not** claim that all
 pre-existing runtime/cache contents were untouched. A Windows isolation fix
 and proof of effective storage paths motivated the follow-up below.
 
-## R0 failure classification and changes
+## Historical R0 failure classification and changes
 
 Public surfaces affected by the two bug fixes are QASPER candidate evidence
 projection and retrieval-query context. CLI signatures, prompt templates, route
@@ -79,7 +471,7 @@ Cross-record cases now require an additional canonical preparation only when
 local refs lack materialized selectors. The candidate transaction is passed
 through; provider latency and benchmark throughput have not been measured.
 
-## Verification evidence
+## Historical verification evidence
 
 All Python rows below use the common no-sync command above. Unless specified,
 cwd is `D:\PythonProject\MARA`. The PowerShell evidence `run.ps1` supplies only
@@ -132,7 +524,7 @@ provider/model probes, Slurm jobs and benchmark dataset runs. No network
 model call was intentionally initiated. Package unit tests do not establish
 benchmark artifact completeness or end-to-end UI readiness.
 
-## Tracked repository map
+## Historical tracked repository map
 
 Inventory reads `git ls-tree` and blobs at the Dev base, not the working tree's
 runtime directories. `repository-map.json` records every tracked path with its
@@ -201,7 +593,7 @@ Manual boundaries needing preservation:
   seams, plus citation-QA and Cohere-ranking application coupling. A blanket
   ban would break existing integrations; inspect each seam before moving it.
 
-## R1 location and later batches
+## Historical R1 location planning
 
 R1 remains unexecuted; **zero duplicate implementations or internal dependency
 edges were removed in this batch**. Both old modules and the `DocQARuntime` /
@@ -228,7 +620,7 @@ R6 CLI/desktop/benchmark/delivery cleanup with package/resource compatibility.
 No later phase is authorized by this report. Each needs its own characterization,
 package gate, actual diff review and independent acceptance.
 
-## Original R0 review completion
+## Historical original R0 review completion
 
 The changed-file set is limited to:
 
@@ -301,7 +693,7 @@ package floors remain unverified.
 **Stop at independent R0 review.** Restoring supported-platform package gates,
 resolving the timing failures and proving cache isolation come before R1.
 
-## R0 follow-up on the same branch
+## Historical R0 follow-up through 7496c6ae
 
 The reviewed input HEAD is `89d99551a028ff4948bb40f0a06bcc24d24822cb`; the fixed
 comparison base remains `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
