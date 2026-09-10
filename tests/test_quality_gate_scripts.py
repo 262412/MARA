@@ -156,7 +156,11 @@ def test_coverage_policy_has_real_package_floors_and_excludes_tests():
         "kotaemon": 60,
         "ktem": 50,
     }
-    assert all("test" not in path for path in coverage_gate.PRODUCTION_PATHS.values())
+    assert all(
+        "test" not in path
+        for paths in coverage_gate.PRODUCTION_PATHS.values()
+        for path in paths
+    )
     assert "*/tests/*" in coverage_gate.COVERAGE_OMIT
     assert "*/ktem_tests/*" in coverage_gate.COVERAGE_OMIT
 
@@ -170,6 +174,43 @@ def test_coverage_policy_captures_python_subprocesses(tmp_path):
     assert "patch = subprocess" in config
     assert "parallel = True" in config
     assert "relative_files = True" in config
+
+
+def test_ktem_contracts_participate_in_collection_and_package_floor(
+    tmp_path, monkeypatch
+):
+    from configparser import ConfigParser
+
+    coverage_gate = _load_script("run_coverage_gates.py")
+    commands = []
+    monkeypatch.setattr(
+        coverage_gate, "_run", lambda command, **_kwargs: commands.append(command)
+    )
+    coverage_gate.run_gates(tmp_path)
+    config = ConfigParser()
+    config.read(tmp_path / "coverage.ini")
+
+    assert "libs/ktem/ktem_contracts" in config.get("run", "source").split()
+    report = next(command for command in commands if "--fail-under=50" in command)
+    assert "--include=libs/ktem/ktem/*,libs/ktem/ktem_contracts/*" in report
+
+
+def test_diff_coverage_counts_changed_contract_statements(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
+    diff_gate = _load_script("check_diff_coverage.py")
+    source = "libs/ktem/ktem_contracts/file_selection.py"
+    coverage_json = tmp_path / "coverage.json"
+    coverage_json.write_text(
+        json.dumps({"files": {source: {"executed_lines": [1], "missing_lines": [2]}}}),
+        encoding="utf-8",
+    )
+
+    result = diff_gate.calculate_diff_coverage(coverage_json, {source: {1, 2}})
+
+    assert result.covered == 1
+    assert result.total == 2
+    assert result.percent == 50.0
+    assert result.missing == {source: [2]}
 
 
 @pytest.mark.parametrize("explicit_parent", [True, False])
@@ -188,6 +229,7 @@ def test_coverage_exports_keep_production_and_exclude_removed_runtime_settings(
         "benchmark/example.py",
         "libs/kotaemon/kotaemon/example.py",
         "libs/ktem/ktem/example.py",
+        "libs/ktem/ktem_contracts/example.py",
         "libs/slide_cli/slide_cli/example.py",
         "app.py",
         "flowsettings.py",
@@ -239,10 +281,18 @@ def test_coverage_exports_keep_production_and_exclude_removed_runtime_settings(
         coverage.xml_report(outfile=str(output / "missing-production.xml"))
 
 
-@pytest.mark.parametrize("package", ["kotaemon", "ktem", "slide_cli"])
+@pytest.mark.parametrize(
+    "package, source_path",
+    [
+        ("kotaemon", "libs/kotaemon/kotaemon"),
+        ("ktem", "libs/ktem/ktem"),
+        ("slide_cli", "libs/slide_cli/slide_cli"),
+        ("ktem_contracts", "libs/ktem/ktem_contracts"),
+    ],
+)
 @pytest.mark.parametrize("separator", ["/", "\\"])
 def test_coverage_combines_package_working_directory_paths(
-    tmp_path, monkeypatch, request, package, separator
+    tmp_path, monkeypatch, request, package, source_path, separator
 ):
     from coverage import Coverage, CoverageData
 
@@ -251,7 +301,7 @@ def test_coverage_combines_package_working_directory_paths(
     repo.mkdir()
     monkeypatch.chdir(repo)
     monkeypatch.setattr(coverage_gate, "REPO_ROOT", repo)
-    production_name = f"libs/{package}/{package}/__init__.py"
+    production_name = f"{source_path}/__init__.py"
     production = repo / production_name
     production.parent.mkdir(parents=True)
     production.write_text("FIRST = 1\nSECOND = 2\nUNCOVERED = 3\n", encoding="utf-8")

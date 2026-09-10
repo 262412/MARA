@@ -15,10 +15,10 @@ COVERAGE_FLOORS = {
     "ktem": 50,
 }
 PRODUCTION_PATHS = {
-    "benchmark": "benchmark",
-    "slide_cli": "libs/slide_cli/slide_cli",
-    "kotaemon": "libs/kotaemon/kotaemon",
-    "ktem": "libs/ktem/ktem",
+    "benchmark": ("benchmark",),
+    "slide_cli": ("libs/slide_cli/slide_cli",),
+    "kotaemon": ("libs/kotaemon/kotaemon",),
+    "ktem": ("libs/ktem/ktem", "libs/ktem/ktem_contracts"),
 }
 COVERAGE_OMIT = (
     "*/tests/*",
@@ -34,12 +34,7 @@ TEST_SUITES = (
     ("libs/ktem/ktem_tests",),
     ("libs/slide_cli",),
 )
-SOURCE_PATHS = (
-    "benchmark",
-    "libs/kotaemon/kotaemon",
-    "libs/ktem/ktem",
-    "libs/slide_cli/slide_cli",
-)
+SOURCE_PATHS = tuple(path for paths in PRODUCTION_PATHS.values() for path in paths)
 ROOT_SOURCE_MODULES = ("app", "flowsettings", "sso_app", "sso_app_demo")
 
 
@@ -69,9 +64,9 @@ def write_coverage_config(output_dir: Path) -> Path:
     # Subprocesses started in a package directory record package-relative paths.
     # Merge those measurements into the same files used by the package floors.
     path_mappings = "\n".join(
-        f"{name} =\n    {path}\n    {name}"
-        for name, path in PRODUCTION_PATHS.items()
-        if path != name
+        f"{Path(path).name} =\n    {path}\n    {Path(path).name}"
+        for path in SOURCE_PATHS
+        if path != Path(path).name
     )
     config_path.write_text(
         "[run]\n"
@@ -136,7 +131,7 @@ def run_gates(output_dir: Path) -> None:
                 "report",
                 f"--fail-under={floor}",
                 "--precision=2",
-                f"--include={PRODUCTION_PATHS[name]}/*",
+                "--include=" + ",".join(f"{path}/*" for path in PRODUCTION_PATHS[name]),
             ),
             env=env,
         )

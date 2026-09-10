@@ -28,7 +28,7 @@ EXPECTED_WHEELS = {
 PACKAGE_ORDER = ("kotaemon", "ktem", "mara-research-cli", "mara-app")
 LAYER_IMPORTS = {
     "kotaemon": ("kotaemon",),
-    "ktem": ("ktem.index.file.pipelines",),
+    "ktem": ("ktem_contracts.file_selection", "ktem.index.file.pipelines"),
     "mara-research-cli": ("slide_cli.cli",),
 }
 KTEM_ASSETS = {

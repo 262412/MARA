@@ -73,10 +73,18 @@ def test_four_distribution_artifacts_have_apache_metadata_and_legal_files(tmp_pa
         assert any(
             name.endswith(".dist-info/licenses/NOTICE") for name in wheel_names
         ), package_name
+        if package_name == "ktem":
+            assert "ktem_contracts/file_selection.py" in wheel_names
 
         with tarfile.open(sdist_path, mode="r:gz") as sdist:
-            sdist_names = {Path(name).name for name in sdist.getnames()}
+            sdist_members = sdist.getnames()
+            sdist_names = {Path(name).name for name in sdist_members}
         assert {"LICENSE.txt", "NOTICE"} <= sdist_names, package_name
+        if package_name == "ktem":
+            assert any(
+                name.endswith("/ktem_contracts/file_selection.py")
+                for name in sdist_members
+            )
 
 
 def test_wheel_validator_rejects_artifact_without_legal_files(tmp_path):
@@ -176,7 +184,10 @@ def test_clean_layer_smoke_imports_representative_installed_modules():
     layer_imports = getattr(run_clean_wheel_smoke, "LAYER_IMPORTS", {})
 
     assert layer_imports["kotaemon"] == ("kotaemon",)
-    assert layer_imports["ktem"] == ("ktem.index.file.pipelines",)
+    assert layer_imports["ktem"] == (
+        "ktem_contracts.file_selection",
+        "ktem.index.file.pipelines",
+    )
     assert layer_imports["mara-research-cli"] == ("slide_cli.cli",)
     assert callable(getattr(run_clean_wheel_smoke, "_run_layer_imports", None))
 

@@ -246,3 +246,14 @@ def test_docqa_artifact_scope_uses_existing_merge_semantics():
         "page": 2,
         "note_ids": ["n", "n2"],
     }
+
+
+@pytest.mark.parametrize("module_name", LEGACY_MODULES)
+def test_legacy_paths_reexport_the_shared_functions(module_name):
+    from ktem_contracts import file_selection
+
+    legacy = importlib.import_module(module_name)
+    assert (
+        legacy.normalize_selected_file_ids is file_selection.normalize_selected_file_ids
+    )
+    assert legacy.merge_unique_file_ids is file_selection.merge_unique_file_ids
