@@ -1,39 +1,204 @@
 # MARA refactor status — 2026-09-10
 
-## Current round: review of 7496c6ae
+## Current round: S1 NLTK dependency security
 
-**The user-listed R0 gates passed. R1 is complete and its applicable gates passed.**
-The R1 source is `c693160e6e5f0e6c05edd8d507219679aad120d2`, normally pushed to
-`origin/codex/r0-r1-safe-refactor`; local and remote HEAD were verified equal at
-that source push.
-[Quality gates 34445819877, attempt 1](https://github.com/262412/MARA/actions/runs/34445819877)
-was dispatched once for that SHA with the explicit original Dev base. It is
-complete with overall **failure**: six NLTK audit jobs failed, so the required
-aggregate also failed. All full suites, static/hygiene, packaging, security
-smoke/secret scans and coverage gates passed. No R2 work has started.
+**R1 remains ACCEPTED. S1 is PARTIAL and security remains BLOCKED.**
+The accepted R1 implementation is `c693160e6e5f0e6c05edd8d507219679aad120d2`;
+the S1 starting review HEAD was `e28dd0cac4a0a6e9470490eb2b3649d674b1d139`.
+Reinspection of [run 34445819877, attempt 1](https://github.com/262412/MARA/actions/runs/34445819877)
+confirmed that its functional, static, installation, coverage and secret-scan
+checks passed. Its six NLTK audits and required aggregate failed. Older Windows
+failures and the older image secret-scan timeout are historical evidence only.
 
-The final report-only commit does not change the validated Python or workflow
-source and is not dispatched again. `evidence-summary-final.json` records the
-actual final local/remote HEAD, the validated source SHA and the report-only
-delta. The workflow as a whole remains NO-GO because of the six audit failures.
+S1 source `8ff3636d2af1ed1c37c81260635619828ea9ef07` was normally pushed on
+`codex/r0-r1-safe-refactor`. [Run 34455961530, attempt 1](https://github.com/262412/MARA/actions/runs/34455961530)
+was dispatched once after confirming no run existed for that SHA, using
+`base_ref=adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+**Final CI: FAILURE, 16 successful jobs and 4 failed jobs.** All three dependency
+audits fail solely on `nltk==3.10.3|GHSA-8mgp-746c-j5xp`, and the required
+aggregate fails because of them. All functional, static, installation, coverage,
+container and secret-scan checks pass at this exact source. The run and every
+job's head SHA were verified; no workflow rerun or waiver was used.
 
-The accepted R0 source is
-`8cc9e9403b92f87b15db82b000c24c65c47b84db`, pushed normally to
-`origin/codex/r0-r1-safe-refactor`. Its full Ubuntu validation completed as
-[Quality gates 34440810480, attempt 1](https://github.com/262412/MARA/actions/runs/34440810480),
-with original Dev `base_ref=adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
-The overall workflow conclusion is **failure** because the NLTK dependency/
-container audits failed and the image secret scan timed out. All R0-source
-full suites, static/hygiene checks, package coverage floors, exports and the
-90% production diff gate passed. The R1 entry conditions are recorded separately
-from that overall workflow conclusion.
+The final report-only follow-up changes this document, not the validated Python,
+dependency or workflow source. `s1-final-state.json` records its actual local and
+remote HEAD separately from validated source `8ff3636d`; no extra CI is dispatched
+for that report-only delta.
 
-This round explicitly permits small commits, normal same-branch pushes and the
-existing workflow dispatch. The historical statements below about an unpushed
-follow-up or remote `89d99551` describe the earlier authorization boundary;
-they are no longer current blockers. No new branch/worktree, history rewrite,
-force push, merge, release, key change, WSL installation or local environment
-synchronization has been performed. The pre-existing untracked `NUL` remains.
+### S1 changes and dependency provenance
+
+The affected surfaces are the four distributions' dependency metadata and
+NLTK-backed document text processing. CLI names/options, persisted formats,
+NLTK bootstrap behavior, R1 import aliases and production deadlines are preserved.
+The two small source commits are:
+
+- `25e591520d3859def9e72bc6600a196ef59310dd`: declare `nltk>=3.10.3,<4` in
+  `libs/kotaemon/pyproject.toml`; regenerate root/docker locks with the pinned
+  uv 0.11.19 and regenerate `constraints.txt` with the existing script.
+- `8ff3636d2af1ed1c37c81260635619828ea9ef07`: add ten offline NLTK compatibility
+  cases, a built-wheel metadata regression, and installed-version checks in the
+  existing four-layer clean wheel smoke.
+
+Actual root Python 3.10/3.11 and container Python 3.10 reverse trees show the
+original `nltk==3.10.0` arriving through `llama-index-core==0.10.68.post1`,
+`llama-index-legacy==0.9.48.post4` and `unstructured==0.15.14`, under kotaemon,
+ktem, mara-research-cli and mara-app. Root requirements consume the generated
+constraints; the sidecar build requirements do not override NLTK. All three
+prior image Trivy inventories independently contain NLTK 3.10.0.
+
+Among third-party locked packages, only NLTK's version and distribution hashes
+changed. The root lock
+generator also normalized dependency-edge markers on nine unrelated packages;
+their versions and artifact hashes are identical. Docker has no such marker
+churn, and the universal constraints diff changes only the NLTK line.
+Both frozen lock checks, generated constraints and container parity pass.
+PyPI's non-yanked 3.10.3 wheel (Python >=3.10) matches both locks:
+SHA-256 `ff9598a8e20518ee0d557745890cc4435b9578489e2dcbc69c4f81fa060caf7c`.
+The release tag is `v3.10.3` at `303f6e2ba8e4548a5f54fd65d86bb5c9a949f1db`.
+
+Four actual wheel/sdist builds pass Twine; four fresh layer environments and a
+fresh combined CLI environment resolve NLTK 3.10.3 and pass the existing smoke.
+The kotaemon wheel carries the lower bound, and all other wheel dependency
+chains reach it. An additional resolver check outside repository configuration,
+with the built wheels and an explicit `nltk==3.10.0`, fails as unsatisfiable
+because of that metadata bound. A safe lock alone is not the installation proof.
+
+### Advisory reconciliation and remaining boundary
+
+Official GitHub advisory metadata and the
+[PyPI 3.10.3 wheel](https://pypi.org/project/nltk/3.10.3/) were checked on 2026-09-10.
+The nine previously blocking dependency findings map as follows; the seven
+previously blocking image CVEs are a subset, not seven additional vulnerabilities.
+
+| GHSA                    | CVE / PYSEC aliases                  | Affected range   | First formal fix   |
+| ----------------------- | ------------------------------------ | ---------------- | ------------------ |
+| GHSA-3gq4-3j92-5w49     | CVE-2026-79674 / PYSEC-2026-3736     | <=3.10.2         | 3.10.3             |
+| GHSA-3hhw-38pf-pxj6     | CVE-2026-62383 / PYSEC-2026-3726     | >=3.10.0,<3.10.2 | 3.10.2             |
+| GHSA-6ww7-3frv-cqxh     | CVE-2026-78682 / PYSEC-2026-3733     | <=3.10.2         | 3.10.3             |
+| GHSA-8mpw-7fpc-4gqj     | CVE-2026-81725 / PYSEC-2026-3752     | <=3.10.2         | 3.10.3             |
+| GHSA-97qj-x29f-37w7     | CVE-2026-78681 / PYSEC-2026-3748     | <=3.10.2         | 3.10.3             |
+| GHSA-f833-7jw8-xwrv     | CVE-2026-62384 / PYSEC-2026-3789     | >=3.10.0,<3.10.2 | 3.10.2             |
+| GHSA-p4rw-rvv2-7xwr     | CVE-2026-79676 / PYSEC-2026-3737     | <=3.10.2         | 3.10.3             |
+| GHSA-w3v8-gmh9-3wv7     | CVE-2026-80206 / PYSEC-2026-3751     | <=3.10.2         | 3.10.3             |
+| GHSA-x99w-6fgc-pmfw     | CVE-2026-79657 / PYSEC-2026-3735     | <=3.10.2         | 3.10.3             |
+| **GHSA-8mgp-746c-j5xp** | **CVE-2026-81726 / PYSEC-2026-3740** | **<=3.10.3**     | **None published** |
+
+The contemporaneous raw 3.10.0 audit contains 35 scanner records representing
+20 GHSA issues after alias deduplication, including findings already in the
+unchanged baseline. At 3.10.3, 19 of those issues are absent and one remains.
+The full twenty-issue mapping, official ranges, aliases and fix versions are
+retained in `advisory-crosswalk.json`. Scanner messages about 26 resolved
+baseline entries are not treated as 26 distinct vulnerabilities.
+
+[GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp)
+has no first patched version in current upstream metadata. The older PYSEC alias
+claims a 3.10.3 fix; current GHSA metadata and actual released wheel behavior
+contradict that claim. With path enforcement enabled, an isolated probe makes
+`nltk.pathsec.open` reject two outside-root sentinel paths while
+`AveragedPerceptron.load/save` successfully read/write them. Both sentinels
+remain inside this task's temporary root. This verifies the library bypass,
+not a remote exploit against MARA. It is not classified as a false positive.
+
+MARA's ordinary token splitter uses LlamaIndex's tiktoken path. Its sentence
+window splitter uses `PunktSentenceTokenizer`; configured Unstructured readers
+reach sentence/word tokenization and tagging. The normal perceptron tagger load
+uses `load_from_json`, a separate guarded path. The repository search found no
+production call to the vulnerable low-level model-artifact APIs, but configurable
+readers/transformers and Python settings prevent a blanket unreachable claim.
+The relevant additional boundary is attacker control of a model artifact path
+or configurable Python component; ordinary uploaded text alone does not prove it.
+
+Until a formal compatible fix is available, proposed mitigations are to keep
+model/resource paths and Python configuration trusted, deny untrusted component
+selection, and limit the runtime OS account's readable/writable files. These
+reduce exposure and do not repair the library. No waiver, NLTK suppression,
+baseline expansion, scanner weakening or source-HEAD dependency was applied.
+The existing container scan uses `ignore-unfixed: true`; a passing container
+gate therefore cannot establish absence of this remaining unfixed issue.
+Downloaded lite/full/ollama evidence confirms the distinction: Trivy 0.70.0's
+filtered reports have no NLTK findings, while their CycloneDX SBOMs explicitly
+mark `pkg:pypi/nltk@3.10.3` as affected by `CVE-2026-81726`; SPDX retains the
+same advisory reference. All three complete image archives have verified GitHub ZIP
+digests, source revision, OCI provenance and installed-package metadata.
+
+### S1 verification and environment protection
+
+Evidence is retained outside Git in
+`D:\PythonProject\MARA-refactor-review-20260910-01a086ff\s1-nltk`.
+`execution.jsonl` records exact commands, exits, source hashes and task-owned
+environment/cache paths. Failed diagnostic attempts and their corrections are
+retained separately.
+
+| Local check                                                                | Result                                     |
+| -------------------------------------------------------------------------- | ------------------------------------------ |
+| Old 3.10.0 offline characterization                                        | 8 passed; fixed text expectations retained |
+| New compatibility plus cut/index, R1 old entries and DocQA scope contracts | 167 passed                                 |
+| Startup isolation, ordered resources and CLI contracts                     | 81 passed, 7 native Windows symlink skips  |
+| Distribution contracts and real built-wheel metadata                       | 22 passed                                  |
+| Four wheel/sdist builds, Twine and clean installation smoke                | Passed                                     |
+| Scoped hooks, full CI Ruff, hygiene and original-Dev baseline ratchet      | Passed                                     |
+| Root/container locks, generated constraints and lock parity                | Passed                                     |
+| All three dependency audit profiles                                        | Failed only on GHSA-8mgp-746c-j5xp         |
+
+| Current Ubuntu CI check at `8ff3636d`                                  | Result                                                                                                            |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| kotaemon Python 3.10 and 3.11                                          | Each 381 passed, 10 optional dependency skips                                                                     |
+| ktem isolated runtime                                                  | 2,786 passed                                                                                                      |
+| Benchmark/root contracts                                               | 1,622 passed                                                                                                      |
+| slide_cli and unified collection                                       | Passed; 5,092 tests collected                                                                                     |
+| Static/hooks, lock checks, hygiene and fixed original-Dev comparison   | Passed                                                                                                            |
+| Four clean wheel installations and Python supply chain                 | Passed; all four layers resolve NLTK 3.10.3                                                                       |
+| Frontend/browser security and both secret scans                        | Passed                                                                                                            |
+| lite/full/ollama container build, runtime smoke, frozen audit and SBOM | Passed; all three installed NLTK inventories are 3.10.3                                                           |
+| Package coverage floors                                                | Benchmark 90.22% / 90%; slide_cli 75.57% / 70%; kotaemon 70.11% / 60%; ktem including ktem_contracts 80.93% / 50% |
+| XML/JSON and 90% production diff                                       | Passed; 94.82% (183/193 statements) against the fixed original Dev base                                           |
+| Three dependency audits                                                | Failed only on GHSA-8mgp-746c-j5xp                                                                                |
+
+The Python distribution artifact contains all four wheels and four sdists with
+matching SHA-256, source commit and provenance, plus both SBOM formats. Each
+image artifact contains build metadata, provenance, the filtered Trivy report,
+SPDX and CycloneDX. ZIP hashes were checked against GitHub artifact metadata.
+The image manifests, installed package paths and unfiltered residual CVE are
+retained in `current-image-lite.json`, `current-image-full.json` and
+`current-image-ollama.json`; wheel verification is in `python-artifact-inspection.json`.
+
+Coverage artifact `10145259507` contains `.coverage`, `coverage.ini`,
+`coverage.xml` and `coverage.json`; its ZIP SHA-256 is
+`b36679824e5597813283d4e97097fde9a542174b0d598c3a5541b11acb17bfdf`, matching
+GitHub metadata. Both reports parse successfully, subprocess coverage remains
+enabled, and no deleted test-runtime source or package-relative duplicate paths
+remain. The R1 shared file-selection module has all 22 statements covered.
+Read-only inspection and an independent recomputation from the downloaded JSON
+confirm the package floors and the same 94.82% production diff; no local coverage
+collector was started. See `coverage-inspection/inspection.json` and
+`final-ci-artifact-diff-coverage.log`.
+
+The new pickle namespace rejection is a security regression that fails on
+3.10.0 and passes on 3.10.3. A legitimate legacy Punkt roundtrip also fails on
+3.10.0 and is restored by 3.10.3; it is not described as an old passing golden.
+Tests preserve real text algorithms, fixed expected chunks/metadata, negative
+cases and existing data formats. Downloads and network use are prohibited during
+the focused compatibility/index runs; the required tiktoken resource was
+explicitly prepared in the exclusive cache before those runs.
+
+Local installs, tests and clean-wheel checks use the exclusive environment and
+caches in `D:\MARA-s1-01a086ff`; workspace packages are non-editable. No canonical
+environment synchronization or local full-coverage collection occurred. The S1 before/after
+metadata inventories match for all 98,823 canonical environment entries, the
+614-entry retained application cache, the office cache and the known user config
+and SQLite paths. This is a metadata comparison, not a reconstruction of the
+pre-incident user configuration. The two historical cleanup-rejected directories
+were not touched, and the pre-existing untracked `NUL` remains.
+
+**Merge/release: NO-GO.** No merge, release, force push, new branch/worktree or R2
+work was performed. R1's completed status is preserved independently of S1's
+remaining security blocker. Completion of this S1 handoff does not start R2-A.
+
+## Previous R0/R1 evidence (retained history)
+
+The following sections retain earlier implementation, CI and incident evidence.
+Their historical authorization and failure statements do not replace the current
+S1 status above.
 
 ### Changes and affected surfaces
 
