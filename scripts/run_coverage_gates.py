@@ -4,6 +4,7 @@ import argparse
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -53,7 +54,18 @@ def write_coverage_config(output_dir: Path) -> Path:
     source_lines = "\n".join(
         f"    {path}" for path in (*SOURCE_PATHS, *ROOT_SOURCE_MODULES)
     )
-    omit_lines = "\n".join(f"    {pattern}" for pattern in COVERAGE_OMIT)
+    explicit_parent = os.environ.get("MARA_PYTEST_RUNTIME_PARENT", "").strip()
+    runtime_parent = (
+        Path(explicit_parent)
+        if explicit_parent
+        else Path(tempfile.gettempdir()) / "mara_pytest"
+    )
+    runtime_pattern = f"{runtime_parent.expanduser().resolve().as_posix()}/session-*/*"
+    # Test-owned settings can share a production module name, then be removed
+    # at session cleanup. Exclude these fixtures from collection and exports.
+    omit_lines = "\n".join(
+        f"    {pattern}" for pattern in (*COVERAGE_OMIT, runtime_pattern)
+    )
     config_path.write_text(
         "[run]\n"
         "patch = subprocess\n"
@@ -64,6 +76,8 @@ def write_coverage_config(output_dir: Path) -> Path:
         "omit =\n"
         f"{omit_lines}\n"
         "\n[report]\n"
+        "omit =\n"
+        f"{omit_lines}\n"
         "precision = 2\n",
         encoding="utf-8",
     )

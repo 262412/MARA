@@ -172,6 +172,70 @@ def test_coverage_policy_captures_python_subprocesses(tmp_path):
     assert "relative_files = True" in config
 
 
+@pytest.mark.parametrize("explicit_parent", [True, False])
+def test_coverage_exports_keep_production_and_exclude_removed_runtime_settings(
+    tmp_path, monkeypatch, explicit_parent
+):
+    from coverage import Coverage, CoverageData
+    from coverage.exceptions import NoSource
+
+    coverage_gate = _load_script("run_coverage_gates.py")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(coverage_gate, "REPO_ROOT", repo)
+    production = {
+        "benchmark/example.py",
+        "libs/kotaemon/kotaemon/example.py",
+        "libs/ktem/ktem/example.py",
+        "libs/slide_cli/slide_cli/example.py",
+        "app.py",
+        "flowsettings.py",
+        "sso_app.py",
+        "sso_app_demo.py",
+    }
+    for name in production:
+        path = repo / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("COVERED = 1\nUNCOVERED = 2\n", encoding="utf-8")
+    if explicit_parent:
+        runtime_parent = tmp_path / "runtimes"
+        monkeypatch.setenv("MARA_PYTEST_RUNTIME_PARENT", str(runtime_parent))
+    else:
+        runtime_parent = tmp_path / "mara_pytest"
+        monkeypatch.delenv("MARA_PYTEST_RUNTIME_PARENT", raising=False)
+        monkeypatch.setattr(coverage_gate.tempfile, "gettempdir", lambda: str(tmp_path))
+    removed_settings = runtime_parent / "session-deleted" / "flowsettings.py"
+    removed_settings.parent.mkdir(parents=True)
+    removed_settings.write_text("FIXTURE = 1\n", encoding="utf-8")
+    removed_settings.unlink()
+    output = tmp_path / "coverage-artifacts"
+    config_path = coverage_gate.write_coverage_config(output)
+    data_path = output / ".coverage"
+    data = CoverageData(basename=str(data_path))
+    data.add_lines({**{name: [1] for name in production}, str(removed_settings): [1]})
+    data.write()
+
+    def forbid_collection(*_args, **_kwargs):
+        raise AssertionError("Export regression must not start coverage collection")
+
+    monkeypatch.setattr(Coverage, "start", forbid_collection)
+    coverage = Coverage(config_file=str(config_path), data_file=str(data_path))
+    coverage.load()
+    assert coverage.xml_report(outfile=str(output / "coverage.xml")) == 50.0
+    assert coverage.json_report(outfile=str(output / "coverage.json")) == 50.0
+    payload = json.loads((output / "coverage.json").read_text(encoding="utf-8"))
+    assert set(payload["files"]) == production
+    for file_data in payload["files"].values():
+        assert file_data["executed_lines"] == [1]
+        assert file_data["missing_lines"] == [2]
+
+    # Missing real production code must still fail rather than be ignored.
+    (repo / "flowsettings.py").unlink()
+    with pytest.raises(NoSource, match="flowsettings.py"):
+        coverage.xml_report(outfile=str(output / "missing-production.xml"))
+
+
 def test_qasper_local_gate_covers_provider_generation_and_audit():
     qasper_gate = _load_script("run_qasper_local_gate.py")
 
