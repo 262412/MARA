@@ -16,8 +16,11 @@ from theflow.settings.default import *  # noqa
 
 
 def _load_user_overrides(path: Path) -> dict[str, object]:
+    validate_test_runtime_paths({"THEFLOW_SETTINGS_MODULE": path})
     if not path.exists():
         return {}
+    if os.environ.get("MARA_PYTEST_RUNTIME_ROOT"):
+        path = path.resolve()
 
     spec = importlib.util.spec_from_file_location("kotaemon_user_flowsettings", path)
     if spec is None or spec.loader is None:
@@ -25,7 +28,9 @@ def _load_user_overrides(path: Path) -> dict[str, object]:
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return {name: getattr(module, name) for name in dir(module) if name.isupper()}
+    overrides = {name: getattr(module, name) for name in dir(module) if name.isupper()}
+    validate_test_runtime_paths(overrides)
+    return overrides
 
 
 runtime_paths = get_runtime_paths()

@@ -219,3 +219,55 @@ def test_test_owned_config_cannot_redirect_storage_outside_session(
     payload = json.loads(result.stdout.strip().splitlines()[-1])
     assert "outside the isolated test runtime" in payload["error"]
     assert payload["denied"] == []
+
+
+@pytest.mark.parametrize("source_mode", ["workspace", "explicit", "packaged", "named"])
+@pytest.mark.parametrize("setting", ["STORAGE", "KH_DATABASE"])
+def test_settings_entrypoints_reject_external_values_before_storage_io(
+    tmp_path, source_mode, setting
+):
+    def configure(environment, paths, outside):
+        value = (
+            {"__type__": "theflow.storage.LocalStorage", "prefix": str(outside)}
+            if setting == "STORAGE"
+            else "sqlite:///" + str(outside / "sql.db")
+        )
+        source = paths.root / "flowsettings.py"
+        if source_mode == "packaged":
+            source = paths.root / "config" / "flowsettings.py"
+        elif source_mode == "explicit":
+            environment["THEFLOW_SETTINGS_MODULE"] = str(source)
+        elif source_mode == "named":
+            source = paths.root / "owned_runtime_settings.py"
+            environment["THEFLOW_SETTINGS_MODULE"] = "owned_runtime_settings"
+        else:
+            environment.pop("THEFLOW_SETTINGS_MODULE")
+        source.write_text(f"{setting} = {value!r}\n", encoding="utf-8")
+
+    result, _ = _controlled_process(tmp_path, configure)
+
+    assert result.returncode == 3, result.stdout + result.stderr
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+    assert "outside the isolated test runtime" in payload["error"]
+    assert payload["denied"] == []
+
+
+@pytest.mark.parametrize("settings_first", [False, True])
+def test_owned_named_config_keeps_real_storage_inside_session(tmp_path, settings_first):
+    def configure(environment, paths, _outside):
+        environment["THEFLOW_SETTINGS_MODULE"] = "owned_runtime_settings"
+        environment["MARA_TEST_SETTINGS_FIRST"] = "1" if settings_first else "0"
+        (paths.root / "owned_runtime_settings.py").write_text(
+            "from ktem.default_flowsettings import *\n"
+            "STORAGE = dict(STORAGE)\n"
+            f"STORAGE['prefix'] = {str(paths.root / 'custom-storage')!r}\n",
+            encoding="utf-8",
+        )
+
+    result, paths = _controlled_process(tmp_path, configure)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+    assert Path(payload["actual"]["storage"]) == paths.root / "custom-storage"
+    assert payload["child"]["actual"] == payload["actual"]
+    assert payload["denied"] == []
