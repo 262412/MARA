@@ -34,23 +34,12 @@ The top-level line currently centers on:
 
 ## Install
 
-From PyPI:
-
-```shell
-pip install mara-research-cli
-```
-
-From TestPyPI:
-
-```shell
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mara-research-cli
-```
-
-From source:
-
-```shell
-uv sync --extra mara
-```
+Use the [repository installation guide](../../README.md#install-web-and-cli)
+([中文](../../README.zh-CN.md#安装-web-与-cli)). It covers Python 3.10,
+the required uv version, model configuration, and the Windows/POSIX installers.
+Run the installer from the primary checkout so the locked workspace packages
+remain non-editable. Public PyPI and TestPyPI metadata for `mara-research-cli`
+returned 404 when checked on 2026-09-10.
 
 ## Verify
 
@@ -62,15 +51,18 @@ MARA docqa --help
 
 ## Recommended Packaged Runtime Workflow
 
-Install the public CLI package and initialize the packaged runtime once:
+After installing from source, use the runtime configuration described in the
+root guide. To initialize user-level configuration for packaged-runtime use:
 
 ```shell
-pip install mara-research-cli
 MARA app init
 MARA app doctor
 MARA doctor
 MARA docqa --help
 ```
+
+Check the effective paths with `MARA app doctor`: a workspace `flowsettings.py`
+can take precedence over packaged configuration.
 
 Use `MARA docqa doctor` first in a fresh environment, then `MARA docqa index`, `MARA docqa files`, `MARA docqa delete`, `MARA docqa ask`, `MARA docqa chat`, `MARA docqa resume`, and `MARA docqa sessions` as needed.
 `MARA docqa acceptance` and `MARA docqa check` stay available as maintainer commands rather than part of the focused slide skill family.

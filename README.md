@@ -1,243 +1,103 @@
-<a id="top"></a>
-
-<div align="center">
-
 # MARA
 
-Local-first document QA, inspectable evidence, knowledge graph exploration, study artifact generation, and route-aware model workflows.
+**Multimodal Agentic Retrieval and Answering**
 
-本地优先的文档问答、可检查证据、知识图谱探索、学习资料生成与 route-aware 模型工作流。
+A document research workbench for asking questions about your own sources,
+inspecting the supporting evidence, and turning findings into notes and study
+materials.
 
-MARA is a branded fork of [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon). The fork keeps the upstream Apache License 2.0 attribution while presenting the user-facing product as `MARA`. Internal Python package names such as `kotaemon`, `ktem`, and `slide_cli` remain for compatibility, but the public product commands are `MARA` and `MARA-cli`.
+[中文说明](README.zh-CN.md) ·
+[Install](#install-web-and-cli) ·
+[Web](#use-the-web-workbench) ·
+[CLI](#use-the-cli) ·
+[Desktop](#use-mara-desktop-preview) ·
+[Research and limitations](#research-and-expected-results)
 
-MARA 是基于 [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon) 的品牌化分支，保留 Apache License 2.0 授权与上游归属说明。当前仓库仍保留 `kotaemon`、`ktem`、`slide_cli` 等内部包名以维持兼容性，但用户侧公开产品入口是 `MARA` 与 `MARA-cli`。
+MARA builds on [Kotaemon](https://github.com/Cinnamon/kotaemon). It adds an
+application layer that connects question requirements, retrieval routes,
+evidence identities, verification, and recovery, together with shared document
+QA services for the browser and command line. It uses existing language models
+and retrieval backends; you configure the models that perform inference.
 
-[English](#english) | [中文](#中文)
+## What can I do with MARA?
 
-English:
-[Overview](#overview) |
-[Screenshots](#screenshots) |
-[Features](#core-capabilities) |
-[Quick Start](#quick-start) |
-[CLI](#cli-usage) |
-[Architecture](#architecture-and-layout) |
-[Configuration](#configuration) |
-[Development](#development-and-verification) |
-[License](#license)
+- Read a paper, report, manual, or slide deck and ask questions about the whole
+  document, a page, a selected passage, or several documents.
+- Inspect retrieved passages and citations alongside the document preview.
+- Explore relationships through a knowledge graph and use a selected node as
+  context for a follow-up question.
+- Save sources, answers, and research notes in a conversation.
+- Generate a study guide, quiz, flashcards, a briefing, a comparison table, or
+  other Studio artifacts, then export the supported formats.
+- Run document QA from scripts, or use the separate slide/workspace commands to
+  inspect, review, and work with presentations.
 
-中文:
-[项目定位](#项目定位) |
-[截图](#截图) |
-[核心能力](#核心能力) |
-[快速开始](#快速开始) |
-[CLI 使用](#cli-使用) |
-[架构与目录](#架构与目录) |
-[配置](#配置) |
-[开发与验证](#开发与验证) |
-[许可](#许可)
+**Local-first describes storage, not an automatic offline mode.** Source files,
+indexes, and conversation data can stay on your machine. A remote model or
+document-processing service may receive your question, retrieved content,
+conversation context, or page images. A fully local workflow also requires local
+inference and parsing backends, with their models and resources available.
 
-</div>
+The default file collection accepts PDF; Word (`.doc`, `.docx`); Excel (`.xls`,
+`.xlsx`); PowerPoint (`.ppt`, `.pptx`); CSV; HTML/MHTML; text and Markdown;
+PNG/JPEG/TIFF images; and ZIP archives. Accepted extensions describe the input
+surface. Successful extraction still depends on the document and reader setup.
 
-<a id="english"></a>
+## Choose your interface
 
-## English
-
-### Overview
-
-MARA (Multimodal Agentic Retrieval and Answering) is a local-first document research workbench for mixed academic, technical, financial, and slide-based documents. It is not a single demo page: the repository contains a runnable Gradio application, a command-line automation surface, and a benchmark framework for document-intelligence workflows.
-
-The current implementation is built around one shared runtime:
-
-- A Gradio Web UI for document upload, source selection, page preview, grounded chat, citation review, route-aware reasoning summaries, knowledge graph exploration, Mind Map browsing, research notes, and Studio artifact generation.
-- `MARA docqa`, a document-QA CLI that reuses the same runtime settings, file index, saved conversations, selected sources, notes, artifacts, and graph cache as the Web UI.
-- A Self-RAG-inspired application controller for MARA reasoning. It does not train a new Self-RAG model; it exposes explicit route, retrieval, evidence, verification, retry, and abstention decisions in ordinary runtime metadata.
-- The top-level `MARA` CLI for deck workflows, workspace file operations, model routing, platform support assets, and application lifecycle commands.
-- `app.py` and `sso_app.py` for source-mode startup and Google / Keycloak SSO startup.
-- `benchmark/`, a route-matrix evaluation framework for document format robustness, DocQA routes, MARA agentic reasoning routes, multimodal evidence tracking, dataset-native scoring, and diagnostic proxy metrics.
-
-The main design goal is to let one configuration, one local index, and one conversation store support both browser workflows and terminal workflows. MARA can be used as a ready-to-run local document QA app, or as a foundation for a custom RAG / document intelligence system that needs inspectable evidence rather than opaque answers.
-
-### Screenshots
-
-![MARA workbench overview](docs/images/mara-workbench-overview.png)
-
-The main workbench combines a source browser, page preview, scoped QA controls, citations, Studio artifacts, research notebook state, and runtime status in one local interface.
-
-| File indexing | Grounded chat | Evidence review |
+| Interface | Best for | Current scope |
 | --- | --- | --- |
-| ![MARA file index](docs/images/file-index-tab.png) | ![MARA chat workbench](docs/images/chat-tab.png) | ![MARA evidence panel](docs/images/info-panel-scores.png) |
+| **Web workbench** | Reading documents, checking evidence, graph exploration, notes, and Studio | The broadest interactive workflow; runs locally in your browser through Gradio. |
+| **MARA CLI** | Repeatable questions, batch workflows, structured output, and slide tools | `MARA docqa` uses shared document QA services. `MARA` and `MARA-cli` expose the same public commands. |
+| **MARA Desktop** | A native window, file import, background indexing, and conversation tasks | Windows/Linux **testing preview**. It does not yet cover every Web feature. |
 
-| Knowledge graph | Studio artifacts | Model resources |
+Codex and Claude Code integrations are optional ways to invoke these commands,
+described [below](#codex-and-claude-code). They are separate from the three
+application interfaces.
+
+| Operating system | Web and CLI from source | Desktop distribution |
 | --- | --- | --- |
-| ![MARA knowledge graph](docs/images/preview-graph.png) | ![MARA Studio artifacts](docs/images/mara-studio-artifacts.png) | ![MARA resources](docs/images/resources-tab.png) |
+| Windows | PowerShell installer; Python 3.10 | Windows x64 preview archive |
+| Linux | Bash installer; Python 3.10 | Linux x64 preview, built for Ubuntu 22.04; see the release's tested systems |
+| macOS | Bash installer is provided; native parsing dependencies need a compatible local setup | No macOS desktop package is documented or provided by the current packaging scripts |
 
-### Core Capabilities
+## Install Web and CLI
 
-#### Web UI And Document QA
+### 1. Prepare the tools
 
-- Local Gradio Web UI with [app.py](app.py) as the default source-mode entrypoint.
-- PDF.js page preview, with Office preview available through LibreOffice-to-PDF conversion.
-- Document-level, page-level, multi-document, and selected-text-focused QA.
-- Citation-aware answers that can be inspected against the document preview.
-- Route-aware answer panel that can summarize scope, retrieval route, evidence modalities, verification status, and controller trace events when MARA reasoning metadata is available.
-- Right-side knowledge graph workflow with generation, refresh, node selection, suggested question loading, and fullscreen Mind Map viewing.
-- Research notebook and Studio panels for selected sources, saved notes, saved answers, generated artifacts, artifact export, regeneration, and deletion.
-- Optional SSO wrapper in [sso_app.py](sso_app.py) for Google and Keycloak.
+Install [Git](https://git-scm.com/downloads), a local **Python 3.10** interpreter,
+and **uv 0.11.19**, the version required by this checkout's
+[pyproject.toml](pyproject.toml).
 
-#### CLI And Automation
-
-- The `mara-research-cli` package installs the public `MARA` and `MARA-cli` commands.
-- Use `MARA ...` for the high-permission product shell and `MARA docqa ...` for the specialist document-QA line.
-- `MARA docqa` reuses the application runtime, file index, conversation state, source selection, notes, artifacts, and graph cache.
-- Common DocQA commands include `MARA docqa index`, `MARA docqa files`, `MARA docqa delete`, `MARA docqa ask`, `MARA docqa chat`, `MARA docqa sessions`, `MARA docqa resume`, `MARA docqa notes`, `MARA docqa sources`, and `MARA docqa artifacts`.
-- Focused DocQA platform skills include `MARA-docqa-delete` for source removal.
-- `MARA app` initializes, checks, and launches the packaged Web UI runtime.
-- `MARA model` generates model routing config, checks provider availability, and runs one routed model call.
-- `MARA platform` installs and validates Codex / Claude Code support assets.
-- The top-level `MARA` line also exposes `MARA inspect`, `MARA read-slide`, `MARA extract`, `MARA search`, `MARA files`, `MARA read`, `MARA write`, `MARA delete`, `MARA shell`, review, and PDF export.
-
-#### MARA Reasoning And Study Artifacts
-
-The default runtime registers these reasoning pipelines:
-
-- `FullQAPipeline`
-- `MaraAgentPipeline`
-- `FullDecomposeQAPipeline`
-- `ReactAgentPipeline`
-- `RewooAgentPipeline`
-
-`MARA docqa ask --reasoning mara` can combine task type, agent mode, and artifact type for more structured outputs. Current task types include:
-
-- `qa`
-- `summary`
-- `compare`
-- `explain`
-- `study_guide`
-- `quiz`
-- `flashcards`
-- `mindmap`
-- `slide_outline`
-- `briefing_doc`
-- `faq`
-- `timeline`
-- `custom_report`
-- `data_table`
-- `infographic`
-- `slide_deck`
-- `audio_overview`
-- `video_overview`
-
-Saved artifact types include:
-
-- `study_guide`
-- `quiz`
-- `flashcards`
-- `mindmap`
-- `slide_outline`
-- `briefing_doc`
-- `faq`
-- `timeline`
-- `custom_report`
-- `data_table`
-- `infographic`
-- `slide_deck`
-- `audio_overview`
-- `video_overview`
-
-Route-aware MARA runs can expose controller metadata for:
-
-- Direct answer or abstention.
-- Document text evidence.
-- Page-image evidence when a visual backend or page-image records are available.
-- Element evidence for table, figure, formula, slide, or page-element records.
-- Knowledge graph evidence for global summaries, comparison, and "connect the dots" tasks.
-- Hybrid evidence that combines text, page-image, element, and graph signals.
-- Light or strict answer verification modes, depending on CLI/runtime configuration.
-
-#### Document Formats And Indexing
-
-The default `FileIndex` file collection supports:
-
-```text
-.png, .jpeg, .jpg, .tiff, .tif, .pdf, .xls, .xlsx, .doc, .docx,
-.ppt, .pptx, .csv, .html, .mhtml, .txt, .md, .zip
-```
-
-The runtime creates local directories for application data, file storage, parse cache, OCR cache, Office conversion cache, ZIP extraction cache, vector storage, and document storage. The default setup uses:
-
-- `LanceDBDocumentStore` for document storage.
-- `ChromaVectorStore` for vector storage.
-- `ktem.index.file.FileIndex` as the default file index type.
-
-#### Models And Providers
-
-The current runtime covers OpenAI, Azure OpenAI, Google Gemini, Anthropic Claude, Groq, Cohere, Mistral, VoyageAI, Ollama, FastEmbed, and local reranking paths. Actual availability depends on your `.env`, local services, and credentials.
-
-`modelcli.yml` separates model aliases, provider priority, and command-line provider checks from the main app runtime.
-
-### Quick Start
-
-#### Option 1: Install The Public CLI Package
-
-Use this path when you want MARA's application and CLI capabilities without editing the source tree.
+The installers expect Python to be installed already and disable automatic
+Python downloads. For example, with Python available:
 
 ```shell
-pip install mara-research-cli
-MARA app init
-MARA app doctor
-MARA app run
+python -m pip install "uv==0.11.19"
+uv --version
+uv python find 3.10
 ```
 
-For TestPyPI validation, use:
+On Windows, use `py -3.10 -m pip` if `python` does not select Python 3.10.
+On macOS/Linux, the interpreter may be named `python3.10`.
+
+The first install downloads the locked runtime dependencies and can take time.
+A local GPU is not required when using remote inference. Local models have their
+own RAM/VRAM requirements.
+
+The Python distribution that provides the commands is named
+`mara-research-cli`. On **2026-09-10**, its public PyPI and TestPyPI metadata
+endpoints returned 404. Use the source installation below instead of relying
+on a package-index installation.
+
+### 2. Clone and configure
 
 ```shell
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mara-research-cli
+git clone https://github.com/262412/MARA.git
+cd MARA
 ```
 
-After startup, open the local URL printed by Gradio. The local default is
-`http://localhost:7860/`; override it with `MARA app run --port ...`,
-`GRADIO_SERVER_PORT`, or platform `PORT` when deploying.
-
-Useful health checks:
-
-```shell
-MARA --help
-MARA doctor
-MARA docqa doctor
-MARA docqa --help
-```
-
-#### Option 2: Source Install For Development
-
-Use this path when you want to modify the UI, DocQA runtime, knowledge graph, platform assets, or CLI.
-
-```shell
-python -m venv .venv
-```
-
-Windows PowerShell:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-macOS / Linux:
-
-```shell
-source .venv/bin/activate
-```
-
-Install local packages:
-
-```shell
-uv sync --extra mara
-```
-
-Prepare environment variables:
-
-```shell
-cp .env.example .env
-```
+Create a repository-root `.env` from [.env.example](.env.example):
 
 Windows PowerShell:
 
@@ -245,912 +105,488 @@ Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-Start the source-mode Web UI:
+macOS/Linux:
 
-```shell
-python app.py
-```
-
-In source mode, root [flowsettings.py](flowsettings.py) is the runtime settings entrypoint, and local app data is written to `./ktem_app_data`.
-
-#### Option 3: Docker
-
-The repository includes a multi-stage [Dockerfile](Dockerfile):
-
-| Target   | Purpose                                                                                 |
-| -------- | --------------------------------------------------------------------------------------- |
-| `lite`   | Baseline Web UI / DocQA runtime with the locked CPU dependency set                     |
-| `full`   | Adds LibreOffice, Tesseract, and other OS document-processing tools                    |
-| `ollama` | Extends `full` with a pinned Ollama runtime; no model is pulled during the image build |
-
-Build:
-
-```shell
-docker build --target full -t mara:full .
-```
-
-Run:
-
-```shell
-docker volume create mara-data
-MARA_SECRET_DIR="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX")"
-MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
-trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
-install -m 0600 /dev/null "$MARA_SECRET_FILE"
-read -rsp 'MARA admin password: ' MARA_ADMIN_PASSWORD
-printf '\n'
-printf '%s\n' "$MARA_ADMIN_PASSWORD" >"$MARA_SECRET_FILE"
-unset MARA_ADMIN_PASSWORD
-chmod 0444 "$MARA_SECRET_FILE"
-docker run \
-  -e MARA_AUTH_MODE=password \
-  --mount type=bind,src="$MARA_SECRET_FILE",dst=/run/secrets/mara_admin_password,readonly \
-  --mount type=volume,src=mara-data,dst=/var/lib/mara \
-  -p 7860:7860 \
-  --rm -it \
-  mara:full
-```
-
-The image runs as fixed user `10001:10001`, and `/var/lib/mara` is its only
-application-data root. The named volume inherits the image directory ownership,
-so first-run initialization remains writable without making the source tree
-writable. A plain bind-mounted secret must be readable by UID 10001; the example
-uses mode `0444` and keeps it outside the repository/build context. On shared
-hosts, prefer a Docker/Kubernetes secret configured for UID 10001 with mode
-`0440`; the temporary directory and file above are removed automatically when
-the shell exits. `.dockerignore` also excludes common secret names as a second
-line of defense. For SSO, set `MARA_AUTH_MODE=sso`,
-configure the SSO environment, and omit the password mount.
-
-Supply-chain scope:
-
-- All Python dependencies come from `uv.lock`; Linux containers select the
-  hash-locked PyTorch 2.8.0 CPU artifact.
-- Legacy Microsoft GraphRAG is not preinstalled because its Tenacity requirement
-  conflicts with the locked MARA runtime. The local lightweight graph route is
-  unchanged.
-- Adobe PDF Services SDK 2.3.1 is not preinstalled because its urllib3 constraint
-  conflicts with Gradio. Select the built-in PDF reader instead.
-- `docling` and `unstructured[all-docs]` are not injected after lock resolution;
-  `full` provides LibreOffice and Tesseract without weakening `pip check`.
-- The Ollama target contains the pinned binary and libraries but no implicitly
-  mutable model. Pull an explicitly selected model into the mounted
-  `/var/lib/mara/ollama` directory after deployment.
-- Package and image publishing remains hard-frozen until the required security
-  gates and external credential rotation are complete.
-- Supply-chain policy, pins, locks, build definitions, and scanner exclusions
-  require a current-head approval from another owner, member, or invited
-  collaborator. This
-  intentional two-person control means a sole owner cannot approve their own PR;
-  the repository must add a second trusted reviewer before changing these files.
-
-### CLI Usage
-
-#### Public Command Surface
-
-`MARA` and `MARA-cli` point to the same entrypoint. The current public top-level commands are:
-
-| Command                                              | Purpose                                                        |
-| ---------------------------------------------------- | -------------------------------------------------------------- |
-| `MARA app`                                           | Packaged app initialization, health checks, and Web UI launch  |
-| `MARA docqa`                                         | Document QA, indexing, sessions, notes, sources, and artifacts |
-| `MARA model`                                         | Model routing config, provider checks, and one routed run      |
-| `MARA platform`                                      | Codex / Claude Code support asset installation and validation  |
-| `MARA doctor`                                        | Top-level MARA agent runtime and provider checks               |
-| `MARA inspect`                                       | Inspect one slide deck                                         |
-| `MARA read-slide`                                    | Read one slide summary                                         |
-| `MARA extract`                                       | Extract deck or slide text                                     |
-| `MARA search`                                        | Search deck summaries                                          |
-| `MARA review`                                        | Run deterministic deck review heuristics                       |
-| `MARA export-pdf`                                    | Export a deck to PDF                                           |
-| `MARA run`                                           | Execute one high-permission deck workflow                      |
-| `MARA apply`                                         | Apply a saved session patch                                    |
-| `MARA chat` / `sessions` / `resume`                  | Interactive deck-agent sessions                                |
-| `MARA files` / `read` / `write` / `delete` / `shell` | Explicit workspace file and shell operations                   |
-
-#### DocQA Mainline
-
-Start with runtime checks:
-
-```shell
-MARA app doctor
-MARA docqa doctor
-```
-
-Index files, directories, or ZIP archives:
-
-```shell
-MARA docqa index ./docs/report.pdf
-MARA docqa index ./docs ./archive.zip --reindex
-MARA docqa files
-```
-
-Document-level QA:
-
-```shell
-MARA docqa ask --file report.pdf --prompt "Summarize this document"
-```
-
-Page-level QA:
-
-```shell
-MARA docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
-```
-
-Selected-text-focused QA:
-
-```shell
-MARA docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
-```
-
-MARA reasoning:
-
-```shell
-MARA docqa ask \
-  --file report.pdf \
-  --reasoning mara \
-  --agent-mode thorough \
-  --task study_guide \
-  --artifact study_guide \
-  --prompt "Create a source-grounded study guide"
-```
-
-Interactive sessions:
-
-```shell
-MARA docqa chat --file report.pdf
-MARA docqa sessions
-MARA docqa resume <conversation-id>
-```
-
-Interactive commands:
-
-```text
-/files
-/use <file>
-/page <n>
-/page clear
-/selected-text <text>
-/history
-/help
-/exit
-```
-
-#### Notes, Sources, And Artifacts
-
-MARA's DocQA notebook commands keep conversations, selected sources, notes, and generated artifacts on the same CLI line:
-
-```shell
-MARA docqa sources select <conversation-id> --file paper.pdf --file slides.pptx
-MARA docqa sources guide <conversation-id>
-MARA docqa notes add <conversation-id> --title "Key idea" --text "..."
-MARA docqa notes save-answer <conversation-id> --title "Saved answer"
-MARA docqa notes convert-source <conversation-id> --note <note-id>
-MARA docqa artifacts generate <conversation-id> --type quiz
-MARA docqa artifacts list <conversation-id>
-MARA docqa artifacts show <conversation-id> --artifact <artifact-id>
-MARA docqa artifacts export <conversation-id> --artifact <artifact-id> --format md
-MARA docqa artifacts evaluate <conversation-id> --artifact <artifact-id> --json
-MARA docqa artifacts evaluate <conversation-id> --json
-MARA docqa artifacts save-note <conversation-id> --artifact <artifact-id>
-MARA docqa artifacts regenerate <conversation-id> --artifact <artifact-id>
-MARA docqa artifacts delete <conversation-id> --artifact <artifact-id>
-```
-
-#### Model Routing
-
-```shell
-MARA model init-config --output modelcli.yml
-MARA model providers --config modelcli.yml
-MARA model run --prompt "health check" --model gpt-4o-mini --dry-run
-```
-
-#### Platform Assets
-
-```shell
-MARA platform list
-MARA platform install --platform codex --mode full --yes
-MARA platform install --platform claude-code --mode full --yes
-MARA platform status --platform codex
-MARA platform validate
-```
-
-Platform assets install the repository's MARA skills, commands, and support docs into external AI coding assistant environments such as Codex and Claude Code.
-
-### Architecture And Layout
-
-| Path                               | Purpose                                                                                                    |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [app.py](app.py)                   | Source-mode Gradio Web UI entrypoint                                                                       |
-| [sso_app.py](sso_app.py)           | FastAPI + Gradio SSO entrypoint                                                                            |
-| [flowsettings.py](flowsettings.py) | Source-mode runtime settings entrypoint                                                                    |
-| [libs/ktem](libs/ktem)             | Web UI, DocQA runtime, knowledge graph, preview, settings pages, and app-layer behavior                    |
-| [libs/kotaemon](libs/kotaemon)     | Core RAG components, loaders, LLM/embedding/reranking integrations, platform assets, and compatibility CLI |
-| [libs/slide_cli](libs/slide_cli)   | Public `MARA` / `MARA-cli` CLI, DocQA CLI, deck agent, and workspace commands                              |
-| [benchmark](benchmark)             | Evaluation framework, manifest normalization, and route-matrix runner                                      |
-| [docs](docs)                       | Usage docs, development docs, release notes, and thesis MVP notes                                          |
-| [scripts](scripts)                 | Release, PDF.js download, codebase hygiene, and maintenance scripts                                        |
-
-Core data flow:
-
-```text
-User / CLI / Web UI
-        |
-        v
-MARA runtime settings
-        |
-        v
-FileIndex + local storage + vector store
-        |
-        v
-Reasoning pipeline
-        |
-        v
-Answer + citations + graph context + notebook artifacts
-```
-
-### Configuration
-
-#### `.env`
-
-Start from [.env.example](.env.example), then fill only the providers you actually use. Common variables include:
-
-- OpenAI: `OPENAI_API_BASE`, `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDINGS_MODEL`
-- Azure OpenAI: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `OPENAI_API_VERSION`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`
-- Cohere: `COHERE_API_KEY`
-- VoyageAI: `VOYAGE_API_KEY`
-- Mistral: `MISTRAL_API_KEY`
-- Local models: `LOCAL_MODEL`, `LOCAL_MODEL_EMBEDDINGS`, `KH_OLLAMA_URL`
-- PDF.js: `PDFJS_VERSION_DIST`
-- SSO: `AUTHENTICATION_METHOD`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `KEYCLOAK_SERVER_URL`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_SECRET`
-
-#### `flowsettings.py`
-
-In source mode, [flowsettings.py](flowsettings.py) calls `build_kotaemon_settings(...)` to build MARA runtime settings:
-
-```python
-globals().update(
-    build_kotaemon_settings(
-        base_dir=this_dir,
-        app_data_dir=this_dir / "ktem_app_data",
-        docs_dir=this_dir / "docs",
-        mode="dev",
-    )
-)
-```
-
-Start here when changing the local data directory, development mode, document directory, or default settings source.
-
-#### `modelcli.yml`
-
-[modelcli.yml](modelcli.yml) controls command-line model routing. It is useful for:
-
-- Standardizing model aliases across a team.
-- Checking provider credentials before real API calls.
-- Supplying routing config to `MARA run` or `MARA model run`.
-
-### Benchmark
-
-The evaluation framework lives in [benchmark](benchmark). It supports normalized manifests, route matrices, DocQA runtime routes, MARA fast / thorough ablations, and metrics for answer quality, citation recall, page hits, multimodal evidence, claim verification, latency, and cache behavior.
-
-Reports separate score authority into three layers: paper-grade external metrics when an evaluator explicitly claims them, dataset-native local scores for local comparison, and MARA diagnostic proxy scores for controller, evidence, citation, groundedness, abstention, and format behavior.
-
-Example:
-
-```powershell
-python -m benchmark run `
-  --manifest benchmark/manifests/format_robustness.json `
-  --suite-name format-robustness-v1 `
-  --reader-mode default `
-  --retrieval-mode hybrid `
-  --top-k 5
-```
-
-Outputs are written under `benchmark/artifacts/`. See [benchmark/README.md](benchmark/README.md) for manifest and metric details.
-
-### Development And Verification
-
-Non-trivial repository changes must follow [docs/development/codebase-hygiene-contract.md](docs/development/codebase-hygiene-contract.md). Key points:
-
-- Preserve the public `MARA` / `MARA-cli` command surface.
-- Do not refresh `scripts/codebase_hygiene_baseline.json` only to make the hygiene gate pass.
-- Python changes need the relevant hygiene gate and pre-commit run for affected files.
-- CLI, DocQA, Gradio event-chain, persisted-data, and config changes need matching tests.
-- Repository-root `pytest -q` is not the default readiness signal while root collection conflicts remain.
-
-README-only changes usually do not need the Python hygiene gate, but should still verify links, public command descriptions, and code accuracy.
-
-#### Maintainer Checks
-
-```powershell
-MARA --help
-MARA docqa --help
-MARA app doctor
-MARA docqa doctor
-```
-
-When changing the `libs/slide_cli` public command surface:
-
-```powershell
-cd libs\slide_cli
-uv run --no-sync --python 3.10 python -m pytest -q
-```
-
-When changing the `libs/kotaemon` GitHub Actions unit-test path:
-
-```powershell
-cd libs\kotaemon
-uv run --no-sync --python 3.10 python -m pytest -q
-```
-
-### Current Boundaries
-
-- Legacy GraphRAG variables and compatibility hooks remain, but the default single-page QA path does not depend on Nano / Light / MS GraphRAG.
-- NotebookLM-style notes, sources, and artifacts are present in the CLI and right-side Studio panel.
-- Audio and video overview artifacts generate source-grounded scripts or scene plans by default; `mp3` and `mp4` export require `KH_MARA_ARTIFACT_MEDIA_EXPORT_ADAPTER`.
-- Data table, infographic, slide outline, and slide deck artifacts support local export paths such as CSV, SVG, Markdown, HTML, JSON, and PPTX.
-- Artifact evaluation reports local `proxy_metric` values and labels `external_metric` / `paper_grade_metric` as not configured or not claimed unless external benchmark adapters are run. Passing `--artifact` evaluates one artifact; omitting it summarizes all notebook artifacts, including source-format coverage across PDF, PPTX, DOCX, and image evidence.
-- Public sharing, cloud sync, and mobile clients are outside the current v1 scope.
-
-### License
-
-This project inherits the upstream Apache License 2.0 license. See [LICENSE.txt](LICENSE.txt) and [NOTICE](NOTICE).
-
-Upstream project:
-
-- [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon)
-
-<p align="right"><a href="#top">Back to top</a> | <a href="#中文">中文</a></p>
-
-<a id="中文"></a>
-
-## 中文
-
-### 项目定位
-
-MARA（Multimodal Agentic Retrieval and Answering）是面向学术、技术、财务和幻灯片类混合文档的本地优先文档研究工作台。它不是单页演示应用，而是一套可以本地运行、可以通过 CLI 自动化、也可以继续二次开发的文档智能仓库。
-
-当前实现围绕一个共享运行时展开：
-
-- Gradio Web UI：文档上传、来源选择、页面预览、grounded chat、引用查看、route-aware reasoning 摘要、知识图谱、Mind Map 浏览、研究笔记和 Studio artifact 生成。
-- `MARA docqa`：复用 Web UI 的配置、索引、会话、来源选择、笔记、artifacts 与知识图谱缓存的文档问答 CLI。
-- Self-RAG-inspired 应用层 controller：不会训练新的 Self-RAG 模型，而是在普通运行时元数据中显式记录 route、retrieval、evidence、verification、retry 和 abstention 决策。
-- `MARA` 顶层命令：面向演示文稿、工作区文件、模型路由、平台资产安装和应用生命周期的产品 CLI。
-- `app.py` / `sso_app.py`：源码模式 Web UI 入口，以及 Google / Keycloak SSO 包装入口。
-- `benchmark/`：用于文档格式鲁棒性、DocQA 路由、MARA agentic reasoning 路由、多模态证据、dataset-native scoring 和 diagnostic proxy metrics 的评测框架。
-
-项目当前的设计目标是让同一份配置、同一个文件索引、同一套会话数据同时服务浏览器体验和终端工作流。你可以把它作为一个可运行的本地文档 QA 应用，也可以把它作为需要可检查证据而不是黑盒回答的 RAG / 文档智能系统基础。
-
-### 截图
-
-![MARA workbench overview](docs/images/mara-workbench-overview.png)
-
-主工作台把 source browser、页面预览、scoped QA、引用、Studio artifacts、研究笔记和运行时状态放在同一个本地界面中。
-
-| 文件索引 | Grounded chat | 证据检查 |
-| --- | --- | --- |
-| ![MARA file index](docs/images/file-index-tab.png) | ![MARA chat workbench](docs/images/chat-tab.png) | ![MARA evidence panel](docs/images/info-panel-scores.png) |
-
-| 知识图谱 | Studio artifacts | 模型资源 |
-| --- | --- | --- |
-| ![MARA knowledge graph](docs/images/preview-graph.png) | ![MARA Studio artifacts](docs/images/mara-studio-artifacts.png) | ![MARA resources](docs/images/resources-tab.png) |
-
-### 核心能力
-
-#### Web UI 与文档问答
-
-- 基于 Gradio 的本地 Web UI，默认入口为 [app.py](app.py)。
-- 支持 PDF.js 页面预览；Office 文件可通过 LibreOffice 转换为 PDF 后预览。
-- 支持文档级、页级、多文档和选中文本聚焦问答。
-- 答案可携带引用信息，便于回到预览区检查证据。
-- 当 MARA reasoning 元数据可用时，答案区域可以展示 scope、retrieval route、evidence modalities、verification 状态和 controller trace 摘要。
-- 右侧知识图谱区域支持生成、刷新、节点选择、建议问题加载和全屏 Mind Map 浏览。
-- Research notebook 和 Studio 面板支持来源选择、笔记、保存答案、生成资料、artifact 导出、重新生成和删除。
-- SSO 入口 [sso_app.py](sso_app.py) 支持 Google 与 Keycloak 配置。
-
-#### CLI 与自动化
-
-- `mara-research-cli` 包安装公开命令 `MARA` 和 `MARA-cli`。
-- `MARA docqa` 复用应用运行时、文件索引、会话状态、来源选择、笔记、artifacts 和图谱缓存。
-- 常用 DocQA 命令包括 `MARA docqa index`、`MARA docqa files`、`MARA docqa delete`、`MARA docqa ask`、`MARA docqa chat`、`MARA docqa sessions`、`MARA docqa resume`、`MARA docqa notes`、`MARA docqa sources` 和 `MARA docqa artifacts`。
-- `MARA app` 管理打包运行时的初始化、健康检查和 Web UI 启动。
-- `MARA model` 提供模型路由配置生成、Provider 可用性检查和一次性模型调用。
-- `MARA platform` 安装和验证 Codex / Claude Code 平台支持资产。
-- `MARA` 顶层还提供幻灯片观察、审阅、PDF 导出、工作区读写和 shell 执行等高权限命令。
-
-#### MARA reasoning 与学习资料
-
-当前默认运行时注册以下推理管线：
-
-- `FullQAPipeline`
-- `MaraAgentPipeline`
-- `FullDecomposeQAPipeline`
-- `ReactAgentPipeline`
-- `RewooAgentPipeline`
-
-`MARA docqa ask --reasoning mara` 可以结合任务类型、agent 模式和 artifact 类型生成更结构化的结果。当前 CLI 支持的任务类型包括：
-
-- `qa`
-- `summary`
-- `compare`
-- `explain`
-- `study_guide`
-- `quiz`
-- `flashcards`
-- `mindmap`
-- `slide_outline`
-- `briefing_doc`
-- `faq`
-- `timeline`
-- `custom_report`
-- `data_table`
-- `infographic`
-- `slide_deck`
-- `audio_overview`
-- `video_overview`
-
-可保存的学习资料类型包括：
-
-- `study_guide`
-- `quiz`
-- `flashcards`
-- `mindmap`
-- `slide_outline`
-- `briefing_doc`
-- `faq`
-- `timeline`
-- `custom_report`
-- `data_table`
-- `infographic`
-- `slide_deck`
-- `audio_overview`
-- `video_overview`
-
-Route-aware MARA 运行可以暴露以下 controller 元数据：
-
-- Direct answer 或 abstention。
-- 文档文本证据。
-- 当 visual backend 或 page-image records 可用时的页面图像证据。
-- 表格、图像、公式、幻灯片或页面元素记录对应的 element evidence。
-- 面向全局总结、比较和“connect the dots”问题的知识图谱证据。
-- 组合 text、page-image、element 和 graph signals 的 hybrid evidence。
-- 取决于 CLI/runtime 配置的 light 或 strict answer verification。
-
-#### 文档格式与索引
-
-默认 `FileIndex` 文件集合支持以下类型：
-
-```text
-.png, .jpeg, .jpg, .tiff, .tif, .pdf, .xls, .xlsx, .doc, .docx,
-.ppt, .pptx, .csv, .html, .mhtml, .txt, .md, .zip
-```
-
-运行时会为应用数据、文件存储、解析缓存、OCR 缓存、Office 转换缓存、ZIP 展开缓存、向量库和文档库建立本地目录。默认配置中使用：
-
-- `LanceDBDocumentStore` 作为文档存储。
-- `ChromaVectorStore` 作为向量存储。
-- `ktem.index.file.FileIndex` 作为默认文件索引类型。
-
-#### 模型与 Provider
-
-当前运行时配置覆盖 OpenAI、Azure OpenAI、Google Gemini、Anthropic Claude、Groq、Cohere、Mistral、VoyageAI、Ollama、FastEmbed 以及本地 reranking 相关路径。实际可用性取决于你的 `.env`、本地服务和密钥配置。
-
-`modelcli.yml` 用于独立管理模型别名、Provider 优先级和运行前检查，适合把应用配置与命令行模型路由解耦。
-
-### 快速开始
-
-#### 方式一：安装公开 CLI 包
-
-适合直接使用 MARA 的应用和命令行能力。
-
-```shell
-pip install mara-research-cli
-MARA app init
-MARA app doctor
-MARA app run
-```
-
-验证 TestPyPI 发布包时使用：
-
-```shell
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mara-research-cli
-```
-
-启动后访问 Gradio 输出的本地地址。本地默认是
-`http://localhost:7860/`；部署或调试时可通过 `MARA app run --port ...`、
-`GRADIO_SERVER_PORT` 或平台提供的 `PORT` 覆盖。
-
-常用健康检查：
-
-```shell
-MARA --help
-MARA doctor
-MARA docqa doctor
-MARA docqa --help
-```
-
-#### 方式二：源码开发安装
-
-适合修改 UI、DocQA、知识图谱、平台资产或 CLI。
-
-```shell
-python -m venv .venv
-```
-
-Windows PowerShell:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-macOS / Linux:
-
-```shell
-source .venv/bin/activate
-```
-
-安装本地包：
-
-```shell
-uv sync --extra mara
-```
-
-准备环境变量：
-
-```shell
+```bash
 cp .env.example .env
 ```
 
+Edit `.env` **before the first runtime check or launch**. For a basic setup you
+need both a chat model and an embedding model. Chat produces answers; embeddings
+make documents searchable.
+
+For an OpenAI-compatible service that supports **both** endpoints, the minimal
+configuration has this shape:
+
+```dotenv
+OPENAI_API_BASE=https://api.openai.com/v1
+OPENAI_API_KEY=YOUR_API_KEY
+OPENAI_CHAT_MODEL=YOUR_CHAT_MODEL_ID
+OPENAI_EMBEDDINGS_MODEL=YOUR_EMBEDDING_MODEL_ID
+```
+
+Replace the placeholders with model IDs available to your account. Blank unused
+provider keys in the copied example. A chat-only endpoint cannot serve as an
+embedding endpoint; configure a separate embedding provider under **resources**
+in that case.
+
+For local inference, configure an available local service, such as Ollama, and
+set the model names it actually hosts:
+
+```dotenv
+LOCAL_MODEL=YOUR_LOCAL_CHAT_MODEL
+LOCAL_MODEL_EMBEDDINGS=YOUR_LOCAL_EMBEDDING_MODEL
+KH_OLLAMA_URL=http://localhost:11434/v1/
+```
+
+Select the intended default **LLM** and **Embedding** in the Web resources panel.
+Setting a model name does not download or start that model.
+
+### 3. Install the locked runtime
+
+Run the installer from the primary checkout.
+
 Windows PowerShell:
 
 ```powershell
-Copy-Item .env.example .env
+.\install.ps1
+.\.venv\Scripts\Activate.ps1
+MARA app run --host 127.0.0.1
 ```
 
-启动源码模式 Web UI：
+macOS/Linux:
 
-```shell
-python app.py
+```bash
+chmod +x install.sh
+./install.sh
+source .venv/bin/activate
+MARA app run --host 127.0.0.1
 ```
 
-源码模式下，根目录 [flowsettings.py](flowsettings.py) 会作为运行时设置入口，本地应用数据默认写入 `./ktem_app_data`。
+The scripts install the local workspace packages with the committed lockfile,
+include the CLI, initialize user configuration, and run `MARA app doctor`.
+If a step fails, address that error before launching. They do not install
+external models or operating-system document tools.
 
-#### 方式三：Docker
-
-仓库自带多阶段 [Dockerfile](Dockerfile)，主要目标为：
-
-| Target   | 用途                                                           |
-| -------- | -------------------------------------------------------------- |
-| `lite`   | 使用锁定 CPU 依赖集的基础 Web UI / DocQA 运行环境              |
-| `full`   | 额外包含 LibreOffice、Tesseract 等系统级文档处理工具            |
-| `ollama` | 在 `full` 基础上加入固定版本 Ollama；构建时不拉取任何模型       |
-
-构建：
+Open the URL printed by MARA, normally
+[http://127.0.0.1:7860](http://127.0.0.1:7860). Stop the server with
+`Ctrl+C`. Use another port when needed:
 
 ```shell
-docker build --target full -t mara:full .
+MARA app run --host 127.0.0.1 --port 7870 --no-browser
 ```
 
-运行：
+Port selection uses `--port`, then `GRADIO_SERVER_PORT`, then deployment `PORT`,
+with 7860 as the default.
+
+Without activating the environment, use `.venv\Scripts\MARA.exe` on Windows or
+`.venv/bin/MARA` on macOS/Linux.
+
+For updates, update the checkout and rerun its installer. Keep runtime data and
+configuration backed up. Skip recreating existing user configuration with
+`.\install.ps1 -SkipInit` on Windows or `SKIP_INIT=1 ./install.sh` on macOS/Linux.
+Use the same option if initial setup reports that the user config already exists.
+Routine commands should use the existing environment; do not resynchronize
+workspace packages as editable installs.
+
+### 4. Check what is ready
 
 ```shell
-docker volume create mara-data
-MARA_SECRET_DIR="$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX")"
-MARA_SECRET_FILE="$MARA_SECRET_DIR/admin-password"
-trap 'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"' EXIT
-install -m 0600 /dev/null "$MARA_SECRET_FILE"
-read -rsp 'MARA 管理员密码: ' MARA_ADMIN_PASSWORD
-printf '\n'
-printf '%s\n' "$MARA_ADMIN_PASSWORD" >"$MARA_SECRET_FILE"
-unset MARA_ADMIN_PASSWORD
-chmod 0444 "$MARA_SECRET_FILE"
-docker run \
-  -e MARA_AUTH_MODE=password \
-  --mount type=bind,src="$MARA_SECRET_FILE",dst=/run/secrets/mara_admin_password,readonly \
-  --mount type=volume,src=mara-data,dst=/var/lib/mara \
-  -p 7860:7860 \
-  --rm -it \
-  mara:full
-```
-
-镜像使用固定用户 `10001:10001`，`/var/lib/mara` 是唯一应用数据根目录。命名
-volume 会继承镜像目录的 ownership，因此首次初始化可写，同时源码仍保持只读。
-普通 bind secret 必须允许 UID 10001 读取；示例使用 `0444`，并把临时文件放在
-仓库和构建上下文之外。多用户主机优先使用 Docker/Kubernetes secret，将 UID
-设为 10001、mode 设为 `0440`；上例临时目录和文件会在 shell 退出时自动清理，
-`.dockerignore` 也会作为第二层防线排除常见 secret 文件名。SSO 部署应设置
-`MARA_AUTH_MODE=sso` 和对应 SSO 环境变量，并省略密码挂载。
-
-供应链范围：
-
-- 所有 Python 依赖来自 `uv.lock`；Linux 容器使用带哈希的 PyTorch 2.8.0 CPU 制品。
-- 旧 Microsoft GraphRAG 的 Tenacity 要求与当前锁冲突，因此容器不再预装；
-  MARA 的本地轻量图路由不受影响。
-- Adobe PDF Services SDK 2.3.1 的 urllib3 约束与 Gradio 冲突，因此容器不再预装；
-  请选择内置 PDF reader。
-- 不再在锁解析后注入 `docling` 或 `unstructured[all-docs]`；`full` 通过
-  LibreOffice 和 Tesseract 提供文档处理能力，同时保持 `pip check` 一致。
-- Ollama 镜像包含固定版本的二进制和库，但不隐式拉取可变模型；部署后请将
-  明确选择的模型拉取到挂载的 `/var/lib/mara/ollama`。
-- 在安全门禁完成并确认外部凭据轮换前，包和镜像发布继续保持硬冻结。
-- 供应链策略、固定版本、锁文件、构建定义和扫描器排除项必须由另一位仓库 owner、
-  member 或受邀 collaborator 对当前 PR head 批准。这是有意的双人控制；单一 owner 无法批准自己的
-  PR，修改这些文件前必须加入第二位可信 reviewer。
-
-### CLI 使用
-
-#### 公开命令面
-
-`MARA` 和 `MARA-cli` 指向同一个入口。当前公开顶层命令为：
-
-| 命令                                                 | 说明                                         |
-| ---------------------------------------------------- | -------------------------------------------- |
-| `MARA app`                                           | 打包应用初始化、健康检查和 Web UI 启动       |
-| `MARA docqa`                                         | 文档问答、索引、会话、笔记、资料和 artifacts |
-| `MARA model`                                         | 模型路由配置、Provider 检查和一次性运行      |
-| `MARA platform`                                      | Codex / Claude Code 平台资产安装与验证       |
-| `MARA doctor`                                        | 顶层 MARA agent 运行时和 Provider 检查       |
-| `MARA inspect`                                       | 检查一个幻灯片文件的结构摘要                 |
-| `MARA read-slide`                                    | 读取指定幻灯片页摘要                         |
-| `MARA extract`                                       | 提取整个 deck 或单页文本                     |
-| `MARA search`                                        | 在 deck 摘要中搜索文本                       |
-| `MARA review`                                        | 使用确定性启发式审阅一个 deck                |
-| `MARA export-pdf`                                    | 将 deck 导出为 PDF                           |
-| `MARA run`                                           | 执行一次高权限 MARA deck 工作流              |
-| `MARA apply`                                         | 应用已保存会话中的 patch                     |
-| `MARA chat` / `sessions` / `resume`                  | 交互式 deck-agent 会话                       |
-| `MARA files` / `read` / `write` / `delete` / `shell` | 显式工作区文件与 shell 操作                  |
-
-#### DocQA 主线
-
-首次使用建议先检查运行时：
-
-```shell
+MARA --help
+MARA-cli --help
+MARA doctor
 MARA app doctor
 MARA docqa doctor
 ```
 
-索引文件、目录或 ZIP：
+These checks report different things: command availability, agent/provider
+configuration, application paths, and document QA readiness. `MARA app doctor`
+can pass while warning that models are missing; `MARA docqa doctor` requires
+configured default LLM and embedding entries and fails until they are available.
+Successful indexing and a source-backed answer are the next checks.
+
+Optional document capabilities need additional tools:
+
+| Capability | Additional requirement |
+| --- | --- |
+| Office preview and conversion for Word, Excel, and PowerPoint | LibreOffice accessible to the runtime; conversion is strict by default |
+| Scanned documents and image text | An OCR-capable reader and its configured dependencies, such as Tesseract |
+| Visual question answering | Usable page-image evidence, a configured visual retriever where required, and a compatible vision generator |
+| Audio/video artifacts | The renderer/backend and media tools required by that artifact; installing the CLI alone is insufficient |
+
+Start with the included Markdown example before troubleshooting a more complex
+file format. The optional container workflow is in
+[Docker usage](docs/development/container-usage.md).
+
+## Use the Web workbench
+
+![MARA Web workbench before model setup and document import](docs/images/mara-web-start.png)
+
+Actual startup capture from a separate empty workspace. See the
+[screenshot notes](docs/images/README.md) for provenance and additional walkthrough captures.
+
+1. **Configure models.** Open **resources**, check the LLM and Embedding entries,
+   and select valid defaults. Saved model settings may already exist.
+2. **Import a source.** Open **files** or use the source panel's add/upload
+   control. Upload [mara-quickstart.md](docs/examples/mara-quickstart.md), or a
+   small document of your own. Wait for indexing to finish successfully.
+3. **Choose the scope.** Select a source and **Document** for whole-document QA.
+   Use **Page** with a selected page, or **Multi-doc** with several sources.
+   Selected-text questions also require the intended passage.
+4. **Ask a question.** For the example, ask:
+   “How many reports are in the pilot, and how are they split by format?”
+5. **Check the evidence.** The source states **12 reports: 8 PDFs and
+   4 presentations**. Inspect the answer's references and source context.
+   Exact wording varies with the model.
+6. **Keep useful work.** Save an answer or note, generate a Studio artifact from
+   the selected sources, or explore the knowledge graph and ask a follow-up.
+
+The example is fictional demonstration material. Its expected answer comes from
+the source text; it is not a reported benchmark result.
+
+For page-based sources, citation review and preview help you check which passage
+or page supports an answer. Evidence coverage, citation correctness, and answer
+correctness still require inspection.
+
+## Use the CLI
+
+Run these commands with the installed environment active and the same runtime
+configuration as your Web workspace.
+
+### Import, ask, and resume
 
 ```shell
-MARA docqa index ./docs/report.pdf
-MARA docqa index ./docs ./archive.zip --reindex
+MARA docqa index docs/examples/mara-quickstart.md
 MARA docqa files
-```
-
-文档级问答：
-
-```shell
-MARA docqa ask --file report.pdf --prompt "Summarize this document"
-```
-
-页级问答：
-
-```shell
-MARA docqa ask --file report.pdf --page 12 --prompt "What does this page say?"
-```
-
-选中文本聚焦问答：
-
-```shell
-MARA docqa ask --file report.pdf --selected-text "contract termination clause" --prompt "Explain this section"
-```
-
-MARA reasoning：
-
-```shell
-MARA docqa ask \
-  --file report.pdf \
-  --reasoning mara \
-  --agent-mode thorough \
-  --task study_guide \
-  --artifact study_guide \
-  --prompt "Create a source-grounded study guide"
-```
-
-交互式会话：
-
-```shell
-MARA docqa chat --file report.pdf
+MARA docqa ask --file mara-quickstart.md --prompt "How many reports are in the pilot, and how are they split by format?" --reasoning mara --route doc --citation inline
 MARA docqa sessions
-MARA docqa resume <conversation-id>
 ```
 
-交互式会话内支持：
+`index` accepts one or more paths. Check its reported failures, then confirm the
+file appears in `files`. `ask --file` selects an **already indexed** file by ID
+or name; it does not replace the import step. Prefer IDs when names are
+ambiguous.
 
-```text
-/files
-/use <file>
-/page <n>
-/page clear
-/selected-text <text>
-/history
-/help
-/exit
-```
+A normal text response includes the conversation ID, the answer, and available
+evidence. MARA runs can also report routing, retrieval, verification, and
+modality information. Add `--json` when consuming structured output.
 
-#### Notes、Sources 与 Artifacts
-
-MARA 的 DocQA notebook 命令把会话、来源选择、笔记和生成资料放在同一条 CLI 线上：
+Replace `CONVERSATION_ID` below with the returned ID:
 
 ```shell
-MARA docqa sources select <conversation-id> --file paper.pdf --file slides.pptx
-MARA docqa sources guide <conversation-id>
-MARA docqa notes add <conversation-id> --title "Key idea" --text "..."
-MARA docqa notes save-answer <conversation-id> --title "Saved answer"
-MARA docqa notes convert-source <conversation-id> --note <note-id>
-MARA docqa artifacts generate <conversation-id> --type quiz
-MARA docqa artifacts list <conversation-id>
-MARA docqa artifacts show <conversation-id> --artifact <artifact-id>
-MARA docqa artifacts export <conversation-id> --artifact <artifact-id> --format md
-MARA docqa artifacts evaluate <conversation-id> --artifact <artifact-id> --json
-MARA docqa artifacts evaluate <conversation-id> --json
-MARA docqa artifacts save-note <conversation-id> --artifact <artifact-id>
-MARA docqa artifacts regenerate <conversation-id> --artifact <artifact-id>
-MARA docqa artifacts delete <conversation-id> --artifact <artifact-id>
+MARA docqa ask --conversation CONVERSATION_ID --prompt "List the review stages."
+MARA docqa resume CONVERSATION_ID
 ```
 
-#### 模型路由
+Use `MARA docqa chat` to start interactive QA. Its REPL includes `/files`,
+`/use`, `/page`, `/selected-text`, `/history`, and `/exit`.
+
+### Control the question scope
+
+Index the example files in these commands first, then use their names or IDs:
+
+```shell
+MARA docqa ask --file report.pdf --page 3 --prompt "Explain the table on this page."
+MARA docqa ask --file report.pdf --selected-text "operating margin" --prompt "Explain this passage."
+MARA docqa ask --file report-a.pdf --file report-b.pdf --scope multi-document --prompt "Compare the stated assumptions." --reasoning mara --task compare
+```
+
+### Inspect routing and verification
+
+The controller can choose among direct, text, visual, element, graph, and hybrid
+paths, or abstain when the configured policy cannot obtain adequate support.
+The available paths depend on your indexed evidence and backends.
+
+```shell
+MARA docqa ask --file mara-quickstart.md --prompt "Summarize the pilot and cite the source." --reasoning mara --controller llm --route auto --verify light --json
+```
+
+This explicitly enables controller planning and light verification.
+The CLI defaults for `--controller` and `--verify` are **off**.
+A route label alone does not prove that images reached a vision model, and
+verification status does not guarantee factual correctness.
+Use `MARA docqa ask --help` for model, route, context-length, and language options.
+
+### Generate and export study materials
+
+```shell
+MARA docqa artifacts generate CONVERSATION_ID --type study_guide --file mara-quickstart.md --prompt "Create a short guide to the pilot."
+MARA docqa artifacts list CONVERSATION_ID
+MARA docqa artifacts export CONVERSATION_ID --artifact ARTIFACT_ID --format md --output study-guide.md
+```
+
+Replace both IDs with values from your session and artifact list. Other artifact
+types include quizzes, flashcards, mind maps, slide outlines, briefing documents,
+FAQs, timelines, custom reports, data tables, infographics, slide decks, and
+audio/video overviews. Supported exports include Markdown, HTML, JSON, CSV, SVG,
+PPTX, MP3, and MP4, **depending on the artifact type and installed dependencies**.
+
+`MARA docqa sources` and `MARA docqa notes` manage the conversation's notebook
+sources and notes. Inspect each command's `--help` for its arguments.
+
+### Slide tools and model routing
+
+Slide inspection is a separate workflow from document QA:
+
+```shell
+MARA inspect --file slides.pptx
+MARA read-slide --file slides.pptx --slide 1
+MARA extract --file slides.pptx
+MARA review --file slides.pptx
+MARA run --file slides.pptx --prompt "Rewrite the opening for executives." --dry-run
+```
+
+| Command | Purpose |
+| --- | --- |
+| `MARA inspect`, `MARA read-slide` | Inspect a deck or one slide |
+| `MARA extract`, `MARA search`, `MARA review` | Extract text, search deck content, or run a deterministic review |
+| `MARA files`, `MARA read` | List workspace files or read a text file |
+| `MARA write`, `MARA delete`, `MARA shell` | Write/delete workspace files or execute a shell command |
+
+The top-level `run`, `chat`, `sessions`, and `resume` commands manage deck-agent
+workflows. `apply` and `export-pdf` handle deck output.
+`files`, `read`, `write`, `delete`, and `shell` operate on workspace files.
+In particular, `MARA docqa delete` removes indexed sources; it is not the same as
+deleting a saved conversation or using `MARA delete`.
+
+The separate model-routing configuration can be inspected without changing the
+Web model defaults:
 
 ```shell
 MARA model init-config --output modelcli.yml
 MARA model providers --config modelcli.yml
-MARA model run --prompt "health check" --model gpt-4o-mini --dry-run
+MARA model run --help
 ```
 
-#### 平台资产
+## Use MARA Desktop (preview)
+
+Desktop uses Electron and React with a bundled Python service. Current source
+includes native file import, background indexing, file management, conversation
+creation/search/rename/delete, document and multi-document questions, streamed
+answers, cancellation, and retry.
+
+Page/selected-text scope, citation navigation and preview, Notes, Studio,
+complete resource/settings management, and data migration still have outstanding
+work. See the [feature matrix](docs/desktop/feature-parity-matrix.md) for the
+current evidence and acceptance status.
+
+### Download a preview
+
+The [indexing-readiness repair preview](https://github.com/262412/MARA/releases/tag/desktop-gate3-preview-4112e99)
+provides Windows x64 and Linux x64 archives with `SHA256SUMS.txt`.
+It is a pinned testing build; it may have fewer capabilities than current source.
+Check [Releases](https://github.com/262412/MARA/releases) for newer, non-withdrawn
+previews and their release notes.
+
+1. Download the archive for your OS and the checksum file from the same release.
+2. Verify the archive's SHA-256, then extract the **entire** archive.
+3. On Windows, launch `MARA.exe` from the extracted application directory.
+   On Linux, launch the extracted `MARA` executable.
+4. Check runtime status and model settings before importing a small document.
+   Configure chat and embeddings, import the file, wait for indexing, and start
+   a conversation.
+5. Check the answer and the task's completion status. Use Web for capabilities
+   that the preview has not yet integrated.
+
+Preview archives contain their runtime; users do not need to install Python or
+Node.js to run them. Keep the executable and its companion resources together.
+Windows 10/11 product acceptance for the linked build is still listed as pending
+in its release notes. No stable desktop-installer or macOS-support claim is made.
+
+### Run current Desktop source
+
+First install the Python runtime above. Desktop development additionally
+requires **Node.js 22.12 or later** and npm.
+
+Windows PowerShell, from the repository root:
+
+```powershell
+$env:MARA_DESKTOP_PYTHON = (Resolve-Path .venv\Scripts\python.exe).Path
+cd apps/desktop
+npm ci
+npm start
+```
+
+Linux, from the repository root:
+
+```bash
+export MARA_DESKTOP_PYTHON="$PWD/.venv/bin/python"
+cd apps/desktop
+npm ci
+npm start
+```
+
+`npm start` builds the application and launches Electron.
+[Desktop development](apps/desktop/README.md) covers contracts, testing, and
+native packaging.
+
+Desktop uses its own data root: normally `%APPDATA%/MARA` on Windows and
+`$XDG_DATA_HOME/MARA` or `~/.local/share/MARA` on Linux.
+Do not assume it automatically opens an existing Web/CLI database or that
+simultaneous writes across interfaces are supported.
+
+## Configuration and data
+
+| Setting or location | Purpose |
+| --- | --- |
+| Repository `.env` and [flowsettings.py](flowsettings.py) | Source-workspace model defaults and application settings |
+| `MARA app init` | Creates user-level configuration templates; `app doctor` reports the effective paths |
+| User config `.env` / `flowsettings.py` | Packaged-runtime configuration when no workspace or explicit settings module takes precedence |
+| `KH_APP_DATA_DIR` | Overrides the application's data directory |
+| `modelcli.yml` | Separate provider/alias configuration for `MARA model` and agent workflows |
+| Desktop Settings and its data directory | Desktop-owned model settings and application state |
+
+Runtime discovery checks an explicit `THEFLOW_SETTINGS_MODULE`, then a workspace
+`flowsettings.py`, then packaged defaults. Running from the repository and
+running from another directory can therefore select different settings.
+Use `MARA app doctor` to check **Settings source**, **App data dir**, and
+**File storage** before expecting Web and CLI to share records.
+
+Source mode defaults to `ktem_app_data/`. The packaged runtime retains the
+platform-directory names **Cinnamon/Kotaemon** for compatibility; the command's
+reported paths are authoritative.
+
+Existing LLM and embedding records are persisted in the application database.
+Editing `.env` supplies defaults but does **not** overwrite an existing saved
+provider. Update the corresponding entry in **resources** and check its default
+selection. Changing embedding models may require reindexing the documents.
+
+Back up the complete data directory, including uploaded files, indexes, and
+conversation/database state, with the application stopped. Keep credentials
+outside Git.
+
+### Network access and authentication
+
+The local examples bind to `127.0.0.1`. Before deliberately serving on a network
+interface, configure `MARA_AUTH_MODE=password` with a provisioned administrator,
+or `MARA_AUTH_MODE=sso` with Google/Keycloak settings. Changing the bind address
+alone does not provision authentication.
+
+`MARA app init --help` documents password initialization for a new user
+configuration. The initializer targets `KH_APP_DATA_DIR` when explicitly set,
+otherwise the packaged data directory; match that directory to the one being
+served. Reinitializing with `--force` recreates the user `.env` and
+`flowsettings.py` and may reset an existing administrator, so back up and restore
+the intended settings as part of a deliberate migration. The
+[container guide](docs/development/container-usage.md) gives a complete
+password-file and persistent-volume example.
+
+## Codex and Claude Code
+
+MARA supplies support bundles for both tools. These install MARA instructions
+and skills; they do not install the host tool itself.
+Focused skills include `MARA-docqa-ask`, `MARA-docqa-index`, and
+`MARA-docqa-delete` for single questions, import, and indexed-source removal.
 
 ```shell
 MARA platform list
+MARA platform install --platform codex --mode full --dry-run
 MARA platform install --platform codex --mode full --yes
-MARA platform install --platform claude-code --mode full --yes
-MARA platform status --platform codex
-MARA platform validate
+MARA platform validate --platform codex --installed
 ```
 
-平台资产用于把本仓库附带的 MARA 技能、命令和说明安装到 Codex 或 Claude Code 等外部 AI coding assistant 环境中。
+For Claude Code, replace `codex` with `claude-code`. The default targets are
+`~/.codex` and `~/.claude`; `--target-dir` selects another target.
+[Platform support](docs/development/platform-cli-support.md) explains merge and
+backup behavior.
 
-### 架构与目录
+The repository's [.codex](.codex) contains shared MARA support assets.
+[.github](.github) provides automation and [.githooks](.githooks) protects the
+shared development environment. Their leading dot does not make them caches.
+See the [directory guide](docs/development/repository-directory-guide.md).
 
-| 路径                               | 作用                                                               |
-| ---------------------------------- | ------------------------------------------------------------------ |
-| [app.py](app.py)                   | 源码模式 Gradio Web UI 入口                                        |
-| [sso_app.py](sso_app.py)           | FastAPI + Gradio SSO 入口                                          |
-| [flowsettings.py](flowsettings.py) | 源码模式运行时设置入口                                             |
-| [libs/ktem](libs/ktem)             | Web UI、DocQA runtime、知识图谱、预览、设置页和应用层逻辑          |
-| [libs/kotaemon](libs/kotaemon)     | 核心 RAG 组件、loader、LLM/embedding/reranking、平台资产和兼容 CLI |
-| [libs/slide_cli](libs/slide_cli)   | 公开 `MARA` / `MARA-cli` CLI、DocQA CLI、deck agent 和工作区命令   |
-| [benchmark](benchmark)             | 评测框架、manifest 标准化和 route-matrix 运行器                    |
-| [docs](docs)                       | 使用文档、开发文档、发布说明和 thesis MVP 说明                     |
-| [scripts](scripts)                 | 发布、PDF.js 下载、代码库卫生检查等维护脚本                        |
+## Research and expected results
 
-核心数据流：
+MARA's research contribution is the integration of explicit query requirements,
+central route selection, canonical evidence identities, configurable
+verification/recovery, and shared runtime services. The
+[dissertation records](https://github.com/262412/MARA-dissertation-records)
+describe the design and its evidence boundaries.
+
+The revision consulted for this README was
+[`38846af`](https://github.com/262412/MARA-dissertation-records/tree/38846af48bcec410d89150351a3d1e1541cd7bc3/dissertation).
+It separates current implementation/regression evidence from a preserved
+six-task evaluation covering FinanceBench, QASPER, RAGTruth, ALCE-ASQA, MMDocRAG,
+and SlideVQA. Those are selected **local task adaptations**.
+
+The recorded comparisons do not establish a general controller-quality
+advantage. Some configurations abstain too often; answer overlap and evidence
+quality can diverge. Missing raw records and unmatched live interface tasks also
+limit reproduction and cross-interface claims. The README therefore does not
+promise published-benchmark parity, guaranteed correct citations, or better
+answers from every more complex route.
+
+For a new installation, useful success criteria are concrete:
+
+| Action | Expected result to inspect |
+| --- | --- |
+| Start the runtime | The UI opens; doctor reports the intended data paths and any missing model configuration |
+| Import a small source | Indexing completes without reported failures and the file appears in the source list |
+| Ask the quickstart question | The answer matches the source's 12 / 8 / 4 counts and offers inspectable source support |
+| Continue a conversation | Its history and selected context can be recovered in the same runtime/user |
+| Generate an artifact | A saved artifact can be listed, opened, and exported in a supported format |
+
+These are acceptance targets for your configuration, not a claim that all models
+and file formats have passed them. A successful process alone is insufficient.
+
+The [benchmark framework](benchmark/README.md) contains evaluation commands and
+artifact conventions. Inspect per-example predictions, citations, terminal
+states, failures, and scoring provenance as well as aggregate metrics.
+
+## Troubleshooting
+
+| Symptom | Next check |
+| --- | --- |
+| `uv` rejects its version or cannot find Python | Use uv 0.11.19 and an existing Python 3.10 interpreter; installers do not download Python |
+| `MARA` is not found after installation | Activate the correct environment or use its full executable path |
+| UI opens but indexing fails | Verify the default embedding provider, endpoint, credentials, and selected reader |
+| Editing `.env` has no effect | Check the effective settings source and saved model entries under resources |
+| Web and CLI show different files | Compare runtime paths, user identity, selected sources, and conversation context |
+| Office or scanned files fail | Check conversion/OCR dependencies; confirm a simple Markdown import works first |
+| No supporting evidence or excessive abstention | Check selected sources, scope, retrieval results, backend availability, and verification mode |
+| Desktop feature is missing | Check the preview's release notes and feature matrix; use the Web workbench for the wider feature set |
+| The default port is occupied | Launch with `MARA app run --port 7870` |
+
+## Repository and development
 
 ```text
-User / CLI / Web UI
-        |
-        v
-MARA runtime settings
-        |
-        v
-FileIndex + local storage + vector store
-        |
-        v
-Reasoning pipeline
-        |
-        v
-Answer + citations + graph context + notebook artifacts
+apps/desktop/       Electron/React desktop application and Python adapter
+libs/slide_cli/     MARA / MARA-cli command implementation
+libs/ktem/          Web UI, document QA runtime, sessions, and application services
+libs/kotaemon/      Retrieval, models, document processing, and platform bundles
+benchmark/         Evaluation runners, adapters, and analysis
+docs/              User, architecture, desktop, and development documentation
+scripts/           Installation support, verification, packaging, and HPC tools
 ```
 
-### 配置
+Internal package names preserve compatibility with the Kotaemon foundation.
 
-#### `.env`
+For non-trivial changes, follow the
+[codebase hygiene contract](docs/development/codebase-hygiene-contract.md) and
+[storage/environment contract](docs/development/storage-layout-contract.md).
+The latter includes the maintainers' HPC-specific layout.
+Only the primary checkout owns the canonical environment; linked worktrees use
+`scripts/run_with_canonical_env.sh`.
 
-从 [.env.example](.env.example) 开始，根据实际使用的 Provider 填写密钥。常用变量包括：
+In a prepared primary development environment, run focused checks without
+synchronizing dependencies:
 
-- OpenAI：`OPENAI_API_BASE`、`OPENAI_API_KEY`、`OPENAI_CHAT_MODEL`、`OPENAI_EMBEDDINGS_MODEL`
-- Azure OpenAI：`AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_API_KEY`、`OPENAI_API_VERSION`、`AZURE_OPENAI_CHAT_DEPLOYMENT`、`AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`
-- Cohere：`COHERE_API_KEY`
-- VoyageAI：`VOYAGE_API_KEY`
-- Mistral：`MISTRAL_API_KEY`
-- 本地模型：`LOCAL_MODEL`、`LOCAL_MODEL_EMBEDDINGS`、`KH_OLLAMA_URL`
-- PDF.js：`PDFJS_VERSION_DIST`
-- SSO：`AUTHENTICATION_METHOD`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`KEYCLOAK_SERVER_URL`、`KEYCLOAK_CLIENT_ID`、`KEYCLOAK_REALM`、`KEYCLOAK_CLIENT_SECRET`
-
-#### `flowsettings.py`
-
-源码模式下，[flowsettings.py](flowsettings.py) 调用 `build_kotaemon_settings(...)` 生成 MARA 运行时配置：
-
-```python
-globals().update(
-    build_kotaemon_settings(
-        base_dir=this_dir,
-        app_data_dir=this_dir / "ktem_app_data",
-        docs_dir=this_dir / "docs",
-        mode="dev",
-    )
-)
+```shell
+uv run --no-sync --python 3.10 python scripts/check_codebase_hygiene.py path/to/changed.py
 ```
 
-如果需要调整本地数据目录、开发模式、文档目录或默认 settings source，优先从这里入手。
+For CLI changes, run the package gate from `libs/slide_cli`:
 
-#### `modelcli.yml`
-
-[modelcli.yml](modelcli.yml) 用于命令行模型路由。它适合以下场景：
-
-- 团队统一模型别名。
-- 在真实调用 API 前检查 Provider 密钥是否可用。
-- 为 `MARA run` 或 `MARA model run` 指定模型路由配置。
-
-### 评测 Benchmark
-
-评测框架位于 [benchmark](benchmark)。它支持统一 manifest、route matrix、DocQA runtime 路由、MARA fast / thorough ablation，以及回答质量、引用召回、页命中、多模态证据、claim verification、延迟与缓存统计等字段。
-
-报告会把 score authority 分成三层：只有外部 evaluator 明确声明时才作为 paper-grade external metric；本地对比默认使用 dataset-native local score；MARA diagnostic proxy score 则用于观察 controller、evidence、citation、groundedness、abstention 和格式行为。
-
-示例：
-
-```powershell
-python -m benchmark run `
-  --manifest benchmark/manifests/format_robustness.json `
-  --suite-name format-robustness-v1 `
-  --reader-mode default `
-  --retrieval-mode hybrid `
-  --top-k 5
-```
-
-输出默认写入 `benchmark/artifacts/`。更多 manifest 与指标说明见 [benchmark/README.md](benchmark/README.md)。
-
-### 开发与验证
-
-本仓库的非平凡改动需要遵守 [docs/development/codebase-hygiene-contract.md](docs/development/codebase-hygiene-contract.md)。重要原则：
-
-- 保持 `MARA` / `MARA-cli` 公开命令面稳定。
-- 不为了让卫生检查通过而刷新 `scripts/codebase_hygiene_baseline.json`。
-- Python 改动需要按受影响文件运行 hygiene gate 与 pre-commit。
-- CLI、DocQA、Gradio 事件链、持久化数据和配置改动需要运行对应测试。
-- 根目录 `pytest -q` 不是当前默认 readiness signal，除非已有 collection 冲突被解决。
-
-文档或 README 改动通常不需要运行 Python hygiene gate，但仍应至少确认关键链接、公开命令列表和真实代码保持一致。
-
-#### 维护者常用检查
-
-```powershell
-MARA --help
-MARA docqa --help
-MARA app doctor
-MARA docqa doctor
-```
-
-当改动 `libs/slide_cli` 的公开命令面时，优先运行：
-
-```powershell
-cd libs\slide_cli
+```shell
 uv run --no-sync --python 3.10 python -m pytest -q
 ```
 
-当改动 `libs/kotaemon` 的 GitHub Actions 单元测试路径时：
+Do not refresh the hygiene baseline to hide a failing check.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance.
 
-```powershell
-cd libs\kotaemon
-uv run --no-sync --python 3.10 python -m pytest -q
-```
+## License and acknowledgements
 
-### 当前边界
-
-- Legacy GraphRAG 相关变量和兼容入口仍保留，但默认单页 QA 路径不依赖 Nano / Light / MS GraphRAG。
-- NotebookLM 风格的 notes、sources、artifacts 主线已在 CLI 和右侧 Studio 面板中落地。
-- Audio 和 video overview artifacts 默认生成 source-grounded script 或 scene plan；`mp3` 和 `mp4` 导出需要配置 `KH_MARA_ARTIFACT_MEDIA_EXPORT_ADAPTER`。
-- Data table、infographic、slide outline 和 slide deck artifacts 支持 CSV、SVG、Markdown、HTML、JSON、PPTX 等本地导出路径。
-- Artifact evaluation 会报告本地 `proxy_metric`，并在未运行外部 benchmark adapter 时把 `external_metric` / `paper_grade_metric` 标记为未配置或未声称。传入 `--artifact` 会评估单个 artifact；省略时会汇总 notebook 中的全部 artifacts，包括 PDF、PPTX、DOCX 和 image evidence 的来源格式覆盖。
-- Public sharing、cloud sync 和 mobile clients 不在当前 v1 范围内。
-
-### 许可
-
-本项目继承上游 Apache License 2.0 授权。请参阅 [LICENSE.txt](LICENSE.txt) 与 [NOTICE](NOTICE)。
-
-上游项目：
-
-- [Cinnamon/kotaemon](https://github.com/Cinnamon/kotaemon)
-
-<p align="right"><a href="#top">回到顶部</a> | <a href="#english">English</a></p>
+MARA is distributed under [Apache License 2.0](LICENSE.txt).
+[NOTICE](NOTICE) preserves the attribution to
+[Cinnamon/Kotaemon](https://github.com/Cinnamon/kotaemon).
+Models, datasets, and optional services retain their respective terms.

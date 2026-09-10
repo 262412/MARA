@@ -45,9 +45,13 @@ def test_release_docs_cover_direct_mara_research_cli_publish_and_install():
         REPO_ROOT / ".github" / "workflows" / "publish-packages.yaml"
     ).read_text(encoding="utf-8")
 
-    assert "pip install mara-research-cli" in root_readme
-    assert "testpypi" in root_readme.lower()
-    assert "pip install mara-research-cli" in package_readme
+    for content in (root_readme, package_readme):
+        assert "mara-research-cli" in content
+        assert "pypi" in content.lower()
+        assert "testpypi" in content.lower()
+    assert r".\install.ps1" in root_readme
+    assert "./install.sh" in root_readme
+    assert "../../README.md#install-web-and-cli" in package_readme
     assert "ktem -> kotaemon -> mara-research-cli -> mara-app" in workflow
 
 
@@ -84,8 +88,9 @@ def test_two_line_shell_docs_cover_mara_model():
         / "2026-04-22-mara-research-cli-two-line-shell-foundation.md"
     ).read_text(encoding="utf-8")
 
-    assert "`MARA ...` for the high-permission product shell" in root_readme
-    assert "`MARA docqa ...` for the specialist document-QA line" in root_readme
+    assert "## Use the CLI" in root_readme
+    assert "### Slide tools and model routing" in root_readme
+    assert "MARA docqa ask" in root_readme
     assert "The phase-3 shell is split into two lines:" in package_readme
     assert "`MARA ...` is the high-permission product line" in package_readme
     for command in [
