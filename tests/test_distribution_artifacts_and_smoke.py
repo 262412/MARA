@@ -6,9 +6,11 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+from email.parser import Parser
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
 
 from scripts import run_clean_wheel_smoke
 
@@ -75,6 +77,15 @@ def test_four_distribution_artifacts_have_apache_metadata_and_legal_files(tmp_pa
         ), package_name
         if package_name == "ktem":
             assert "ktem_contracts/file_selection.py" in wheel_names
+        if package_name == "kotaemon":
+            requirements = [
+                Requirement(value)
+                for value in Parser().parsestr(metadata).get_all("Requires-Dist", [])
+            ]
+            nltk = next(item for item in requirements if item.name == "nltk")
+            assert "3.10.0" not in nltk.specifier
+            assert "3.10.2" not in nltk.specifier
+            assert "3.10.3" in nltk.specifier
 
         with tarfile.open(sdist_path, mode="r:gz") as sdist:
             sdist_members = sdist.getnames()

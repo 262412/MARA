@@ -276,6 +276,8 @@ import importlib.metadata
 import pathlib
 import sys
 
+from packaging.version import Version
+
 prefix = pathlib.Path(sys.prefix).resolve()
 for module_name in {LAYER_IMPORTS.get(distribution, ())!r}:
     module = importlib.import_module(module_name)
@@ -290,6 +292,10 @@ if not location.is_relative_to(prefix):
     raise RuntimeError(
         f"{distribution} metadata loaded outside clean venv: {{location}}"
     )
+nltk_version = importlib.metadata.version("nltk")
+if Version(nltk_version) < Version("3.10.3"):
+    raise RuntimeError(f"{distribution} resolved NLTK {{nltk_version}} below 3.10.3")
+print(f"[wheel-smoke] {distribution} resolved nltk=={{nltk_version}}")
 """
     _run(
         [_venv_python(venv), "-c", validation],
