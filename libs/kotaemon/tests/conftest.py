@@ -13,6 +13,14 @@ import pytest_runtime_plugin as _runtime_isolation  # noqa: E402
 pytest_configure = _runtime_isolation.register_plugin
 
 
+@pytest.fixture
+def chroma_store_factory(tmp_path):
+    from .chroma_test_runtime import owned_chroma_stores
+
+    with owned_chroma_stores(tmp_path) as create:
+        yield create
+
+
 @pytest.fixture(scope="function")
 def mock_google_search(monkeypatch):
     import googlesearch

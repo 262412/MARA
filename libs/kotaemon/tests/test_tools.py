@@ -8,7 +8,7 @@ from kotaemon.agents.tools import ComponentTool, GoogleSearchTool, WikipediaTool
 from kotaemon.base import Document
 from kotaemon.embeddings import AzureOpenAIEmbeddings
 from kotaemon.indices.vectorindex import VectorIndexing, VectorRetrieval
-from kotaemon.storages import ChromaVectorStore, InMemoryDocumentStore
+from kotaemon.storages import InMemoryDocumentStore
 
 with open(Path(__file__).parent / "resources" / "embedding_openai.json") as f:
     openai_embedding = CreateEmbeddingResponse.model_validate(json.load(f))
@@ -34,8 +34,8 @@ def test_wikipedia_tool(mock_wikipedia_search):
     "openai.resources.embeddings.Embeddings.create",
     side_effect=lambda *args, **kwargs: openai_embedding,
 )
-def test_pipeline_tool(_openai_embeddings_create, tmp_path):
-    db = ChromaVectorStore(path=str(tmp_path))
+def test_pipeline_tool(_openai_embeddings_create, tmp_path, chroma_store_factory):
+    db = chroma_store_factory(path=tmp_path)
     doc_store = InMemoryDocumentStore()
     embedding = AzureOpenAIEmbeddings(
         azure_deployment="embedding-deployment",
