@@ -66,6 +66,13 @@ def write_coverage_config(output_dir: Path) -> Path:
     omit_lines = "\n".join(
         f"    {pattern}" for pattern in (*COVERAGE_OMIT, runtime_pattern)
     )
+    # Subprocesses started in a package directory record package-relative paths.
+    # Merge those measurements into the same files used by the package floors.
+    path_mappings = "\n".join(
+        f"{name} =\n    {path}\n    {name}"
+        for name, path in PRODUCTION_PATHS.items()
+        if path != name
+    )
     config_path.write_text(
         "[run]\n"
         "patch = subprocess\n"
@@ -75,6 +82,8 @@ def write_coverage_config(output_dir: Path) -> Path:
         f"{source_lines}\n"
         "omit =\n"
         f"{omit_lines}\n"
+        "\n[paths]\n"
+        f"{path_mappings}\n"
         "\n[report]\n"
         "omit =\n"
         f"{omit_lines}\n"

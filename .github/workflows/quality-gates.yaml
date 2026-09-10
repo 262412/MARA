@@ -284,6 +284,7 @@ jobs:
         with:
           name: coverage-evidence
           path: coverage-artifacts/
+          include-hidden-files: true
           if-no-files-found: error
 
   wheel-smoke:

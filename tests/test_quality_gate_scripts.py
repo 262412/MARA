@@ -174,7 +174,7 @@ def test_coverage_policy_captures_python_subprocesses(tmp_path):
 
 @pytest.mark.parametrize("explicit_parent", [True, False])
 def test_coverage_exports_keep_production_and_exclude_removed_runtime_settings(
-    tmp_path, monkeypatch, explicit_parent
+    tmp_path, monkeypatch, request, explicit_parent
 ):
     from coverage import Coverage, CoverageData
     from coverage.exceptions import NoSource
@@ -213,6 +213,7 @@ def test_coverage_exports_keep_production_and_exclude_removed_runtime_settings(
     config_path = coverage_gate.write_coverage_config(output)
     data_path = output / ".coverage"
     data = CoverageData(basename=str(data_path))
+    request.addfinalizer(data.close)
     data.add_lines({**{name: [1] for name in production}, str(removed_settings): [1]})
     data.write()
 
@@ -221,11 +222,13 @@ def test_coverage_exports_keep_production_and_exclude_removed_runtime_settings(
 
     monkeypatch.setattr(Coverage, "start", forbid_collection)
     coverage = Coverage(config_file=str(config_path), data_file=str(data_path))
+    # Reporting creates mapped SQLite copies; close every copy owned by this instance.
+    request.addfinalizer(coverage._atexit)
     coverage.load()
     assert coverage.xml_report(outfile=str(output / "coverage.xml")) == 50.0
     assert coverage.json_report(outfile=str(output / "coverage.json")) == 50.0
     payload = json.loads((output / "coverage.json").read_text(encoding="utf-8"))
-    assert set(payload["files"]) == production
+    assert {name.replace("\\", "/") for name in payload["files"]} == production
     for file_data in payload["files"].values():
         assert file_data["executed_lines"] == [1]
         assert file_data["missing_lines"] == [2]
@@ -234,6 +237,55 @@ def test_coverage_exports_keep_production_and_exclude_removed_runtime_settings(
     (repo / "flowsettings.py").unlink()
     with pytest.raises(NoSource, match="flowsettings.py"):
         coverage.xml_report(outfile=str(output / "missing-production.xml"))
+
+
+@pytest.mark.parametrize("package", ["kotaemon", "ktem", "slide_cli"])
+@pytest.mark.parametrize("separator", ["/", "\\"])
+def test_coverage_combines_package_working_directory_paths(
+    tmp_path, monkeypatch, request, package, separator
+):
+    from coverage import Coverage, CoverageData
+
+    coverage_gate = _load_script("run_coverage_gates.py")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(coverage_gate, "REPO_ROOT", repo)
+    production_name = f"libs/{package}/{package}/__init__.py"
+    production = repo / production_name
+    production.parent.mkdir(parents=True)
+    production.write_text("FIRST = 1\nSECOND = 2\nUNCOVERED = 3\n", encoding="utf-8")
+    output = tmp_path / "coverage-artifacts"
+    config_path = coverage_gate.write_coverage_config(output)
+    data_path = output / ".coverage"
+    for suffix, name, lines in (
+        ("repo", production_name, [1]),
+        ("package", f"{package}{separator}__init__.py", [2]),
+    ):
+        data = CoverageData(basename=str(data_path), suffix=suffix)
+        request.addfinalizer(data.close)
+        data.add_lines({name: lines})
+        data.write()
+
+    def forbid_collection(*_args, **_kwargs):
+        raise AssertionError("Path regression must not start coverage collection")
+
+    monkeypatch.setattr(Coverage, "start", forbid_collection)
+    coverage = Coverage(config_file=str(config_path), data_file=str(data_path))
+    request.addfinalizer(coverage._atexit)
+    coverage.combine(strict=True)
+    coverage.save()
+    assert coverage.xml_report(outfile=str(output / "coverage.xml")) == pytest.approx(
+        200 / 3
+    )
+    assert coverage.json_report(outfile=str(output / "coverage.json")) == pytest.approx(
+        200 / 3
+    )
+    payload = json.loads((output / "coverage.json").read_text(encoding="utf-8"))
+    files = {name.replace("\\", "/"): value for name, value in payload["files"].items()}
+    assert set(files) == {production_name}
+    assert files[production_name]["executed_lines"] == [1, 2]
+    assert files[production_name]["missing_lines"] == [3]
 
 
 def test_qasper_local_gate_covers_provider_generation_and_audit():
