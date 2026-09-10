@@ -131,7 +131,7 @@ def _symlink(link: Path, target: Path, *, directory: bool = False) -> None:
     try:
         link.symlink_to(target, target_is_directory=directory)
     except OSError as error:
-        if os.name == "nt" and error.winerror == 1314:
+        if os.name == "nt" and getattr(error, "winerror", None) == 1314:
             pytest.skip(
                 "Windows token cannot create symlinks; native case runs in Ubuntu CI"
             )

@@ -122,7 +122,7 @@ def test_basetemp_symlink_alias_is_rejected(owned_runtime, target):
     try:
         alias.symlink_to(destination, target_is_directory=True)
     except OSError as error:
-        if os.name == "nt" and error.winerror == 1314:
+        if os.name == "nt" and getattr(error, "winerror", None) == 1314:
             pytest.skip(
                 "Windows token cannot create symlinks; native case runs in Ubuntu CI"
             )
