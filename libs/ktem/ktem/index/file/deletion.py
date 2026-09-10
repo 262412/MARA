@@ -144,7 +144,7 @@ class DeletionCoordinator:
         if not stored_path or self._storage_root is None:
             return None
         relative = Path(stored_path)
-        if relative.is_absolute() or ".." in relative.parts or relative == Path("."):
+        if relative.anchor or ".." in relative.parts or relative == Path("."):
             raise DeletionError(
                 stage="validate",
                 file_id=file_id,
