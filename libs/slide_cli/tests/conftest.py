@@ -1,6 +1,14 @@
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+import pytest_runtime_plugin as _runtime_isolation  # noqa: E402
+
+pytest_configure = _runtime_isolation.register_plugin
+
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 KOTAEMON_ROOT = PACKAGE_ROOT.parents[1] / "kotaemon"
 

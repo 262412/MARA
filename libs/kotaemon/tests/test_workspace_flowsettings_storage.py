@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from pytest_runtime_isolation import activate_test_runtime
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 SOURCE_PYTHONPATH = os.pathsep.join(
     str(REPOSITORY_ROOT / path) for path in ("libs/kotaemon", "libs/ktem")
@@ -23,6 +25,7 @@ def test_app_doctor_workspace_settings_do_not_create_source_theflow(tmp_path):
     shutil.copy2(REPOSITORY_ROOT / "flowsettings.py", workspace / "flowsettings.py")
 
     environment = os.environ.copy()
+    _, paths = activate_test_runtime(environment, tmp_path)
     environment.pop("THEFLOW_SETTINGS_MODULE", None)
     environment.pop("KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED", None)
     environment.update(
@@ -54,4 +57,4 @@ def test_app_doctor_workspace_settings_do_not_create_source_theflow(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["settings_source"] == "workspace-flowsettings"
     assert not (workspace / ".theflow").exists()
-    assert (cache_dir / "Kotaemon" / "theflow").is_dir()
+    assert (paths.cache_dir / "theflow").is_dir()

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
+import sys
 import tempfile
+import uuid
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Mapping, MutableMapping
 
 ISOLATED_RUNTIME_ENV_KEYS = (
+    "MARA_PYTEST_RUNTIME_ROOT",
     "MARA_RUNTIME_DIR",
     "MARA_OUTPUT_DIR",
     "KH_APP_DATA_DIR",
@@ -37,7 +42,60 @@ ISOLATED_RUNTIME_ENV_KEYS = (
     "TIKTOKEN_CACHE_DIR",
     "THEFLOW_SETTINGS_MODULE",
     "THEFLOW_TEMP_PATH",
+    "NLTK_DATA",
+    "TMP",
+    "TEMP",
+    "TMPDIR",
 )
+
+OWNER_MARKER = ".mara-pytest-owner"
+
+
+def _seed_nltk_cache(target: Path) -> None:
+    """Copy bundled read-only resources; tests must never prepare site-packages."""
+    for entry in sys.path:
+        source = Path(entry) / "llama_index/core/_static/nltk_cache"
+        if source.is_dir():
+            shutil.copytree(source, target, dirs_exist_ok=True)
+            return
+
+
+def _dispose_session_database(root: Path) -> None:
+    module = sys.modules.get("ktem.db.engine")
+    engine = vars(module).get("engine") if module else None
+    if engine is None:
+        return
+    database = engine.url.database
+    if database and Path(database).resolve().is_relative_to(root):
+        engine.dispose()
+
+
+def _close_session_caches(root: Path) -> None:
+    module = sys.modules.get("theflow.cache.filebased")
+    caches = vars(module).get("_local_caches", {}) if module else {}
+    for key, cache in list(caches.items()):
+        if Path(cache.directory).resolve().is_relative_to(root):
+            cache.close()
+            del caches[key]
+
+
+def _remove_readonly_fixture(root: Path, operation, filename, exc_info) -> None:
+    error = exc_info[1]
+    path = Path(filename)
+    if (
+        os.name != "nt"
+        or operation is not os.unlink
+        or not isinstance(error, PermissionError)
+        or getattr(error, "winerror", None) != 5
+        or path.is_symlink()
+        or not path.resolve().is_relative_to(root)
+    ):
+        raise error
+    mode = path.stat().st_mode
+    if not stat.S_ISREG(mode) or mode & stat.S_IWRITE:
+        raise error
+    path.chmod(mode | stat.S_IWRITE)
+    operation(filename)
 
 
 @dataclass(frozen=True)
@@ -77,12 +135,17 @@ class TestRuntimePaths:
             self.vectorstore_path,
             self.cache_dir,
             self.output_dir,
+            self.root / "config",
+            self.root / "tmp",
+            self.cache_dir / "nltk",
         ):
             path.mkdir(parents=True, exist_ok=True)
+        _seed_nltk_cache(self.cache_dir / "nltk")
 
     def environment(self) -> dict[str, str]:
         cache_dir = self.cache_dir
         return {
+            "MARA_PYTEST_RUNTIME_ROOT": str(self.root),
             "MARA_RUNTIME_DIR": str(self.root),
             "MARA_OUTPUT_DIR": str(self.output_dir),
             "KH_APP_DATA_DIR": str(self.app_data_dir),
@@ -114,6 +177,10 @@ class TestRuntimePaths:
             "TIKTOKEN_CACHE_DIR": str(cache_dir / "tiktoken"),
             "THEFLOW_SETTINGS_MODULE": "ktem.default_flowsettings",
             "THEFLOW_TEMP_PATH": str(cache_dir / "theflow-temp"),
+            "NLTK_DATA": str(cache_dir / "nltk"),
+            "TMP": str(self.root / "tmp"),
+            "TEMP": str(self.root / "tmp"),
+            "TMPDIR": str(self.root / "tmp"),
         }
 
 
@@ -122,8 +189,17 @@ def activate_test_runtime(
 ) -> tuple[dict[str, str | None], TestRuntimePaths]:
     paths = TestRuntimePaths.from_root(root)
     paths.create_directories()
-    snapshot = {key: environment.get(key) for key in ISOLATED_RUNTIME_ENV_KEYS}
+    cleared = {key for key in environment if key.startswith("MARA_DESKTOP_")} | {
+        "KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED"
+    }
+    snapshot = {
+        key: environment.get(key)
+        for key in (*ISOLATED_RUNTIME_ENV_KEYS, *cleared, "PYTHONDONTWRITEBYTECODE")
+    }
+    for key in cleared:
+        environment.pop(key, None)
     environment.update(paths.environment())
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
     return snapshot, paths
 
 
@@ -142,11 +218,11 @@ def create_session_runtime_root(environment: Mapping[str, str]) -> Path:
     if explicit_parent:
         parent = Path(explicit_parent).expanduser().resolve()
     else:
-        runtime_dir = str(environment.get("MARA_RUNTIME_DIR") or "").strip()
-        if runtime_dir:
-            parent = Path(runtime_dir).expanduser().resolve().parent / "mara_pytest"
-        else:
-            parent = Path(tempfile.gettempdir()).resolve() / "mara_pytest"
+        parent = Path(tempfile.gettempdir()).resolve() / "mara_pytest"
+    if parent.is_relative_to(Path(sys.prefix).resolve()):
+        raise RuntimeError(
+            "Test runtime parent cannot be inside the Python environment"
+        )
     parent.mkdir(parents=True, exist_ok=True)
     return Path(tempfile.mkdtemp(prefix="session-", dir=parent)).resolve()
 
@@ -157,20 +233,52 @@ class ActiveTestRuntime:
     snapshot: dict[str, str | None]
     paths: TestRuntimePaths
     closed: bool = False
+    owned_root: Path | None = None
+    owner_token: str = ""
 
     @classmethod
     def start(cls, environment: MutableMapping[str, str]) -> "ActiveTestRuntime":
         root = create_session_runtime_root(environment)
+        owner_token = uuid.uuid4().hex
+        (root / OWNER_MARKER).write_text(owner_token, encoding="utf-8")
         snapshot, paths = activate_test_runtime(environment, root)
-        return cls(environment=environment, snapshot=snapshot, paths=paths)
+        return cls(
+            environment=environment,
+            snapshot=snapshot,
+            paths=paths,
+            owned_root=root,
+            owner_token=owner_token,
+        )
 
     def close(self) -> None:
         if self.closed:
             return
-        restore_environment(self.environment, self.snapshot)
-        shutil.rmtree(self.paths.root, ignore_errors=True)
-        self.closed = True
+        try:
+            root = self.paths.root
+            if (
+                self.owned_root != root
+                or root.resolve() != root
+                or not self.owner_token
+                or (root / OWNER_MARKER).is_symlink()
+                or not (root / OWNER_MARKER).is_file()
+                or (root / OWNER_MARKER).read_text(encoding="utf-8") != self.owner_token
+            ):
+                raise RuntimeError(
+                    "Refusing to clean a runtime not owned by this test session"
+                )
+            _dispose_session_database(root)
+            _close_session_caches(root)
+            shutil.rmtree(root, onerror=partial(_remove_readonly_fixture, root))
+        finally:
+            restore_environment(self.environment, self.snapshot)
+            self.closed = True
 
 
 def start_process_test_runtime() -> ActiveTestRuntime:
+    flow_module = sys.modules.get("theflow.settings")
+    settings = vars(flow_module).get("settings") if flow_module else None
+    if "ktem" in sys.modules or (
+        settings is not None and vars(settings).get("_initialized", False)
+    ):
+        raise RuntimeError("Test isolation must start before importing ktem")
     return ActiveTestRuntime.start(os.environ)
