@@ -2,11 +2,14 @@
 
 ## Decision and protected baseline
 
-**R0 review checkpoint; R1 is not released.** The listed failures have scoped
-repairs, but local Windows package/coverage gates have unresolved failures.
-Skipped POSIX tests and historical CI are not current passes. No R1 extraction,
-runtime/UI/planner migration, push, merge, environment rebuild, dependency
-installation, or data cleanup was performed.
+**R0 remains NO-GO; R1 has not started.** The follow-up below repairs test
+isolation, deterministic deadline checks and two confirmed Windows path-boundary
+defects. Current supported-platform package and coverage gates remain required.
+Skipped POSIX tests and historical CI are not current passes. The five earlier
+R0 commits, through `89d99551a028ff4948bb40f0a06bcc24d24822cb`, were pushed at the
+user's explicit request before this follow-up. This follow-up permits local
+commits only and performs no new push, branch/worktree creation, branch switch,
+merge, history rewrite, environment synchronization or R1/R2 extraction.
 
 - Reviewed and fetched `origin/Dev`:
   `adab3f4d8f221e3620494fab0a24ef8e5557d12a` (the supplied audit base).
@@ -29,7 +32,7 @@ workspace libraries on `PYTHONPATH`, existing cached pre-commit environments,
 the evidence directory. No syncing/installing wrapper was substituted.
 This is Windows source validation, not a claim of Ubuntu CI equivalence.
 
-**Isolation exception discovered by the full suite:** `PlatformDirs` on Windows
+**Historical isolation exception from the original R0 full suite:** `PlatformDirs` on Windows
 does not use the test's XDG cache override. `flowsettings.STORAGE["prefix"]`
 resolved to the existing
 `C:\Users\22826\AppData\Local\Cinnamon\Kotaemon\Cache\theflow`, outside the
@@ -37,10 +40,10 @@ session directory. Metadata inspection found new timestamped traces during
 the final tests under `PrepareEvidencePipeline`, `TokenSplitter`, `ModelCliLLM`
 and `ReadSlideTool`; the last two component directories were newly created.
 `cache-audit.json` records the observed scope without reading trace contents.
-No further runtime tests or cache cleanup followed this discovery. There is
+No further runtime tests or cache cleanup followed in that checkpoint. There is
 no pre-run snapshot of this cache, so this report does **not** claim that all
 pre-existing runtime/cache contents were untouched. A Windows isolation fix
-and proof of effective storage paths are prerequisites for another runtime run.
+and proof of effective storage paths motivated the follow-up below.
 
 ## R0 failure classification and changes
 
@@ -225,7 +228,7 @@ R6 CLI/desktop/benchmark/delivery cleanup with package/resource compatibility.
 No later phase is authorized by this report. Each needs its own characterization,
 package gate, actual diff review and independent acceptance.
 
-## Review completion
+## Original R0 review completion
 
 The changed-file set is limited to:
 
@@ -252,8 +255,10 @@ At the user's request, the repairs were committed locally on
 The reviewed implementation checkpoint is `dacca8b1`; this record is delivered
 in a following documentation commit. Each staged diff passed
 `git diff --cached --check`. Committing does not change the R0 NO-GO decision.
-No push or merge occurred, and no additional runtime tests were run during
-commit preparation.
+At that commit-preparation checkpoint, no push or merge had occurred and no
+additional runtime tests were run. The user subsequently requested and
+authorized pushing the five original commits through `89d99551`; the follow-up
+below does not push again.
 
 To roll back the implementation while preserving history, revert only these
 four commits in reverse order:
@@ -265,10 +270,10 @@ No rollback has been executed.
 
 Final complete suite results:
 
-| Command after the common Python prefix (cwd repository root)                                  | Result                                                                                                                                                                                                                                                                           |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-m coverage run --rcfile=<evidence>/coverage/coverage.ini -m pytest -q libs/ktem/ktem_tests` | Exit 1; **2,542 passed / 102 failed** in 774.22s; `r0-ktem-reviewed.log`. Failure-list comparison with the intermediate run removes only the selector regression; no new failed node IDs. The remaining 100 filesystem/platform cases and two deadline assertions block release. |
-| `scripts/run_coverage_gates.py --output-dir <evidence>/coverage-gates-reviewed`               | Exit 1 at its first suite, `benchmark/tests tests`: **1,488 passed / 11 failed / 27 skipped** in 804.17s; `r0-coverage-gates-reviewed.log`. Package floors and the script's final reports were not reached.                                                                      |
+| Command after the common Python prefix (cwd repository root)                                  | Result                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-m coverage run --rcfile=<evidence>/coverage/coverage.ini -m pytest -q libs/ktem/ktem_tests` | Exit 1; **2,542 passed / 102 failed** in 774.22s; `r0-ktem-reviewed.log`. Failure-list comparison with the intermediate run removes only the selector regression; no new failed node IDs. See the follow-up's per-node classification: these cannot all be described as platform failures. |
+| `scripts/run_coverage_gates.py --output-dir <evidence>/coverage-gates-reviewed`               | Exit 1 at its first suite, `benchmark/tests tests`: **1,488 passed / 11 failed / 27 skipped** in 804.17s; `r0-coverage-gates-reviewed.log`. Package floors and the script's final reports were not reached.                                                                                |
 
 The eleven benchmark/root failures are: five Windows symlink privilege cases;
 two POSIX Bash launch cases (the bare `bash` resolves to the WindowsApps alias,
@@ -295,3 +300,193 @@ package floors remain unverified.
 
 **Stop at independent R0 review.** Restoring supported-platform package gates,
 resolving the timing failures and proving cache isolation come before R1.
+
+## R0 follow-up on the same branch
+
+The reviewed input HEAD is `89d99551a028ff4948bb40f0a06bcc24d24822cb`; the fixed
+comparison base remains `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+All new evidence is under the original evidence directory's `followup/`.
+`execution.jsonl` records the exact argv, cwd, exit code, duration, input HEAD
+and SHA256 of every changed/new Python file for each run. `versions.json`
+records CPython 3.10.19, pytest 8.4.2, coverage 7.10.7, pre-commit 4.3.0,
+SQLAlchemy 2.0.43, theflow 0.8.6, platformdirs 4.4.0 and uv 0.11.19.
+The command prefix is still `uv run --no-sync --offline --python 3.10 python`.
+Unless stated otherwise, cwd is `D:\PythonProject\MARA`.
+The final implementation HEAD is
+`dffd695497a074895da72216ea8155874f016ffb`; the documentation commit follows it.
+`head-*` execution records name this exact SHA with no uncommitted Python
+changes. `source-equivalence.json` compares the earlier focused checks' file
+hashes with this implementation, so their former input HEAD is not mistaken
+for a test of unchanged `89d99551` source.
+
+### Changes and public boundaries
+
+- Test infrastructure: `pytest_runtime_isolation.py`, new
+  `pytest_runtime_plugin.py`, root `conftest.py`, and the kotaemon/slide_cli
+  `tests/conftest.py` files. All three entrypoints activate the same owned
+  session before business imports. Tempfiles, inherited desktop settings,
+  NLTK resources, actual storage settings and cleanup ownership are covered.
+  Bundled NLTK resources are copied read-only into the session. SQLAlchemy
+  pools and theflow caches are closed only for session-owned paths.
+  Cleanup runs at pytest unconfigure so test results remain visible if a
+  resource cannot close. A regression covers read-only owned Git fixtures;
+  the narrow Windows unlink repair requires a regular, read-only file inside
+  the owned root. Other cleanup errors are still raised.
+- Necessary bootstrap changes: `ktem/runtime_bootstrap.py` and
+  `ktem/default_flowsettings.py`. An explicit test flag selects owned
+  config/data/cache paths and rejects external configured paths before I/O.
+  Test configuration does not search source/user parents for `.env`.
+  Without that flag, normal PlatformDirs and Desktop path selection remain;
+  an explicitly configured NLTK directory is respected. No DB schema,
+  provider record, CLI signature, UI event chain or production timeout changes.
+- New protection tests: `tests/test_runtime_isolation_bootstrap.py`,
+  `tests/test_runtime_isolation_subprocess.py` and
+  `tests/test_runtime_isolation_entrypoints.py`. They check actual SQLite,
+  storage traces, files/output writes, child/grandchild inheritance, both
+  initialization orders, early rejection and ownership-aware cleanup.
+  Package-cwd probes execute their real conftest entrypoints. The source
+  bootstrap path is asserted against this checkout.
+- Existing fixture corrections: `test_preview_cache_roots.py` temporarily sets
+  `USERPROFILE` as well as `HOME`; `test_workspace_flowsettings_storage.py`
+  explicitly activates its child runtime and checks its resolved storage root.
+  Both retain their behavioral assertions.
+- Confirmed Windows security defects: `ktem/index/file/deletion.py`,
+  `ktem/index/file/storage_lifetime.py` and `ktem/preview/service.py` now reject
+  path anchors, including rooted paths without a drive, before joining them
+  to trusted storage. Existing deletion/preview/storage negative cases cover
+  the failure. The preview test also blocks external mkdir if rejection ever
+  regresses; the storage test requires the intended typed error. POSIX
+  descriptor, symlink, identity, atomic publication and vendor checks remain.
+- Deadline tests: `test_docqa_route_deadline.py`, `test_mara_route_deadline.py`
+  and new `route_deadline_test_helpers.py`. Only the two wall-clock unit tests
+  use a controlled unresponsive worker/clock. Their state/evidence assertions
+  remain, with explicit waits of 0.08s and 0.10s and one worker start. All six
+  real timeout/cancellation integration tests remain unchanged.
+
+The deadline implementation reserves 20ms from the 100ms test request, then
+allows an additional 100ms cancellation grace. The old `<0.2s` assertion had
+little room for scheduling and clock granularity. `observe_deadline.py`
+recorded waits of 0.08478s and 0.10849s; elapsed perf-counter time was 0.19752s
+while the production monotonic trace reported 0.204s. That diagnostic exited
+1 because the then-open SQLite pool prevented cleanup; its timing observation
+is not a passed gate. The deterministic tests do not assert that an
+unresponsive backend physically stops within the nominal request budget.
+Real integration tests separately check cancellation once, cooperative stop,
+late-result rejection, no late evidence/authority, and unchanged defaults.
+
+### Isolation incident and retained evidence
+
+The first package-cwd attempts in this follow-up did not load root conftest.
+Consequently their apparent test passes were insufficient isolation evidence.
+The unisolated kotaemon run updated the actual profile's `.env`, `.env.example`
+and `flowsettings.py` at 09:03:35, and cache metadata contains 335 entries
+updated since follow-up start. This is a validation error in this follow-up;
+it is not attributed only to the previous R0 run.
+
+`known-runtime-metadata.json` and `user-cache-before-final.json` record observed
+metadata without exposing configuration contents. The known profile and
+repository SQLite files retain August modification times. There is no complete
+pre-run snapshot, so neither original configuration contents nor every runtime
+byte can be certified unchanged. No verified pre-run config backup was found
+in the profile directory. Observed config files were preserved separately in
+`config-observed-after-package-run/`; that is an after-event copy, not a
+restoration source. No user cache/config was deleted, moved or guessed back.
+
+After adding package entrypoint activation, the controlled 42-test run and CLI
+suite produced zero metadata changes against the retained user-cache,
+office-cache and canonical NLTK snapshot. The final focused check adds the
+read-only cleanup case for 43 passes. `user-cache-after-final.json` and
+`final-runtime-footprint.json` record the post-suite comparison, including
+config bytes against the retained after-event copy. The final comparison finds
+zero added/changed/removed cache entries, identical retained config bytes,
+unchanged observed SQLite metadata and no remaining coverage bootstrap files.
+These comparisons cannot
+recover or certify the original pre-run state. The first ktem and coverage
+attempts were interrupted when additional isolation gaps were discovered;
+their logs remain and are not counted as completed gates.
+
+Coverage instrumentation also wrote temporary `subcover_<pid>.pth` files in
+the canonical `.venv` and its `Lib/site-packages`. The installed coverage
+7.10.7 `patch=subprocess` implementation creates these files itself; disabling
+bytecode writes does not prevent them. Two interrupted task-owned coverage
+processes left four such files. Their process IDs, timestamps and exact
+coverage bootstrap bytes established ownership; copies and the removal
+record are in `coverage-bootstrap-cleanup/`. Only those four owned files were
+removed. Local full coverage was not retried after discovering this behavior,
+because it conflicts with the required canonical-environment write boundary.
+No dependency installation, synchronization or upgrade was performed.
+
+The first final-HEAD benchmark/root run exposed one new invocation problem:
+the evidence-directory prefix made an atomic cache temporary path exceed this
+Windows runtime's path limit. Only `MARA_PYTEST_RUNTIME_PARENT` was shortened
+to `D:\MARA-r0-pytest-01a086ff`; every session still uses a unique ownership
+marker and the same isolation plugin. The failing diagnostics case passed
+under that parent (`head-root-short-path-regression.log`, exit 0, 1 passed).
+Source, cache naming, fixture bytes and assertions were not changed.
+
+### Historical failures and current gates
+
+`historical-failure-nodes.json` maps all 118 failures from the three original
+final suite logs to exact node IDs, log line ranges, error excerpts and reasons:
+3 production/infrastructure defects, 2 test-clock/synchronization failures,
+79 platform-capability or platform-semantics cases, 29 permission/tool failures,
+2 CRLF/fixture-byte differences and 3 unconfirmed causes. The vendor LICENSE
+and frozen QASPER document byte assertions remain unchanged.
+
+The unconfirmed nodes are the equal-length rewrite download test, the two-fresh
+DocQA POSIX launcher test, and the documented secret-file-permission shell
+test. A likely platform mechanism is documented where supported; their
+underlying failures are not relabeled as confirmed without adequate evidence.
+
+| Current-source check                                                           | Result and log in `followup/`                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actual isolation, subprocess/entrypoint and compatibility regressions          | Exit 0, 43 passed; `r0-cleanup-and-entrypoints-final.log`. Includes read-only fixture cleanup and default production-path compatibility.                                                                                                                                                                                                                                                  |
+| Windows root/path security regressions                                         | Exit 0, 6 passed; `windows-root-paths-after.log`. The protected pre-fix run failed 3 cases. The same nodes pass in the final complete ktem suite.                                                                                                                                                                                                                                         |
+| Original six, recovery/selector negatives and deadline/cancellation cases      | Exit 0, 27 passed / 2 POSIX skips; `r0-original-and-negative-final.log`. Source hashes distinguish later test-cleanup changes; the same executed nodes pass in the final full suites. Receipt skips still require real Linux execution.                                                                                                                                                   |
+| `-m pytest -q`, cwd `libs/slide_cli`                                           | Exit 0, 131 passed; `head-slide-cli-full.log`.                                                                                                                                                                                                                                                                                                                                            |
+| `-m pytest -q libs/ktem/ktem_tests`                                            | Exit 1, 2,547 passed / 97 failed in 307.73s; `head-ktem-full.log`. Five historical failures resolved. Frozen stage-2, transaction and security-negative assertions were retained.                                                                                                                                                                                                         |
+| `-m pytest -q`, cwd `libs/kotaemon`                                            | Exit 1, 359 passed / 4 failed / 15 skipped in 113.09s; `head-kotaemon-full.log`. Four failures concern FIFO/symlink capability or permission. After the summary, unconfigure also raises WinError 32 for the Chroma/HNSW `data_level0.bin` held open on Windows.                                                                                                                          |
+| `-m pytest -q benchmark/tests tests`                                           | The first final-HEAD run returned exit 1, 1,517 passed / 11 failed / 27 skipped in 387.52s; `head-root-benchmark-full.log`. Ten historical failures remain and one long test-root path failure was introduced by the invocation. With the shorter owned parent, exit 1, 1,518 passed / 10 failed / 27 skipped in 367.52s; `head-root-benchmark-short.log`. No new failed node IDs remain. |
+| Full `scripts/run_coverage_gates.py --output-dir <followup>/coverage-isolated` | Intermediate source only, exit 1: first suite reached 100% but read-only owned fixture cleanup failed before the usual summary; `r0-isolated-coverage-complete.log`. That cleanup is now covered and fixed. No current-HEAD full coverage run followed discovery of coverage's canonical-environment `.pth` writes. No package floor was reached.                                         |
+| Full Ruff, hygiene, baseline against exact Dev SHA                             | Exit 0; `head-ruff.log`, `head-hygiene.log`, `head-baseline.log`. Baseline was not refreshed.                                                                                                                                                                                                                                                                                             |
+| Changed-file pre-commit and final diff whitespace checks                       | Python source checks passed with exit 0 in `r0-final-static-pass.log` (all 20 Python file hashes match final implementation). Final report pre-commit and `git diff --check` also pass with exit 0; `head-report-static-pass.log` and the staged commit record.                                                                                                                           |
+
+`head-suite-comparison.json` contains exact final failed node IDs, resolutions
+and category counts against the original three complete logs: seven historical
+failures resolved, 111 remain, and no new failed node IDs. All four package
+coverage floors remain required: benchmark 90%, slide_cli 70%, kotaemon 60%
+and ktem 50%. No changed-lines result substitutes for these floors.
+
+The bounded read-only Barkla SSH retry still fails with
+`Control socket connect(...codex-jump-relay-lxe): Connection refused` (exit 1).
+No WSL distribution or suitable local Linux/container runtime is available.
+The work-branch CI query found no runs. Its remote HEAD is the earlier
+`89d99551`; follow-up source has not been pushed, so dispatching that old
+revision would not validate these changes. `environment-blockers.json`
+records the exact branch/base, command and missing execution/synchronization
+conditions. No old CI result substitutes for the current source, and no new
+environment was installed or synchronized.
+
+**R0 NO-GO; R1 not started.** Complete supported-platform suites, both POSIX
+receipt executions, package coverage floors and the remaining diagnostic/
+cleanup issues are still outstanding. No characterization/extraction into
+`ktem_contracts.file_selection` has begun. Stop here without R2.
+
+Four new local implementation commits retain the five reviewed commits:
+
+- `c6032903`: runtime entrypoint/ownership and path-boundary protection tests.
+- `0e49aea1`: test isolation, bootstrap boundaries and fixture corrections.
+- `c08cc1bc`: reject anchored paths before storage operations.
+- `dffd6954`: deterministic deadline unit checks and shared test helper.
+
+This existing report is delivered in a separate fifth local documentation
+commit. `final-git-state.json` records its actual full HEAD, status, branch,
+commit range and remote comparison. Each staged diff passes
+`git diff --cached --check`; the pre-existing untracked `NUL` remains.
+No follow-up push, PR, merge, branch/worktree creation, branch switch, reset,
+clean or history rewrite was performed.
+
+For a history-preserving implementation rollback, review later work first and
+revert only `dffd6954 c08cc1bc 0e49aea1 c6032903` in that order. The documentation
+commit is separate. This does not revert the five earlier commits or restore
+external profile/cache contents. No rollback was executed.
