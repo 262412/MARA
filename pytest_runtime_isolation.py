@@ -250,22 +250,24 @@ class ActiveTestRuntime:
             owner_token=owner_token,
         )
 
+    def require_owned_root(self) -> Path:
+        root = self.paths.root
+        if (
+            self.owned_root != root
+            or root.resolve() != root
+            or not self.owner_token
+            or (root / OWNER_MARKER).is_symlink()
+            or not (root / OWNER_MARKER).is_file()
+            or (root / OWNER_MARKER).read_text(encoding="utf-8") != self.owner_token
+        ):
+            raise RuntimeError("Runtime is not owned by this test session")
+        return root
+
     def close(self) -> None:
         if self.closed:
             return
         try:
-            root = self.paths.root
-            if (
-                self.owned_root != root
-                or root.resolve() != root
-                or not self.owner_token
-                or (root / OWNER_MARKER).is_symlink()
-                or not (root / OWNER_MARKER).is_file()
-                or (root / OWNER_MARKER).read_text(encoding="utf-8") != self.owner_token
-            ):
-                raise RuntimeError(
-                    "Refusing to clean a runtime not owned by this test session"
-                )
+            root = self.require_owned_root()
             _dispose_session_database(root)
             _close_session_caches(root)
             shutil.rmtree(root, onerror=partial(_remove_readonly_fixture, root))

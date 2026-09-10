@@ -54,12 +54,29 @@ def register_plugin(config):
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_configure(config):
-    base = config.option.basetemp
-    if base is not None and not Path(base).resolve().is_relative_to(
-        _TEST_RUNTIME.paths.root
+    root = _TEST_RUNTIME.require_owned_root()
+    base = Path(config.option.basetemp or root / "pytest").expanduser().absolute()
+    if (
+        base != base.resolve()
+        or base == root
+        or not base.is_relative_to(root)
+        or (base.exists() and not base.is_dir())
     ):
-        raise pytest.UsageError("pytest basetemp must stay inside the test runtime")
-    config.option.basetemp = str(base or _TEST_RUNTIME.paths.root / "pytest")
+        raise pytest.UsageError(
+            "pytest basetemp must be a dedicated owned subdirectory"
+        )
+    state_paths = (
+        root / "config",
+        root / "tmp",
+        _TEST_RUNTIME.paths.app_data_dir,
+        _TEST_RUNTIME.paths.cache_dir,
+        _TEST_RUNTIME.paths.output_dir,
+    )
+    if any(
+        base.is_relative_to(path) or path.is_relative_to(base) for path in state_paths
+    ):
+        raise pytest.UsageError("pytest basetemp cannot overlap runtime state")
+    config.option.basetemp = str(base)
 
 
 @pytest.fixture(scope="session")
