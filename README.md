@@ -220,10 +220,21 @@ file format. The optional container workflow is in
 
 ## Use the Web workbench
 
+![MARA Web answering a document question alongside the source preview](docs/images/mara-web-evidence.webp)
+
+A real document-QA example: the indexed Word document and page navigation are
+on the left, the source preview is in the center, and the answer is on the right.
+See the [screenshot notes](docs/images/README.md) for the source and visible state.
+
+<details>
+<summary>First launch in an empty workspace</summary>
+
 ![MARA Web workbench before model setup and document import](docs/images/mara-web-start.png)
 
-Actual startup capture from a separate empty workspace. See the
-[screenshot notes](docs/images/README.md) for provenance and additional walkthrough captures.
+Actual startup capture from a separate empty workspace, before configuring
+models or importing documents.
+
+</details>
 
 1. **Configure models.** Open **resources**, check the LLM and Embedding entries,
    and select valid defaults. Saved model settings may already exist.
@@ -359,6 +370,12 @@ MARA model run --help
 ```
 
 ## Use MARA Desktop (preview)
+
+![MARA Desktop streaming a document summary with the selected source visible](docs/images/mara-desktop-workspace.webp)
+
+The native workbench shows recent tasks on the left, a document summary in the
+center, and the selected source on the right. This capture shows the answer
+while it is still generating.
 
 Desktop uses Electron and React with a bundled Python service. Current source
 includes native file import, background indexing, file management, conversation

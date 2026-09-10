@@ -198,10 +198,19 @@ MARA docqa doctor
 
 ## 使用 Web 工作台
 
+![MARA Web 同时展示真实文档问答与原文预览](docs/images/mara-web-evidence.webp)
+
+真实文档问答示例：左侧是已索引的 Word 文档和页面导航，中间显示原文预览，右侧显示回答。
+截图来源和可见运行状态见[截图说明](docs/images/README.md)。
+
+<details>
+<summary>首次启动时的空白工作区</summary>
+
 ![尚未配置模型和导入文档的 MARA Web 工作台](docs/images/mara-web-start.png)
 
-这是在独立空白工作区中实际启动后截取的界面。
-截图来源与可补充的操作场景见[截图说明](docs/images/README.md)。
+这是在独立空白工作区中实际启动后截取的界面，尚未配置模型或导入文档。
+
+</details>
 
 1. **检查模型。** 打开 **resources**，检查 LLM 和 Embedding 条目并设定默认模型。
    应用可能已经存在之前保存的配置。
@@ -329,6 +338,11 @@ MARA model run --help
 ```
 
 ## 使用 MARA Desktop 预览版
+
+![MARA Desktop 根据选定来源流式生成文档摘要](docs/images/mara-desktop-workspace.webp)
+
+原生桌面工作台：左侧是最近任务，中间是文档摘要，右侧是当前选定的来源。
+截图展示的是答案仍在生成时的流式回答过程。
 
 桌面端使用 Electron、React 与内置 Python 服务。
 当前源码已接入原生文件导入、后台索引、文件管理、会话新建/搜索/重命名/删除、
