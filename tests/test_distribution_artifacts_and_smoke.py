@@ -21,6 +21,13 @@ PACKAGES = {
     "ktem": REPO_ROOT / "libs" / "ktem",
     "mara-research-cli": REPO_ROOT / "libs" / "slide_cli",
 }
+KTEM_PUBLIC_MODULES = {
+    "ktem_contracts/file_selection.py",
+    "ktem/docqa/__init__.py",
+    "ktem/docqa/_runtime_models.py",
+    "ktem/docqa/_runtime_utils.py",
+    "ktem/docqa/runtime.py",
+}
 
 
 def _write_sdist(path: Path, members: list[tuple[str, bytes]]) -> None:
@@ -76,7 +83,7 @@ def test_four_distribution_artifacts_have_apache_metadata_and_legal_files(tmp_pa
             name.endswith(".dist-info/licenses/NOTICE") for name in wheel_names
         ), package_name
         if package_name == "ktem":
-            assert "ktem_contracts/file_selection.py" in wheel_names
+            assert KTEM_PUBLIC_MODULES <= wheel_names
         if package_name == "kotaemon":
             requirements = [
                 Requirement(value)
@@ -92,10 +99,8 @@ def test_four_distribution_artifacts_have_apache_metadata_and_legal_files(tmp_pa
             sdist_names = {Path(name).name for name in sdist_members}
         assert {"LICENSE.txt", "NOTICE"} <= sdist_names, package_name
         if package_name == "ktem":
-            assert any(
-                name.endswith("/ktem_contracts/file_selection.py")
-                for name in sdist_members
-            )
+            for module_path in KTEM_PUBLIC_MODULES:
+                assert any(name.endswith("/" + module_path) for name in sdist_members)
 
 
 def test_wheel_validator_rejects_artifact_without_legal_files(tmp_path):

@@ -387,6 +387,7 @@ def _run_offline_runtime_smoke(
     offline_env: dict[str, str],
 ) -> None:
     _assert_installed_distribution_paths(venv, offline_env)
+    _run_docqa_export_smoke(venv, offline_env)
     for executable in ("MARA", "MARA-cli"):
         _run(
             [_venv_command(venv, executable), "--help"],
@@ -406,6 +407,41 @@ def _run_offline_runtime_smoke(
     )
     if not viewer.is_file():
         raise RuntimeError(f"Offline app init did not materialize {viewer}.")
+
+
+def _run_docqa_export_smoke(venv: Path, env: dict[str, str]) -> None:
+    validation = """
+import importlib
+import pathlib
+import sys
+
+import ktem
+parent_modules = set(sys.modules)
+from ktem.docqa import DocQARequest, DocQAResponse
+added_modules = set(sys.modules) - parent_modules
+blocked = ('ktem.docqa.runtime', 'ktem.docqa.execution', 'ktem.db',
+           'ktem.llms', 'ktem.embeddings', 'ktem.rerankings', 'gradio')
+assert not any(name == prefix or name.startswith(prefix + '.')
+               for name in added_modules for prefix in blocked), added_modules
+prefix = pathlib.Path(sys.prefix).resolve()
+for name in ('ktem', 'ktem.docqa', 'ktem.docqa._runtime_models'):
+    assert pathlib.Path(sys.modules[name].__file__).resolve().is_relative_to(prefix)
+assert DocQARequest('Question').prompt == 'Question'
+assert DocQARequest.__module__ == 'ktem.docqa._runtime_models'
+from ktem.docqa import DocQARuntime, execute_controller_turn
+runtime = importlib.import_module('ktem.docqa.runtime')
+execution = importlib.import_module('ktem.docqa.execution')
+assert DocQARuntime is runtime.DocQARuntime
+assert DocQARequest is runtime.DocQARequest
+assert DocQAResponse is runtime.DocQAResponse
+assert execute_controller_turn is execution.execute_controller_turn
+print('[wheel-smoke] installed DocQA lightweight exports and runtime identity passed')
+"""
+    _run(
+        [_venv_python(venv), "-B", "-c", validation],
+        env=env,
+        cwd=venv.parent,
+    )
 
 
 def run_smoke(dist_root: Path) -> None:
