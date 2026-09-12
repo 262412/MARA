@@ -1,10 +1,11 @@
 """Check Gradio's real dependency graph, including failure edges and demo tail."""
 
-from ktem.pages.chat import pdfview_js, scroll_answer_panel_js
-from ktem.pages.chat.chat_gradio_adapters import chat_submit_ports
-from ktem.pages.chat.chat_message_events import bind_chat_submit_events
+import os
+import subprocess
+import sys
+from pathlib import Path
 
-from .chat_submission_app_fixture import submission_app
+from pytest_runtime_isolation import ActiveTestRuntime
 
 
 def _ids(components):
@@ -16,6 +17,9 @@ def _ids(components):
 
 
 def _check_chain(blocks, page, chain, *, demo):
+    from ktem.pages.chat import pdfview_js, scroll_answer_panel_js
+    from ktem.pages.chat.chat_gradio_adapters import chat_submit_ports
+
     ports = chat_submit_ports(page)
     roles = [
         "submit",
@@ -83,11 +87,12 @@ def _check_chain(blocks, page, chain, *, demo):
     assert chain[1]["types"]["generator"] is True
 
 
-def test_real_registration_preserves_failure_edges_and_demo_difference(
-    monkeypatch,
-    mara_test_runtime_paths,
-):
-    with submission_app(monkeypatch, mara_test_runtime_paths.root) as (app, blocks):
+def _check_real_registration(monkeypatch, root):
+    from ktem.pages.chat import pdfview_js, scroll_answer_panel_js
+    from ktem.pages.chat.chat_message_events import bind_chat_submit_events
+    from ktem_tests.chat_submission_app_fixture import submission_app
+
+    with submission_app(monkeypatch, root) as (app, blocks):
         page = app.chat_page
         dependencies = blocks.config["dependencies"]
         start = next(
@@ -106,3 +111,27 @@ def test_real_registration_preserves_failure_edges_and_demo_difference(
             )
         demo_chain = blocks.get_config_file()["dependencies"][before:]
         _check_chain(blocks, page, demo_chain, demo=True)
+
+
+def test_real_registration_preserves_failure_edges_and_demo_difference():
+    environment = os.environ.copy()
+    runtime = ActiveTestRuntime.start(environment)
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-B", str(Path(__file__).resolve())],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert completed.returncode == 0, completed.stdout + completed.stderr
+    finally:
+        runtime.close()
+        assert not runtime.paths.root.exists()
+
+
+if __name__ == "__main__":
+    import pytest
+
+    with pytest.MonkeyPatch.context() as patch:
+        _check_real_registration(patch, Path(os.environ["MARA_PYTEST_RUNTIME_ROOT"]))

@@ -4,10 +4,11 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 import gradio as gr
+from ktem.docqa import chat_submission as submission_core
 
 from .chat_submit_sources import resolve_chat_submit_sources
 
-SELECTION_MARKER = "[Selected text from current page]"
+SELECTION_MARKER = submission_core.SELECTION_MARKER
 
 MergeGraphSourceIdsFn = Callable[[Any, list[str]], list[str]]
 
@@ -38,60 +39,47 @@ def prepare_chat_submission(
     first_indexing_file_fn: Callable[..., list[str]] | None,
     first_indexing_url_fn: Callable[..., list[str]] | None,
 ) -> PreparedChatSubmission:
-    if not chat_input:
-        raise ValueError("Input is empty")
-
-    chat_input_text = chat_input.get("text", "")
-    (
-        chat_input_text,
-        file_ids,
-        selector_choices_to_add,
-        used_command,
-    ) = resolve_chat_submit_sources(
+    content = submission_core.prepare_submission_content(
         chat_input=chat_input,
-        chat_input_text=chat_input_text,
-        first_selector_choices=first_selector_choices,
-        settings=settings,
+        chat_history=chat_history,
         user_id=user_id,
+        settings=settings,
+        first_selector_choices=first_selector_choices,
+        graph_source_ids=graph_source_ids,
+        selected_page_text=selected_page_text,
+        default_question=default_question,
+        merge_graph_source_ids=merge_graph_source_ids,
         first_indexing_file_fn=first_indexing_file_fn,
         first_indexing_url_fn=first_indexing_url_fn,
+        resolve_sources=lambda **kwargs: resolve_chat_submit_sources(**kwargs),
+        inject_selection=lambda text, selected: _inject_selected_page_text(
+            text, selected
+        ),
     )
-
-    first_selector_choices.extend(selector_choices_to_add)
-    merged_graph_source_ids = merge_graph_source_ids(graph_source_ids, file_ids)
-
-    if not chat_input_text and file_ids:
-        chat_input_text = default_question
-
-    if not chat_input_text and not chat_history:
-        chat_input_text = default_question
-
-    chat_input_text, selected_page_text = _inject_selected_page_text(
-        chat_input_text,
-        selected_page_text,
-    )
-
-    if file_ids:
+    if content.file_ids:
         selector_output = [
             "select",
-            gr.update(value=file_ids, choices=first_selector_choices),
+            gr.update(value=content.file_ids, choices=first_selector_choices),
         ]
     else:
         selector_output = [gr.update(), gr.update()]
 
-    if chat_input_text:
-        chat_history = chat_history + [(chat_input_text, None)]
-    elif not chat_history:
-        raise gr.Error("Empty chat")
+    # Gradio updates precede history concatenation and the empty-chat error.
+    try:
+        chat_history = submission_core.complete_chat_history(
+            content.chat_input_text, chat_history
+        )
+    except submission_core.EmptyChatError as error:
+        raise gr.Error(str(error)) from None
 
     return PreparedChatSubmission(
-        chat_input_text=chat_input_text,
+        chat_input_text=content.chat_input_text,
         chat_history=chat_history,
         selector_output=selector_output,
-        used_command=used_command,
-        selected_page_text=selected_page_text,
+        used_command=content.used_command,
+        selected_page_text=content.selected_page_text,
         selected_graph_context=selected_graph_context,
-        merged_graph_source_ids=merged_graph_source_ids,
+        merged_graph_source_ids=content.merged_graph_source_ids,
     )
 
 
@@ -99,19 +87,6 @@ def _inject_selected_page_text(
     chat_input_text: str,
     selected_page_text: Any,
 ) -> tuple[str, Any]:
-    if not selected_page_text or not str(selected_page_text).strip():
-        return chat_input_text, selected_page_text
-
-    selected_page_text = " ".join(str(selected_page_text).split())
-    if chat_input_text and SELECTION_MARKER in chat_input_text:
-        return chat_input_text, selected_page_text
-    if chat_input_text:
-        return (
-            f"{chat_input_text}\n\n{SELECTION_MARKER}\n{selected_page_text}",
-            selected_page_text,
-        )
-    return (
-        "Please explain the following selected text from the current page:\n"
-        f"{selected_page_text}",
-        selected_page_text,
+    return submission_core.inject_selected_page_text(
+        chat_input_text, selected_page_text
     )

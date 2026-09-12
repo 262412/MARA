@@ -420,7 +420,19 @@ from types import SimpleNamespace
 import ktem
 parent_modules = set(sys.modules)
 from ktem.docqa import DocQARequest, DocQAResponse, DocQASession, DocQASessionSummary
-from ktem.docqa import session_projection
+from ktem.docqa import chat_submission, session_projection
+
+submission = chat_submission.prepare_submission_content(
+    chat_input={'text': 'Installed @"one.pdf"'}, chat_history=[],
+    user_id='owner', settings={}, first_selector_choices=[('one.pdf', 'file-1')],
+    graph_source_ids=[], selected_page_text=' page text ', default_question='Default',
+    merge_graph_source_ids=lambda old, new: old + new,
+    first_indexing_file_fn=None, first_indexing_url_fn=None,
+)
+assert submission.chat_input_text == 'Installed\\n\\n[Selected text from current page]\\npage text'
+assert submission.file_ids == ['file-1']
+assert submission.merged_graph_source_ids == ['file-1']
+assert chat_submission.complete_chat_history(submission.chat_input_text, []) == [(submission.chat_input_text, None)]
 
 row = SimpleNamespace(id='installed-session', name='Installed record', user='owner',
     is_public=False, date_created=None, date_updated=None,
@@ -435,12 +447,12 @@ added_modules = set(sys.modules) - parent_modules
 blocked = ('ktem.docqa.runtime', 'ktem.docqa.execution', 'ktem.db',
            'ktem.docqa._runtime_session_service', 'ktem.docqa._runtime_sessions',
            'ktem.docqa._runtime_notebook', 'ktem.llms', 'ktem.embeddings',
-           'ktem.rerankings', 'gradio', 'sqlmodel', 'sqlalchemy')
+           'ktem.rerankings', 'ktem.pages', 'gradio', 'sqlmodel', 'sqlalchemy')
 assert not any(name == prefix or name.startswith(prefix + '.')
                for name in added_modules for prefix in blocked), added_modules
 prefix = pathlib.Path(sys.prefix).resolve()
 for name in ('ktem', 'ktem.docqa', 'ktem.docqa._runtime_models',
-             'ktem.docqa.session_projection'):
+             'ktem.docqa.session_projection', 'ktem.docqa.chat_submission'):
     assert pathlib.Path(sys.modules[name].__file__).resolve().is_relative_to(prefix)
 assert DocQARequest('Question').prompt == 'Question'
 assert DocQARequest.__module__ == 'ktem.docqa._runtime_models'
@@ -454,6 +466,7 @@ assert execute_controller_turn is execution.execute_controller_turn
 assert DocQASession is runtime.DocQASession
 assert DocQASessionSummary is runtime.DocQASessionSummary
 print('[wheel-smoke] installed session projection calls and DTO identity passed')
+print('[wheel-smoke] installed independent chat submission passed')
 print('[wheel-smoke] installed DocQA lightweight exports and runtime identity passed')
 """
     _run(
