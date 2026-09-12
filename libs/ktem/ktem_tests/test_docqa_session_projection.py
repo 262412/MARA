@@ -30,8 +30,17 @@ def _row(data_source=None, **overrides):
     return SimpleNamespace(**values)
 
 
-@pytest.fixture
-def projection():
+@pytest.fixture(params=["legacy", "projection"])
+def projection(request):
+    if request.param == "projection":
+        from ktem.docqa.session_projection import loaded_session, session_summary
+
+        return SimpleNamespace(
+            summary=session_summary,
+            loaded=lambda row: loaded_session(
+                row, default_state=_runtime_sessions.STATE
+            ),
+        )
     return SimpleNamespace(
         summary=RuntimeSessionService._session_summary,
         loaded=RuntimeSessionService._loaded_session,

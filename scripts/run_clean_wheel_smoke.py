@@ -414,17 +414,32 @@ def _run_docqa_export_smoke(venv: Path, env: dict[str, str]) -> None:
 import importlib
 import pathlib
 import sys
+from types import SimpleNamespace
 
 import ktem
 parent_modules = set(sys.modules)
-from ktem.docqa import DocQARequest, DocQAResponse
+from ktem.docqa import DocQARequest, DocQAResponse, DocQASession, DocQASessionSummary
+from ktem.docqa import session_projection
+
+row = SimpleNamespace(id='installed-session', name='Installed record', user='owner',
+    is_public=False, date_created=None, date_updated=None,
+    data_source={'messages': [['q', 'a']],
+                 'selected': {'9': ['select', ['file-1'], 'owner']}})
+loaded = session_projection.loaded_session(row, default_state={'app': {'regen': False}})
+summary = session_projection.session_summary(row)
+assert type(loaded) is DocQASession and type(summary) is DocQASessionSummary
+assert loaded.messages == [('q', 'a')] and loaded.retrieval_messages == ['']
+assert loaded.graph_source_ids == ['file-1'] and summary.graph_source_count == 0
 added_modules = set(sys.modules) - parent_modules
 blocked = ('ktem.docqa.runtime', 'ktem.docqa.execution', 'ktem.db',
-           'ktem.llms', 'ktem.embeddings', 'ktem.rerankings', 'gradio')
+           'ktem.docqa._runtime_session_service', 'ktem.docqa._runtime_sessions',
+           'ktem.docqa._runtime_notebook', 'ktem.llms', 'ktem.embeddings',
+           'ktem.rerankings', 'gradio', 'sqlmodel', 'sqlalchemy')
 assert not any(name == prefix or name.startswith(prefix + '.')
                for name in added_modules for prefix in blocked), added_modules
 prefix = pathlib.Path(sys.prefix).resolve()
-for name in ('ktem', 'ktem.docqa', 'ktem.docqa._runtime_models'):
+for name in ('ktem', 'ktem.docqa', 'ktem.docqa._runtime_models',
+             'ktem.docqa.session_projection'):
     assert pathlib.Path(sys.modules[name].__file__).resolve().is_relative_to(prefix)
 assert DocQARequest('Question').prompt == 'Question'
 assert DocQARequest.__module__ == 'ktem.docqa._runtime_models'
@@ -435,6 +450,9 @@ assert DocQARuntime is runtime.DocQARuntime
 assert DocQARequest is runtime.DocQARequest
 assert DocQAResponse is runtime.DocQAResponse
 assert execute_controller_turn is execution.execute_controller_turn
+assert DocQASession is runtime.DocQASession
+assert DocQASessionSummary is runtime.DocQASessionSummary
+print('[wheel-smoke] installed session projection calls and DTO identity passed')
 print('[wheel-smoke] installed DocQA lightweight exports and runtime identity passed')
 """
     _run(
