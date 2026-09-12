@@ -1,216 +1,238 @@
 # MARA refactor status — 2026-09-12
 
-## Current round: R2-B session record projections
+## Current round: R2-C pipeline preparation and assembly
 
-**R2-B 限定验证通过，等待独立审查。**
+**R2-C 限定验证通过，等待独立审查。**
 **整体 CI FAILURE，S1 未关闭，合并/发布 NO-GO。**
-R1 and R2-A retain their accepted scope. S1 remains unresolved; this round
-does not authorize merge or release.
+**R2-B: ACCEPTED**, following the user's explicit independent review in this
+round. R1 and R2-A retain their accepted scope. This does not close S1 or
+authorize merge, release or R3.
 
-The review/increment base is `ec2b7b4c5b5393d18ea013fe7f60e53994aa0a78`;
-the original Dev comparison remains
-`adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
-Accepted R2-A source is `6613c03278fddf3d2fb570b59acc6cf9a42694f6`,
-and accepted R1 source is `c693160e6e5f0e6c05edd8d507219679aad120d2`.
-The [R2-A report at the review base](https://github.com/262412/MARA/blob/ec2b7b4c5b5393d18ea013fe7f60e53994aa0a78/docs/development/refactor-status.md)
-retains the earlier export, security-alias and S1 evidence without duplicating
-those long reports here.
+Review/increment base: `d6890a74b59f0a35b172a65fe766ae7278081395`.
+Fixed original Dev: `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+Accepted R2-B source: `9c116ff06a2c77c61dda976f70a6b90c3fd8912e`;
+accepted R2-A: `6613c03278fddf3d2fb570b59acc6cf9a42694f6`;
+accepted R1: `c693160e6e5f0e6c05edd8d507219679aad120d2`.
+The [previous report at d6890a74](https://github.com/262412/MARA/blob/d6890a74b59f0a35b172a65fe766ae7278081395/docs/development/refactor-status.md)
+retains R2-B implementation and earlier security/alias evidence. Its historical
+pending-review status is superseded by the user's R2-B acceptance above.
 
-R2-B characterization commit `240c591497c4de1be82c06bb7e2ef509b2ac29ab`
-precedes implementation `9c116ff06a2c77c61dda976f70a6b90c3fd8912e`.
-Both were normally pushed to the existing `codex/r0-r1-safe-refactor` branch.
-[Quality gates 34669658710, attempt 1](https://github.com/262412/MARA/actions/runs/34669658710)
-was dispatched once with the original Dev `base_ref`; its actual head SHA is
-the implementation SHA above. The final report-only successor, its exact
-local/remote SHA, and source-equivalence check are recorded in
-`r2b-final-state.json`. The report-only commit reuses these source results;
-it does not claim another CI execution.
+Characterization commit `ab326d8b0dcc4019a9d87f43f1c57a806ad4c3b5` precedes implementation
+`c2a818e0c5215c9af35c8d8c29fa7bd07a7ae62d`. Both were normally pushed on the existing
+`codex/r0-r1-safe-refactor` branch.
+[Quality gates 34677091570, attempt 1](https://github.com/262412/MARA/actions/runs/34677091570)
+was dispatched once with the fixed Dev `base_ref`, and verified that exact
+implementation SHA. The final report-only successor, actual local/remote SHA
+and source-equivalence proof are recorded in `r2c-final-state.json` and the final
+handoff. Report-only changes reuse the source evidence; no additional CI run is
+claimed for them.
 
-### Responsibilities and preserved behavior
+### Responsibilities, order and compatibility
 
-The affected public surface is Web/CLI session reading. The only application
-source changes are `libs/ktem/ktem/docqa/session_projection.py` and
-`_runtime_session_service.py`. No equivalent record-projection module was
-found in the scoped session/helper inventory.
+The affected public surface is preparation for DocQA Web, CLI, benchmark and
+desktop calls. A bounded helper inventory found no equivalent preparation module.
+Application source changes are limited to `runtime.py` and
+`pipeline_preparation.py`; other changes are characterization/import tests and
+the existing wheel checks.
 
-- `session_projection.session_summary(row)` interprets a loaded record as the
-  original `_runtime_models.DocQASessionSummary`.
-- `session_projection.loaded_session(row, default_state=...)` returns the
-  original `_runtime_models.DocQASession`.
-- Both old staticmethods retain their names, signatures and actual service
-  call sites. The loaded-session delegate reads the existing `_sessions.STATE`
-  on each call. No duplicated STATE definition, extra DTO, repository, callback framework
-  or new facade export map was introduced.
+The new module prepares settings/reasoning, creates retrievers and the pipeline,
+then prepares file/page scope and multimodal request context. Its one concrete
+`PipelinePreparationDependencies` value supplies explicit operations and resource
+getters. It receives no runtime object and does not import runtime. Getters and
+callbacks read instance resources and existing module helpers at their original
+use sites; they preserve patches applied during `get_pipeline`, instance method
+overrides and reasoning-registry replacement during lookup. The original
+`{"app": {"regen": False}}` fallback is provided by the old delegate; the
+different `_runtime_pipeline.STATE` is not substituted or copied.
 
-The moved function bodies match the original AST, apart from replacing the
-two `_sessions.STATE` references with the explicit state parameter.
-The nine remaining service methods are unchanged, including list/load/create,
-settings, graph-source owner backfill, selection mapping and persistence.
-Queries, public/owner predicates, sorting, early returns and commit/refresh
-ordering therefore retain their original source as well as integration tests.
-R1 selection helpers, R2-A exports, model definitions, Notebook code, runtime,
-Web control and persistence formats retain their review-base source.
+`DocQARuntime._prepare_pipeline` retains its original signature, and
+`create_pipeline` still returns `(pipeline, reasoning_state)`. The original
+`_PreparedPipeline` definition, fields, module and reference identities remain
+in `_runtime_models`. Top-level preparation helper entrypoints and the preview
+helper patch namespace remain available. Existing pipeline, preview, selection,
+multimodal, evidence-identity, ingestion and request-context rules are reused.
 
-Fixed expectations were first run against the old working-tree implementation:
-**54 tests passed before extraction**, followed by the characterization commit.
-After extraction the same expectations exercise both the direct projection
-functions and old delegates; with the independent import test, **88 passed**.
-These checks cover empty/normal records, tuple messages, retrieval history
-padding/truncation, absent/None/empty/default and nested state, origin, user ID,
-public flags, date identity/type, exceptions, and exact copy/reference boundaries.
-Only state is deep-copied; nested message/plot/selection/data-source references
-retain their original sharing.
+AST comparison confirms that only `_prepare_pipeline` changed among runtime
+functions: the other **43 functions/methods** are unchanged.
+Session projection/services, queries, permissions, transactions, Notebook,
+selection contracts, routing, verification, streaming, Gradio chains, parent
+bootstrap, dependencies/locks and all gate/scanner policies retain their source.
 
-Explicit graph IDs still retain duplicates and whitespace; zero and False are
-still converted to strings. Complete sessions fall back to selected IDs only when
-explicit normalized IDs are empty; summaries do not use that fallback.
-The isolated SQLite tests retain owner/private/public visibility, missing/empty
-IDs, ordering, owner-only graph backfill and transaction ordering. Public
-non-owner conversation persistence remains allowed with the owner's selection
-mapping retained; private non-owner persistence remains denied. This refactor
-does not redefine write permissions.
+Before production editing, **118 fixed-expectation and existing boundary tests
+passed on the old working-tree implementation**, with saved source bytes and
+hash evidence. They were committed before extraction. The same legacy checks
+passed afterward. Direct preparation uses a `SimpleNamespace` with explicit
+capabilities rather than a Runtime instance, and repeats fixed values and traces.
+All **31 fixed test-function ASTs** are identical to the pre-extraction commit;
+only the execution fixture was parameterized (`fixed-expectation-proof.json`).
+The final exact-source run of the new preparation/cold-import tests was
+**160 passed with no warnings**; it does not merely compare two delegating aliases.
 
-### Import, consumer and distribution evidence
+Coverage locks the original settings/state deep copies and selected-input shallow
+copy; None/empty/default/explicit and unknown reasoning; setting override,
+ordered retriever and `get_pipeline` calls; Web search and missing-backend
+short circuits; file-index absence and late availability; active-source fallback;
+document/page/PDF/non-PDF/selected-text behavior; typed empty-page errors;
+strict source authorization; graph/page-image/element records; evidence identity,
+ingestion traces, request context and prepared-object references.
 
-The fresh-process probe imports the real `ktem` parent before importing and
-calling the new projection module, without prewarming runtime or substituting
-the parent package. In the measured Windows Python 3.10.19 environment, the
-parent baseline contains **236 modules and 20 owned-directory creation attempts**.
-The projection import and calls add **9 modules and no audited operations**.
-The added modules are the DocQA facade, projection, original models/utils,
-existing selection helper and shared file-selection contract, plus `html` and
-`html.entities`. The import does not load `ktem.docqa.runtime`, session or
-Notebook services, DB, SQLModel/SQLAlchemy, model management or Gradio.
-Counts are environment observations, not portable limits;
-the parent itself is not claimed to have zero side effects.
+The fixed successful trace is user resolution → settings → reasoning info →
+overrides → index 9 → index 4 → reasoning state → pipeline creation → selected
+IDs/active source → page normalization/text → selected records → request images
+→ graph normalization/strict validation → local elements/graph → request elements
+→ request context. Exact counts, arguments and **23 injected failure positions**
+preserve exception identity and short-circuit prefixes. Pipeline creation still
+precedes later page/source validation; no independent behavior fix was mixed in.
 
-Local gates passed: **471 related tests with 7 native-Windows skips**, another
-**15 actual Web control/Gradio-adapter tests**, **13 distribution tests**,
-changed-file pre-commit, full Ruff/hygiene, and baseline ratchets against both
-fixed Dev and the R2-B review base. The related suite includes R2-A exports and
-cold data types, R1 callers/patches, runtime/session and actual CLI consumers.
+### Cold imports, consumers and local validation
 
-All four packages built wheel and sdist artifacts and passed Twine validation.
-The actual clean-wheel run installed each dependency layer and a combined
-environment, verified installed paths and original DTO identities, called both
-projections before runtime import, exercised CLI help and offline app init,
-and resolved NLTK 3.10.3. No source overlay was used in installed-wheel probes.
-Local wheels include the pre-existing user asset edits; they are not claimed
-byte-identical to CI wheels built from the committed tree.
+The fresh subprocess uses the real `ktem` parent and does not prewarm runtime or
+fake the parent package. Parent-only and independent-preparation probes have the
+same baseline: **236 modules and 20 owned-directory creation attempts**
+in Windows Python 3.10.19. Import plus an independent call with existing helper
+callbacks adds **14 modules and zero audited file-write, database or network operations**.
+No runtime/service/Notebook/DB/SQLModel/SQLAlchemy/model-management/Gradio module
+is added. Counts are observations, not fixed budgets, and the parent itself is
+not claimed to have zero side effects.
 
-CI distribution artifact `10289942873` has verified ZIP SHA-256
-`bff50b3f102cf93ff3b8003539aa2dcc4acbbca001c6768e8178829541b26055`.
-All eight artifact hashes, SBOMs and provenance match source `9c116ff0` and
-run `34669658710`. The ktem wheel and sdist contain the new projection, old
-service and five preserved R1/R2-A source members, byte-identical to Git blobs.
+Actual consumers include ChatPage's `create_pipeline` adapter, the CLI request
+facade/runtime override, sync and streamed turns, cancellation/session paths,
+the desktop sidecar and benchmark selected-text path. R1 selection and patch
+tests, R2-A export/import tests, and R2-B projection plus owner/private/public
+session regressions remain in these runs. No permission behavior was revised.
 
-**Final CI: FAILURE — 16 successful jobs, three failed dependency audits and their failed required aggregate.**
-All existing package, collection, static, frontend, secret, wheel, image and
-coverage jobs passed at the implementation SHA. Unified collection contains
-**5,255 tests**. The complete package results are:
+Local changed-file pre-commit (including mypy), full Ruff/hygiene, both baseline
+ratchets, **13 distribution tests**, four actual wheel/sdist builds and Twine
+checks passed. The actual clean-wheel run verifies installed module paths,
+R2-A/R2-B identities, independent projections, old preparation/create entrypoints,
+CLI help and offline app init. It uses clean installed wheels and resolves NLTK
+3.10.3. Local artifacts retain the 133 existing user asset edits and are not
+claimed byte-identical to committed-source CI artifacts.
+
+The complete local Windows run is explicitly **3175 passed, 103 failed, 7 skipped**.
+Related consumers returned **707 passed, 1 failed, 7 skipped**; that one failure
+was the pre-runtime byte-size assertion on the CRLF QASPER fixture. The unchanged
+committed LF fixture was copied into owned scratch, and all **4 benchmark tests
+passed** without modifying the checkout fixture. These results are retained as
+local results, separately from the complete Linux CI suites below.
+
+Every local failure is attributed in `local-failure-verification.json`: 96 are
+native-Windows limitations/defaults (POSIX directory handles and lifecycle locks,
+disabled artifact generation, `fchmod`, symlink privilege, path/name constraints,
+held-file replacement and mode bits); 4 are the old offline harness blocking
+Windows' internal socketpair; 2 are CRLF fixture/license assertions; 1 asserts
+wording changed in the pre-existing user skill assets. A narrowly scoped external
+wrapper allows only the internal Windows socketpair and disables Gradio analytics:
+**37 auth/SSO tests passed**, with no unraisable/thread exception or external
+connection. Production guards were observed without changing their result/errors;
+all failing test and relevant production Git blobs match the review base. No
+Windows security guard, test skip, permission, asset or line ending was changed.
+
+### Exact-source CI, build and coverage
+
+**Final CI: FAILURE — 16 successful jobs, three failed dependency audits and
+their failed required aggregate.** All package, static, collection, frontend,
+secret, wheel, image and coverage jobs passed at `c2a818e0c5215c9af35c8d8c29fa7bd07a7ae62d`.
+Unified collection contains **5,415 tests**.
 
 | Existing CI suite            | Actual result                        |
 | ---------------------------- | ------------------------------------ |
-| ktem isolated runtime        | 2,949 passed                         |
+| ktem isolated runtime        | 3,109 passed                         |
 | Benchmark and root contracts | 1,622 passed                         |
 | kotaemon Python 3.10         | 381 passed, 10 skipped               |
 | kotaemon Python 3.11         | 381 passed, 10 skipped               |
 | slide_cli                    | 131 passed (pytest progress markers) |
 
-The kotaemon skips are the existing optional integration cases; the local
-Windows skips are separately retained in the local regression log.
+The optional integration skips are retained. The Linux package gates execute the
+unmodified complete suites, including the Windows-limited tests above.
 
-The existing CI collector produced the verified coverage artifact `10291080966`, SHA-256 `55e0961c6121f1b8223209c5d661814449f1dbace546a4975500d153a82cd410`.
-The original production scope includes `ktem_contracts`; there are no added
-omit rules, temporary runtime paths or duplicate package-relative aliases.
+Python distribution artifact `10292343597` has verified ZIP SHA-256
+`19c3ce66ddbbd3cee0fa86fcb2dfd0f0804902905933e85322ea660ac1c9fb36`. All eight artifact hashes, CycloneDX/SPDX SBOMs and
+provenance match this source and run. The ktem wheel and sdist contain the new
+preparation module and seven runtime/R1/R2-A/R2-B members byte-identical to Git.
+
+The existing CI coverage artifact is `10293086565`, SHA-256
+`4ca074fade4e364701e26ef8be17e6cbacc286fd2b7e0274f7f71c8a40175419`. The unchanged collector includes `ktem_contracts`
+and the new module; no omit, scan-scope, alias or threshold change was made.
 
 | Production package | Covered statements     | Unchanged floor |
 | ------------------ | ---------------------- | --------------- |
 | benchmark          | 90.22% (17,146/19,005) | 90%             |
 | slide_cli          | 75.57% (2,144/2,837)   | 70%             |
 | kotaemon           | 70.11% (7,521/10,727)  | 60%             |
-| ktem               | 80.95% (41,249/50,954) | 50%             |
+| ktem               | 81.00% (41,303/50,990) | 50%             |
 
-The new projection module is included: **22/22 statements covered**.
-Production diff against fixed Dev: **95.76% (226/236)**;
-against `ec2b7b4c`: **100.00% (26/26)**.
-Both pass the unchanged 90% gate. The downloaded `.coverage` was opened
-read-only, and both existing diff gates were run on the CI JSON; no local
-coverage collector or environment instrumentation was installed.
+New preparation module: **84/84 statements covered**.
+Fixed Dev production diff: **96.92% (315/325)**.
+R2-C increment against `d6890a74`: **100.00% (89/89)**.
+Both unchanged 90% gates pass. The downloaded coverage database was opened
+read-only; existing diff-coverage logic and CLI checks used the CI JSON.
+No temporary runtime files, duplicate package-relative aliases or local coverage
+collector were introduced. Coverage exercises preparation work, not only delegates.
 
-### Security and warning disposition
+### Security, warning and protection evidence
 
-All three dependency profiles fail on the same ten exact keys as R2-A:
+Profiles `root-py310`, `root-py311` and `container-py310` fail on the same ten
+exact blocking keys as R2-B:
 
 | Package/version      | Still-blocking advisory keys                                       |
 | -------------------- | ------------------------------------------------------------------ |
-| nltk 3.10.3          | GHSA-8mgp-746c-j5xp                                                |
+| nltk 3.10.3          | GHSA-8mgp-746c-j5xp (CVE-2026-81726)                               |
 | chromadb 0.5.16      | PYSEC-2026-3813, PYSEC-2026-3814, PYSEC-2026-3815                  |
 | pypdf 4.2.0          | PYSEC-2026-3910, PYSEC-2026-3911, PYSEC-2026-3912, PYSEC-2026-3913 |
 | transformers 4.56.2  | PYSEC-2026-3929                                                    |
 | unstructured 0.15.14 | PYSEC-2026-3930                                                    |
 
-The current raw logs and `security-key-reconciliation.json` preserve every key,
-profile and package version, and retain the nine prior PYSEC/GHSA/CVE alias
-records with their original evidence hash. There are no new blocking keys in
-this run. Existing exact-key matching still rejects these records; their alias
-relationships neither waive risk nor establish a fix. The NLTK model-artifact
-path issue remains open. Locks, declarations, security/hygiene baselines,
-alias logic, coverage thresholds, required jobs and scanner scope are unchanged.
+`security-key-reconciliation.json` retains profile/version/ID and raw-log hashes,
+and the nine original PYSEC/GHSA/CVE alias records with their unchanged evidence
+hash. There are no new blocking keys. Alias relationships do not waive any key
+or establish a fix. The NLTK model-artifact path issue remains open.
 
-All three image gates passed with their existing filters. Verified lite/full/ollama
-artifacts are `10290882649`, `10290991706` and `10289803097`.
-Their build metadata, OCI provenance, hashes and actual inventories agree on
-the current source and NLTK 3.10.3. All three full CycloneDX reports still
-mark NLTK as affected by CVE-2026-81726, while the filtered Trivy reports
-contain no NLTK finding. Passing the filtered scan does not close S1.
+Verified image artifacts are lite `10293110073`, full `10292723955`, ollama `10293410265`. Build metadata, OCI provenance and
+installed package inventories match this source. Each full CycloneDX report still
+marks NLTK 3.10.3 affected by CVE-2026-81726; the existing filtered Trivy reports
+contain no NLTK finding. The filtered image gates passing does not close S1.
 
-Warnings were examined separately from security keys. ARC4 deprecation was
-reproduced by importing the unchanged pypdf 4.2.0 / cryptography 50.0.0 alone
-and also occurs in R2-A. The external offline harness pre-import warning
-disappears with the normal project pytest entrypoint (54 old-contract tests
-passed without warnings). CI warning comparisons include complete multiline
-pytest messages and Pydantic categories; they retain the existing
-dependency/Gradio, uv experimental-output and forced Node 24 diagnostics.
-The only differing warning text is `word,language` versus `language,word`
-from the unchanged prompt-template set iteration, verified at its source
-and prior log. No unexplained new warning or isolation failure remains.
-The first test-only run also exposed an expired ORM object in the new
-sorting fixture; retaining its IDs before commit corrected the fixture
-before the old implementation passed and before production extraction.
-The external coverage-summary helper initially imported standalone CLI
-scripts as a package; using their existing script directory fixed that
-helper import. Both unmodified diff-coverage CLI runs had already passed.
-The failed helper attempt and dependent report abort remain in the log.
+All 20 jobs' warning text was compared with R2-B, including full multiline pytest
+and Pydantic warning bodies. The only differing text is the order of `word` and
+`language` from unchanged prompt-template set iteration. Existing ARC4/pypdf,
+dependency/Gradio, uv experimental-output and forced Node 24 diagnostics remain.
+The Windows offline-wrapper/thread issues above are separately diagnosed;
+the final normal preparation tests have no warnings. No new unexplained CI
+warning or isolation failure remains.
 
-### Evidence location, protection and stopping point
+Evidence-tool failures are retained separately: the first old test expectations
+misstated case-insensitive benchmark origin and a scope alias, and were corrected
+before the old-implementation test pass and production editing. Static formatting
+and an unused compatibility import were corrected before the final source checks.
+The connector's temporary artifact URL returned HTTP 403; the same artifact was
+downloaded through the authorized GitHub Actions API and verified against its API
+digest. Local diagnostic parsing was corrected to retain complete failure sections.
+None of these is attributed to NLTK or used to relax a production gate.
 
-Local evidence is under
-`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r2b-session-projection`:
-`execution.jsonl`, `incremental-source-review.json`, `cold-import-evidence.json`,
-`local-verification-manifest.json`, `python-artifact-inspection.json`,
-`coverage-verified.json`, current CI job logs/artifacts, the security/warning
-comparisons and `r2b-final-state.json`.
+Fresh snapshots retain all **133 pre-existing asset/instruction files byte for byte**,
+the untracked `NUL`, canonical `.venv` metadata (98,853 entries), user caches,
+configuration and both existing SQLite files. The two historical cleanup-refused
+directories retain their original metadata. Only seven explicit source/test/smoke
+paths and this current report section were staged; no new branch/worktree, force
+push, merge, release, environment synchronization or historical cleanup occurred.
 
-The initial **133 unrelated Markdown asset/instruction changes** retain their
-exact bytes and remain outside these commits. Canonical environment metadata
-(98,853 entries), the retained app cache (614 entries), office cache, three
-known config files and two SQLite files match the before snapshot. The two
-historical cleanup-rejected directories and pre-existing `NUL` remain intact.
-No canonical sync, local coverage instrumentation, new branch/worktree, force
-push, merge or release occurred. This comparison does not reconstruct
-pre-incident user data; the retained incident account below remains applicable.
+Evidence root: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r2c-pipeline-preparation`.
+It contains old-source proof, ordered test logs, source/commit/push manifests,
+cold-import operations, per-test Windows attribution, build and artifact hashes,
+all CI job logs, package/diff coverage, security aliases, warning comparisons,
+protected snapshots and the final source/report/remote identity record.
 
-**R2-B stops here pending independent review. Overall merge/release: NO-GO.**
-A prospective rollback is limited to `9c116ff0` followed by `240c5914`, plus
-this round's report-only commit; it retains all accepted R1/R2-A work. No
-rollback or subsequent pipeline/Notebook/R3/security-upgrade round was executed.
+**R2-C stops here pending independent review. Overall merge/release: NO-GO.**
+A prospective rollback is limited to this report-only successor, `c2a818e0`
+and `ab326d8b`; it retains accepted R1/R2-A/R2-B work. No rollback or R3,
+Notebook, dependency-upgrade or security-remediation round was executed.
 
 ## Previous R0/R1 evidence (retained history)
 
 The following sections retain earlier implementation, CI and incident evidence.
 Their historical authorization and failure statements do not replace the current
-R2-B status above.
+R2-C status above.
 
 ### Changes and affected surfaces
 
