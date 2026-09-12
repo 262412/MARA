@@ -114,12 +114,21 @@ def _check_real_registration(monkeypatch, root):
 
 
 def test_real_registration_preserves_failure_edges_and_demo_difference():
+    repository = Path(__file__).resolve().parents[3]
     environment = os.environ.copy()
+    environment["PYTHONPATH"] = os.pathsep.join(
+        [
+            str(repository),
+            *(str(repository / "libs" / name) for name in ("ktem", "kotaemon")),
+            environment.get("PYTHONPATH", ""),
+        ]
+    )
     runtime = ActiveTestRuntime.start(environment)
     try:
         completed = subprocess.run(
             [sys.executable, "-B", str(Path(__file__).resolve())],
             env=environment,
+            cwd=runtime.paths.root,
             capture_output=True,
             text=True,
             timeout=120,

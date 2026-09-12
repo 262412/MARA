@@ -1,6 +1,7 @@
 """Own all resources while constructing the production App and message chain."""
 
 from contextlib import contextmanager
+from importlib import import_module
 from pathlib import Path
 from typing import Any, cast
 
@@ -9,7 +10,11 @@ from typing import Any, cast
 def submission_app(monkeypatch, root, *, demo_mode=False):
     from theflow.settings import settings
 
-    from libs.kotaemon.tests.chroma_test_runtime import owned_chroma_stores
+    # Test suites have different mypy package roots; load the shared owner by
+    # its runtime name without assigning a second static name to that file.
+    owned_chroma_stores = import_module(
+        "libs.kotaemon.tests.chroma_test_runtime"
+    ).owned_chroma_stores
 
     docs = Path(settings.KH_DOC_DIR)
     assert docs.resolve().is_relative_to(root)
