@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from copy import deepcopy
 from typing import Any, Iterator, Optional
 
 from ktem.auth.passwords import hash_password
@@ -27,9 +26,9 @@ from . import _runtime_elements, _runtime_graph
 from . import _runtime_mara as _mara
 from . import _runtime_notebook as _nb
 from . import _runtime_pipeline as _pipeline
-from . import _runtime_preview
 from . import _runtime_selection as _selection
 from . import _runtime_turn as _turn
+from . import pipeline_preparation
 from ._runtime_app import _DocQAPreviewService, _RuntimeAppContext
 from ._runtime_file_service import RuntimeFileService
 from ._runtime_models import (
@@ -49,6 +48,9 @@ from ._runtime_utils import _html_to_text, _serialize_value
 from .evidence_record_identity import isolate_evidence_records
 
 logger = logging.getLogger(__name__)
+
+# Preserve the existing preview-helper patch namespace.
+_runtime_preview = pipeline_preparation._runtime_preview
 
 
 def _build_turn_response(
@@ -447,118 +449,47 @@ class DocQARuntime(RuntimeSessionMutationFacade):
         return selected_inputs
 
     def _prepare_pipeline(self, request: DocQARequest) -> _PreparedPipeline:
-        resolved_user_id = self._resolve_user_id(request.user_id)
-        settings = deepcopy(request.settings or self.load_settings(resolved_user_id))
-        state = deepcopy(request.state or {"app": {"regen": False}})
-        selected_inputs = dict(request.selected_inputs or {})
-
-        if request.reasoning_type in ("(default)", None):
-            reasoning_mode = settings["reasoning.use"]
-        else:
-            reasoning_mode = request.reasoning_type
-        if reasoning_mode not in reasonings:
-            raise ValueError(f"Unknown reasoning pipeline '{reasoning_mode}'.")
-
-        reasoning_cls = reasonings[reasoning_mode]
-        reasoning_id = reasoning_cls.get_info()["id"]
-
-        _pipeline.apply_request_setting_overrides(settings, reasoning_id, request)
-
-        retrievers = []
-        if request.command_state == WEB_SEARCH_COMMAND:
-            if not self._web_search_cls:
-                raise ValueError("Web search back-end is not available.")
-            retrievers.append(self._web_search_cls())
-        else:
-            for index in getattr(self._app.index_manager, "indices", []):
-                selected_input = selected_inputs.get(index.id)
-                retrievers.extend(
-                    index.get_retriever_pipelines(
-                        settings, resolved_user_id, selected_input
-                    )
-                )
-
-        reasoning_state = _pipeline.build_reasoning_state(state, reasoning_id)
-        pipeline = reasoning_cls.get_pipeline(settings, reasoning_state, retrievers)
-
-        active_file_id = str(request.active_file_id or "")
-        active_file_name = str(request.active_file_name or "")
-        selected_file_ids: list[str] = []
-
-        if self.file_index is not None:
-            selected_input = selected_inputs.get(self.file_index.id)
-            selected_file_ids = self.file_index.resolve_selected_ids(
-                resolved_user_id, selected_input
-            )
-
-            active_file_id, active_file_name = _runtime_preview.resolve_active_source(
-                self._preview,
-                selected_file_ids,
-                active_file_id,
-                active_file_name,
-                user_id=resolved_user_id,
-            )
-
-        normalized_page_number = self._normalize_page_number(request.page_number)
-        qa_scope = self._normalize_qa_scope(request.qa_scope, normalized_page_number)
-        selected_text = str(request.selected_text or "").strip()
-        selected_text = _runtime_preview.resolve_page_text(
-            self._preview,
-            qa_scope,
-            normalized_page_number,
-            active_file_id,
-            active_file_name,
-            selected_text,
-            user_id=resolved_user_id,
-        )
-
-        graph_context = (
-            request.graph_context if isinstance(request.graph_context, dict) else {}
-        )
-        is_pdf_file = str(active_file_name or "").lower().endswith(".pdf")
-        scoped_page_number = (
-            normalized_page_number
-            if qa_scope == "page" and is_pdf_file and normalized_page_number is not None
-            else None
-        )
-        pipeline.active_file_id = active_file_id or ""
-        pipeline.active_file_name = active_file_name
-        pipeline.qa_scope = qa_scope
-        pipeline.page_number = scoped_page_number
-        pipeline.selected_text = selected_text
-        pipeline.selected_file_records = self._selected_file_records_for_retrieval(
-            selected_file_ids,
-            active_file_id or "",
-            resolved_user_id,
-        )
-        _apply_request_page_image_records(pipeline, request)
-        graph_source_ids = self._normalize_selected_file_ids(request.graph_source_ids)
-        _runtime_preview.validate_sources(
-            self._preview, graph_source_ids, user_id=resolved_user_id
-        )
-        graph_context = _apply_multimodal_runtime_indexes(
-            pipeline,
-            self.file_index,
-            selected_file_ids,
-            active_file_id,
-            graph_source_ids,
-            graph_context,
-        )
-        _apply_request_element_index_records(pipeline, request)
-        _mara.apply_request_context(pipeline, request, graph_context)
-
-        return _PreparedPipeline(
-            pipeline=pipeline,
-            reasoning_state=reasoning_state,
-            selected_file_ids=selected_file_ids,
-            active_file_id=active_file_id or "",
-            active_file_name=active_file_name,
-            qa_scope=qa_scope,
-            page_number=scoped_page_number,
-            selected_text=selected_text,
-            graph_context=graph_context,
-            settings=settings,
-            reasoning_id=reasoning_id,
+        return pipeline_preparation.prepare_pipeline(
+            request,
+            default_state={"app": {"regen": False}},
+            web_search_command=WEB_SEARCH_COMMAND,
+            dependencies=pipeline_preparation.PipelinePreparationDependencies(
+                resolve_user_id=lambda value: self._resolve_user_id(value),
+                load_settings=lambda user: self.load_settings(user),
+                get_reasonings=lambda: reasonings,
+                get_indices=lambda: getattr(self._app.index_manager, "indices", []),
+                get_web_search_class=lambda: self._web_search_cls,
+                get_file_index=lambda: self.file_index,
+                get_preview=lambda: self._preview,
+                normalize_page_number=lambda value: self._normalize_page_number(value),
+                normalize_qa_scope=lambda scope, page: self._normalize_qa_scope(
+                    scope, page
+                ),
+                normalize_selected_file_ids=lambda ids: self._normalize_selected_file_ids(
+                    ids
+                ),
+                selected_file_records=lambda ids, active, user: self._selected_file_records_for_retrieval(
+                    ids, active, user
+                ),
+                apply_setting_overrides=lambda settings, reasoning_id, req: _pipeline.apply_request_setting_overrides(
+                    settings, reasoning_id, req
+                ),
+                build_reasoning_state=lambda state, reasoning_id: _pipeline.build_reasoning_state(
+                    state, reasoning_id
+                ),
+                apply_page_image_records=lambda pipeline, req: _apply_request_page_image_records(
+                    pipeline, req
+                ),
+                apply_multimodal_indexes=lambda pipeline, index, ids, active, graph_ids, context: _apply_multimodal_runtime_indexes(
+                    pipeline, index, ids, active, graph_ids, context
+                ),
+                apply_element_records=lambda pipeline, req: _apply_request_element_index_records(
+                    pipeline, req
+                ),
+                apply_request_context=lambda pipeline, req, context: _mara.apply_request_context(
+                    pipeline, req, context
+                ),
+            ),
         )
 
     def create_pipeline(self, request: DocQARequest):

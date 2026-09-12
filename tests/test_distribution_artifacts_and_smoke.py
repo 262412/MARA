@@ -27,6 +27,7 @@ KTEM_PUBLIC_MODULES = {
     "ktem/docqa/_runtime_models.py",
     "ktem/docqa/_runtime_utils.py",
     "ktem/docqa/session_projection.py",
+    "ktem/docqa/pipeline_preparation.py",
     "ktem/docqa/runtime.py",
 }
 

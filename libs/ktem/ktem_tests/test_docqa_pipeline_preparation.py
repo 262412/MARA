@@ -44,9 +44,9 @@ FULL_TRACE = [
 ]
 
 
-@pytest.fixture
-def probe(monkeypatch):
-    return PreparationProbe(monkeypatch)
+@pytest.fixture(params=["legacy", "independent"])
+def probe(monkeypatch, request):
+    return PreparationProbe(monkeypatch, independent=request.param == "independent")
 
 
 def request(**overrides):

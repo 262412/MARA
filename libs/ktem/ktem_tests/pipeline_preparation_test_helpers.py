@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from functools import wraps
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 from typing import Any, cast
 
 import ktem.docqa.runtime as runtime_module
@@ -12,7 +12,7 @@ from ktem.docqa.runtime import DocQARuntime
 
 
 class PreparationProbe:
-    def __init__(self, monkeypatch) -> None:
+    def __init__(self, monkeypatch, *, independent=False) -> None:
         self.calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
         self.counts: Counter[str] = Counter()
         self.fail_at: tuple[str, int] | None = None
@@ -34,7 +34,24 @@ class PreparationProbe:
         self.preview = PreviewProbe(self)
         self.file_index = IndexProbe(self, 9, self.retrievers[:2])
         self.other_index = IndexProbe(self, 4, self.retrievers[2:])
-        self.runtime = cast(Any, object.__new__(DocQARuntime))
+        self.runtime = cast(
+            Any, SimpleNamespace() if independent else object.__new__(DocQARuntime)
+        )
+        if independent:
+            for name in (
+                "_normalize_page_number",
+                "_normalize_qa_scope",
+                "_normalize_selected_file_ids",
+                "_merge_unique_file_ids",
+            ):
+                setattr(self.runtime, name, getattr(DocQARuntime, name))
+            self.runtime._selected_file_records_for_retrieval = MethodType(
+                DocQARuntime._selected_file_records_for_retrieval, self.runtime
+            )
+            self.runtime.create_pipeline = MethodType(
+                DocQARuntime.create_pipeline, self.runtime
+            )
+            self.runtime._prepare_pipeline = self.prepare_independently
         self.runtime._app = SimpleNamespace(
             index_manager=SimpleNamespace(indices=[self.file_index, self.other_index])
         )
@@ -146,6 +163,59 @@ class PreparationProbe:
 
     def prepare(self, request):
         return self.runtime._prepare_pipeline(request)
+
+    def prepare_independently(self, request):
+        from ktem.docqa.pipeline_preparation import (
+            PipelinePreparationDependencies,
+            prepare_pipeline,
+        )
+
+        assert not isinstance(self.runtime, DocQARuntime)
+        dependencies = PipelinePreparationDependencies(
+            resolve_user_id=lambda value: self.runtime._resolve_user_id(value),
+            load_settings=lambda user: self.runtime.load_settings(user),
+            get_reasonings=lambda: runtime_module.reasonings,
+            get_indices=lambda: getattr(self.runtime._app.index_manager, "indices", []),
+            get_web_search_class=lambda: self.runtime._web_search_cls,
+            get_file_index=lambda: self.runtime.file_index,
+            get_preview=lambda: self.runtime._preview,
+            normalize_page_number=lambda value: self.runtime._normalize_page_number(
+                value
+            ),
+            normalize_qa_scope=lambda scope, page: self.runtime._normalize_qa_scope(
+                scope, page
+            ),
+            normalize_selected_file_ids=lambda ids: self.runtime._normalize_selected_file_ids(
+                ids
+            ),
+            selected_file_records=lambda ids, active, user: self.runtime._selected_file_records_for_retrieval(
+                ids, active, user
+            ),
+            apply_setting_overrides=lambda settings, reasoning_id, req: runtime_module._pipeline.apply_request_setting_overrides(
+                settings, reasoning_id, req
+            ),
+            build_reasoning_state=lambda state, reasoning_id: runtime_module._pipeline.build_reasoning_state(
+                state, reasoning_id
+            ),
+            apply_page_image_records=lambda pipeline, req: runtime_module._apply_request_page_image_records(
+                pipeline, req
+            ),
+            apply_multimodal_indexes=lambda pipeline, index, ids, active, graph_ids, context: runtime_module._apply_multimodal_runtime_indexes(
+                pipeline, index, ids, active, graph_ids, context
+            ),
+            apply_element_records=lambda pipeline, req: runtime_module._apply_request_element_index_records(
+                pipeline, req
+            ),
+            apply_request_context=lambda pipeline, req, context: runtime_module._mara.apply_request_context(
+                pipeline, req, context
+            ),
+        )
+        return prepare_pipeline(
+            request,
+            dependencies=dependencies,
+            default_state={"app": {"regen": False}},
+            web_search_command=runtime_module.WEB_SEARCH_COMMAND,
+        )
 
 
 class IndexProbe:

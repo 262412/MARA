@@ -388,6 +388,7 @@ def _run_offline_runtime_smoke(
 ) -> None:
     _assert_installed_distribution_paths(venv, offline_env)
     _run_docqa_export_smoke(venv, offline_env)
+    _run_docqa_preparation_smoke(venv, offline_env)
     for executable in ("MARA", "MARA-cli"):
         _run(
             [_venv_command(venv, executable), "--help"],
@@ -460,6 +461,54 @@ print('[wheel-smoke] installed DocQA lightweight exports and runtime identity pa
         env=env,
         cwd=venv.parent,
     )
+
+
+def _run_docqa_preparation_smoke(venv: Path, env: dict[str, str]) -> None:
+    validation = """
+from pathlib import Path
+from types import SimpleNamespace
+import sys
+
+import ktem.docqa.runtime as runtime_module
+from ktem.docqa import pipeline_preparation
+from ktem.docqa._runtime_models import DocQARequest, _PreparedPipeline
+
+prefix = Path(sys.prefix).resolve()
+for module in (runtime_module, pipeline_preparation):
+    assert Path(module.__file__).resolve().is_relative_to(prefix), module.__file__
+calls = []
+pipeline = SimpleNamespace()
+
+class Reasoning:
+    @staticmethod
+    def get_info():
+        return {'id': 'wheel'}
+
+    @staticmethod
+    def get_pipeline(settings, state, retrievers):
+        calls.append((settings, state, retrievers))
+        return pipeline
+
+runtime_module.reasonings = {'wheel': Reasoning}
+runtime = object.__new__(runtime_module.DocQARuntime)
+runtime._resolve_user_id = lambda user: 'wheel-owner'
+runtime.load_settings = lambda user: {'reasoning.use': 'wheel'}
+runtime._app = SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
+runtime.file_index = None
+runtime._preview = None
+request = DocQARequest(prompt='Installed preparation', qa_scope='document')
+prepared = runtime._prepare_pipeline(request)
+assert type(prepared) is _PreparedPipeline
+assert prepared.pipeline is pipeline and pipeline.docqa_request is request
+assert prepared.reasoning_state is calls[0][1]
+assert prepared.settings is calls[0][0]
+assert prepared.selected_file_ids == [] and prepared.page_number is None
+assert calls[0][2] == [] and prepared.reasoning_id == 'wheel'
+created, state = runtime.create_pipeline(request)
+assert created is pipeline and state is calls[1][1] and len(calls) == 2
+print('[wheel-smoke] installed pipeline preparation and legacy create_pipeline passed')
+"""
+    _run([_venv_python(venv), "-c", validation], env=env, cwd=venv.parent)
 
 
 def run_smoke(dist_root: Path) -> None:
