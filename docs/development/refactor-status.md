@@ -1,239 +1,216 @@
-# MARA refactor status — 2026-09-11
+# MARA refactor status — 2026-09-12
 
-## Current round: R2-A DocQA public exports
+## Current round: R2-B session record projections
 
-**R1 remains ACCEPTED. S1 remains PARTIAL and security BLOCKED.**
-**R2-A scoped functional, import-boundary, static, packaging and coverage checks PASS.**
-Security verification remains blocked, including additional audit keys identified
-in this run; this is not full CI acceptance or deployment approval.
-This round starts at review HEAD `5184da5a2164a6ae13b72cea37cfc833c7e2c616`,
-preserves accepted R1 source `c693160e6e5f0e6c05edd8d507219679aad120d2`
-and S1 source `8ff3636d2af1ed1c37c81260635619828ea9ef07`.
-The [completed S1 report](https://github.com/262412/MARA/blob/5184da5a2164a6ae13b72cea37cfc833c7e2c616/docs/development/refactor-status.md)
-retains its dependency provenance, compatibility evidence and remaining
-`GHSA-8mgp-746c-j5xp` / `CVE-2026-81726` boundary.
+**R2-B 限定验证通过，等待独立审查。**
+**整体 CI FAILURE，S1 未关闭，合并/发布 NO-GO。**
+R1 and R2-A retain their accepted scope. S1 remains unresolved; this round
+does not authorize merge or release.
 
-R2-A source `6613c03278fddf3d2fb570b59acc6cf9a42694f6` was normally pushed to
-`codex/r0-r1-safe-refactor`. [Run 34554076031, attempt 1](https://github.com/262412/MARA/actions/runs/34554076031)
-was dispatched once after confirming no corresponding run existed at that SHA,
-with the unchanged original-Dev
-`base_ref=adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
-**Final CI: FAILURE, 16 successful jobs and 4 failed jobs.** The failed jobs
-are the three dependency audits and their required aggregate. Every other job,
-including coverage and all three image checks, passes at this exact source.
-The audit failures contain nine additional PYSEC keys beyond the earlier NLTK
-finding; their reconciliation and unchanged blocking status are recorded below.
-The final report-only commit is recorded separately in `r2a-final-state.json`,
-including the actual local/remote HEAD and source-equivalence check. It does not
-require another run of identical Python, dependency and workflow source.
+The review/increment base is `ec2b7b4c5b5393d18ea013fe7f60e53994aa0a78`;
+the original Dev comparison remains
+`adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+Accepted R2-A source is `6613c03278fddf3d2fb570b59acc6cf9a42694f6`,
+and accepted R1 source is `c693160e6e5f0e6c05edd8d507219679aad120d2`.
+The [R2-A report at the review base](https://github.com/262412/MARA/blob/ec2b7b4c5b5393d18ea013fe7f60e53994aa0a78/docs/development/refactor-status.md)
+retains the earlier export, security-alias and S1 evidence without duplicating
+those long reports here.
 
-### Scope and preserved export contract
+R2-B characterization commit `240c591497c4de1be82c06bb7e2ef509b2ac29ab`
+precedes implementation `9c116ff06a2c77c61dda976f70a6b90c3fd8912e`.
+Both were normally pushed to the existing `codex/r0-r1-safe-refactor` branch.
+[Quality gates 34669658710, attempt 1](https://github.com/262412/MARA/actions/runs/34669658710)
+was dispatched once with the original Dev `base_ref`; its actual head SHA is
+the implementation SHA above. The final report-only successor, its exact
+local/remote SHA, and source-equivalence check are recorded in
+`r2b-final-state.json`. The report-only commit reuses these source results;
+it does not claim another CI execution.
 
-The affected surface is the public `ktem.docqa` import facade. The only
-production file changed is `libs/ktem/ktem/docqa/__init__.py`; the six other
-source changes are characterization/import tests, their fixed fixture/helper,
-and the existing wheel smoke/membership checks. CLI names/options, data class
-definitions, fields/defaults, persisted formats, runtime business logic and
-Gradio event chains retain their existing source.
+### Responsibilities and preserved behavior
 
-The two small implementation commits are:
+The affected public surface is Web/CLI session reading. The only application
+source changes are `libs/ktem/ktem/docqa/session_projection.py` and
+`_runtime_session_service.py`. No equivalent record-projection module was
+found in the scoped session/helper inventory.
 
-- `b1da18e7eedada570dc6d9a48bcd31ef04147218`: freeze the old export order,
-  signatures, defaults, constants, object identities, legacy module attributes,
-  serialization, real patch consumers and fresh-process import orders.
-- `6613c03278fddf3d2fb570b59acc6cf9a42694f6`: replace eager facade imports
-  with an explicit map, module `__getattr__`/`__dir__`, and type-checking-only
-  imports; add the cold-import goals and installed-wheel checks.
+- `session_projection.session_summary(row)` interprets a loaded record as the
+  original `_runtime_models.DocQASessionSummary`.
+- `session_projection.loaded_session(row, default_state=...)` returns the
+  original `_runtime_models.DocQASession`.
+- Both old staticmethods retain their names, signatures and actual service
+  call sites. The loaded-session delegate reads the existing `_sessions.STATE`
+  on each call. No duplicated STATE definition, extra DTO, repository, callback framework
+  or new facade export map was introduced.
 
-The map contains all 45 original `__all__` entries in their original order,
-plus 20 previously bound submodule attributes with callers. Each value is the
-original object, cached only after successful import; unknown names raise
-`AttributeError`, and actual module-loading exceptions propagate unchanged.
-The implementation follows [PEP 562](https://peps.python.org/pep-0562/) without
-proxy modules, replacement classes, new frameworks or custom import locks.
+The moved function bodies match the original AST, apart from replacing the
+two `_sessions.STATE` references with the explicit state parameter.
+The nine remaining service methods are unchanged, including list/load/create,
+settings, graph-source owner backfill, selection mapping and persistence.
+Queries, public/owner predicates, sorting, early returns and commit/refresh
+ordering therefore retain their original source as well as integration tests.
+R1 selection helpers, R2-A exports, model definitions, Notebook code, runtime,
+Web control and persistence formats retain their review-base source.
 
-| Export group                                                                       | Original source retained                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Eight public DocQA data classes                                                    | `_runtime_models`; identical by `is` to the facade and original runtime aliases                                                                                                                                                                                                                                                                                             |
-| `DocQARuntime`                                                                     | `runtime.DocQARuntime`                                                                                                                                                                                                                                                                                                                                                      |
-| Controller, evidence, execution, workflow, policy, artifact and multimodal exports | Their original named modules and definitions                                                                                                                                                                                                                                                                                                                                |
-| Six declared module exports                                                        | `_runtime_selection`, `_runtime_indexing`, `_runtime_doctor`, `_runtime_pipeline`, `_runtime_sessions`, `_runtime_turn`                                                                                                                                                                                                                                                     |
-| Twenty legacy module attributes                                                    | `runtime`, `controller`, `evidence`, `execution`, `artifact_models`, `multimodal_index`, `request_policies`, `workflow`, `_runtime_app`, `_runtime_elements`, `_runtime_graph`, `_runtime_mara`, `_runtime_models`, `_runtime_notebook`, `_runtime_utils`, `boolean_evidence_scope`, `route_budget`, `visual_backends`, `_runtime_file_service`, `_runtime_session_service` |
+Fixed expectations were first run against the old working-tree implementation:
+**54 tests passed before extraction**, followed by the characterization commit.
+After extraction the same expectations exercise both the direct projection
+functions and old delegates; with the independent import test, **88 passed**.
+These checks cover empty/normal records, tuple messages, retrieval history
+padding/truncation, absent/None/empty/default and nested state, origin, user ID,
+public flags, date identity/type, exceptions, and exact copy/reference boundaries.
+Only state is deep-copied; nested message/plot/selection/data-source references
+retain their original sharing.
 
-The exact 65-name map is in the production file and
-`local-verification-manifest.json`; the fixed old contract is
-`libs/ktem/ktem_tests/fixtures/docqa_public_exports.json`.
-The focused caller inventory found no required facade `vars`/`__dict__` or
-`reload` consumer. Unloaded symbols are discoverable through `dir` and
-`__all__`, but are not promised to exist in `vars(module)`.
-Star import still requests every export and loads the real runtime.
-R1's original staticmethod/patch consumers remain covered.
+Explicit graph IDs still retain duplicates and whitespace; zero and False are
+still converted to strings. Complete sessions fall back to selected IDs only when
+explicit normalized IDs are empty; summaries do not use that fallback.
+The isolated SQLite tests retain owner/private/public visibility, missing/empty
+IDs, ordering, owner-only graph backfill and transaction ordering. Public
+non-owner conversation persistence remains allowed with the owner's selection
+mapping retained; private non-owner persistence remains denied. This refactor
+does not redefine write permissions.
 
-### Measured import boundary
+### Import, consumer and distribution evidence
 
-Old and new measurements use the same Python 3.10.19 environment, unchanged
-dependencies including NLTK 3.10.3, and separate fresh processes for every row.
-Each imports the real `ktem` first. Its identical 239-module baseline and
-20 owned-directory creation attempts are recorded before DocQA access.
-Measurements are captured before any export introspection can warm the runtime.
+The fresh-process probe imports the real `ktem` parent before importing and
+calling the new projection module, without prewarming runtime or substituting
+the parent package. In the measured Windows Python 3.10.19 environment, the
+parent baseline contains **236 modules and 20 owned-directory creation attempts**.
+The projection import and calls add **9 modules and no audited operations**.
+The added modules are the DocQA facade, projection, original models/utils,
+existing selection helper and shared file-selection contract, plus `html` and
+`html.entities`. The import does not load `ktem.docqa.runtime`, session or
+Notebook services, DB, SQLModel/SQLAlchemy, model management or Gradio.
+Counts are environment observations, not portable limits;
+the parent itself is not claimed to have zero side effects.
 
-| Access after real parent import | Added modules before | Added modules after | Additional audited operations before → after                      |
-| ------------------------------- | -------------------: | ------------------: | ----------------------------------------------------------------- |
-| Parent only                     |                    0 |                   0 | None → none                                                       |
-| `import ktem.docqa`             |                2,803 |                   1 | SQLite connection + directory attempt → none                      |
-| `DocQARequest, DocQAResponse`   |                2,803 |                   5 | SQLite connection + directory attempt → none                      |
-| `DocQARuntime`                  |                2,803 |               2,768 | SQLite connection + directory attempt → same kinds, changed order |
-| `execute_controller_turn`       |                2,803 |                 248 | SQLite connection + directory attempt → none                      |
+Local gates passed: **471 related tests with 7 native-Windows skips**, another
+**15 actual Web control/Gradio-adapter tests**, **13 distribution tests**,
+changed-file pre-commit, full Ruff/hygiene, and baseline ratchets against both
+fixed Dev and the R2-B review base. The related suite includes R2-A exports and
+cold data types, R1 callers/patches, runtime/session and actual CLI consumers.
 
-The five modules for request/response access are the facade, `_runtime_models`,
-`_runtime_utils`, `html` and `html.entities`. A separate fresh-process test
-covers all eight data classes and excludes newly loaded runtime, execution,
-controller, DB/index/model managers, Gradio, SQLModel, LlamaIndex and torch.
-The audit rejects network access and writes outside the existing owned test
-runtime. Full runtime access verifies the actual owned SQLite User table and
-the existing lazy model-manager state. Parent bootstrap is unchanged; eager
-edges from the facade were removed, not all static dependencies or repository
-cycles. No timing claim is based on the single-sample diagnostic durations.
+All four packages built wheel and sdist artifacts and passed Twine validation.
+The actual clean-wheel run installed each dependency layer and a combined
+environment, verified installed paths and original DTO identities, called both
+projections before runtime import, exercised CLI help and offline app init,
+and resolved NLTK 3.10.3. No source overlay was used in installed-wheel probes.
+Local wheels include the pre-existing user asset edits; they are not claimed
+byte-identical to CI wheels built from the committed tree.
 
-### Verification and retained evidence
+CI distribution artifact `10289942873` has verified ZIP SHA-256
+`bff50b3f102cf93ff3b8003539aa2dcc4acbbca001c6768e8178829541b26055`.
+All eight artifact hashes, SBOMs and provenance match source `9c116ff0` and
+run `34669658710`. The ktem wheel and sdist contain the new projection, old
+service and five preserved R1/R2-A source members, byte-identical to Git blobs.
 
-Local evidence is in
-`D:\PythonProject\MARA-refactor-review-20260910-01a086ff\r2a-docqa-exports`.
-`execution.jsonl` and `local-verification-manifest.json` retain exact commands,
-cwd, source SHA/working-file hashes, dependency environment, exits and logs.
-Local commands run from `D:\PythonProject\MARA` through `run.py`, using the
-verified exclusive `D:\MARA-s1-01a086ff\env\Scripts\python.exe`, with exclusive
-cache/temp paths and the existing `ActiveTestRuntime` isolation entrypoint.
+**Final CI: FAILURE — 16 successful jobs, three failed dependency audits and their failed required aggregate.**
+All existing package, collection, static, frontend, secret, wheel, image and
+coverage jobs passed at the implementation SHA. Unified collection contains
+**5,255 tests**. The complete package results are:
 
-| Local gate / command family                                                                                        | Result                                                                         |
-| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| Old export contracts plus existing import-laziness cases                                                           | Exit 0; 90 passed before production edits                                      |
-| New light-access goals against old production                                                                      | Expected exit 1; 3 failed, 5 deselected, exposing the eager stack              |
-| New public contract + import-boundary test files                                                                   | Exit 0; 89 passed                                                              |
-| Combined DocQA/runtime/session/graph/R1/CLI/startup isolation tests via the existing offline pytest wrapper        | Exit 0; 377 passed, 7 native Windows symlink skips                             |
-| `pytest tests/test_distribution_artifacts_and_smoke.py`                                                            | Exit 0; 13 passed                                                              |
-| `scripts/publish_packages.py check --rebuild --outdir D:/MARA-s1-01a086ff/r2a-dist` and existing clean wheel smoke | Exit 0; all four wheel/sdist builds, Twine and installed facade/runtime checks |
-| Changed-file pre-commit, full CI Ruff, hygiene and both baseline ratchets                                          | Exit 0                                                                         |
-| Read-only audit of newly reported records                                                                          | Exit 1; all findings retained and reconciled below                             |
+| Existing CI suite            | Actual result                        |
+| ---------------------------- | ------------------------------------ |
+| ktem isolated runtime        | 2,949 passed                         |
+| Benchmark and root contracts | 1,622 passed                         |
+| kotaemon Python 3.10         | 381 passed, 10 skipped               |
+| kotaemon Python 3.11         | 381 passed, 10 skipped               |
+| slide_cli                    | 131 passed (pytest progress markers) |
 
-Failed setup/diagnostic attempts and their remediation are retained in
-`diagnostic-remediations.json`; no passing old contract or negative assertion
-was weakened. The real dotted-string loader, legacy patch consumer, original
-data classes, default factories and owned serialization roundtrips are tested.
-Three loader-induced ImportError/ModuleNotFoundError/RuntimeError cases require
-the same exception object to propagate, no partial caching, and a subsequent
-successful import from the original runtime.
+The kotaemon skips are the existing optional integration cases; the local
+Windows skips are separately retained in the local regression log.
 
-| Current Ubuntu CI check at `6613c032`                               | Result                                                                                                            |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| kotaemon CPython 3.10.21 and 3.11.16                                | Each 381 passed, 10 optional dependency skips                                                                     |
-| ktem isolated runtime                                               | 2,875 passed                                                                                                      |
-| Benchmark/root contracts                                            | 1,622 passed                                                                                                      |
-| slide_cli and unified collection                                    | Passed; 131 CLI tests collected, 5,181 tests in unified collection                                                |
-| Full hooks/mypy, Ruff, hygiene and original-Dev ratchet             | Passed                                                                                                            |
-| Four clean wheel installations and Python distribution supply chain | Passed                                                                                                            |
-| Frontend/browser tests and both secret scans                        | Passed                                                                                                            |
-| lite/full/ollama image build, smoke, frozen audit and SBOM          | Passed; all three image provenance, package inventories and artifact digests verified                             |
-| Four package coverage floors                                        | Benchmark 90.22% / 90%; slide_cli 75.57% / 70%; kotaemon 70.11% / 60%; ktem including ktem_contracts 80.94% / 50% |
-| 90% production diff against fixed original Dev and R2-A start       | Passed; original Dev 95.24% (200/210); R2-A increment 100.00% (17/17)                                             |
-| Three dependency audits                                             | Failed on the same ten current keys per profile                                                                   |
-| Required aggregate                                                  | Failed because all three dependency audits failed                                                                 |
+The existing CI collector produced the verified coverage artifact `10291080966`, SHA-256 `55e0961c6121f1b8223209c5d661814449f1dbace546a4975500d153a82cd410`.
+The original production scope includes `ktem_contracts`; there are no added
+omit rules, temporary runtime paths or duplicate package-relative aliases.
 
-CI Python distribution artifact `10181892547` has ZIP SHA-256
-`783a2622b4fa5b9ee7bb7e20dca7f5b54dd583d3dba8740656423c45bb3ece5c`, matching
-GitHub metadata. All eight wheel/sdist hashes, source commit, provenance and
-both SBOM formats were verified. The ktem facade, models, utils, runtime and R1
-file-selection member bytes match source `6613c032` in both wheel and sdist.
-The clean-wheel fresh child confirms imports come from its installed environment.
+| Production package | Covered statements     | Unchanged floor |
+| ------------------ | ---------------------- | --------------- |
+| benchmark          | 90.22% (17,146/19,005) | 90%             |
+| slide_cli          | 75.57% (2,144/2,837)   | 70%             |
+| kotaemon           | 70.11% (7,521/10,727)  | 60%             |
+| ktem               | 80.95% (41,249/50,954) | 50%             |
 
-Coverage artifact `10183017901` has ZIP SHA-256
-`67cb7d33b1057b787cf16072e0563c9cc5942866c3fc253bc5dc659c83ad1dbc`, matching
-GitHub metadata. `.coverage`, `coverage.ini`, XML and JSON are present; both
-reports parse, subprocess measurement stays enabled, and package-relative
-aliases and deleted test-runtime files are absent. The facade's coverage summary
-is 100% (16/16 statements), and R1 file selection remains 100% (22/22).
-Read-only inspection of the downloaded JSON independently confirms all four
-package floors and both unchanged 90% diff gates: 95.24% (200/210) against
-original Dev and 100% (17/17) against the R2-A start. The latter uses the existing
-diff gate's changed-line calculation. No local collector was started. See
-`coverage-verified.json`, `fixed-base-ci-artifact-diff.log` and
-`incremental-ci-artifact-diff.log`.
+The new projection module is included: **22/22 statements covered**.
+Production diff against fixed Dev: **95.76% (226/236)**;
+against `ec2b7b4c`: **100.00% (26/26)**.
+Both pass the unchanged 90% gate. The downloaded `.coverage` was opened
+read-only, and both existing diff gates were run on the CI JSON; no local
+coverage collector or environment instrumentation was installed.
 
-The lite/full/ollama evidence artifacts are `10182217662`, `10182260577` and
-`10182479198`. Their ZIP SHA-256 values match GitHub metadata; each contains the
-expected build metadata, OCI provenance, filtered Trivy report, SPDX and
-CycloneDX. Source revision and image digest agree, and each actual package
-inventory contains NLTK 3.10.3. Complete hashes and manifests are retained in
-`current-image-lite.json`, `current-image-full.json` and
-`current-image-ollama.json`.
+### Security and warning disposition
 
-### Current security blockers
+All three dependency profiles fail on the same ten exact keys as R2-A:
 
-**The new run does not have only the earlier NLTK finding.**
-All three dependency profiles now fail on ten keys: the existing NLTK GHSA and
-nine additional PYSEC records. Upon observing this change, source expansion
-stopped and the records were investigated read-only. Lock files, declarations,
-constraints, audit baselines, scanners, required jobs and coverage thresholds
-have no changes in this round.
+| Package/version      | Still-blocking advisory keys                                       |
+| -------------------- | ------------------------------------------------------------------ |
+| nltk 3.10.3          | GHSA-8mgp-746c-j5xp                                                |
+| chromadb 0.5.16      | PYSEC-2026-3813, PYSEC-2026-3814, PYSEC-2026-3815                  |
+| pypdf 4.2.0          | PYSEC-2026-3910, PYSEC-2026-3911, PYSEC-2026-3912, PYSEC-2026-3913 |
+| transformers 4.56.2  | PYSEC-2026-3929                                                    |
+| unstructured 0.15.14 | PYSEC-2026-3930                                                    |
 
-The nine PYSEC records were published on 2026-09-10 at 09:44:49–09:44:59 UTC,
-after the prior S1 audit. Each maps to an issue already present under a GHSA ID
-at the same package version in the prior raw audit and all three unchanged
-baseline profiles. The existing gate compares exact package/version/advisory
-keys, so the additional alias records fail it. This explains the changed gate
-output; it does not waive a finding or establish remediation.
+The current raw logs and `security-key-reconciliation.json` preserve every key,
+profile and package version, and retain the nine prior PYSEC/GHSA/CVE alias
+records with their original evidence hash. There are no new blocking keys in
+this run. Existing exact-key matching still rejects these records; their alias
+relationships neither waive risk nor establish a fix. The NLTK model-artifact
+path issue remains open. Locks, declarations, security/hygiene baselines,
+alias logic, coverage thresholds, required jobs and scanner scope are unchanged.
 
-| Locked package       | New blocking ID | Existing GHSA / CVE alias                                                                 | Fix version in current advisory data |
-| -------------------- | --------------- | ----------------------------------------------------------------------------------------- | ------------------------------------ |
-| chromadb 0.5.16      | PYSEC-2026-3813 | [GHSA-2wm9-hf6c-p5cr](https://github.com/advisories/GHSA-2wm9-hf6c-p5cr) / CVE-2026-45830 | None listed                          |
-| chromadb 0.5.16      | PYSEC-2026-3814 | [GHSA-36p7-vc44-83pf](https://github.com/advisories/GHSA-36p7-vc44-83pf) / CVE-2026-45833 | None listed                          |
-| chromadb 0.5.16      | PYSEC-2026-3815 | [GHSA-xph7-9rjv-w5fr](https://github.com/advisories/GHSA-xph7-9rjv-w5fr) / CVE-2026-45831 | None listed                          |
-| pypdf 4.2.0          | PYSEC-2026-3910 | [GHSA-23w6-3w8w-8484](https://github.com/advisories/GHSA-23w6-3w8w-8484) / CVE-2026-84310 | 6.16.1                               |
-| pypdf 4.2.0          | PYSEC-2026-3911 | [GHSA-763m-79hh-57f2](https://github.com/advisories/GHSA-763m-79hh-57f2) / CVE-2026-84311 | 6.16.1                               |
-| pypdf 4.2.0          | PYSEC-2026-3912 | [GHSA-fc8x-2rww-xw9m](https://github.com/advisories/GHSA-fc8x-2rww-xw9m) / CVE-2026-82398 | 6.15.0                               |
-| pypdf 4.2.0          | PYSEC-2026-3913 | [GHSA-jp53-mhqp-8xcg](https://github.com/advisories/GHSA-jp53-mhqp-8xcg) / CVE-2026-84309 | 6.16.0                               |
-| transformers 4.56.2  | PYSEC-2026-3929 | [GHSA-xrqw-3rrv-vx5w](https://github.com/advisories/GHSA-xrqw-3rrv-vx5w) / CVE-2026-9856  | 5.10.0                               |
-| unstructured 0.15.14 | PYSEC-2026-3930 | [GHSA-4mvj-m6j5-pmf7](https://github.com/advisories/GHSA-4mvj-m6j5-pmf7) / CVE-2026-71428 | 0.24.0                               |
+All three image gates passed with their existing filters. Verified lite/full/ollama
+artifacts are `10290882649`, `10290991706` and `10289803097`.
+Their build metadata, OCI provenance, hashes and actual inventories agree on
+the current source and NLTK 3.10.3. All three full CycloneDX reports still
+mark NLTK as affected by CVE-2026-81726, while the filtered Trivy reports
+contain no NLTK finding. Passing the filtered scan does not close S1.
 
-`new-security-records.json` retains aliases, publication/modification times,
-formal fix metadata and the prior-record/baseline matches. The raw audit and
-all three failed CI job logs remain available. These proposed upstream versions
-have not been tested for MARA compatibility in R2-A. No dependency upgrade,
-baseline alias change or new exception was applied.
+Warnings were examined separately from security keys. ARC4 deprecation was
+reproduced by importing the unchanged pypdf 4.2.0 / cryptography 50.0.0 alone
+and also occurs in R2-A. The external offline harness pre-import warning
+disappears with the normal project pytest entrypoint (54 old-contract tests
+passed without warnings). CI warning comparisons include complete multiline
+pytest messages and Pydantic categories; they retain the existing
+dependency/Gradio, uv experimental-output and forced Node 24 diagnostics.
+The only differing warning text is `word,language` versus `language,word`
+from the unchanged prompt-template set iteration, verified at its source
+and prior log. No unexplained new warning or isolation failure remains.
+The first test-only run also exposed an expired ORM object in the new
+sorting fixture; retaining its IDs before commit corrected the fixture
+before the old implementation passed and before production extraction.
+The external coverage-summary helper initially imported standalone CLI
+scripts as a package; using their existing script directory fixed that
+helper import. Both unmodified diff-coverage CLI runs had already passed.
+The failed helper attempt and dependent report abort remain in the log.
 
-S1 remains blocked on NLTK 3.10.3
-[GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp).
-Its previously verified model-artifact path bypass and proposed trust/OS-access
-mitigations remain documented in the linked S1 report; lazy exports do not fix
-that library behavior. The existing container scanner filters unfixed findings.
-All three new
-CycloneDX reports still mark NLTK 3.10.3 as affected by CVE-2026-81726, while their
-filtered Trivy reports contain no NLTK finding. Passing these gates does not
-close the issue.
+### Evidence location, protection and stopping point
 
-### Environment protection and stopping point
+Local evidence is under
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r2b-session-projection`:
+`execution.jsonl`, `incremental-source-review.json`, `cold-import-evidence.json`,
+`local-verification-manifest.json`, `python-artifact-inspection.json`,
+`coverage-verified.json`, current CI job logs/artifacts, the security/warning
+comparisons and `r2b-final-state.json`.
 
-After local checks, the current round's before/after metadata inventories match
-for 98,853 canonical environment entries, the 614-entry retained application
-cache, office cache, three known config files and two SQLite files. No canonical
-environment synchronization or local coverage collector ran. The two historical
-cleanup-rejected directories and pre-existing untracked `NUL` were preserved.
-This is a metadata comparison, not a reconstruction of pre-incident user data;
-the historical incident account below remains intact.
+The initial **133 unrelated Markdown asset/instruction changes** retain their
+exact bytes and remain outside these commits. Canonical environment metadata
+(98,853 entries), the retained app cache (614 entries), office cache, three
+known config files and two SQLite files match the before snapshot. The two
+historical cleanup-rejected directories and pre-existing `NUL` remain intact.
+No canonical sync, local coverage instrumentation, new branch/worktree, force
+push, merge or release occurred. This comparison does not reconstruct
+pre-incident user data; the retained incident account below remains applicable.
 
-**Merge/release: NO-GO.** R1 remains accepted; S1 and the additional current audit
-keys remain blocking. This handoff stops at the scoped R2-A checkpoint; no
-R2-B/R3, wider runtime migration, new branch/worktree, merge or release was
-performed.
-A prospective rollback is limited to the two R2-A source commits
-`b1da18e7` and `6613c032` (implementation first, characterization second);
-it would retain all R0/R1/S1 work. No rollback was executed.
+**R2-B stops here pending independent review. Overall merge/release: NO-GO.**
+A prospective rollback is limited to `9c116ff0` followed by `240c5914`, plus
+this round's report-only commit; it retains all accepted R1/R2-A work. No
+rollback or subsequent pipeline/Notebook/R3/security-upgrade round was executed.
 
 ## Previous R0/R1 evidence (retained history)
 
 The following sections retain earlier implementation, CI and incident evidence.
 Their historical authorization and failure statements do not replace the current
-R2-A status above.
+R2-B status above.
 
 ### Changes and affected surfaces
 
