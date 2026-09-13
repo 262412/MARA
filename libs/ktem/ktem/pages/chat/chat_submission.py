@@ -13,6 +13,19 @@ SELECTION_MARKER = submission_core.SELECTION_MARKER
 MergeGraphSourceIdsFn = Callable[[Any, list[str]], list[str]]
 
 
+def bind_chat_indexing_request(operation, incoming_request):
+    """Bind only this submission's server request at the Web boundary."""
+    if operation is None:
+        return None
+
+    def index(inputs, reindex, settings, user_id, request=None):
+        # The legacy URL callback supplies request=None. It must not replace the
+        # authenticated request captured by this submission's local operation.
+        return operation(inputs, reindex, settings, user_id, request=incoming_request)
+
+    return index
+
+
 @dataclass
 class PreparedChatSubmission:
     chat_input_text: str

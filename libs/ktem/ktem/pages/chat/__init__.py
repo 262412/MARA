@@ -45,7 +45,7 @@ from .chat_layout import render_chat_workbench_layout
 from .chat_message_events import bind_chat_submit_events
 from .chat_preview_events import bind_chat_preview_events
 from .chat_runtime_runner import ChatCallbackInputs, run_chat_callback_outputs
-from .chat_submission import prepare_chat_submission
+from .chat_submission import bind_chat_indexing_request, prepare_chat_submission
 from .chat_suggestion import ChatSuggestion
 from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
@@ -1598,8 +1598,12 @@ class ChatPage(BasePage):
             selected_graph_context=selected_graph_context,
             default_question=DEFAULT_QUESTION,
             merge_graph_source_ids=self.merge_graph_source_ids,
-            first_indexing_file_fn=getattr(self, "first_indexing_file_fn", None),
-            first_indexing_url_fn=getattr(self, "first_indexing_url_fn", None),
+            first_indexing_file_fn=bind_chat_indexing_request(
+                getattr(self, "first_indexing_file_fn", None), request
+            ),
+            first_indexing_url_fn=bind_chat_indexing_request(
+                getattr(self, "first_indexing_url_fn", None), request
+            ),
         )
 
         if not conv_id:
