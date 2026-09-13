@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .chat_gradio_adapters import chat_preview_ports
+
 
 def _chat_file_list_inputs(page):
     return [
@@ -70,6 +72,7 @@ def bind_knowledge_graph_events(page) -> None:
         show_progress="hidden",
     )
 
+    ports = chat_preview_ports(page)
     page._chat_file_click.change(
         fn=page.select_chat_file,
         inputs=[page._chat_file_click],
@@ -78,6 +81,11 @@ def bind_knowledge_graph_events(page) -> None:
             page._indices_input[1],
             page._chat_file_click,
         ],
+        show_progress="hidden",
+    ).then(
+        fn=page.page_preview.on_selected_file_change,
+        inputs=ports.selected_file.gradio_inputs,
+        outputs=ports.selected_file.gradio_outputs,
         show_progress="hidden",
     )
 

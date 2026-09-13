@@ -76,7 +76,7 @@ def _check_chain(blocks, page, chain, *, demo):
         fn = blocks.fns[dependency["id"]]
         assert fn.concurrency_limit == (20 if position in (0, 1, 8) else "default")
         if callback is not None:
-            if position == 1:
+            if position in (1, 2):
                 assert fn.fn.__wrapped__ == callback
             elif position in (6, 7, 8):
                 attribute = {

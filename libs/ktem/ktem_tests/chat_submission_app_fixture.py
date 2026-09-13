@@ -134,6 +134,9 @@ def seed_owned_document(app, root):
     page = document.new_page()
     text = "The observatory has seven telescopes. This is an owned test document."
     page.insert_text((72, 72), text)
+    document.new_page().insert_text(
+        (72, 72), "An owned second page without a saved answer."
+    )
     document.save(path)
     document.close()
     source_id, chunk_id = "owned-observatory", "owned-observatory-page-1"

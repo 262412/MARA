@@ -81,6 +81,12 @@ def _make_page():
         load_conversation_graph_state=object(),
         chat_control=SimpleNamespace(conversation_id=conversation_id),
     )
+    from .event_chain_spy import EventGraphSpy, build_chat_page
+
+    defaults = build_chat_page(EventGraphSpy())
+    for name, value in vars(defaults).items():
+        if not hasattr(page, name):
+            setattr(page, name, value)
     return page
 
 

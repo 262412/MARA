@@ -9,6 +9,11 @@ from .chat_gradio_adapters import (
     chat_conversation_ports,
     conversation_rename_ports,
 )
+from .conversation_restore import (
+    clear_conversation,
+    restore_conversation,
+    restored_answer,
+)
 
 
 def bind_chat_conversation_events(
@@ -43,7 +48,7 @@ def _bind_demo_conversation_events(
 ) -> None:
     page.chat_control.btn_demo_logout.click(fn=None, js=page.chat_control.logout_js)
     page.chat_control.btn_new.click(
-        fn=page.chat_control.clear_conv,
+        fn=clear_conversation(page.chat_control.clear_conv),
         outputs=ports.selection.gradio_outputs,
     ).then(
         lambda: (gr.update(visible=False), gr.update(visible=True)),
@@ -80,7 +85,7 @@ def _bind_standard_conversation_events(
         outputs=ports.new_conversation.gradio_outputs,
         show_progress="hidden",
     ).then(
-        page.chat_control.select_conv,
+        restore_conversation(page.chat_control.select_conv),
         inputs=ports.selection.gradio_inputs,
         outputs=ports.selection.gradio_outputs,
         show_progress="hidden",
@@ -123,7 +128,7 @@ def _bind_delete_conversation_events(page: Any, ports: ChatConversationPorts) ->
         outputs=ports.delete_conversation.gradio_outputs,
         show_progress="hidden",
     ).then(
-        page.chat_control.select_conv,
+        restore_conversation(page.chat_control.select_conv),
         inputs=ports.selection.gradio_inputs,
         outputs=ports.selection.gradio_outputs,
         show_progress="hidden",
@@ -171,7 +176,7 @@ def _bind_conversation_select_event(
 ) -> None:
     on_conv_select = (
         page.chat_control.conversation.select(
-            page.chat_control.select_conv,
+            restore_conversation(page.chat_control.select_conv),
             inputs=ports.selection.gradio_inputs,
             outputs=ports.selection.gradio_outputs,
             show_progress="hidden",
@@ -240,7 +245,7 @@ def _append_conversation_preview_refresh(
         outputs=ports.pdf_refresh.gradio_outputs,
         js=pdfview_js,
     ).then(
-        fn=lambda history: history[-1][1] if history else "",
+        fn=restored_answer(page._generate_answer_panel_html),
         inputs=ports.answer.gradio_inputs,
         outputs=ports.answer.gradio_outputs,
         show_progress="hidden",

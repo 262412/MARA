@@ -11,8 +11,14 @@ from kotaemon.loaders.pdf_loader import get_page_thumbnails
 
 from ...db.models import engine
 from . import page_preview_cache
-from .generation_store import has_in_progress, make_page_key, set_current_view
+from .generation_store import (
+    get_view_revision,
+    has_in_progress,
+    make_page_key,
+    try_set_current_view,
+)
 from .page_preview_callbacks import (
+    empty_page_navigation,
     normalize_preview_tick,
     poll_office_conversion,
     resolve_preview_access,
@@ -444,6 +450,8 @@ class ChatPagePreviewController:
         page_outputs_cache,
         request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        session_key = getattr(request, "session_hash", None) or "default"
+        revision = get_view_revision(session_key)
         file_id, file_name, file_path = self.resolve_pdf_source(
             first_selector_choices,
             selected_file_ids,
@@ -458,9 +466,10 @@ class ChatPagePreviewController:
             preview_src,
             preview_notice,
         ) = self._build_preview_payload(file_id, file_name, file_path, 1, 1)
-        session_key = getattr(request, "session_hash", None) or "default"
-        if session_key:
-            set_current_view(session_key, make_page_key(file_id, page_number))
+        if not try_set_current_view(
+            session_key, make_page_key(file_id, page_number), revision
+        ):
+            return (gr.skip(),) * 14
         page_outputs = self.get_cached_page_outputs(
             page_outputs_cache, page_number, file_id, session_key=session_key
         )
@@ -491,6 +500,7 @@ class ChatPagePreviewController:
         del file_path
         lock_key = file_id or "default"
         session_key = getattr(request, "session_hash", None) or "default"
+        revision = get_view_revision(session_key)
         if session_key and has_in_progress(
             session_key, make_page_key(file_id, current_page)
         ):
@@ -521,25 +531,8 @@ class ChatPagePreviewController:
             self._page_change_lock[lock_key] = True
 
             if not file_id:
-                (
-                    _,
-                    total_pages,
-                    preview_src,
-                    preview_notice,
-                ) = self._build_preview_payload(file_id, "", "", 1, 1)
-                if session_key:
-                    set_current_view(session_key, make_page_key(file_id, 1))
-                return (
-                    1,
-                    total_pages,
-                    preview_src,
-                    preview_notice,
-                    *self.get_cached_page_outputs(
-                        page_outputs_cache,
-                        1,
-                        file_id,
-                        session_key=session_key,
-                    ),
+                return empty_page_navigation(
+                    self, file_id, page_outputs_cache, session_key, revision
                 )
 
             file_name, file_path = self._resolve_callback_source(file_id, request)
@@ -556,8 +549,10 @@ class ChatPagePreviewController:
                 requested_page,
                 total_pages,
             )
-            if session_key:
-                set_current_view(session_key, make_page_key(file_id, next_page))
+            if not try_set_current_view(
+                session_key, make_page_key(file_id, next_page), revision
+            ):
+                return (gr.skip(),) * 10
             return (
                 next_page,
                 total_pages,
@@ -623,6 +618,7 @@ class ChatPagePreviewController:
         del file_path
         lock_key = file_id or "default"
         session_key = getattr(request, "session_hash", None) or "default"
+        revision = get_view_revision(session_key)
 
         if self._page_change_lock.get(lock_key, False):
             logger.debug(f"Page set ignored for file {lock_key}, page={current_page}")
@@ -644,25 +640,8 @@ class ChatPagePreviewController:
             self._page_change_lock[lock_key] = True
 
             if not file_id:
-                (
-                    _,
-                    total_pages,
-                    preview_src,
-                    preview_notice,
-                ) = self._build_preview_payload(file_id, "", "", 1, 1)
-                if session_key:
-                    set_current_view(session_key, make_page_key(file_id, 1))
-                return (
-                    1,
-                    total_pages,
-                    preview_src,
-                    preview_notice,
-                    *self.get_cached_page_outputs(
-                        page_outputs_cache,
-                        1,
-                        file_id,
-                        session_key=session_key,
-                    ),
+                return empty_page_navigation(
+                    self, file_id, page_outputs_cache, session_key, revision
                 )
 
             file_name, file_path = self._resolve_callback_source(file_id, request)
@@ -678,8 +657,10 @@ class ChatPagePreviewController:
                 current_page,
                 total_pages,
             )
-            if session_key:
-                set_current_view(session_key, make_page_key(file_id, next_page))
+            if not try_set_current_view(
+                session_key, make_page_key(file_id, next_page), revision
+            ):
+                return (gr.skip(),) * 10
             return (
                 next_page,
                 total_pages,
@@ -703,6 +684,8 @@ class ChatPagePreviewController:
         total_pages,
         request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
+        session_key = getattr(request, "session_hash", None) or "default"
+        revision = get_view_revision(session_key)
         file_id, file_name, file_path = self.resolve_pdf_source(
             first_selector_choices,
             selected_file_ids,
@@ -723,6 +706,10 @@ class ChatPagePreviewController:
             target_page,
             total_pages,
         )
+        if not try_set_current_view(
+            session_key, make_page_key(file_id, page_number), revision
+        ):
+            return (gr.skip(),) * 7
         self._sync_preview_tracking(next_file_id, must_force_first, page_number)
         return (
             file_id,
@@ -768,6 +755,8 @@ class ChatPagePreviewController:
             current_preview_notice,
         ) = values
 
+        session_key = getattr(request, "session_hash", None) or "default"
+        revision = get_view_revision(session_key)
         if not file_id:
             return gr.skip(), gr.skip(), gr.skip(), gr.skip()
 
@@ -800,6 +789,8 @@ class ChatPagePreviewController:
             target_page,
             total_pages,
         )
+        if revision != get_view_revision(session_key):
+            return (gr.skip(),) * 4
         self._sync_preview_tracking(next_file_id, must_force_first, page_number)
         if (
             int(page_number or 1) == int(target_page or 1)

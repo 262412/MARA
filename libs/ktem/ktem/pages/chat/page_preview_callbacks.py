@@ -10,7 +10,30 @@ from ktem.preview.context import PreviewAccess, preview_access_for_user
 from ktem.preview.errors import PreviewAccessError, PreviewErrorCode
 from theflow.settings import settings as flowsettings
 
+from .generation_store import make_page_key, try_set_current_view
+
 logger = logging.getLogger(__name__)
+
+
+def empty_page_navigation(
+    controller, file_id, page_outputs_cache, session_key, revision
+):
+    """Share the original empty-source navigation and its stale-view guard."""
+    _, total, source, notice = controller._build_preview_payload(file_id, "", "", 1, 1)
+    if not try_set_current_view(session_key, make_page_key(file_id, 1), revision):
+        return (gr.skip(),) * 10
+    return (
+        1,
+        total,
+        source,
+        notice,
+        *controller.get_cached_page_outputs(
+            page_outputs_cache,
+            1,
+            file_id,
+            session_key=session_key,
+        ),
+    )
 
 
 def resolve_preview_access(

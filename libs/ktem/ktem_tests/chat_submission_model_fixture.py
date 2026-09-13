@@ -11,6 +11,8 @@ class SubmissionChatModel(ChatLLM):
     def invoke(self, messages, **kwargs):
         prompt = str(messages[-1])
         text = "Owned document discussion" if "conversation name" in prompt else "1"
+        if "conversation name" in prompt and "ISOLATED CONVERSATION" in str(messages):
+            text = "Isolated conversation"
         return LLMInterface(content=text, logprobs=[])
 
     def stream(self, messages, **kwargs):

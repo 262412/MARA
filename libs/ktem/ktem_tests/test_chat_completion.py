@@ -26,6 +26,7 @@ def completion():
     )
     context = {
         "conversation_id": "id",
+        "view_revision": 0,
         "messages": [["question", "answer"]],
         "selecteds": ("select", ["document"], "real-owner"),
     }
@@ -51,6 +52,7 @@ def test_stream_adapter_captures_scope_without_changing_old_callback():
     history[0][1] = "changed"
     assert result[14] == {
         "conversation_id": "id",
+        "view_revision": 0,
         "messages": [["question", "answer"]],
         "selecteds": (["document"],),
     }

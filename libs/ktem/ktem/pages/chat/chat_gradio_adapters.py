@@ -173,6 +173,8 @@ def _runtime_ports(page: Any) -> EventPorts:
 def _cache_ports(page: Any) -> EventPorts:
     return EventPorts(
         inputs=(
+            page.chat_control.conversation_id,
+            page._request_completion,
             page._page_outputs_cache,
             page._request_page_number,
             page._request_last_question,
@@ -314,6 +316,7 @@ def _conversation_selection_ports(page: Any) -> EventPorts:
             page.chat_control.cb_is_public,
             page.state_chat,
             *page._indices_input,
+            page._page_outputs_cache,
         ),
     )
 

@@ -8,6 +8,8 @@ from typing import Callable
 
 import gradio as gr
 
+from .generation_store import get_view_revision
+
 
 def with_completion_context(callback):
     """Keep the old stream callback intact and capture its actual input scope."""
@@ -18,6 +20,9 @@ def with_completion_context(callback):
         context = {
             "conversation_id": inputs["conversation_id"],
             "selecteds": deepcopy(inputs.get("selecteds", ())),
+            "view_revision": get_view_revision(
+                getattr(inputs.get("request"), "session_hash", None)
+            ),
         }
         for output in callback(*args, **kwargs):
             yield (*output, {**context, "messages": deepcopy(output[13])})
@@ -36,6 +41,10 @@ class CompletionTail:
 
     def _completed(self, conversation_id, user_id, messages, context, request):
         if not context or context["conversation_id"] != conversation_id:
+            return None
+        if context["view_revision"] != get_view_revision(
+            getattr(request, "session_hash", None)
+        ):
             return None
         if not messages or context["messages"] != messages:
             return None

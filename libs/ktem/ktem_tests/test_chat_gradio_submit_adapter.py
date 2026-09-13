@@ -117,7 +117,7 @@ def test_submit_chain_preserves_distinct_parent_nodes_and_exact_event_order(
     assert [call.params.get("fn") for call in graph.calls] == [
         page.submit_msg,
         graph.calls[1].params["fn"],
-        page.page_preview.cache_page_outputs,
+        graph.calls[2].params["fn"],
         graph.calls[3].params["fn"],
         graph.calls[4].params["fn"],
         graph.calls[5].params["fn"],
@@ -126,6 +126,9 @@ def test_submit_chain_preserves_distinct_parent_nodes_and_exact_event_order(
         graph.calls[8].params["fn"],
     ]
     assert graph.calls[1].params["fn"].__wrapped__ is page.chat_fn
+    assert (
+        graph.calls[2].params["fn"].__wrapped__ is page.page_preview.cache_page_outputs
+    )
     assert graph.calls[5].params["fn"]() is None
     assert (
         graph.calls[6].params["fn"].__self__.suggest_name

@@ -110,6 +110,9 @@ class ComponentSpy:
     def change(self, *args: Any, **kwargs: Any) -> ChainNodeSpy:
         return self._event("change", *args, **kwargs)
 
+    def input(self, *args: Any, **kwargs: Any) -> ChainNodeSpy:
+        return self._event("input", *args, **kwargs)
+
     def tick(self, *args: Any, **kwargs: Any) -> ChainNodeSpy:
         return self._event("tick", *args, **kwargs)
 
@@ -210,6 +213,7 @@ def build_chat_page(graph: EventGraphSpy, index_count: int = 5) -> SimpleNamespa
     page.persist_data_source = marker("page.persist_data_source")
     page._resolve_persist_user_id = marker("page._resolve_persist_user_id")
     page.docqa = SimpleNamespace(load_session=marker("docqa.load_session"))
+    page._generate_answer_panel_html = marker("page._generate_answer_panel_html")
     page._json_to_plot = marker("page._json_to_plot")
     page.toggle_delete = marker("page.toggle_delete")
     page.render_latest_citations_card = marker("page.render_latest_citations_card")

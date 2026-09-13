@@ -14,6 +14,7 @@ from .chat_docqa_runtime import build_web_docqa_request, runtime_trace_reference
 from .chat_submission import SELECTION_MARKER
 from .generation_store import (
     get_current_view,
+    get_snapshot_by_page,
     init_cache_entry,
     make_page_key,
     make_request_key,
@@ -40,7 +41,12 @@ class ChatRuntimeTurn:
 
     def is_active_view(self) -> bool:
         current_view = get_current_view(self.session_key) if self.session_key else None
-        return (current_view is None) or (current_view == self.page_key)
+        snapshot = get_snapshot_by_page(self.session_key, self.page_key)
+        return bool(
+            snapshot
+            and snapshot["request_key"] == self.request_key
+            and ((current_view is None) or (current_view == self.page_key))
+        )
 
 
 def prepare_chat_runtime_turn(

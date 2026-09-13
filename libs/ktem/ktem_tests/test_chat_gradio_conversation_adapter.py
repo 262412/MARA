@@ -45,6 +45,7 @@ def test_conversation_ports_preserve_fixed_outputs_and_every_index_component():
         page.chat_control.cb_is_public,
         page.state_chat,
         *page._indices_input,
+        page._page_outputs_cache,
     )
     assert ports.preview.inputs == (
         page.first_selector_choices,
@@ -91,7 +92,7 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
         None,
     ]
     assert new_chain[0].params["inputs"] is page._app.user_id
-    assert new_chain[1].params["outputs"][-6:] == page._indices_input
+    assert new_chain[1].params["outputs"][-7:-1] == page._indices_input
     delete_chain = linear_chain(graph, graph.roots("chat_control.btn_del_conf")[0])
     assert [_fn_name(call) for call in delete_chain] == [
         "chat_control.delete_conv",
@@ -120,7 +121,7 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
         "<lambda>",
         "<lambda>",
         "<lambda>",
-        "<lambda>",
+        "answer",
         "<lambda>",
         "page.render_latest_citations_card",
         "page.render_latest_reasoning_trace",
@@ -132,7 +133,7 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
     assert select_chain[6].params["js"] == "clear-selection-js"
     assert select_chain[8].params["js"] == "pdf-js"
     assert select_chain[-1].params["js"] == "focus-js"
-    assert select_chain[0].params["outputs"][-6:] == page._indices_input
+    assert select_chain[0].params["outputs"][-7:-1] == page._indices_input
 
 
 def test_standard_conversation_registration_does_not_require_demo_paper_list():
@@ -176,7 +177,7 @@ def test_demo_conversation_adds_only_visibility_branch_and_keeps_root_order():
         "page.suggest_chat_conv",
         None,
     ]
-    assert new_chain[0].params["outputs"][-5:] == page._indices_input
+    assert new_chain[0].params["outputs"][-6:-1] == page._indices_input
     assert new_chain[-1].params["js"] == "focus-js"
 
 
@@ -190,7 +191,7 @@ def test_sign_out_uses_named_conversation_outputs_and_clear_adapter():
 
     def clear_conv():
         clear_calls.append(True)
-        return "signed-out"
+        return ("signed-out",)
 
     page.chat_control.clear_conv = clear_conv
     page._app.subscribe_event = lambda **definition: subscriptions.append(definition)
@@ -202,7 +203,9 @@ def test_sign_out_uses_named_conversation_outputs_and_clear_adapter():
     assert sign_out["outputs"] == list(
         chat_conversation_ports(page, demo_mode=False).selection.outputs
     )
-    assert sign_out["fn"]() == "signed-out"
+    import gradio as gr
+
+    assert sign_out["fn"](gr.Request(session_hash="signout")) == ("signed-out", {})
     assert clear_calls == [True]
     assert sign_out["show_progress"] == "hidden"
 

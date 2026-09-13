@@ -28,7 +28,7 @@ def test_chat_submit_event_chain_keeps_runtime_cache_and_persist_order():
 
     helper_tokens = [
         "fn=with_completion_context(page.chat_fn)",
-        "fn=page.page_preview.cache_page_outputs",
+        "fn=cache_request_view(page.page_preview.cache_page_outputs)",
         "outputs=ports.clear_selection.gradio_outputs",
         "js=pdfview_js",
         "js=scroll_answer_panel_js",

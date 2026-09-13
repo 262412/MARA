@@ -47,6 +47,7 @@ from .chat_preview_events import bind_chat_preview_events
 from .chat_runtime_runner import ChatCallbackInputs, run_chat_callback_outputs
 from .chat_submission import bind_chat_indexing_request, prepare_chat_submission
 from .chat_suggestion import ChatSuggestion
+from .conversation_restore import clear_conversation
 from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
 from .source_scope import (
@@ -1694,7 +1695,7 @@ class ChatPage(BasePage):
             self._app.subscribe_event(
                 name="onSignOut",
                 definition={
-                    "fn": self.chat_control.clear_conv,
+                    "fn": clear_conversation(self.chat_control.clear_conv),
                     "outputs": chat_conversation_ports(
                         self, demo_mode=KH_DEMO_MODE
                     ).selection.gradio_outputs,

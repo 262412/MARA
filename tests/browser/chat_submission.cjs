@@ -122,6 +122,48 @@ async function streamFailure() {
   } finally { await page.close(); }
 }
 
+async function conversationIsolation() {
+  const {page, queue} = await login();
+  try {
+    await page.getByText('Conversation', {exact: true}).click();
+    await page.locator('#conversation-dropdown input').click();
+    await page.getByRole('option', {name: 'Owned document discussion', exact: true}).click();
+    await expect(page.locator('#answer-panel')).toContainText('SECOND question about the telescopes');
+    const before = (await evidence()).conversations;
+    await page.locator('#new-conv-button').click();
+    await expect.poll(async () => (await evidence()).conversations.length).toBe(before.length + 1);
+    await expect(page.locator('#answer-panel')).not.toContainText('SECOND question');
+    await selectSource(page);
+    await expect(page.locator('#answer-panel')).not.toContainText('SECOND question');
+    await send(page, 'ISOLATED CONVERSATION own question');
+    await tailFinished(queue);
+    let data = await evidence();
+    const fresh = data.conversations.find(row => !before.some(old => old.id === row.id));
+    expect(fresh.name).toBe('Isolated conversation');
+    assertStoredTurn(fresh, data.writes.filter(item => item.conversation_id === fresh.id), 1);
+    await page.getByRole('button', {name: 'Next ▶', exact: true}).click();
+    await expect(page.locator('#pdf-page-number input')).toHaveValue('2');
+    await expect(page.locator('#answer-panel')).not.toContainText('ISOLATED CONVERSATION');
+    await page.getByRole('button', {name: '◀ Prev', exact: true}).click();
+    await expect(page.locator('#pdf-page-number input')).toHaveValue('1');
+    await expect(page.locator('#answer-panel')).toContainText('ISOLATED CONVERSATION');
+    await page.locator('#conversation-dropdown input').click();
+    await page.getByRole('option', {name: 'Owned document discussion', exact: true}).click();
+    await expect(page.locator('#answer-panel')).toContainText('SECOND question about the telescopes');
+    await expect(page.locator('#answer-panel')).not.toContainText('ISOLATED CONVERSATION');
+    await page.reload();
+    await page.locator('#chat-input textarea').waitFor({state: 'visible'});
+    await page.getByText('Conversation', {exact: true}).click();
+    await page.locator('#conversation-dropdown input').click();
+    await page.getByRole('option', {name: 'Isolated conversation', exact: true}).click();
+    await expect(page.locator('#answer-panel')).toContainText('ISOLATED CONVERSATION');
+    await expect(page.locator('#answer-panel')).not.toContainText('SECOND question');
+    data = await evidence();
+    expect(data.conversations.find(row => row.id === fresh.id).data_source).toEqual(fresh.data_source);
+    results.scenarios.push({name: 'empty-conversation-same-file-page-isolation-navigation-reload', id: fresh.id, queue});
+  } finally { await page.close(); }
+}
+
 async function slowViewSwitch() {
   const {page, queue} = await login();
   try {
@@ -208,7 +250,7 @@ async function authenticatedIndexing() {
 (async () => {
   browser = await chromium.launch({headless: true, ...(process.env.MARA_BROWSER_CHANNEL ? {channel: process.env.MARA_BROWSER_CHANNEL} : {})});
   const selected = process.env.MARA_BROWSER_SCENARIOS?.split(',');
-  const scenarios = [normalSubmission, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing];
+  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
   for (const scenario of scenarios.filter(fn => !selected || selected.includes(fn.name))) {
     try { await scenario(); }

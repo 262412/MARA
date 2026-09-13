@@ -6,6 +6,7 @@ import gradio as gr
 
 from .chat_completion import CompletionTail, with_completion_context
 from .chat_gradio_adapters import ChatSubmitPorts, chat_submit_ports
+from .conversation_restore import cache_request_view
 
 
 def bind_chat_submit_events(
@@ -99,7 +100,7 @@ def _append_runtime_stream(page: Any, ports: ChatSubmitPorts, chat_event: Any) -
 
 def _append_request_cache(page: Any, ports: ChatSubmitPorts, chat_event: Any) -> Any:
     return chat_event.success(
-        fn=page.page_preview.cache_page_outputs,
+        fn=cache_request_view(page.page_preview.cache_page_outputs),
         inputs=ports.cache.gradio_inputs,
         outputs=ports.cache.gradio_outputs,
         show_progress="hidden",
