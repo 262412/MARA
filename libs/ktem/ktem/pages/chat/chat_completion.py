@@ -8,7 +8,12 @@ from typing import Callable
 
 import gradio as gr
 
-from .generation_store import get_view_revision
+from .generation_store import (
+    get_current_view,
+    get_snapshot_by_page,
+    get_view_revision,
+    make_page_key,
+)
 
 
 def with_completion_context(callback):
@@ -17,15 +22,32 @@ def with_completion_context(callback):
     @wraps(callback)
     def stream(*args, **kwargs):
         inputs = signature(callback).bind(*args, **kwargs).arguments
+        session_key = getattr(inputs.get("request"), "session_hash", None) or "default"
         context = {
             "conversation_id": inputs["conversation_id"],
             "selecteds": deepcopy(inputs.get("selecteds", ())),
             "view_revision": get_view_revision(
                 getattr(inputs.get("request"), "session_hash", None)
             ),
+            "page_key": make_page_key(
+                inputs.get("active_file_id"), inputs.get("page_number")
+            ),
+            "generation_key": None,
         }
-        for output in callback(*args, **kwargs):
-            yield (*output, {**context, "messages": deepcopy(output[13])})
+        for index, output in enumerate(callback(*args, **kwargs)):
+            if index == 0:
+                snapshot = get_snapshot_by_page(session_key, context["page_key"])
+                context["generation_key"] = (snapshot or {}).get("request_key")
+            yield (
+                *output,
+                {
+                    **context,
+                    "messages": deepcopy(output[13]),
+                    "page_messages": deepcopy(output[0])
+                    if isinstance(output[0], (list, tuple))
+                    else None,
+                },
+            )
 
     return stream
 
@@ -53,6 +75,16 @@ class CompletionTail:
         # The finalizer is the authority for a successful turn. Error placeholders,
         # partial streams and a different/newer turn must never reach Web writes.
         if session is None or session.messages != [tuple(pair) for pair in messages]:
+            return None
+        session_key = getattr(request, "session_hash", None) or "default"
+        snapshot = get_snapshot_by_page(session_key, context["page_key"])
+        if (
+            not snapshot
+            or snapshot["request_key"] != context["generation_key"]
+            or not snapshot["done"]
+            or snapshot["error"]
+            or get_current_view(session_key) != context["page_key"]
+        ):
             return None
         return session
 

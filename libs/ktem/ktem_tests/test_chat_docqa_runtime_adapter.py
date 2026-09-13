@@ -495,7 +495,9 @@ def test_chat_fn_final_output_preserves_last_streamed_answer_frame():
     assert "runtime answer" in final[5]
     assert "short final answer" not in final[5]
     assert final[0] == [("What changed?", "runtime answer")]
-    assert final[-1] == [("What changed?", "runtime answer")]
+    # Completion validation receives the authoritative final response; the
+    # longer streamed display is only the page projection.
+    assert final[-1] == [("What changed?", "short final answer")]
 
 
 def test_typewriter_display_frames_are_bounded_for_large_answer_delta():

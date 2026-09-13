@@ -15,6 +15,23 @@ from .generation_store import make_page_key, try_set_current_view
 logger = logging.getLogger(__name__)
 
 
+def page_navigation_outputs(
+    controller, cache, file_id, page, total, source, notice, session_key, revision
+):
+    """Apply the same view guard and page projection for both navigation inputs."""
+    if not try_set_current_view(session_key, make_page_key(file_id, page), revision):
+        return (gr.skip(),) * 10
+    return (
+        page,
+        total,
+        source,
+        notice,
+        *controller.get_cached_page_outputs(
+            cache, page, file_id, session_key=session_key
+        ),
+    )
+
+
 def empty_page_navigation(
     controller, file_id, page_outputs_cache, session_key, revision
 ):

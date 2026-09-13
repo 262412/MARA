@@ -491,7 +491,6 @@ def _with_displayed_final_answer(
         return response
 
     response.answer = displayed_answer
-    response.messages = list(preserved_history) + [(chat_input, displayed_answer)]
     return response
 
 
@@ -520,6 +519,7 @@ def final_docqa_response_output(
     chat_history_full = response.messages or preserved_history + [
         (chat_input, text or msg_placeholder)
     ]
+    page_history = preserved_history + [(chat_input, text or msg_placeholder)]
     reasoning_html = render_answer_reasoning_block(
         route_decision=response.route_decision,
         retrieve_decision=response.retrieve_decision,
@@ -538,7 +538,7 @@ def final_docqa_response_output(
         request_key,
         answer_text=text,
         answer_html=answer_html,
-        chat_history=chat_history_full,
+        chat_history=page_history,
     )
     update_mindmap(request_key, mindmap_html)
     update_plot(request_key, plot)
@@ -551,7 +551,7 @@ def final_docqa_response_output(
         artifact_payload,
     )
     return (
-        chat_history_full if active_view else gr.skip(),
+        page_history if active_view else gr.skip(),
         mindmap_html if active_view else gr.skip(),
         plot_gr if active_view else gr.skip(),
         plot,

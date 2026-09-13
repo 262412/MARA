@@ -140,7 +140,9 @@ def _managed_preview_controller(monkeypatch, owned_preview_app):
     controller = preview_module.ChatPagePreviewController(app)
     calls: list[tuple[Any, ...]] = []
 
-    def build_payload(*args):
+    def build_payload(*args, access):
+        assert access.user_id == "attacker"
+        assert access.owner_required
         calls.append(args)
         return 1, 1, "preview", "notice"
 
@@ -315,7 +317,7 @@ def test_preview_direct_call_abi_keeps_shapes(monkeypatch, owned_preview_app):
     monkeypatch.setattr(
         controller,
         "_build_preview_payload",
-        lambda *_args: (1, 1, "preview", "notice"),
+        lambda *_args, access=None: (1, 1, "preview", "notice"),
     )
     monkeypatch.setattr(controller, "_get_office_job_status", lambda _path: "pending")
 

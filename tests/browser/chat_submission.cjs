@@ -37,6 +37,7 @@ async function login(username = 'browser-owner') {
 
 async function selectSource(page) {
   await page.locator('[data-chat-file-id="owned-observatory"]').click();
+  await expect(page.locator('[data-chat-file-id="owned-observatory"]')).toHaveClass(/is-selected/);
   await expect(page.locator('#main-pdf-preview-frame')).toHaveAttribute('src', /viewer.html/, {timeout: 15000});
 }
 
@@ -58,6 +59,11 @@ function assertStoredTurn(record, writes, turns) {
   expect(record.data_source.plot_history).toHaveLength(turns);
   expect(record.data_source.graph_source_ids).toEqual(['owned-observatory']);
   expect(record.data_source.origin).toBe('web');
+  assertFinalizerAndWebWrites(writes, turns);
+  expect(record.data_source.retrieval_messages.every(refs => refs.includes('owned-observatory.pdf'))).toBeTruthy();
+}
+
+function assertFinalizerAndWebWrites(writes, turns) {
   expect(writes).toHaveLength(turns * 2);
   for (let i = 0; i < writes.length; i += 2) {
     expect(writes[i].origin_argument).toBe('web');
@@ -66,7 +72,6 @@ function assertStoredTurn(record, writes, turns) {
       expect(writes[i + 1].data_source[field], field).toEqual(writes[i].data_source[field]);
     }
   }
-  expect(record.data_source.retrieval_messages.every(refs => refs.includes('owned-observatory.pdf'))).toBeTruthy();
 }
 
 async function normalSubmission() {
@@ -227,11 +232,22 @@ async function authenticatedIndexing() {
       const owner = data.users[username];
       const uploaded = data.files.find(file => file.name === filename && file.user === owner);
       expect(uploaded).toBeDefined();
+      const context = data.states.find(state => state.session_hash === queue.sessionHash)._request_completion;
+      const conversationId = context.conversation_id;
+      assertFinalizerAndWebWrites(data.writes.filter(item => item.conversation_id === conversationId), 1);
       await expect(page.locator(`[data-chat-file-id="${uploaded.id}"]`)).toHaveCount(1);
       await send(page, 'https://example.org/owned-web-document');
       await tailFinished(queue, 2);
       data = await evidence();
       expect(data.files.some(file => file.name === 'https://example.org/owned-web-document' && file.user === owner)).toBeTruthy();
+      await expect(page.locator('.pdf-preview-notice')).toContainText('Selected file is unavailable');
+      const conversation = data.conversations.find(row => row.id === conversationId);
+      expect(conversation.data_source.messages).toHaveLength(2);
+      expect(conversation.data_source.retrieval_messages).toHaveLength(2);
+      expect(conversation.data_source.plot_history).toHaveLength(2);
+      expect(conversation.data_source.retrieval_messages[0]).toContain(filename);
+      expect(conversation.data_source.retrieval_messages[1]).toContain('owned-web-document');
+      assertFinalizerAndWebWrites(data.writes.filter(item => item.conversation_id === conversationId), 2);
       const indexCalls = data.callbacks.filter(item => item.event === 'call' && item.callback.includes('index_fn_') && item.session_hash === queue.sessionHash);
       expect(indexCalls.map(item => item.username)).toEqual([username, username]);
       results.scenarios.push({name: 'browser-upload-and-url-owner-isolation', username, uploadedId: uploaded.id, queue});

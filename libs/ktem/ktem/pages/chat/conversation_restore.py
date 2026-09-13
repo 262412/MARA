@@ -63,6 +63,7 @@ def cache_request_view(callback):
             not context
             or context["conversation_id"] != conversation_id
             or context["view_revision"] != get_view_revision(request.session_hash)
+            or context["page_messages"] is None
         ):
             return gr.skip()
         return callback(
@@ -72,7 +73,7 @@ def cache_request_view(callback):
             mindmap_html,
             answer_text,
             file_id,
-            chat_history,
+            context["page_messages"],
         )
 
     interface = signature(cache)

@@ -74,11 +74,15 @@ class PreviewPayloadService:
 
         effective_name = (
             request.file_name
-            or self._controller._resolve_file_name_by_file_id(request.file_id)
+            or self._controller._resolve_file_name_by_file_id(
+                request.file_id, access=request.access
+            )
         )
         effective_path = (
             request.file_path
-            or self._controller._resolve_file_path_by_file_id(request.file_id)
+            or self._controller._resolve_file_path_by_file_id(
+                request.file_id, access=request.access
+            )
         )
         if not effective_path or not os.path.isfile(effective_path):
             return PreviewPayload(

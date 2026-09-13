@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from typing import cast
 
+import gradio as gr
+from gradio.helpers import special_args
 from ktem.pages.chat.chat_auxiliary_events import (
     _bind_user_feedback_events,
     bind_chat_pre_studio_events,
@@ -37,7 +39,10 @@ class _Button:
 def test_demo_new_chat_binds_clear_conversation_callback():
     btn_new = _Button()
     btn_logout = _Button()
-    clear_conv = object()
+
+    def clear_conv():
+        return "", []
+
     page = SimpleNamespace(
         chat_control=SimpleNamespace(
             btn_demo_logout=btn_logout,
@@ -91,7 +96,12 @@ def test_demo_new_chat_binds_clear_conversation_callback():
         "focus",
     )
 
-    assert btn_new.calls[0][1]["fn"] is clear_conv
+    callback = btn_new.calls[0][1]["fn"]
+    assert callback.__wrapped__ is clear_conv
+    request = gr.Request(username="owner", session_hash="demo-browser")
+    inputs, _, _ = special_args(callback, [], request=request)
+    assert inputs == [request]
+    assert callback(*inputs) == ("", [], {})
 
 
 def test_public_and_like_events_include_local_user_identity():

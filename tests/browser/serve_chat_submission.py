@@ -118,6 +118,10 @@ def _observe(page):
         page.first_indexing_url_fn,
         page.refresh_chat_file_list,
         page.page_preview.on_selected_file_change,
+        page.page_preview.refresh_selected_file_preview,
+        page.page_preview.on_page_change,
+        page.page_preview.on_page_set,
+        page.page_preview.on_preview_tick,
         CompletionTail.persist,
         RuntimeSessionService.persist_conversation_state,
     ]
@@ -142,8 +146,8 @@ def _observe(page):
                 "file_name": values.get("file_name"),
                 "file_path": values.get("file_path"),
                 "preview_failed": (
-                    frame.f_code
-                    == page.page_preview.on_selected_file_change.__func__.__code__
+                    name.startswith("ChatPagePreviewController.")
+                    and name != "ChatPagePreviewController.cache_page_outputs"
                     and event == "return"
                     and arg is None
                 ),

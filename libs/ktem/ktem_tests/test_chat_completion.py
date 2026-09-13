@@ -9,7 +9,24 @@ from ktem.pages.chat.chat_completion import CompletionTail, with_completion_cont
 
 
 @pytest.fixture
-def completion():
+def completion(monkeypatch):
+    from ktem.pages.chat import chat_completion
+
+    monkeypatch.setattr(
+        chat_completion,
+        "get_snapshot_by_page",
+        Mock(
+            return_value={
+                "request_key": "owned-request",
+                "done": True,
+                "error": None,
+            }
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        chat_completion, "get_current_view", Mock(return_value="file_1")
+    )
     session = SimpleNamespace(
         messages=[("question", "answer")],
         retrieval_messages=["citation"],
@@ -27,10 +44,37 @@ def completion():
     context = {
         "conversation_id": "id",
         "view_revision": 0,
+        "generation_key": "owned-request",
+        "page_key": "file_1",
         "messages": [["question", "answer"]],
         "selecteds": ("select", ["document"], "real-owner"),
     }
     return tail, context, session
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        None,
+        {"request_key": "newer-request", "done": True, "error": None},
+        {"request_key": "owned-request", "done": False, "error": None},
+        {"request_key": "owned-request", "done": True, "error": "failed"},
+    ],
+)
+def test_identical_messages_do_not_authorize_a_different_or_incomplete_request(
+    completion, snapshot, monkeypatch
+):
+    from ktem.pages.chat import chat_completion
+
+    tail, context, _ = completion
+    monkeypatch.setattr(
+        chat_completion, "get_snapshot_by_page", Mock(return_value=snapshot)
+    )
+    assert tail.suggest("id", "owner", context["messages"], context, gr.Request()) == (
+        gr.skip(),
+        False,
+    )
+    tail.suggest_name.assert_not_called()
 
 
 def test_stream_adapter_captures_scope_without_changing_old_callback():
@@ -53,6 +97,9 @@ def test_stream_adapter_captures_scope_without_changing_old_callback():
     assert result[14] == {
         "conversation_id": "id",
         "view_revision": 0,
+        "generation_key": None,
+        "page_key": "default_1",
+        "page_messages": None,
         "messages": [["question", "answer"]],
         "selecteds": (["document"],),
     }
