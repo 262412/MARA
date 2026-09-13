@@ -36,6 +36,7 @@ async function login(username = 'browser-owner') {
 }
 
 async function selectSource(page) {
+  await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
   await page.locator('[data-chat-file-id="owned-observatory"]').click();
   await expect(page.locator('[data-chat-file-id="owned-observatory"]')).toHaveClass(/is-selected/);
   await expect(page.locator('#main-pdf-preview-frame')).toHaveAttribute('src', /viewer.html/, {timeout: 15000});
