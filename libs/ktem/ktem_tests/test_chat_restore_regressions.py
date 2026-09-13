@@ -177,7 +177,7 @@ def test_late_preview_is_discarded_after_conversation_reset(monkeypatch):
 
     monkeypatch.setattr(controller, "resolve_pdf_source", resolve)
     monkeypatch.setattr(
-        controller, "_build_preview_payload", lambda *args: (1, 1, "src", "")
+        controller, "_build_preview_payload", lambda *args, **kwargs: (1, 1, "src", "")
     )
     assert (
         controller.on_selected_file_change([], ["old"], {}, request)
@@ -201,3 +201,19 @@ def test_late_stream_cache_cannot_contaminate_reset_conversation():
         == gr.skip()
     )
     writer.assert_not_called()
+
+
+@pytest.mark.parametrize("adapter", ["clear_conversation", "cache_request_view"])
+def test_added_request_parameter_is_injected_by_real_gradio(adapter):
+    from gradio.helpers import special_args
+    from ktem.pages.chat import conversation_restore
+
+    def original(*args) -> tuple:
+        return args
+
+    wrapped = getattr(conversation_restore, adapter)(original)
+    request = gr.Request(username="owner", session_hash="browser")
+    values = [] if adapter == "clear_conversation" else list(range(9))
+    injected, _, _ = special_args(wrapped, values.copy(), request=request)
+    assert injected == [*values, request]
+    assert wrapped.__wrapped__ is original

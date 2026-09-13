@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 from html import escape
 from pathlib import Path
 from urllib.parse import quote
@@ -18,6 +19,8 @@ from pypdf.errors import PdfReadError
 from ...assets import get_pdfjs_runtime_dir
 from ...utils.render import BASE_PATH
 from .page_preview_types import is_pdf_source
+
+_PDF_COPY_LOCK = threading.Lock()
 
 
 def get_file_signature(file_path: str) -> str:
@@ -188,21 +191,26 @@ def ensure_pdf_preview_copy(file_path: str, file_name: str) -> str:
     safe_stem = safe_stem[:80] or "preview"
     signature = get_file_signature(str(source))[:16]
     preview_path = preview_dir / f"{safe_stem}_{signature}.pdf"
-    if preview_path.is_file() and preview_path.stat().st_size == source.stat().st_size:
-        return str(preview_path)
-
-    temp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            dir=preview_dir,
-            prefix=f".{safe_stem}-",
-            suffix=".tmp",
-            delete=False,
-        ) as temp_file:
-            temp_path = Path(temp_file.name)
-        shutil.copyfile(source, temp_path)
-        os.replace(temp_path, preview_path)
-    finally:
-        if temp_path is not None and temp_path.exists():
-            temp_path.unlink()
+    # Concurrent selector/restore callbacks must not replace a copy already
+    # being served to the browser. Recheck its signature path under the lock.
+    with _PDF_COPY_LOCK:
+        if (
+            preview_path.is_file()
+            and preview_path.stat().st_size == source.stat().st_size
+        ):
+            return str(preview_path)
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=preview_dir,
+                prefix=f".{safe_stem}-",
+                suffix=".tmp",
+                delete=False,
+            ) as temp_file:
+                temp_path = Path(temp_file.name)
+            shutil.copyfile(source, temp_path)
+            os.replace(temp_path, preview_path)
+        finally:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink()
     return str(preview_path)

@@ -1,6 +1,6 @@
 """Keep authorized conversation restoration separate from page navigation."""
 
-from functools import update_wrapper, wraps
+from functools import WRAPPER_ASSIGNMENTS, update_wrapper, wraps
 from inspect import signature
 
 import gradio as gr
@@ -28,7 +28,13 @@ def clear_conversation(callback):
         return (*callback(), {})
 
     interface = signature(clear)
-    update_wrapper(clear, callback)
+    update_wrapper(
+        clear,
+        callback,
+        assigned=tuple(
+            field for field in WRAPPER_ASSIGNMENTS if field != "__annotations__"
+        ),
+    )
     setattr(clear, "__signature__", interface)
     return clear
 
@@ -70,6 +76,12 @@ def cache_request_view(callback):
         )
 
     interface = signature(cache)
-    update_wrapper(cache, callback)
+    update_wrapper(
+        cache,
+        callback,
+        assigned=tuple(
+            field for field in WRAPPER_ASSIGNMENTS if field != "__annotations__"
+        ),
+    )
     setattr(cache, "__signature__", interface)
     return cache
