@@ -1,24 +1,28 @@
 // Exercise the existing App through browser events; evidence routes are read-only.
 const path = require('node:path');
 
-module.exports = function ({expect, login, evidence, send, tailFinished, results, output, base, assertFinalizerAndWebWrites}) {
+module.exports = function ({expect, login, evidence, send, tailFinished, settled, initialized, results, output, base, assertFinalizerAndWebWrites}) {
   async function ownedRows() {
     const data = await evidence();
     return data.conversations.filter(row => row.user === data.users['browser-controls']);
   }
 
   async function openControls(page) {
+    await initialized(page.submissionQueue);
     await page.getByText('Conversation', {exact: true}).click();
     await expect(page.locator('#new-conv-button')).toBeVisible();
   }
 
   async function choose(page, name) {
+    await settled(page.submissionQueue);
     const input = page.locator('#conversation-dropdown input');
     await input.fill(name);
     await expect(page.getByRole('option', {name, exact: true})).toBeVisible();
+    await expect(page.locator('#conversation-dropdown').getByRole('option')).toHaveCount(1);
     await input.press('ArrowDown');
     await input.press('Enter');
     await expect(input).toHaveValue(name);
+    await settled(page.submissionQueue);
   }
 
   async function rename(page, id, name) {
@@ -28,6 +32,7 @@ module.exports = function ({expect, login, evidence, send, tailFinished, results
     await input.press('Enter');
     await expect.poll(async () => (await evidence()).conversations.find(row => row.id === id)?.name).toBe(name);
     await expect(input).toBeHidden();
+    await settled(page.submissionQueue);
   }
 
   async function remove(page, id) {
@@ -41,6 +46,7 @@ module.exports = function ({expect, login, evidence, send, tailFinished, results
     await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
     await page.locator(`[data-chat-file-id="${id}"]`).click();
     await expect(page.locator(`[data-chat-file-id="${id}"]`)).toHaveClass(/is-selected/);
+    await settled(page.submissionQueue);
   }
 
   async function upload(page, queue, question) {

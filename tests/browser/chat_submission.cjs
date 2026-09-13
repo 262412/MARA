@@ -3,9 +3,9 @@ const { chromium, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 const output = process.argv[2];
-const { roles } = JSON.parse(fs.readFileSync(path.join(output, 'ready.json')));
+const { roles, initial_selection_events } = JSON.parse(fs.readFileSync(path.join(output, 'ready.json')));
 const base = 'http://127.0.0.1:8768';
-const results = { scenarios: [], errors: [] };
+const results = { scenarios: [], errors: [], completions: [] };
 let browser;
 
 async function evidence() {
@@ -18,11 +18,25 @@ async function login(username = 'browser-owner') {
   const page = await browser.newPage({locale: 'en-US', viewport: {width: 1600, height: 1200}});
   page.on('pageerror', error => results.errors.push(String(error)));
   const queue = [];
+  queue.requestOrder = new WeakMap();
+  queue.requestIds = [];
+  queue.navigationStart = 0;
+  page.on('framenavigated', frame => {
+    if (frame === page.mainFrame()) queue.navigationStart = queue.length;
+  });
+  queue.page = page;
   page.on('request', request => {
     if (request.url().includes('/queue/join')) {
       const payload = request.postDataJSON();
+      queue.requestOrder.set(request, queue.length);
       queue.push(payload.fn_index);
       queue.sessionHash = payload.session_hash;
+    }
+  });
+  page.on('response', async response => {
+    if (new URL(response.url()).pathname === '/queue/join' && response.ok()) {
+      const body = await response.json();
+      queue.requestIds[queue.requestOrder.get(response.request())] = body.event_id;
     }
   });
   await page.route('https://cdnjs.cloudflare.com/ajax/libs/tributejs/5.1.3/tribute.min.js',
@@ -32,7 +46,28 @@ async function login(username = 'browser-owner') {
   await page.locator('input[type=password]').fill('OwnedFixture7!');
   await page.getByRole('button', {name: /Login|登录/}).click();
   await page.locator('#chat-input textarea').waitFor({state: 'visible', timeout: 60000});
+  await initialized(queue);
+  page.submissionQueue = queue;
   return {page, queue};
+}
+
+async function initialized(queue) {
+  await expect.poll(() => initial_selection_events.every(fn => queue.slice(queue.navigationStart).includes(fn)), {timeout: 20000}).toBe(true);
+  await settled(queue);
+}
+
+async function settled(queue) {
+  // Wait for this action's submitted requests. Periodic preview work continues;
+  // a held generation also remains active while conversation controls are used.
+  const offset = queue.navigationStart;
+  const submitted = queue.slice(offset);
+  await expect.poll(async () => {
+    const data = await evidence();
+    return submitted.length > 0 && submitted.every((fn, index) => fn === roles.runtime ||
+      ['success', 'failed'].includes(data.queue_events[queue.requestIds[index + offset]]?.status));
+  }, {timeout: 20000}).toBe(true);
+  results.completions.push({sessionHash: queue.sessionHash, submitted: submitted.map((fn, i) => ({fn, eventId: queue.requestIds[i + offset]}))});
+  await queue.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
 async function selectSource(page) {
@@ -40,9 +75,11 @@ async function selectSource(page) {
   await page.locator('[data-chat-file-id="owned-observatory"]').click();
   await expect(page.locator('[data-chat-file-id="owned-observatory"]')).toHaveClass(/is-selected/);
   await expect(page.locator('#main-pdf-preview-frame')).toHaveAttribute('src', /viewer.html/, {timeout: 15000});
+  await settled(page.submissionQueue);
 }
 
 async function send(page, text) {
+  await settled(page.submissionQueue);
   await page.locator('#chat-input textarea').fill(text);
   await page.locator('#chat-input textarea').press('Enter');
 }
@@ -100,6 +137,7 @@ async function normalSubmission() {
     }
     await page.reload();
     await page.locator('#chat-input textarea').waitFor({state: 'visible'});
+    await initialized(queue);
     await page.getByText('Conversation', {exact: true}).click();
     await page.locator('#conversation-dropdown input').click();
     await page.getByRole('option', {name: 'Owned document discussion', exact: true}).click();
@@ -159,6 +197,7 @@ async function conversationIsolation() {
     await expect(page.locator('#answer-panel')).not.toContainText('ISOLATED CONVERSATION');
     await page.reload();
     await page.locator('#chat-input textarea').waitFor({state: 'visible'});
+    await initialized(queue);
     await page.getByText('Conversation', {exact: true}).click();
     await page.locator('#conversation-dropdown input').click();
     await page.getByRole('option', {name: 'Isolated conversation', exact: true}).click();
@@ -267,12 +306,13 @@ async function authenticatedIndexing() {
 (async () => {
   browser = await chromium.launch({headless: true, ...(process.env.MARA_BROWSER_CHANNEL ? {channel: process.env.MARA_BROWSER_CHANNEL} : {})});
   const selected = process.env.MARA_BROWSER_SCENARIOS?.split(',');
-  const operations = require('./conversation_actions.cjs')({expect, login, evidence, send, tailFinished, results, output, base, assertFinalizerAndWebWrites});
+  const operations = require('./conversation_actions.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, results, output, base, assertFinalizerAndWebWrites});
   const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
   for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : fn.name !== 'publicConversationPermissions')) {
-    try { await scenario(); }
-    catch (error) { results.scenarios.push({name: scenario.name, failure: String(error)}); }
+    console.log('Starting browser scenario:', scenario.name);
+    try { await scenario(); console.log('Passed browser scenario:', scenario.name); }
+    catch (error) { results.scenarios.push({name: scenario.name, failure: error.stack}); console.log('Failed browser scenario:', scenario.name, error.stack); }
   }
   results.evidence = await evidence();
   expect(results.evidence.callbacks.filter(item => item.preview_failed), 'unexpected preview callback failures').toEqual([]);

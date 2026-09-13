@@ -109,13 +109,54 @@ def _launch(app, blocks, root, output):
         model_boundary.held_release.set()
         return {"released": True}
 
-    (output / "ready.json").write_text(
-        json.dumps({"roles": roles, "gradio": gradio.__version__, "root": str(root)}),
-        encoding="utf-8",
-    )
+    _write_ready(output, root, roles, blocks, page._indices_input[1]._id)
     deadline = time.monotonic() + 600
     while time.monotonic() < deadline and not (output / "stop").exists():
         time.sleep(0.2)
+
+
+def _write_ready(output, root, roles, blocks, selector_id):
+    import gradio
+
+    dependencies = blocks.config["dependencies"]
+    (output / "ready.json").write_text(
+        json.dumps(
+            {
+                "roles": roles,
+                "gradio": gradio.__version__,
+                "root": str(root),
+                "initial_selection_events": _initial_selection_events(
+                    dependencies, selector_id
+                ),
+                "functions": {
+                    dep["id"]: {
+                        "name": blocks.fns[dep["id"]].name,
+                        "targets": dep["targets"],
+                        "inputs": dep["inputs"],
+                        "outputs": dep["outputs"],
+                    }
+                    for dep in dependencies
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _initial_selection_events(dependencies, selector_id):
+    """Find initial selector writers in the real registered app-load chains."""
+    by_id = {dep["id"]: dep for dep in dependencies}
+    initial = []
+    for dep in dependencies:
+        if selector_id not in dep["outputs"]:
+            continue
+        root = dep
+        while root["trigger_after"] is not None:
+            root = by_id[root["trigger_after"]]
+        if any(event == "load" for _, event in root["targets"]):
+            initial.append(dep["id"])
+    assert initial
+    return initial
 
 
 def _observe(page):
@@ -223,6 +264,7 @@ def _read_evidence(blocks, page, trace, writes):
             "conversations": [row.model_dump(mode="json") for row in rows],
             "callbacks": list(trace),
             "writes": list(writes),
+            "queue_events": dict(blocks._queue.event_analytics),
             "states": states,
             "users": {
                 user.username: user.id for user in session.exec(select(User)).all()
