@@ -98,6 +98,7 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
         "chat_control.delete_conv",
         "chat_control.select_conv",
         "page._json_to_plot",
+        "answer",
         "page.render_latest_citations_card",
         "page.render_latest_reasoning_trace",
         "<lambda>",
@@ -144,6 +145,30 @@ def test_standard_conversation_registration_does_not_require_demo_paper_list():
     _bind_conversation(page, demo_mode=False)
 
     assert graph.roots("chat_control.btn_new")
+
+
+def test_delete_renders_remaining_history_and_clears_the_last_answer():
+    graph = EventGraphSpy()
+    page = build_chat_page(graph)
+    page._generate_answer_panel_html = lambda history, question, answer: (
+        history,
+        question,
+        answer,
+    )
+    _bind_conversation(page, demo_mode=False)
+    chain = linear_chain(graph, graph.roots("chat_control.btn_del_conf")[0])
+    renderers = [
+        call for call in chain if call.params.get("outputs") == [page.answer_panel]
+    ]
+    assert len(renderers) == 1
+    renderer = renderers[0]
+    assert renderer.params["inputs"] == [page.chat_panel.chatbot]
+    assert renderer.params["fn"]([]) == ""
+    assert renderer.params["fn"]([["older", "answer"], ["current", "final"]]) == (
+        [["older", "answer"]],
+        "current",
+        "final",
+    )
 
 
 def test_demo_conversation_adds_only_visibility_branch_and_keeps_root_order():

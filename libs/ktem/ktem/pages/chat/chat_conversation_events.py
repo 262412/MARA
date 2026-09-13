@@ -137,6 +137,11 @@ def _bind_delete_conversation_events(page: Any, ports: ChatConversationPorts) ->
         inputs=ports.plot.gradio_inputs,
         outputs=ports.plot.gradio_outputs,
     ).then(
+        fn=restored_answer(page._generate_answer_panel_html),
+        inputs=ports.answer.gradio_inputs,
+        outputs=ports.answer.gradio_outputs,
+        show_progress="hidden",
+    ).then(
         fn=page.render_latest_citations_card,
         inputs=ports.citations.gradio_inputs,
         outputs=ports.citations.gradio_outputs,
