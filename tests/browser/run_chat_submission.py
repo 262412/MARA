@@ -1,0 +1,109 @@
+"""Run the real chat browser regressions and gracefully close owned resources."""
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+from urllib.request import urlopen
+
+TRIBUTE_URL = "https://cdnjs.cloudflare.com/ajax/libs/tributejs/5.1.3/tribute.min.js"
+TRIBUTE_SHA256 = "40703cceb4b468e72ae1eda73afdebdff4acc184b76a047bdd8dd487dd837ae5"
+
+
+def run(output):
+    repository = Path(__file__).resolve().parents[2]
+    output.mkdir(parents=True, exist_ok=True)
+    if any((output / name).exists() for name in ("ready.json", "stop", "server.log")):
+        raise ValueError("Use a fresh browser evidence directory")
+    source = os.environ.get("MARA_BROWSER_TRIBUTE")
+    if source:
+        tribute = Path(source).read_bytes()
+    else:
+        with urlopen(TRIBUTE_URL, timeout=30) as response:
+            tribute = response.read()
+    assert hashlib.sha256(tribute).hexdigest() == TRIBUTE_SHA256
+    (output / "tribute.min.js").write_bytes(tribute)
+    _record_source(repository, output)
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = os.pathsep.join(
+        str(path)
+        for path in (
+            repository,
+            repository / "libs/ktem",
+            repository / "libs/kotaemon",
+            repository / "libs/slide_cli",
+        )
+    )
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    environment["NO_PROXY"] = "localhost,127.0.0.1,::1"
+    with (output / "server.log").open("w", encoding="utf-8") as log:
+        server = subprocess.Popen(
+            [
+                sys.executable,
+                "-B",
+                "tests/browser/serve_chat_submission.py",
+                "--output",
+                str(output),
+            ],
+            cwd=repository,
+            env=environment,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+        try:
+            deadline = time.monotonic() + 120
+            while not (output / "ready.json").exists():
+                if server.poll() is not None or time.monotonic() > deadline:
+                    raise RuntimeError(
+                        f"Browser server did not become ready: {output / 'server.log'}"
+                    )
+                time.sleep(0.2)
+            completed = subprocess.run(
+                ["node", "tests/browser/chat_submission.cjs", str(output)],
+                cwd=repository,
+                env=environment,
+                timeout=360,
+            )
+            return completed.returncode
+        finally:
+            (output / "stop").write_text("stop", encoding="utf-8")
+            server.wait(timeout=45)
+            if server.returncode != 0:
+                raise RuntimeError(
+                    f"Browser server cleanup failed: {output / 'server.log'}"
+                )
+
+
+def _record_source(repository, output):
+    names = [
+        "tests/browser/serve_chat_submission.py",
+        "tests/browser/chat_submission.cjs",
+        "tests/browser/run_chat_submission.py",
+    ]
+    (output / "source.json").write_text(
+        json.dumps(
+            {
+                "head": subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+                ).strip(),
+                "sha256": {
+                    name: hashlib.sha256((repository / name).read_bytes()).hexdigest()
+                    for name in names
+                },
+                "tribute_sha256": TRIBUTE_SHA256,
+                "scenarios": os.environ.get("MARA_BROWSER_SCENARIOS", "all"),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, required=True)
+    raise SystemExit(run(parser.parse_args().output.resolve()))
