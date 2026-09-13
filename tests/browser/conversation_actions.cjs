@@ -1,7 +1,7 @@
 // Exercise the existing App through browser events; evidence routes are read-only.
 const path = require('node:path');
 
-module.exports = function ({expect, login, evidence, send, tailFinished, settled, initialized, results, output, base, assertFinalizerAndWebWrites}) {
+module.exports = function ({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites}) {
   async function ownedRows() {
     const data = await evidence();
     return data.conversations.filter(row => row.user === data.users['browser-controls']);
@@ -15,6 +15,8 @@ module.exports = function ({expect, login, evidence, send, tailFinished, settled
 
   async function choose(page, name) {
     await settled(page.submissionQueue);
+    const queue = page.submissionQueue;
+    const tails = queue.filter(fn => fn === roles.conversation_select_tail).length;
     const input = page.locator('#conversation-dropdown input');
     await input.fill(name);
     await expect(page.getByRole('option', {name, exact: true})).toBeVisible();
@@ -22,6 +24,9 @@ module.exports = function ({expect, login, evidence, send, tailFinished, settled
     await input.press('ArrowDown');
     await input.press('Enter');
     await expect(input).toHaveValue(name);
+    // The select chain closes an old delete confirmation before rendering the
+    // restored view. Let that natural tail finish before opening a new dialog.
+    await expect.poll(() => queue.filter(fn => fn === roles.conversation_select_tail).length, {timeout: 20000}).toBe(tails + 1);
     await settled(page.submissionQueue);
   }
 

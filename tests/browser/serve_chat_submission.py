@@ -78,6 +78,7 @@ def _launch(app, blocks, root, output):
             (dep["id"] for dep in dependencies[start : start + 9]),
         )
     )
+    roles.update(_selection_roles(dependencies, page.chat_control.conversation._id))
     blocks.queue().launch(
         server_name="127.0.0.1",
         server_port=8768,
@@ -157,6 +158,23 @@ def _initial_selection_events(dependencies, selector_id):
             initial.append(dep["id"])
     assert initial
     return initial
+
+
+def _selection_roles(dependencies, conversation_id):
+    current = next(
+        dep for dep in dependencies if (conversation_id, "select") in dep["targets"]
+    )
+    roles = {"conversation_select": current["id"]}
+    while True:
+        if current["backend_fn"]:
+            roles["conversation_select_tail"] = current["id"]
+        children = [
+            dep for dep in dependencies if dep["trigger_after"] == current["id"]
+        ]
+        if not children:
+            return roles
+        assert len(children) == 1
+        current = children[0]
 
 
 def _observe(page):
