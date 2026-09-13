@@ -208,6 +208,8 @@ def build_chat_page(graph: EventGraphSpy, index_count: int = 5) -> SimpleNamespa
     page.suggest_chat_conv = marker("page.suggest_chat_conv")
     page.check_and_suggest_name_conv = marker("page.check_and_suggest_name_conv")
     page.persist_data_source = marker("page.persist_data_source")
+    page._resolve_persist_user_id = marker("page._resolve_persist_user_id")
+    page.docqa = SimpleNamespace(load_session=marker("docqa.load_session"))
     page._json_to_plot = marker("page._json_to_plot")
     page.toggle_delete = marker("page.toggle_delete")
     page.render_latest_citations_card = marker("page.render_latest_citations_card")
@@ -226,7 +228,7 @@ def _add_chat_markers(page: SimpleNamespace) -> None:
         "_active_file_name state_plot_panel info_panel plot_panel answer_panel "
         "citations_panel reasoning_trace_panel _request_page_number _request_file_id "
         "_request_last_question _request_info_html _request_answer_html "
-        "_request_chat_history _page_outputs_cache _conversation_renamed "
+        "_request_chat_history _request_completion _page_outputs_cache _conversation_renamed "
         "_preview_links followup_questions_ui followup_questions "
         "state_retrieval_history state_plot_history chat_settings _active_file_path "
         "_active_file_total_pages page_strip_search page_strip_file_summary "

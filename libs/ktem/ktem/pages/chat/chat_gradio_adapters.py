@@ -82,7 +82,12 @@ def chat_submit_ports(page: Any) -> ChatSubmitPorts:
         pdf_refresh=EventPorts(outputs=(page._preview_links,)),
         scroll=EventPorts(),
         suggest_name=EventPorts(
-            inputs=page._request_chat_history,
+            inputs=(
+                page.chat_control.conversation_id,
+                page._app.user_id,
+                page._request_chat_history,
+                page._request_completion,
+            ),
             outputs=(page.chat_control.conversation_rn, page._conversation_renamed),
         ),
         rename=_rename_ports(page),
@@ -160,6 +165,7 @@ def _runtime_ports(page: Any) -> EventPorts:
             page._request_info_html,
             page._request_answer_html,
             page._request_chat_history,
+            page._request_completion,
         ),
     )
 
@@ -186,6 +192,8 @@ def _rename_ports(page: Any) -> EventPorts:
             page.chat_control.conversation_rn,
             page._conversation_renamed,
             page._app.user_id,
+            page._request_chat_history,
+            page._request_completion,
         ),
         outputs=(
             page.chat_control.conversation,
@@ -207,6 +215,7 @@ def _persist_ports(page: Any) -> EventPorts:
             page._request_chat_history,
             page.state_chat,
             page._graph_source_ids,
+            page._request_completion,
             *page._indices_input,
         ),
         outputs=(page.state_retrieval_history, page.state_plot_history),

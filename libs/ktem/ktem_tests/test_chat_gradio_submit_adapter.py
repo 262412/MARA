@@ -75,6 +75,7 @@ def test_submit_ports_are_named_immutable_and_preserve_all_index_inputs():
         page._request_info_html,
         page._request_answer_html,
         page._request_chat_history,
+        page._request_completion,
     )
     assert ports.persist.inputs[-6:] == tuple(page._indices_input)
     assert ports.submit.inputs is ports.submit.inputs
@@ -115,16 +116,35 @@ def test_submit_chain_preserves_distinct_parent_nodes_and_exact_event_order(
     assert len({call.node_id for call in graph.calls}) == len(graph.calls)
     assert [call.params.get("fn") for call in graph.calls] == [
         page.submit_msg,
-        page.chat_fn,
+        graph.calls[1].params["fn"],
         page.page_preview.cache_page_outputs,
         graph.calls[3].params["fn"],
         graph.calls[4].params["fn"],
-        None,
-        page.check_and_suggest_name_conv,
-        page.chat_control.rename_conv,
-        page.persist_data_source,
+        graph.calls[5].params["fn"],
+        graph.calls[6].params["fn"],
+        graph.calls[7].params["fn"],
+        graph.calls[8].params["fn"],
     ]
-    assert graph.calls[6].params["inputs"] is page._request_chat_history
+    assert graph.calls[1].params["fn"].__wrapped__ is page.chat_fn
+    assert graph.calls[5].params["fn"]() is None
+    assert (
+        graph.calls[6].params["fn"].__self__.suggest_name
+        is page.check_and_suggest_name_conv
+    )
+    assert (
+        graph.calls[7].params["fn"].__self__.rename_conversation
+        is page.chat_control.rename_conv
+    )
+    assert (
+        graph.calls[8].params["fn"].__self__.persist_data_source
+        is page.persist_data_source
+    )
+    assert graph.calls[6].params["inputs"] == [
+        page.chat_control.conversation_id,
+        page._app.user_id,
+        page._request_chat_history,
+        page._request_completion,
+    ]
     assert graph.calls[7].params["outputs"] == [
         page.chat_control.conversation,
         page.chat_control.conversation,

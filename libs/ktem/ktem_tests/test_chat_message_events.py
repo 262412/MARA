@@ -21,20 +21,20 @@ def test_chat_submit_event_chain_keeps_runtime_cache_and_persist_order():
         "_append_runtime_stream(page, ports, chat_event)",
         "_append_request_cache(page, ports, chat_event)",
         "_append_post_stream_ui(",
-        "_append_conversation_name_update(page, ports, chat_event)",
+        "_append_conversation_name_update(tail, ports, chat_event)",
     ]
     positions = [submit_chain.index(token) for token in ordered_tokens]
     assert positions == sorted(positions)
 
     helper_tokens = [
-        "fn=page.chat_fn",
+        "fn=with_completion_context(page.chat_fn)",
         "fn=page.page_preview.cache_page_outputs",
         "outputs=ports.clear_selection.gradio_outputs",
         "js=pdfview_js",
         "js=scroll_answer_panel_js",
-        "fn=page.check_and_suggest_name_conv",
+        "suggest_name=page.check_and_suggest_name_conv",
         "page.chat_control.rename_conv",
     ]
     for token in helper_tokens:
         assert token in message_events
-    assert "fn=page.persist_data_source" in message_events
+    assert "persist_data_source=page.persist_data_source" in message_events

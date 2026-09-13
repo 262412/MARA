@@ -533,6 +533,7 @@ class ChatPage(BasePage):
         self._request_info_html = gr.State(value="")
         self._request_answer_html = gr.State(value="")
         self._request_chat_history = gr.State(value=[])
+        self._request_completion = gr.State(value=None)
 
     def on_building_ui(self):
         render_chat_workbench_layout(

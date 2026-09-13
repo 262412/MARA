@@ -69,20 +69,31 @@ def _check_chain(blocks, page, chain, *, demo):
         )
         assert dependency["trigger_only_on_success"] is expected_success[position]
         assert dependency["show_progress"] == expected_progress[position]
-        assert dependency["queue"] is (position != 5)
+        assert dependency["queue"] is True
         assert dependency["batch"] is False
         assert dependency["cancels"] == []
         assert dependency["trigger_mode"] == "once"
         fn = blocks.fns[dependency["id"]]
         assert fn.concurrency_limit == (20 if position in (0, 1, 8) else "default")
         if callback is not None:
-            assert fn.fn == callback
+            if position == 1:
+                assert fn.fn.__wrapped__ == callback
+            elif position in (6, 7, 8):
+                attribute = {
+                    6: "suggest_name",
+                    7: "rename_conversation",
+                    8: "persist_data_source",
+                }[position]
+                assert getattr(fn.fn.__self__, attribute) == callback
+            else:
+                assert fn.fn == callback
         assert dependency["js"] == {4: pdfview_js, 5: scroll_answer_panel_js}.get(
             position
         )
     assert blocks.fns[chain[3]["id"]].fn() == ""
     assert blocks.fns[chain[4]["id"]].fn() is True
-    assert blocks.fns[chain[5]["id"]].fn is None
+    # Gradio 4.39 needs a backend completion event to trigger the naming tail.
+    assert blocks.fns[chain[5]["id"]].fn() is None
     assert chain[7]["outputs"][0] == chain[7]["outputs"][1]
     assert chain[1]["types"]["generator"] is True
 
