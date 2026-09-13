@@ -267,9 +267,10 @@ async function authenticatedIndexing() {
 (async () => {
   browser = await chromium.launch({headless: true, ...(process.env.MARA_BROWSER_CHANNEL ? {channel: process.env.MARA_BROWSER_CHANNEL} : {})});
   const selected = process.env.MARA_BROWSER_SCENARIOS?.split(',');
-  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing];
+  const operations = require('./conversation_actions.cjs')({expect, login, evidence, send, tailFinished, results, output, base, assertFinalizerAndWebWrites});
+  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
-  for (const scenario of scenarios.filter(fn => !selected || selected.includes(fn.name))) {
+  for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : fn.name !== 'publicConversationPermissions')) {
     try { await scenario(); }
     catch (error) { results.scenarios.push({name: scenario.name, failure: String(error)}); }
   }

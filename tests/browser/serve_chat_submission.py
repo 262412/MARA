@@ -6,6 +6,7 @@ import os
 import sys
 import threading
 import time
+from importlib import import_module
 from pathlib import Path
 
 from pytest_runtime_isolation import start_process_test_runtime
@@ -47,8 +48,12 @@ def _launch(app, blocks, root, output):
     from ktem_tests.chat_submission_app_fixture import seed_owned_document
     from theflow.settings import settings
 
+    model_boundary = import_module("libs.ktem.ktem_tests.chat_submission_model_fixture")
+
     assert gradio.__version__ == "4.39.0"
     seed_owned_document(app, root)
+    if os.environ.get("MARA_BROWSER_PUBLIC_FIXTURE") == "1":
+        _seed_public_conversations()
     page = app.chat_page
     trace, writes = _observe(page)
     dependencies = blocks.config["dependencies"]
@@ -92,6 +97,18 @@ def _launch(app, blocks, root, output):
     def evidence():
         return _read_evidence(blocks, page, trace, writes)
 
+    @blocks.app.get("/owned-model-gate")
+    def model_gate():
+        return {
+            "started": model_boundary.held_started.is_set(),
+            "released": model_boundary.held_release.is_set(),
+        }
+
+    @blocks.app.post("/owned-model-gate/release")
+    def release_model():
+        model_boundary.held_release.set()
+        return {"released": True}
+
     (output / "ready.json").write_text(
         json.dumps({"roles": roles, "gradio": gradio.__version__, "root": str(root)}),
         encoding="utf-8",
@@ -113,6 +130,10 @@ def _observe(page):
         page.page_preview.cache_page_outputs,
         page.check_and_suggest_name_conv,
         page.chat_control.rename_conv,
+        page.chat_control.new_conv,
+        page.chat_control.delete_conv,
+        page.chat_control.select_conv,
+        page.chat_control.load_chat_history,
         page.persist_data_source,
         page.first_indexing_file_fn,
         page.first_indexing_url_fn,
@@ -223,14 +244,15 @@ def _indexing_boundaries(patch):
     from kotaemon.loaders.web_loader import WebReader
 
     with Session(engine) as session:
-        session.add(
-            User(
-                username="browser-other",
-                username_lower="browser-other",
-                password=hash_password("OwnedFixture7!"),
-                admin=False,
+        for username in ("browser-other", "browser-controls"):
+            session.add(
+                User(
+                    username=username,
+                    username_lower=username,
+                    password=hash_password("OwnedFixture7!"),
+                    admin=False,
+                )
             )
-        )
         session.commit()
 
     def fetch_owned_url(self, url):
@@ -238,6 +260,31 @@ def _indexing_boundaries(patch):
         return "The owned web document describes an observatory with seven telescopes."
 
     patch.setattr(WebReader, "fetch_url", fetch_owned_url)
+
+
+def _seed_public_conversations():
+    """Pre-existing public/private records for the isolated permissions scenario."""
+    from ktem.db.models import Conversation, User, engine
+    from sqlmodel import Session, select
+
+    with Session(engine) as session:
+        owner = session.exec(select(User).where(User.username == "browser-owner")).one()
+        for public in (True, False):
+            row = Conversation(
+                user=owner.id,
+                name="Owned public control" if public else "Owned private control",
+                is_public=public,
+            )
+            row.data_source = {
+                "messages": [["PUBLIC FIXTURE", "Owned persisted public answer."]],
+                "retrieval_messages": ["Owned public reference"],
+                "plot_history": [None],
+                "origin": "web",
+                "state": {},
+                "selected": {"1": ["select", ["owned-observatory"], owner.id]},
+            }
+            session.add(row)
+        session.commit()
 
 
 if __name__ == "__main__":

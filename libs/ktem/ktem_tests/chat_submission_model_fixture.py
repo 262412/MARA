@@ -1,10 +1,14 @@
 """Deterministic model boundaries for the real submission browser fixture."""
 
 import time
+from threading import Event
 
 from kotaemon.base import DocumentWithEmbedding, LLMInterface
 from kotaemon.embeddings.base import BaseEmbeddings
 from kotaemon.llms import ChatLLM
+
+held_started = Event()
+held_release = Event()
 
 
 class SubmissionChatModel(ChatLLM):
@@ -23,6 +27,10 @@ class SubmissionChatModel(ChatLLM):
             raise ValueError("Owned model stream failure")
         if "SLOW_STREAM" in prompt:
             time.sleep(4)
+        if "HELD_STREAM" in prompt:
+            held_started.set()
+            if not held_release.wait(45):
+                raise TimeoutError("Owned browser did not release the model boundary")
         yield LLMInterface(content="the observatory has seven telescopes.", logprobs=[])
 
 

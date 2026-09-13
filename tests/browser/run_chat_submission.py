@@ -82,6 +82,8 @@ def _record_source(repository, output):
     names = [
         "tests/browser/serve_chat_submission.py",
         "tests/browser/chat_submission.cjs",
+        "tests/browser/conversation_actions.cjs",
+        "libs/ktem/ktem_tests/chat_submission_model_fixture.py",
         "tests/browser/run_chat_submission.py",
     ]
     (output / "source.json").write_text(
@@ -96,6 +98,7 @@ def _record_source(repository, output):
                 },
                 "tribute_sha256": TRIBUTE_SHA256,
                 "scenarios": os.environ.get("MARA_BROWSER_SCENARIOS", "all"),
+                "public_fixture": os.environ.get("MARA_BROWSER_PUBLIC_FIXTURE") == "1",
             },
             indent=2,
         ),

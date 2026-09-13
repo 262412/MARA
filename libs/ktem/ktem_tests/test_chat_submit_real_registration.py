@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 from pytest_runtime_isolation import ActiveTestRuntime
 
@@ -112,6 +113,7 @@ def _check_real_registration(monkeypatch, root):
             if blocks.fns[dep["id"]].fn == page.submit_msg
         )
         _check_chain(blocks, page, dependencies[start : start + 9], demo=False)
+        _check_conversation_callbacks(blocks, page)
         before = len(blocks.fns)
         with blocks:
             bind_chat_submit_events(
@@ -122,6 +124,66 @@ def _check_real_registration(monkeypatch, root):
             )
         demo_chain = blocks.get_config_file()["dependencies"][before:]
         _check_chain(blocks, page, demo_chain, demo=True)
+
+
+def _check_conversation_callbacks(blocks, page):
+    import gradio as gr
+    from gradio.helpers import special_args
+
+    control = page.chat_control
+    dependencies = blocks.config["dependencies"]
+    request = gr.Request(username="browser-owner", session_hash="control-registration")
+    for component, event, callback, inputs in (
+        (control.btn_new, "click", control.new_conv, ["claimed"]),
+        (control.btn_del_conf, "click", control.delete_conv, ["id", "claimed"]),
+        (control.conversation, "select", control.select_conv, ["id", "claimed"]),
+        (
+            control.conversation_rn,
+            "submit",
+            control.rename_conv,
+            ["id", "name", True, "claimed"],
+        ),
+    ):
+        root = next(
+            dep for dep in dependencies if dep["targets"] == [(component._id, event)]
+        )
+        fn = blocks.fns[root["id"]]
+        assert getattr(fn.fn, "__wrapped__", fn.fn) == callback
+        component_inputs = cast(list, inputs)
+        injected, _, _ = special_args(fn.fn, list(component_inputs), request=request)
+        assert injected == [*component_inputs, request]
+        assert root["trigger_after"] is None
+        assert root["trigger_only_on_success"] is False
+        assert root["queue"] is True and root["batch"] is False
+        assert root["cancels"] == [] and root["trigger_mode"] == "once"
+        assert fn.concurrency_limit == "default"
+        if event == "select":
+            assert root["inputs"] == [control.conversation._id, page._app.user_id._id]
+            assert root["outputs"] == _ids(
+                [
+                    control.conversation_id,
+                    control.conversation,
+                    control.conversation_rn,
+                    page.chat_panel.chatbot,
+                    page.followup_questions,
+                    page.info_panel,
+                    page.state_plot_panel,
+                    page.state_retrieval_history,
+                    page.state_plot_history,
+                    control.cb_is_public,
+                    page.state_chat,
+                    *page._indices_input,
+                    page._page_outputs_cache,
+                ]
+            )
+        elif event == "submit":
+            assert root["outputs"] == _ids(
+                [control.conversation, control.conversation, control.conversation_rn]
+            )
+        else:
+            assert root["outputs"] == _ids(
+                [control.conversation_id, control.conversation]
+            )
 
 
 def test_real_registration_preserves_failure_edges_and_demo_difference():
