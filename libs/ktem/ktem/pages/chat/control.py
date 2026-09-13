@@ -13,6 +13,11 @@ from theflow.settings import settings as flowsettings
 
 from .chat_suggestion import ChatSuggestion
 from .common import STATE
+from .conversation_actions import (
+    empty_conversation_outputs,
+    selected_conversation_outputs,
+    selector_outputs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,26 +49,9 @@ def is_conv_name_valid(name):
 
 def _empty_conversation_state(app):
     default_chat_suggestions = [[each] for each in ChatSuggestion.CHAT_SAMPLES]
-    indices = []
-    for index in app.index_manager.indices:
-        if index.selector is None:
-            continue
-        if isinstance(index.selector, int):
-            indices.append(index.default_selector)
-        if isinstance(index.selector, tuple):
-            indices.extend(index.default_selector)
+    indices = selector_outputs(app.index_manager.indices)
     return (
-        "",
-        "",
-        "",
-        [],
-        default_chat_suggestions,
-        "",
-        None,
-        [],
-        [],
-        False,
-        STATE,
+        *empty_conversation_outputs(default_chat_suggestions, STATE),
         *indices,
     )
 
@@ -296,61 +284,17 @@ class ConversationControl(BasePage):
                     "Conversation is outside the authenticated user scope: "
                     f"conversation_id={conversation_id}"
                 )
-            id_ = session_info.conversation_id
-            name = session_info.name
-            is_conv_public = session_info.is_public
-            selected = (
-                session_info.selected_mapping if user_id == session_info.user_id else {}
+            outputs, selected = selected_conversation_outputs(
+                session_info, user_id, default_chat_suggestions
             )
-            chats = session_info.data_source.get("messages", [])
-            chat_suggestions = session_info.data_source.get(
-                "chat_suggestions", default_chat_suggestions
-            )
-            retrieval_history = session_info.retrieval_messages
-            plot_history = session_info.plot_history
-            info_panel = (
-                retrieval_history[-1]
-                if retrieval_history
-                else "<h5><b>No evidence found.</b></h5>"
-            )
-            plot_data = plot_history[-1] if plot_history else None
-            state = session_info.state
         except Exception as exc:
             logger.warning("Conversation selection failed: %s", exc)
-            id_ = ""
-            name = ""
             selected = {}
-            chats = []
-            chat_suggestions = default_chat_suggestions
-            retrieval_history = []
-            plot_history = []
-            info_panel = ""
-            plot_data = None
-            state = STATE
-            is_conv_public = False
+            outputs = empty_conversation_outputs(default_chat_suggestions, STATE)
 
-        indices = []
-        for index in self._app.index_manager.indices:
-            # assume that the index has selector
-            if index.selector is None:
-                continue
-            if isinstance(index.selector, int):
-                indices.append(selected.get(str(index.id), index.default_selector))
-            if isinstance(index.selector, tuple):
-                indices.extend(selected.get(str(index.id), index.default_selector))
-
+        indices = selector_outputs(self._app.index_manager.indices, selected)
         return (
-            id_,
-            id_,
-            name,
-            chats,
-            chat_suggestions,
-            info_panel,
-            plot_data,
-            retrieval_history,
-            plot_history,
-            is_conv_public,
-            state,
+            *outputs,
             *indices,
         )
 
