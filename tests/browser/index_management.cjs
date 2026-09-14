@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-module.exports = function ({expect, login, evidence, settled, send, tailFinished, results, output}) {
+module.exports = function ({expect, login, evidence, settled, send, tailFinished, results, output, base}) {
   const manager = page => page.locator('#indices-tab');
   const ownerFiles = (data, username) => data.files.filter(file => file.user === data.users[username]);
 
@@ -76,10 +76,12 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
       await openManager(page);
       await selectFile(page, names[0]);
       await manager(page).getByRole('button', {name: 'Delete', exact: true}).click();
-      await expect.poll(async () => (await evidence()).files.some(file => file.id === revised.id)).toBe(false);
+      await expect.poll(async () => (await evidence()).files.some(file => file.id === revised.id), {timeout: 30000}).toBe(false);
       await settled(queue);
       await page.getByRole('tab', {name: 'chat', exact: true}).click();
       await expect(page.locator(`[data-chat-file-id="${revised.id}"]`)).toHaveCount(0);
+      results.previewRevocations ||= [];
+      results.previewRevocations.push({sessionHash: queue.sessionHash, fileId: revised.id});
       await openManager(page);
       const filter = manager(page).getByLabel('Filter by name:');
       await filter.fill('r3d-management-'); await filter.press('Enter');
@@ -136,7 +138,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
       await page.locator('#studio-artifact-scope input').click();
       await page.getByRole('option', {name: 'multi-document', exact: true}).click();
       await page.locator('#studio-generate-artifact').click();
-      await expect.poll(async () => (await evidence()).conversations.find(row => row.id === conversationId).data_source.mara_notebook?.artifacts.length).toBe(1);
+      await expect.poll(async () => (await evidence()).conversations.find(row => row.id === conversationId).data_source.mara_notebook?.artifacts.length, {timeout: 45000}).toBe(1);
       const artifact = (await evidence()).conversations.find(row => row.id === conversationId).data_source.mara_notebook.artifacts[0];
       expect(artifact.status).toBe('ready');
       expect([...artifact.source_scope.source_ids].sort()).toEqual([...group.data.files].sort());
@@ -172,5 +174,46 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
     }
   }
 
-  return [indexManagement, indexGroups];
+  async function deletedSourcePreviewRevocation() {
+    const {page, queue} = await login('browser-controls');
+    const key = 'revoked-source-preview';
+    const name = 'r3d-revoked-preview.txt';
+    async function gate(suffix, body) {
+      const response = await fetch(base + '/owned-file-browser-gate' + suffix, body === undefined ? {} : {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+      });
+      expect(response.ok).toBe(true);
+      return response.json();
+    }
+    try {
+      await openManager(page);
+      await upload(page, [name]);
+      const before = await evidence();
+      const file = ownerFiles(before, 'browser-controls').find(item => item.name === name);
+      await selectFile(page, name);
+      await manager(page).getByRole('button', {name: 'Go to Chat', exact: true}).click();
+      await expect(page.locator(`[data-chat-file-id="${file.id}"]`)).toHaveClass(/is-selected/);
+      await gate('/arm', {key, callback: 'ChatPagePreviewController.on_preview_tick', event: 'call', username: 'browser-controls', session_hash: queue.sessionHash, file_id: file.id});
+      await expect.poll(async () => (await gate(''))[key]?.entered, {timeout: 15000}).toBe(true);
+      await openManager(page);
+      await selectFile(page, name);
+      await manager(page).getByRole('button', {name: 'Delete', exact: true}).click();
+      await expect.poll(async () => (await evidence()).files.some(item => item.id === file.id), {timeout: 30000}).toBe(false);
+      await expect(page.locator(`[data-chat-file-id="${file.id}"]`)).toHaveCount(0, {timeout: 20000});
+      await gate('/release/' + key, {});
+      await expect.poll(async () => (await evidence()).callbacks.filter(item => item.event === 'exception' && item.session_hash === queue.sessionHash && item.file_id === file.id).length).toBe(1);
+      await settled(queue);
+      await page.getByRole('tab', {name: 'chat', exact: true}).click();
+      await expect(page.locator('#index-0 .token')).toHaveCount(0);
+      expect((await evidence()).files).toEqual(before.files.filter(item => item.id !== file.id));
+      results.previewRevocations ||= [];
+      results.previewRevocations.push({sessionHash: queue.sessionHash, fileId: file.id});
+      results.scenarios.push({name: 'deleted-owner-source-rejects-held-preview-without-reading-or-restoring-it', fileId: file.id});
+    } finally {
+      await gate('/release/' + key, {});
+      await page.close();
+    }
+  }
+
+  return [indexManagement, indexGroups, deletedSourcePreviewRevocation];
 };

@@ -278,6 +278,35 @@ def test_preview_timer_rejects_victim_id_before_extension_short_circuit(
     assert calls == []
 
 
+def test_preview_timer_rejects_revoked_owned_source_before_conversion(
+    monkeypatch, owned_preview_app
+):
+    from ktem.preview.errors import PreviewAccessError
+
+    controller, request, calls, storage = _managed_preview_controller(
+        monkeypatch, owned_preview_app
+    )
+    app, db_engine, _ = owned_preview_app
+    source = app.index_manager.indices[0]._resources["Source"]
+    with Session(db_engine) as session:
+        session.delete(session.get(source, "attacker-file"))
+        session.commit()
+
+    with pytest.raises(PreviewAccessError, match="source_unavailable"):
+        controller.on_preview_tick(
+            "attacker-file",
+            "attacker.docx",
+            str(storage / "attacker-doc"),
+            1,
+            1,
+            "old-preview",
+            "old-notice",
+            request=cast(Any, request),
+        )
+    assert calls == []
+    assert (storage / "attacker-doc").read_text() == "attacker"
+
+
 def test_preview_callbacks_receive_exact_injected_gradio_request(owned_preview_app):
     from ktem.pages.chat.page_preview import ChatPagePreviewController
 

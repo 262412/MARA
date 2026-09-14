@@ -318,7 +318,7 @@ async function authenticatedIndexing() {
   const operations = require('./conversation_actions.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});
   const fileBrowser = require('./file_browser_navigation.cjs')({expect, login, evidence, settled, send, selectSource, tailFinished, results, output});
   const refreshRaces = require('./file_browser_concurrency.cjs')({expect, login, evidence, settled, send, tailFinished, results, base});
-  const indexManagement = require('./index_management.cjs')({expect, login, evidence, settled, send, tailFinished, results, output});
+  const indexManagement = require('./index_management.cjs')({expect, login, evidence, settled, send, tailFinished, results, output, base});
   const studio = require('./studio_workflows.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});
   const studioPermissions = require('./studio_permissions.cjs')({expect, login, evidence, settled, roles, results});
   const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions];
@@ -329,7 +329,18 @@ async function authenticatedIndexing() {
     catch (error) { results.scenarios.push({name: scenario.name, failure: error.stack}); console.log('Failed browser scenario:', scenario.name, error.stack); }
   }
   results.evidence = await evidence();
-  expect(results.evidence.callbacks.filter(item => item.preview_failed), 'unexpected preview callback failures').toEqual([]);
+  for (const failure of results.evidence.callbacks.filter(item => item.preview_failed)) {
+    // Deleting an owned source revokes an already queued timer request too.
+    // Require that precise authorization failure; all other preview errors fail.
+    expect(failure.callback).toBe('ChatPagePreviewController.on_preview_tick');
+    expect((results.previewRevocations || []).some(item => item.sessionHash === failure.session_hash && item.fileId === failure.file_id)).toBe(true);
+    const errors = results.evidence.callbacks.filter(item => item.event === 'exception' && item.session_hash === failure.session_hash && item.file_id === failure.file_id);
+    expect(errors.length).toBeGreaterThan(0);
+    for (const error of errors) {
+      expect(error.error_type).toBe('PreviewAccessError');
+      expect(error.error).toContain('[source_unavailable]');
+    }
+  }
   expect(results.errors).toEqual([]);
   if (results.scenarios.some(item => item.failure)) process.exitCode = 1;
 })().catch(error => { results.errors.push(String(error)); process.exitCode = 1; })

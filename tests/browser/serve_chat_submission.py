@@ -31,6 +31,8 @@ def serve(output):
     finally:
         threading.setprofile(None)
         sys.setprofile(None)
+        threading.settrace(None)  # type: ignore[arg-type]  # Python 3.10 stub
+        sys.settrace(None)
         runtime.close()
         (output / "cleanup.json").write_text(
             json.dumps(
@@ -301,7 +303,33 @@ def _observe(page, barriers):
 
     threading.setprofile(observe)
     sys.setprofile(observe)
+    _observe_preview_exceptions(page.page_preview.on_preview_tick, trace)
     return trace, writes
+
+
+def _observe_preview_exceptions(callback, trace):
+    def observe(frame, event, arg):
+        if frame.f_code is not callback.__func__.__code__:
+            return None
+        frame.f_trace_lines = False
+        if event == "exception":
+            values = frame.f_locals
+            request = values.get("request")
+            trace.append(
+                {
+                    "callback": callback.__qualname__,
+                    "event": event,
+                    "session_hash": getattr(request, "session_hash", None),
+                    "file_id": values.get("file_id"),
+                    "error_type": arg[0].__name__,
+                    "error": str(arg[1]),
+                    "preview_failed": False,
+                }
+            )
+        return observe
+
+    threading.settrace(observe)
+    sys.settrace(observe)
 
 
 def _read_evidence(blocks, page, trace, writes):
