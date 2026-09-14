@@ -1,274 +1,409 @@
 # MARA refactor status — 2026-09-14
 
-## Current round: R3-C file library and page navigation presentation
+## Current round: R3-D Web closeout
 
-**R3-B: ACCEPTED**, following the user's independent review of source
-`8d0f78d14775b3dcbd013da18969d856397a1859`. Accepted R1/R2/R3-A and F1–F4
-remain accepted. This round stops at R3-C; the remaining R3 scope below requires
-a separate decision after independent review.
+**R3-C: ACCEPTED**, following the user's independent review of
+`0e90c86c0eb57136955aba2851f1c52328e45c42`. Accepted R1/R2/R3-A,
+F1–F4 and R3-B remain accepted. Review base:
+`29e489bf4b8ea668f06ab2348299fa2ae24256fd`; fixed original Dev:
+`adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+The [accepted R3-C report](https://github.com/262412/MARA/blob/29e489bf4b8ea668f06ab2348299fa2ae24256fd/docs/development/refactor-status.md)
+retains the earlier characterization, browser, coverage and security evidence.
 
-**R3-C 限定验证通过，等待独立审查。**
+**D1/D2/D3 限定功能验证通过；R3-D Web 功能范围收口，等待独立收口审查。**
+**Overall stable-source CI: FAILURE. S1/PCRE2 remain open;
+merge/release remains NO-GO.** The additional Gitleaks checksum false positive
+is separately evidenced below and remains a failing required check. Neither
+security nor desktop binary packaging is claimed as accepted.
 
-**Overall new-source CI: FAILURE. S1/PCRE2 remain open;
-merge/release remains NO-GO.** Local full-suite failures remain separately
-recorded below and are not converted into passes.
+Final source/test SHA: **`b553444086b0d4c060a36a9cf07d3bbde94d2904`**.
+Production last changed at `dd4e3077d9a2ec7431aab10c19594f94092a0608`.
+The last four commits change tests/observers only. The last two only repair
+sequential file-table observation and barrier cleanup; production, Python tests
+and build inputs equal `04a5f179` (`stable-source-equivalence.json`). The final
+complete browser matrix and stable CI run use `b5534440`; local full Python
+suites/builds use those identical inputs at `04a5f179`. Ordinary source push and
+remote readback verify `b5534440` (`stable-source-push.json`). The later report-only
+commit's actual report/local/remote SHAs and source equivalence are recorded in
+`r3d-report-commit.json` and `r3d-final-state.json`.
 
-Review base: `742c3e0b5a654a37126c2ef6d2bb9344f5e05d1e`.
-Fixed original Dev: `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
-The [accepted R3-B report](https://github.com/262412/MARA/blob/742c3e0b5a654a37126c2ef6d2bb9344f5e05d1e/docs/development/refactor-status.md)
-retains its original characterization, deletion fix, browser and security evidence.
+| Ordered, reviewable change                                         | Commit                                     |
+| ------------------------------------------------------------------ | ------------------------------------------ |
+| D1: failing overlap tests on the old implementation                | `fb18465e1e342aa35a6a51a6ff16a8a7715603fc` |
+| D1: retain browser intent across initialization/index refresh      | `4b8215c3a84645cccdd588bbd725d0c87d62e262` |
+| D1: retain legacy event-spy adapters                               | `b807166fd7eb5d8fc4f8891b953a736878d3e80f` |
+| D2: move unchanged callbacks to owned resources                    | `b049112817ecd254a2cfe61cee1ccde99795d18f` |
+| D3 fix: resolve the actual indexed note result                     | `5ffcb584cd245b144a53f97cc48a5bf29c166266` |
+| D3 fix: retain authorized groups and expand displayed members      | `29cc3d820b438a2aab04c1e7569831243afb1a6b` |
+| D3 fix: reject late Studio presentation results                    | `f74f7f646b7f984574ad2948993e57462a1771bb` |
+| D3 fix: restore authorized artifact cards                          | `e846bf458ad4fce51d9e4d6efd042af9e4c638d5` |
+| D3 fix: consume the real selector mapping                          | `e1e98eb7c8c37c9f7cff939bfd176e68e063f90e` |
+| D3 fix: retain actual chat history when generating a Mind Map      | `dd4e3077d9a2ec7431aab10c19594f94092a0608` |
+| D3: complete App browser regressions                               | `852fbb42d389a5927b6a87f34897e088041ce0ef` |
+| D3: precise preview-revocation observer and public artifact test   | `04a5f179a6278ec6af1a0bb2d3912a66e85b6d5a` |
+| D3: observe the refreshed source ID after reindex                  | `1275486ec1ff5c0c00728d0bfdf5e060ddfdac67` |
+| D3: wait for filtered rows and retain the original barrier failure | `b553444086b0d4c060a36a9cf07d3bbde94d2904` |
 
-| Reviewable change                                                                 | Commit                                     |
-| --------------------------------------------------------------------------------- | ------------------------------------------ |
-| Fixed original HTML/DOM and IO expectations before production changes             | `dac2782c02967de16222f60f9e41bc954472d045` |
-| Separate fix: encode file names in the Focus Markdown component                   | `25d72ee849db034e0cdf5998df224ed03a9bdf16` |
-| Real App file-library, navigation and source-switch browser tests                 | `795ba4d3cf4daabcbd090414339c6588b8f9b2ba` |
-| Extract file and page presentation, retaining old page entries                    | `e9f754128028d58f7063e30190283cb399ac6eba` |
-| Browser observer: retain evidence when a closing page interrupts response reading | `0e90c86c0eb57136955aba2851f1c52328e45c42` |
+### D1: initialization and refresh ordering
 
-Final source/test SHA: **`0e90c86c0eb57136955aba2851f1c52328e45c42`**.
-The production bytes equal `e9f75412`; the last commit changes only the browser
-harness (`harness-source-equivalence.json`). The ordinary source push and remote
-readback both verify `0e90c86c` (`source-push.json`). Final browser, full local
-suites, build and CI all use this source. The later report-only commit records
-its actual report/local/remote SHAs in `r3c-report-commit.json` and
-`r3c-final-state.json`; those trees must remain source-equivalent.
+The former remaining-scope startup overlap was reproduced before fixing it.
+Controlled callback/delivery barriers showed an old initialization result
+replacing a newer filter, reverse filter deliveries showing the wrong file type,
+late selector initialization clearing a selection, old conversation refresh
+restoring the wrong Focus, and late upload/card results replacing a newer source
+choice. Evidence includes `d1-initial-baseline`,
+`d1-filter-context-baseline-observed`, `d1-expanded-old-source`,
+`d1-quick-upload-intent-red` and `d1-successive-source-observed`.
+The A→B→A baseline already passed; it is retained as a regression, not claimed
+as a reproduced defect.
 
-### Responsibility boundary and fixed behavior
+`file_browser_updates.py` is a narrow Web result adapter. The existing authorized
+callbacks still perform each query/index operation once with the real request.
+`file_browser_refresh.js` owns per-document mount epochs, filter/view intent,
+catalog changes, request issuance and upload intent. Final client application
+checks the captured context against the current conversation/selection/filter;
+late results cannot overwrite a later applied request or a newer user intent.
+Filtering still changes presentation only. Upload and deletion effects run to
+completion; only stale presentation/reset outputs are suppressed.
 
-No equivalent file-library/page-card renderer existed. The new
-`pages/chat/file_browser_rendering.py` owns file-type/size/page labels, grouping
-and card HTML, capacity summary HTML, page headers, text/image card HTML,
-thumbnail containers and metadata HTML. Its only imports are `html`, `os` and
-`re`; `os` is used for lexical suffix splitting. It receives ordinary data and
-does not receive a page/app/runtime, query a database, read files, generate
-previews or call models. It adds no cache, prefetching or DI framework.
+All file-library refresh registrations use that result boundary: initial
+selector loads/sign-in subscriptions, filters, source choices/tags, conversation
+changes, chat-tab selection, selector vocabulary changes, quick/full uploads and
+index notifications. The old refresh/select methods and their four/three output
+contracts remain. The previously unused `chat_file_rows` presentation output is
+now hidden JSON so the browser can apply the four-result bundle together.
+Old patchable callbacks are consumed by the adapters. Gradio 4.39's server-side
+selector vocabulary is copied into its per-session component configuration;
+a small selector-local lock covers only copy/assignment, never IO. No global
+request, whole-site lock, retry loop or new generic state/DI framework is added.
 
-Nine old formatter/rendering methods remain as delegates or narrow IO adapters,
-including the two original staticmethods. Header stat calls, storage-capacity
-lookup, text extraction/pagination, thumbnail lookup/fallback, authorization
-and language-setting reads stay in `ChatPage`, in their original order. Existing
-upper-level render/preview patch consumers remain on those old entries; the
-private formatter entrypoints delegate to the single formatting implementation.
-The actual production diff is only `pages/chat/__init__.py` and the new renderer.
-AST comparison verifies all old signatures/decorators and the other **55 methods**
-unchanged (`source-scope-final.json`).
+The final 11 controlled-race scenarios cover initialization/filter overlap,
+in-flight filtering, reverse delivery, A→B→A, selector initialization/selection,
+conversation switching, file and URL uploads followed by a newer source choice,
+delete notification/old refresh, successive cards, two same-user browsers and
+a second authenticated user. They start the initialization races while the
+original requests are held; no startup prewarming or repeat clicks are used.
+The D1 focused set passed 27 Python contracts and 12 Node cases before D2;
+legacy adapter regressions add 17 passes. Final complete suites include them.
 
-`rendering-contract-baseline-final.log` records **85 passes against the old
-production implementation**, before the extraction or Focus fix. Seventeen
-complete HTML strings were captured from `742c3e0b` and committed as fixed
-expectations; they were not regenerated from the new renderer. They cover group
-and input order, selected IDs, Unicode/HTML names and attributes, empty/missing
-records, file-type fallbacks, unit boundaries including original negative/NaN/
-infinity behavior, metadata and page numbers, excerpts, literal regex searches,
-entity highlighting, image hits and fallback cards.
+### D2: callback ownership and packaged loading
 
-IO tests fix call timing, counts and early failures: zero storage avoids disk
-lookup; malformed counts fail at the original point; file stat precedes header
-page-count conversion; metadata existence checks precede language reads; text
-extraction still paginates at 1200 characters and clips to 260; filtered text
-pages are deliberately read again during rendering. Source rows and selected
-inputs retain their references and mutation behavior. No pagination/highlight
-algorithm was changed. `data-chat-file-id`, `data-page-number`, CSS classes and
-existing copy remain fixed. Attribute encoding supplies no source/URI permission.
+Eight effective callback strings were frozen before extraction and retain exact
+UTF-8 content, leading newlines and Gradio function-expression form. Old Python
+names/patch entries still resolve them at module import, before the same event
+registration/invocation positions. Index-manager focus aliases share the same
+resource. No JS behavior, DOM token, iframe/CSP policy, authorization, CDN or
+framework version was changed by the migration.
 
-The post-extraction renderer, IO, compatibility and actual page-consumer set
-passes **115 tests** (`extraction-direct-consumers.log`). Direct renderer calls
-match all 17 old snapshots while file open/stat, disk lookup and socket connect
-are denied, without constructing a page or runtime. Parent packages are imported
-normally; this is a rendering-effects test, not a claim that the existing chat
-parent package has a lightweight cold import. Existing R1/R2 cold-import contracts
-remain in the complete regression suite; parent bootstrap is unchanged.
+| Old callback name                | Unique resource under `ktem/assets/js/` | Actual caller/load position                                             |
+| -------------------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
+| `chat_input_focus_js`            | `chat_input_focus.js`                   | Conversation/auxiliary events, App creation; index-upload focus aliases |
+| `quick_urls_submit_js`           | `quick_urls_submit.js`                  | Auxiliary URL input callback                                            |
+| `recommended_papers_js`          | `recommended_papers.js`                 | Recommended-paper preview event                                         |
+| `clear_bot_message_selection_js` | `clear_bot_message_selection.js`        | Conversation selection tail                                             |
+| `pdfview_js`                     | `pdfview.js`                            | Message, conversation, preview and auxiliary event chains               |
+| `fetch_api_key_js`               | `fetch_api_key.js`                      | Existing demo App-load callback                                         |
+| `scroll_answer_panel_js`         | `scroll_answer_panel.js`                | Message completion scroll node                                          |
+| `preview_drag_pan_js`            | `preview_drag_pan.js`                   | Compatibility export; no active registered caller                       |
 
-### Separate Focus fix and browser evidence
+`resource-ownership-final.json` binds the original names, exact string hashes,
+callers and wheel/sdist members. BaseApp loads `safe_dom.js`,
+`knowledge_graph_viewer.js`, D1's `file_browser_refresh.js`, then `main.js`.
+Existing CSS/head/PDF resources retain their owners and timing. Index-specific
+CAPTURE/APPLY strings remain small delegation glue in the Web adapter;
+DOM-dependent local drag styles remain in their original callback. No second
+runtime implementation is created.
 
-The old Focus component interpreted HTML in an authorized display name as markup.
-`focus-encoding-red.log` has two failing fixed expectations (visible row and
-authorized fallback); `browser-focus-red/results.json` records a real unintended
-same-origin `/r3c-exfil` image request and missing literal name text. Gradio removed
-the test `onerror` attribute; no JavaScript execution or data exfiltration is
-claimed. The separate one-line `html.escape(str(selected_name))` fix keeps the
-name literal. `focus-encoding-green.log` has **87 passes**. The final two-user
-browser results show the exact names, no injected element/global and no such
-request. The structural commit contains no further behavior fix.
+Before migration: two Python string/real-registration tests and seven Node
+callback behavior cases passed. Final Node runs pass **42/42**, covering effective
+focus/error handling, URL key events, delayed recommended-paper/scroll actions,
+storage, PDF/frame and drag/touch contracts, D1 ordering and existing security/
+graph/desktop configuration contracts. Python loader coverage is not used as a
+substitute for JS behavior. Actual local wheels/sdists and outside-repository
+clean-wheel loads pass with **no PYTHONPATH**, real installed ChatPage imports,
+resource-prefix checks and network denial (`source-clean-wheel.log`).
 
-The added browser cases were exercised before extraction. Initial probe failures
-also identified test assumptions that were corrected against actual behavior:
-text preview uses sandboxed `srcdoc`; a 200-character indexed fixture had one
-page; PNG main preview presents indexed text while the card uses its indexed
-thumbnail; PDF.js inserts bidi marks in the visible search counter. A probe that
-typed a filter before initial file/preview work completed overlapped the existing
-startup refresh. The final filter scenario begins after one natural card selection
-and preview completion; filtering while login initialization is still active is
-not claimed as accepted, and production initialization timing was not changed.
+### D3: real index, graph and Studio seams
 
-The first combined run (`source-browser-full.log`) was interrupted by an async
-harness observer reading a queue response after its page had closed. The separate
-test-only fix records that exact error only when the page is closed; other errors
-remain failures. The complete final rerun has no ignored observer closures and
-no unexpected JavaScript or preview callback errors.
+Each product correction has a failing unit/browser expectation before its own
+fix commit; no defect fix is hidden in the D2 resource move:
 
-`source-browser-verified` and the separate `source-browser-public` run use the
-complete production App, fixed **Gradio 4.39.0**, fresh browser contexts and owned
-storage. All **13 scenarios** pass: the retained ten plus three added cases.
-`browser-verified.json` binds their source/harness hashes, actual callback traces,
-write pairs and cleanup. The real registration still has **361 functions** with
-identical names, targets, input/output lists, initial selector events and callback
-roles relative to R3-B (`event-registration-comparison.json`). Event module bytes
-and registration methods are unchanged; existing real-registration/event tests
-remain in the full suite.
+| Reproduced defect and red evidence                                                                                                                                | Minimal corrected boundary                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Note conversion expected `source_id`, but the real index result contains file metadata (`d3-note-source-red`)                                                     | Reuse authenticated `resolve_file_refs` for the server-materialized note basename when the old result-ID helper yields no IDs                                              |
+| Authorized group selection was removed on refresh; Focus showed raw group JSON (`d3-group-refresh-red`, `d3-group-cards-red`)                                     | Keep the same authorized group option and use the existing selection normalizer for displayed member IDs                                                                   |
+| A completed old Studio callback overwrote a newer view (`d3-studio-view-red`, `d3-studio-restore-late-red`)                                                       | Compare the existing generation-store ownership token around the real operation; retain its authorized side effect, skip stale component outputs                           |
+| Reload did not restore saved artifact cards (`d3-studio-restore-contract-red`)                                                                                    | Extend the existing restoration renderer using authenticated Notebook reads and the existing artifact renderer; retain the old renderer entry and before/after view checks |
+| Real mode/files/identity selector triples reached Mind Map as user IDs (`d3-studio-selector-red`, `d3-group-mindmap-red`)                                         | Pass the existing explicit selector mapping in the Web adapter; retain legacy direct-call shapes and reuse group normalization                                             |
+| Mind Map inserted an unpersisted synthetic chat turn; subsequent Runtime/Web reference histories diverged (`d3-artifact-history-red`, `d3-graph-send-disconnect`) | Keep artifact/trace/viewer outputs and Notebook persistence; return no-update for actual chat, retrieval and plot histories                                                |
 
-| Browser scope                             | Verified natural behavior                                                                                                                                            |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Retained two-turn conversation            | Stream, citations/cache, naming, Web tail writes, refresh and restored content                                                                                       |
-| Retained conversation isolation           | New empty conversation, same file/page in different conversations, navigation and refresh                                                                            |
-| Retained failure and ownership protection | Generation error, slow stream/new conversation, disconnect/cancel, held stream/delete without resurrection                                                           |
-| Retained upload and URL (two users)       | Actual browser upload and real index entrypoints, request identity, URL preview fallback and completion tail                                                         |
-| Retained conversation controls            | New/cancel delete, manual/auto naming, remaining/last deletion and restored answer                                                                                   |
-| Retained separate public fixture          | Public non-owner read succeeds; rename/delete are rejected; zero writes                                                                                              |
-| Added file browser (two users)            | Case/whitespace filtering, clear/no-match, actual card clicks, prev/next/direct page/page-card navigation, special names/text, thumbnail hit, private-file isolation |
-| Added PDF/source-switch case              | Actual PDF.js find/highlight/no-match/clear and slow-stream file switch without overwriting the new view                                                             |
+The complete App runs on Windows in Microsoft Edge with Gradio 4.39.0. It uses
+actual browser upload inputs, index services, request
+identity, SQL persistence and natural event tails. Only deterministic model/
+network boundaries are substituted. The final four fresh-runtime/browser batches
+pass **32 scenarios**, including all **13 retained R3-C scenarios** and the
+separate public fixture (`browser-verified.json`):
 
-Runtime/Web write pairs retain messages, retrieval/plot history, state, selected
-mapping, origin and graph IDs. The existing parallel Notebook initialization is
-recorded separately and remains unchanged. Slow conversation/file switches each
-retain one Runtime finalizer write for the original request; the Web tail enters
-but rejects the stale view and does not rename/write over it. The deleted held
-request still reaches the unchanged finalizer's `NoResultFound` and never
-recreates the row. No intermediate naming/persistence API is manually invoked.
-Model/CDN/network boundaries alone are deterministic. All twelve probe/final
-browser runtimes were removed; historical retained directories were not cleaned.
+| Verified browser scope                   | Actual exercised behavior                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Retained chat/conversation/preview flows | Two-turn stream, citations/cache, auto/manual naming, Runtime/Web write pairs, refresh, empty/same-file conversations, delete cancel/confirm/last item, late request/delete, URL/file upload with two users, error/disconnect, slow view/source switches, filter/cards/pages/PDF search/special characters and public read/write restrictions |
+| D1 races                                 | All 11 barrier-controlled intent/catalog/browser interleavings described above                                                                                                                                                                                                                                                                |
+| Real index manager                       | Browser upload, select/Close, force reindex with a new source ID, Go to Chat, single deletion, bulk confirmation cancel/confirm, notification refresh and other files retained                                                                                                                                                                |
+| Groups                                   | Create/select/update/Close/delete, Go to Chat with both members, grounded multi-document Mind Map and other-user invisibility; deleting a group retains its files                                                                                                                                                                             |
+| Revoked preview                          | Hold a real preview timer, delete its owned source through the manager, release it: exact `PreviewAccessError/source_unavailable`, cleared selector/card, no other file touched                                                                                                                                                               |
+| Studio notes/artifact/graph              | Manual/answer note save, citations, empty-save behavior, refresh/restore, note→indexed source, Mind Map picker Close, generate/save-as-note, actual Markdown export bytes/hash, graph-node question draft→send and aligned real conversation/reference history                                                                                |
+| Studio failure/lifecycle                 | Visible no-source failure with empty source IDs, held generation→new conversation, disconnect after real artifact save→fresh-browser restoration of exactly one artifact                                                                                                                                                                      |
+| Separate public fixture                  | Owner uploads and generates an actual artifact; non-owner can read saved notes/cards but save/convert/export/delete/generate attempts are rejected with no persisted mutation or export                                                                                                                                                       |
 
-`refresh_chat_file_list` remains four outputs; `refresh_page_context_view` and
-`select_chat_file` remain three each, preserving no-update versus clear semantics.
-PreviewAccess, real request identity, view revision, generation ownership,
-complete/page-message separation, passive change/active input, restore/completion
-guards and deletion answer recovery remain unchanged. SQL, schema, permissions,
-transactions and resource-deletion semantics are untouched.
+The product's single-file delete acts immediately; its Close button cancels
+selection, while bulk delete has a real confirmation/cancel pair. Studio's
+available cancel path is closing the generation picker; no in-progress artifact
+cancel button is invented. The actual artifact path accepted here is Mind Map,
+including export; other artifact types and router behavior are not certified by
+this fixture. Existing chat stream/disconnect cancellation protection is retained.
 
-### Local, packaged and CI verification
+Observer failures are kept distinct from product defects. A monolithic expanded
+run exceeded the original 600-second harness budget; it is retained as failed,
+then the entire matrix was run in bounded fresh batches. Hidden Dataframe
+measurement rows, queue timing and duplicate generated conversation names were
+corrected in the observer. In the first final batch at `04a5f179`, reindex left
+the same filename in Upload result before its refresh tail completed, so the
+observer selected an already replaced ID; the service correctly rejected it.
+`1275486e` waits for the new ID in the naturally rendered file table before a
+single click. This changes no product logic, permissions or retry behavior.
+The next run at `1275486e` also exposed a click on the old row index before a
+filter transition finished; Gradio rejected that mismatched index. Cleanup then
+masked the original error by releasing an uncreated barrier. `b5534440` asserts
+the single filtered row has rendered before the sequential click, and only
+releases an armed barrier. Those failed logs remain; this is not a claim to
+have redesigned Gradio's concurrent table-selection protocol.
 
-Full local affected suites: **3412 passed, 99 failed, 7 skipped, 41 warnings**
-(`source-full-affected-suites.log`). Exact failure-node comparison and unchanged
-failing-test bytes prove no new failure relative to R3-B; the previous 99-item
-classification and evidence hash remain in `local-failure-verification-final.json`.
-No skip or platform/security exception was added. All nine distinct local warning
-bodies match the previous run (`local-warning-comparison.json`). This local run
-remains a failure, not a full-suite pass.
+Preview errors are not globally ignored: the committed observer requires the
+exact deleted file/browser, timer callback, captured exception type and
+`source_unavailable` code. The controlled deletion case must produce that refusal;
+all other unexpected JS/preview failures fail the harness. An isolated database
+test also verifies rejection before payload reads while the physical file still
+exists (`test_preview_owner_scope.py`). Group Go-to-Chat can emit the existing
+Gradio vocabulary warning while its choices notification is pending; the final
+group token, member cards, exact artifact source IDs and private-user isolation
+are separately asserted. The warning is recorded independently of NLTK.
+The diagnostic audit also records queued index-selection reads refused after
+the same browser deletes that exact source; the real deletion/clear tail still
+completes. Their source IDs and completion order are checked separately from
+the controlled preview refusal. Existing non-admin `list_users` refusals and
+the six deliberately forbidden public-Studio writes are individually classified
+in `browser-diagnostics-verification.json`, not silently counted as successful
+callbacks or grouped under NLTK.
 
-Full ruff/hygiene, changed-file pre-commit, locked-constraint/container parity,
-supply-chain policy and fixed-Dev/round-base hygiene checks pass. Four actual
-wheels and four sdists build and pass Twine checks; clean-wheel installations and
-MARA/MARA-cli command/bootstrap checks pass. `local-build-verified.json` checks
-27 retained/touched source members against the actual local archives, including
-the new renderer. The working copy's preserved user assets are included in those
-local builds; CI builds use the committed source tree. The downloaded CI Python
-artifact independently verifies all eight distributions' hashes, provenance and
-SBOMs and 29 ktem source members against `0e90c86c`
-(`python-artifact-inspection.json`).
+### Preserved boundaries and verification
 
-[Quality gates run 34802034996](https://github.com/262412/MARA/actions/runs/34802034996) uses final source
-`0e90c86c0eb57136955aba2851f1c52328e45c42` and the fixed Dev comparison input.
-It completes with **7 FAILURE, 13 SUCCESS**; overall **FAILURE**. `quality-final.json` retains every job,
-step conclusion and actual log summary. All functional/static/build/collection/
-secret checks pass; the three Python audits, three image baseline checks and
-required summary gate fail for the retained security blockers. These are observed
-results from this run, not a fixed expected future failure count.
+All **65 old ChatPage signatures/decorators** remain. The renderer, runtime,
+session reads/mutations, Notebook/artifact service, source/group permissions,
+graph builder, preview runtime/service, generation store and message event
+module remain byte-identical to the round base. Selector identity/SQL call ASTs
+are unchanged (`retained-scope-verification.json`). No schema, transaction,
+deletion policy, streaming protocol, route/validation algorithm or production
+default was changed. Existing R1/R2 cold imports and R3-A/B/C compatibility
+contracts remain in the full suites.
 
-| CI regression suite          | Actual result                                                                    |
+Real registration has **367 functions** versus 361. Six JS application nodes
+are added by D1; callback-name counts otherwise match. Sending still returns
+12 items and retains all nine submission/runtime/completion role names and
+arities. Conversation restoration's trace renderer adds only conversation/user
+inputs; its existing event edges/order remain. This is an explicit event change,
+not an unchanged-whole-graph claim (`event-registration-comparison.json`).
+PreviewAccess, actual request injection, view revision/generation ownership,
+full/page-history separation and restoration/completion guards remain in use.
+
+Local full affected suites (`libs/ktem/ktem_tests`, `libs/slide_cli/tests` and
+the related benchmark/bootstrap/isolation/desktop sidecar consumers):
+**3442 passed, 99 failed, 7 skipped, 43 warnings**.
+All 99 failure nodes and failing-test bytes match the accepted R3-C evidence;
+no new local failure or new skip is introduced. The nine distinct warning
+bodies also match; the two extra warning emissions arise from the new real
+Gradio Blocks contract using the existing FastAPI `on_event` path. This full
+local run remains FAILURE, not a claimed pass (`local-failure-verification-final.json`,
+`local-warning-comparison.json`).
+
+Full ruff/hygiene, explicit-file pre-commit, fixed-Dev/round-base hygiene,
+constraint/container parity and supply-chain policy checks pass. Four actual
+wheels and four sdists build and pass Twine; clean-wheel installations and
+public CLI/bootstrap/resource checks pass. Local archive inspection verifies
+47 retained/touched members. CI independently verifies all eight distribution
+hashes, provenance/SBOMs and 50 ktem source/resource members against the final
+source. Local builds include the preserved user assets; CI uses the committed
+tree. Final Linux suite and coverage figures are below.
+
+[Stable quality run 34824848584](https://github.com/262412/MARA/actions/runs/34824848584) uses final source
+`b553444086b0d4c060a36a9cf07d3bbde94d2904` and the unchanged fixed-Dev comparison input.
+It completes with **8 FAILURE, 12 SUCCESS**;
+overall **FAILURE**. These counts are this run's actual results,
+not assumed future outcomes. All functional/static/collection/build/clean-wheel,
+frontend and coverage jobs pass. The three Python audits, three container
+baseline checks, repository Gitleaks and required summary fail. The built-image
+secret check passes. `quality-final.json` retains each job and step conclusion.
+
+| Final Linux regression job   | Actual result                                                                    |
 | ---------------------------- | -------------------------------------------------------------------------------- |
-| ktem isolated runtime        | 3342 passed, 45 warnings in 701.21s (0:11:41)                                    |
-| kotaemon Python 3.10         | =========== 381 passed, 10 skipped, 93 warnings in 178.48s (0:02:58) =========== |
-| kotaemon Python 3.11         | =========== 381 passed, 10 skipped, 93 warnings in 126.64s (0:02:06) =========== |
-| Benchmark and root contracts | 1622 passed, 8 warnings in 737.76s (0:12:17)                                     |
-| Unified pytest collection    | Unified pytest collection passed: 5648 tests (minimum 1260).                     |
+| ktem isolated runtime        | 3372 passed, 47 warnings in 694.50s (0:11:34)                                    |
+| kotaemon Python 3.10         | =========== 381 passed, 10 skipped, 93 warnings in 179.59s (0:02:59) =========== |
+| kotaemon Python 3.11         | =========== 381 passed, 10 skipped, 93 warnings in 180.26s (0:03:00) =========== |
+| Benchmark and root contracts | 1622 passed, 8 warnings in 747.90s (0:12:27)                                     |
+| slide_cli                    | PASS (existing quiet pytest invocation; no numeric summary emitted)              |
+| Unified pytest collection    | Unified pytest collection passed: 5678 tests (minimum 1260).                     |
+
+The earlier run [34822233006](https://github.com/262412/MARA/actions/runs/34822233006)
+at `04a5f179` ended **CANCELLED** with 11 successful, 7 failed and 2 cancelled
+jobs when the unchanged workflow concurrency policy superseded this task
+with the final source. Its partial coverage is not final acceptance evidence.
+
+A local Actions status GET returned SSL EOF (`ci-phase12-run.json`); the
+subsequent bounded read succeeded for the same run/source. That transport
+record is retained separately and is not counted as a CI job failure.
 
 The fresh warning-body comparison differs only in the existing
-`word,language` / `language,word` order in a PromptTemplate warning
-(kotaemon Python 3.11). `warning-final-verification.json` verifies
-unchanged template/test bytes and the retained fresh-process hash-seed
-reproduction of the unsorted set order. No unexplained new warning body remains.
-The three image jobs also retain the same warning lines. These checks are
-separate from NLTK and authorization/isolation findings; raw comparisons
-remain in `warnings-final.json` and `image-warnings-final.json`. Warning
-counts also match R3-B for every suite, including the coverage runs
-(`warning-count-comparison.json`).
+`word,language` / `language,word` PromptTemplate set order; unchanged
+template/test bytes and the retained fresh-process hash-seed proof are
+checked in `warning-final-verification.json`. No unexplained warning body or image-warning line remains. The new real
+Gradio Blocks test reaches two existing FastAPI `on_event` deprecation
+paths. The normal ktem count changes 45→47. Its coverage execution changes
+46→47: those two additions accompany one fewer existing Gradio analytics
+version notice in the unchanged SSO test (five→four). The complete warning
+sections, SSO/auth test bytes and lock are compared in
+`warning-emission-inspection.json` and `warning-count-comparison.json`;
+the initial analysis helper assumption of +2 for both runs was corrected
+to the observed counts. All other suite warning counts match R3-C.
+`warnings-final.json`, `warning-count-comparison.json` and
+`image-warnings-final.json` retain the separate comparisons.
 
-| Coverage scope             | Covered statements / total | Result / unchanged floor |
+| Coverage scope             | Covered statements / total | Actual / unchanged floor |
 | -------------------------- | -------------------------- | ------------------------ |
 | benchmark                  | 17146/19005                | 90.218% / 90%            |
 | slide_cli                  | 2144/2837                  | 75.573% / 70%            |
 | kotaemon                   | 7521/10727                 | 70.113% / 60%            |
-| ktem                       | 42798/51207                | 83.578% / 50%            |
-| fixed_dev (`adab3f4d`)     | 751/775                    | 96.903% / 90%            |
-| r3c_increment (`742c3e0b`) | 115/117                    | 98.291% / 90%            |
+| ktem                       | 42941/51341                | 83.639% / 50%            |
+| fixed_dev (`adab3f4d`)     | 910/935                    | 97.326% / 90%            |
+| r3d_increment (`29e489bf`) | 159/160                    | 99.375% / 90%            |
 
-The new renderer has **100/102 covered
-statements** in the existing package collector. Coverage artifact `10332732804`
-has SHA-256 `6ee41343d5d8a3fdfc738180f156fb54ba2674585ccb858229457aeada5dd4ea`. The unchanged production diff gate
-checks both fixed Dev and this round's base. Subprocess collection remains enabled;
-no extra omit, temporary runtime file or raw package-relative alias is present.
+The directly added/changed Web boundaries are present in the existing collector:
 
-### Security remains open
+| Module under `libs/ktem/ktem/`                | Covered / statements |
+| --------------------------------------------- | -------------------- |
+| `app.py`                                      | 208/231              |
+| `index/file/_chat_upload_events.py`           | 134/137              |
+| `index/file/_selector_ui.py`                  | 91/107               |
+| `index/file/ui.py`                            | 190/270              |
+| `pages/chat/__init__.py`                      | 427/640              |
+| `pages/chat/chat_conversation_events.py`      | 32/32                |
+| `pages/chat/chat_gradio_adapters.py`          | 95/95                |
+| `pages/chat/chat_knowledge_graph_bindings.py` | 30/32                |
+| `pages/chat/chat_layout.py`                   | 138/148              |
+| `pages/chat/conversation_restore.py`          | 49/49                |
+| `pages/chat/file_browser_updates.py`          | 41/41                |
+| `pages/chat/studio_artifact_controls.py`      | 82/100               |
+| `pages/chat/studio_artifact_generation.py`    | 81/99                |
+| `pages/chat/studio_artifact_mindmap.py`       | 64/71                |
+| `pages/chat/studio_callback_identity.py`      | 36/36                |
+| `pages/chat/studio_note_actions.py`           | 77/92                |
 
-Fresh audits of **root-py310, root-py311 and container-py310** retain exactly the
-same blocking package/version/ID set as R3-B; no new or resolved blocking key:
+Coverage artifact `10341686419` has SHA-256
+`dd77c1b5fbaacfafb125e4ea0a971e32ccab107c8692a0729f4f553027d28b10`. `coverage-verified.json` also checks
+the retained R1/R2/R3 modules, package floors and both production diffs using
+the unchanged gate functions. This does not claim 100% coverage for every
+touched legacy module or use delegated lines alone as acceptance.
 
-| Package/version         | Blocking IDs in each profile                                               |
+No collector scope, omit/skip list, threshold, debt baseline, lock or required
+job was weakened. Subprocess coverage, canonical source paths and absence of
+temporary-runtime aliases are checked in the downloaded evidence. JS behavior
+has its own Node/browser evidence.
+
+### Security and R3 closeout matrix
+
+Fresh dependency scans report the same keys in all three actual profiles:
+
+| Profile           | Actual job / result      |
+| ----------------- | ------------------------ |
+| `root-py310`      | `103914616162` / FAILURE |
+| `root-py311`      | `103914616112` / FAILURE |
+| `container-py310` | `103914616212` / FAILURE |
+
+| Package / version       | Blocking ID(s) in each profile                                             |
 | ----------------------- | -------------------------------------------------------------------------- |
-| `nltk==3.10.3`          | `GHSA-8mgp-746c-j5xp` / `CVE-2026-81726`                                   |
 | `chromadb==0.5.16`      | `PYSEC-2026-3813`, `PYSEC-2026-3814`, `PYSEC-2026-3815`                    |
+| `nltk==3.10.3`          | `GHSA-8mgp-746c-j5xp`                                                      |
 | `pypdf==4.2.0`          | `PYSEC-2026-3910`, `PYSEC-2026-3911`, `PYSEC-2026-3912`, `PYSEC-2026-3913` |
 | `transformers==4.56.2`  | `PYSEC-2026-3929`                                                          |
 | `unstructured==0.15.14` | `PYSEC-2026-3930`                                                          |
 
-`security-key-reconciliation-final.json` retains each fresh job/log/hash and the
-original nine-alias evidence at `r2a-docqa-exports/new-security-records.json`,
-SHA-256 `5caae4ea1922c397555995e906bc987fcd42d141e0ec479d27796ebb106b6ead`.
-Security baselines, alias decisions, dependencies/locks, scan scope and required
-jobs are unchanged.
+The NLTK record is `GHSA-8mgp-746c-j5xp` / `CVE-2026-81726`; the nine
+PYSEC records and their prior alias evidence remain explicitly retained in
+`security-key-reconciliation-final.json`. No new or resolved profile key
+appears relative to accepted R3-C. Alias logic, baselines and scan scope
+remain unchanged; this comparison does not close S1.
 
-Fresh Trivy **0.70.0** scans of full/lite/ollama preserve the same two HIGH
-blocking keys, `libpcre2-8-0==10.42-1|CVE-2026-86145` and
-`libpcre2-8-0==10.42-1|CVE-2026-89161` (reported fix: `10.42-1+deb12u1`).
-The package and layer match the previous accepted evidence; no new raw or blocking
-keys, secrets or misconfigurations appear. These findings remain new relative to
-the frozen security baseline, not new in R3-C. Build/provenance/runtime smoke pass;
-standalone container SBOM generation is **SKIPPED** after the baseline failures.
-The retained image artifacts contain build metadata, provenance and Trivy reports.
+The new **Trivy 0.70.0** full/lite/ollama scans retain the two HIGH PCRE2
+blocking keys `libpcre2-8-0==10.42-1|CVE-2026-86145` and
+`libpcre2-8-0==10.42-1|CVE-2026-89161`, with reported fix
+`10.42-1+deb12u1`. The package and layer match R3-C; no new raw/blocking
+keys, secrets or misconfigurations appear. These remain new relative to
+the frozen security baseline, not newly introduced in R3-D. Actual
+image builds, retained provenance and runtime smoke pass for Linux/amd64
+full/lite/ollama. Docker still collects `libs` into non-editable wheels and
+copies the installed environment. The separate post-scan SPDX image SBOM
+step is **SKIPPED** after each baseline failure; it is not claimed as
+generated. BuildKit attestation and Trivy evidence remain available.
 
-| Target | Artifact ID   | Artifact SHA-256                                                   |
+| Image  | Artifact ID   | Artifact SHA-256                                                   |
 | ------ | ------------- | ------------------------------------------------------------------ |
-| full   | `10332140335` | `594344812a15c752be742b3e833abdc9affa8773735772676bd833d2d7c4f73c` |
-| lite   | `10331908419` | `24bfccab38d69095760b500c5a0fbb158baa85a5526b8feede0d692a17698b8a` |
-| ollama | `10331869108` | `4e3cd19c40e3cb2861a96d574fc6dee441b90851090bb2a2d0b7df3c7d4501d9` |
+| full   | `10340710947` | `fd8a7528163cde3475c8442ffed0630c0b3e81cf234f8f806b871004c7f4c7a9` |
+| lite   | `10340082952` | `6e8c7f5826910bf587fe52ff6dc9f2f6d30dd3d37044c9fb4dd3764a2efae775` |
+| ollama | `10340038226` | `db09b8aa53f84692413c82f3b85190d7fe55de2b842dc5a8c4866ce0fae40c7c` |
 
-### Protection and remaining R3 scope
+Gitleaks additionally reports `generic-api-key` at
+`libs/ktem/ktem_tests/test_chat_javascript_resources.py:12`, introduced in
+`b0491128`. This value is exactly SHA-256 of the public baseline
+`fetch_api_key_js` string, not an authentication credential. The baseline
+string and packaged resource compare byte for byte; recomputing their digest
+equals the fixed test expectation (`gitleaks-checksum-finding.json`, final CI
+log). Both history and current-worktree scans remain failed. No inline ignore,
+allowlist, scan-scope change or history rewrite was used. This new required-check
+failure is separately classified; it is not part of the old 99/NLTK blockers.
 
-All **133 pre-existing asset/instruction changes** are preserved byte for byte,
-as is the untracked `NUL` entry. Only named round files were staged. Canonical
-environment and real configuration/database/cache metadata, worktree inventory,
-and historical cleanup-refused directories are compared in `r3c-final-state.json`.
-Validation uses the existing owned environment and isolated runtimes; no canonical
-sync, branch/worktree creation, force push, merge, deployment or release occurred.
-The retained R0/R1 history below is byte-identical.
+The former R3 remaining table is now the following evidence/status matrix:
+
+| R3 item                                                             | Evidence/status at this round                                                                                                                                                                                                   |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Startup/filter/index-refresh concurrency                            | **Verified, awaiting review**: D1 red proofs, 11 complete barrier/browser cases, real request and per-browser vocabulary/intent protection                                                                                      |
+| Frontend callback/resource ownership                                | **Verified, awaiting review**: eight unique resources, unchanged effective strings and callbacks, explicit load/caller/archive mapping, 42 Node contracts                                                                       |
+| Web wheel/sdist and repository-external loading                     | **Verified**: actual local and final CI builds/clean wheels, installed ChatPage resources without PYTHONPATH                                                                                                                    |
+| Container resource collection/runtime                               | **Build/provenance/runtime verified for Linux/amd64 full/lite/ollama**; source-bound image build/provenance/runtime evidence retained; vulnerability gates remain separate failures                                             |
+| Desktop resource collection                                         | **Static/config contract verified only**: native React/PyInstaller sidecar explicitly excludes Gradio; collection config/Node tests checked. No desktop binary build/install executed or claimed                                |
+| Index management and notifications                                  | **Verified, awaiting review**: actual upload/reindex/select/Close/single+bulk delete/group flows and notification/catalog races; no broader deletion semantics                                                                  |
+| Authorized preview/navigation and graph/source/citation interaction | **Verified, awaiting review**: retained preview/PDF/source-switch tests, exact revocation refusal and real graph-node→question→stream/citation persistence                                                                      |
+| Studio notes and one actual artifact path                           | **Verified, awaiting review**: save/restore/convert, Mind Map/export, picker cancel, failure/disconnect/view ownership and public non-owner refusal. Other artifact types and nonexistent cancellation controls are not claimed |
+| S1/PCRE2 and new Gitleaks checksum finding                          | **BLOCKED**: unchanged scans/gates and actual failing CI evidence; no dependency/security upgrade in R3-D                                                                                                                       |
+
+### Protection and stop point
+
+All **133 pre-existing asset/instruction changes** remain byte-identical; the
+untracked `NUL` entry is preserved. Only explicit round paths were staged.
+Canonical environment/real configuration/database/cache metadata, worktree
+inventory and historical cleanup-refused directories are compared before/after
+in `r3d-final-state.json`. All final browser runtimes are owned and removed.
+No canonical sync, branch/worktree creation, force push, merge, deployment or
+release occurred. The retained R0/R1 history below remains byte-identical.
 
 Evidence root:
-`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r3c-file-browser-rendering`.
-`execution.jsonl` records exact commands, source SHA, dirty-file hashes, environment,
-exit codes and logs. Source/report push receipts bind the remote state; the final
-report-only tree reuses source evidence only after byte-equivalence checks.
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r3d-web-closeout`.
+Stable CI evidence:
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r3d-stable-ci`.
+`execution.jsonl` records commands, source SHA, dirty-file hashes, environment,
+exit codes and logs. Report/source push receipts and final-state receipt bind
+the actual local/remote commits; the report-only tree reuses source evidence
+only after byte-equivalence checks.
 
-This is a focused remaining-scope table, not a renewed repository inventory:
-
-| R3 area                               | Verified and retained                                                                                             | Still requires a separate closeout decision                                                                                                     |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend resource ownership/packaging | File/page HTML now has one renderer; existing CSS/JS tokens, actual card bindings and package builds pass         | Ownership of remaining inline JS/CSS and broader frontend resource packaging has not been consolidated                                          |
-| Index events                          | Existing split/event graph retained; actual upload/URL identity and two-user browser paths pass                   | Other index-management flows and the startup-refresh concurrency window are not broadly accepted by this round                                  |
-| Preview, graph and Studio interaction | Authorized preview/navigation, restore/tail guards, source switching and existing graph/Studio contracts retained | Full graph/Studio interaction and remaining preview orchestration need separately scoped end-to-end closeout; no full preview rewrite performed |
-
-**Stop at R3-C and await independent review. S1/PCRE2 remain open;
-merge/release remains NO-GO.**
+**Stop at R3-D. Await independent closeout review before R4.
+S1/PCRE2 remain open; merge/release remains NO-GO.**
 
 ## Previous R0/R1 evidence (retained history)
 
