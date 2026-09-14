@@ -10,6 +10,7 @@ from importlib import import_module
 from pathlib import Path
 
 from file_browser_barriers import FileBrowserBarriers
+from web_seam_observer import studio_exports
 
 from pytest_runtime_isolation import start_process_test_runtime
 
@@ -208,13 +209,15 @@ def _selection_roles(dependencies, conversation_id):
         current = children[0]
 
 
-def _observe(page, barriers):
-    from ktem.db.models import Conversation, engine
+def _observed_callbacks(page):
     from ktem.docqa._runtime_session_service import RuntimeSessionService
     from ktem.pages.chat.chat_completion import CompletionTail
-    from sqlmodel import Session
+    from ktem.pages.chat.studio_artifact_controls import (
+        generate_studio_artifact_panel_update,
+        regenerate_latest_studio_artifact_panel_update,
+    )
 
-    callbacks = [
+    return [
         page.submit_msg,
         page.chat_fn,
         page.page_preview.cache_page_outputs,
@@ -225,6 +228,7 @@ def _observe(page, barriers):
         page.chat_control.select_conv,
         page.chat_control.load_chat_history,
         page.persist_data_source,
+        page.render_latest_reasoning_trace,
         page.first_indexing_file_fn,
         page.first_indexing_url_fn,
         page.refresh_chat_file_list,
@@ -236,10 +240,21 @@ def _observe(page, barriers):
         page.page_preview.on_page_change,
         page.page_preview.on_page_set,
         page.page_preview.on_preview_tick,
+        generate_studio_artifact_panel_update,
+        regenerate_latest_studio_artifact_panel_update,
         CompletionTail.persist,
         RuntimeSessionService.persist_conversation_state,
     ]
-    codes = {getattr(fn, "__func__", fn).__code__: fn.__qualname__ for fn in callbacks}
+
+
+def _observe(page, barriers):
+    from ktem.db.models import Conversation, engine
+    from sqlmodel import Session
+
+    codes = {
+        getattr(fn, "__func__", fn).__code__: fn.__qualname__
+        for fn in _observed_callbacks(page)
+    }
     trace, writes = [], []
 
     def observe(frame, event, arg):
@@ -292,6 +307,7 @@ def _observe(page, barriers):
 def _read_evidence(blocks, page, trace, writes):
     from ktem.db.models import Conversation, User, engine
     from sqlmodel import Session, select
+    from theflow.settings import settings
 
     with Session(engine) as session:
         rows = session.exec(
@@ -315,6 +331,7 @@ def _read_evidence(blocks, page, trace, writes):
             )
         return {
             "conversations": [row.model_dump(mode="json") for row in rows],
+            "studio_exports": studio_exports(rows, settings.KH_APP_DATA_DIR),
             "callbacks": list(trace),
             "writes": list(writes),
             "queue_events": dict(blocks._queue.event_analytics),
@@ -322,6 +339,12 @@ def _read_evidence(blocks, page, trace, writes):
             "users": {
                 user.username: user.id for user in session.exec(select(User)).all()
             },
+            "groups": [
+                {"id": row.id, "name": row.name, "user": row.user, "data": row.data}
+                for row in session.exec(
+                    select(page.file_index._resources["FileGroup"])
+                ).all()
+            ],
             "files": [
                 {"id": row.id, "name": row.name, "user": row.user, "path": row.path}
                 for row in session.exec(

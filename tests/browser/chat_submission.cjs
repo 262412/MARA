@@ -318,9 +318,12 @@ async function authenticatedIndexing() {
   const operations = require('./conversation_actions.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});
   const fileBrowser = require('./file_browser_navigation.cjs')({expect, login, evidence, settled, send, selectSource, tailFinished, results, output});
   const refreshRaces = require('./file_browser_concurrency.cjs')({expect, login, evidence, settled, send, tailFinished, results, base});
-  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces];
+  const indexManagement = require('./index_management.cjs')({expect, login, evidence, settled, send, tailFinished, results, output});
+  const studio = require('./studio_workflows.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});
+  const studioPermissions = require('./studio_permissions.cjs')({expect, login, evidence, settled, roles, results});
+  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
-  for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : fn.name !== 'publicConversationPermissions')) {
+  for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : !['publicConversationPermissions', 'publicStudioPermissions'].includes(fn.name))) {
     console.log('Starting browser scenario:', scenario.name);
     try { await scenario(); console.log('Passed browser scenario:', scenario.name); }
     catch (error) { results.scenarios.push({name: scenario.name, failure: error.stack}); console.log('Failed browser scenario:', scenario.name, error.stack); }

@@ -86,6 +86,11 @@ def _record_source(repository, output):
         "tests/browser/file_browser_navigation.cjs",
         "tests/browser/file_browser_concurrency.cjs",
         "tests/browser/file_browser_barriers.py",
+        "tests/browser/index_management.cjs",
+        "tests/browser/studio_workflows.cjs",
+        "tests/browser/studio_permissions.cjs",
+        "libs/ktem/ktem/pages/chat/studio_callback_identity.py",
+        "tests/browser/web_seam_observer.py",
         "libs/ktem/ktem_tests/file_browser_app_fixture.py",
         "libs/ktem/ktem_tests/chat_submission_model_fixture.py",
         "tests/browser/run_chat_submission.py",
@@ -98,6 +103,13 @@ def _record_source(repository, output):
         "libs/ktem/ktem/pages/chat/chat_knowledge_graph_bindings.py",
         "libs/ktem/ktem/pages/chat/__init__.py",
         "libs/ktem/ktem/index/file/ui.py",
+        "libs/ktem/ktem/pages/chat/studio_note_actions.py",
+        "libs/ktem/ktem/pages/chat/studio_artifact_controls.py",
+        "libs/ktem/ktem/pages/chat/studio_artifact_generation.py",
+        "libs/ktem/ktem/pages/chat/studio_artifact_mindmap.py",
+        "libs/ktem/ktem/pages/chat/conversation_restore.py",
+        "libs/ktem/ktem/pages/chat/chat_gradio_adapters.py",
+        "libs/ktem/ktem/pages/chat/chat_conversation_events.py",
     ]
     names.extend(
         str(asset.relative_to(repository))
