@@ -49,9 +49,8 @@ def generate_studio_mindmap_outputs(
         values=values,
     )
     answer = "Interactive mind map generated."
-    messages = [*list(values["chat_history"] or []), (prompt, answer)]
     answer_html = page._generate_answer_panel_html(
-        messages[:-1],
+        list(values["chat_history"] or []),
         prompt,
         answer,
         is_thinking=False,
@@ -67,9 +66,11 @@ def generate_studio_mindmap_outputs(
     viewer_html = render_studio_artifact_viewer_html(artifact)
     return (
         conversation_id,
-        messages,
-        [],
-        [],
+        # A notebook artifact is not a persisted question/answer turn. Keep
+        # conversation messages and their retrieval/plot slots aligned.
+        gr.skip(),
+        gr.skip(),
+        gr.skip(),
         values["chat_state"],
         answer_html,
         page._render_citations_card_html(""),
