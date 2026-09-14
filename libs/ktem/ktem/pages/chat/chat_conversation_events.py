@@ -13,6 +13,7 @@ from .conversation_restore import (
     clear_conversation,
     restore_conversation,
     restored_answer,
+    restored_studio_trace,
 )
 
 
@@ -61,7 +62,9 @@ def _bind_demo_conversation_events(
         inputs=ports.citations.gradio_inputs,
         outputs=ports.citations.gradio_outputs,
     ).then(
-        fn=page.render_latest_reasoning_trace,
+        fn=restored_studio_trace(
+            page.render_latest_reasoning_trace, page._resolve_persist_user_id
+        ),
         inputs=ports.reasoning.gradio_inputs,
         outputs=ports.reasoning.gradio_outputs,
     ).then(
@@ -101,7 +104,9 @@ def _bind_standard_conversation_events(
         inputs=ports.citations.gradio_inputs,
         outputs=ports.citations.gradio_outputs,
     ).then(
-        fn=page.render_latest_reasoning_trace,
+        fn=restored_studio_trace(
+            page.render_latest_reasoning_trace, page._resolve_persist_user_id
+        ),
         inputs=ports.reasoning.gradio_inputs,
         outputs=ports.reasoning.gradio_outputs,
     ).then(
@@ -146,7 +151,9 @@ def _bind_delete_conversation_events(page: Any, ports: ChatConversationPorts) ->
         inputs=ports.citations.gradio_inputs,
         outputs=ports.citations.gradio_outputs,
     ).then(
-        fn=page.render_latest_reasoning_trace,
+        fn=restored_studio_trace(
+            page.render_latest_reasoning_trace, page._resolve_persist_user_id
+        ),
         inputs=ports.reasoning.gradio_inputs,
         outputs=ports.reasoning.gradio_outputs,
     ).then(
@@ -265,7 +272,9 @@ def _append_conversation_preview_refresh(
         outputs=ports.citations.gradio_outputs,
         show_progress="hidden",
     ).then(
-        fn=page.render_latest_reasoning_trace,
+        fn=restored_studio_trace(
+            page.render_latest_reasoning_trace, page._resolve_persist_user_id
+        ),
         inputs=ports.reasoning.gradio_inputs,
         outputs=ports.reasoning.gradio_outputs,
         show_progress="hidden",

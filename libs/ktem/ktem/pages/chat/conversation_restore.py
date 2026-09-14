@@ -46,6 +46,37 @@ def restored_answer(render):
     return answer
 
 
+def restored_studio_trace(render, resolve_user_id):
+    def trace(history, retrieval, conversation_id, user_id, request: gr.Request):
+        from .studio_artifact_results import (
+            _conversation_artifacts,
+            render_studio_artifacts_html,
+        )
+        from .studio_callback_identity import _view_ownership
+
+        view = _view_ownership(request)
+        user_id = resolve_user_id(user_id, request)
+        fallback = render(history, retrieval)
+        artifacts = _conversation_artifacts(conversation_id, user_id=user_id)
+        output = (
+            render_studio_artifacts_html({"artifacts": artifacts})
+            if artifacts
+            else fallback
+        )
+        return output if view == _view_ownership(request) else gr.skip()
+
+    interface = signature(trace)
+    update_wrapper(
+        trace,
+        render,
+        assigned=tuple(
+            field for field in WRAPPER_ASSIGNMENTS if field != "__annotations__"
+        ),
+    )
+    setattr(trace, "__signature__", interface)
+    return trace
+
+
 def cache_request_view(callback):
     def cache(
         conversation_id,

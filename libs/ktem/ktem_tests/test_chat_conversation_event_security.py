@@ -74,6 +74,7 @@ def test_demo_new_chat_binds_clear_conversation_callback():
         followup_questions_ui=object(),
         render_latest_citations_card=object(),
         render_latest_reasoning_trace=object(),
+        _resolve_persist_user_id=object(),
         suggest_chat_conv=object(),
     )
 

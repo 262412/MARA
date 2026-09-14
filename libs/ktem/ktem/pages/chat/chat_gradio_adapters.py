@@ -252,7 +252,12 @@ def chat_conversation_ports(page: Any, *, demo_mode: bool) -> ChatConversationPo
             inputs=(page.state_retrieval_history,), outputs=(page.citations_panel,)
         ),
         reasoning=EventPorts(
-            inputs=(page.chat_panel.chatbot, page.state_retrieval_history),
+            inputs=(
+                page.chat_panel.chatbot,
+                page.state_retrieval_history,
+                page.chat_control.conversation_id,
+                page._app.user_id,
+            ),
             outputs=(page.reasoning_trace_panel,),
         ),
         last_question=EventPorts(outputs=(page._last_question,)),
