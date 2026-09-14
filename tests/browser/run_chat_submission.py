@@ -84,6 +84,8 @@ def _record_source(repository, output):
         "tests/browser/chat_submission.cjs",
         "tests/browser/conversation_actions.cjs",
         "tests/browser/file_browser_navigation.cjs",
+        "tests/browser/file_browser_concurrency.cjs",
+        "tests/browser/file_browser_barriers.py",
         "libs/ktem/ktem_tests/file_browser_app_fixture.py",
         "libs/ktem/ktem_tests/chat_submission_model_fixture.py",
         "tests/browser/run_chat_submission.py",

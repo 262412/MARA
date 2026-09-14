@@ -9,6 +9,8 @@ import time
 from importlib import import_module
 from pathlib import Path
 
+from file_browser_barriers import FileBrowserBarriers
+
 from pytest_runtime_isolation import start_process_test_runtime
 
 
@@ -59,7 +61,8 @@ def _launch(app, blocks, root, output):
 
         seed_file_browser_documents(app, root)
     page = app.chat_page
-    trace, writes = _observe(page)
+    barriers = FileBrowserBarriers()
+    trace, writes = _observe(page, barriers)
     dependencies = blocks.config["dependencies"]
     start = next(
         i
@@ -98,6 +101,18 @@ def _launch(app, blocks, root, output):
         ),
     )
 
+    _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers)
+
+    _write_ready(output, root, roles, blocks, page._indices_input[1]._id)
+    deadline = time.monotonic() + 600
+    try:
+        while time.monotonic() < deadline and not (output / "stop").exists():
+            time.sleep(0.2)
+    finally:
+        barriers.release_all()
+
+
+def _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers):
     @blocks.app.get("/owned-evidence")
     def evidence():
         return _read_evidence(blocks, page, trace, writes)
@@ -114,10 +129,17 @@ def _launch(app, blocks, root, output):
         model_boundary.held_release.set()
         return {"released": True}
 
-    _write_ready(output, root, roles, blocks, page._indices_input[1]._id)
-    deadline = time.monotonic() + 600
-    while time.monotonic() < deadline and not (output / "stop").exists():
-        time.sleep(0.2)
+    @blocks.app.post("/owned-file-browser-gate/arm")
+    def arm_file_browser_gate(spec: dict):
+        return barriers.arm(spec)
+
+    @blocks.app.get("/owned-file-browser-gate")
+    def file_browser_gate_status():
+        return barriers.status()
+
+    @blocks.app.post("/owned-file-browser-gate/release/{key}")
+    def release_file_browser_gate(key: str):
+        return barriers.release(key)
 
 
 def _write_ready(output, root, roles, blocks, selector_id):
@@ -181,7 +203,7 @@ def _selection_roles(dependencies, conversation_id):
         current = children[0]
 
 
-def _observe(page):
+def _observe(page, barriers):
     from ktem.db.models import Conversation, engine
     from ktem.docqa._runtime_session_service import RuntimeSessionService
     from ktem.pages.chat.chat_completion import CompletionTail
@@ -237,6 +259,7 @@ def _observe(page):
                 ),
             }
         )
+        barriers.observe(name, event, values, arg)
         if (
             name == "RuntimeSessionService.persist_conversation_state"
             and event == "return"

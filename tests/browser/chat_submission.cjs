@@ -14,7 +14,7 @@ async function evidence() {
   return response.json();
 }
 
-async function login(username = 'browser-owner') {
+async function login(username = 'browser-owner', {initialize = true} = {}) {
   const page = await browser.newPage({locale: 'en-US', viewport: {width: 1600, height: 1200}});
   page.on('pageerror', error => results.errors.push(String(error)));
   const queue = [];
@@ -55,7 +55,7 @@ async function login(username = 'browser-owner') {
   await page.locator('input[type=password]').fill('OwnedFixture7!');
   await page.getByRole('button', {name: /Login|登录/}).click();
   await page.locator('#chat-input textarea').waitFor({state: 'visible', timeout: 60000});
-  await initialized(queue);
+  if (initialize) await initialized(queue);
   page.submissionQueue = queue;
   return {page, queue};
 }
@@ -317,7 +317,8 @@ async function authenticatedIndexing() {
   const selected = process.env.MARA_BROWSER_SCENARIOS?.split(',');
   const operations = require('./conversation_actions.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});
   const fileBrowser = require('./file_browser_navigation.cjs')({expect, login, evidence, settled, send, selectSource, tailFinished, results, output});
-  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser];
+  const refreshRaces = require('./file_browser_concurrency.cjs')({expect, login, evidence, settled, results, base});
+  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
   for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : fn.name !== 'publicConversationPermissions')) {
     console.log('Starting browser scenario:', scenario.name);
