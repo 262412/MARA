@@ -89,6 +89,13 @@ def _record_source(repository, output):
         "libs/ktem/ktem_tests/file_browser_app_fixture.py",
         "libs/ktem/ktem_tests/chat_submission_model_fixture.py",
         "tests/browser/run_chat_submission.py",
+        "libs/ktem/ktem/pages/chat/file_browser_updates.py",
+        "libs/ktem/ktem/assets/js/file_browser_refresh.js",
+        "libs/ktem/ktem/app.py",
+        "libs/ktem/ktem/index/file/_selector_ui.py",
+        "libs/ktem/ktem/index/file/_chat_upload_events.py",
+        "libs/ktem/ktem/pages/chat/chat_layout.py",
+        "libs/ktem/ktem/pages/chat/chat_knowledge_graph_bindings.py",
     ]
     (output / "source.json").write_text(
         json.dumps(

@@ -101,6 +101,7 @@ def _launch(app, blocks, root, output):
         ),
     )
 
+    barriers.bind_delivery(blocks._queue)
     _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers)
 
     _write_ready(output, root, roles, blocks, page._indices_input[1]._id)
@@ -171,11 +172,15 @@ def _write_ready(output, root, roles, blocks, selector_id):
 
 
 def _initial_selection_events(dependencies, selector_id):
-    """Find initial selector writers in the real registered app-load chains."""
+    """Find selector result producers in the real registered app-load chains."""
     by_id = {dep["id"]: dep for dep in dependencies}
+    output_ids = {selector_id}
+    for dep in dependencies:
+        if not dep["backend_fn"] and selector_id in dep["outputs"]:
+            output_ids.update(dep["inputs"])
     initial = []
     for dep in dependencies:
-        if selector_id not in dep["outputs"]:
+        if not output_ids.intersection(dep["outputs"]) or not dep["backend_fn"]:
             continue
         root = dep
         while root["trigger_after"] is not None:
@@ -223,6 +228,9 @@ def _observe(page, barriers):
         page.first_indexing_file_fn,
         page.first_indexing_url_fn,
         page.refresh_chat_file_list,
+        getattr(page, f"_index_{page.file_index.id}").load_files,
+        getattr(page._app, f"_index_{page.file_index.id}").list_file,
+        getattr(page._app, f"_index_{page.file_index.id}").delete_event,
         page.page_preview.on_selected_file_change,
         page.page_preview.refresh_selected_file_preview,
         page.page_preview.on_page_change,

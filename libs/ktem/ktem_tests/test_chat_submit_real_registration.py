@@ -114,6 +114,7 @@ def _check_real_registration(monkeypatch, root):
         )
         _check_chain(blocks, page, dependencies[start : start + 9], demo=False)
         _check_conversation_callbacks(blocks, page)
+        _check_file_browser_callbacks(blocks, page)
         before = len(blocks.fns)
         with blocks:
             bind_chat_submit_events(
@@ -184,6 +185,71 @@ def _check_conversation_callbacks(blocks, page):
             assert root["outputs"] == _ids(
                 [control.conversation_id, control.conversation]
             )
+
+
+def _check_file_browser_callbacks(blocks, page):
+    import gradio as gr
+    from gradio.helpers import special_args
+    from ktem.pages.chat.file_browser_updates import APPLY_FILES_JS
+
+    dependencies = blocks.config["dependencies"]
+    outputs = _ids(
+        [
+            page.chat_file_rows,
+            page.chat_file_list,
+            page.chat_selected_file,
+            page.workbench_file_summary,
+        ]
+    )
+    writers = [dep for dep in dependencies if set(outputs).intersection(dep["outputs"])]
+    assert len(writers) == 1
+    assert writers[0]["outputs"] == outputs
+    assert writers[0]["backend_fn"] is False
+    assert writers[0]["js"] == APPLY_FILES_JS
+    assert writers[0]["inputs"] == _ids(
+        [
+            page._file_browser_result,
+            page.chat_file_filter,
+            page._indices_input[1],
+            page.chat_control.conversation,
+        ]
+    )
+    request = gr.Request(username="owner", session_hash="file-registration")
+    refreshes = [
+        dep
+        for dep in dependencies
+        if blocks.fns[dep["id"]].name == "refresh_chat_file_list"
+    ]
+    assert len(refreshes) >= 7
+    for dep in refreshes:
+        assert dep["outputs"] == [page._file_browser_result._id]
+        assert "captureFiles(1)" in dep["js"]
+        assert dep["cancels"] == []
+        args = ["conversation", "claimed", [], [], [], "filter", {"epoch": "a"}]
+        injected, _, _ = special_args(
+            blocks.fns[dep["id"]].fn, args[:], request=request
+        )
+        assert injected == [*args, request]
+    selector = getattr(page, f"_index_{page.file_index.id}")
+    loads = [
+        dep for dep in dependencies if selector._files_result._id in dep["outputs"]
+    ]
+    assert any("captureSelector(1, true)" in dep["js"] for dep in loads)
+    assert any("captureSelector(1, false)" in dep["js"] for dep in loads)
+    for dep in loads:
+        assert dep["inputs"] == _ids(
+            [
+                selector.selector,
+                page._app.user_id,
+                selector._files_stamp,
+                selector._files_applied,
+            ]
+        )
+        args = [[], "claimed", {"epoch": "a"}, {}]
+        injected, _, _ = special_args(
+            blocks.fns[dep["id"]].fn, args[:], request=request
+        )
+        assert injected == [*args, request]
 
 
 def test_real_registration_preserves_failure_edges_and_demo_difference():

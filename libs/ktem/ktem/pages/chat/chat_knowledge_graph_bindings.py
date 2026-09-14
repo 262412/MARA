@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from .chat_gradio_adapters import chat_preview_ports
+from .file_browser_updates import (
+    bind_file_browser_result,
+    bind_file_selection_result,
+    chat_file_refresh_event,
+)
 
 
 def _chat_file_list_inputs(page):
@@ -49,40 +54,18 @@ def _sync_scope_then_refresh_file_list(chain, page):
         inputs=_persist_graph_scope_inputs(page),
         outputs=_graph_scope_sync_outputs(page),
         show_progress="hidden",
-    ).then(
-        fn=page.refresh_chat_file_list,
-        inputs=_chat_file_list_inputs(page),
-        outputs=_chat_file_list_outputs(page),
-        show_progress="hidden",
-    )
+    ).then(**chat_file_refresh_event(page))
 
 
 def bind_knowledge_graph_events(page) -> None:
-    page.chat_file_filter.change(
-        fn=page.refresh_chat_file_list,
-        inputs=_chat_file_list_inputs(page),
-        outputs=_chat_file_list_outputs(page),
-        show_progress="hidden",
-    )
+    bind_file_browser_result(page)
+    page.chat_file_filter.change(**chat_file_refresh_event(page))
 
-    page._indices_input[1].change(
-        fn=page.refresh_chat_file_list,
-        inputs=_chat_file_list_inputs(page),
-        outputs=_chat_file_list_outputs(page),
-        show_progress="hidden",
-    )
+    page._indices_input[1].change(**chat_file_refresh_event(page))
 
     ports = chat_preview_ports(page)
-    page._chat_file_click.change(
-        fn=page.select_chat_file,
-        inputs=[page._chat_file_click],
-        outputs=[
-            page._indices_input[0],
-            page._indices_input[1],
-            page._chat_file_click,
-        ],
-        show_progress="hidden",
-    ).then(
+    bind_file_selection_result(page)
+    page._file_browser_selection_applied.change(
         fn=page.page_preview.on_selected_file_change,
         inputs=ports.selected_file.gradio_inputs,
         outputs=ports.selected_file.gradio_outputs,
@@ -144,12 +127,7 @@ def subscribe_public_knowledge_graph_events(page) -> None:
             "outputs": _graph_scope_sync_outputs(page),
             "show_progress": "hidden",
         },
-        {
-            "fn": page.refresh_chat_file_list,
-            "inputs": _chat_file_list_inputs(page),
-            "outputs": _chat_file_list_outputs(page),
-            "show_progress": "hidden",
-        },
+        chat_file_refresh_event(page),
     ]
     for definition in definitions:
         page._app.subscribe_event(name=event_name, definition=definition)

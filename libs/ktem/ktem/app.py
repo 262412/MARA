@@ -85,7 +85,11 @@ class BaseApp:
             self._safe_dom_js = fi.read()
         with (dir_assets / "js" / "main.js").open() as fi:
             self._js = compose_blocks_js(
-                fi.read(), f"{self._safe_dom_js}\n{self._kg_viewer_js}"
+                fi.read(),
+                f"{self._safe_dom_js}\n{self._kg_viewer_js}\n"
+                + (dir_assets / "js" / "file_browser_refresh.js").read_text(
+                    encoding="utf-8"
+                ),
             )
             pdfjs_dir = get_pdfjs_runtime_dir(
                 getattr(settings, "KH_APP_DATA_DIR", None)

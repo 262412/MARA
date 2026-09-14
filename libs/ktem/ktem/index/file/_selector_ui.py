@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from copy import copy
+from threading import Lock
 from typing import TypeAlias
 
 import gradio as gr
@@ -51,6 +53,7 @@ class FileSelector(BasePage):
     def __init__(self, app, index):
         super().__init__(app)
         self._index = index
+        self._choices_lock = Lock()
         self.on_building_ui()
 
     def default(self):
@@ -76,8 +79,20 @@ class FileSelector(BasePage):
         )
         self.selector_user_id = gr.State(value=user_id)
         self.selector_choices = gr.JSON(value=[], visible=False)
+        self._files_result = gr.JSON(value=None, visible=False)
+        self._files_stamp = gr.JSON(value=None, visible=False)
+        self._files_applied = gr.State(value={})
 
     def on_register_events(self):
+        from ktem.pages.chat.file_browser_updates import APPLY_SELECTOR_JS
+
+        self._files_result.change(
+            fn=None,
+            inputs=[self._files_result, self.selector],
+            outputs=[self.selector, self.selector_choices],
+            js=APPLY_SELECTOR_JS,
+            show_progress="hidden",
+        )
         self.mode.change(
             fn=self.mode_changed,
             inputs=[self.mode, self._app.user_id],
@@ -160,16 +175,12 @@ class FileSelector(BasePage):
         return gr.update(value=selected_files, choices=options), options
 
     def _on_app_created(self):
-        self._app.app.load(
-            self.load_files,
-            inputs=[self.selector, self._app.user_id],
-            outputs=[self.selector, self.selector_choices],
-        )
+        self._app.app.load(**self._load_files_event())
 
     def on_subscribe_public_events(self):
         self._app.subscribe_event(
             name=f"onFileIndex{self._index.id}Changed",
-            definition=self._load_files_event(),
+            definition=self._load_files_event(index_changed=True),
         )
         if self._app.f_user_management:
             for event_name in ["onSignIn", "onSignOut"]:
@@ -178,13 +189,54 @@ class FileSelector(BasePage):
                     definition=self._load_files_event(),
                 )
 
-    def _load_files_event(self):
+    def _load_files_event(self, *, index_changed=False):
+        from ktem.pages.chat.file_browser_updates import (
+            CAPTURE_SELECTOR_JS,
+            file_selector_result,
+        )
+
         return {
-            "fn": self.load_files,
-            "inputs": [self.selector, self._app.user_id],
-            "outputs": [self.selector, self.selector_choices],
+            "fn": file_selector_result(self.load_files, self._apply_file_choices),
+            "inputs": [
+                self.selector,
+                self._app.user_id,
+                self._files_stamp,
+                self._files_applied,
+            ],
+            "outputs": [self._files_result],
+            "js": CAPTURE_SELECTOR_JS.replace("INDEX_ID", str(self._index.id)).replace(
+                "INDEX_CHANGED", "true" if index_changed else "false"
+            ),
             "show_progress": "hidden",
         }
+
+    def _apply_file_choices(self, stamp, options, applied):
+        """Keep Gradio's per-session component vocabulary in delivery order.
+
+        The final browser gate owns the visible options. Gradio 4.39 also keeps
+        component constructor arguments on the server for subsequent updates;
+        a JavaScript-only output cannot update that session-local vocabulary.
+        The lock covers only the copy/assignment, never the authorized query.
+        """
+        from gradio.context import LocalContext
+
+        config = LocalContext.blocks_config.get()
+        if config is None:
+            raise RuntimeError("File choices require an active Gradio session")
+        with self._choices_lock:
+            if (
+                applied.get("epoch") == stamp["epoch"]
+                and applied.get("selectorRequest", 0) > stamp["selectorRequest"]
+            ):
+                return
+            component = copy(config.blocks[self.selector._id])
+            component.choices = list(options)
+            component._constructor_args = [
+                dict(component.constructor_args, choices=list(options)),
+                *component._constructor_args[1:],
+            ]
+            config.blocks[self.selector._id] = component
+            applied.update(stamp)
 
 
 __all__ = ["FileSelector"]
