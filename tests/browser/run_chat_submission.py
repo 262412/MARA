@@ -66,7 +66,7 @@ def run(output):
                 ["node", "tests/browser/chat_submission.cjs", str(output)],
                 cwd=repository,
                 env=environment,
-                timeout=360,
+                timeout=600,
             )
             return completed.returncode
         finally:
@@ -83,6 +83,8 @@ def _record_source(repository, output):
         "tests/browser/serve_chat_submission.py",
         "tests/browser/chat_submission.cjs",
         "tests/browser/conversation_actions.cjs",
+        "tests/browser/file_browser_navigation.cjs",
+        "libs/ktem/ktem_tests/file_browser_app_fixture.py",
         "libs/ktem/ktem_tests/chat_submission_model_fixture.py",
         "tests/browser/run_chat_submission.py",
     ]

@@ -54,6 +54,10 @@ def _launch(app, blocks, root, output):
     seed_owned_document(app, root)
     if os.environ.get("MARA_BROWSER_PUBLIC_FIXTURE") == "1":
         _seed_public_conversations()
+    else:
+        from ktem_tests.file_browser_app_fixture import seed_file_browser_documents
+
+        seed_file_browser_documents(app, root)
     page = app.chat_page
     trace, writes = _observe(page)
     dependencies = blocks.config["dependencies"]
