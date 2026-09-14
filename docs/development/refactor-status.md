@@ -1,275 +1,274 @@
-# MARA refactor status — 2026-09-13
+# MARA refactor status — 2026-09-14
 
-## Current round: R3-B conversation control and Web adaptation
+## Current round: R3-C file library and page navigation presentation
 
-**R3-A structure, F1–F4 and the complete R3-A browser closeout: ACCEPTED**, following
-the user's independent review of `b30d5341b3a711f25cadbb4710f177fcebb1abef`.
-Accepted R1/R2/R3-A results are retained. This round is limited to R3-B;
-no R3-C, R4, security upgrade or preview-wide refactor is included.
+**R3-B: ACCEPTED**, following the user's independent review of source
+`8d0f78d14775b3dcbd013da18969d856397a1859`. Accepted R1/R2/R3-A and F1–F4
+remain accepted. This round stops at R3-C; the remaining R3 scope below requires
+a separate decision after independent review.
 
-**R3-B limited validation passes; awaiting independent review.**
+**R3-C 限定验证通过，等待独立审查。**
 
-**Overall new-source CI: FAILURE. S1 remains open;
-merge/release remains NO-GO.** Windows full-suite failures remain separately
+**Overall new-source CI: FAILURE. S1/PCRE2 remain open;
+merge/release remains NO-GO.** Local full-suite failures remain separately
 recorded below and are not converted into passes.
 
-Review base: `6d54ea8a49aa50df92b84195c8d57f653e765c7f`.
+Review base: `742c3e0b5a654a37126c2ef6d2bb9344f5e05d1e`.
 Fixed original Dev: `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
-The [accepted R3-A report](https://github.com/262412/MARA/blob/6d54ea8a49aa50df92b84195c8d57f653e765c7f/docs/development/refactor-status.md)
-retains F1–F4's original failing tests, fixes and browser evidence.
+The [accepted R3-B report](https://github.com/262412/MARA/blob/742c3e0b5a654a37126c2ef6d2bb9344f5e05d1e/docs/development/refactor-status.md)
+retains its original characterization, deletion fix, browser and security evidence.
 
-| Reviewable change                                                      | Commit                                     |
-| ---------------------------------------------------------------------- | ------------------------------------------ |
-| Fixed expectations against the original control, before extraction     | `451e50aa8e5717eeb48b001a75cb1a1d4cd338e8` |
-| Separate fix: render the remaining conversation after deletion         | `6eec884cee82abe9f64d2d0360db5e529a2fcd9b` |
-| Real App operation, permission and held-generation browser regressions | `e6432d5ea70541ee9bdd23d91061e06bf66dcf0a` |
-| Structural extraction of conversation outputs and selectors            | `a5855eea73379f22a2434aa1a5df641436a0568f` |
-| Browser initialization and actual queued-action completion             | `af98c98da22a92c11e006bd542d05d47a83877de` |
-| Await the natural selection tail before the next control operation     | `8d0f78d14775b3dcbd013da18969d856397a1859` |
+| Reviewable change                                                                 | Commit                                     |
+| --------------------------------------------------------------------------------- | ------------------------------------------ |
+| Fixed original HTML/DOM and IO expectations before production changes             | `dac2782c02967de16222f60f9e41bc954472d045` |
+| Separate fix: encode file names in the Focus Markdown component                   | `25d72ee849db034e0cdf5998df224ed03a9bdf16` |
+| Real App file-library, navigation and source-switch browser tests                 | `795ba4d3cf4daabcbd090414339c6588b8f9b2ba` |
+| Extract file and page presentation, retaining old page entries                    | `e9f754128028d58f7063e30190283cb399ac6eba` |
+| Browser observer: retain evidence when a closing page interrupts response reading | `0e90c86c0eb57136955aba2851f1c52328e45c42` |
 
-The production implementation is `a5855eea`; the final source/test SHA is
-**`8d0f78d14775b3dcbd013da18969d856397a1859`**. The source push and remote readback
-both verify that SHA (`source-push.json`). All final browser, local full-suite,
-build and CI evidence below uses this final SHA. A later report-only commit
-records the actual report/local/remote SHAs in `r3b-report-commit.json` and
-`r3b-final-state.json`; the source and test tree must remain equivalent.
+Final source/test SHA: **`0e90c86c0eb57136955aba2851f1c52328e45c42`**.
+The production bytes equal `e9f75412`; the last commit changes only the browser
+harness (`harness-source-equivalence.json`). The ordinary source push and remote
+readback both verify `0e90c86c` (`source-push.json`). Final browser, full local
+suites, build and CI all use this source. The later report-only commit records
+its actual report/local/remote SHAs in `r3c-report-commit.json` and
+`r3c-final-state.json`; those trees must remain source-equivalent.
 
-### Responsibility boundary and preserved behavior
+### Responsibility boundary and fixed behavior
 
-No equivalent result/selector adapter existed. `conversation_restore.py` remains
-the recovery authority; the new `pages/chat/conversation_actions.py` only assembles
-the fixed output slots and dynamic selector values from an authorized session
-record, supplied defaults and existing index descriptors. It has no imports and
-receives no page, app or runtime. It introduces no DTO, repository or DI framework.
+No equivalent file-library/page-card renderer existed. The new
+`pages/chat/file_browser_rendering.py` owns file-type/size/page labels, grouping
+and card HTML, capacity summary HTML, page headers, text/image card HTML,
+thumbnail containers and metadata HTML. Its only imports are `html`, `os` and
+`re`; `os` is used for lexical suffix splitting. It receives ordinary data and
+does not receive a page/app/runtime, query a database, read files, generate
+previews or call models. It adds no cache, prefetching or DI framework.
 
-`ConversationControl.select_conv` retains identity resolution, the original
-service call, its broad logged exception boundary and the selector-error boundary.
-`_empty_conversation_state(app)` remains the old compatibility entrypoint and
-delegates result construction. The already thin `new_conv`, `delete_conv`,
-`clear_conv`, reload, rename, UI construction and service factories remain in
-place. AST comparison verifies that the other 15 class methods are unchanged.
-The full production diff is exactly `control.py`,
-`conversation_actions.py` and the separately reviewed deletion event fix.
+Nine old formatter/rendering methods remain as delegates or narrow IO adapters,
+including the two original staticmethods. Header stat calls, storage-capacity
+lookup, text extraction/pagination, thumbnail lookup/fallback, authorization
+and language-setting reads stay in `ChatPage`, in their original order. Existing
+upper-level render/preview patch consumers remain on those old entries; the
+private formatter entrypoints delegate to the single formatting implementation.
+The actual production diff is only `pages/chat/__init__.py` and the new renderer.
+AST comparison verifies all old signatures/decorators and the other **55 methods**
+unchanged (`source-scope-final.json`).
 
-`control-contract-baseline-verified.log` records **52 passes on the old production
-implementation**, before either production change. The tests were committed first.
-They fix identity and error timing, create/delete/list-refresh order and counts,
-first/empty selection after deletion, warning/error behavior and no-update versus
-clear outputs. They preserve raw `data_source.messages` rather than substituting
-the projected message list, suggestion defaults including explicit `None`, the
-shared default `STATE` reference, and retrieval/plot/state references. Selector
-coverage includes `None`, integer `0`, other integers, tuples, ignored kinds,
-eager default lookup and explicit invalid mappings; exceptions retain their old
-position. Tests also exercise old patch/override entries and actual request
-injection. Independent adapter tests use ordinary records without constructing
-a control or App. The focused post-extraction set passes **87 tests**.
+`rendering-contract-baseline-final.log` records **85 passes against the old
+production implementation**, before the extraction or Focus fix. Seventeen
+complete HTML strings were captured from `742c3e0b` and committed as fixed
+expectations; they were not regenerated from the new renderer. They cover group
+and input order, selected IDs, Unicode/HTML names and attributes, empty/missing
+records, file-type fallbacks, unit boundaries including original negative/NaN/
+infinity behavior, metadata and page numbers, excerpts, literal regex searches,
+entity highlighting, image hits and fallback cards.
 
-Real isolated-database tests retain request-derived identity and reject forged
-component IDs, missing/deleted users and private cross-owner reads. Public
-non-owner selection omits the owner's selector mapping; public visibility retains
-the configured username/all-users policy. Public readability grants neither
-rename nor deletion. All SQL, session read/mutation services, transactions,
-schema and resource-deletion semantics are unchanged.
+IO tests fix call timing, counts and early failures: zero storage avoids disk
+lookup; malformed counts fail at the original point; file stat precedes header
+page-count conversion; metadata existence checks precede language reads; text
+extraction still paginates at 1200 characters and clips to 260; filtered text
+pages are deliberately read again during rendering. Source rows and selected
+inputs retain their references and mutation behavior. No pagination/highlight
+algorithm was changed. `data-chat-file-id`, `data-page-number`, CSS classes and
+existing copy remain fixed. Attribute encoding supplies no source/URI permission.
 
-Direct select/clear still return **11 fixed slots plus dynamic selectors**;
-the existing restoration wrapper adds the cache output. New/delete retain their
-two outputs; rename retains its three outputs, including the repeated conversation
-component. Real normal/demo Gradio registration verifies the callbacks, request
-injection, triggers, chain order, inputs/outputs, JS and concurrency options.
-The message-send graph and its 12-output entrypoint remain unchanged.
+The post-extraction renderer, IO, compatibility and actual page-consumer set
+passes **115 tests** (`extraction-direct-consumers.log`). Direct renderer calls
+match all 17 old snapshots while file open/stat, disk lookup and socket connect
+are denied, without constructing a page or runtime. Parent packages are imported
+normally; this is a rendering-effects test, not a claim that the existing chat
+parent package has a lightweight cold import. Existing R1/R2 cold-import contracts
+remain in the complete regression suite; parent bootstrap is unchanged.
 
-### Separate baseline defect and event preservation
+### Separate Focus fix and browser evidence
 
-The new operation browser scenarios first ran against the old production code.
-`delete-answer-red.log` fails because the deletion chain has no restored-answer
-renderer. `browser-delete-red` then confirms the user-visible failure: deleting
-the second conversation selects the first in the dropdown while leaving the
-second answer displayed. The separate fix adds only one answer-rendering `.then`
-after the existing plot conversion in the deletion chain, reusing
-`conversation_restore.restored_answer`. The targeted set then passes 70 tests,
-and `browser-delete-green` passes both new operation scenarios before extraction.
+The old Focus component interpreted HTML in an authorized display name as markup.
+`focus-encoding-red.log` has two failing fixed expectations (visible row and
+authorized fallback); `browser-focus-red/results.json` records a real unintended
+same-origin `/r3c-exfil` image request and missing literal name text. Gradio removed
+the test `onerror` attribute; no JavaScript execution or data exfiltration is
+claimed. The separate one-line `html.escape(str(selected_name))` fix keeps the
+name literal. `focus-encoding-green.log` has **87 passes**. The final two-user
+browser results show the exact names, no injected element/global and no such
+request. The structural commit contains no further behavior fix.
 
-All other event edges and production adapters remain unchanged. View revision,
-generation ownership, full messages versus page messages, passive `.change`
-versus active `.input`, PreviewAccess and the F1–F4 completion guards remain.
-No files, shared indexes or other users' resources are deleted with a conversation.
+The added browser cases were exercised before extraction. Initial probe failures
+also identified test assumptions that were corrected against actual behavior:
+text preview uses sandboxed `srcdoc`; a 200-character indexed fixture had one
+page; PNG main preview presents indexed text while the card uses its indexed
+thumbnail; PDF.js inserts bidi marks in the visible search counter. A probe that
+typed a filter before initial file/preview work completed overlapped the existing
+startup refresh. The final filter scenario begins after one natural card selection
+and preview completion; filtering while login initialization is still active is
+not claimed as accepted, and production initialization timing was not changed.
 
-The harness separately exposed two readiness gaps: initial App file-list writers
-can finish after the input becomes visible, and the select root can finish before
-its tail closes an old delete dialog. The harness now derives these events from
-the real registered graph, observes actual queue completion and waits for the
-natural selection tail. It changes no product callback, visibility rule or queue
-implementation; it does not force clicks or call intermediate operation APIs.
-Failed readiness runs remain in the evidence directory, including
-`final-source-browser-full`; the final runs below supersede them.
+The first combined run (`source-browser-full.log`) was interrupted by an async
+harness observer reading a queue response after its page had closed. The separate
+test-only fix records that exact error only when the page is closed; other errors
+remain failures. The complete final rerun has no ignored observer closures and
+no unexpected JavaScript or preview callback errors.
 
-### Real complete-App browser acceptance
+`source-browser-verified` and the separate `source-browser-public` run use the
+complete production App, fixed **Gradio 4.39.0**, fresh browser contexts and owned
+storage. All **13 scenarios** pass: the retained ten plus three added cases.
+`browser-verified.json` binds their source/harness hashes, actual callback traces,
+write pairs and cleanup. The real registration still has **361 functions** with
+identical names, targets, input/output lists, initial selector events and callback
+roles relative to R3-B (`event-registration-comparison.json`). Event module bytes
+and registration methods are unchanged; existing real-registration/event tests
+remain in the full suite.
 
-The existing `tests/browser/run_chat_submission.py` harness runs the complete
-App with **Gradio 4.39.0**, fresh browser contexts and empty caches. Model,
-embedding and owned URL-content boundaries are deterministic; pages, events,
-adapters, authentication and indexing are real. Files are uploaded through the
-actual browser input and `/upload`. The full run performs three real file uploads
-and two URL indexing calls, with distinct authenticated users.
+| Browser scope                             | Verified natural behavior                                                                                                                                            |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Retained two-turn conversation            | Stream, citations/cache, naming, Web tail writes, refresh and restored content                                                                                       |
+| Retained conversation isolation           | New empty conversation, same file/page in different conversations, navigation and refresh                                                                            |
+| Retained failure and ownership protection | Generation error, slow stream/new conversation, disconnect/cancel, held stream/delete without resurrection                                                           |
+| Retained upload and URL (two users)       | Actual browser upload and real index entrypoints, request identity, URL preview fallback and completion tail                                                         |
+| Retained conversation controls            | New/cancel delete, manual/auto naming, remaining/last deletion and restored answer                                                                                   |
+| Retained separate public fixture          | Public non-owner read succeeds; rename/delete are rejected; zero writes                                                                                              |
+| Added file browser (two users)            | Case/whitespace filtering, clear/no-match, actual card clicks, prev/next/direct page/page-card navigation, special names/text, thumbnail hit, private-file isolation |
+| Added PDF/source-switch case              | Actual PDF.js find/highlight/no-match/clear and slow-stream file switch without overwriting the new view                                                             |
 
-`source-browser-accepted` exits **0 in 242.30 s**, passing the original seven
-scenarios and two new operation scenarios. `source-browser-public` exits
-**0 in 25.56 s**, passing the additional public-session permission scenario.
-Both runs record the final source SHA and harness hashes and clean up their
-owned runtime roots successfully (`browser-verified.json`).
+Runtime/Web write pairs retain messages, retrieval/plot history, state, selected
+mapping, origin and graph IDs. The existing parallel Notebook initialization is
+recorded separately and remains unchanged. Slow conversation/file switches each
+retain one Runtime finalizer write for the original request; the Web tail enters
+but rejects the stale view and does not rename/write over it. The deleted held
+request still reaches the unchanged finalizer's `NoResultFound` and never
+recreates the row. No intermediate naming/persistence API is manually invoked.
+Model/CDN/network boundaries alone are deterministic. All twelve probe/final
+browser runtimes were removed; historical retained directories were not cleaned.
 
-| Browser path                                                                                                                                                | Result                                                                                      |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Two turns, streaming, citations/cache, automatic naming, natural Web persist and reload                                                                     | PASS; both turns restore on first selection                                                 |
-| New empty conversation, same file in different conversations, page navigation and refresh                                                                   | PASS; histories stay isolated                                                               |
-| Model error                                                                                                                                                 | PASS; no completed-message persistence or naming                                            |
-| Slow stream followed by a new conversation                                                                                                                  | PASS; the new view remains empty and unmodified                                             |
-| Disconnect during partial streaming                                                                                                                         | PASS; cancellation before finalizer/Web writes                                              |
-| First user's actual upload and URL preview/send tail                                                                                                        | PASS; authenticated indexing and natural completion                                         |
-| Second user's actual upload/URL and private-source isolation                                                                                                | PASS; distinct owners and sources                                                           |
-| New/cancel-delete, same uploaded file in two conversations, manual/automatic names, switch/reload, confirmed deletion and deletion of the last conversation | PASS; remaining answer restored, final view empty, other rows and indexed sources unchanged |
-| Held generation, switch, reselect and delete before release                                                                                                 | PASS; no resurrection, replacement-view write or stale answer                               |
-| Public read by a non-owner, hidden private conversation/source, forbidden rename/delete                                                                     | PASS; real UI rejection and unchanged public row                                            |
+`refresh_chat_file_list` remains four outputs; `refresh_page_context_view` and
+`select_chat_file` remain three each, preserving no-update versus clear semantics.
+PreviewAccess, real request identity, view revision, generation ownership,
+complete/page-message separation, passive change/active input, restore/completion
+guards and deletion answer recovery remain unchanged. SQL, schema, permissions,
+transactions and resource-deletion semantics are untouched.
 
-The public fixture seeds owned public/private records before launching the App;
-selection, rename and delete all use the real UI. It does not claim to validate
-the existing Share-checkbox placement, which is hidden in Feedback by the
-unchanged frontend. No test fixture substitutes for browser uploads.
+### Local, packaged and CI verification
 
-The final full run records **19 successful persistence calls**. Eighteen are
-nine normal turns' paired Runtime finalizer/Web writes: messages, retrieval
-history, plot history, state, selection, origin and graph IDs match within every
-pair. The existing parallel Notebook initialization adds only the usual empty
-notes/artifacts and selected source IDs, as also observed in the accepted R3-A
-evidence. It is recorded separately, not claimed to be whole-row equality.
+Full local affected suites: **3412 passed, 99 failed, 7 skipped, 41 warnings**
+(`source-full-affected-suites.log`). Exact failure-node comparison and unchanged
+failing-test bytes prove no new failure relative to R3-B; the previous 99-item
+classification and evidence hash remain in `local-failure-verification-final.json`.
+No skip or platform/security exception was added. All nine distinct local warning
+bodies match the previous run (`local-warning-comparison.json`). This local run
+remains a failure, not a full-suite pass.
 
-The remaining call is the slow stream's Runtime finalizer writing its original
-conversation. The later Web tail callback enters the existing completion guard
-and does not write the new conversation; the new row stays untitled and empty.
-In the held-generation deletion case the unchanged Runtime finalizer raises
-`NoResultFound` for the deleted row; its failed success edge never starts a Web
-tail or recreates the row. This expected rejection is distinct from the model
-error, cancellation, authorization rejection and security findings.
+Full ruff/hygiene, changed-file pre-commit, locked-constraint/container parity,
+supply-chain policy and fixed-Dev/round-base hygiene checks pass. Four actual
+wheels and four sdists build and pass Twine checks; clean-wheel installations and
+MARA/MARA-cli command/bootstrap checks pass. `local-build-verified.json` checks
+27 retained/touched source members against the actual local archives, including
+the new renderer. The working copy's preserved user assets are included in those
+local builds; CI builds use the committed source tree. The downloaded CI Python
+artifact independently verifies all eight distributions' hashes, provenance and
+SBOMs and 29 ktem source members against `0e90c86c`
+(`python-artifact-inspection.json`).
 
-Reproduce the full run with the existing isolated Python/Playwright environment:
-
-```text
-python tests/browser/run_chat_submission.py --output <fresh-owned-evidence-directory>
-```
-
-For the separate public fixture, set `MARA_BROWSER_PUBLIC_FIXTURE=1` and
-`MARA_BROWSER_SCENARIOS=publicConversationPermissions`. Actual commands, hashes,
-raw callback/queue/write records and screenshots are retained beside each result.
-
-### Full gates, build, coverage and new-source CI
-
-The final local affected suite includes all ktem and CLI tests, selected-text
-runtime contracts, desktop sidecar tests and runtime bootstrap/isolation tests.
-It records **3331 passed, 99 failed, 7 skipped, 41 warnings** in 419.53 s.
-The 99 failure nodes match the previously explained set exactly; their test
-sources are unchanged, and no new failure or warning body appears. Existing
-Windows, checkout and preserved-user-asset failures remain failures, not skips.
-`local-failure-verification-final.json` retains the prior per-node classification
-and raw current error lines without reclassifying them as NLTK failures.
-
-Scoped pre-commit, full Ruff/hygiene, fixed-Dev and round-base baseline ratchets,
-locked constraints, container lock parity and supply-chain policy all pass.
-The actual rebuild produces all four wheels and four sdists; twine passes.
-Clean-wheel layer/combined installation and public CLI smoke pass. Twenty-six
-local runtime/source members, including the new module, match the built archives;
-local builds retain the user's unrelated asset edits. The independent CI build
-uses the exact committed source and verifies 28 protected/new source members,
-all eight distribution hashes, provenance and CycloneDX/SPDX records.
-
-[Quality gates run 34753062558](https://github.com/262412/MARA/actions/runs/34753062558) uses the final source
-and fixed Dev comparison input. It completes with **7 FAILURE, 13 SUCCESS**; overall **FAILURE**. `quality-final.json` retains every job,
+[Quality gates run 34802034996](https://github.com/262412/MARA/actions/runs/34802034996) uses final source
+`0e90c86c0eb57136955aba2851f1c52328e45c42` and the fixed Dev comparison input.
+It completes with **7 FAILURE, 13 SUCCESS**; overall **FAILURE**. `quality-final.json` retains every job,
 step conclusion and actual log summary. All functional/static/build/collection/
 secret checks pass; the three Python audits, three image baseline checks and
-required summary gate fail for the retained security blockers.
+required summary gate fail for the retained security blockers. These are observed
+results from this run, not a fixed expected future failure count.
 
-| CI regression suite          | Actual result                                                |
-| ---------------------------- | ------------------------------------------------------------ |
-| ktem isolated runtime        | 3261 passed, 45 warnings in 442.68s (0:07:22)                |
-| kotaemon Python 3.10         | 381 passed, 10 skipped, 93 warnings in 180.33s (0:03:00)     |
-| kotaemon Python 3.11         | 381 passed, 10 skipped, 93 warnings in 148.53s (0:02:28)     |
-| Benchmark and root contracts | 1622 passed, 8 warnings in 734.35s (0:12:14)                 |
-| Unified pytest collection    | Unified pytest collection passed: 5567 tests (minimum 1260). |
+| CI regression suite          | Actual result                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| ktem isolated runtime        | 3342 passed, 45 warnings in 701.21s (0:11:41)                                    |
+| kotaemon Python 3.10         | =========== 381 passed, 10 skipped, 93 warnings in 178.48s (0:02:58) =========== |
+| kotaemon Python 3.11         | =========== 381 passed, 10 skipped, 93 warnings in 126.64s (0:02:06) =========== |
+| Benchmark and root contracts | 1622 passed, 8 warnings in 737.76s (0:12:17)                                     |
+| Unified pytest collection    | Unified pytest collection passed: 5648 tests (minimum 1260).                     |
 
-The standalone ktem warning count is 45 versus 44 previously; the coverage
-ktem run is 46 versus 45. Both warning sections differ only by one additional
-occurrence of the existing Gradio version-check warning at the unchanged
-signed-provider SSO test. `gradio-warning-verification.json` records unchanged
-SSO/lock bytes and a fixed-response background-check reproduction.
-
-The coverage log also reverses `language,word` to `word,language` in one
-existing PromptTemplate warning. `warning-final-verification.json` verifies
+The fresh warning-body comparison differs only in the existing
+`word,language` / `language,word` order in a PromptTemplate warning
+(kotaemon Python 3.11). `warning-final-verification.json` verifies
 unchanged template/test bytes and the retained fresh-process hash-seed
 reproduction of the unsorted set order. No unexplained new warning body remains.
-These findings are recorded separately from NLTK and authorization/isolation
-failures; raw comparisons remain in `warnings-final.json` and
-`image-warnings-final.json`.
+The three image jobs also retain the same warning lines. These checks are
+separate from NLTK and authorization/isolation findings; raw comparisons
+remain in `warnings-final.json` and `image-warnings-final.json`. Warning
+counts also match R3-B for every suite, including the coverage runs
+(`warning-count-comparison.json`).
 
 | Coverage scope             | Covered statements / total | Result / unchanged floor |
 | -------------------------- | -------------------------- | ------------------------ |
 | benchmark                  | 17146/19005                | 90.218% / 90%            |
 | slide_cli                  | 2144/2837                  | 75.573% / 70%            |
 | kotaemon                   | 7521/10727                 | 70.113% / 60%            |
-| ktem                       | 42711/51171                | 83.467% / 50%            |
-| fixed_dev (`adab3f4d`)     | 636/658                    | 96.657% / 90%            |
-| r3b_increment (`6d54ea8a`) | 36/36                      | 100.000% / 90%           |
+| ktem                       | 42798/51207                | 83.578% / 50%            |
+| fixed_dev (`adab3f4d`)     | 751/775                    | 96.903% / 90%            |
+| r3c_increment (`742c3e0b`) | 115/117                    | 98.291% / 90%            |
 
-The new adapter has **30/30 covered
-statements** in the existing package collector. Coverage artifact `10316819796`
-has SHA-256 `bfef369ececbbc583e8468f250b4d0e9dc741a7053e2b676b76494e605bdf3e7`. The unchanged production diff gate
+The new renderer has **100/102 covered
+statements** in the existing package collector. Coverage artifact `10332732804`
+has SHA-256 `6ee41343d5d8a3fdfc738180f156fb54ba2674585ccb858229457aeada5dd4ea`. The unchanged production diff gate
 checks both fixed Dev and this round's base. Subprocess collection remains enabled;
 no extra omit, temporary runtime file or raw package-relative alias is present.
 
-### Security, preserved workspace and handoff
+### Security remains open
 
-All three fresh audit profiles (`root-py310`, `root-py311`, `container-py310`)
-remain **FAILURE**, with the same package/version/ID keys:
+Fresh audits of **root-py310, root-py311 and container-py310** retain exactly the
+same blocking package/version/ID set as R3-B; no new or resolved blocking key:
 
 | Package/version         | Blocking IDs in each profile                                               |
 | ----------------------- | -------------------------------------------------------------------------- |
-| `nltk==3.10.3`          | `GHSA-8mgp-746c-j5xp` (`CVE-2026-81726`)                                   |
+| `nltk==3.10.3`          | `GHSA-8mgp-746c-j5xp` / `CVE-2026-81726`                                   |
 | `chromadb==0.5.16`      | `PYSEC-2026-3813`, `PYSEC-2026-3814`, `PYSEC-2026-3815`                    |
 | `pypdf==4.2.0`          | `PYSEC-2026-3910`, `PYSEC-2026-3911`, `PYSEC-2026-3912`, `PYSEC-2026-3913` |
 | `transformers==4.56.2`  | `PYSEC-2026-3929`                                                          |
 | `unstructured==0.15.14` | `PYSEC-2026-3930`                                                          |
 
-`security-key-reconciliation-final.json` retains all fresh log hashes and the
-original nine alias records, whose evidence SHA-256 remains
-`5caae4ea1922c397555995e906bc987fcd42d141e0ec479d27796ebb106b6ead`.
-There are no new/resolved Python blocking keys compared with accepted R3-A.
+`security-key-reconciliation-final.json` retains each fresh job/log/hash and the
+original nine-alias evidence at `r2a-docqa-exports/new-security-records.json`,
+SHA-256 `5caae4ea1922c397555995e906bc987fcd42d141e0ec479d27796ebb106b6ead`.
+Security baselines, alias decisions, dependencies/locks, scan scope and required
+jobs are unchanged.
 
 Fresh Trivy **0.70.0** scans of full/lite/ollama preserve the same two HIGH
 blocking keys, `libpcre2-8-0==10.42-1|CVE-2026-86145` and
 `libpcre2-8-0==10.42-1|CVE-2026-89161` (reported fix: `10.42-1+deb12u1`).
 The package and layer match the previous accepted evidence; no new raw or blocking
 keys, secrets or misconfigurations appear. These findings remain new relative to
-the frozen security baseline, not new in R3-B. Build/provenance/runtime smoke pass;
+the frozen security baseline, not new in R3-C. Build/provenance/runtime smoke pass;
 standalone container SBOM generation is **SKIPPED** after the baseline failures.
 The retained image artifacts contain build metadata, provenance and Trivy reports.
 
 | Target | Artifact ID   | Artifact SHA-256                                                   |
 | ------ | ------------- | ------------------------------------------------------------------ |
-| full   | `10316403707` | `2943a12ddc6708aa15e6f4b598d47bcada1b1009055bc2700f6485ccbb01a002` |
-| lite   | `10316443849` | `4b328fddc3177d1f7f6e86202833daf6cf0c536c5b22ad1a26796751abdb48a9` |
-| ollama | `10315968546` | `d1d640296ebaadc9ebfcedcef73d7d23740829613bda73bbd0e4969ca597960b` |
+| full   | `10332140335` | `594344812a15c752be742b3e833abdc9affa8773735772676bd833d2d7c4f73c` |
+| lite   | `10331908419` | `24bfccab38d69095760b500c5a0fbb158baa85a5526b8feede0d692a17698b8a` |
+| ollama | `10331869108` | `4e3cd19c40e3cb2861a96d574fc6dee441b90851090bb2a2d0b7df3c7d4501d9` |
 
-During R3-B, no dependency, lock, security/hygiene baseline, alias policy, scan scope, coverage
-scope/floor or required job was changed. Canonical `.venv` metadata for 98,853
-entries and real configuration/cache/database metadata remain unchanged.
-The initial 133 unrelated asset/instruction changes remain byte-identical;
-the pre-existing untracked `NUL` and historical cleanup-refused directories are
-retained. Only the named round files are staged. No branch/worktree, force push,
-merge, deployment or publication occurred.
+### Protection and remaining R3 scope
+
+All **133 pre-existing asset/instruction changes** are preserved byte for byte,
+as is the untracked `NUL` entry. Only named round files were staged. Canonical
+environment and real configuration/database/cache metadata, worktree inventory,
+and historical cleanup-refused directories are compared in `r3c-final-state.json`.
+Validation uses the existing owned environment and isolated runtimes; no canonical
+sync, branch/worktree creation, force push, merge, deployment or release occurred.
+The retained R0/R1 history below is byte-identical.
 
 Evidence root:
-`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r3b-conversation-actions`.
-`execution.jsonl`, source/commit/push receipts, raw CI logs/artifacts and final
-state records bind the results to their actual SHAs. This round stops at R3-B
-for independent review; S1/PCRE2 and merge/release NO-GO remain separate.
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r3c-file-browser-rendering`.
+`execution.jsonl` records exact commands, source SHA, dirty-file hashes, environment,
+exit codes and logs. Source/report push receipts bind the remote state; the final
+report-only tree reuses source evidence only after byte-equivalence checks.
+
+This is a focused remaining-scope table, not a renewed repository inventory:
+
+| R3 area                               | Verified and retained                                                                                             | Still requires a separate closeout decision                                                                                                     |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend resource ownership/packaging | File/page HTML now has one renderer; existing CSS/JS tokens, actual card bindings and package builds pass         | Ownership of remaining inline JS/CSS and broader frontend resource packaging has not been consolidated                                          |
+| Index events                          | Existing split/event graph retained; actual upload/URL identity and two-user browser paths pass                   | Other index-management flows and the startup-refresh concurrency window are not broadly accepted by this round                                  |
+| Preview, graph and Studio interaction | Authorized preview/navigation, restore/tail guards, source switching and existing graph/Studio contracts retained | Full graph/Studio interaction and remaining preview orchestration need separately scoped end-to-end closeout; no full preview rewrite performed |
+
+**Stop at R3-C and await independent review. S1/PCRE2 remain open;
+merge/release remains NO-GO.**
 
 ## Previous R0/R1 evidence (retained history)
 
