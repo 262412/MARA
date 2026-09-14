@@ -102,6 +102,14 @@ def test_css_applies_reading_surface_to_preview_and_evidence_cards():
 
 def test_chat_file_list_renders_corpus_style_cards():
     chat_page = _read_chat_page()
+    rendering = CHAT_PAGE_FILE.with_name("file_browser_rendering.py").read_text(
+        encoding="utf-8"
+    )
+    assert "def _render_chat_file_list_html(" in chat_page
+    assert (
+        "file_browser_rendering.render_chat_file_list(rows, selected_ids)" in chat_page
+    )
+    assert "def _format_corpus_file_type(" in chat_page
 
     expected_tokens = [
         "corpus-file-library",
@@ -109,10 +117,10 @@ def test_chat_file_list_renders_corpus_style_cards():
         "corpus-file-entry__icon",
         "corpus-file-entry__meta",
         "corpus-file-entry__status",
-        "_format_corpus_file_type",
+        "format_corpus_file_type",
     ]
     for token in expected_tokens:
-        assert token in chat_page
+        assert token in rendering
 
 
 def test_txt_page_thumbnail_renders_text_preview_and_search_highlight():

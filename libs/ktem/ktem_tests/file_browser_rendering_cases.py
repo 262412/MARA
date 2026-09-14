@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import ktem.pages.chat as chat
 
-ROWS = [
+ROWS: list[dict] = [
     {"id": "doc", "name": "notes.MD", "page_count": 0, "size": 0},
     {"id": "image", "name": "画像.PNG", "size": 1024},
     {"id": "pdf'\"<&", "name": "星 & <tag> '\".PDF", "page_count": 2, "size": 1536},

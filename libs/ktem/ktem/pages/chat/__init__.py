@@ -29,6 +29,7 @@ from kotaemon.indices.qa.utils import strip_think_tag
 from ...utils import SUPPORTED_LANGUAGE_MAP
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
+from . import file_browser_rendering
 from .answer_rendering import format_chat_message_html
 
 # final_docqa_response_output consumes response.artifact for Studio panel updates.
@@ -704,37 +705,14 @@ class ChatPage(BasePage):
 
     @staticmethod
     def _format_corpus_file_type(file_name: str) -> str:
-        suffix = os.path.splitext(str(file_name or "").lower())[1]
-        if suffix == ".pdf":
-            return "PDF"
-        if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}:
-            return "Images"
-        if suffix in {".ppt", ".pptx"}:
-            return "Slides"
-        if suffix in {".doc", ".docx", ".txt", ".md", ".rtf"}:
-            return "Documents"
-        return "Documents"
+        return file_browser_rendering.format_corpus_file_type(file_name)
 
     @staticmethod
     def _format_bytes(size_bytes: int | float | None) -> str:
-        size = float(size_bytes or 0)
-        units = ["B", "KB", "MB", "GB", "TB"]
-        for unit in units:
-            if size < 1024 or unit == units[-1]:
-                if unit == "B":
-                    return f"{int(size)} {unit}"
-                return f"{size:.1f} {unit}"
-            size /= 1024
-        return "0 B"
+        return file_browser_rendering.format_bytes(size_bytes)
 
     def _format_corpus_file_meta(self, file_name: str, page_count=None) -> str:
-        if page_count:
-            pages = max(1, int(page_count))
-            return f"{pages} page" if pages == 1 else f"{pages} pages"
-        suffix = os.path.splitext(str(file_name or "").lower())[1]
-        if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}:
-            return "1 page"
-        return "page count unavailable"
+        return file_browser_rendering.format_corpus_file_meta(file_name, page_count)
 
     def _resolve_source_file_path(self, file_id: str, user_id=None) -> str:
         if not file_id:
@@ -815,132 +793,28 @@ class ChatPage(BasePage):
             except Exception:
                 width = 100
 
-        file_label = "file" if file_count == 1 else "files"
-        page_label = "page" if page_count == 1 else "pages"
-        return (
-            "<div class='workbench-file-summary'>"
-            "<div>"
-            f"<strong>{file_count} {file_label}</strong>"
-            f"<span>{page_count} {page_label}</span>"
-            "</div>"
-            "<div>"
-            f"<strong>{html.escape(storage_label)}</strong>"
-            "<span>stored</span>"
-            "</div>"
-            "<div class='workbench-file-summary__bar'>"
-            f"<span style='width: {width}%'></span>"
-            "</div>"
-            "</div>"
+        return file_browser_rendering.render_corpus_summary(
+            file_count, page_count, storage_label, width
         )
 
     def _render_chat_file_list_html(
         self, rows: list[dict], selected_ids: set[str]
     ) -> str:
-        if not rows:
-            return "<div class='chat-file-empty'>No files uploaded</div>"
-
-        grouped_rows: dict[str, list[dict]] = {
-            "PDF": [],
-            "Images": [],
-            "Slides": [],
-            "Documents": [],
-        }
-        for row in rows:
-            file_name = str(row.get("name", "") or row.get("id", ""))
-            grouped_rows[self._format_corpus_file_type(file_name)].append(row)
-
-        sections = []
-        for file_type, type_rows in grouped_rows.items():
-            if not type_rows:
-                continue
-
-            items = []
-            for row in type_rows:
-                file_id = str(row.get("id", "") or "")
-                file_name = str(row.get("name", "") or file_id)
-                is_selected = file_id in selected_ids
-                item_class = (
-                    "corpus-file-entry is-selected"
-                    if is_selected
-                    else "corpus-file-entry"
-                )
-                page_meta = self._format_corpus_file_meta(
-                    file_name, row.get("page_count")
-                )
-                size_meta = self._format_bytes(int(row.get("size", 0) or 0))
-                items.append(
-                    "<button type='button' "
-                    f"class='{item_class}' "
-                    f"data-chat-file-id='{html.escape(file_id, quote=True)}'>"
-                    "<span class='corpus-file-entry__icon'>"
-                    f"{html.escape(file_type[:3].upper())}"
-                    "</span>"
-                    "<span class='corpus-file-entry__body'>"
-                    "<span class='corpus-file-entry__name'>"
-                    f"{html.escape(file_name)}"
-                    "</span>"
-                    "<span class='corpus-file-entry__meta'>"
-                    f"{html.escape(page_meta)} - {html.escape(size_meta)}"
-                    "</span>"
-                    "</span>"
-                    "<span class='corpus-file-entry__status'>Indexed</span>"
-                    "</button>"
-                )
-
-            sections.append(
-                "<section class='corpus-file-section'>"
-                "<div class='corpus-file-section__header'>"
-                f"<strong>{html.escape(file_type)}</strong>"
-                f"<span>{len(type_rows)}</span>"
-                "</div>"
-                "<div class='corpus-file-section__items'>" + "".join(items) + "</div>"
-                "</section>"
-            )
-
-        if sections:
-            return "<div class='corpus-file-library'>" + "".join(sections) + "</div>"
-
-        items = []
-        for row in rows:
-            file_id = str(row.get("id", "") or "")
-            file_name = str(row.get("name", "") or file_id)
-            is_selected = file_id in selected_ids
-            item_class = (
-                "chat-file-entry is-selected" if is_selected else "chat-file-entry"
-            )
-            items.append(
-                "<button type='button' "
-                f"class='{item_class}' "
-                f"data-chat-file-id='{html.escape(file_id, quote=True)}'>"
-                "<span class='chat-file-entry__name'>"
-                f"{html.escape(file_name)}"
-                "</span>"
-                "</button>"
-            )
-
-        return "<div class='chat-file-list-shell'>" + "".join(items) + "</div>"
+        return file_browser_rendering.render_chat_file_list(rows, selected_ids)
 
     def _render_page_strip_header(
         self, file_id: str, file_name: str, file_path: str, total_pages
     ) -> str:
         del file_id
         if not file_name:
-            return "<div class='page-strip-empty'>Select a file to preview pages.</div>"
+            return file_browser_rendering.render_page_strip_header("", "", 1, 0)
         file_type = self._format_corpus_file_type(file_name)
         size = (
             os.path.getsize(file_path) if file_path and os.path.isfile(file_path) else 0
         )
         pages = max(1, int(total_pages or 1))
-        page_label = "page" if pages == 1 else "pages"
-        return (
-            "<div class='page-strip-header'>"
-            f"<div class='page-strip-file-icon'>{html.escape(file_type[:3].upper())}</div>"
-            "<div>"
-            f"<strong>{html.escape(file_name)}</strong>"
-            f"<span>{pages} {page_label} - {html.escape(self._format_bytes(size))}</span>"
-            "</div>"
-            "<span class='page-strip-indexed'>Indexed</span>"
-            "</div>"
+        return file_browser_rendering.render_page_strip_header(
+            file_name, file_type, pages, size
         )
 
     @staticmethod
@@ -976,17 +850,7 @@ class ChatPage(BasePage):
         query: str,
     ) -> str:
         excerpt = self._get_text_thumbnail_excerpt(file_id, file_name, file_path, page)
-        if not excerpt:
-            excerpt = "No text preview available."
-        if query:
-            pattern = re.compile(re.escape(query), flags=re.IGNORECASE)
-            excerpt = pattern.sub(
-                lambda match: f"<mark>{html.escape(match.group(0))}</mark>",
-                html.escape(excerpt),
-            )
-        else:
-            excerpt = html.escape(excerpt)
-        return f"<span class='page-thumbnail-card__text'>{excerpt}</span>"
+        return file_browser_rendering.render_text_thumbnail_preview(excerpt, query)
 
     def _render_page_thumbnail_strip(
         self,
@@ -998,7 +862,7 @@ class ChatPage(BasePage):
         filter_text: str = "",
     ) -> str:
         if not file_id or not file_name:
-            return "<div class='page-thumbnail-empty'>No file selected.</div>"
+            return file_browser_rendering.render_empty_thumbnail_strip()
 
         current_page = max(1, int(page_number or 1))
         total = max(1, int(total_pages or 1))
@@ -1015,18 +879,11 @@ class ChatPage(BasePage):
                 ).lower()
             ]
             if not matched_pages:
-                return (
-                    "<div class='page-thumbnail-empty'>"
-                    f"No pages match '{html.escape(query)}'."
-                    "</div>"
-                )
+                return file_browser_rendering.render_empty_thumbnail_strip(query)
             page_numbers = matched_pages
 
         cards = []
         for page in page_numbers:
-            classes = ["page-thumbnail-card"]
-            if page == current_page:
-                classes.append("is-active")
             if self._is_text_thumbnail_source(file_name, file_path):
                 preview = self._render_text_thumbnail_preview(
                     file_id, file_name, file_path, page, query
@@ -1044,26 +901,16 @@ class ChatPage(BasePage):
                     preview_src = self.page_preview._get_page_preview_image(
                         file_id, file_path, page
                     )
-                if preview_src:
-                    preview = (
-                        "<img class='page-thumbnail-card__image' "
-                        "loading='lazy' "
-                        f"src='{html.escape(preview_src, quote=True)}' "
-                        f"alt='Page {page} preview' />"
-                    )
-                else:
-                    preview = "<span class='page-thumbnail-card__page'></span>"
+                preview = file_browser_rendering.render_image_thumbnail_preview(
+                    preview_src, page
+                )
             cards.append(
-                "<button type='button' "
-                f"class='{' '.join(classes)}' "
-                f"data-page-number='{page}'>"
-                f"<span class='page-thumbnail-card__num'>{page}</span>"
-                f"{preview}"
-                f"<strong>Page {page}</strong>"
-                "</button>"
+                file_browser_rendering.render_page_thumbnail_card(
+                    page, current_page, preview
+                )
             )
 
-        return "<div class='page-thumbnail-list'>" + "".join(cards) + "</div>"
+        return file_browser_rendering.render_page_thumbnail_list(cards)
 
     def _render_page_metadata_strip(
         self,
@@ -1088,18 +935,8 @@ class ChatPage(BasePage):
         )
         language_setting = self._app.default_settings.reasoning.settings.get("lang")
         language = getattr(language_setting, "value", "") or "default"
-        summary = (
-            f"Previewing {html.escape(file_name)}" if file_name else "No page selected"
-        )
-        return (
-            "<div class='page-metadata-strip'>"
-            f"<div><span>Modality</span><strong>{html.escape(file_type)}</strong></div>"
-            f"<div><span>Page</span><strong>{current_page} / {total}</strong></div>"
-            f"<div><span>Page Summary</span><strong>{summary}</strong></div>"
-            f"<div><span>Extracted Text</span><strong>{html.escape(extracted)}</strong></div>"
-            f"<div><span>OCR</span><strong>{html.escape(ocr_state)}</strong></div>"
-            f"<div><span>Language</span><strong>{html.escape(str(language))}</strong></div>"
-            "</div>"
+        return file_browser_rendering.render_page_metadata_strip(
+            file_name, file_type, current_page, total, extracted, ocr_state, language
         )
 
     @staticmethod
