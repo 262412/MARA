@@ -35,8 +35,17 @@ async function login(username = 'browser-owner') {
   });
   page.on('response', async response => {
     if (new URL(response.url()).pathname === '/queue/join' && response.ok()) {
-      const body = await response.json();
-      queue.requestIds[queue.requestOrder.get(response.request())] = body.event_id;
+      try {
+        const body = await response.json();
+        queue.requestIds[queue.requestOrder.get(response.request())] = body.event_id;
+      } catch (error) {
+        if (page.isClosed() && String(error).includes('Target page, context or browser has been closed')) {
+          results.observerClosures ||= [];
+          results.observerClosures.push({sessionHash: queue.sessionHash, error: String(error)});
+        } else {
+          results.errors.push(String(error));
+        }
+      }
     }
   });
   await page.route('https://cdnjs.cloudflare.com/ajax/libs/tributejs/5.1.3/tribute.min.js',
