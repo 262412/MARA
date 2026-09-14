@@ -163,9 +163,9 @@ class FileSelector(BasePage):
             group_table = self._index._resources["FileGroup"]
             statement = select(group_table).where(group_table.user == user_id)
             for (group,) in session.execute(statement).all():
-                options.append(
-                    (f"group: '{group.name}'", json.dumps(group.data.get("files", [])))
-                )
+                group_value = json.dumps(group.data.get("files", []))
+                options.append((f"group: '{group.name}'", group_value))
+                available_ids.append(group_value)
 
         if selected_files:
             available_ids_set = set(available_ids)

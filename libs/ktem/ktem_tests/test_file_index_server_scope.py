@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, cast
@@ -255,3 +256,55 @@ def test_file_selector_load_uses_server_identity(
 
     assert update["choices"] == [("own.pdf", "server-file")]
     assert options == [("own.pdf", "server-file")]
+
+
+def test_selector_refresh_preserves_only_authorized_group_choices(
+    private_file_database, monkeypatch
+):
+    index, source_table, _index_table, group_table, db_engine = private_file_database
+    own_group = json.dumps(["owner-a", "owner-b"])
+    foreign_group = json.dumps(["foreign-file"])
+    with Session(db_engine) as session:
+        session.add_all(
+            [
+                source_table(id="owner-a", name="a.txt", user="owner"),
+                source_table(id="owner-b", name="b.txt", user="owner"),
+                source_table(id="foreign-file", name="secret.txt", user="other"),
+                group_table(
+                    name="Own group",
+                    user="owner",
+                    data={"files": ["owner-a", "owner-b"]},
+                ),
+                group_table(
+                    name="Other group", user="other", data={"files": ["foreign-file"]}
+                ),
+            ]
+        )
+        session.commit()
+    selector = cast(Any, FileSelector.__new__(FileSelector))
+    selector._index = index
+    monkeypatch.setattr(selector_ui_module, "engine", db_engine)
+    monkeypatch.setattr(
+        selector_ui_module,
+        "resolve_file_index_user_id",
+        lambda _user, _request: "owner",
+    )
+    selected = [own_group, "owner-b", foreign_group, "foreign-file", '["missing"]']
+    update, options = selector.load_files(
+        selected, "other", request=SimpleNamespace(username="owner")
+    )
+
+    assert update["value"] == [own_group, "owner-b"]
+    assert options == [
+        ("a.txt", "owner-a"),
+        ("b.txt", "owner-b"),
+        ("group: 'Own group'", own_group),
+    ]
+    assert update["choices"] == options
+    assert selected == [
+        own_group,
+        "owner-b",
+        foreign_group,
+        "foreign-file",
+        '["missing"]',
+    ]

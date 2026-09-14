@@ -13,6 +13,7 @@ from ktem.assets import ASSETS_DIR
 from ktem.auth.service import resolve_request_user_id
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
+from ktem.index.file._selection import normalize_selected_values
 from ktem.preview.context import preview_access_for_user
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
     SuggestConvNamePipeline,
@@ -753,7 +754,15 @@ class ChatPage(BasePage):
         request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         user_id = self._resolve_persist_user_id(user_id, request)
-        selected_ids = self._normalize_selected_file_ids(selected_file_ids)
+        selected_ids = [
+            file_id
+            for value in self._normalize_selected_file_ids(selected_file_ids)
+            for file_id in (
+                normalize_selected_values(value)
+                if self._is_group_selector_value(value)
+                else [value]
+            )
+        ]
         selected_set = set(selected_ids)
         keyword = str(filter_text or "").strip().lower()
 
