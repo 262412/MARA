@@ -1287,7 +1287,7 @@ class ChatPage(BasePage):
         return (
             rows,
             list_html,
-            f"Focus: {selected_name}",
+            f"Focus: {html.escape(str(selected_name))}",
             self._render_corpus_summary_html(rows),
         )
 

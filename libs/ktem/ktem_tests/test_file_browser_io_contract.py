@@ -337,7 +337,7 @@ def test_refresh_uses_request_identity_first_and_keeps_filtered_selection_fallba
     result = page.refresh_chat_file_list(
         "conv", "forged", choices, selected, graph, " FOCUS ", request=request
     )
-    assert result == (rows, "list", "Focus: Hidden & File", "summary")
+    assert result == (rows, "list", "Focus: Hidden &amp; File", "summary")
     assert result[0] is rows and selected == ["hidden"] and graph == ["graph"]
     assert calls == [
         ("identity", "forged", request),
