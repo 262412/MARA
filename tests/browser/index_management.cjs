@@ -49,6 +49,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
     await filter.fill(filename);
     await filter.press('Enter');
     await manager(page).getByRole('tab', {name: 'Files', exact: true}).click();
+    await expect(page.locator('#file_list_view svelte-virtual-table-viewport tbody tr')).toHaveCount(1, {timeout: 20000});
     await page.locator('#file_list_view svelte-virtual-table-viewport').getByText(filename, {exact: true}).click();
     await expect(manager(page)).toContainText('Selected file: ' + filename);
     await expect(manager(page).getByRole('button', {name: 'Delete', exact: true})).toBeVisible();
@@ -186,6 +187,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
     const {page, queue} = await login('browser-controls');
     const key = 'revoked-source-preview';
     const name = 'r3d-revoked-preview.txt';
+    let armed = false;
     async function gate(suffix, body) {
       const response = await fetch(base + '/owned-file-browser-gate' + suffix, body === undefined ? {} : {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
@@ -202,6 +204,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
       await manager(page).getByRole('button', {name: 'Go to Chat', exact: true}).click();
       await expect(page.locator(`[data-chat-file-id="${file.id}"]`)).toHaveClass(/is-selected/);
       await gate('/arm', {key, callback: 'ChatPagePreviewController.on_preview_tick', event: 'call', username: 'browser-controls', session_hash: queue.sessionHash, file_id: file.id});
+      armed = true;
       await expect.poll(async () => (await gate(''))[key]?.entered, {timeout: 15000}).toBe(true);
       await openManager(page);
       await selectFile(page, name);
@@ -218,7 +221,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
       results.previewRevocations.push({sessionHash: queue.sessionHash, fileId: file.id});
       results.scenarios.push({name: 'deleted-owner-source-rejects-held-preview-without-reading-or-restoring-it', fileId: file.id});
     } finally {
-      await gate('/release/' + key, {});
+      if (armed) await gate('/release/' + key, {});
       await page.close();
     }
   }
