@@ -96,7 +96,13 @@ def _record_source(repository, output):
         "libs/ktem/ktem/index/file/_chat_upload_events.py",
         "libs/ktem/ktem/pages/chat/chat_layout.py",
         "libs/ktem/ktem/pages/chat/chat_knowledge_graph_bindings.py",
+        "libs/ktem/ktem/pages/chat/__init__.py",
+        "libs/ktem/ktem/index/file/ui.py",
     ]
+    names.extend(
+        str(asset.relative_to(repository))
+        for asset in (repository / "libs/ktem/ktem/assets/js").glob("*.js")
+    )
     (output / "source.json").write_text(
         json.dumps(
             {

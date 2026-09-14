@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from pytest_runtime_isolation import TestRuntimePaths  # noqa: E402
+from scripts import clean_wheel_web_smoke as web_smoke  # noqa: E402
 
 EXPECTED_WHEELS = {
     "ktem": "ktem/",
@@ -39,6 +40,7 @@ KTEM_ASSETS = {
     "ktem/assets/vendor/pdfjs/LICENSE.pdfjs",
     "ktem/assets/vendor/pdfjs/manifest.json",
     "ktem/assets/vendor/pdfjs/pdfjs-6.1.200-dist.zip",
+    *web_smoke.CHAT_CALLBACK_ASSETS,
 }
 
 
@@ -389,6 +391,7 @@ def _run_offline_runtime_smoke(
     _assert_installed_distribution_paths(venv, offline_env)
     _run_docqa_export_smoke(venv, offline_env)
     _run_docqa_preparation_smoke(venv, offline_env)
+    web_smoke.run_chat_callback_smoke(_venv_python(venv), venv.parent, offline_env)
     for executable in ("MARA", "MARA-cli"):
         _run(
             [_venv_command(venv, executable), "--help"],
