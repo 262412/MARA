@@ -34,6 +34,14 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
     }
     await expect.poll(() => queue.length).toBeGreaterThan(before);
     await settled(queue);
+    // Reindex keeps the displayed filename while replacing its source ID.
+    // The old upload-result text can match before the refresh tail arrives.
+    const indexed = (await evidence()).files.filter(file => names.includes(file.name));
+    for (const file of indexed) {
+      const row = page.locator('#file_list_view svelte-virtual-table-viewport tr')
+        .filter({hasText: file.name});
+      await expect(row).toContainText(file.id, {timeout: 30000});
+    }
   }
 
   async function selectFile(page, filename) {
