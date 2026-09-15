@@ -4,25 +4,14 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from . import finance_plan_policy
 from .boolean_conjunction import with_boolean_support_group
 from .boolean_evidence_scope import boolean_retrieval_query
-from .finance_agreement_identity import agreement_date
-from .finance_evidence_dimensions import requested_scale
-from .finance_query_planning import (
-    finance_fact_specs,
-    finance_formula_spec,
-    finance_formula_status,
-    finance_operand_specs,
-    is_finance_segment_comparison,
-)
+from .finance_query_planning import finance_formula_status
 from .finance_retrieval_focus import (
     apply_finance_retrieval_focus,
     apply_finance_retrieval_focus_to_slots,
-    finance_comparison_operands_required,
-    finance_retrieval_focus_terms,
-    with_finance_retrieval_focus,
 )
-from .financial_statement_identity import required_financial_identity
 from .heuristic_query_slots import heuristic_slots, mmdoc_visual_time_series_slots
 from .query_classification import (
     has_causal_intent,
@@ -181,66 +170,35 @@ def _heuristic_evidence_slots(
     )
     if visual_slots:
         return visual_slots, False, False
-    finance_domain_requested = "finance" in str(verification_domain or "").lower()
-    inferred_finance_specs = (
-        finance_operand_specs(text, periods)
-        if normalized_type == "numeric"
-        or finance_comparison_operands_required(text, periods, verification_domain)
-        else ()
+    (
+        slots,
+        finance_domain,
+        segment_comparison,
+    ) = finance_plan_policy.finance_evidence_slots(
+        text,
+        normalized_type=normalized_type,
+        periods=periods,
+        period_kind=period_kind,
+        capabilities=capabilities,
+        verification_domain=verification_domain,
+        causal_intent=causal_intent,
+        build_slots=_finance_slots,
     )
-    finance_domain = finance_domain_requested or bool(inferred_finance_specs)
-    segment_comparison = finance_domain and is_finance_segment_comparison(text)
-    finance_specs = inferred_finance_specs if finance_domain else ()
-    formula_status = (
-        finance_formula_status(text, periods)
-        if finance_domain and normalized_type == "numeric"
-        else "not_applicable"
-    )
-    finance_fact = finance_domain and normalized_type != "numeric" and not causal_intent
-    finance_support_specs = finance_fact_specs(text, periods) if finance_fact else ()
-    slots: tuple[EvidenceSlot, ...] = (
-        ()
-        if formula_status == "unsupported"
-        else (
-            _finance_slots(
-                finance_specs or finance_support_specs,
-                require_scale=bool(finance_specs and requested_scale(text)),
-                role="operand" if finance_specs else "support",
-                period_kind=period_kind,
-                page_labels=_explicit_page_labels(capabilities),
-                query_context=text,
-            )
-            if finance_specs or finance_support_specs
-            else heuristic_slots(
-                text,
-                normalized_type,
-                planned_question_type,
-                periods,
-                metric,
-                capabilities,
-                verification_domain,
-            )
+    if slots is None:
+        slots = heuristic_slots(
+            text,
+            normalized_type,
+            planned_question_type,
+            periods,
+            metric,
+            capabilities,
+            verification_domain,
         )
+    slots = finance_plan_policy.finalize_finance_slots(
+        text,
+        slots,
+        finance_domain=finance_domain,
     )
-    if "total" in text.lower() and any(
-        slot.metric == "revolving credit capacity" for slot in slots
-    ):
-        active_date = agreement_date(text)
-        slots = tuple(
-            (
-                replace(
-                    slot,
-                    cardinality=2,
-                    operator_role="collection",
-                    entity=f"active_at:{active_date}" if active_date else "active",
-                )
-                if slot.metric == "revolving credit capacity"
-                else slot
-            )
-            for slot in slots
-        )
-    if finance_domain:
-        slots = with_finance_retrieval_focus(slots, text)
     slots = _apply_fiscal_quarter_qualifiers(text, slots)
     return slots, finance_domain, segment_comparison
 
@@ -279,16 +237,12 @@ def _add_finance_formula_constraint(
     periods: list[str],
     calculation_authoritative: bool,
 ) -> None:
-    formula_spec = (
-        finance_formula_spec(question, periods) if calculation_authoritative else None
+    finance_plan_policy.add_finance_formula_constraint(
+        constraints,
+        question,
+        periods,
+        calculation_authoritative,
     )
-    constraints["finance_formula_status"] = (
-        finance_formula_status(question, periods)
-        if calculation_authoritative
-        else "not_applicable"
-    )
-    if formula_spec is not None:
-        constraints["finance_formula"] = formula_spec
 
 
 def _add_distinct_slot_constraint(
@@ -379,15 +333,7 @@ def score_evidence_for_slot(
 def _segment_comparison_slots(
     slots: tuple[EvidenceSlot, ...],
 ) -> tuple[EvidenceSlot, ...]:
-    return tuple(
-        replace(
-            slot,
-            statement_kind="segment_table",
-            financial_scope="segment",
-            query=f"reporting segment net revenue {slot.period}".strip(),
-        )
-        for slot in slots
-    )
+    return finance_plan_policy.segment_comparison_slots(slots)
 
 
 def missing_required_slots(plan: QueryPlan) -> list[EvidenceSlot]:
@@ -442,45 +388,16 @@ def _finance_slots(
     page_labels: tuple[str, ...] = (),
     query_context: str = "",
 ) -> tuple[EvidenceSlot, ...]:
-    slots = []
-    for index, (slot_id, metric, period) in enumerate(specs):
-        statement_kind, financial_scope = required_financial_identity(metric)
-        slots.append(
-            EvidenceSlot(
-                slot_id=f"operand:{slot_id}",
-                role=role,
-                metric=metric,
-                period=period,
-                period_kind=period_kind,
-                modality="auto",
-                statement_kind=statement_kind,
-                financial_scope=financial_scope,
-                required_for_execution=role == "operand",
-                query=_finance_retrieval_query(
-                    metric,
-                    period,
-                    statement_kind=statement_kind,
-                    query_context=query_context,
-                ),
-                locator=_finance_slot_locator(
-                    index,
-                    slot_count=len(specs),
-                    page_labels=page_labels,
-                ),
-            )
-        )
-    slots_tuple = tuple(slots)
-    if not require_scale:
-        return slots_tuple
-    dimension_query = _finance_dimension_query(slots_tuple, query_context)
-    return (
-        *slots_tuple,
-        EvidenceSlot(
-            slot_id="dimension:scale",
-            role="dimension",
-            required_for_execution=True,
-            query=dimension_query,
-        ),
+    return finance_plan_policy.finance_slots(
+        specs,
+        require_scale=require_scale,
+        role=role,
+        period_kind=period_kind,
+        page_labels=page_labels,
+        query_context=query_context,
+        retrieval_query=_finance_retrieval_query,
+        dimension_query=_finance_dimension_query,
+        slot_locator=_finance_slot_locator,
     )
 
 
@@ -491,67 +408,23 @@ def _finance_retrieval_query(
     statement_kind: str,
     query_context: str = "",
 ) -> str:
-    terms = [metric]
-    aliases = {
-        "capital expenditure": ("capital spending",),
-        "cost of goods sold": (
-            "cost of products sold",
-            "cost of revenues",
-            "cost of sales",
-            "COGS",
-        ),
-        "operating cash flow": (
-            "cash from operations",
-            "net cash provided by operating activities",
-        ),
-        "revolving credit capacity": (
-            "revolving credit agreement",
-            "revolving credit agreements",
-            "borrow up to",
-        ),
-    }
-    terms.extend(aliases.get(metric, ()))
-    if metric == "capital expenditure" and _is_free_cash_flow_query(query_context):
-        terms.extend(("capex", "purchases of land buildings and equipment"))
-    headings = {
-        "balance_sheet": "consolidated balance sheet",
-        "cash_flow_statement": "consolidated statement of cash flows",
-        "income_statement": "consolidated statements of income",
-        "non_gaap_performance": "non-GAAP reconciliation",
-    }
-    if statement_kind in headings:
-        terms.append(headings[statement_kind])
-    if period:
-        terms.append(period)
-    terms.extend(
-        term
-        for term in finance_retrieval_focus_terms(query_context)
-        if term not in terms
+    return finance_plan_policy.finance_retrieval_query(
+        metric,
+        period,
+        statement_kind=statement_kind,
+        query_context=query_context,
     )
-    return " ".join(terms)
 
 
 def _is_free_cash_flow_query(question: str) -> bool:
-    lowered = str(question or "").lower()
-    return "free cash flow" in lowered or bool(re.search(r"\bfcf\b", lowered))
+    return finance_plan_policy.is_free_cash_flow_query(question)
 
 
 def _finance_dimension_query(
     slots: tuple[EvidenceSlot, ...],
     query_context: str,
 ) -> str:
-    terms = ["tabular dollars unit scale convention"]
-    for slot in slots:
-        terms.extend((slot.metric, slot.period, slot.query))
-    if _is_free_cash_flow_query(query_context):
-        terms.extend(
-            (
-                "consolidated statement of cash flows",
-                "net cash provided by operating activities",
-                "purchases of land buildings and equipment",
-            )
-        )
-    return " ".join(dict.fromkeys(term for term in terms if term))
+    return finance_plan_policy.finance_dimension_query(slots, query_context)
 
 
 def _second_round_slot_query(slot: EvidenceSlot) -> str:
@@ -583,10 +456,7 @@ def _second_round_slot_query(slot: EvidenceSlot) -> str:
 
 
 def _explicit_page_labels(capabilities: dict[str, object]) -> tuple[str, ...]:
-    values = capabilities.get("explicit_page_labels")
-    if not isinstance(values, (list, tuple)):
-        return ()
-    return tuple(str(value).strip() for value in values if str(value).strip())
+    return finance_plan_policy.explicit_page_labels(capabilities)
 
 
 def _finance_slot_locator(
@@ -595,6 +465,8 @@ def _finance_slot_locator(
     slot_count: int,
     page_labels: tuple[str, ...],
 ) -> EvidenceLocator:
-    if len(page_labels) == slot_count:
-        return EvidenceLocator(page_label=page_labels[index])
-    return EvidenceLocator(page_labels=page_labels)
+    return finance_plan_policy.finance_slot_locator(
+        index,
+        slot_count=slot_count,
+        page_labels=page_labels,
+    )
