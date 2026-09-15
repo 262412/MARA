@@ -86,7 +86,10 @@ import json, os, sys
 import ktem
 before = set(sys.modules)
 events = []
+auditing = True
 def audit(event, args):
+    if not auditing:
+        return
     if event in {"socket.connect", "socket.getaddrinfo", "sqlite3.connect"}:
         events.append(event)
         raise AssertionError(event)
@@ -99,6 +102,7 @@ def audit(event, args):
             raise AssertionError("file write during policy import")
 sys.addaudithook(audit)
 from ktem.docqa import finance_plan_policy
+auditing = False
 loaded = sorted(set(sys.modules) - before)
 for name in loaded:
     assert not name.startswith(("ktem.docqa.query_planning", "ktem.docqa.runtime", "ktem.docqa._runtime", "ktem.db", "sqlmodel", "sqlalchemy", "gradio", "ktem.llms")), name
@@ -117,6 +121,7 @@ print(json.dumps({"parent": ktem.__file__, "policy": finance_plan_policy.__file_
         capture_output=True,
         check=True,
     )
+    assert "Traceback" not in result.stderr, result.stderr
     observed = json.loads(result.stdout)
     assert (
         Path(observed["parent"]).resolve()
