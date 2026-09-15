@@ -1,0 +1,4714 @@
+{
+  "baseline": "835b2af7f54c51d500a964bc476174ae8e2d17f1",
+  "capture_head": "e40dc0a18ef57d251a2931ce85553e22ee145798",
+  "production_git_sha256": {
+    "libs/ktem/ktem/docqa/query_planning.py": "4d4918f6b32db080fcab6e2c7d7d39a1f3a7fb3ab7ce8f5e0876aa479535b7b6",
+    "libs/ktem/ktem/docqa/finance_query_planning.py": "247afef974a3c7a9c44fad0c6b7397be5449c6ebbe68a29913b2b44284e73d55",
+    "libs/ktem/ktem/docqa/finance_retrieval_focus.py": "c807ee640be3cab15d15f3547090a7204707a50e49b26f9cf8c2940a5cab3f65",
+    "libs/ktem/ktem/docqa/heuristic_query_slots.py": "f28f2eac2565f8504f730d17bbbe138c1c4eca911c14a95f419cca7abc615952",
+    "libs/ktem/ktem/docqa/query_classification.py": "a3a0fd10b241f50da4f1bb8afa541ed59a580c508fdd376cd10e01b6e20c3a1d",
+    "libs/ktem/ktem/docqa/query_plan_schema.py": "64ffcd20a3adeaf0a6025e5998f543f3de1735790c899654d299bfccad9acd54",
+    "libs/ktem/ktem/docqa/query_plan_constraints.py": "d4cb9e5f63084cfbc7165c3724e4f6429c87fbc73b37915fbfffa7e9881cd8c2",
+    "libs/ktem/ktem/docqa/query_plan_retrieval.py": "2f9305532b36808e49c42984ae74265fb1b87de2a0d9bf1ce66216f69b52172b",
+    "libs/ktem/ktem/docqa/query_evidence_binding.py": "9e1134939bd3d7951173cc6db7ff5882c1aedd93727b3b96b9cf1b30c9b7ae47"
+  },
+  "cases": {
+    "empty": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:c7e1dc0f13474b4aebf9",
+        "answer_type": "free_text",
+        "question_type": "simple_fact",
+        "subqueries": [
+          ""
+        ],
+        "evidence_slots": [],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [],
+      "coverage": null,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "heuristic_query_slots.heuristic_slots",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id"
+      ]
+    },
+    "none_question": {
+      "exception": {
+        "type": "TypeError",
+        "message": "expected string or bytes-like object"
+      },
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question"
+      ]
+    },
+    "unicode_text": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:a2d354a3e28ecb58d08d",
+        "answer_type": "free_text",
+        "question_type": "simple_fact",
+        "subqueries": [
+          "Who wrote α & β <notes>?"
+        ],
+        "evidence_slots": [],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [],
+      "coverage": null,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "heuristic_query_slots.heuristic_slots",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id"
+      ]
+    },
+    "unknown_domain": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:c0725a783a79f465d417",
+        "answer_type": "numeric",
+        "question_type": "numeric",
+        "subqueries": [
+          "many participants included"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:primary",
+            "role": "operand",
+            "entity": "",
+            "metric": "many participants included",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "many participants included",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "unknown",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:primary",
+          "slot_id": "operand:primary",
+          "query": "operand primary many participants included",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "heuristic_query_slots.heuristic_slots",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "numeric_finance": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:6f6f068d322bf89e133d",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "net sales consolidated statements of income 2019",
+          "net property plant and equipment consolidated balance sheet 2018",
+          "net property plant and equipment consolidated balance sheet 2019"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:net_sales:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net sales",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net sales consolidated statements of income 2019",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2018",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2018",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2018",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2019",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2019",
+            "2018"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "supported",
+          "finance_formula": {
+            "formula_id": "fixed_asset_turnover",
+            "name": "fixed_asset_turnover",
+            "formula_match_rule": "alias:fixed_asset_turnover",
+            "formula_confidence": 1.0,
+            "operand_specs": [
+              {
+                "slot_id": "net_sales:2019",
+                "metric": "net sales",
+                "period": "2019"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2018",
+                "metric": "net property plant and equipment",
+                "period": "2018"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2019",
+                "metric": "net property plant and equipment",
+                "period": "2019"
+              }
+            ],
+            "expression_ast": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "program": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "output_unit": "ratio",
+            "target_period": "2019",
+            "previous_period": "2018"
+          }
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:net_sales:2019",
+          "slot_id": "operand:net_sales:2019",
+          "query": "operand net_sales 2019 net sales consolidated statements of income 2019 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2018",
+          "slot_id": "operand:net_property_plant_and_equipment:2018",
+          "query": "operand net_property_plant_and_equipment 2018 net property plant and equipment consolidated balance sheet 2018 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2019",
+          "slot_id": "operand:net_property_plant_and_equipment:2019",
+          "query": "operand net_property_plant_and_equipment 2019 net property plant and equipment consolidated balance sheet 2019 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "finance_substring": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:48643a9a3b0e8c7e68e3",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "net sales consolidated statements of income 2019",
+          "net property plant and equipment consolidated balance sheet 2018",
+          "net property plant and equipment consolidated balance sheet 2019"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:net_sales:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net sales",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net sales consolidated statements of income 2019",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2018",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2018",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2018",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2019",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2019",
+            "2018"
+          ],
+          "verification_domain": " preFINANCEpost ",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "supported",
+          "finance_formula": {
+            "formula_id": "fixed_asset_turnover",
+            "name": "fixed_asset_turnover",
+            "formula_match_rule": "alias:fixed_asset_turnover",
+            "formula_confidence": 1.0,
+            "operand_specs": [
+              {
+                "slot_id": "net_sales:2019",
+                "metric": "net sales",
+                "period": "2019"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2018",
+                "metric": "net property plant and equipment",
+                "period": "2018"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2019",
+                "metric": "net property plant and equipment",
+                "period": "2019"
+              }
+            ],
+            "expression_ast": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "program": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "output_unit": "ratio",
+            "target_period": "2019",
+            "previous_period": "2018"
+          }
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:net_sales:2019",
+          "slot_id": "operand:net_sales:2019",
+          "query": "operand net_sales 2019 net sales consolidated statements of income 2019 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2018",
+          "slot_id": "operand:net_property_plant_and_equipment:2018",
+          "query": "operand net_property_plant_and_equipment 2018 net property plant and equipment consolidated balance sheet 2018 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2019",
+          "slot_id": "operand:net_property_plant_and_equipment:2019",
+          "query": "operand net_property_plant_and_equipment 2019 net property plant and equipment consolidated balance sheet 2019 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "inferred_finance": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:6b8b1dfcf56b4fe7816f",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "net sales consolidated statements of income 2019",
+          "net property plant and equipment consolidated balance sheet 2018",
+          "net property plant and equipment consolidated balance sheet 2019"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:net_sales:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net sales",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net sales consolidated statements of income 2019",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2018",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2018",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2018",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2019",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2019",
+            "2018"
+          ],
+          "verification_domain": "",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "supported",
+          "finance_formula": {
+            "formula_id": "fixed_asset_turnover",
+            "name": "fixed_asset_turnover",
+            "formula_match_rule": "alias:fixed_asset_turnover",
+            "formula_confidence": 1.0,
+            "operand_specs": [
+              {
+                "slot_id": "net_sales:2019",
+                "metric": "net sales",
+                "period": "2019"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2018",
+                "metric": "net property plant and equipment",
+                "period": "2018"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2019",
+                "metric": "net property plant and equipment",
+                "period": "2019"
+              }
+            ],
+            "expression_ast": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "program": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "output_unit": "ratio",
+            "target_period": "2019",
+            "previous_period": "2018"
+          }
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:net_sales:2019",
+          "slot_id": "operand:net_sales:2019",
+          "query": "operand net_sales 2019 net sales consolidated statements of income 2019 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2018",
+          "slot_id": "operand:net_property_plant_and_equipment:2018",
+          "query": "operand net_property_plant_and_equipment 2018 net property plant and equipment consolidated balance sheet 2018 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2019",
+          "slot_id": "operand:net_property_plant_and_equipment:2019",
+          "query": "operand net_property_plant_and_equipment 2019 net property plant and equipment consolidated balance sheet 2019 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "unsupported": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:fed46f1bc08b3678a830",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "What was the revenue productivity turnover from FY2018 to FY2019?"
+        ],
+        "evidence_slots": [],
+        "constraints": {
+          "periods": [
+            "2018",
+            "2019"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "unsupported"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [],
+      "coverage": null,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id"
+      ]
+    },
+    "unsupported_unknown": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:6798e909e2d9c896cff4",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "revenue productivity turnover fy2018 fy2019 2018",
+          "revenue productivity turnover fy2018 fy2019 2019"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:2018",
+            "role": "operand",
+            "entity": "",
+            "metric": "revenue productivity turnover fy2018 fy2019",
+            "period": "2018",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue productivity turnover fy2018 fy2019 2018",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "revenue productivity turnover fy2018 fy2019",
+            "period": "2019",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue productivity turnover fy2018 fy2019 2019",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2018",
+            "2019"
+          ],
+          "verification_domain": "unknown",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:2018",
+          "slot_id": "operand:2018",
+          "query": "operand 2018 revenue productivity turnover fy2018 fy2019 2018",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:2019",
+          "slot_id": "operand:2019",
+          "query": "operand 2019 revenue productivity turnover fy2018 fy2019 2019",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "heuristic_query_slots.heuristic_slots",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "finance_not_applicable": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:ea8b9c7ee76f714e6696",
+        "answer_type": "numeric",
+        "question_type": "numeric",
+        "subqueries": [
+          "many participants included"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:primary",
+            "role": "operand",
+            "entity": "",
+            "metric": "many participants included",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "many participants included",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:primary",
+          "slot_id": "operand:primary",
+          "query": "operand primary many participants included",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "heuristic_query_slots.heuristic_slots",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "scale_fcf": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:29168cb668b745779b1e",
+        "answer_type": "numeric",
+        "question_type": "numeric",
+        "subqueries": [
+          "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+          "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+          "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:operating_cash_flow",
+            "role": "operand",
+            "entity": "",
+            "metric": "operating cash flow",
+            "period": "2018",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "cash_flow_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:capital_expenditure",
+            "role": "operand",
+            "entity": "",
+            "metric": "capital expenditure",
+            "period": "2018",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "cash_flow_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+            "locator": {}
+          },
+          {
+            "slot_id": "dimension:scale",
+            "role": "dimension",
+            "entity": "",
+            "metric": "",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+            "locator": null
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2018"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:operating_cash_flow",
+          "slot_id": "operand:operating_cash_flow",
+          "query": "operand operating_cash_flow operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:capital_expenditure",
+          "slot_id": "operand:capital_expenditure",
+          "query": "operand capital_expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 capital expenditure capital spending consolidated statement of cash flows 2018 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:dimension:scale",
+          "slot_id": "dimension:scale",
+          "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment parent table dollars scale unit convention statement locator",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_dimension_query",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "fcf_no_scale": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:ecbe4aa75e3c5a4cfc2d",
+        "answer_type": "numeric",
+        "question_type": "numeric",
+        "subqueries": [
+          "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+          "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:operating_cash_flow",
+            "role": "operand",
+            "entity": "",
+            "metric": "operating cash flow",
+            "period": "2018",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "cash_flow_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:capital_expenditure",
+            "role": "operand",
+            "entity": "",
+            "metric": "capital expenditure",
+            "period": "2018",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "cash_flow_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2018"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:operating_cash_flow",
+          "slot_id": "operand:operating_cash_flow",
+          "query": "operand operating_cash_flow operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:capital_expenditure",
+          "slot_id": "operand:capital_expenditure",
+          "query": "operand capital_expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 capital expenditure capital spending consolidated statement of cash flows 2018 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "fact_support": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:efa25973886c001430b7",
+        "answer_type": "free_text",
+        "question_type": "simple_fact",
+        "subqueries": [
+          "revenue consolidated statements of income 2023"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:revenue:2023",
+            "role": "support",
+            "entity": "",
+            "metric": "revenue",
+            "period": "2023",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue consolidated statements of income 2023",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2023"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:revenue:2023",
+          "slot_id": "operand:revenue:2023",
+          "query": "operand revenue 2023 revenue consolidated statements of income 2023 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_fact_specs",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "causal": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:6a7a9dfe9200d57a8051",
+        "answer_type": "free_text",
+        "question_type": "long_form",
+        "subqueries": [
+          "Why did revenue decline in 2021 and 2022?"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "support:primary",
+            "role": "support",
+            "entity": "",
+            "metric": "why revenue",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "Why did revenue decline in 2021 and 2022?",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2021",
+            "2022"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 12,
+        "max_pages": 5
+      },
+      "round_two": [
+        {
+          "query_id": "round2:support:primary",
+          "slot_id": "support:primary",
+          "query": "support primary Why did revenue decline in 2021 and 2022? why revenue",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "finance_query_planning.is_finance_segment_comparison",
+        "heuristic_query_slots.heuristic_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "segment": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:993314d20b921cc86f5c",
+        "answer_type": "extractive",
+        "question_type": "comparison_argmax",
+        "subqueries": [
+          "reporting segment net revenue 2021",
+          "reporting segment net revenue 2022"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:net_sales:2021",
+            "role": "support",
+            "entity": "",
+            "metric": "net sales",
+            "period": "2021",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "segment_table",
+            "financial_scope": "segment",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "reporting segment net revenue 2021",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_sales:2022",
+            "role": "support",
+            "entity": "",
+            "metric": "net sales",
+            "period": "2022",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "segment_table",
+            "financial_scope": "segment",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "reporting segment net revenue 2022",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2021",
+            "2022"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "comparison_operator": "proportional_increase",
+          "excluded_entities": [
+            "embedded"
+          ],
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:net_sales:2021",
+          "slot_id": "operand:net_sales:2021",
+          "query": "operand net_sales 2021 reporting segment net revenue 2021 net sales 2021 segment",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_sales:2022",
+          "slot_id": "operand:net_sales:2022",
+          "query": "operand net_sales 2022 reporting segment net revenue 2022 net sales 2022 segment",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_fact_specs",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "query_planning._segment_comparison_slots",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "collection_date": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:4406d7a9bd72a1f73cda",
+        "answer_type": "numeric",
+        "question_type": "numeric",
+        "subqueries": [
+          "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:revolving_credit_capacity:2023",
+            "role": "operand",
+            "entity": "active_at:2023-05-26",
+            "metric": "revolving credit capacity",
+            "period": "2023",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 2,
+            "operator_role": "collection",
+            "query": "revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2023"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:revolving_credit_capacity:2023",
+          "slot_id": "operand:revolving_credit_capacity:2023",
+          "query": "operand revolving_credit_capacity 2023 revolving credit capacity revolving credit agreement revolving credit agreements borrow up to 2023",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "collection_active": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:b6943e1e751d4a69f030",
+        "answer_type": "numeric",
+        "question_type": "numeric",
+        "subqueries": [
+          "revolving credit capacity"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:primary",
+            "role": "operand",
+            "entity": "active",
+            "metric": "revolving credit capacity",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 2,
+            "operator_role": "collection",
+            "query": "revolving credit capacity",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:primary",
+          "slot_id": "operand:primary",
+          "query": "operand primary revolving credit capacity revolving credit capacity revolving credit agreement revolving credit agreements borrow up to",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "heuristic_query_slots.heuristic_slots",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "non_collection": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:51660e8dcbc6832c8b40",
+        "answer_type": "numeric",
+        "question_type": "numeric",
+        "subqueries": [
+          "revolving credit capacity"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:primary",
+            "role": "operand",
+            "entity": "",
+            "metric": "revolving credit capacity",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revolving credit capacity",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:primary",
+          "slot_id": "operand:primary",
+          "query": "operand primary revolving credit capacity revolving credit capacity revolving credit agreement revolving credit agreements borrow up to",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "heuristic_query_slots.heuristic_slots",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "quarter_generic": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:6a8e3b40159fa5c23e8b",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "enrollment q1 fy2020 q2 fy2021 2020",
+          "enrollment q1 fy2020 q2 fy2021 2021"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:2020",
+            "role": "operand",
+            "entity": "fiscal_quarter:q1",
+            "metric": "enrollment q1 fy2020 q2 fy2021",
+            "period": "2020",
+            "period_kind": "quarter",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "enrollment q1 fy2020 q2 fy2021 2020",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:2021",
+            "role": "operand",
+            "entity": "fiscal_quarter:q2",
+            "metric": "enrollment q1 fy2020 q2 fy2021",
+            "period": "2021",
+            "period_kind": "quarter",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "enrollment q1 fy2020 q2 fy2021 2021",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2020",
+            "2021"
+          ],
+          "verification_domain": "",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:2020",
+          "slot_id": "operand:2020",
+          "query": "operand 2020 enrollment q1 fy2020 q2 fy2021 2020",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:2021",
+          "slot_id": "operand:2021",
+          "query": "operand 2021 enrollment q1 fy2020 q2 fy2021 2021",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "heuristic_query_slots.heuristic_slots",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "quarter_finance": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:089816f4e21d8296d40b",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "revenue consolidated statements of income 2020",
+          "revenue consolidated statements of income 2021"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:revenue:2020",
+            "role": "operand",
+            "entity": "fiscal_quarter:q1",
+            "metric": "revenue",
+            "period": "2020",
+            "period_kind": "quarter",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue consolidated statements of income 2020",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:revenue:2021",
+            "role": "operand",
+            "entity": "fiscal_quarter:q2",
+            "metric": "revenue",
+            "period": "2021",
+            "period_kind": "quarter",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue consolidated statements of income 2021",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2020",
+            "2021"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:revenue:2020",
+          "slot_id": "operand:revenue:2020",
+          "query": "operand revenue 2020 revenue consolidated statements of income 2020 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:revenue:2021",
+          "slot_id": "operand:revenue:2021",
+          "query": "operand revenue 2021 revenue consolidated statements of income 2021 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "visual_early": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:c94ec125afb7893779e8",
+        "answer_type": "free_text",
+        "question_type": "visual_time_series",
+        "subqueries": [
+          "revenue q1 fy2020 q2 fy2021 2020",
+          "revenue q1 fy2020 q2 fy2021 2021"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "support:2020",
+            "role": "support",
+            "entity": "",
+            "metric": "revenue q1 fy2020 q2 fy2021",
+            "period": "2020",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "visual_time_series_cell",
+            "financial_scope": "",
+            "modality": "table",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue q1 fy2020 q2 fy2021 2020",
+            "locator": {}
+          },
+          {
+            "slot_id": "support:2021",
+            "role": "support",
+            "entity": "",
+            "metric": "revenue q1 fy2020 q2 fy2021",
+            "period": "2021",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "visual_time_series_cell",
+            "financial_scope": "",
+            "modality": "table",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue q1 fy2020 q2 fy2021 2021",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2020",
+            "2021"
+          ],
+          "verification_domain": "mmdoc_finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:support:2020",
+          "slot_id": "support:2020",
+          "query": "support 2020 revenue q1 fy2020 q2 fy2021 2020",
+          "modality": "table"
+        },
+        {
+          "query_id": "round2:support:2021",
+          "slot_id": "support:2021",
+          "query": "support 2021 revenue q1 fy2020 q2 fy2021 2021",
+          "modality": "table"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "slidevqa": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:c5e7be20fd19e0c5d147",
+        "answer_type": "boolean",
+        "question_type": "simple_fact",
+        "subqueries": [
+          "Regarding CCD customers, is a greater percentage MALE or FEMALE?"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "support:visual_primary",
+            "role": "support",
+            "entity": "",
+            "metric": "regarding ccd customers greater male or female",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "visual_support",
+            "financial_scope": "",
+            "modality": "page_image",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [],
+          "verification_domain": " SlideVQA ",
+          "requires_visual": true,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:support:visual_primary",
+          "slot_id": "support:visual_primary",
+          "query": "support visual_primary Regarding CCD customers, is a greater percentage MALE or FEMALE? regarding ccd customers greater male or female",
+          "modality": "page_image"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "heuristic_query_slots.heuristic_slots",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "slidevqa_nonexact": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:01c6cbfe8e015f405b0e",
+        "answer_type": "free_text",
+        "question_type": "simple_fact",
+        "subqueries": [
+          "Who wrote the paper?"
+        ],
+        "evidence_slots": [],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "prefix_slidevqa",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [],
+      "coverage": null,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "heuristic_query_slots.heuristic_slots",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id"
+      ]
+    },
+    "boolean": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:4806d09483da9acbc397",
+        "answer_type": "boolean",
+        "question_type": "simple_fact",
+        "subqueries": [
+          "Did the authors evaluate both clinical and legal datasets? current study authors experiments evaluate tested examples results"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "support:boolean_proposition",
+            "role": "support",
+            "entity": "",
+            "metric": "authors evaluate both clinical legal datasets",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "boolean_proposition",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": false,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "Did the authors evaluate both clinical and legal datasets? current study authors experiments evaluate tested examples results",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "qasper",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "question": "Did the authors evaluate both clinical and legal datasets?",
+          "boolean_support_group": {
+            "operator": "all",
+            "premise_mode": "all_required",
+            "semantics": "open_world",
+            "rule_id": "same_source_argument_conjunction.v1",
+            "quantifier": "both",
+            "required_argument_tokens": [
+              "clinical",
+              "dataset",
+              "legal"
+            ],
+            "max_premises": 4
+          },
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:support:boolean_proposition",
+          "slot_id": "support:boolean_proposition",
+          "query": "Did the authors evaluate both clinical and legal datasets? current study authors experiments evaluate tested examples results current study authors experiments evaluate tested examples results evaluate assess test benchmark inspect examine analyze investigate dataset data corpus probes",
+          "modality": "auto"
+        }
+      ],
+      "coverage": null,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "heuristic_query_slots.heuristic_slots",
+        "query_phrase_extraction.metric_phrase",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id"
+      ]
+    },
+    "pages_equal": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:eceafd635dd69e62ad5e",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "revenue consolidated statements of income 2021",
+          "revenue consolidated statements of income 2022"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:revenue:2021",
+            "role": "operand",
+            "entity": "",
+            "metric": "revenue",
+            "period": "2021",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue consolidated statements of income 2021",
+            "locator": {
+              "page_label": "8"
+            }
+          },
+          {
+            "slot_id": "operand:revenue:2022",
+            "role": "operand",
+            "entity": "",
+            "metric": "revenue",
+            "period": "2022",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue consolidated statements of income 2022",
+            "locator": {
+              "page_label": "12"
+            }
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2021",
+            "2022"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": true,
+          "requires_distinct_source_pages": true,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": [
+              "8",
+              "12"
+            ]
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": true,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:revenue:2021",
+          "slot_id": "operand:revenue:2021",
+          "query": "operand revenue 2021 revenue consolidated statements of income 2021 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:revenue:2022",
+          "slot_id": "operand:revenue:2022",
+          "query": "operand revenue 2022 revenue consolidated statements of income 2022 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "pages_unequal": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:a966bd9003daa9d2ac3e",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "revenue consolidated statements of income 2021",
+          "revenue consolidated statements of income 2022"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:revenue:2021",
+            "role": "operand",
+            "entity": "",
+            "metric": "revenue",
+            "period": "2021",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue consolidated statements of income 2021",
+            "locator": {
+              "page_labels": [
+                "8"
+              ]
+            }
+          },
+          {
+            "slot_id": "operand:revenue:2022",
+            "role": "operand",
+            "entity": "",
+            "metric": "revenue",
+            "period": "2022",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "revenue consolidated statements of income 2022",
+            "locator": {
+              "page_labels": [
+                "8"
+              ]
+            }
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2021",
+            "2022"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": [
+              "8"
+            ]
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:revenue:2021",
+          "slot_id": "operand:revenue:2021",
+          "query": "operand revenue 2021 revenue consolidated statements of income 2021 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:revenue:2022",
+          "slot_id": "operand:revenue:2022",
+          "query": "operand revenue 2022 revenue consolidated statements of income 2022 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "focus_numeric": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:818982d01d7343065230",
+        "answer_type": "numeric",
+        "question_type": "numeric",
+        "subqueries": [
+          "gross profit consolidated statements of income 2023 Total revenues Total costs and expenses Gross profit",
+          "net sales consolidated statements of income 2023 Total revenues Total costs and expenses Gross profit"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:gross_profit",
+            "role": "operand",
+            "entity": "",
+            "metric": "gross profit",
+            "period": "2023",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "gross profit consolidated statements of income 2023 Total revenues Total costs and expenses Gross profit",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_sales",
+            "role": "operand",
+            "entity": "",
+            "metric": "net sales",
+            "period": "2023",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net sales consolidated statements of income 2023 Total revenues Total costs and expenses Gross profit",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2023"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:gross_profit",
+          "slot_id": "operand:gross_profit",
+          "query": "operand gross_profit gross profit consolidated statements of income 2023 Total revenues Total costs and expenses Gross profit gross profit consolidated statements of income 2023 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_sales",
+          "slot_id": "operand:net_sales",
+          "query": "operand net_sales net sales consolidated statements of income 2023 Total revenues Total costs and expenses Gross profit net sales consolidated statements of income 2023 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "focus_narrative": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:46470fa1f2b6c3e37f5f",
+        "answer_type": "free_text",
+        "question_type": "long_form",
+        "subqueries": [
+          "Describe the primary customers and customer concentration. limited number of commercial airlines revenues from a limited number U.S. government contracts percent of revenues one customer accounted for consolidated net revenue year ended major customer"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "support:primary",
+            "role": "support",
+            "entity": "",
+            "metric": "describe primary customers customer concentration",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "Describe the primary customers and customer concentration. limited number of commercial airlines revenues from a limited number U.S. government contracts percent of revenues one customer accounted for consolidated net revenue year ended major customer",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 12,
+        "max_pages": 5
+      },
+      "round_two": [
+        {
+          "query_id": "round2:support:primary",
+          "slot_id": "support:primary",
+          "query": "support primary Describe the primary customers and customer concentration. limited number of commercial airlines revenues from a limited number U.S. government contracts percent of revenues one customer accounted for consolidated net revenue year ended major customer describe primary customers customer concentration limited number of commercial airlines revenues from a limited number U.S. government contracts percent of revenues one customer accounted for consolidated net revenue year ended major customer",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_fact_specs",
+        "heuristic_query_slots.heuristic_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "payload_empty_mapping": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:6f6f068d322bf89e133d",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "net sales consolidated statements of income 2019",
+          "net property plant and equipment consolidated balance sheet 2018",
+          "net property plant and equipment consolidated balance sheet 2019"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:net_sales:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net sales",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net sales consolidated statements of income 2019",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2018",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2018",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2018",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2019",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2019",
+            "2018"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "supported",
+          "finance_formula": {
+            "formula_id": "fixed_asset_turnover",
+            "name": "fixed_asset_turnover",
+            "formula_match_rule": "alias:fixed_asset_turnover",
+            "formula_confidence": 1.0,
+            "operand_specs": [
+              {
+                "slot_id": "net_sales:2019",
+                "metric": "net sales",
+                "period": "2019"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2018",
+                "metric": "net property plant and equipment",
+                "period": "2018"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2019",
+                "metric": "net property plant and equipment",
+                "period": "2019"
+              }
+            ],
+            "expression_ast": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "program": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "output_unit": "ratio",
+            "target_period": "2019",
+            "previous_period": "2018"
+          }
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:net_sales:2019",
+          "slot_id": "operand:net_sales:2019",
+          "query": "operand net_sales 2019 net sales consolidated statements of income 2019 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2018",
+          "slot_id": "operand:net_property_plant_and_equipment:2018",
+          "query": "operand net_property_plant_and_equipment 2018 net property plant and equipment consolidated balance sheet 2018 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2019",
+          "slot_id": "operand:net_property_plant_and_equipment:2019",
+          "query": "operand net_property_plant_and_equipment 2019 net property plant and equipment consolidated balance sheet 2019 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "payload_empty_slots": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:708635e7079446e44b0e",
+        "answer_type": "free_text",
+        "question_type": "planned",
+        "subqueries": [],
+        "evidence_slots": [],
+        "constraints": {
+          "verification_domain": "",
+          "question": "Describe the study."
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [],
+      "coverage": null,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload",
+        "query_plan_schema.with_plan_id",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "boolean_conjunction.with_boolean_support_group",
+        "finance_retrieval_focus.apply_finance_retrieval_focus",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots"
+      ]
+    },
+    "payload_malformed_slots": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:2d8ec5bea7ae43a7fb84",
+        "answer_type": "free_text",
+        "question_type": "long_form",
+        "subqueries": [
+          "Describe the study."
+        ],
+        "evidence_slots": [],
+        "constraints": {
+          "periods": [],
+          "verification_domain": "",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": false,
+          "finance_formula_status": "not_applicable"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 12,
+        "max_pages": 5
+      },
+      "round_two": [],
+      "coverage": null,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_retrieval_focus.finance_comparison_operands_required",
+        "heuristic_query_slots.heuristic_slots",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id"
+      ]
+    },
+    "payload_supported_override": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:6f6f068d322bf89e133d",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "net sales consolidated statements of income 2019",
+          "net property plant and equipment consolidated balance sheet 2018",
+          "net property plant and equipment consolidated balance sheet 2019"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "operand:net_sales:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net sales",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "income_statement",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net sales consolidated statements of income 2019",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2018",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2018",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2018",
+            "locator": {}
+          },
+          {
+            "slot_id": "operand:net_property_plant_and_equipment:2019",
+            "role": "operand",
+            "entity": "",
+            "metric": "net property plant and equipment",
+            "period": "2019",
+            "period_kind": "fiscal_year",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "balance_sheet",
+            "financial_scope": "consolidated",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "net property plant and equipment consolidated balance sheet 2019",
+            "locator": {}
+          }
+        ],
+        "constraints": {
+          "periods": [
+            "2019",
+            "2018"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "supported",
+          "finance_formula": {
+            "formula_id": "fixed_asset_turnover",
+            "name": "fixed_asset_turnover",
+            "formula_match_rule": "alias:fixed_asset_turnover",
+            "formula_confidence": 1.0,
+            "operand_specs": [
+              {
+                "slot_id": "net_sales:2019",
+                "metric": "net sales",
+                "period": "2019"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2018",
+                "metric": "net property plant and equipment",
+                "period": "2018"
+              },
+              {
+                "slot_id": "net_property_plant_and_equipment:2019",
+                "metric": "net property plant and equipment",
+                "period": "2019"
+              }
+            ],
+            "expression_ast": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "program": {
+              "operator": "divide",
+              "inputs": [
+                {
+                  "ref": "operand:net_sales:2019"
+                },
+                {
+                  "operator": "average",
+                  "inputs": [
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2018"
+                    },
+                    {
+                      "ref": "operand:net_property_plant_and_equipment:2019"
+                    }
+                  ]
+                }
+              ]
+            },
+            "output_unit": "ratio",
+            "target_period": "2019",
+            "previous_period": "2018"
+          }
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [
+        {
+          "query_id": "round2:operand:net_sales:2019",
+          "slot_id": "operand:net_sales:2019",
+          "query": "operand net_sales 2019 net sales consolidated statements of income 2019 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2018",
+          "slot_id": "operand:net_property_plant_and_equipment:2018",
+          "query": "operand net_property_plant_and_equipment 2018 net property plant and equipment consolidated balance sheet 2018 consolidated",
+          "modality": "auto"
+        },
+        {
+          "query_id": "round2:operand:net_property_plant_and_equipment:2019",
+          "slot_id": "operand:net_property_plant_and_equipment:2019",
+          "query": "operand net_property_plant_and_equipment 2019 net property plant and equipment consolidated balance sheet 2019 consolidated",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload",
+        "query_plan_schema.with_plan_id",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._finance_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_slot_locator",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "payload_unsupported_override": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:fed46f1bc08b3678a830",
+        "answer_type": "numeric",
+        "question_type": "multi_period_numeric",
+        "subqueries": [
+          "What was the revenue productivity turnover from FY2018 to FY2019?"
+        ],
+        "evidence_slots": [],
+        "constraints": {
+          "periods": [
+            "2018",
+            "2019"
+          ],
+          "verification_domain": "finance",
+          "requires_visual": false,
+          "requires_multiple_evidence": false,
+          "requires_distinct_source_pages": false,
+          "requires_structured_elements": false,
+          "explicit_page_labels": {
+            "__tuple__": []
+          },
+          "figure_label": "",
+          "table_label": "",
+          "requires_distinct_evidence": false,
+          "requires_structure": true,
+          "finance_formula_status": "unsupported"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 16,
+        "max_pages": 6
+      },
+      "round_two": [],
+      "coverage": null,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload",
+        "query_plan_schema.with_plan_id",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._build_heuristic_query_plan",
+        "query_planning_lexicon.planning_tokens",
+        "query_classification.has_causal_intent",
+        "query_classification.normalized_answer_type",
+        "query_phrase_extraction.periods_in_question",
+        "query_evidence_constraints.period_kind_in_question",
+        "query_phrase_extraction.metric_phrase",
+        "query_classification.question_capabilities",
+        "query_classification.question_type",
+        "query_planning._heuristic_evidence_slots",
+        "heuristic_query_slots.mmdoc_visual_time_series_slots",
+        "finance_query_planning.finance_operand_specs",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.is_finance_segment_comparison",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "finance_retrieval_focus.with_finance_retrieval_focus",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._apply_fiscal_quarter_qualifiers",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_constraints.query_plan_constraints",
+        "query_planning._add_finance_formula_constraint",
+        "finance_query_planning.finance_formula_spec",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "query_planning._add_distinct_slot_constraint",
+        "query_plan_schema.with_plan_id"
+      ]
+    },
+    "payload_unknown_accept": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:caller-supplied",
+        "answer_type": "numeric",
+        "question_type": "planned",
+        "subqueries": [
+          "first",
+          "first",
+          "second"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "caller:slot",
+            "role": "operand",
+            "entity": "",
+            "metric": "",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [
+              "x",
+              "x"
+            ],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "caller query",
+            "locator": {
+              "source_id": "source",
+              "page_labels": [
+                "8",
+                "8",
+                "12"
+              ]
+            }
+          }
+        ],
+        "constraints": {
+          "verification_domain": "unknown",
+          "nested": {
+            "value": [
+              1
+            ]
+          },
+          "question": "What is FY2019 fixed asset turnover using FY2019 revenue and average net PP&E for FY2018 and FY2019?"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:caller:slot",
+          "slot_id": "caller:slot",
+          "query": "caller slot caller query",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload",
+        "query_plan_schema.with_plan_id",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "boolean_conjunction.with_boolean_support_group",
+        "finance_retrieval_focus.apply_finance_retrieval_focus",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "payload_empty_domain_accept": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:caller-supplied",
+        "answer_type": "numeric",
+        "question_type": "planned",
+        "subqueries": [
+          "first",
+          "first",
+          "second"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "caller:slot",
+            "role": "operand",
+            "entity": "",
+            "metric": "",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [
+              "x",
+              "x"
+            ],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "caller query",
+            "locator": {
+              "source_id": "source",
+              "page_labels": [
+                "8",
+                "8",
+                "12"
+              ]
+            }
+          }
+        ],
+        "constraints": {
+          "verification_domain": "",
+          "nested": {
+            "value": [
+              1
+            ]
+          },
+          "question": "What is FY2019 fixed asset turnover using FY2019 revenue and average net PP&E for FY2018 and FY2019?"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:caller:slot",
+          "slot_id": "caller:slot",
+          "query": "caller slot caller query",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload",
+        "query_plan_schema.with_plan_id",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "boolean_conjunction.with_boolean_support_group",
+        "finance_retrieval_focus.apply_finance_retrieval_focus",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "payload_nonnumeric_accept": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:caller-supplied",
+        "answer_type": "free_text",
+        "question_type": "planned",
+        "subqueries": [
+          "first",
+          "first",
+          "second"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "caller:slot",
+            "role": "operand",
+            "entity": "",
+            "metric": "",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [
+              "x",
+              "x"
+            ],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "caller query",
+            "locator": {
+              "source_id": "source",
+              "page_labels": [
+                "8",
+                "8",
+                "12"
+              ]
+            }
+          }
+        ],
+        "constraints": {
+          "verification_domain": "finance",
+          "nested": {
+            "value": [
+              1
+            ]
+          },
+          "question": "What is FY2019 fixed asset turnover using FY2019 revenue and average net PP&E for FY2018 and FY2019?"
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:caller:slot",
+          "slot_id": "caller:slot",
+          "query": "caller slot caller query",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload",
+        "query_plan_schema.with_plan_id",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "boolean_conjunction.with_boolean_support_group",
+        "finance_retrieval_focus.apply_finance_retrieval_focus",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "payload_focus": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:94b3dab4d42b72daaad9",
+        "answer_type": "free_text",
+        "question_type": "planned",
+        "subqueries": [
+          "caller query limited number of commercial airlines revenues from a limited number U.S. government contracts percent of revenues"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "caller:slot",
+            "role": "operand",
+            "entity": "",
+            "metric": "",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [
+              "x",
+              "x"
+            ],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "caller query limited number of commercial airlines revenues from a limited number U.S. government contracts percent of revenues",
+            "locator": {
+              "source_id": "source",
+              "page_labels": [
+                "8",
+                "8",
+                "12"
+              ]
+            }
+          }
+        ],
+        "constraints": {
+          "verification_domain": "finance",
+          "nested": {
+            "value": [
+              1
+            ]
+          },
+          "question": "Describe primary customers."
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:caller:slot",
+          "slot_id": "caller:slot",
+          "query": "caller slot caller query limited number of commercial airlines revenues from a limited number U.S. government contracts percent of revenues",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload",
+        "query_plan_schema.with_plan_id",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "boolean_conjunction.with_boolean_support_group",
+        "finance_retrieval_focus.apply_finance_retrieval_focus",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "finance_retrieval_focus.finance_retrieval_focus_terms",
+        "query_plan_schema.with_plan_id",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "payload_boolean": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:9d760ca85901f11e2365",
+        "answer_type": "boolean",
+        "question_type": "planned",
+        "subqueries": [
+          "first",
+          "first",
+          "second"
+        ],
+        "evidence_slots": [
+          {
+            "slot_id": "caller:slot",
+            "role": "operand",
+            "entity": "",
+            "metric": "",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "auto",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": true,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [
+              "x",
+              "x"
+            ],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "caller query",
+            "locator": {
+              "source_id": "source",
+              "page_labels": [
+                "8",
+                "8",
+                "12"
+              ]
+            }
+          }
+        ],
+        "constraints": {
+          "verification_domain": "qasper",
+          "nested": {
+            "value": [
+              1
+            ]
+          },
+          "question": "Did the authors evaluate both clinical and legal datasets?",
+          "boolean_support_group": {
+            "operator": "all",
+            "premise_mode": "all_required",
+            "semantics": "open_world",
+            "rule_id": "same_source_argument_conjunction.v1",
+            "quantifier": "both",
+            "required_argument_tokens": [
+              "clinical",
+              "dataset",
+              "legal"
+            ],
+            "max_premises": 4
+          }
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": false,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:caller:slot",
+          "slot_id": "caller:slot",
+          "query": "caller slot caller query",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload",
+        "query_plan_schema.with_plan_id",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "boolean_conjunction.with_boolean_support_group",
+        "query_plan_schema.with_plan_id",
+        "finance_retrieval_focus.apply_finance_retrieval_focus",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    },
+    "payload_bad_rounds": {
+      "exception": {
+        "type": "ValueError",
+        "message": "invalid literal for int() with base 10: 'invalid'"
+      },
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload"
+      ]
+    },
+    "payload_bad_constraints": {
+      "exception": {
+        "type": "TypeError",
+        "message": "cannot convert dictionary update sequence element #0 to a sequence"
+      },
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload"
+      ]
+    },
+    "payload_bad_locator": {
+      "exception": {
+        "type": "TypeError",
+        "message": "'int' object is not iterable"
+      },
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_plan_schema.plan_from_payload"
+      ]
+    },
+    "object_payload": {
+      "plan": {
+        "contract_id": "query_plan.v1",
+        "plan_id": "plan:original-object",
+        "answer_type": "free_text",
+        "question_type": "planned",
+        "subqueries": [],
+        "evidence_slots": [
+          {
+            "slot_id": "caller",
+            "role": "support",
+            "entity": "",
+            "metric": "",
+            "period": "",
+            "period_kind": "",
+            "unit": "",
+            "scale": "",
+            "statement_kind": "",
+            "financial_scope": "",
+            "modality": "",
+            "required": true,
+            "required_for_retrieval": true,
+            "required_for_execution": false,
+            "required_for_verification": true,
+            "status": "missing",
+            "evidence_ids": [],
+            "cardinality": 1,
+            "operator_role": "",
+            "query": "study",
+            "locator": null
+          }
+        ],
+        "constraints": {
+          "nested": {
+            "value": [
+              1
+            ]
+          }
+        },
+        "max_retrieval_rounds": 2
+      },
+      "original_object": true,
+      "budget": {
+        "max_items": 8,
+        "max_pages": 3
+      },
+      "round_two": [
+        {
+          "query_id": "round2:caller",
+          "slot_id": "caller",
+          "query": "caller study",
+          "modality": "auto"
+        }
+      ],
+      "coverage": 0.0,
+      "calls": [
+        "query_plan_schema.initial_plan_from_payload",
+        "query_phrase_extraction.periods_in_question",
+        "finance_query_planning.finance_formula_status",
+        "finance_query_planning.finance_formula_spec",
+        "boolean_conjunction.with_boolean_support_group",
+        "finance_retrieval_focus.apply_finance_retrieval_focus",
+        "finance_retrieval_focus.apply_finance_retrieval_focus_to_slots",
+        "query_planning._finance_retrieval_query",
+        "finance_retrieval_focus.finance_retrieval_focus_terms"
+      ]
+    }
+  }
+}

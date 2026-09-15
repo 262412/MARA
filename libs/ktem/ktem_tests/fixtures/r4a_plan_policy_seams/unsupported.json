@@ -1,0 +1,814 @@
+{
+ "source": "e40dc0a18ef57d251a2931ce85553e22ee145798",
+ "pythonhashseed": "0",
+ "observation": {
+  "calls": [
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "",
+    "query": "What was the revenue productivity turnover from FY2018 to FY2019?",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   },
+   {
+    "stage": "retrieve",
+    "round": 2,
+    "slot": "",
+    "query": "What was the revenue productivity turnover from FY2018 to FY2019?",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   }
+  ],
+  "planned": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:fed46f1bc08b3678a830",
+   "answer_type": "numeric",
+   "question_type": "multi_period_numeric",
+   "subqueries": [
+    "What was the revenue productivity turnover from FY2018 to FY2019?"
+   ],
+   "evidence_slots": [],
+   "constraints": {
+    "periods": [
+     "2018",
+     "2019"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": true,
+    "finance_formula_status": "unsupported"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "final_plan": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:fed46f1bc08b3678a830",
+   "answer_type": "numeric",
+   "question_type": "multi_period_numeric",
+   "subqueries": [
+    "What was the revenue productivity turnover from FY2018 to FY2019?"
+   ],
+   "evidence_slots": [],
+   "constraints": {
+    "periods": [
+     "2018",
+     "2019"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": true,
+    "finance_formula_status": "unsupported",
+    "question": "What was the revenue productivity turnover from FY2018 to FY2019?"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "plan_id": "plan:fed46f1bc08b3678a830",
+  "state_version": 4,
+  "bound": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:fed46f1bc08b3678a830",
+   "answer_type": "numeric",
+   "question_type": "multi_period_numeric",
+   "subqueries": [
+    "What was the revenue productivity turnover from FY2018 to FY2019?"
+   ],
+   "evidence_slots": [],
+   "constraints": {
+    "periods": [
+     "2018",
+     "2019"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": true,
+    "finance_formula_status": "unsupported",
+    "question": "What was the revenue productivity turnover from FY2018 to FY2019?"
+   },
+   "max_retrieval_rounds": 2,
+   "binding_trace": [],
+   "state_version": 4
+  },
+  "controller": {
+   "route": "text_rag",
+   "legacy_route": "doc_text",
+   "policy": "doc",
+   "controller_mode": "off",
+   "requires_retrieval": true,
+   "reason": "Requested document text route."
+  },
+  "retrieval": {
+   "status": "ambiguous",
+   "reason": "Retrieved evidence metadata is present but lacks concrete evidence.",
+   "retry": false
+  },
+  "verification": {
+   "mode": "light",
+   "status": "not_enough_evidence",
+   "reason": "Light verification requested without sufficient evidence.",
+   "action": "abstain",
+   "claims": [],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [],
+   "claim_results": [],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "guardrail": {
+   "status": "not_enough_evidence",
+   "action": "abstain",
+   "reason": "Retrieved evidence metadata is present but lacks concrete evidence."
+  },
+  "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+  "terminal_answer": "unanswerable",
+  "terminal_state": {
+   "contract_id": "engine_terminal_state.v1",
+   "answer": "unanswerable",
+   "raw_generated_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+   "raw_candidate_label": "unanswerable",
+   "normalized_candidate_label": "unanswerable",
+   "verified_canonical_answer": "",
+   "semantic_correction_applied": false,
+   "correction_reason": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_quote": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "terminal_reason": "",
+   "guardrail_result": {
+    "status": "not_enough_evidence",
+    "action": "abstain",
+    "reason": "Retrieved evidence metadata is present but lacks concrete evidence."
+   },
+   "verify_decision": {
+    "mode": "light",
+    "status": "not_enough_evidence",
+    "reason": "Light verification requested without sufficient evidence.",
+    "action": "abstain",
+    "claims": [],
+    "unsupported_claims": [],
+    "unknown_claims": [],
+    "verified_citations": [],
+    "claim_results": [],
+    "input_answer_polarity": "",
+    "canonical_answer_polarity": "",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "",
+    "authoritative_evidence_id": "",
+    "authoritative_evidence_ref": "",
+    "authoritative_span_id": "",
+    "authoritative_quote": "",
+    "authoritative_span_start": null,
+    "authoritative_span_end": null,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "",
+    "section_scope": "",
+    "relation": "",
+    "object": "",
+    "predicate_arguments": {
+     "__tuple__": []
+    },
+    "qualifier": "",
+    "quantifier": "",
+    "verified_support_slot_ids": [],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {},
+    "typed_authority": {},
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "",
+    "arguments": [],
+    "scope": ""
+   },
+   "guardrail_decision": {
+    "status": "not_enough_evidence",
+    "action": "abstain",
+    "reason": "Retrieved evidence metadata is present but lacks concrete evidence."
+   },
+   "evidence_bundle": {
+    "route": "doc_text",
+    "items": [],
+    "metadata": {
+     "retrieval_query_contracts": [
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:primary",
+       "slot_id": "",
+       "query": "What was the revenue productivity turnover from FY2018 to FY2019?"
+      },
+      {
+       "contract_id": "recovery_query.v1",
+       "query_kind": "recovery",
+       "round_id": 2,
+       "query_id": "round2:quality_retry",
+       "slot_id": "",
+       "query": "What was the revenue productivity turnover from FY2018 to FY2019?"
+      }
+     ],
+     "schema_version": "evidence_bundle.v2",
+     "dedupe_trace": {
+      "schema_version": "evidence_bundle.v2",
+      "input_count": 0,
+      "output_count": 0,
+      "structure_duplicate_count": 0,
+      "exact_text_duplicate_count": 0,
+      "overlap_duplicate_count": 0,
+      "minhash_duplicate_count": 0,
+      "semantic_duplicate_count": 0,
+      "conflict_guard_count": 0,
+      "duplicate_ratio": 0.0
+     },
+     "canonical_candidate_count": 0,
+     "canonical_candidate_evidence": [],
+     "candidate_evidence": [],
+     "candidate_ranked_evidence": [],
+     "candidate_ranking_contract": "global_ranked_v1",
+     "pre_rerank_required_slot_candidates_restored": 0,
+     "reranker_input_evidence": [],
+     "reranker_input_contract": "required_slot_restored.v1",
+     "fused_evidence": [],
+     "fusion_stage_snapshot": {
+      "contract_id": "fusion_stage_snapshot.v1",
+      "route": "doc_text",
+      "state": "not_executed",
+      "candidate_stage": "fusion_not_executed",
+      "reason": "no_fusion_candidates",
+      "input_count": 0,
+      "output_count": 0,
+      "input_identities": [],
+      "output_identities": [],
+      "identity_preserved": true,
+      "fusion_trace_present": false
+     },
+     "ranking_trace": {
+      "candidate_stage": "fusion_not_executed",
+      "candidate_limit": 0,
+      "candidate_input_count": 0,
+      "input_count": 0,
+      "reranker_input_count": 0,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "not_executed",
+       "candidate_stage": "fusion_not_executed",
+       "reason": "no_fusion_candidates",
+       "input_count": 0,
+       "output_count": 0,
+       "input_identities": [],
+       "output_identities": [],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "reranker_aggregate_trace": {
+      "candidate_stage": "fusion_not_executed",
+      "candidate_limit": 0,
+      "candidate_input_count": 0,
+      "input_count": 0,
+      "reranker_input_count": 0,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "not_executed",
+       "candidate_stage": "fusion_not_executed",
+       "reason": "no_fusion_candidates",
+       "input_count": 0,
+       "output_count": 0,
+       "input_identities": [],
+       "output_identities": [],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "page_coverage": [],
+     "source_ids": [],
+     "evidence_ids": [],
+     "source_page_locators": [],
+     "source_page_alias_locators": [],
+     "modality_counts": {},
+     "evidence": [],
+     "selected_evidence": [],
+     "generation_context_evidence": [],
+     "used_evidence": [],
+     "stage_aliases": {
+      "used_evidence": "generation_context_evidence"
+     },
+     "query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:fed46f1bc08b3678a830",
+      "answer_type": "numeric",
+      "question_type": "multi_period_numeric",
+      "subqueries": [
+       "What was the revenue productivity turnover from FY2018 to FY2019?"
+      ],
+      "evidence_slots": [],
+      "constraints": {
+       "periods": [
+        "2018",
+        "2019"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": true,
+       "finance_formula_status": "unsupported",
+       "question": "What was the revenue productivity turnover from FY2018 to FY2019?"
+      },
+      "max_retrieval_rounds": 2,
+      "binding_trace": [],
+      "state_version": 4
+     },
+     "query_plan_id": "plan:fed46f1bc08b3678a830",
+     "planned_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:fed46f1bc08b3678a830",
+      "answer_type": "numeric",
+      "question_type": "multi_period_numeric",
+      "subqueries": [
+       "What was the revenue productivity turnover from FY2018 to FY2019?"
+      ],
+      "evidence_slots": [],
+      "constraints": {
+       "periods": [
+        "2018",
+        "2019"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": true,
+       "finance_formula_status": "unsupported"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "planned",
+      "state_version": 0
+     },
+     "bound_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:fed46f1bc08b3678a830",
+      "answer_type": "numeric",
+      "question_type": "multi_period_numeric",
+      "subqueries": [
+       "What was the revenue productivity turnover from FY2018 to FY2019?"
+      ],
+      "evidence_slots": [],
+      "constraints": {
+       "periods": [
+        "2018",
+        "2019"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": true,
+       "finance_formula_status": "unsupported",
+       "question": "What was the revenue productivity turnover from FY2018 to FY2019?"
+      },
+      "max_retrieval_rounds": 2,
+      "binding_trace": [],
+      "state_version": 4
+     },
+     "evidence_selection_trace": {
+      "strategy": "marginal_evidence_set_selection_v3",
+      "candidate_count": 0,
+      "selected_count": 0,
+      "max_items": 16,
+      "max_pages": 6,
+      "unique_pages": 0,
+      "selected_pages": [],
+      "slot_coverage": null,
+      "missing_required_slot_count": 0,
+      "continuation_expansion_count": 0,
+      "page_modality_expansion_count": 0,
+      "structure_expansion_enabled": false,
+      "mmr_lambda": 0.7,
+      "structure_metadata_coverage": 0.0,
+      "mixed_candidate_structure_metadata_coverage": 0.0,
+      "structure_coverage_scope": "legacy_mixed",
+      "required_slot_candidates_restored": 0,
+      "candidate_budget_partitions": {
+       "factual_narrative": 0,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "selected_budget_usage": {
+       "factual_narrative": 0,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "evidence_stage_trace": [],
+      "trace_validation_errors": [],
+      "required_slot_bindings": [],
+      "execution_slot_lineage": [],
+      "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+      "boolean_assessment_cache": {
+       "unique_semantic_candidates": 0,
+       "slots": 0,
+       "cache_entries": 0,
+       "cache_builds": 1,
+       "cache_hits": 0,
+       "cache_misses": 0,
+       "classification_calls": 0,
+       "mmr_hot_loop_misses": 0,
+       "time_spent_ms": "elapsed milliseconds"
+      }
+     },
+     "structure_metadata_coverage": 0.0,
+     "slot_coverage": null,
+     "missing_required_slot_count": 0,
+     "second_round_queries": [],
+     "second_round_requests": [],
+     "retrieval_rounds": 2,
+     "finance_numeric_trace": {
+      "answer": "",
+      "confidence": 0.0,
+      "question_type": "unplanned_numeric",
+      "inputs": {},
+      "formula": "",
+      "calculation_plan": {
+       "contract_id": "calculation_plan.v1",
+       "formula_inputs": [],
+       "operands": [],
+       "steps": [],
+       "result_step_id": "",
+       "answer_unit": "",
+       "answer_scale": ""
+      },
+      "calculation_verification": {
+       "valid": false,
+       "errors": [
+        "unsupported_formula"
+       ],
+       "verified_operand_ids": [],
+       "citation_ids": []
+      },
+      "calculation_execution": {
+       "status": "error",
+       "value": null,
+       "citation_ids": [],
+       "step_values": {},
+       "error": "unsupported_formula"
+      },
+      "authoritative_query_plan": {
+       "contract_id": "query_plan.v1",
+       "plan_id": "plan:fed46f1bc08b3678a830",
+       "answer_type": "numeric",
+       "question_type": "multi_period_numeric",
+       "subqueries": [
+        "What was the revenue productivity turnover from FY2018 to FY2019?"
+       ],
+       "evidence_slots": [],
+       "constraints": {
+        "periods": [
+         "2018",
+         "2019"
+        ],
+        "verification_domain": "finance",
+        "requires_visual": false,
+        "requires_multiple_evidence": false,
+        "requires_distinct_source_pages": false,
+        "requires_structured_elements": false,
+        "explicit_page_labels": {
+         "__tuple__": []
+        },
+        "figure_label": "",
+        "table_label": "",
+        "requires_distinct_evidence": false,
+        "requires_structure": true,
+        "finance_formula_status": "unsupported",
+        "question": "What was the revenue productivity turnover from FY2018 to FY2019?"
+       },
+       "max_retrieval_rounds": 2,
+       "binding_trace": [],
+       "state_version": 4
+      },
+      "attempt_status": "unsupported_formula",
+      "dimension_bindings": []
+     },
+     "verification_slot_states": [],
+     "missing_required_calculation_slot_ids": [],
+     "pipeline_stage_timings": {
+      "planning_seconds": "elapsed seconds",
+      "retrieval_seconds": "elapsed seconds",
+      "generation_seconds": "elapsed seconds",
+      "retry_seconds": "elapsed seconds",
+      "verification_seconds": "elapsed seconds",
+      "finalization_seconds": "elapsed seconds"
+     }
+    }
+   },
+   "terminal_outcome": "safe_abstention",
+   "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+   "terminal_semantic_commit": {
+    "contract_id": "terminal_semantic_commit.v3",
+    "semantic_answer": "unanswerable",
+    "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "outcome": "safe_abstention",
+    "outcome_reason": "Retrieved evidence metadata is present but lacks concrete evidence.",
+    "answer_status": "abstained",
+    "verify_decision": {
+     "mode": "light",
+     "status": "not_enough_evidence",
+     "reason": "Light verification requested without sufficient evidence.",
+     "action": "abstain",
+     "claims": [],
+     "unsupported_claims": [],
+     "unknown_claims": [],
+     "verified_citations": [],
+     "claim_results": [],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "boolean_authority_status": "",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "verified_support_slot_ids": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "typed_authority": {},
+     "candidate_contract_id": "",
+     "candidate_label": "",
+     "verifier_input_candidate": "",
+     "verifier_candidate_status": "",
+     "replacement_candidate_allowed": false,
+     "predicate": "",
+     "arguments": [],
+     "scope": ""
+    },
+    "guardrail_decision": {
+     "status": "not_enough_evidence",
+     "action": "abstain",
+     "reason": "Retrieved evidence metadata is present but lacks concrete evidence."
+    },
+    "authoritative_evidence": [],
+    "citations": [],
+    "projection_hash": "8f4868a86c1464bc180f3eba71d94076a5a5024ddb7e40ad45fc9e379211b531",
+    "state_version": 3
+   }
+  },
+  "terminal_verification": {
+   "mode": "light",
+   "status": "not_enough_evidence",
+   "reason": "Light verification requested without sufficient evidence.",
+   "action": "abstain",
+   "claims": [],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [],
+   "claim_results": [],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "terminal_guardrail": {
+   "status": "not_enough_evidence",
+   "action": "abstain",
+   "reason": "Retrieved evidence metadata is present but lacks concrete evidence."
+  },
+  "rounds": 2,
+  "recovery": null,
+  "numeric": {
+   "attempt_status": "unsupported_formula",
+   "answer": "",
+   "formula": "",
+   "inputs": {},
+   "calculation_execution": {
+    "status": "error",
+    "value": null,
+    "citation_ids": [],
+    "step_values": {},
+    "error": "unsupported_formula"
+   },
+   "calculation_verification": {
+    "valid": false,
+    "errors": [
+     "unsupported_formula"
+    ],
+    "verified_operand_ids": [],
+    "citation_ids": []
+   },
+   "authoritative_query_plan": {
+    "contract_id": "query_plan.v1",
+    "plan_id": "plan:fed46f1bc08b3678a830",
+    "answer_type": "numeric",
+    "question_type": "multi_period_numeric",
+    "subqueries": [
+     "What was the revenue productivity turnover from FY2018 to FY2019?"
+    ],
+    "evidence_slots": [],
+    "constraints": {
+     "periods": [
+      "2018",
+      "2019"
+     ],
+     "verification_domain": "finance",
+     "requires_visual": false,
+     "requires_multiple_evidence": false,
+     "requires_distinct_source_pages": false,
+     "requires_structured_elements": false,
+     "explicit_page_labels": {
+      "__tuple__": []
+     },
+     "figure_label": "",
+     "table_label": "",
+     "requires_distinct_evidence": false,
+     "requires_structure": true,
+     "finance_formula_status": "unsupported",
+     "question": "What was the revenue productivity turnover from FY2018 to FY2019?"
+    },
+    "max_retrieval_rounds": 2,
+    "binding_trace": [],
+    "state_version": 4
+   }
+  }
+ }
+}

@@ -1,0 +1,1919 @@
+{
+ "source": "e40dc0a18ef57d251a2931ce85553e22ee145798",
+ "pythonhashseed": "0",
+ "observation": {
+  "calls": [
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "support:visual_primary",
+    "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?",
+    "route": "page_image_rag",
+    "budget": {
+     "max_items": 8,
+     "max_pages": 3
+    }
+   },
+   {
+    "stage": "generate",
+    "route": "page_image_rag"
+   },
+   {
+    "stage": "retrieve",
+    "round": 2,
+    "slot": "support:boolean_proposition",
+    "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?",
+    "route": "page_image_rag",
+    "budget": {
+     "max_items": 8,
+     "max_pages": 3
+    }
+   }
+  ],
+  "planned": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:074afb716a928befccf6",
+   "answer_type": "boolean",
+   "question_type": "simple_fact",
+   "subqueries": [
+    "Regarding CCD customers, is a greater percentage MALE or FEMALE?"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:visual_primary",
+     "role": "support",
+     "entity": "",
+     "metric": "regarding ccd customers greater male or female",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "visual_support",
+     "financial_scope": "",
+     "modality": "page_image",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?",
+     "locator": {}
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "slidevqa",
+    "requires_visual": true,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": false,
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "final_plan": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:074afb716a928befccf6",
+   "answer_type": "boolean",
+   "question_type": "simple_fact",
+   "subqueries": [
+    "Regarding CCD customers, is a greater percentage MALE or FEMALE?"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:visual_primary",
+     "role": "support",
+     "entity": "",
+     "metric": "regarding ccd customers greater male or female",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "visual_support",
+     "financial_scope": "",
+     "modality": "page_image",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "filled",
+     "evidence_ids": [
+      "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?",
+     "locator": {}
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "slidevqa",
+    "requires_visual": true,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": false,
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "plan_id": "plan:074afb716a928befccf6",
+  "state_version": 3,
+  "bound": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:074afb716a928befccf6",
+   "answer_type": "boolean",
+   "question_type": "simple_fact",
+   "subqueries": [
+    "Regarding CCD customers, is a greater percentage MALE or FEMALE?"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:visual_primary",
+     "role": "support",
+     "entity": "",
+     "metric": "regarding ccd customers greater male or female",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "visual_support",
+     "financial_scope": "",
+     "modality": "page_image",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_support",
+     "evidence_ids": [
+      "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?",
+     "locator": {}
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "slidevqa",
+    "requires_visual": true,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": false,
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2,
+   "stage": "verified",
+   "state_version": 2,
+   "state_authority": "verified_claim_support.v1",
+   "authority_projection_contract": ""
+  },
+  "controller": {
+   "route": "page_image_rag",
+   "legacy_route": "doc_page_image",
+   "policy": "visual",
+   "controller_mode": "off",
+   "requires_retrieval": true,
+   "reason": "Requested visual page route."
+  },
+  "retrieval": {
+   "status": "good",
+   "reason": "Retrieved evidence is sufficient for generation.",
+   "retry": false
+  },
+  "verification": {
+   "mode": "light",
+   "status": "supported",
+   "reason": "Visual answer is bound to selected page-image evidence.",
+   "action": "generate",
+   "claims": [
+    "FEMALE"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [
+    "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+   ],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "FEMALE",
+     "status": "supported",
+     "supporting_evidence_ids": [
+      "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+     ],
+     "authority_status": "visual_page",
+     "verified_slot_state": "verified_support"
+    }
+   ],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "guardrail": {
+   "status": "ok",
+   "action": "return",
+   "reason": "Visual answer is bound to selected page-image evidence."
+  },
+  "answer": "FEMALE",
+  "terminal_answer": "FEMALE",
+  "terminal_state": {
+   "contract_id": "engine_terminal_state.v1",
+   "answer": "FEMALE",
+   "raw_generated_answer": "FEMALE",
+   "raw_candidate_label": "invalid",
+   "normalized_candidate_label": "invalid",
+   "verified_canonical_answer": "",
+   "semantic_correction_applied": false,
+   "correction_reason": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_quote": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "terminal_reason": "",
+   "guardrail_result": {
+    "status": "ok",
+    "action": "return",
+    "reason": "Visual answer is bound to selected page-image evidence."
+   },
+   "verify_decision": {
+    "mode": "light",
+    "status": "supported",
+    "reason": "Visual answer is bound to selected page-image evidence.",
+    "action": "generate",
+    "claims": [
+     "FEMALE"
+    ],
+    "unsupported_claims": [],
+    "unknown_claims": [],
+    "verified_citations": [
+     "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+    ],
+    "claim_results": [
+     {
+      "claim_id": "claim:1",
+      "claim": "FEMALE",
+      "status": "supported",
+      "supporting_evidence_ids": [
+       "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+      ],
+      "authority_status": "visual_page",
+      "verified_slot_state": "verified_support"
+     }
+    ],
+    "input_answer_polarity": "",
+    "canonical_answer_polarity": "",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "",
+    "authoritative_evidence_id": "",
+    "authoritative_evidence_ref": "",
+    "authoritative_span_id": "",
+    "authoritative_quote": "",
+    "authoritative_span_start": null,
+    "authoritative_span_end": null,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "",
+    "section_scope": "",
+    "relation": "",
+    "object": "",
+    "predicate_arguments": {
+     "__tuple__": []
+    },
+    "qualifier": "",
+    "quantifier": "",
+    "verified_support_slot_ids": [],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {},
+    "typed_authority": {},
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "",
+    "arguments": [],
+    "scope": ""
+   },
+   "guardrail_decision": {
+    "status": "ok",
+    "action": "return",
+    "reason": "Visual answer is bound to selected page-image evidence."
+   },
+   "evidence_bundle": {
+    "route": "doc_page_image",
+    "items": [
+     {
+      "evidence_id": "page-image:slide-doc:6",
+      "source_id": "slide-doc",
+      "source_name": "slide-doc_page_6.jpg",
+      "source_aliases": [
+       "slide-doc",
+       "slide-doc_page_6.jpg",
+       "slide-doc_page_6"
+      ],
+      "page_label": "6",
+      "modality": "page_image",
+      "element_id": "",
+      "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:support:visual_primary",
+        "slot_id": "support:visual_primary",
+        "retriever_name": "visual",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "slide-doc#page:6"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [],
+      "identity": {
+       "source_id": "slide-doc",
+       "kind": "evidence",
+       "local_id": "page-image:slide-doc:6"
+      }
+     }
+    ],
+    "metadata": {
+     "page_image_index": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "page_label": "6",
+       "modality": "page_image",
+       "evidence_level": "page",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ]
+      }
+     ],
+     "retrieval_query_contracts": [
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:support:visual_primary",
+       "slot_id": "support:visual_primary",
+       "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?"
+      }
+     ],
+     "visual_typed_projection": {
+      "contract_id": "typed_visual_evidence_path.v1",
+      "parent_count": 1,
+      "projected_count": 0,
+      "rejected_count": 0
+     },
+     "schema_version": "evidence_bundle.v2",
+     "dedupe_trace": {
+      "schema_version": "evidence_bundle.v2",
+      "input_count": 1,
+      "output_count": 1,
+      "structure_duplicate_count": 0,
+      "exact_text_duplicate_count": 0,
+      "overlap_duplicate_count": 0,
+      "minhash_duplicate_count": 0,
+      "semantic_duplicate_count": 0,
+      "conflict_guard_count": 0,
+      "duplicate_ratio": 0.0
+     },
+     "canonical_candidate_count": 1,
+     "canonical_candidate_evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "candidate_evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "candidate_ranked_evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "candidate_ranking_contract": "global_ranked_v1",
+     "pre_rerank_required_slot_candidates_restored": 0,
+     "reranker_input_evidence": [],
+     "reranker_input_contract": "required_slot_restored.v1",
+     "fused_evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "fusion_stage_snapshot": {
+      "contract_id": "fusion_stage_snapshot.v1",
+      "route": "doc_page_image",
+      "state": "passthrough",
+      "candidate_stage": "fusion_passthrough",
+      "reason": "route_does_not_use_cross_modal_fusion",
+      "input_count": 1,
+      "output_count": 1,
+      "input_identities": [
+       "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+      ],
+      "output_identities": [
+       "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+      ],
+      "identity_preserved": true,
+      "fusion_trace_present": false
+     },
+     "ranking_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 1,
+      "candidate_input_count": 1,
+      "input_count": 1,
+      "reranker_input_count": 1,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_page_image",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 1,
+       "output_count": 1,
+       "input_identities": [
+        "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+       ],
+       "output_identities": [
+        "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "reranker_aggregate_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 1,
+      "candidate_input_count": 1,
+      "input_count": 1,
+      "reranker_input_count": 1,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_page_image",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 1,
+       "output_count": 1,
+       "input_identities": [
+        "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+       ],
+       "output_identities": [
+        "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "page_coverage": [
+      "6"
+     ],
+     "source_ids": [
+      "slide-doc"
+     ],
+     "evidence_ids": [
+      "page-image:slide-doc:6"
+     ],
+     "source_page_locators": [
+      {
+       "source_id": "slide-doc",
+       "page_label": "6"
+      }
+     ],
+     "source_page_alias_locators": [
+      {
+       "source_id": "slide-doc",
+       "page_label": "6"
+      },
+      {
+       "source_id": "slide-doc_page_6",
+       "page_label": "6"
+      },
+      {
+       "source_id": "slide-doc_page_6.jpg",
+       "page_label": "6"
+      }
+     ],
+     "modality_counts": {
+      "page_image": 1
+     },
+     "evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "selected_evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "generation_context_evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "used_evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "stage_aliases": {
+      "used_evidence": "generation_context_evidence"
+     },
+     "query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:074afb716a928befccf6",
+      "answer_type": "boolean",
+      "question_type": "simple_fact",
+      "subqueries": [
+       "Regarding CCD customers, is a greater percentage MALE or FEMALE?"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:visual_primary",
+        "role": "support",
+        "entity": "",
+        "metric": "regarding ccd customers greater male or female",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "visual_support",
+        "financial_scope": "",
+        "modality": "page_image",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_support",
+        "evidence_ids": [
+         "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?",
+        "locator": {}
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "slidevqa",
+       "requires_visual": true,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": false,
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "verified",
+      "state_version": 2,
+      "state_authority": "verified_claim_support.v1",
+      "authority_projection_contract": ""
+     },
+     "query_plan_id": "plan:074afb716a928befccf6",
+     "planned_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:074afb716a928befccf6",
+      "answer_type": "boolean",
+      "question_type": "simple_fact",
+      "subqueries": [
+       "Regarding CCD customers, is a greater percentage MALE or FEMALE?"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:visual_primary",
+        "role": "support",
+        "entity": "",
+        "metric": "regarding ccd customers greater male or female",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "visual_support",
+        "financial_scope": "",
+        "modality": "page_image",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?",
+        "locator": {}
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "slidevqa",
+       "requires_visual": true,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": false,
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "planned",
+      "state_version": 0
+     },
+     "bound_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:074afb716a928befccf6",
+      "answer_type": "boolean",
+      "question_type": "simple_fact",
+      "subqueries": [
+       "Regarding CCD customers, is a greater percentage MALE or FEMALE?"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:visual_primary",
+        "role": "support",
+        "entity": "",
+        "metric": "regarding ccd customers greater male or female",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "visual_support",
+        "financial_scope": "",
+        "modality": "page_image",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_support",
+        "evidence_ids": [
+         "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "Regarding CCD customers, is a greater percentage MALE or FEMALE?",
+        "locator": {}
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "slidevqa",
+       "requires_visual": true,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": false,
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "verified",
+      "state_version": 2,
+      "state_authority": "verified_claim_support.v1",
+      "authority_projection_contract": ""
+     },
+     "evidence_selection_trace": {
+      "strategy": "marginal_evidence_set_selection_v3",
+      "candidate_count": 1,
+      "selected_count": 1,
+      "max_items": 8,
+      "max_pages": 3,
+      "unique_pages": 1,
+      "selected_pages": [
+       {
+        "source_id": "slide-doc",
+        "page_label": "6"
+       }
+      ],
+      "slot_coverage": 1.0,
+      "missing_required_slot_count": 0,
+      "continuation_expansion_count": 0,
+      "page_modality_expansion_count": 0,
+      "structure_expansion_enabled": false,
+      "mmr_lambda": 0.7,
+      "structure_metadata_coverage": 0.0,
+      "mixed_candidate_structure_metadata_coverage": 0.0,
+      "structure_coverage_scope": "legacy_mixed",
+      "required_slot_candidates_restored": 0,
+      "candidate_budget_partitions": {
+       "factual_narrative": 2,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "selected_budget_usage": {
+       "factual_narrative": 1,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "evidence_stage_trace": [
+       {
+        "evidence_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "support:visual_primary"
+        ],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       }
+      ],
+      "trace_validation_errors": [],
+      "required_slot_bindings": [
+       {
+        "slot_id": "support:visual_primary",
+        "status": "filled",
+        "retrieval_satisfied": true,
+        "execution_satisfied": null,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+        ],
+        "best_selected_slot_score": 1.0,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+          "reason": "bound_to_slot",
+          "slot_score": 1.0
+         }
+        ],
+        "candidate_drop_reasons": []
+       }
+      ],
+      "execution_slot_lineage": [],
+      "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+      "boolean_assessment_cache": {
+       "unique_semantic_candidates": 0,
+       "slots": 0,
+       "cache_entries": 0,
+       "cache_builds": 1,
+       "cache_hits": 0,
+       "cache_misses": 0,
+       "classification_calls": 0,
+       "mmr_hot_loop_misses": 0,
+       "time_spent_ms": "elapsed milliseconds"
+      }
+     },
+     "structure_metadata_coverage": 0.0,
+     "slot_coverage": 1.0,
+     "missing_required_slot_count": 0,
+     "second_round_queries": [],
+     "second_round_requests": [],
+     "typed_adequacy_status": "not_applicable",
+     "heuristic_adequacy_status": "good",
+     "final_adequacy_status": "good",
+     "adequacy_decision_authority": "general_heuristic",
+     "heuristic_overridden": false,
+     "heuristic_override_reason": "",
+     "typed_adequacy_reason": "non_finance_domain",
+     "retrieval_rounds": 1,
+     "generation_backend": "fixed_visual_boundary",
+     "visual_answer_authority": {
+      "contract_id": "visual_evidence_authority.v1",
+      "answer": "FEMALE",
+      "evidence_ids": [
+       "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+      ],
+      "backend": "fixed_visual_boundary"
+     },
+     "vlm_cache": {
+      "hit": false,
+      "key": "fixed_visual_boundary|Regarding CCD customers, is a greater percentage MALE or FEMALE?|benchmark|slide-doc|6|page-image:slide-doc:6"
+     },
+     "pre_verification_answer": "FEMALE",
+     "qasper_answer_revision_attempted_evidence_signatures": [],
+     "pre_guardrail_answer": "FEMALE",
+     "verified_evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "verified_claim_support_evidence": [
+      {
+       "evidence_id": "page-image:slide-doc:6",
+       "source_id": "slide-doc",
+       "source_name": "slide-doc_page_6.jpg",
+       "source_aliases": [
+        "slide-doc",
+        "slide-doc_page_6.jpg",
+        "slide-doc_page_6"
+       ],
+       "page_label": "6",
+       "modality": "page_image",
+       "element_id": "",
+       "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:visual_primary",
+         "slot_id": "support:visual_primary",
+         "retriever_name": "visual",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "slide-doc#page:6"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [],
+       "identity": {
+        "source_id": "slide-doc",
+        "kind": "evidence",
+        "local_id": "page-image:slide-doc:6"
+       }
+      }
+     ],
+     "verified_claim_support_by_claim": {
+      "claim:1": [
+       "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+      ]
+     },
+     "verification_slot_states": [
+      {
+       "slot_id": "support:visual_primary",
+       "status": "verified_support",
+       "evidence_ids": [
+        "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+       ]
+      }
+     ],
+     "verify_decision": {
+      "mode": "light",
+      "status": "supported",
+      "reason": "Visual answer is bound to selected page-image evidence.",
+      "action": "generate",
+      "claims": [
+       "FEMALE"
+      ],
+      "unsupported_claims": [],
+      "unknown_claims": [],
+      "verified_citations": [
+       "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+      ],
+      "claim_results": [
+       {
+        "claim_id": "claim:1",
+        "claim": "FEMALE",
+        "status": "supported",
+        "supporting_evidence_ids": [
+         "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+        ],
+        "authority_status": "visual_page",
+        "verified_slot_state": "verified_support"
+       }
+      ],
+      "input_answer_polarity": "",
+      "canonical_answer_polarity": "",
+      "semantic_correction_applied": false,
+      "boolean_authority_status": "",
+      "authoritative_evidence_id": "",
+      "authoritative_evidence_ref": "",
+      "authoritative_span_id": "",
+      "authoritative_quote": "",
+      "authoritative_span_start": null,
+      "authoritative_span_end": null,
+      "authoritative_canonical_start": null,
+      "authoritative_canonical_end": null,
+      "actor": "",
+      "section_scope": "",
+      "relation": "",
+      "object": "",
+      "predicate_arguments": {
+       "__tuple__": []
+      },
+      "qualifier": "",
+      "quantifier": "",
+      "verified_support_slot_ids": [],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "authoritative_conflict": {},
+      "typed_authority": {},
+      "candidate_contract_id": "",
+      "candidate_label": "",
+      "verifier_input_candidate": "",
+      "verifier_candidate_status": "",
+      "replacement_candidate_allowed": false,
+      "predicate": "",
+      "arguments": [],
+      "scope": ""
+     },
+     "pipeline_stage_timings": {
+      "planning_seconds": "elapsed seconds",
+      "retrieval_seconds": "elapsed seconds",
+      "generation_seconds": "elapsed seconds",
+      "retry_seconds": "elapsed seconds",
+      "verification_seconds": "elapsed seconds",
+      "finalization_seconds": "elapsed seconds"
+     }
+    }
+   },
+   "terminal_outcome": "answered",
+   "presentation_answer": "FEMALE",
+   "terminal_semantic_commit": {
+    "contract_id": "terminal_semantic_commit.v3",
+    "semantic_answer": "FEMALE",
+    "presentation_answer": "FEMALE",
+    "outcome": "answered",
+    "outcome_reason": "",
+    "answer_status": "answered",
+    "verify_decision": {
+     "mode": "light",
+     "status": "supported",
+     "reason": "Visual answer is bound to selected page-image evidence.",
+     "action": "generate",
+     "claims": [
+      "FEMALE"
+     ],
+     "unsupported_claims": [],
+     "unknown_claims": [],
+     "verified_citations": [
+      "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+     ],
+     "claim_results": [
+      {
+       "claim_id": "claim:1",
+       "claim": "FEMALE",
+       "status": "supported",
+       "supporting_evidence_ids": [
+        "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+       ],
+       "authority_status": "visual_page",
+       "verified_slot_state": "verified_support"
+      }
+     ],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "boolean_authority_status": "",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "verified_support_slot_ids": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "typed_authority": {},
+     "candidate_contract_id": "",
+     "candidate_label": "",
+     "verifier_input_candidate": "",
+     "verifier_candidate_status": "",
+     "replacement_candidate_allowed": false,
+     "predicate": "",
+     "arguments": [],
+     "scope": ""
+    },
+    "guardrail_decision": {
+     "status": "ok",
+     "action": "return",
+     "reason": "Visual answer is bound to selected page-image evidence."
+    },
+    "authoritative_evidence": [
+     {
+      "evidence_id": "page-image:slide-doc:6",
+      "source_id": "slide-doc",
+      "source_name": "slide-doc_page_6.jpg",
+      "source_aliases": [
+       "slide-doc",
+       "slide-doc_page_6.jpg",
+       "slide-doc_page_6"
+      ],
+      "page_label": "6",
+      "modality": "page_image",
+      "element_id": "",
+      "canonical_id": "evidence:slide-doc:page-image%3Aslide-doc%3A6",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:support:visual_primary",
+        "slot_id": "support:visual_primary",
+        "retriever_name": "visual",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "slide-doc#page:6"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [],
+      "identity": {
+       "source_id": "slide-doc",
+       "kind": "evidence",
+       "local_id": "page-image:slide-doc:6"
+      }
+     }
+    ],
+    "citations": [
+     "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+    ],
+    "projection_hash": "3b21c1c37bd8f9b71946610f55a97eb789a62fd2dfcf747bb13125365f3524bb",
+    "state_version": 3
+   }
+  },
+  "terminal_verification": {
+   "mode": "light",
+   "status": "supported",
+   "reason": "Visual answer is bound to selected page-image evidence.",
+   "action": "generate",
+   "claims": [
+    "FEMALE"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [
+    "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+   ],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "FEMALE",
+     "status": "supported",
+     "supporting_evidence_ids": [
+      "evidence:slide-doc:page-image%3Aslide-doc%3A6"
+     ],
+     "authority_status": "visual_page",
+     "verified_slot_state": "verified_support"
+    }
+   ],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "terminal_guardrail": {
+   "status": "ok",
+   "action": "return",
+   "reason": "Visual answer is bound to selected page-image evidence."
+  },
+  "rounds": 1,
+  "recovery": null,
+  "numeric": {
+   "attempt_status": null,
+   "answer": null,
+   "formula": null,
+   "inputs": null,
+   "calculation_execution": null,
+   "calculation_verification": null,
+   "authoritative_query_plan": null
+  }
+ }
+}

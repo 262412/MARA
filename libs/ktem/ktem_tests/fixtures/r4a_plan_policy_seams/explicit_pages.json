@@ -1,0 +1,4103 @@
+{
+ "source": "e40dc0a18ef57d251a2931ce85553e22ee145798",
+ "pythonhashseed": "0",
+ "observation": {
+  "calls": [
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "operand:revenue:2021",
+    "query": "revenue consolidated statements of income 2021",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   },
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "operand:revenue:2022",
+    "query": "revenue consolidated statements of income 2022",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   },
+   {
+    "stage": "generate",
+    "route": "text_rag"
+   }
+  ],
+  "planned": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:eceafd635dd69e62ad5e",
+   "answer_type": "numeric",
+   "question_type": "multi_period_numeric",
+   "subqueries": [
+    "revenue consolidated statements of income 2021",
+    "revenue consolidated statements of income 2022"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "operand:revenue:2021",
+     "role": "operand",
+     "entity": "",
+     "metric": "revenue",
+     "period": "2021",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "income_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "revenue consolidated statements of income 2021",
+     "locator": {
+      "page_label": "8"
+     }
+    },
+    {
+     "slot_id": "operand:revenue:2022",
+     "role": "operand",
+     "entity": "",
+     "metric": "revenue",
+     "period": "2022",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "income_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "revenue consolidated statements of income 2022",
+     "locator": {
+      "page_label": "12"
+     }
+    }
+   ],
+   "constraints": {
+    "periods": [
+     "2021",
+     "2022"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": true,
+    "requires_distinct_source_pages": true,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": [
+      "8",
+      "12"
+     ]
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": true,
+    "requires_structure": true,
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "final_plan": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:eceafd635dd69e62ad5e",
+   "answer_type": "numeric",
+   "question_type": "multi_period_numeric",
+   "subqueries": [
+    "revenue consolidated statements of income 2021",
+    "revenue consolidated statements of income 2022"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "operand:revenue:2021",
+     "role": "operand",
+     "entity": "",
+     "metric": "revenue",
+     "period": "2021",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "income_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "filled",
+     "evidence_ids": [
+      "cell::left"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "revenue consolidated statements of income 2021",
+     "locator": {
+      "page_label": "8"
+     }
+    },
+    {
+     "slot_id": "operand:revenue:2022",
+     "role": "operand",
+     "entity": "",
+     "metric": "revenue",
+     "period": "2022",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "income_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "filled",
+     "evidence_ids": [
+      "cell::right"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "revenue consolidated statements of income 2022",
+     "locator": {
+      "page_label": "12"
+     }
+    }
+   ],
+   "constraints": {
+    "periods": [
+     "2021",
+     "2022"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": true,
+    "requires_distinct_source_pages": true,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": [
+      "8",
+      "12"
+     ]
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": true,
+    "requires_structure": true,
+    "finance_formula_status": "not_applicable",
+    "question": "What was the percentage change in revenue from 2021 to 2022 on pages 8 and 12?"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "plan_id": "plan:eceafd635dd69e62ad5e",
+  "state_version": 2,
+  "bound": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:eceafd635dd69e62ad5e",
+   "answer_type": "numeric",
+   "question_type": "multi_period_numeric",
+   "subqueries": [
+    "revenue consolidated statements of income 2021",
+    "revenue consolidated statements of income 2022"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "operand:revenue:2021",
+     "role": "operand",
+     "entity": "",
+     "metric": "revenue",
+     "period": "2021",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "income_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "filled",
+     "evidence_ids": [
+      "cell::left"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "revenue consolidated statements of income 2021",
+     "locator": {
+      "page_label": "8"
+     },
+     "table_instance_id": "cell::left",
+     "table_group_id": "cell::left"
+    },
+    {
+     "slot_id": "operand:revenue:2022",
+     "role": "operand",
+     "entity": "",
+     "metric": "revenue",
+     "period": "2022",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "income_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "filled",
+     "evidence_ids": [
+      "cell::right"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "revenue consolidated statements of income 2022",
+     "locator": {
+      "page_label": "12"
+     },
+     "table_instance_id": "cell::right",
+     "table_group_id": "cell::right"
+    }
+   ],
+   "constraints": {
+    "periods": [
+     "2021",
+     "2022"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": true,
+    "requires_distinct_source_pages": true,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": [
+      "8",
+      "12"
+     ]
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": true,
+    "requires_structure": true,
+    "finance_formula_status": "not_applicable",
+    "question": "What was the percentage change in revenue from 2021 to 2022 on pages 8 and 12?"
+   },
+   "max_retrieval_rounds": 2,
+   "binding_trace": [
+    {
+     "slot_id": "operand:revenue:2021",
+     "preserved_existing_binding": true,
+     "replacement_reason": "",
+     "before_identity": "cell::left",
+     "after_identity": "cell::left"
+    },
+    {
+     "slot_id": "operand:revenue:2022",
+     "preserved_existing_binding": true,
+     "replacement_reason": "",
+     "before_identity": "cell::right",
+     "after_identity": "cell::right"
+    }
+   ],
+   "state_authority": "verified_calculation_plan",
+   "verified_required_slot_ids": [
+    "operand:revenue:2021",
+    "operand:revenue:2022"
+   ],
+   "state_version": 2
+  },
+  "controller": {
+   "route": "text_rag",
+   "legacy_route": "doc_text",
+   "policy": "doc",
+   "controller_mode": "off",
+   "requires_retrieval": true,
+   "reason": "Requested document text route."
+  },
+  "retrieval": {
+   "status": "good",
+   "reason": "Retrieved evidence is sufficient for generation.",
+   "retry": false
+  },
+  "verification": {
+   "mode": "light",
+   "status": "supported",
+   "reason": "Light verification requested; current verifier observed evidence.",
+   "action": "generate",
+   "claims": [
+    "20.0%"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [
+    "cell::left",
+    "cell::right"
+   ],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "20.0%",
+     "status": "supported",
+     "supporting_evidence_ids": [
+      "cell::left",
+      "cell::right"
+     ],
+     "contradicting_evidence_ids": [],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "authority_status": "",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "supporting_evidence_spans": [],
+     "contradicting_evidence_spans": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "verified_slot_state": "verified_support",
+     "predicate": "",
+     "arguments": [],
+     "scope": "",
+     "verified_support_slot_ids": []
+    }
+   ],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "guardrail": {
+   "status": "ok",
+   "action": "return",
+   "reason": "Light verification requested; current verifier observed evidence."
+  },
+  "answer": "20.0%",
+  "terminal_answer": "20.0%",
+  "terminal_state": {
+   "contract_id": "engine_terminal_state.v1",
+   "answer": "20.0%",
+   "raw_generated_answer": "20.0%",
+   "raw_candidate_label": "",
+   "normalized_candidate_label": "",
+   "verified_canonical_answer": "",
+   "semantic_correction_applied": false,
+   "correction_reason": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_quote": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "terminal_reason": "",
+   "guardrail_result": {
+    "status": "ok",
+    "action": "return",
+    "reason": "Light verification requested; current verifier observed evidence."
+   },
+   "verify_decision": {
+    "mode": "light",
+    "status": "supported",
+    "reason": "Light verification requested; current verifier observed evidence.",
+    "action": "generate",
+    "claims": [
+     "20.0%"
+    ],
+    "unsupported_claims": [],
+    "unknown_claims": [],
+    "verified_citations": [
+     "cell::left",
+     "cell::right"
+    ],
+    "claim_results": [
+     {
+      "claim_id": "claim:1",
+      "claim": "20.0%",
+      "status": "supported",
+      "supporting_evidence_ids": [
+       "cell::left",
+       "cell::right"
+      ],
+      "contradicting_evidence_ids": [],
+      "input_answer_polarity": "",
+      "canonical_answer_polarity": "",
+      "semantic_correction_applied": false,
+      "authority_status": "",
+      "authoritative_evidence_id": "",
+      "authoritative_evidence_ref": "",
+      "authoritative_span_id": "",
+      "authoritative_quote": "",
+      "authoritative_span_start": null,
+      "authoritative_span_end": null,
+      "authoritative_canonical_start": null,
+      "authoritative_canonical_end": null,
+      "actor": "",
+      "section_scope": "",
+      "relation": "",
+      "object": "",
+      "predicate_arguments": {
+       "__tuple__": []
+      },
+      "qualifier": "",
+      "quantifier": "",
+      "supporting_evidence_spans": [],
+      "contradicting_evidence_spans": [],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "authoritative_conflict": {},
+      "verified_slot_state": "verified_support",
+      "predicate": "",
+      "arguments": [],
+      "scope": "",
+      "verified_support_slot_ids": []
+     }
+    ],
+    "input_answer_polarity": "",
+    "canonical_answer_polarity": "",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "",
+    "authoritative_evidence_id": "",
+    "authoritative_evidence_ref": "",
+    "authoritative_span_id": "",
+    "authoritative_quote": "",
+    "authoritative_span_start": null,
+    "authoritative_span_end": null,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "",
+    "section_scope": "",
+    "relation": "",
+    "object": "",
+    "predicate_arguments": {
+     "__tuple__": []
+    },
+    "qualifier": "",
+    "quantifier": "",
+    "verified_support_slot_ids": [],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {},
+    "typed_authority": {},
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "",
+    "arguments": [],
+    "scope": ""
+   },
+   "guardrail_decision": {
+    "status": "ok",
+    "action": "return",
+    "reason": "Light verification requested; current verifier observed evidence."
+   },
+   "evidence_bundle": {
+    "route": "doc_text",
+    "items": [
+     {
+      "evidence_id": "left",
+      "source_id": "",
+      "source_name": "",
+      "page_label": "8",
+      "modality": "table",
+      "element_id": "",
+      "cell_id": "left",
+      "canonical_id": "cell::left",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "cell_role": "data",
+      "row_index": null,
+      "column_index": null,
+      "row_label": "Revenue",
+      "column_label": "2021",
+      "raw_row_label": "Revenue",
+      "raw_column_label": "2021",
+      "normalized_row_label": "Revenue",
+      "normalized_column_label": "2021",
+      "period": "2021",
+      "value": "100",
+      "statement_kind": "income_statement",
+      "financial_scope": "consolidated",
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:revenue:2021",
+        "slot_id": "operand:revenue:2021",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:revenue:2022",
+        "slot_id": "operand:revenue:2022",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [],
+      "evidence_level": "cell",
+      "metadata": {},
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "period_kind": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "representations": [],
+      "identity": {
+       "source_id": "",
+       "kind": "cell",
+       "local_id": "left"
+      }
+     },
+     {
+      "evidence_id": "right",
+      "source_id": "",
+      "source_name": "",
+      "page_label": "12",
+      "modality": "table",
+      "element_id": "",
+      "cell_id": "right",
+      "canonical_id": "cell::right",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "cell_role": "data",
+      "row_index": null,
+      "column_index": null,
+      "row_label": "Revenue",
+      "column_label": "2022",
+      "raw_row_label": "Revenue",
+      "raw_column_label": "2022",
+      "normalized_row_label": "Revenue",
+      "normalized_column_label": "2022",
+      "period": "2022",
+      "value": "120",
+      "statement_kind": "income_statement",
+      "financial_scope": "consolidated",
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:revenue:2021",
+        "slot_id": "operand:revenue:2021",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:revenue:2022",
+        "slot_id": "operand:revenue:2022",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [],
+      "evidence_level": "cell",
+      "metadata": {},
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "period_kind": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "representations": [],
+      "identity": {
+       "source_id": "",
+       "kind": "cell",
+       "local_id": "right"
+      }
+     }
+    ],
+    "metadata": {
+     "evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "retrieval_query_contracts": [
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:operand:revenue:2021",
+       "slot_id": "operand:revenue:2021",
+       "query": "revenue consolidated statements of income 2021"
+      },
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:operand:revenue:2022",
+       "slot_id": "operand:revenue:2022",
+       "query": "revenue consolidated statements of income 2022"
+      }
+     ],
+     "materialization_trace": {
+      "parent_table_candidate_count": 0,
+      "materialized_table_count": 0,
+      "materialized_cell_count": 0,
+      "materialization_cache_hit_rate": 0.0,
+      "materialized_cells_per_required_slot": 0.0,
+      "materialized_cells_by_required_slot": {
+       "operand:revenue:2021": 0,
+       "operand:revenue:2022": 0
+      },
+      "candidate_count_before_materialization": 2,
+      "candidate_count_after_materialization": 2,
+      "materialization_seconds": "elapsed seconds"
+     },
+     "schema_version": "evidence_bundle.v2",
+     "dedupe_trace": {
+      "schema_version": "evidence_bundle.v2",
+      "input_count": 2,
+      "output_count": 2,
+      "structure_duplicate_count": 0,
+      "exact_text_duplicate_count": 0,
+      "overlap_duplicate_count": 0,
+      "minhash_duplicate_count": 0,
+      "semantic_duplicate_count": 0,
+      "conflict_guard_count": 0,
+      "duplicate_ratio": 0.0
+     },
+     "canonical_candidate_count": 2,
+     "canonical_candidate_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "candidate_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "candidate_ranked_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "candidate_ranking_contract": "global_ranked_v1",
+     "pre_rerank_required_slot_candidates_restored": 0,
+     "reranker_input_evidence": [],
+     "reranker_input_contract": "required_slot_restored.v1",
+     "fused_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "fusion_stage_snapshot": {
+      "contract_id": "fusion_stage_snapshot.v1",
+      "route": "doc_text",
+      "state": "passthrough",
+      "candidate_stage": "fusion_passthrough",
+      "reason": "route_does_not_use_cross_modal_fusion",
+      "input_count": 2,
+      "output_count": 2,
+      "input_identities": [
+       "cell::left",
+       "cell::right"
+      ],
+      "output_identities": [
+       "cell::left",
+       "cell::right"
+      ],
+      "identity_preserved": true,
+      "fusion_trace_present": false
+     },
+     "ranking_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 2,
+      "candidate_input_count": 2,
+      "input_count": 2,
+      "reranker_input_count": 2,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 2,
+       "output_count": 2,
+       "input_identities": [
+        "cell::left",
+        "cell::right"
+       ],
+       "output_identities": [
+        "cell::left",
+        "cell::right"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "reranker_aggregate_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 2,
+      "candidate_input_count": 2,
+      "input_count": 2,
+      "reranker_input_count": 2,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 2,
+       "output_count": 2,
+       "input_identities": [
+        "cell::left",
+        "cell::right"
+       ],
+       "output_identities": [
+        "cell::left",
+        "cell::right"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "page_coverage": [
+      "8",
+      "12"
+     ],
+     "source_ids": [],
+     "evidence_ids": [
+      "left",
+      "right"
+     ],
+     "source_page_locators": [],
+     "source_page_alias_locators": [],
+     "modality_counts": {
+      "table": 2
+     },
+     "selected_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "generation_context_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "used_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "stage_aliases": {
+      "used_evidence": "generation_context_evidence"
+     },
+     "query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:eceafd635dd69e62ad5e",
+      "answer_type": "numeric",
+      "question_type": "multi_period_numeric",
+      "subqueries": [
+       "revenue consolidated statements of income 2021",
+       "revenue consolidated statements of income 2022"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "operand:revenue:2021",
+        "role": "operand",
+        "entity": "",
+        "metric": "revenue",
+        "period": "2021",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "income_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "filled",
+        "evidence_ids": [
+         "cell::left"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "revenue consolidated statements of income 2021",
+        "locator": {
+         "page_label": "8"
+        },
+        "table_instance_id": "cell::left",
+        "table_group_id": "cell::left"
+       },
+       {
+        "slot_id": "operand:revenue:2022",
+        "role": "operand",
+        "entity": "",
+        "metric": "revenue",
+        "period": "2022",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "income_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "filled",
+        "evidence_ids": [
+         "cell::right"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "revenue consolidated statements of income 2022",
+        "locator": {
+         "page_label": "12"
+        },
+        "table_instance_id": "cell::right",
+        "table_group_id": "cell::right"
+       }
+      ],
+      "constraints": {
+       "periods": [
+        "2021",
+        "2022"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": true,
+       "requires_distinct_source_pages": true,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": [
+         "8",
+         "12"
+        ]
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": true,
+       "requires_structure": true,
+       "finance_formula_status": "not_applicable",
+       "question": "What was the percentage change in revenue from 2021 to 2022 on pages 8 and 12?"
+      },
+      "max_retrieval_rounds": 2,
+      "binding_trace": [
+       {
+        "slot_id": "operand:revenue:2021",
+        "preserved_existing_binding": true,
+        "replacement_reason": "",
+        "before_identity": "cell::left",
+        "after_identity": "cell::left"
+       },
+       {
+        "slot_id": "operand:revenue:2022",
+        "preserved_existing_binding": true,
+        "replacement_reason": "",
+        "before_identity": "cell::right",
+        "after_identity": "cell::right"
+       }
+      ],
+      "state_authority": "verified_calculation_plan",
+      "verified_required_slot_ids": [
+       "operand:revenue:2021",
+       "operand:revenue:2022"
+      ],
+      "state_version": 2
+     },
+     "query_plan_id": "plan:eceafd635dd69e62ad5e",
+     "planned_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:eceafd635dd69e62ad5e",
+      "answer_type": "numeric",
+      "question_type": "multi_period_numeric",
+      "subqueries": [
+       "revenue consolidated statements of income 2021",
+       "revenue consolidated statements of income 2022"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "operand:revenue:2021",
+        "role": "operand",
+        "entity": "",
+        "metric": "revenue",
+        "period": "2021",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "income_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "revenue consolidated statements of income 2021",
+        "locator": {
+         "page_label": "8"
+        }
+       },
+       {
+        "slot_id": "operand:revenue:2022",
+        "role": "operand",
+        "entity": "",
+        "metric": "revenue",
+        "period": "2022",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "income_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "revenue consolidated statements of income 2022",
+        "locator": {
+         "page_label": "12"
+        }
+       }
+      ],
+      "constraints": {
+       "periods": [
+        "2021",
+        "2022"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": true,
+       "requires_distinct_source_pages": true,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": [
+         "8",
+         "12"
+        ]
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": true,
+       "requires_structure": true,
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "planned",
+      "state_version": 0
+     },
+     "bound_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:eceafd635dd69e62ad5e",
+      "answer_type": "numeric",
+      "question_type": "multi_period_numeric",
+      "subqueries": [
+       "revenue consolidated statements of income 2021",
+       "revenue consolidated statements of income 2022"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "operand:revenue:2021",
+        "role": "operand",
+        "entity": "",
+        "metric": "revenue",
+        "period": "2021",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "income_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "filled",
+        "evidence_ids": [
+         "cell::left"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "revenue consolidated statements of income 2021",
+        "locator": {
+         "page_label": "8"
+        },
+        "table_instance_id": "cell::left",
+        "table_group_id": "cell::left"
+       },
+       {
+        "slot_id": "operand:revenue:2022",
+        "role": "operand",
+        "entity": "",
+        "metric": "revenue",
+        "period": "2022",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "income_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "filled",
+        "evidence_ids": [
+         "cell::right"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "revenue consolidated statements of income 2022",
+        "locator": {
+         "page_label": "12"
+        },
+        "table_instance_id": "cell::right",
+        "table_group_id": "cell::right"
+       }
+      ],
+      "constraints": {
+       "periods": [
+        "2021",
+        "2022"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": true,
+       "requires_distinct_source_pages": true,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": [
+         "8",
+         "12"
+        ]
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": true,
+       "requires_structure": true,
+       "finance_formula_status": "not_applicable",
+       "question": "What was the percentage change in revenue from 2021 to 2022 on pages 8 and 12?"
+      },
+      "max_retrieval_rounds": 2,
+      "binding_trace": [
+       {
+        "slot_id": "operand:revenue:2021",
+        "preserved_existing_binding": true,
+        "replacement_reason": "",
+        "before_identity": "cell::left",
+        "after_identity": "cell::left"
+       },
+       {
+        "slot_id": "operand:revenue:2022",
+        "preserved_existing_binding": true,
+        "replacement_reason": "",
+        "before_identity": "cell::right",
+        "after_identity": "cell::right"
+       }
+      ],
+      "state_authority": "verified_calculation_plan",
+      "verified_required_slot_ids": [
+       "operand:revenue:2021",
+       "operand:revenue:2022"
+      ],
+      "state_version": 2
+     },
+     "evidence_selection_trace": {
+      "strategy": "marginal_evidence_set_selection_v3",
+      "candidate_count": 2,
+      "selected_count": 2,
+      "max_items": 16,
+      "max_pages": 6,
+      "unique_pages": 0,
+      "selected_pages": [],
+      "slot_coverage": 1.0,
+      "missing_required_slot_count": 0,
+      "continuation_expansion_count": 0,
+      "page_modality_expansion_count": 0,
+      "structure_expansion_enabled": false,
+      "mmr_lambda": 0.7,
+      "structure_metadata_coverage": 0.0,
+      "mixed_candidate_structure_metadata_coverage": 0.0,
+      "structure_coverage_scope": "element_index",
+      "required_slot_candidates_restored": 0,
+      "candidate_budget_partitions": {
+       "factual_narrative": 0,
+       "execution_operands": 4,
+       "parent_tables": 2,
+       "dimensions": 0
+      },
+      "selected_budget_usage": {
+       "factual_narrative": 0,
+       "execution_operands": 2,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "evidence_stage_trace": [
+       {
+        "evidence_id": "cell::left",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "operand:revenue:2021"
+        ],
+        "executable_operand": true,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       },
+       {
+        "evidence_id": "cell::right",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "operand:revenue:2022"
+        ],
+        "executable_operand": true,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       }
+      ],
+      "trace_validation_errors": [],
+      "required_slot_bindings": [
+       {
+        "slot_id": "operand:revenue:2021",
+        "status": "filled",
+        "retrieval_satisfied": true,
+        "execution_satisfied": true,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "cell::left"
+        ],
+        "best_selected_slot_score": 3.25,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "cell::left",
+          "reason": "bound_to_slot",
+          "slot_score": 3.25
+         }
+        ],
+        "candidate_drop_reasons": [
+         {
+          "evidence_id": "cell::right",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         }
+        ]
+       },
+       {
+        "slot_id": "operand:revenue:2022",
+        "status": "filled",
+        "retrieval_satisfied": true,
+        "execution_satisfied": true,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "cell::right"
+        ],
+        "best_selected_slot_score": 3.25,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "cell::right",
+          "reason": "bound_to_slot",
+          "slot_score": 3.25
+         }
+        ],
+        "candidate_drop_reasons": [
+         {
+          "evidence_id": "cell::left",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         }
+        ]
+       }
+      ],
+      "execution_slot_lineage": [
+       {
+        "slot_id": "operand:revenue:2021",
+        "slot_query": "revenue consolidated statements of income 2021",
+        "parent_candidates": [],
+        "selected_parent": "",
+        "materialized_cell_candidates": [],
+        "reranker_observations": [],
+        "selected_cell": "cell::left",
+        "binding_score": 3.25,
+        "rejection_reasons": [],
+        "execution_operand": {
+         "evidence_id": "left",
+         "source_id": "",
+         "source_name": "",
+         "page_label": "8",
+         "modality": "table",
+         "element_id": "",
+         "cell_id": "left",
+         "canonical_id": "cell::left",
+         "parent_element_id": "",
+         "neighbor_element_ids": [],
+         "section_id": "",
+         "table_id": "",
+         "cell_role": "data",
+         "row_index": null,
+         "column_index": null,
+         "row_label": "Revenue",
+         "column_label": "2021",
+         "raw_row_label": "Revenue",
+         "raw_column_label": "2021",
+         "normalized_row_label": "Revenue",
+         "normalized_column_label": "2021",
+         "period": "2021",
+         "value": "100",
+         "statement_kind": "income_statement",
+         "financial_scope": "consolidated",
+         "continuation_id": "",
+         "chunk_start": null,
+         "chunk_end": null,
+         "normalized_text_hash": "",
+         "duplicate_evidence_ids": [],
+         "retrieval_lineage": [
+          {
+           "round_id": 1,
+           "query_id": "round1:operand:revenue:2021",
+           "slot_id": "operand:revenue:2021",
+           "retriever_name": "text",
+           "raw_rank": 1,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          },
+          {
+           "round_id": 1,
+           "query_id": "round1:operand:revenue:2022",
+           "slot_id": "operand:revenue:2022",
+           "retriever_name": "text",
+           "raw_rank": 1,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          }
+         ],
+         "bbox": null,
+         "caption": "",
+         "text": "",
+         "ocr_text": "",
+         "vlm_text": "",
+         "source_backrefs": [],
+         "evidence_level": "cell",
+         "metadata": {},
+         "span_id": "",
+         "table_instance_id": null,
+         "table_group_id": null,
+         "block_id": null,
+         "period_kind": null,
+         "unit": null,
+         "scale": null,
+         "currency": null,
+         "representations": [],
+         "identity": {
+          "source_id": "",
+          "kind": "cell",
+          "local_id": "left"
+         },
+         "_selection_relevance_score": 0.0,
+         "_selection_relevance_sources": []
+        }
+       },
+       {
+        "slot_id": "operand:revenue:2022",
+        "slot_query": "revenue consolidated statements of income 2022",
+        "parent_candidates": [],
+        "selected_parent": "",
+        "materialized_cell_candidates": [],
+        "reranker_observations": [],
+        "selected_cell": "cell::right",
+        "binding_score": 3.25,
+        "rejection_reasons": [],
+        "execution_operand": {
+         "evidence_id": "right",
+         "source_id": "",
+         "source_name": "",
+         "page_label": "12",
+         "modality": "table",
+         "element_id": "",
+         "cell_id": "right",
+         "canonical_id": "cell::right",
+         "parent_element_id": "",
+         "neighbor_element_ids": [],
+         "section_id": "",
+         "table_id": "",
+         "cell_role": "data",
+         "row_index": null,
+         "column_index": null,
+         "row_label": "Revenue",
+         "column_label": "2022",
+         "raw_row_label": "Revenue",
+         "raw_column_label": "2022",
+         "normalized_row_label": "Revenue",
+         "normalized_column_label": "2022",
+         "period": "2022",
+         "value": "120",
+         "statement_kind": "income_statement",
+         "financial_scope": "consolidated",
+         "continuation_id": "",
+         "chunk_start": null,
+         "chunk_end": null,
+         "normalized_text_hash": "",
+         "duplicate_evidence_ids": [],
+         "retrieval_lineage": [
+          {
+           "round_id": 1,
+           "query_id": "round1:operand:revenue:2021",
+           "slot_id": "operand:revenue:2021",
+           "retriever_name": "text",
+           "raw_rank": 2,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          },
+          {
+           "round_id": 1,
+           "query_id": "round1:operand:revenue:2022",
+           "slot_id": "operand:revenue:2022",
+           "retriever_name": "text",
+           "raw_rank": 2,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          }
+         ],
+         "bbox": null,
+         "caption": "",
+         "text": "",
+         "ocr_text": "",
+         "vlm_text": "",
+         "source_backrefs": [],
+         "evidence_level": "cell",
+         "metadata": {},
+         "span_id": "",
+         "table_instance_id": null,
+         "table_group_id": null,
+         "block_id": null,
+         "period_kind": null,
+         "unit": null,
+         "scale": null,
+         "currency": null,
+         "representations": [],
+         "identity": {
+          "source_id": "",
+          "kind": "cell",
+          "local_id": "right"
+         },
+         "_selection_relevance_score": 0.0,
+         "_selection_relevance_sources": []
+        }
+       }
+      ],
+      "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+      "boolean_assessment_cache": {
+       "unique_semantic_candidates": 0,
+       "slots": 0,
+       "cache_entries": 0,
+       "cache_builds": 1,
+       "cache_hits": 0,
+       "cache_misses": 0,
+       "classification_calls": 0,
+       "mmr_hot_loop_misses": 0,
+       "time_spent_ms": "elapsed milliseconds"
+      }
+     },
+     "structure_metadata_coverage": 0.0,
+     "slot_coverage": 1.0,
+     "missing_required_slot_count": 0,
+     "second_round_queries": [],
+     "second_round_requests": [],
+     "finance_numeric_trace": {
+      "answer": "20.0%",
+      "confidence": 0.95,
+      "question_type": "percentage_change",
+      "inputs": {
+       "revenue_2021": 100.0,
+       "revenue_2022": 120.0
+      },
+      "formula": "(current - prior) / abs(prior) * 100",
+      "calculation_plan": {
+       "contract_id": "calculation_plan.v1",
+       "formula_inputs": [
+        {
+         "input_id": "revenue_2021",
+         "query_slot_id": "operand:revenue:2021",
+         "metric": "revenue",
+         "period": "2021",
+         "cardinality": 1,
+         "operator_role": "revenue_2021",
+         "required_for_execution": true
+        },
+        {
+         "input_id": "revenue_2022",
+         "query_slot_id": "operand:revenue:2022",
+         "metric": "revenue",
+         "period": "2022",
+         "cardinality": 1,
+         "operator_role": "revenue_2022",
+         "required_for_execution": true
+        }
+       ],
+       "operands": [
+        {
+         "operand_id": "revenue_2021",
+         "evidence_id": "left",
+         "value": "100.0",
+         "input_id": "revenue_2021",
+         "query_slot_id": "operand:revenue:2021",
+         "evidence_identity": "cell::left",
+         "unit": "",
+         "scale": "",
+         "currency": "",
+         "period": "2021",
+         "entity": "",
+         "source": "evidence",
+         "cell_id": "left",
+         "row_label": "Revenue",
+         "column_label": "2021",
+         "statement_kind": "income_statement",
+         "financial_scope": "consolidated",
+         "table_instance_id": "cell::left",
+         "table_group_id": "cell::left"
+        },
+        {
+         "operand_id": "revenue_2022",
+         "evidence_id": "right",
+         "value": "120.0",
+         "input_id": "revenue_2022",
+         "query_slot_id": "operand:revenue:2022",
+         "evidence_identity": "cell::right",
+         "unit": "",
+         "scale": "",
+         "currency": "",
+         "period": "2022",
+         "entity": "",
+         "source": "evidence",
+         "cell_id": "right",
+         "row_label": "Revenue",
+         "column_label": "2022",
+         "statement_kind": "income_statement",
+         "financial_scope": "consolidated",
+         "table_instance_id": "cell::right",
+         "table_group_id": "cell::right"
+        }
+       ],
+       "steps": [
+        {
+         "step_id": "result",
+         "operator": "percent_change",
+         "input_ids": [
+          "revenue_2021",
+          "revenue_2022"
+         ],
+         "constant": null,
+         "constant_source": "",
+         "rounding_places": null
+        }
+       ],
+       "result_step_id": "result",
+       "answer_unit": "percent",
+       "answer_scale": ""
+      },
+      "calculation_verification": {
+       "valid": true,
+       "errors": {
+        "__tuple__": []
+       },
+       "verified_operand_ids": {
+        "__tuple__": [
+         "revenue_2021",
+         "revenue_2022"
+        ]
+       },
+       "citation_ids": {
+        "__tuple__": [
+         "cell::left",
+         "cell::right"
+        ]
+       },
+       "required_slot_ids": {
+        "__tuple__": [
+         "operand:revenue:2021",
+         "operand:revenue:2022"
+        ]
+       },
+       "verified_required_slot_ids": {
+        "__tuple__": [
+         "operand:revenue:2021",
+         "operand:revenue:2022"
+        ]
+       }
+      },
+      "calculation_execution": {
+       "status": "ok",
+       "value": "20.0",
+       "citation_ids": [
+        "cell::left",
+        "cell::right"
+       ],
+       "step_values": {
+        "result": "20.0"
+       },
+       "error": ""
+      },
+      "authoritative_query_plan": {
+       "contract_id": "query_plan.v1",
+       "plan_id": "plan:eceafd635dd69e62ad5e",
+       "answer_type": "numeric",
+       "question_type": "multi_period_numeric",
+       "subqueries": [
+        "revenue consolidated statements of income 2021",
+        "revenue consolidated statements of income 2022"
+       ],
+       "evidence_slots": [
+        {
+         "slot_id": "operand:revenue:2021",
+         "role": "operand",
+         "entity": "",
+         "metric": "revenue",
+         "period": "2021",
+         "period_kind": "",
+         "unit": "",
+         "scale": "",
+         "statement_kind": "income_statement",
+         "financial_scope": "consolidated",
+         "modality": "auto",
+         "required": true,
+         "required_for_retrieval": true,
+         "required_for_execution": true,
+         "required_for_verification": true,
+         "status": "filled",
+         "evidence_ids": [
+          "cell::left"
+         ],
+         "cardinality": 1,
+         "operator_role": "",
+         "query": "revenue consolidated statements of income 2021",
+         "locator": {
+          "page_label": "8"
+         },
+         "table_instance_id": "cell::left",
+         "table_group_id": "cell::left"
+        },
+        {
+         "slot_id": "operand:revenue:2022",
+         "role": "operand",
+         "entity": "",
+         "metric": "revenue",
+         "period": "2022",
+         "period_kind": "",
+         "unit": "",
+         "scale": "",
+         "statement_kind": "income_statement",
+         "financial_scope": "consolidated",
+         "modality": "auto",
+         "required": true,
+         "required_for_retrieval": true,
+         "required_for_execution": true,
+         "required_for_verification": true,
+         "status": "filled",
+         "evidence_ids": [
+          "cell::right"
+         ],
+         "cardinality": 1,
+         "operator_role": "",
+         "query": "revenue consolidated statements of income 2022",
+         "locator": {
+          "page_label": "12"
+         },
+         "table_instance_id": "cell::right",
+         "table_group_id": "cell::right"
+        }
+       ],
+       "constraints": {
+        "periods": [
+         "2021",
+         "2022"
+        ],
+        "verification_domain": "finance",
+        "requires_visual": false,
+        "requires_multiple_evidence": true,
+        "requires_distinct_source_pages": true,
+        "requires_structured_elements": false,
+        "explicit_page_labels": {
+         "__tuple__": [
+          "8",
+          "12"
+         ]
+        },
+        "figure_label": "",
+        "table_label": "",
+        "requires_distinct_evidence": true,
+        "requires_structure": true,
+        "finance_formula_status": "not_applicable",
+        "question": "What was the percentage change in revenue from 2021 to 2022 on pages 8 and 12?"
+       },
+       "max_retrieval_rounds": 2,
+       "binding_trace": [
+        {
+         "slot_id": "operand:revenue:2021",
+         "preserved_existing_binding": true,
+         "replacement_reason": "",
+         "before_identity": "cell::left",
+         "after_identity": "cell::left"
+        },
+        {
+         "slot_id": "operand:revenue:2022",
+         "preserved_existing_binding": true,
+         "replacement_reason": "",
+         "before_identity": "cell::right",
+         "after_identity": "cell::right"
+        }
+       ],
+       "state_authority": "verified_calculation_plan",
+       "verified_required_slot_ids": [
+        "operand:revenue:2021",
+        "operand:revenue:2022"
+       ]
+      },
+      "attempt_status": "executed",
+      "dimension_bindings": []
+     },
+     "verification_slot_states": [
+      {
+       "slot_id": "operand:revenue:2021",
+       "status": "verified_support",
+       "evidence_ids": [
+        "cell::left"
+       ]
+      },
+      {
+       "slot_id": "operand:revenue:2022",
+       "status": "verified_support",
+       "evidence_ids": [
+        "cell::right"
+       ]
+      }
+     ],
+     "missing_required_calculation_slot_ids": [],
+     "typed_calculation_support_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "typed_calculation_citation_ids": [
+      "cell::left",
+      "cell::right"
+     ],
+     "typed_adequacy_status": "good",
+     "heuristic_adequacy_status": "good",
+     "final_adequacy_status": "good",
+     "adequacy_decision_authority": "typed_calculation",
+     "heuristic_overridden": false,
+     "heuristic_override_reason": "",
+     "typed_adequacy_reason": "verified_typed_execution",
+     "retrieval_rounds": 1,
+     "generation_backend": "finance_numeric_answerer",
+     "pre_verification_answer": "20.0%",
+     "calculation_result_comparison": {
+      "raw_calculation_result": "20.0",
+      "normalized_calculation_result": "20.0",
+      "rendered_answer_value": "20.0",
+      "answer_unit": "percent",
+      "answer_scale": "",
+      "decimal_places": 1,
+      "rounding_mode": "ROUND_HALF_UP",
+      "precision_source": "rendered_answer",
+      "quantized_calculation_result": "20.0",
+      "quantized_rendered_answer": "20.0",
+      "matched": true
+     },
+     "qasper_answer_revision_attempted_evidence_signatures": [],
+     "pre_guardrail_answer": "20.0%",
+     "verified_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "verified_claim_support_evidence": [
+      {
+       "evidence_id": "left",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "8",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "left",
+       "canonical_id": "cell::left",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2021",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2021",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2021",
+       "period": "2021",
+       "value": "100",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "left"
+       }
+      },
+      {
+       "evidence_id": "right",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "12",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "right",
+       "canonical_id": "cell::right",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Revenue",
+       "column_label": "2022",
+       "raw_row_label": "Revenue",
+       "raw_column_label": "2022",
+       "normalized_row_label": "Revenue",
+       "normalized_column_label": "2022",
+       "period": "2022",
+       "value": "120",
+       "statement_kind": "income_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2021",
+         "slot_id": "operand:revenue:2021",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:revenue:2022",
+         "slot_id": "operand:revenue:2022",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "right"
+       }
+      }
+     ],
+     "verified_claim_support_by_claim": {
+      "claim:1": [
+       "cell::left",
+       "cell::right"
+      ]
+     },
+     "verify_decision": {
+      "mode": "light",
+      "status": "supported",
+      "reason": "Light verification requested; current verifier observed evidence.",
+      "action": "generate",
+      "claims": [
+       "20.0%"
+      ],
+      "unsupported_claims": [],
+      "unknown_claims": [],
+      "verified_citations": [
+       "cell::left",
+       "cell::right"
+      ],
+      "claim_results": [
+       {
+        "claim_id": "claim:1",
+        "claim": "20.0%",
+        "status": "supported",
+        "supporting_evidence_ids": [
+         "cell::left",
+         "cell::right"
+        ],
+        "contradicting_evidence_ids": [],
+        "input_answer_polarity": "",
+        "canonical_answer_polarity": "",
+        "semantic_correction_applied": false,
+        "authority_status": "",
+        "authoritative_evidence_id": "",
+        "authoritative_evidence_ref": "",
+        "authoritative_span_id": "",
+        "authoritative_quote": "",
+        "authoritative_span_start": null,
+        "authoritative_span_end": null,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "",
+        "section_scope": "",
+        "relation": "",
+        "object": "",
+        "predicate_arguments": {
+         "__tuple__": []
+        },
+        "qualifier": "",
+        "quantifier": "",
+        "supporting_evidence_spans": [],
+        "contradicting_evidence_spans": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {},
+        "verified_slot_state": "verified_support",
+        "predicate": "",
+        "arguments": [],
+        "scope": "",
+        "verified_support_slot_ids": []
+       }
+      ],
+      "input_answer_polarity": "",
+      "canonical_answer_polarity": "",
+      "semantic_correction_applied": false,
+      "boolean_authority_status": "",
+      "authoritative_evidence_id": "",
+      "authoritative_evidence_ref": "",
+      "authoritative_span_id": "",
+      "authoritative_quote": "",
+      "authoritative_span_start": null,
+      "authoritative_span_end": null,
+      "authoritative_canonical_start": null,
+      "authoritative_canonical_end": null,
+      "actor": "",
+      "section_scope": "",
+      "relation": "",
+      "object": "",
+      "predicate_arguments": {
+       "__tuple__": []
+      },
+      "qualifier": "",
+      "quantifier": "",
+      "verified_support_slot_ids": [],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "authoritative_conflict": {},
+      "typed_authority": {},
+      "candidate_contract_id": "",
+      "candidate_label": "",
+      "verifier_input_candidate": "",
+      "verifier_candidate_status": "",
+      "replacement_candidate_allowed": false,
+      "predicate": "",
+      "arguments": [],
+      "scope": ""
+     },
+     "pipeline_stage_timings": {
+      "planning_seconds": "elapsed seconds",
+      "retrieval_seconds": "elapsed seconds",
+      "generation_seconds": "elapsed seconds",
+      "retry_seconds": "elapsed seconds",
+      "verification_seconds": "elapsed seconds",
+      "finalization_seconds": "elapsed seconds"
+     }
+    }
+   },
+   "terminal_outcome": "answered",
+   "presentation_answer": "20.0%",
+   "terminal_semantic_commit": {
+    "contract_id": "terminal_semantic_commit.v3",
+    "semantic_answer": "20.0%",
+    "presentation_answer": "20.0%",
+    "outcome": "answered",
+    "outcome_reason": "",
+    "answer_status": "answered",
+    "verify_decision": {
+     "mode": "light",
+     "status": "supported",
+     "reason": "Light verification requested; current verifier observed evidence.",
+     "action": "generate",
+     "claims": [
+      "20.0%"
+     ],
+     "unsupported_claims": [],
+     "unknown_claims": [],
+     "verified_citations": [
+      "cell::left",
+      "cell::right"
+     ],
+     "claim_results": [
+      {
+       "claim_id": "claim:1",
+       "claim": "20.0%",
+       "status": "supported",
+       "supporting_evidence_ids": [
+        "cell::left",
+        "cell::right"
+       ],
+       "contradicting_evidence_ids": [],
+       "input_answer_polarity": "",
+       "canonical_answer_polarity": "",
+       "semantic_correction_applied": false,
+       "authority_status": "",
+       "authoritative_evidence_id": "",
+       "authoritative_evidence_ref": "",
+       "authoritative_span_id": "",
+       "authoritative_quote": "",
+       "authoritative_span_start": null,
+       "authoritative_span_end": null,
+       "authoritative_canonical_start": null,
+       "authoritative_canonical_end": null,
+       "actor": "",
+       "section_scope": "",
+       "relation": "",
+       "object": "",
+       "predicate_arguments": {
+        "__tuple__": []
+       },
+       "qualifier": "",
+       "quantifier": "",
+       "supporting_evidence_spans": [],
+       "contradicting_evidence_spans": [],
+       "authority_derivations": [],
+       "selected_derivation_id": "",
+       "authoritative_conflict": {},
+       "verified_slot_state": "verified_support",
+       "predicate": "",
+       "arguments": [],
+       "scope": "",
+       "verified_support_slot_ids": []
+      }
+     ],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "boolean_authority_status": "",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "verified_support_slot_ids": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "typed_authority": {},
+     "candidate_contract_id": "",
+     "candidate_label": "",
+     "verifier_input_candidate": "",
+     "verifier_candidate_status": "",
+     "replacement_candidate_allowed": false,
+     "predicate": "",
+     "arguments": [],
+     "scope": ""
+    },
+    "guardrail_decision": {
+     "status": "ok",
+     "action": "return",
+     "reason": "Light verification requested; current verifier observed evidence."
+    },
+    "authoritative_evidence": [
+     {
+      "evidence_id": "left",
+      "source_id": "",
+      "source_name": "",
+      "page_label": "8",
+      "modality": "table",
+      "element_id": "",
+      "cell_id": "left",
+      "canonical_id": "cell::left",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "cell_role": "data",
+      "row_index": null,
+      "column_index": null,
+      "row_label": "Revenue",
+      "column_label": "2021",
+      "raw_row_label": "Revenue",
+      "raw_column_label": "2021",
+      "normalized_row_label": "Revenue",
+      "normalized_column_label": "2021",
+      "period": "2021",
+      "value": "100",
+      "statement_kind": "income_statement",
+      "financial_scope": "consolidated",
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:revenue:2021",
+        "slot_id": "operand:revenue:2021",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:revenue:2022",
+        "slot_id": "operand:revenue:2022",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [],
+      "evidence_level": "cell",
+      "metadata": {},
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "period_kind": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "representations": [],
+      "identity": {
+       "source_id": "",
+       "kind": "cell",
+       "local_id": "left"
+      }
+     },
+     {
+      "evidence_id": "right",
+      "source_id": "",
+      "source_name": "",
+      "page_label": "12",
+      "modality": "table",
+      "element_id": "",
+      "cell_id": "right",
+      "canonical_id": "cell::right",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "cell_role": "data",
+      "row_index": null,
+      "column_index": null,
+      "row_label": "Revenue",
+      "column_label": "2022",
+      "raw_row_label": "Revenue",
+      "raw_column_label": "2022",
+      "normalized_row_label": "Revenue",
+      "normalized_column_label": "2022",
+      "period": "2022",
+      "value": "120",
+      "statement_kind": "income_statement",
+      "financial_scope": "consolidated",
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:revenue:2021",
+        "slot_id": "operand:revenue:2021",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:revenue:2022",
+        "slot_id": "operand:revenue:2022",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [],
+      "evidence_level": "cell",
+      "metadata": {},
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "period_kind": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "representations": [],
+      "identity": {
+       "source_id": "",
+       "kind": "cell",
+       "local_id": "right"
+      }
+     }
+    ],
+    "citations": [
+     "cell::left",
+     "cell::right"
+    ],
+    "projection_hash": "821e3868187876b5c116b5a52c07afac45049e22026dbb4e829c26dfade68b7d",
+    "state_version": 3
+   }
+  },
+  "terminal_verification": {
+   "mode": "light",
+   "status": "supported",
+   "reason": "Light verification requested; current verifier observed evidence.",
+   "action": "generate",
+   "claims": [
+    "20.0%"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [
+    "cell::left",
+    "cell::right"
+   ],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "20.0%",
+     "status": "supported",
+     "supporting_evidence_ids": [
+      "cell::left",
+      "cell::right"
+     ],
+     "contradicting_evidence_ids": [],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "authority_status": "",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "supporting_evidence_spans": [],
+     "contradicting_evidence_spans": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "verified_slot_state": "verified_support",
+     "predicate": "",
+     "arguments": [],
+     "scope": "",
+     "verified_support_slot_ids": []
+    }
+   ],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "terminal_guardrail": {
+   "status": "ok",
+   "action": "return",
+   "reason": "Light verification requested; current verifier observed evidence."
+  },
+  "rounds": 1,
+  "recovery": null,
+  "numeric": {
+   "attempt_status": "executed",
+   "answer": "20.0%",
+   "formula": "(current - prior) / abs(prior) * 100",
+   "inputs": {
+    "revenue_2021": 100.0,
+    "revenue_2022": 120.0
+   },
+   "calculation_execution": {
+    "status": "ok",
+    "value": "20.0",
+    "citation_ids": [
+     "cell::left",
+     "cell::right"
+    ],
+    "step_values": {
+     "result": "20.0"
+    },
+    "error": ""
+   },
+   "calculation_verification": {
+    "valid": true,
+    "errors": {
+     "__tuple__": []
+    },
+    "verified_operand_ids": {
+     "__tuple__": [
+      "revenue_2021",
+      "revenue_2022"
+     ]
+    },
+    "citation_ids": {
+     "__tuple__": [
+      "cell::left",
+      "cell::right"
+     ]
+    },
+    "required_slot_ids": {
+     "__tuple__": [
+      "operand:revenue:2021",
+      "operand:revenue:2022"
+     ]
+    },
+    "verified_required_slot_ids": {
+     "__tuple__": [
+      "operand:revenue:2021",
+      "operand:revenue:2022"
+     ]
+    }
+   },
+   "authoritative_query_plan": {
+    "contract_id": "query_plan.v1",
+    "plan_id": "plan:eceafd635dd69e62ad5e",
+    "answer_type": "numeric",
+    "question_type": "multi_period_numeric",
+    "subqueries": [
+     "revenue consolidated statements of income 2021",
+     "revenue consolidated statements of income 2022"
+    ],
+    "evidence_slots": [
+     {
+      "slot_id": "operand:revenue:2021",
+      "role": "operand",
+      "entity": "",
+      "metric": "revenue",
+      "period": "2021",
+      "period_kind": "",
+      "unit": "",
+      "scale": "",
+      "statement_kind": "income_statement",
+      "financial_scope": "consolidated",
+      "modality": "auto",
+      "required": true,
+      "required_for_retrieval": true,
+      "required_for_execution": true,
+      "required_for_verification": true,
+      "status": "filled",
+      "evidence_ids": [
+       "cell::left"
+      ],
+      "cardinality": 1,
+      "operator_role": "",
+      "query": "revenue consolidated statements of income 2021",
+      "locator": {
+       "page_label": "8"
+      },
+      "table_instance_id": "cell::left",
+      "table_group_id": "cell::left"
+     },
+     {
+      "slot_id": "operand:revenue:2022",
+      "role": "operand",
+      "entity": "",
+      "metric": "revenue",
+      "period": "2022",
+      "period_kind": "",
+      "unit": "",
+      "scale": "",
+      "statement_kind": "income_statement",
+      "financial_scope": "consolidated",
+      "modality": "auto",
+      "required": true,
+      "required_for_retrieval": true,
+      "required_for_execution": true,
+      "required_for_verification": true,
+      "status": "filled",
+      "evidence_ids": [
+       "cell::right"
+      ],
+      "cardinality": 1,
+      "operator_role": "",
+      "query": "revenue consolidated statements of income 2022",
+      "locator": {
+       "page_label": "12"
+      },
+      "table_instance_id": "cell::right",
+      "table_group_id": "cell::right"
+     }
+    ],
+    "constraints": {
+     "periods": [
+      "2021",
+      "2022"
+     ],
+     "verification_domain": "finance",
+     "requires_visual": false,
+     "requires_multiple_evidence": true,
+     "requires_distinct_source_pages": true,
+     "requires_structured_elements": false,
+     "explicit_page_labels": {
+      "__tuple__": [
+       "8",
+       "12"
+      ]
+     },
+     "figure_label": "",
+     "table_label": "",
+     "requires_distinct_evidence": true,
+     "requires_structure": true,
+     "finance_formula_status": "not_applicable",
+     "question": "What was the percentage change in revenue from 2021 to 2022 on pages 8 and 12?"
+    },
+    "max_retrieval_rounds": 2,
+    "binding_trace": [
+     {
+      "slot_id": "operand:revenue:2021",
+      "preserved_existing_binding": true,
+      "replacement_reason": "",
+      "before_identity": "cell::left",
+      "after_identity": "cell::left"
+     },
+     {
+      "slot_id": "operand:revenue:2022",
+      "preserved_existing_binding": true,
+      "replacement_reason": "",
+      "before_identity": "cell::right",
+      "after_identity": "cell::right"
+     }
+    ],
+    "state_authority": "verified_calculation_plan",
+    "verified_required_slot_ids": [
+     "operand:revenue:2021",
+     "operand:revenue:2022"
+    ]
+   }
+  }
+ }
+}
