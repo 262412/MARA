@@ -207,15 +207,47 @@ def check_secret_scan(root: Path) -> list[ContractIssue]:
                     f"missing {token}",
                 )
             )
-    if "allowlist" in config.lower():
+    if not _exact_gitleaks_digest_exception(tomli.loads(config)):
         issues.append(
             ContractIssue(
                 Path(".gitleaks.toml"),
                 "gitleaks-frp-allowlist",
-                "the known historical FRP token must remain a blocking finding",
+                "only the exact public callback digest exception is allowed; "
+                "FRP token detection must remain unchanged",
             )
         )
     return issues
+
+
+def _exact_gitleaks_digest_exception(config: dict) -> bool:
+    return config == {
+        "extend": {"useDefault": True},
+        "rules": [
+            {
+                "id": "mara-promptui-frp-token",
+                "description": "MARA historical PromptUI FRP token",
+                "regex": r"""["']([A-Za-z0-9/+;#]{12,})["']""",
+                "path": r"(?:^|/)promptui/tunnel\.py$",
+                "secretGroup": 1,
+            },
+            {
+                "id": "generic-api-key",
+                "allowlists": [
+                    {
+                        "description": "Public fetch_api_key.js callback digest in its fixed resource test",
+                        "condition": "AND",
+                        "regexTarget": "secret",
+                        "regexes": [
+                            "^a64df388b53b97497f9d76679413aa825bd6ea5706265f9f9b2ffe2c8c641076$"
+                        ],
+                        "paths": [
+                            r"^(?:/repo/)?libs/ktem/ktem_tests/test_chat_javascript_resources\.py$"
+                        ],
+                    }
+                ],
+            },
+        ],
+    }
 
 
 def check_trusted_review(root: Path) -> list[ContractIssue]:

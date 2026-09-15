@@ -7,3 +7,13 @@ description = "MARA historical PromptUI FRP token"
 regex = '''["']([A-Za-z0-9/+;#]{12,})["']'''
 path = '''(?:^|/)promptui/tunnel\.py$'''
 secretGroup = 1
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Public fetch_api_key.js callback digest in its fixed resource test"
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^a64df388b53b97497f9d76679413aa825bd6ea5706265f9f9b2ffe2c8c641076$''']
+paths = ['''^(?:/repo/)?libs/ktem/ktem_tests/test_chat_javascript_resources\.py$''']
