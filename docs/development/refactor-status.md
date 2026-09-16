@@ -1,327 +1,307 @@
-# MARA refactor status — 2026-09-15
+# MARA refactor status — 2026-09-17
 
-## Current round: G0 precise false-positive handling and R4-A plan policy
+## Current round: R4-B evidence candidate policy and binding orchestration
 
-**R3 agreed Web scope: ACCEPTED**, following the user's independent closeout
-review of `b553444086b0d4c060a36a9cf07d3bbde94d2904`. R1/R2/R3-A,
-F1–F4, R3-B/R3-C/R3-D remain accepted. Desktop remains configuration-only
-verification; the actual Studio artifact accepted in that fixture remains Mind
-Map. Other artifact types, desktop binaries and security are not newly certified.
-The [accepted R3-D report](https://github.com/262412/MARA/blob/835b2af7f54c51d500a964bc476174ae8e2d17f1/docs/development/refactor-status.md)
-retains its complete closeout matrix. This round's base is `835b2af7f54c51d500a964bc476174ae8e2d17f1`;
-fixed original Dev is `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+**G0 CLOSED; R4-A ACCEPTED (limited functional scope)**, following the user's
+independent review of `e3647e38b85c87f7bf9ded9f364691a0c4d6fb88`.
+R1/R2 and the agreed R3 Web scope, including F1–F4, remain accepted. The
+[accepted G0/R4-A report](https://github.com/262412/MARA/blob/7ed1b371cd942012b24e9654c191fcb843e7a9e4/docs/development/refactor-status.md)
+retains the previous evidence and its first browser observer failure and complete
+unchanged-batch repeat. Desktop remains configuration-only verification; other
+unverified artifact types and desktop binaries are not newly certified.
 
-**G0 精确摘要误报已关闭；R4-A 限定验证通过，等待独立审查。**
-**Overall stable-source CI: FAILURE
-(13 successful / 7 failed jobs).
+This round's base is `7ed1b371cd942012b24e9654c191fcb843e7a9e4`; fixed original
+Dev is `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+
+**R4-B 限定验证通过，等待独立审查。**
+**Overall stable-source CI: FAILURE (13 successful / 7 failed jobs).
 S1/PCRE2 remain open; merge/release remains NO-GO.**
-One strict browser batch initially failed in its Chromium response observer;
-the unchanged complete batch passed on a fresh repeat. Both attempts and the
-remaining observer limitation are recorded below, not classified as NLTK.
+The completed 32-scenario browser matrix is one whole fresh run of unchanged
+sources and assertions. Earlier failed attempts, their diagnoses and remaining
+observer limitations are retained below. The first image secret scan timed out;
+one targeted rerun completed successfully. Neither failure is classified as NLTK.
 
-### Source and reviewable commits
+### Source, tests and reviewable commits
 
-Stable source/test and verified source-push SHA: **`e3647e38b85c87f7bf9ded9f364691a0c4d6fb88`**.
-Last production change: **`7a8bb8263db1a1f87a6e7ee08e7de32858d8988f`**. The following final five-line
-test-only change bounds a cold-import audit before coverage's shutdown writes;
-production and build inputs are identical between those two SHAs. The stable
-browser matrix, builds, clean-wheel and Linux CI use `e3647e38b85c87f7bf9ded9f364691a0c4d6fb88`.
-The local full suite started at `7a8bb8263db1a1f87a6e7ee08e7de32858d8988f`; the audit-only test change was
-verified separately under subprocess coverage and in the complete stable Linux
-suite. Full local test-input equivalence is not asserted across that test change.
-The later report-only commit's actual report/local/remote SHA, report blob and
-source equivalence are recorded in `r4a-report-commit.json` and
-`r4a-final-state.json`; no source CI is attributed to an untested source revision.
-The report is itself a changed secret-scan input: the final report content is
-scanned before committing, and the complete history is rescanned after the
-report commit with the same pinned scanner (`report-gitleaks-dir-before.log`,
-`report-gitleaks-history.log`). Functional/build/coverage inputs remain equal;
-secret-scan evidence includes these additional report checks.
+Stable source/test and verified source-push SHA:
+**`c3446d505f200934f25ebd20c2c0ffaceadb20d4`**. Last production change:
+**`96e3c52f5558b63bff4c781d6717bb749bc20717`**.
 
-| Ordered change                                                           | Commit                                     |
-| ------------------------------------------------------------------------ | ------------------------------------------ |
-| G0: precise rule-local exception and containment/control checks          | `e40dc0a18ef57d251a2931ce85553e22ee145798` |
-| Fixed old planning and downstream contracts, committed before extraction | `89bf306258d61059fd54be1cbba45571ad66a1d1` |
-| R4-A: financial plan policy extraction and independent policy tests      | `7a8bb8263db1a1f87a6e7ee08e7de32858d8988f` |
-| Keep cold-import audit strict while allowing coverage shutdown           | `e3647e38b85c87f7bf9ded9f364691a0c4d6fb88` |
+| Ordered change                                                                         | Commit                                     |
+| -------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Fixed old binding, snapshot and execution contracts, committed before production edits | `3d739ef3da3ead716279b0ddcaff11003d94507f` |
+| Extract candidate policy; preserve binding state and orchestration                     | `96e3c52f5558b63bff4c781d6717bb749bc20717` |
+| Correct the new isolated wheel smoke's entrypoint and fixture setup                    | `c3446d505f200934f25ebd20c2c0ffaceadb20d4` |
 
-### G0: exact public digest, retained detection
+The final commit changes only `scripts/clean_wheel_binding_smoke.py`. `libs`,
+`tests`, `benchmark`, `apps`, isolation helpers, package metadata, lock, G0 and
+workflows have identical Git tree/blob IDs across the last two commits. The
+smoke helper is absent from all eight distribution archives. Local full tests,
+static checks and builds executed at `96e3c52f`; their functional inputs are
+therefore equivalent to `c3446d50`. The successful local clean-wheel used the
+exact final helper. Stable browser acceptance, the additional real-parent cold
+import and Linux CI use `c3446d50`. Evidence: `source-test-equivalence.json`.
 
-Job `103914616276` was checked against the actual public
-`ktem/assets/js/fetch_api_key.js`, its premigration literal and the unchanged
-`test_chat_javascript_resources.py`. Recomputed effective UTF-8 script digest (the same text-loading/newline
-semantics as the fixed resource test):
-`a64df388b53b97497f9d76679413aa825bd6ea5706265f9f9b2ffe2c8c641076`.
-The fixed resource test remains effective and byte-identical.
+The later report-only commit's actual report/local/remote SHA and report blob
+are recorded in `r4b-report-commit.json` and `r4b-final-state.json`. Only this
+report changes after the stable source; functional/build/coverage inputs remain
+equal. The final report content receives its own pinned secret scan before
+commit, followed by a full-history scan after commit. Report-only equivalence
+does not automatically waive secret scanning.
 
-The exception is only on `generic-api-key`, with v8.24.3's rule-local
-`condition = "AND"`, `regexTarget = "secret"`, that complete anchored digest,
-and the exact test path. The path expression admits only the observed relative
-Git path and `/repo/` directory-mount form. It does not exempt another basename,
-parent directory, commit, another credential value, or that hash in another file.
-The default detector, historical PromptUI FRP rule, history/worktree scans,
-scanner image pin and exit-code policy remain unchanged.
+### Responsibility boundary and retained contracts
 
-The former containment checker rejected every allowlist. Its G0-specific update
-now checks the complete parsed configuration against the original rules plus
-this one exact exception; broader exceptions, OR, rule overrides and global
-allowlists still fail. Nine mutation checks and exact path/value boundary checks
-guard this change. This is not a vulnerability-baseline or alias-policy update.
+The equivalent-module check found existing scoring, assessment and identity
+helpers, but no equivalent owner of all six candidate rules. Production changes
+are limited to `query_evidence_binding.py` and `evidence_binding_policy.py`.
 
-Pinned native **Gitleaks 8.24.3** was checksum-verified against its official
-release. In an exclusive fixture outside MARA, the public value failed before
-the exception. Afterward **10/10 git/dir controls** matched their expected exit
-codes: the exact value/path passes; a changed value, the same hash in another
-file, another credential in the same file and the custom FRP case are detected.
-Generated fake credentials are confined to those fixture repositories and were
-never committed to MARA. Local native absolute Windows paths were also observed;
-the exception was not widened to arbitrary drive/parent prefixes.
+| Owner                                                                | Responsibility after extraction                                                                                                                                                               |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `evidence_binding_policy`                                            | Existing candidate IDs, verification, segment comparison, collection, dimension and distinct selection rules; narrow plan/slot/ranked inputs and necessary operand sets                       |
+| `query_evidence_binding`                                             | `_BindingState`, preprocessing/materialization, ranking orchestration, old-binding validity, operand accounting, slot status, monotonic replacement reasons, trace and boolean reconciliation |
+| Existing identity/ranking/support/assessment/snapshot/schema modules | Canonical identity, quantized score/quality, provenance/semantic/cardinality checks, cache lookup and original data types; unchanged production code                                          |
 
-The stable native full-history rescan passed. New Linux CI job
-[104327004693](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004693)
-used the unchanged v8.24.3 image digest and passed both actual `git /repo`
-(1326 commits, 90.46 MB) and `dir /repo` (30.72 MB) scans with no
-leaks. The independent built-image secret scan also passed. Evidence:
-`g0-digest-proof.json`, `g0-controls-before/result.json`,
-`g0-controls-after/result.json`, `g0-controls-stable/result.json`, `g0-ci-rescan.json` and raw CI logs.
+The policy receives no Runtime, Controller or `_BindingState`, and does not
+import the binder, database or Gradio. It reuses existing helpers rather than
+duplicating scoring or identity rules. No strategy registry, DI framework or
+extra canonicalization/deduplication was introduced. AST checks prove all six
+moved bodies and signatures equivalent after name mapping, and all 11 retained
+binder definitions unchanged. Existing shared operand sets still mutate at the
+same stage. No top-k, threshold, formula, prompt, budget, route or dataset changes.
 
-### R4-A: responsibilities and retained behavior
+Six old private candidate names remain compatibility aliases. Public binders,
+return forms, original classes, `score_evidence_for_slot` export and the actual
+binder/query-planning patch paths remain covered. The general binder still
+invokes its legacy `_candidate_ids_for_slot` patch point. The planning facade's
+score wrapper is preserved; no new monotonic facade export was invented.
 
-Production changes are limited to `query_planning.py` and
-`finance_plan_policy.py`; the equivalent-module check found reusable financial
-helpers, but no existing owner of this complete contribution. The new module
-owns existing financial slot construction, metric/dimension queries, page
-locators, collection/segment contributions and formula constraints. It reuses
-`finance_query_planning`, `finance_retrieval_focus` and existing identity/scale
-helpers without changing their metric, formula or focus rules.
+The original implementation passed **219 targeted tests before extraction**;
+those fixed tests were committed first. The 36 characterization files, including
+complete golden observations, remain byte-identical afterward. They cover
+preprocessing `if/elif`, materialization and coherent-segment order; six-place
+score quantization, quality compensation and canonical identity ordering;
+`None` versus `[]`; early returns; slicing `ranked[:3]` before filtering;
+narrative override, dimension/operand alignment; facility/cardinality/date;
+distinct evidence/page sets; and generic operand truncation. No golden was
+regenerated after production edits. Initial fixture-authoring corrections were
+completed on the old source and remain recorded separately.
 
-`query_planning` retains public entrypoints and generic orchestration: payload
-admission/override, classification, visual early return, generic fallback,
-fiscal-quarter application, the existing focus positions, constraint assembly
-and plan-ID assignment. Its payload override check and calls to existing focus
-helpers intentionally remain at their original stages. The new policy does not
-reverse-import `query_planning`, Runtime/Controller, DB or Gradio, and receives
-ordinary values plus only the necessary slot operations. No registry, plugin,
-DTO, repository or DI framework was introduced.
+**92 complete binding observations** cover 23 fixed cases × ordinary/monotonic
+× snapshot/None. Comparisons include full `as_dict`, `plan_id`, ordered evidence
+IDs, slot status, references, calls and trace. Two-round cases retain valid old
+bindings, original permitted replacements and `replacement_reason`, insufficient
+then sufficient/still insufficient evidence, invalid old identities and source
+conflicts. Outputs are not sorted to hide differences. Only explicitly named
+elapsed-time audit fields are normalized.
 
-All **23 original function signatures** remain. Eight moved rule bodies are
-AST-equivalent after function/local-name mapping. Old `_finance_slots`,
-`_finance_retrieval_query`, dimension and locator entries delegate; the actual
-old query/locator patch consumers still supply slot operations. Round-two
-retrieval uses the same old query entry. Original `QueryPlan`, `EvidenceSlot`
-and `EvidenceLocator` definitions and module identity stay in
-`query_plan_schema`. The 14 committed characterization files remain unchanged
-after extraction (`verify_extraction.json`).
+Snapshot miss tests remove the relevant identity/semantic/cardinality entries
+and assert `SelectionAssessmentCacheMiss`; automatic build/expand is patched to
+fail. Selection does not classify missing entries or silently fall back. Counts
+are compared separately for snapshot and None paths. For example, the fixed
+monotonic boolean case performs seven classifications without a snapshot (the
+support item is classified twice), versus six classifications, one cache build,
+seven hits and zero misses with it. `contract-count-summary.json` retains all
+92 observations, including round-specific counts and original reconciliation.
 
-Before production edits, **130 selected contracts passed on the old
-implementation**, including the new fixed plan/downstream expectations. The
-new characterization/seam set has 72 cases; independent policy/import checks
-bring the focused result to **78 passed**. The full snapshots compare
-`as_dict`, plan IDs, exact slot/query/constraint order, budgets, object/copy
-semantics, call traces, errors and short-circuit points. Coverage includes:
+### Downstream and independent-import verification
 
-- Payload acceptance and override precedence; explicit/inferred financial
-  domains, unknown/empty domains, boolean, SlideVQA and visual early returns.
-- Supported and unsupported formulas; operand/support/scale, segments,
-  quarters, agreement collection/date and explicit page locators; focus order.
-- Unsupported formulas keep authoritative empty slots. Generic fallback uses
-  a separate `None` result; fiscal-quarter behavior retains its original
-  non-financial applicability. Request-plan backfill and version behavior stay.
-- Legacy patch entries, shared first/second-round helpers, exception timing,
-  and public exports/real Web, CLI, benchmark and sidecar consumers.
+The retained nine R4-A evidence seams plus six new seams execute real planning,
+normalization/materialization, selection/binding, recovery, execution validation,
+citations and terminal-state handling. Financial operands, scale, collection,
+segment, QASPER relation, boolean cross-page and visual cases are covered. Only
+model/retrieval boundaries are fixed; query, budget, slot state, citations, route,
+trace and terminal results are frozen, not merely the answer string. A fixed
+hash seed preserves the original citation-set iteration without sorting outputs.
 
-Nine fixed-evidence seams run real planning → binding → retrieval/execution →
-recovery → verification. They compare complete plans, queries, budgets, slot
-states, citations, routes, terminal state and verification/execution records,
-including formula success, recovered/partial collections, missing scale,
-unsupported formula, explicit pages, visual results and boolean correction.
-Only retrieval/model boundaries are deterministic fixtures. Measured elapsed
-values are type/range-checked and normalized at named timing fields. A fixed
-child-process `PYTHONHASHSEED=0` stabilizes the original citation-set iteration;
-IDs are retained and results are not sorted to hide differences. Initial
-observer/timing/hash-seed failures remain in the evidence; all golden captures
-and the passing old-code run precede the production commit.
+The two segment execution fixtures preserve existing abstention paths: one raw
+Revenue-header fixture fails retrieval readiness, and the segment-ready fixture
+still fails final verification. They are not reported as successful segment
+answers. Existing direct segment-calculation tests also pass. The recovered
+revenue fixture reaches the original supported second-round result.
 
-The fresh-process import test starts from the real `ktem` parent and audits only
-the new import window: no runtime/controller orchestration imports, database,
-network or file-write effects. It does not preload Runtime or fake the parent.
-The initial hook also blocked coverage's later SQLite shutdown and lost child
-coverage despite exit 0. The separate test fix deactivates the hook after the
-audited import and rejects stderr tracebacks; the before/after probe confirms
-both coverage data files are now retained. No coverage omit or scope was added.
+The post-extraction targeted run passes **229 tests**, including ten independent
+policy/import tests. A fresh process imports the real `ktem` parent, then the
+policy without prewarming the binder/runtime or faking the parent package; the
+audit records no extra filesystem/network side effects or forbidden imports.
+The audit ends before coverage's legitimate shutdown writes. The 11 actual
+consumer boundaries inspected are unchanged: Web streaming, CLI turn execution,
+benchmark runtime/slot metrics, sidecar turn streaming, execution/retrieval/
+reasoning, selection binding, finance answer handling and public facades.
 
-Actual retained consumers are recorded with call-site lines and unchanged blob
-hashes in `consumer-boundaries.json`: Web `chat_docqa_streaming` and desktop
-`sidecar/application.py` consume `Runtime.stream_turn`; CLI `docqa_cli.py` and
-`benchmark/engines.py` consume `Runtime.run_turn`. `execution_planning` and
-`retrieval_rounds` consume the original request-plan entry; reasoning
-`mara_route_retrieval` consumes `build_query_plan`. Sidecar application/query
-commit tests ran locally; no desktop binary execution is claimed.
+Evidence: `stable-targeted.log`, `stable-cold-import-evidence.log`,
+`extraction-verified.json`, `fixed-characterization-sha256.json`,
+`contract-count-summary.json`, `consumer-boundaries.json`.
 
-### Retained Web paths and browser observation
+### Complete browser matrix and retained failed attempts
 
-At the stable source, the unchanged full-App harness passes all **32 retained
-R3-D scenarios**, checked by exact scenario-name multiset, in fresh batches of
-12 retained flows, 11 controlled refresh races, seven index/Studio seams and
-two separate public-fixture scenarios. Gradio remains 4.39.0; actual browser
-uploads, request identity, events, index services and persistence are exercised.
-Only the existing model/network boundaries are fixed. No intermediate write
-API or prewarmed cache substitutes for the UI, and every owned App fixture runtime is removed.
+`tests/browser/run_chat_submission.py` and the real full App are unchanged.
+The accepted matrix uses fresh owned runtimes, empty application caches, actual
+browser uploads, natural events, real identity and persistence. It does not call
+intermediate naming/persistence APIs or replace the page/event/adapter logic.
+The exact scenario multiset matches the accepted R3-D/R4-A matrix:
 
-The first seven-scene batch completed its business assertions but failed the
-strict harness because `response.json()` in the successful `/queue/join`
-response observer raised `Network.getResponseBody: No resource with given identifier found`. The complete seven-scene batch then passed on the same
-source and identical harness without relaxed checks. Both raw results remain;
-the exact browser lifecycle trigger in that original run is not proven. An
-initial diagnostic did not complete and was terminated only within its owned
-process tree. A bounded real-Chromium control then passed response-body reading
-for an active HTTP 200 response, reproduced this exact error after navigation,
-and separately produced the existing closed-page error after closure. This
-locates a response-observer lifetime failure, while retaining the missing
-navigation timestamp in the original run as a repeatability limitation. It is
-not a claimed product fix or NLTK failure.
-`browser-observer-disposition.json` records it separately.
+| Batch                   | Passing scenarios | Retained scope                                                                                                                                                               |
+| ----------------------- | ----------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Retained flows          |                12 | Two-turn stream/citation/cache/name/persist/reload; empty and same-file sessions; upload/URL and two users; error/disconnect; slow and late switch/delete; navigation/search |
+| Refresh ordering        |                11 | Initialization/filter overlap, reverse delivery, A→B→A, source selection, upload/URL/delete notifications, conversation switch and two browsers                              |
+| Index/Studio seams      |                 7 | Selection/reindex/delete/group operations, source revocation, notes/artifact, late generation, no-source failure, disconnect/restore                                         |
+| Separate public fixture |                 2 | Public conversation read versus owner mutation and Studio nonowner refusals                                                                                                  |
 
-The valid matrix and `browser-diagnostics-verification.json` additionally check
-the existing generation/view guards, full/page histories, completion tail,
-authenticated file/URL access, public non-owner refusals, deletion revocation,
-slow switches, cancellation/disconnect, groups and the actual Mind Map path.
-No new unexplained failed application callback is present. Web production,
-browser harness, SQL/schema, permissions, transactions, routing, prompts,
-thresholds and frozen benchmark results are unchanged this round.
+All **32 scenarios pass in the single `network-restored-browser-*` matrix**,
+including the original failure scenarios and strict global error assertions.
+Preview revocation remains linked to typed `PreviewAccessError`; queued reads
+after authorized deletion are checked against actual delete/clear ordering.
+All owned runtimes are removed. This is separate from CI's browser security smoke.
 
-### Builds, suites and coverage
+The following earlier attempts remain failures, not stitched into acceptance:
 
-The full local affected suite records **3548 passed, 99 failed, 7 skipped,
-43 warnings**. The failure-node set equals the already explained R3-D 99,
-with byte-identical failing tests, no newly failing node and no new warning
-body. No skip, baseline refresh or repeated historical diagnosis was added.
-The complete stable Linux runs pass **3450 ktem tests**, **1632 benchmark/root
-contracts**, both kotaemon Python versions, CLI, unified collection, static/
-hygiene and frontend/security jobs. The actual job conclusions are below.
+1. The first retained-flow batch missed the expected deleted-conversation toast.
+   The unchanged deterministic model fixture's 45-second release wait expired
+   before deletion completed. Its queue failure precedes the delete event in the
+   same browser session. The other three batches passed. Concurrent local
+   verification is recorded, but its causal role in the timeout is not proven.
+2. A complete second attempt used the final source. All 12 retained business
+   scenarios passed, but its strict observer caught `Failed to fetch`, so the
+   batch failed. Its observer lacks a URL/timestamp for that error; exact request
+   attribution remains unknown. The next three Apps failed during startup with
+   explicit proxy connection refusal while obtaining the public tokenizer data.
+   Those UI scenarios did not execute. Cleanup receipts prove their owned
+   runtimes were removed despite the outer failure message.
+3. After the proxy listener and the exact resource were independently verified
+   reachable (HTTP 200 and matching SHA), one further whole matrix was run. The
+   probe kept bytes only in memory and did not warm the App cache. All four
+   batches passed with unchanged source, harness, timeouts and assertions. There
+   were no further retries, relaxed errors or selected-green scenario assembly.
 
-Local static hooks, full hygiene, fixed-Dev/round baseline ratchets,
-constraint synchronization, container lock parity and supply-chain policy all
-pass. Local and Linux CI builds produce **four wheels and four sdists**.
-The new policy and retained modules match the actual archives (40 local source
-members; 31 CI members); CI artifact digests, commit provenance and distribution
-SBOMs were checked. Outside-repository clean-wheel checks pass locally and in
-CI, including installed public CLI, DTO/session/pipeline boundaries and real
-ChatPage resources without repository `PYTHONPATH`.
+Evidence: all three `*-browser-matrix-execution.json` files and raw batch logs,
+`network-recovery-probe.json`, `browser-verified.json`,
+`browser-diagnostics-verification.json`, `browser-observer-disposition.json`.
+The unknown request attribution in attempt 2 remains an observer limitation;
+neither it nor the fixture timeout is asserted to be a new product fix.
 
-The existing collector, subprocess coverage, production scope and floors are
-unchanged. The downloaded stable CI coverage has no raw package-relative aliases
-or temporary runtime files. New policy coverage is
-**77/77 statements
-(100.00%)**, rather than only delegated entry lines.
+### Full gates, build and coverage
 
-| Package   | Covered statements   | Existing floor |
-| --------- | -------------------- | -------------- |
-| benchmark | 17146/19005 (90.22%) | 90%            |
-| slide_cli | 2144/2837 (75.57%)   | 70%            |
-| kotaemon  | 7521/10727 (70.11%)  | 60%            |
-| ktem      | 42979/51373 (83.66%) | 50%            |
+Local affected tests: **3694 passed / 99 failed / 7 skipped / 43 warnings**.
+All 99 failed nodes, their primary exceptions and failure expressions match the
+prior accepted local run; failing test bytes are unchanged. Normalization is
+limited to owned temporary roots, object addresses and the three preview-cache
+signatures derived from fixture path/size/mtime. No new failure node or changed
+failure nature is hidden under the prior labels. The seven existing skips were
+not expanded. Evidence: `local-failure-verification-final.json`, the retained
+first raw signature comparison, and `local-warning-comparison.json`.
 
-| Production diff | Base                                       | Covered changed lines (floor 90%) |
-| --------------- | ------------------------------------------ | --------------------------------- |
-| fixed_dev       | `adab3f4d8f221e3620494fab0a24ef8e5557d12a` | 1001/1027 (97.47%)                |
-| r4a_increment   | `835b2af7f54c51d500a964bc476174ae8e2d17f1` | 91/92 (98.91%)                    |
+Stable Linux CI passes the full affected suites: ktem **3596**, benchmark/root
+**1632**, kotaemon **381 on each Python 3.10/3.11** (ten existing skips each),
+CLI, and unified collection **5912**. Static/pre-commit, hygiene, fixed-Dev and
+round debt checks, locked constraints, container lock parity and supply-chain
+contract checks pass. No debt baseline, omit, skip, scope or threshold changes.
 
-The official CI uses fixed Dev; the round increment is independently calculated
-from the same downloaded coverage with the unchanged production gate. No
-recollection with a narrowed scope is used. Evidence: `coverage-verified.json`,
-`coverage-inspection/`, `local-build-verified.json`,
-`python-artifact-inspection.json` and `execution.jsonl`.
+Four real wheels and four sdists were built locally; archive contents and the
+new policy were verified. The clean-wheel run executes outside the repository,
+checks installed module paths and real binding/score exports with strict import
+and network boundaries. Three initial errors in the newly written smoke fixture
+(inherited offline-guard `PYTHONPATH`, missing plan-ID argument, wrong facade for
+monotonic binding) were corrected only in that helper and retained in raw logs.
+The final helper passes locally and in all four CI clean-wheel installations.
+CI separately built, digest-verified and inspected all eight archives and their
+Python distribution SBOM/provenance at the exact stable SHA. Local archives may
+include the preserved user asset bytes; they are not claimed identical to CI's
+clean checkout archives.
 
-### Actual CI and security disposition
+The downloaded CI coverage artifact digest is verified. Original collector,
+subprocess coverage, package scope and production-diff calculation are unchanged:
 
-[Quality gates run 34952679300](https://github.com/262412/MARA/actions/runs/34952679300) is bound to
-`e3647e38b85c87f7bf9ded9f364691a0c4d6fb88`. An initial dispatch returned HTTP 500; listing confirmed no run for
-that source before one retry created this run. No duplicate run is claimed.
+| Scope                          | Covered / statements | Coverage |                          Original floor |
+| ------------------------------ | -------------------: | -------: | --------------------------------------: |
+| benchmark                      |        17146 / 19005 |   90.22% |                                     90% |
+| slide_cli                      |          2144 / 2837 |   75.57% |                                     70% |
+| kotaemon                       |         7521 / 10727 |   70.11% |                                     60% |
+| ktem                           |        42994 / 51384 |   83.67% |                                     50% |
+| New policy                     |              82 / 83 |   98.80% | Included in original package/diff gates |
+| Binder                         |              85 / 85 |     100% | Included in original package/diff gates |
+| Fixed Dev production increment |          1092 / 1119 |   97.59% |                                     90% |
+| R4-B production increment      |              91 / 92 |   98.91% |                                     90% |
 
-| Required job                                                                                                                           | Actual conclusion |
-| -------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| [ktem isolated runtime](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004472)                                      | success           |
-| [Coverage floors and production diff](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004622)                        | success           |
-| [Repository and image secret scans / Built image](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004632)            | success           |
-| [Benchmark and root contracts](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004691)                               | success           |
-| [Repository and image secret scans / Repository and history](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004693) | success           |
-| [Unified pytest collection](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004811)                                  | success           |
-| [kotaemon Python 3.10](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004841)                                       | success           |
-| [Python distribution supply chain](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004931)                           | success           |
-| [Static, hygiene, and baseline ratchet](https://github.com/262412/MARA/actions/runs/34952679300/job/104327004954)                      | success           |
-| [Dependency audit root-py310](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005006)                                | failure           |
-| [Dependency audit root-py311](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005018)                                | failure           |
-| [Container ollama supply chain](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005034)                              | failure           |
-| [Container full supply chain](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005079)                                | failure           |
-| [slide_cli](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005113)                                                  | success           |
-| [kotaemon Python 3.11](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005131)                                       | success           |
-| [Frontend and browser security](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005156)                              | success           |
-| [Dependency audit container-py310](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005179)                           | failure           |
-| [Container lite supply chain](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005188)                                | failure           |
-| [Four clean wheel installations](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005201)                             | success           |
-| [Required quality gates](https://github.com/262412/MARA/actions/runs/34952679300/job/104342173414)                                     | failure           |
+The policy's sole uncovered statement is the original missing-raw-item `continue`
+at line 159. It is not excluded. Coverage contains the new module and retained
+R1/R2/R3/R4-A modules, with no temporary-runtime or package-relative aliases.
 
-Fresh Python audits retain the same complete blocking key set in each profile:
+Warning review keeps two distinct facts: the unchanged template's `word,language`
+set iteration can reverse in a fresh process; and the existing asynchronous
+Gradio version notice appears once more in standalone ktem and once less in
+coverage. Removing only that duplicate node makes each raw warning section
+identical. The relevant tests, Gradio integration and lock are unchanged; logs
+do not identify the initiating Blocks thread. No other new warning body remains
+unexplained. These are not NLTK findings. Container warning bodies also match.
 
-| Profile         | Actual job                                                                               | Conclusion |
-| --------------- | ---------------------------------------------------------------------------------------- | ---------- |
-| root-py310      | [104327005006](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005006) | failure    |
-| root-py311      | [104327005018](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005018) | failure    |
-| container-py310 | [104327005179](https://github.com/262412/MARA/actions/runs/34952679300/job/104327005179) | failure    |
+### Actual CI and retained security blockers
 
-| Installed package       | Blocking ID in all three profiles |
-| ----------------------- | --------------------------------- |
-| `chromadb==0.5.16`      | `PYSEC-2026-3813`                 |
-| `chromadb==0.5.16`      | `PYSEC-2026-3814`                 |
-| `chromadb==0.5.16`      | `PYSEC-2026-3815`                 |
-| `nltk==3.10.3`          | `GHSA-8mgp-746c-j5xp`             |
-| `pypdf==4.2.0`          | `PYSEC-2026-3910`                 |
-| `pypdf==4.2.0`          | `PYSEC-2026-3911`                 |
-| `pypdf==4.2.0`          | `PYSEC-2026-3912`                 |
-| `pypdf==4.2.0`          | `PYSEC-2026-3913`                 |
-| `transformers==4.56.2`  | `PYSEC-2026-3929`                 |
-| `unstructured==0.15.14` | `PYSEC-2026-3930`                 |
+[Quality run 35102330690](https://github.com/262412/MARA/actions/runs/35102330690)
+uses source `c3446d505f200934f25ebd20c2c0ffaceadb20d4` and the fixed original Dev
+coverage base. Attempt 1 completed **12 successful / 8 failed**. Its additional
+failure was built-image secret job `104814607689`: Docker image export exceeded
+Trivy's unchanged deadline, so no completed scan conclusion was available.
 
-The nine PYSEC alias records and their original evidence hash are retained in
-`security-key-reconciliation-final.json`. No baseline or alias interpretation was
-changed. Fresh Trivy 0.70.0 scans of full/lite/ollama retain
-`libpcre2-8-0==10.42-1` with `CVE-2026-86145` and `CVE-2026-89161`;
-their package/layer identity matches R3-D. No new raw or blocking key appeared.
-Image build/runtime smoke and provenance succeed; image SBOM steps remain
-unexecuted after the vulnerability failures. No release or publication occurred.
-G0's clean secret scans do not close these real vulnerability blockers.
+One authorized targeted rerun completed the actual scan successfully in job
+[104911070755](https://github.com/262412/MARA/actions/runs/35102330690/job/104911070755).
+The aggregate then reran. The latest result is **13 successful / 7 failed**.
+Actions assigns new IDs to 18 carried-forward job records; their original
+timestamps and complete log bytes are identical. They are not claimed to be 18
+new executions. `ci-rerun-reconciliation.json` maps these IDs and rechecks audit
+keys. The first scan failure, rerun request and successful scan logs are retained.
 
-Complete warning-body comparisons found only the separately verified original
-`word,language` / `language,word` set-order variation. Coverage's ktem run has
-48 warnings versus the prior 47: its summary attributes one extra occurrence
-of the existing Gradio 4.39.0-to-4.44.1 version notice to
-`test_sso_predict_route_accepts_signed_provider_session`. Removing only that
-duplicate node leaves the complete warning section identical to the prior run.
-The SSO test/service, lock and workflow are unchanged. Pinned Gradio starts the
-version check in a background thread; the logs do not timestamp which Blocks
-instance initiated that extra notice. `warning-emission-review.json` preserves
-this count delta and its evidence, without a new warning body or suppression.
-Other suite warning counts and image warning sets have no unexplained delta.
-The narrow cold-coverage probe's
-four root-module-not-imported notices belong to that one-test probe, not the
-full package collector; the final collector retains the original scope.
+G0 remains CLOSED with the exact unchanged allowlist. The native pinned v8.24.3
+controls again match **10/10** positive/negative expectations. The real CI
+repository/history scan passes both `git /repo` (1330 commits) and `dir /repo`,
+with the same scanner digest and exit policy. No exception was broadened. Final
+report dir/history scans supplement that source evidence.
 
-### Protection and stopping point
+The three Python profiles (`root-py310`, `root-py311`, `container-py310`) still
+fail on the same actual package/version/ID keys:
 
-The initial **133 unrelated asset/instruction modifications** remain byte-for-byte
-unchanged, and untracked `NUL` remains untouched. Only named round files were
-staged. Canonical `.venv` metadata (98,853 entries), real caches, configuration,
-both databases and historical refused-cleanup directories match their initial
-snapshots. All work remains on `codex/r0-r1-safe-refactor`; no new worktree,
-branch, force push, history rewrite, merge, deployment or release was performed.
-Reports preserve the earlier R0/R1 history section exactly.
+| Package/version         | Blocking IDs                                                               |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `nltk==3.10.3`          | `GHSA-8mgp-746c-j5xp`                                                      |
+| `chromadb==0.5.16`      | `PYSEC-2026-3813`, `PYSEC-2026-3814`, `PYSEC-2026-3815`                    |
+| `pypdf==4.2.0`          | `PYSEC-2026-3910`, `PYSEC-2026-3911`, `PYSEC-2026-3912`, `PYSEC-2026-3913` |
+| `transformers==4.56.2`  | `PYSEC-2026-3929`                                                          |
+| `unstructured==0.15.14` | `PYSEC-2026-3930`                                                          |
 
-Local evidence roots: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`
-`r4a-plan-policy` and `r4a-stable-ci`. Actual source/report/local/remote receipts,
-raw logs, fixture hashes, browser attempts, build archives and scanner evidence
-are linked by the JSON records described above. This round stops at **R4-A**,
-awaiting independent review; R4-B and security upgrades are not started.
+All three actual container targets (lite/full/ollama) still fail on
+`libpcre2-8-0==10.42-1`: `CVE-2026-86145` and `CVE-2026-89161`.
+Their scan/provenance artifacts are digest-verified and compared by raw and
+blocking keys; package/layer and warning evidence match R4-A. Image SBOM steps
+are skipped after the failing gate and are not reported as completed. These six
+failed audit jobs plus Required quality gates account for the latest seven.
+No security baseline, alias decision, dependency lock, scan scope or required job
+was changed. Exact findings come from this run, not an assumed failure count.
+
+### Evidence and protection receipt
+
+Primary local evidence root:
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4b-evidence-binding`.
+CI raw logs/artifacts and verified summaries:
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4b-stable-ci`.
+`execution.jsonl` records exact commands, source SHA, affected-file hashes and
+exit codes. Key build/CI receipts include `local-build-verified.json`,
+`clean-wheel-verified-entries.log`, `quality-attempt1.json`, `quality-final.json`,
+`coverage-verified.json`, `python-artifact-inspection.json`,
+`image-*-inspection.json`, `security-key-reconciliation-final.json`,
+`warning-final-verification.json` and `ci-rerun-reconciliation.json`.
+
+All **133 pre-existing user asset/instruction changes remain byte-identical**;
+the initial untracked `NUL`, existing worktrees and the three historically
+refused cleanup directories are preserved. Only explicit round paths were
+staged; the index is empty after commits. Canonical `.venv` metadata (98,853
+entries), real cache metadata (614 entries), office-cache and real configuration/
+database metadata match the initial snapshot. No canonical sync or real-data
+mutation was performed. `initial-state.json`, `protected-initial.json`, final
+snapshots, commit receipts and `r4b-final-state.json` retain the protection proof.
+The retained R0/R1 history below stays byte-identical; prior round reports remain
+available through their accepted Git commits.
+
+Work stops at R4-B for independent review. No R4-C, reopened R3 work, safety
+upgrade, merge, deployment or release was started.
 
 ## Previous R0/R1 evidence (retained history)
 
