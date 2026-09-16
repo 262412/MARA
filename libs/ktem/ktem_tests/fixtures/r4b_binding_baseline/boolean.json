@@ -1,0 +1,1640 @@
+{
+  "source": "7ed1b371cd942012b24e9654c191fcb843e7a9e4",
+  "production_sha256": {
+    "query_evidence_binding": "8efc6ad940c4fb6e4ffc5bd41319a5dac901ddbbefc7f52bb6923dc0e7324211",
+    "query_evidence_binding_support": "8fdc3cb68b0d4f4c6fbe6632f5bb0fa52b092bb9392af302a2bfdccc0184e6eb",
+    "query_evidence_assessment": "d7bfe2e5972badfa1025b4dc0b2c0717bf0e1217190b6417c2f180d0db187a1b",
+    "evidence_identity": "9e3bc94f77e551a2b86b752a5b38c903a2d906d274811a9e684c4568365b261e",
+    "query_plan_schema": "7b719a95eaa7621116dd26aa51389ac5ec20f37d9d4fa864ea4a44bb1a0c94fe",
+    "deterministic_ranking": "600a418a6654d608f3f6aea4e04f61c55a1069616604091bc019d34012e6ee78",
+    "selection_assessment_snapshot": "af0a29cafd5a61f84705098c5ec70a673dadce748e6b3122e4d34bfe6fac6088"
+  },
+  "observations": {
+    "boolean/ordinary/False": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:cd7e25ba61188422ac62",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Did the authors release source code?"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors release source code",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Did the authors release source code?",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": {
+                "__tuple__": []
+              },
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Did the authors release source code?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "support",
+              "source_id": "runtime-source-A",
+              "section_id": "methods",
+              "page_label": "support",
+              "text": "We release source code for the toolkit.",
+              "metadata": {
+                "reranker_input_identity": "raw:support",
+                "reranker_score": 0.2
+              }
+            },
+            {
+              "evidence_id": "related",
+              "source_id": "runtime-source-A",
+              "section_id": "related_work",
+              "page_label": "related",
+              "text": "Previous work released source code for a toolkit.",
+              "metadata": {
+                "reranker_input_identity": "raw:related",
+                "reranker_score": 0.9
+              }
+            },
+            {
+              "evidence_id": "noise",
+              "source_id": "runtime-source-A",
+              "section_id": "results",
+              "page_label": "noise",
+              "text": "We evaluate the toolkit on three datasets. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. ",
+              "metadata": {
+                "reranker_input_identity": "raw:noise",
+                "reranker_score": 0.8
+              }
+            },
+            {
+              "evidence_id": "future",
+              "source_id": "runtime-source-A",
+              "section_id": "future_work",
+              "page_label": "future",
+              "text": "We plan to release source code in future work.",
+              "metadata": {
+                "reranker_input_identity": "raw:future",
+                "reranker_score": 0.7
+              }
+            },
+            {
+              "evidence_id": "method",
+              "source_id": "runtime-source-A",
+              "section_id": "methods",
+              "page_label": "method",
+              "text": "Our method uses a public benchmark and open data.",
+              "metadata": {
+                "reranker_input_identity": "raw:method",
+                "reranker_score": 0.6
+              }
+            },
+            {
+              "evidence_id": "result",
+              "source_id": "runtime-source-A",
+              "section_id": "results",
+              "page_label": "result",
+              "text": "The toolkit improves accuracy on the benchmark.",
+              "metadata": {
+                "reranker_input_identity": "raw:result",
+                "reranker_score": 0.5
+              }
+            }
+          ],
+          "audit": null,
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:cd7e25ba61188422ac62",
+          "answer_type": "boolean",
+          "question_type": "simple_fact",
+          "subqueries": [
+            "Did the authors release source code?"
+          ],
+          "evidence_slots": [
+            {
+              "slot_id": "support:boolean_proposition",
+              "role": "support",
+              "entity": "",
+              "metric": "authors release source code",
+              "period": "",
+              "period_kind": "",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "boolean_proposition",
+              "financial_scope": "",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": false,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "retrieved_unverified",
+              "evidence_ids": [
+                "evidence:runtime-source-A:support"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "Did the authors release source code?",
+              "locator": {}
+            }
+          ],
+          "constraints": {
+            "periods": [],
+            "verification_domain": "qasper",
+            "requires_visual": false,
+            "requires_multiple_evidence": false,
+            "requires_distinct_source_pages": false,
+            "requires_structured_elements": false,
+            "explicit_page_labels": {
+              "__tuple__": []
+            },
+            "figure_label": "",
+            "table_label": "",
+            "requires_distinct_evidence": false,
+            "requires_structure": false,
+            "question": "Did the authors release source code?",
+            "finance_formula_status": "not_applicable"
+          },
+          "max_retrieval_rounds": 2
+        },
+        "trace": [],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "support:boolean_proposition",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:support",
+            "result": 3.25
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:related",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:noise",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:future",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:method",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:result",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "support:boolean_proposition",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "support:boolean_proposition",
+            "result": "retrieved_unverified"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors release source code",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_unverified",
+                "evidence_ids": [
+                  "evidence:runtime-source-A:support"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Did the authors release source code?",
+                "locator": {}
+              }
+            ],
+            "identities": [
+              "evidence:runtime-source-A:support",
+              "evidence:runtime-source-A:related",
+              "evidence:runtime-source-A:noise",
+              "evidence:runtime-source-A:future",
+              "evidence:runtime-source-A:method",
+              "evidence:runtime-source-A:result"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "support",
+            "source_id": "runtime-source-A",
+            "section_id": "methods",
+            "page_label": "support",
+            "text": "We release source code for the toolkit.",
+            "metadata": {
+              "reranker_input_identity": "raw:support",
+              "reranker_score": 0.2
+            }
+          },
+          {
+            "evidence_id": "related",
+            "source_id": "runtime-source-A",
+            "section_id": "related_work",
+            "page_label": "related",
+            "text": "Previous work released source code for a toolkit.",
+            "metadata": {
+              "reranker_input_identity": "raw:related",
+              "reranker_score": 0.9
+            }
+          },
+          {
+            "evidence_id": "noise",
+            "source_id": "runtime-source-A",
+            "section_id": "results",
+            "page_label": "noise",
+            "text": "We evaluate the toolkit on three datasets. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. ",
+            "metadata": {
+              "reranker_input_identity": "raw:noise",
+              "reranker_score": 0.8
+            }
+          },
+          {
+            "evidence_id": "future",
+            "source_id": "runtime-source-A",
+            "section_id": "future_work",
+            "page_label": "future",
+            "text": "We plan to release source code in future work.",
+            "metadata": {
+              "reranker_input_identity": "raw:future",
+              "reranker_score": 0.7
+            }
+          },
+          {
+            "evidence_id": "method",
+            "source_id": "runtime-source-A",
+            "section_id": "methods",
+            "page_label": "method",
+            "text": "Our method uses a public benchmark and open data.",
+            "metadata": {
+              "reranker_input_identity": "raw:method",
+              "reranker_score": 0.6
+            }
+          },
+          {
+            "evidence_id": "result",
+            "source_id": "runtime-source-A",
+            "section_id": "results",
+            "page_label": "result",
+            "text": "The toolkit improves accuracy on the benchmark.",
+            "metadata": {
+              "reranker_input_identity": "raw:result",
+              "reranker_score": 0.5
+            }
+          }
+        ],
+        "audit": null,
+        "classifications": {
+          "support": 2,
+          "related": 1,
+          "noise": 1,
+          "future": 1,
+          "method": 1,
+          "result": 1
+        },
+        "same_slot_objects": [
+          false
+        ],
+        "same_constraints": true
+      }
+    ],
+    "boolean/ordinary/True": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:cd7e25ba61188422ac62",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Did the authors release source code?"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors release source code",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Did the authors release source code?",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": {
+                "__tuple__": []
+              },
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Did the authors release source code?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "support",
+              "source_id": "runtime-source-A",
+              "section_id": "methods",
+              "page_label": "support",
+              "text": "We release source code for the toolkit.",
+              "metadata": {
+                "reranker_input_identity": "raw:support",
+                "reranker_score": 0.2
+              }
+            },
+            {
+              "evidence_id": "related",
+              "source_id": "runtime-source-A",
+              "section_id": "related_work",
+              "page_label": "related",
+              "text": "Previous work released source code for a toolkit.",
+              "metadata": {
+                "reranker_input_identity": "raw:related",
+                "reranker_score": 0.9
+              }
+            },
+            {
+              "evidence_id": "noise",
+              "source_id": "runtime-source-A",
+              "section_id": "results",
+              "page_label": "noise",
+              "text": "We evaluate the toolkit on three datasets. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. ",
+              "metadata": {
+                "reranker_input_identity": "raw:noise",
+                "reranker_score": 0.8
+              }
+            },
+            {
+              "evidence_id": "future",
+              "source_id": "runtime-source-A",
+              "section_id": "future_work",
+              "page_label": "future",
+              "text": "We plan to release source code in future work.",
+              "metadata": {
+                "reranker_input_identity": "raw:future",
+                "reranker_score": 0.7
+              }
+            },
+            {
+              "evidence_id": "method",
+              "source_id": "runtime-source-A",
+              "section_id": "methods",
+              "page_label": "method",
+              "text": "Our method uses a public benchmark and open data.",
+              "metadata": {
+                "reranker_input_identity": "raw:method",
+                "reranker_score": 0.6
+              }
+            },
+            {
+              "evidence_id": "result",
+              "source_id": "runtime-source-A",
+              "section_id": "results",
+              "page_label": "result",
+              "text": "The toolkit improves accuracy on the benchmark.",
+              "metadata": {
+                "reranker_input_identity": "raw:result",
+                "reranker_score": 0.5
+              }
+            }
+          ],
+          "audit": {
+            "unique_semantic_candidates": 6,
+            "slots": 1,
+            "cache_entries": 6,
+            "cache_builds": 1,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "classification_calls": 6,
+            "mmr_hot_loop_misses": 0,
+            "time_spent_ms": "elapsed milliseconds"
+          },
+          "classifications": {
+            "support": 1,
+            "related": 1,
+            "noise": 1,
+            "future": 1,
+            "method": 1,
+            "result": 1
+          }
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:cd7e25ba61188422ac62",
+          "answer_type": "boolean",
+          "question_type": "simple_fact",
+          "subqueries": [
+            "Did the authors release source code?"
+          ],
+          "evidence_slots": [
+            {
+              "slot_id": "support:boolean_proposition",
+              "role": "support",
+              "entity": "",
+              "metric": "authors release source code",
+              "period": "",
+              "period_kind": "",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "boolean_proposition",
+              "financial_scope": "",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": false,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "retrieved_unverified",
+              "evidence_ids": [
+                "evidence:runtime-source-A:support"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "Did the authors release source code?",
+              "locator": {}
+            }
+          ],
+          "constraints": {
+            "periods": [],
+            "verification_domain": "qasper",
+            "requires_visual": false,
+            "requires_multiple_evidence": false,
+            "requires_distinct_source_pages": false,
+            "requires_structured_elements": false,
+            "explicit_page_labels": {
+              "__tuple__": []
+            },
+            "figure_label": "",
+            "table_label": "",
+            "requires_distinct_evidence": false,
+            "requires_structure": false,
+            "question": "Did the authors release source code?",
+            "finance_formula_status": "not_applicable"
+          },
+          "max_retrieval_rounds": 2
+        },
+        "trace": [],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "support:boolean_proposition",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:support",
+            "result": 3.25
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:related",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:noise",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:future",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:method",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:result",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "support:boolean_proposition",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "support:boolean_proposition",
+            "result": "retrieved_unverified"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors release source code",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_unverified",
+                "evidence_ids": [
+                  "evidence:runtime-source-A:support"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Did the authors release source code?",
+                "locator": {}
+              }
+            ],
+            "identities": [
+              "evidence:runtime-source-A:support",
+              "evidence:runtime-source-A:related",
+              "evidence:runtime-source-A:noise",
+              "evidence:runtime-source-A:future",
+              "evidence:runtime-source-A:method",
+              "evidence:runtime-source-A:result"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "support",
+            "source_id": "runtime-source-A",
+            "section_id": "methods",
+            "page_label": "support",
+            "text": "We release source code for the toolkit.",
+            "metadata": {
+              "reranker_input_identity": "raw:support",
+              "reranker_score": 0.2
+            }
+          },
+          {
+            "evidence_id": "related",
+            "source_id": "runtime-source-A",
+            "section_id": "related_work",
+            "page_label": "related",
+            "text": "Previous work released source code for a toolkit.",
+            "metadata": {
+              "reranker_input_identity": "raw:related",
+              "reranker_score": 0.9
+            }
+          },
+          {
+            "evidence_id": "noise",
+            "source_id": "runtime-source-A",
+            "section_id": "results",
+            "page_label": "noise",
+            "text": "We evaluate the toolkit on three datasets. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. ",
+            "metadata": {
+              "reranker_input_identity": "raw:noise",
+              "reranker_score": 0.8
+            }
+          },
+          {
+            "evidence_id": "future",
+            "source_id": "runtime-source-A",
+            "section_id": "future_work",
+            "page_label": "future",
+            "text": "We plan to release source code in future work.",
+            "metadata": {
+              "reranker_input_identity": "raw:future",
+              "reranker_score": 0.7
+            }
+          },
+          {
+            "evidence_id": "method",
+            "source_id": "runtime-source-A",
+            "section_id": "methods",
+            "page_label": "method",
+            "text": "Our method uses a public benchmark and open data.",
+            "metadata": {
+              "reranker_input_identity": "raw:method",
+              "reranker_score": 0.6
+            }
+          },
+          {
+            "evidence_id": "result",
+            "source_id": "runtime-source-A",
+            "section_id": "results",
+            "page_label": "result",
+            "text": "The toolkit improves accuracy on the benchmark.",
+            "metadata": {
+              "reranker_input_identity": "raw:result",
+              "reranker_score": 0.5
+            }
+          }
+        ],
+        "audit": {
+          "unique_semantic_candidates": 6,
+          "slots": 1,
+          "cache_entries": 6,
+          "cache_builds": 1,
+          "cache_hits": 7,
+          "cache_misses": 0,
+          "classification_calls": 6,
+          "mmr_hot_loop_misses": 0,
+          "time_spent_ms": "elapsed milliseconds"
+        },
+        "classifications": {
+          "support": 1,
+          "related": 1,
+          "noise": 1,
+          "future": 1,
+          "method": 1,
+          "result": 1
+        },
+        "same_slot_objects": [
+          false
+        ],
+        "same_constraints": true
+      }
+    ],
+    "boolean/monotonic/False": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:cd7e25ba61188422ac62",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Did the authors release source code?"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors release source code",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Did the authors release source code?",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": {
+                "__tuple__": []
+              },
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Did the authors release source code?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "support",
+              "source_id": "runtime-source-A",
+              "section_id": "methods",
+              "page_label": "support",
+              "text": "We release source code for the toolkit.",
+              "metadata": {
+                "reranker_input_identity": "raw:support",
+                "reranker_score": 0.2
+              }
+            },
+            {
+              "evidence_id": "related",
+              "source_id": "runtime-source-A",
+              "section_id": "related_work",
+              "page_label": "related",
+              "text": "Previous work released source code for a toolkit.",
+              "metadata": {
+                "reranker_input_identity": "raw:related",
+                "reranker_score": 0.9
+              }
+            },
+            {
+              "evidence_id": "noise",
+              "source_id": "runtime-source-A",
+              "section_id": "results",
+              "page_label": "noise",
+              "text": "We evaluate the toolkit on three datasets. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. ",
+              "metadata": {
+                "reranker_input_identity": "raw:noise",
+                "reranker_score": 0.8
+              }
+            },
+            {
+              "evidence_id": "future",
+              "source_id": "runtime-source-A",
+              "section_id": "future_work",
+              "page_label": "future",
+              "text": "We plan to release source code in future work.",
+              "metadata": {
+                "reranker_input_identity": "raw:future",
+                "reranker_score": 0.7
+              }
+            },
+            {
+              "evidence_id": "method",
+              "source_id": "runtime-source-A",
+              "section_id": "methods",
+              "page_label": "method",
+              "text": "Our method uses a public benchmark and open data.",
+              "metadata": {
+                "reranker_input_identity": "raw:method",
+                "reranker_score": 0.6
+              }
+            },
+            {
+              "evidence_id": "result",
+              "source_id": "runtime-source-A",
+              "section_id": "results",
+              "page_label": "result",
+              "text": "The toolkit improves accuracy on the benchmark.",
+              "metadata": {
+                "reranker_input_identity": "raw:result",
+                "reranker_score": 0.5
+              }
+            }
+          ],
+          "audit": null,
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:cd7e25ba61188422ac62",
+          "answer_type": "boolean",
+          "question_type": "simple_fact",
+          "subqueries": [
+            "Did the authors release source code?"
+          ],
+          "evidence_slots": [
+            {
+              "slot_id": "support:boolean_proposition",
+              "role": "support",
+              "entity": "",
+              "metric": "authors release source code",
+              "period": "",
+              "period_kind": "",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "boolean_proposition",
+              "financial_scope": "",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": false,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "retrieved_unverified",
+              "evidence_ids": [
+                "evidence:runtime-source-A:support"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "Did the authors release source code?",
+              "locator": {}
+            }
+          ],
+          "constraints": {
+            "periods": [],
+            "verification_domain": "qasper",
+            "requires_visual": false,
+            "requires_multiple_evidence": false,
+            "requires_distinct_source_pages": false,
+            "requires_structured_elements": false,
+            "explicit_page_labels": {
+              "__tuple__": []
+            },
+            "figure_label": "",
+            "table_label": "",
+            "requires_distinct_evidence": false,
+            "requires_structure": false,
+            "question": "Did the authors release source code?",
+            "finance_formula_status": "not_applicable"
+          },
+          "max_retrieval_rounds": 2
+        },
+        "trace": [
+          {
+            "slot_id": "support:boolean_proposition",
+            "preserved_existing_binding": false,
+            "replacement_reason": "missing_existing_binding",
+            "before_identity": "",
+            "after_identity": "evidence:runtime-source-A:support"
+          }
+        ],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "support:boolean_proposition",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:support",
+            "result": 3.25
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:related",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:noise",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:future",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:method",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:result",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "support:boolean_proposition",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "support:boolean_proposition",
+            "result": "retrieved_unverified"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors release source code",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_unverified",
+                "evidence_ids": [
+                  "evidence:runtime-source-A:support"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Did the authors release source code?",
+                "locator": {}
+              }
+            ],
+            "identities": [
+              "evidence:runtime-source-A:support",
+              "evidence:runtime-source-A:related",
+              "evidence:runtime-source-A:noise",
+              "evidence:runtime-source-A:future",
+              "evidence:runtime-source-A:method",
+              "evidence:runtime-source-A:result"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "support",
+            "source_id": "runtime-source-A",
+            "section_id": "methods",
+            "page_label": "support",
+            "text": "We release source code for the toolkit.",
+            "metadata": {
+              "reranker_input_identity": "raw:support",
+              "reranker_score": 0.2
+            }
+          },
+          {
+            "evidence_id": "related",
+            "source_id": "runtime-source-A",
+            "section_id": "related_work",
+            "page_label": "related",
+            "text": "Previous work released source code for a toolkit.",
+            "metadata": {
+              "reranker_input_identity": "raw:related",
+              "reranker_score": 0.9
+            }
+          },
+          {
+            "evidence_id": "noise",
+            "source_id": "runtime-source-A",
+            "section_id": "results",
+            "page_label": "noise",
+            "text": "We evaluate the toolkit on three datasets. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. ",
+            "metadata": {
+              "reranker_input_identity": "raw:noise",
+              "reranker_score": 0.8
+            }
+          },
+          {
+            "evidence_id": "future",
+            "source_id": "runtime-source-A",
+            "section_id": "future_work",
+            "page_label": "future",
+            "text": "We plan to release source code in future work.",
+            "metadata": {
+              "reranker_input_identity": "raw:future",
+              "reranker_score": 0.7
+            }
+          },
+          {
+            "evidence_id": "method",
+            "source_id": "runtime-source-A",
+            "section_id": "methods",
+            "page_label": "method",
+            "text": "Our method uses a public benchmark and open data.",
+            "metadata": {
+              "reranker_input_identity": "raw:method",
+              "reranker_score": 0.6
+            }
+          },
+          {
+            "evidence_id": "result",
+            "source_id": "runtime-source-A",
+            "section_id": "results",
+            "page_label": "result",
+            "text": "The toolkit improves accuracy on the benchmark.",
+            "metadata": {
+              "reranker_input_identity": "raw:result",
+              "reranker_score": 0.5
+            }
+          }
+        ],
+        "audit": null,
+        "classifications": {
+          "support": 2,
+          "related": 1,
+          "noise": 1,
+          "future": 1,
+          "method": 1,
+          "result": 1
+        },
+        "same_slot_objects": [
+          false
+        ],
+        "same_constraints": true
+      }
+    ],
+    "boolean/monotonic/True": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:cd7e25ba61188422ac62",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Did the authors release source code?"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors release source code",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Did the authors release source code?",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": {
+                "__tuple__": []
+              },
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Did the authors release source code?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "support",
+              "source_id": "runtime-source-A",
+              "section_id": "methods",
+              "page_label": "support",
+              "text": "We release source code for the toolkit.",
+              "metadata": {
+                "reranker_input_identity": "raw:support",
+                "reranker_score": 0.2
+              }
+            },
+            {
+              "evidence_id": "related",
+              "source_id": "runtime-source-A",
+              "section_id": "related_work",
+              "page_label": "related",
+              "text": "Previous work released source code for a toolkit.",
+              "metadata": {
+                "reranker_input_identity": "raw:related",
+                "reranker_score": 0.9
+              }
+            },
+            {
+              "evidence_id": "noise",
+              "source_id": "runtime-source-A",
+              "section_id": "results",
+              "page_label": "noise",
+              "text": "We evaluate the toolkit on three datasets. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. ",
+              "metadata": {
+                "reranker_input_identity": "raw:noise",
+                "reranker_score": 0.8
+              }
+            },
+            {
+              "evidence_id": "future",
+              "source_id": "runtime-source-A",
+              "section_id": "future_work",
+              "page_label": "future",
+              "text": "We plan to release source code in future work.",
+              "metadata": {
+                "reranker_input_identity": "raw:future",
+                "reranker_score": 0.7
+              }
+            },
+            {
+              "evidence_id": "method",
+              "source_id": "runtime-source-A",
+              "section_id": "methods",
+              "page_label": "method",
+              "text": "Our method uses a public benchmark and open data.",
+              "metadata": {
+                "reranker_input_identity": "raw:method",
+                "reranker_score": 0.6
+              }
+            },
+            {
+              "evidence_id": "result",
+              "source_id": "runtime-source-A",
+              "section_id": "results",
+              "page_label": "result",
+              "text": "The toolkit improves accuracy on the benchmark.",
+              "metadata": {
+                "reranker_input_identity": "raw:result",
+                "reranker_score": 0.5
+              }
+            }
+          ],
+          "audit": {
+            "unique_semantic_candidates": 6,
+            "slots": 1,
+            "cache_entries": 6,
+            "cache_builds": 1,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "classification_calls": 6,
+            "mmr_hot_loop_misses": 0,
+            "time_spent_ms": "elapsed milliseconds"
+          },
+          "classifications": {
+            "support": 1,
+            "related": 1,
+            "noise": 1,
+            "future": 1,
+            "method": 1,
+            "result": 1
+          }
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:cd7e25ba61188422ac62",
+          "answer_type": "boolean",
+          "question_type": "simple_fact",
+          "subqueries": [
+            "Did the authors release source code?"
+          ],
+          "evidence_slots": [
+            {
+              "slot_id": "support:boolean_proposition",
+              "role": "support",
+              "entity": "",
+              "metric": "authors release source code",
+              "period": "",
+              "period_kind": "",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "boolean_proposition",
+              "financial_scope": "",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": false,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "retrieved_unverified",
+              "evidence_ids": [
+                "evidence:runtime-source-A:support"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "Did the authors release source code?",
+              "locator": {}
+            }
+          ],
+          "constraints": {
+            "periods": [],
+            "verification_domain": "qasper",
+            "requires_visual": false,
+            "requires_multiple_evidence": false,
+            "requires_distinct_source_pages": false,
+            "requires_structured_elements": false,
+            "explicit_page_labels": {
+              "__tuple__": []
+            },
+            "figure_label": "",
+            "table_label": "",
+            "requires_distinct_evidence": false,
+            "requires_structure": false,
+            "question": "Did the authors release source code?",
+            "finance_formula_status": "not_applicable"
+          },
+          "max_retrieval_rounds": 2
+        },
+        "trace": [
+          {
+            "slot_id": "support:boolean_proposition",
+            "preserved_existing_binding": false,
+            "replacement_reason": "missing_existing_binding",
+            "before_identity": "",
+            "after_identity": "evidence:runtime-source-A:support"
+          }
+        ],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "support:boolean_proposition",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:support",
+            "result": 3.25
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:related",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:noise",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:future",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:method",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "support:boolean_proposition",
+            "identity": "evidence:runtime-source-A:result",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "support:boolean_proposition",
+            "result": 0.0
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "support:boolean_proposition",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "support:boolean_proposition",
+            "result": "retrieved_unverified"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors release source code",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_unverified",
+                "evidence_ids": [
+                  "evidence:runtime-source-A:support"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Did the authors release source code?",
+                "locator": {}
+              }
+            ],
+            "identities": [
+              "evidence:runtime-source-A:support",
+              "evidence:runtime-source-A:related",
+              "evidence:runtime-source-A:noise",
+              "evidence:runtime-source-A:future",
+              "evidence:runtime-source-A:method",
+              "evidence:runtime-source-A:result"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "support",
+            "source_id": "runtime-source-A",
+            "section_id": "methods",
+            "page_label": "support",
+            "text": "We release source code for the toolkit.",
+            "metadata": {
+              "reranker_input_identity": "raw:support",
+              "reranker_score": 0.2
+            }
+          },
+          {
+            "evidence_id": "related",
+            "source_id": "runtime-source-A",
+            "section_id": "related_work",
+            "page_label": "related",
+            "text": "Previous work released source code for a toolkit.",
+            "metadata": {
+              "reranker_input_identity": "raw:related",
+              "reranker_score": 0.9
+            }
+          },
+          {
+            "evidence_id": "noise",
+            "source_id": "runtime-source-A",
+            "section_id": "results",
+            "page_label": "noise",
+            "text": "We evaluate the toolkit on three datasets. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. The evaluation protocol reports unrelated results. ",
+            "metadata": {
+              "reranker_input_identity": "raw:noise",
+              "reranker_score": 0.8
+            }
+          },
+          {
+            "evidence_id": "future",
+            "source_id": "runtime-source-A",
+            "section_id": "future_work",
+            "page_label": "future",
+            "text": "We plan to release source code in future work.",
+            "metadata": {
+              "reranker_input_identity": "raw:future",
+              "reranker_score": 0.7
+            }
+          },
+          {
+            "evidence_id": "method",
+            "source_id": "runtime-source-A",
+            "section_id": "methods",
+            "page_label": "method",
+            "text": "Our method uses a public benchmark and open data.",
+            "metadata": {
+              "reranker_input_identity": "raw:method",
+              "reranker_score": 0.6
+            }
+          },
+          {
+            "evidence_id": "result",
+            "source_id": "runtime-source-A",
+            "section_id": "results",
+            "page_label": "result",
+            "text": "The toolkit improves accuracy on the benchmark.",
+            "metadata": {
+              "reranker_input_identity": "raw:result",
+              "reranker_score": 0.5
+            }
+          }
+        ],
+        "audit": {
+          "unique_semantic_candidates": 6,
+          "slots": 1,
+          "cache_entries": 6,
+          "cache_builds": 1,
+          "cache_hits": 7,
+          "cache_misses": 0,
+          "classification_calls": 6,
+          "mmr_hot_loop_misses": 0,
+          "time_spent_ms": "elapsed milliseconds"
+        },
+        "classifications": {
+          "support": 1,
+          "related": 1,
+          "noise": 1,
+          "future": 1,
+          "method": 1,
+          "result": 1
+        },
+        "same_slot_objects": [
+          false
+        ],
+        "same_constraints": true
+      }
+    ]
+  }
+}

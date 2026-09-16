@@ -1,0 +1,854 @@
+{
+  "source": "7ed1b371cd942012b24e9654c191fcb843e7a9e4",
+  "production_sha256": {
+    "query_evidence_binding": "8efc6ad940c4fb6e4ffc5bd41319a5dac901ddbbefc7f52bb6923dc0e7324211",
+    "query_evidence_binding_support": "8fdc3cb68b0d4f4c6fbe6632f5bb0fa52b092bb9392af302a2bfdccc0184e6eb",
+    "query_evidence_assessment": "d7bfe2e5972badfa1025b4dc0b2c0717bf0e1217190b6417c2f180d0db187a1b",
+    "evidence_identity": "9e3bc94f77e551a2b86b752a5b38c903a2d906d274811a9e684c4568365b261e",
+    "query_plan_schema": "7b719a95eaa7621116dd26aa51389ac5ec20f37d9d4fa864ea4a44bb1a0c94fe",
+    "deterministic_ranking": "600a418a6654d608f3f6aea4e04f61c55a1069616604091bc019d34012e6ee78",
+    "selection_assessment_snapshot": "af0a29cafd5a61f84705098c5ec70a673dadce748e6b3122e4d34bfe6fac6088"
+  },
+  "observations": {
+    "old_partial/ordinary/False": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:d98493bdbc408a8f0f28",
+            "answer_type": "extractive",
+            "question_type": "lookup",
+            "subqueries": [],
+            "evidence_slots": [
+              {
+                "slot_id": "s",
+                "role": "support",
+                "entity": "",
+                "metric": "topic",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "",
+                "financial_scope": "",
+                "modality": "",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_partial",
+                "evidence_ids": [
+                  "evidence:paper:a"
+                ],
+                "cardinality": 2,
+                "operator_role": "",
+                "query": "",
+                "locator": null
+              }
+            ],
+            "constraints": {},
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "a",
+              "source_id": "paper",
+              "page_label": "1",
+              "text": "topic"
+            },
+            {
+              "evidence_id": "b",
+              "source_id": "paper",
+              "page_label": "1",
+              "text": "topic in millions",
+              "scale": "million"
+            }
+          ],
+          "audit": null,
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:d98493bdbc408a8f0f28",
+          "answer_type": "extractive",
+          "question_type": "lookup",
+          "subqueries": [],
+          "evidence_slots": [
+            {
+              "slot_id": "s",
+              "role": "support",
+              "entity": "",
+              "metric": "topic",
+              "period": "",
+              "period_kind": "",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "",
+              "financial_scope": "",
+              "modality": "",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "evidence:paper:b",
+                "evidence:paper:a"
+              ],
+              "cardinality": 2,
+              "operator_role": "",
+              "query": "",
+              "locator": null
+            }
+          ],
+          "constraints": {},
+          "max_retrieval_rounds": 2
+        },
+        "trace": [],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "s",
+            "result": [
+              false,
+              "incomplete_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "s",
+            "identity": "evidence:paper:a",
+            "result": 1.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "s",
+            "identity": "evidence:paper:b",
+            "result": 1.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "s",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "s",
+            "result": 1.0
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "s",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "s",
+            "result": "filled"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "s",
+                "role": "support",
+                "entity": "",
+                "metric": "topic",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "",
+                "financial_scope": "",
+                "modality": "",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "evidence:paper:b",
+                  "evidence:paper:a"
+                ],
+                "cardinality": 2,
+                "operator_role": "",
+                "query": "",
+                "locator": null
+              }
+            ],
+            "identities": [
+              "evidence:paper:a",
+              "evidence:paper:b"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "a",
+            "source_id": "paper",
+            "page_label": "1",
+            "text": "topic"
+          },
+          {
+            "evidence_id": "b",
+            "source_id": "paper",
+            "page_label": "1",
+            "text": "topic in millions",
+            "scale": "million"
+          }
+        ],
+        "audit": null,
+        "classifications": {},
+        "same_slot_objects": [
+          false
+        ],
+        "same_constraints": true
+      }
+    ],
+    "old_partial/ordinary/True": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:d98493bdbc408a8f0f28",
+            "answer_type": "extractive",
+            "question_type": "lookup",
+            "subqueries": [],
+            "evidence_slots": [
+              {
+                "slot_id": "s",
+                "role": "support",
+                "entity": "",
+                "metric": "topic",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "",
+                "financial_scope": "",
+                "modality": "",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_partial",
+                "evidence_ids": [
+                  "evidence:paper:a"
+                ],
+                "cardinality": 2,
+                "operator_role": "",
+                "query": "",
+                "locator": null
+              }
+            ],
+            "constraints": {},
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "a",
+              "source_id": "paper",
+              "page_label": "1",
+              "text": "topic"
+            },
+            {
+              "evidence_id": "b",
+              "source_id": "paper",
+              "page_label": "1",
+              "text": "topic in millions",
+              "scale": "million"
+            }
+          ],
+          "audit": {
+            "unique_semantic_candidates": 0,
+            "slots": 0,
+            "cache_entries": 0,
+            "cache_builds": 1,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "classification_calls": 0,
+            "mmr_hot_loop_misses": 0,
+            "time_spent_ms": "elapsed milliseconds"
+          },
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:d98493bdbc408a8f0f28",
+          "answer_type": "extractive",
+          "question_type": "lookup",
+          "subqueries": [],
+          "evidence_slots": [
+            {
+              "slot_id": "s",
+              "role": "support",
+              "entity": "",
+              "metric": "topic",
+              "period": "",
+              "period_kind": "",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "",
+              "financial_scope": "",
+              "modality": "",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "evidence:paper:b",
+                "evidence:paper:a"
+              ],
+              "cardinality": 2,
+              "operator_role": "",
+              "query": "",
+              "locator": null
+            }
+          ],
+          "constraints": {},
+          "max_retrieval_rounds": 2
+        },
+        "trace": [],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "s",
+            "result": [
+              false,
+              "incomplete_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "s",
+            "identity": "evidence:paper:a",
+            "result": 1.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "s",
+            "identity": "evidence:paper:b",
+            "result": 1.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "s",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "s",
+            "result": 1.0
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "s",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "s",
+            "result": "filled"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "s",
+                "role": "support",
+                "entity": "",
+                "metric": "topic",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "",
+                "financial_scope": "",
+                "modality": "",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "evidence:paper:b",
+                  "evidence:paper:a"
+                ],
+                "cardinality": 2,
+                "operator_role": "",
+                "query": "",
+                "locator": null
+              }
+            ],
+            "identities": [
+              "evidence:paper:a",
+              "evidence:paper:b"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "a",
+            "source_id": "paper",
+            "page_label": "1",
+            "text": "topic"
+          },
+          {
+            "evidence_id": "b",
+            "source_id": "paper",
+            "page_label": "1",
+            "text": "topic in millions",
+            "scale": "million"
+          }
+        ],
+        "audit": {
+          "unique_semantic_candidates": 0,
+          "slots": 0,
+          "cache_entries": 0,
+          "cache_builds": 1,
+          "cache_hits": 0,
+          "cache_misses": 0,
+          "classification_calls": 0,
+          "mmr_hot_loop_misses": 0,
+          "time_spent_ms": "elapsed milliseconds"
+        },
+        "classifications": {},
+        "same_slot_objects": [
+          false
+        ],
+        "same_constraints": true
+      }
+    ],
+    "old_partial/monotonic/False": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:d98493bdbc408a8f0f28",
+            "answer_type": "extractive",
+            "question_type": "lookup",
+            "subqueries": [],
+            "evidence_slots": [
+              {
+                "slot_id": "s",
+                "role": "support",
+                "entity": "",
+                "metric": "topic",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "",
+                "financial_scope": "",
+                "modality": "",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_partial",
+                "evidence_ids": [
+                  "evidence:paper:a"
+                ],
+                "cardinality": 2,
+                "operator_role": "",
+                "query": "",
+                "locator": null
+              }
+            ],
+            "constraints": {},
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "a",
+              "source_id": "paper",
+              "page_label": "1",
+              "text": "topic"
+            },
+            {
+              "evidence_id": "b",
+              "source_id": "paper",
+              "page_label": "1",
+              "text": "topic in millions",
+              "scale": "million"
+            }
+          ],
+          "audit": null,
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:d98493bdbc408a8f0f28",
+          "answer_type": "extractive",
+          "question_type": "lookup",
+          "subqueries": [],
+          "evidence_slots": [
+            {
+              "slot_id": "s",
+              "role": "support",
+              "entity": "",
+              "metric": "topic",
+              "period": "",
+              "period_kind": "",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "",
+              "financial_scope": "",
+              "modality": "",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "evidence:paper:b",
+                "evidence:paper:a"
+              ],
+              "cardinality": 2,
+              "operator_role": "",
+              "query": "",
+              "locator": null
+            }
+          ],
+          "constraints": {},
+          "max_retrieval_rounds": 2
+        },
+        "trace": [
+          {
+            "slot_id": "s",
+            "preserved_existing_binding": false,
+            "replacement_reason": "incomplete_existing_binding",
+            "before_identity": "evidence:paper:a",
+            "after_identity": "evidence:paper:b"
+          }
+        ],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "s",
+            "result": [
+              false,
+              "incomplete_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "s",
+            "identity": "evidence:paper:a",
+            "result": 1.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "s",
+            "identity": "evidence:paper:b",
+            "result": 1.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "s",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "s",
+            "result": 1.0
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "s",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "s",
+            "result": "filled"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "s",
+                "role": "support",
+                "entity": "",
+                "metric": "topic",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "",
+                "financial_scope": "",
+                "modality": "",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "evidence:paper:b",
+                  "evidence:paper:a"
+                ],
+                "cardinality": 2,
+                "operator_role": "",
+                "query": "",
+                "locator": null
+              }
+            ],
+            "identities": [
+              "evidence:paper:a",
+              "evidence:paper:b"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "a",
+            "source_id": "paper",
+            "page_label": "1",
+            "text": "topic"
+          },
+          {
+            "evidence_id": "b",
+            "source_id": "paper",
+            "page_label": "1",
+            "text": "topic in millions",
+            "scale": "million"
+          }
+        ],
+        "audit": null,
+        "classifications": {},
+        "same_slot_objects": [
+          false
+        ],
+        "same_constraints": true
+      }
+    ],
+    "old_partial/monotonic/True": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:d98493bdbc408a8f0f28",
+            "answer_type": "extractive",
+            "question_type": "lookup",
+            "subqueries": [],
+            "evidence_slots": [
+              {
+                "slot_id": "s",
+                "role": "support",
+                "entity": "",
+                "metric": "topic",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "",
+                "financial_scope": "",
+                "modality": "",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_partial",
+                "evidence_ids": [
+                  "evidence:paper:a"
+                ],
+                "cardinality": 2,
+                "operator_role": "",
+                "query": "",
+                "locator": null
+              }
+            ],
+            "constraints": {},
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "a",
+              "source_id": "paper",
+              "page_label": "1",
+              "text": "topic"
+            },
+            {
+              "evidence_id": "b",
+              "source_id": "paper",
+              "page_label": "1",
+              "text": "topic in millions",
+              "scale": "million"
+            }
+          ],
+          "audit": {
+            "unique_semantic_candidates": 0,
+            "slots": 0,
+            "cache_entries": 0,
+            "cache_builds": 1,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "classification_calls": 0,
+            "mmr_hot_loop_misses": 0,
+            "time_spent_ms": "elapsed milliseconds"
+          },
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:d98493bdbc408a8f0f28",
+          "answer_type": "extractive",
+          "question_type": "lookup",
+          "subqueries": [],
+          "evidence_slots": [
+            {
+              "slot_id": "s",
+              "role": "support",
+              "entity": "",
+              "metric": "topic",
+              "period": "",
+              "period_kind": "",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "",
+              "financial_scope": "",
+              "modality": "",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "evidence:paper:b",
+                "evidence:paper:a"
+              ],
+              "cardinality": 2,
+              "operator_role": "",
+              "query": "",
+              "locator": null
+            }
+          ],
+          "constraints": {},
+          "max_retrieval_rounds": 2
+        },
+        "trace": [
+          {
+            "slot_id": "s",
+            "preserved_existing_binding": false,
+            "replacement_reason": "incomplete_existing_binding",
+            "before_identity": "evidence:paper:a",
+            "after_identity": "evidence:paper:b"
+          }
+        ],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "s",
+            "result": [
+              false,
+              "incomplete_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "s",
+            "identity": "evidence:paper:a",
+            "result": 1.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "s",
+            "identity": "evidence:paper:b",
+            "result": 1.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "s",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "s",
+            "result": 1.0
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "s",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "s",
+            "result": "filled"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "s",
+                "role": "support",
+                "entity": "",
+                "metric": "topic",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "",
+                "financial_scope": "",
+                "modality": "",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "evidence:paper:b",
+                  "evidence:paper:a"
+                ],
+                "cardinality": 2,
+                "operator_role": "",
+                "query": "",
+                "locator": null
+              }
+            ],
+            "identities": [
+              "evidence:paper:a",
+              "evidence:paper:b"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "a",
+            "source_id": "paper",
+            "page_label": "1",
+            "text": "topic"
+          },
+          {
+            "evidence_id": "b",
+            "source_id": "paper",
+            "page_label": "1",
+            "text": "topic in millions",
+            "scale": "million"
+          }
+        ],
+        "audit": {
+          "unique_semantic_candidates": 0,
+          "slots": 0,
+          "cache_entries": 0,
+          "cache_builds": 1,
+          "cache_hits": 0,
+          "cache_misses": 0,
+          "classification_calls": 0,
+          "mmr_hot_loop_misses": 0,
+          "time_spent_ms": "elapsed milliseconds"
+        },
+        "classifications": {},
+        "same_slot_objects": [
+          false
+        ],
+        "same_constraints": true
+      }
+    ]
+  }
+}

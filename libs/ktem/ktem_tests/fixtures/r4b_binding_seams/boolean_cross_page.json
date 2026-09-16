@@ -1,0 +1,5029 @@
+{
+ "source": "7ed1b371cd942012b24e9654c191fcb843e7a9e4",
+ "pythonhashseed": "0",
+ "observation": {
+  "calls": [
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "support:left_subject",
+    "query": "page 1",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   },
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "support:right_subject",
+    "query": "page 2",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   },
+   {
+    "stage": "generate",
+    "route": "text_rag"
+   }
+  ],
+  "planned": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:a0ee0ceb01c40bb01bd3",
+   "answer_type": "boolean",
+   "question_type": "cross_page",
+   "subqueries": [
+    "Across pages 1 and 2, did the authors release the code?",
+    "page 1",
+    "page 2"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:proposition",
+     "role": "support",
+     "entity": "",
+     "metric": "authors release code",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "boolean_proposition",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": false,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "Across pages 1 and 2, did the authors release the code?",
+     "locator": null
+    },
+    {
+     "slot_id": "support:left_subject",
+     "role": "support",
+     "entity": "",
+     "metric": "page 1",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "page 1",
+     "locator": {
+      "page_label": "1"
+     }
+    },
+    {
+     "slot_id": "support:right_subject",
+     "role": "support",
+     "entity": "",
+     "metric": "page 2",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "page 2",
+     "locator": {
+      "page_label": "2"
+     }
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "qasper",
+    "requires_visual": false,
+    "requires_multiple_evidence": true,
+    "requires_distinct_source_pages": true,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": [
+      "1",
+      "2"
+     ]
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": true,
+    "requires_structure": true,
+    "question": "Across pages 1 and 2, did the authors release the code?",
+    "boolean_support_group": {
+     "operator": "all",
+     "premise_mode": "all_required",
+     "semantics": "open_world",
+     "rule_id": "same_source_argument_conjunction.v1",
+     "quantifier": "none",
+     "required_argument_tokens": [
+      "code",
+      "page"
+     ],
+     "max_premises": 4
+    },
+    "finance_formula_status": "not_applicable",
+    "distinct_source_page_slot_ids": {
+     "__tuple__": [
+      "support:left_subject",
+      "support:right_subject"
+     ]
+    }
+   },
+   "max_retrieval_rounds": 2
+  },
+  "final_plan": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:a0ee0ceb01c40bb01bd3",
+   "answer_type": "boolean",
+   "question_type": "cross_page",
+   "subqueries": [
+    "Across pages 1 and 2, did the authors release the code?",
+    "page 1",
+    "page 2"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:proposition",
+     "role": "support",
+     "entity": "",
+     "metric": "authors release code",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "boolean_proposition",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": false,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_conflict",
+     "evidence_ids": [
+      "evidence:paper:page-1",
+      "evidence:paper:page-2"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "Across pages 1 and 2, did the authors release the code?",
+     "locator": null
+    },
+    {
+     "slot_id": "support:left_subject",
+     "role": "support",
+     "entity": "",
+     "metric": "page 1",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_conflict",
+     "evidence_ids": [
+      "evidence:paper:page-1"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "page 1",
+     "locator": {
+      "page_label": "1"
+     }
+    },
+    {
+     "slot_id": "support:right_subject",
+     "role": "support",
+     "entity": "",
+     "metric": "page 2",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_conflict",
+     "evidence_ids": [
+      "evidence:paper:page-2"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "page 2",
+     "locator": {
+      "page_label": "2"
+     }
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "qasper",
+    "requires_visual": false,
+    "requires_multiple_evidence": true,
+    "requires_distinct_source_pages": true,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": [
+      "1",
+      "2"
+     ]
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": true,
+    "requires_structure": true,
+    "question": "Across pages 1 and 2, did the authors release the code?",
+    "boolean_support_group": {
+     "operator": "all",
+     "premise_mode": "all_required",
+     "semantics": "open_world",
+     "rule_id": "same_source_argument_conjunction.v1",
+     "quantifier": "none",
+     "required_argument_tokens": [
+      "code",
+      "page"
+     ],
+     "max_premises": 4
+    },
+    "finance_formula_status": "not_applicable",
+    "distinct_source_page_slot_ids": {
+     "__tuple__": [
+      "support:left_subject",
+      "support:right_subject"
+     ]
+    }
+   },
+   "max_retrieval_rounds": 2
+  },
+  "plan_id": "plan:a0ee0ceb01c40bb01bd3",
+  "state_version": 2,
+  "bound": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:a0ee0ceb01c40bb01bd3",
+   "answer_type": "boolean",
+   "question_type": "cross_page",
+   "subqueries": [
+    "Across pages 1 and 2, did the authors release the code?",
+    "page 1",
+    "page 2"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:proposition",
+     "role": "support",
+     "entity": "",
+     "metric": "authors release code",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "boolean_proposition",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": false,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_conflict",
+     "evidence_ids": [
+      "evidence:paper:page-1",
+      "evidence:paper:page-2"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "Across pages 1 and 2, did the authors release the code?",
+     "locator": null
+    },
+    {
+     "slot_id": "support:left_subject",
+     "role": "support",
+     "entity": "",
+     "metric": "page 1",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_conflict",
+     "evidence_ids": [
+      "evidence:paper:page-1"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "page 1",
+     "locator": {
+      "page_label": "1"
+     }
+    },
+    {
+     "slot_id": "support:right_subject",
+     "role": "support",
+     "entity": "",
+     "metric": "page 2",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_conflict",
+     "evidence_ids": [
+      "evidence:paper:page-2"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "page 2",
+     "locator": {
+      "page_label": "2"
+     }
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "qasper",
+    "requires_visual": false,
+    "requires_multiple_evidence": true,
+    "requires_distinct_source_pages": true,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": [
+      "1",
+      "2"
+     ]
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": true,
+    "requires_structure": true,
+    "question": "Across pages 1 and 2, did the authors release the code?",
+    "boolean_support_group": {
+     "operator": "all",
+     "premise_mode": "all_required",
+     "semantics": "open_world",
+     "rule_id": "same_source_argument_conjunction.v1",
+     "quantifier": "none",
+     "required_argument_tokens": [
+      "code",
+      "page"
+     ],
+     "max_premises": 4
+    },
+    "finance_formula_status": "not_applicable",
+    "distinct_source_page_slot_ids": {
+     "__tuple__": [
+      "support:left_subject",
+      "support:right_subject"
+     ]
+    }
+   },
+   "max_retrieval_rounds": 2,
+   "stage": "verified",
+   "state_version": 2,
+   "state_authority": "boolean_authoritative_conflict.v1",
+   "authority_projection_contract": "typed_proposition_authority.v1"
+  },
+  "controller": {
+   "route": "text_rag",
+   "legacy_route": "doc_text",
+   "policy": "doc",
+   "controller_mode": "off",
+   "requires_retrieval": true,
+   "reason": "Requested document text route."
+  },
+  "retrieval": {
+   "status": "good",
+   "reason": "Retrieved evidence is sufficient for generation.",
+   "retry": false
+  },
+  "verification": {
+   "mode": "strict",
+   "status": "verified_conflict",
+   "reason": "authoritative_conflict_abstention",
+   "action": "abstain",
+   "claims": [
+    "yes: Across pages 1 and 2, did the authors release the code?"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "yes: Across pages 1 and 2, did the authors release the code?",
+     "status": "conflicting",
+     "supporting_evidence_ids": [
+      "evidence:paper:page-1"
+     ],
+     "contradicting_evidence_ids": [
+      "evidence:paper:page-2"
+     ],
+     "input_answer_polarity": "yes",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "authority_status": "verified_conflict",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "supporting_evidence_spans": [
+      {
+       "evidence_id": "evidence:paper:page-1",
+       "evidence_ref": "evidence:paper:page-1#quote:25:79",
+       "span_id": "evidence:paper:page-1#quote:25:79",
+       "quote": "The authors released the code publicly with the paper.",
+       "span_start": 25,
+       "span_end": 79,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "provide",
+       "section_scope": "current_paper",
+       "scope": "current_paper",
+       "relation": "provide",
+       "object": "code",
+       "arguments": [
+        "code"
+       ],
+       "quantifier": "none",
+       "polarity": "yes",
+       "qualifier": "none",
+       "reason": "claim_scope_relation_and_polarity_compatible",
+       "source_id": "paper",
+       "page_label": "1"
+      }
+     ],
+     "contradicting_evidence_spans": [
+      {
+       "evidence_id": "evidence:paper:page-2",
+       "evidence_ref": "evidence:paper:page-2#quote:28:96",
+       "span_id": "evidence:paper:page-2#quote:28:96",
+       "quote": "The authors did not release the code for the final evaluated system.",
+       "span_start": 28,
+       "span_end": 96,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "provide",
+       "section_scope": "current_paper",
+       "scope": "current_paper",
+       "relation": "provide",
+       "object": "code",
+       "arguments": [
+        "code"
+       ],
+       "quantifier": "none",
+       "polarity": "no",
+       "qualifier": "none",
+       "reason": "scope_valid_opposite_proposition",
+       "source_id": "paper",
+       "page_label": "2"
+      }
+     ],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {
+      "contract_id": "boolean_authoritative_conflict.v1",
+      "status": "verified_conflict",
+      "positive_authorities": [
+       {
+        "evidence_id": "evidence:paper:page-1",
+        "evidence_ref": "evidence:paper:page-1#quote:25:79",
+        "span_id": "evidence:paper:page-1#quote:25:79",
+        "quote": "The authors released the code publicly with the paper.",
+        "span_start": 25,
+        "span_end": 79,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "yes",
+        "qualifier": "none",
+        "reason": "claim_scope_relation_and_polarity_compatible",
+        "source_id": "paper",
+        "page_label": "1"
+       }
+      ],
+      "negative_authorities": [
+       {
+        "evidence_id": "evidence:paper:page-2",
+        "evidence_ref": "evidence:paper:page-2#quote:28:96",
+        "span_id": "evidence:paper:page-2#quote:28:96",
+        "quote": "The authors did not release the code for the final evaluated system.",
+        "span_start": 28,
+        "span_end": 96,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "no",
+        "qualifier": "none",
+        "reason": "scope_valid_opposite_proposition",
+        "source_id": "paper",
+        "page_label": "2"
+       }
+      ],
+      "required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "verified_required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "required_evidence_ids": [
+       "evidence:paper:page-1",
+       "evidence:paper:page-2"
+      ],
+      "required_evidence_coverage": 1.0
+     },
+     "verified_slot_state": "verified_conflict",
+     "predicate": "",
+     "arguments": [],
+     "scope": "",
+     "verified_support_slot_ids": [
+      "support:proposition",
+      "support:left_subject",
+      "support:right_subject"
+     ],
+     "typed_authority_contract": "typed_proposition_authority.v1"
+    }
+   ],
+   "input_answer_polarity": "yes",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "verified_conflict",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [
+    "support:proposition",
+    "support:left_subject",
+    "support:right_subject"
+   ],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {
+    "contract_id": "boolean_authoritative_conflict.v1",
+    "status": "verified_conflict",
+    "positive_authorities": [
+     {
+      "evidence_id": "evidence:paper:page-1",
+      "evidence_ref": "evidence:paper:page-1#quote:25:79",
+      "span_id": "evidence:paper:page-1#quote:25:79",
+      "quote": "The authors released the code publicly with the paper.",
+      "span_start": 25,
+      "span_end": 79,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "yes",
+      "qualifier": "none",
+      "reason": "claim_scope_relation_and_polarity_compatible",
+      "source_id": "paper",
+      "page_label": "1"
+     }
+    ],
+    "negative_authorities": [
+     {
+      "evidence_id": "evidence:paper:page-2",
+      "evidence_ref": "evidence:paper:page-2#quote:28:96",
+      "span_id": "evidence:paper:page-2#quote:28:96",
+      "quote": "The authors did not release the code for the final evaluated system.",
+      "span_start": 28,
+      "span_end": 96,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "no",
+      "qualifier": "none",
+      "reason": "scope_valid_opposite_proposition",
+      "source_id": "paper",
+      "page_label": "2"
+     }
+    ],
+    "required_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "verified_required_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "required_evidence_ids": [
+     "evidence:paper:page-1",
+     "evidence:paper:page-2"
+    ],
+    "required_evidence_coverage": 1.0
+   },
+   "typed_authority": {
+    "contract_id": "typed_proposition_authority.v1",
+    "state": "verified_conflict",
+    "reason": "authoritative_conflict_abstention",
+    "answer_type": "boolean",
+    "question": "Across pages 1 and 2, did the authors release the code?",
+    "candidate_answer": "yes",
+    "claim_ids": [
+     "claim:1"
+    ],
+    "required_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "verified_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "slot_bindings": {
+     "support:proposition": [
+      "evidence:paper:page-1",
+      "evidence:paper:page-2"
+     ],
+     "support:left_subject": [
+      "evidence:paper:page-1"
+     ],
+     "support:right_subject": [
+      "evidence:paper:page-2"
+     ]
+    },
+    "authority_atoms": [
+     {
+      "evidence_id": "evidence:paper:page-1",
+      "evidence_ref": "evidence:paper:page-1#quote:25:79",
+      "span_id": "evidence:paper:page-1#quote:25:79",
+      "quote": "The authors released the code publicly with the paper.",
+      "span_start": 25,
+      "span_end": 79,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "yes",
+      "qualifier": "none",
+      "reason": "claim_scope_relation_and_polarity_compatible",
+      "source_id": "paper",
+      "page_label": "1"
+     },
+     {
+      "evidence_id": "evidence:paper:page-2",
+      "evidence_ref": "evidence:paper:page-2#quote:28:96",
+      "span_id": "evidence:paper:page-2#quote:28:96",
+      "quote": "The authors did not release the code for the final evaluated system.",
+      "span_start": 28,
+      "span_end": 96,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "no",
+      "qualifier": "none",
+      "reason": "scope_valid_opposite_proposition",
+      "source_id": "paper",
+      "page_label": "2"
+     }
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "canonical_answer_polarity": "",
+    "query_plan_state_version": 2
+   },
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "guardrail": {
+   "status": "verified_conflict",
+   "action": "abstain",
+   "reason": "authoritative_conflict_abstention"
+  },
+  "answer": "unanswerable",
+  "terminal_answer": "unanswerable",
+  "terminal_state": {
+   "contract_id": "engine_terminal_state.v1",
+   "answer": "unanswerable",
+   "raw_generated_answer": "yes",
+   "raw_candidate_label": "yes",
+   "normalized_candidate_label": "unanswerable",
+   "verified_canonical_answer": "",
+   "semantic_correction_applied": false,
+   "correction_reason": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_quote": "",
+   "authoritative_conflict": {
+    "contract_id": "boolean_authoritative_conflict.v1",
+    "status": "verified_conflict",
+    "positive_authorities": [
+     {
+      "evidence_id": "evidence:paper:page-1",
+      "evidence_ref": "evidence:paper:page-1#quote:25:79",
+      "span_id": "evidence:paper:page-1#quote:25:79",
+      "quote": "The authors released the code publicly with the paper.",
+      "span_start": 25,
+      "span_end": 79,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "yes",
+      "qualifier": "none",
+      "reason": "claim_scope_relation_and_polarity_compatible",
+      "source_id": "paper",
+      "page_label": "1"
+     }
+    ],
+    "negative_authorities": [
+     {
+      "evidence_id": "evidence:paper:page-2",
+      "evidence_ref": "evidence:paper:page-2#quote:28:96",
+      "span_id": "evidence:paper:page-2#quote:28:96",
+      "quote": "The authors did not release the code for the final evaluated system.",
+      "span_start": 28,
+      "span_end": 96,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "no",
+      "qualifier": "none",
+      "reason": "scope_valid_opposite_proposition",
+      "source_id": "paper",
+      "page_label": "2"
+     }
+    ],
+    "required_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "verified_required_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "required_evidence_ids": [
+     "evidence:paper:page-1",
+     "evidence:paper:page-2"
+    ],
+    "required_evidence_coverage": 1.0
+   },
+   "typed_authority": {
+    "contract_id": "typed_proposition_authority.v1",
+    "state": "verified_conflict",
+    "reason": "authoritative_conflict_abstention",
+    "answer_type": "boolean",
+    "question": "Across pages 1 and 2, did the authors release the code?",
+    "candidate_answer": "yes",
+    "claim_ids": [
+     "claim:1"
+    ],
+    "required_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "verified_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "slot_bindings": {
+     "support:proposition": [
+      "evidence:paper:page-1",
+      "evidence:paper:page-2"
+     ],
+     "support:left_subject": [
+      "evidence:paper:page-1"
+     ],
+     "support:right_subject": [
+      "evidence:paper:page-2"
+     ]
+    },
+    "authority_atoms": [
+     {
+      "evidence_id": "evidence:paper:page-1",
+      "evidence_ref": "evidence:paper:page-1#quote:25:79",
+      "span_id": "evidence:paper:page-1#quote:25:79",
+      "quote": "The authors released the code publicly with the paper.",
+      "span_start": 25,
+      "span_end": 79,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "yes",
+      "qualifier": "none",
+      "reason": "claim_scope_relation_and_polarity_compatible",
+      "source_id": "paper",
+      "page_label": "1"
+     },
+     {
+      "evidence_id": "evidence:paper:page-2",
+      "evidence_ref": "evidence:paper:page-2#quote:28:96",
+      "span_id": "evidence:paper:page-2#quote:28:96",
+      "quote": "The authors did not release the code for the final evaluated system.",
+      "span_start": 28,
+      "span_end": 96,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "no",
+      "qualifier": "none",
+      "reason": "scope_valid_opposite_proposition",
+      "source_id": "paper",
+      "page_label": "2"
+     }
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "canonical_answer_polarity": "",
+    "query_plan_state_version": 2
+   },
+   "terminal_reason": "authoritative_conflict_abstention",
+   "guardrail_result": {
+    "status": "verified_conflict",
+    "action": "abstain",
+    "reason": "authoritative_conflict_abstention"
+   },
+   "verify_decision": {
+    "mode": "strict",
+    "status": "verified_conflict",
+    "reason": "authoritative_conflict_abstention",
+    "action": "abstain",
+    "claims": [
+     "yes: Across pages 1 and 2, did the authors release the code?"
+    ],
+    "unsupported_claims": [],
+    "unknown_claims": [],
+    "verified_citations": [],
+    "claim_results": [
+     {
+      "claim_id": "claim:1",
+      "claim": "yes: Across pages 1 and 2, did the authors release the code?",
+      "status": "conflicting",
+      "supporting_evidence_ids": [
+       "evidence:paper:page-1"
+      ],
+      "contradicting_evidence_ids": [
+       "evidence:paper:page-2"
+      ],
+      "input_answer_polarity": "yes",
+      "canonical_answer_polarity": "",
+      "semantic_correction_applied": false,
+      "authority_status": "verified_conflict",
+      "authoritative_evidence_id": "",
+      "authoritative_evidence_ref": "",
+      "authoritative_span_id": "",
+      "authoritative_quote": "",
+      "authoritative_span_start": null,
+      "authoritative_span_end": null,
+      "authoritative_canonical_start": null,
+      "authoritative_canonical_end": null,
+      "actor": "",
+      "section_scope": "",
+      "relation": "",
+      "object": "",
+      "predicate_arguments": {
+       "__tuple__": []
+      },
+      "qualifier": "",
+      "quantifier": "",
+      "supporting_evidence_spans": [
+       {
+        "evidence_id": "evidence:paper:page-1",
+        "evidence_ref": "evidence:paper:page-1#quote:25:79",
+        "span_id": "evidence:paper:page-1#quote:25:79",
+        "quote": "The authors released the code publicly with the paper.",
+        "span_start": 25,
+        "span_end": 79,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "yes",
+        "qualifier": "none",
+        "reason": "claim_scope_relation_and_polarity_compatible",
+        "source_id": "paper",
+        "page_label": "1"
+       }
+      ],
+      "contradicting_evidence_spans": [
+       {
+        "evidence_id": "evidence:paper:page-2",
+        "evidence_ref": "evidence:paper:page-2#quote:28:96",
+        "span_id": "evidence:paper:page-2#quote:28:96",
+        "quote": "The authors did not release the code for the final evaluated system.",
+        "span_start": 28,
+        "span_end": 96,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "no",
+        "qualifier": "none",
+        "reason": "scope_valid_opposite_proposition",
+        "source_id": "paper",
+        "page_label": "2"
+       }
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "authoritative_conflict": {
+       "contract_id": "boolean_authoritative_conflict.v1",
+       "status": "verified_conflict",
+       "positive_authorities": [
+        {
+         "evidence_id": "evidence:paper:page-1",
+         "evidence_ref": "evidence:paper:page-1#quote:25:79",
+         "span_id": "evidence:paper:page-1#quote:25:79",
+         "quote": "The authors released the code publicly with the paper.",
+         "span_start": 25,
+         "span_end": 79,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "predicate": "provide",
+         "section_scope": "current_paper",
+         "scope": "current_paper",
+         "relation": "provide",
+         "object": "code",
+         "arguments": [
+          "code"
+         ],
+         "quantifier": "none",
+         "polarity": "yes",
+         "qualifier": "none",
+         "reason": "claim_scope_relation_and_polarity_compatible",
+         "source_id": "paper",
+         "page_label": "1"
+        }
+       ],
+       "negative_authorities": [
+        {
+         "evidence_id": "evidence:paper:page-2",
+         "evidence_ref": "evidence:paper:page-2#quote:28:96",
+         "span_id": "evidence:paper:page-2#quote:28:96",
+         "quote": "The authors did not release the code for the final evaluated system.",
+         "span_start": 28,
+         "span_end": 96,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "predicate": "provide",
+         "section_scope": "current_paper",
+         "scope": "current_paper",
+         "relation": "provide",
+         "object": "code",
+         "arguments": [
+          "code"
+         ],
+         "quantifier": "none",
+         "polarity": "no",
+         "qualifier": "none",
+         "reason": "scope_valid_opposite_proposition",
+         "source_id": "paper",
+         "page_label": "2"
+        }
+       ],
+       "required_slot_ids": [
+        "support:proposition",
+        "support:left_subject",
+        "support:right_subject"
+       ],
+       "verified_required_slot_ids": [
+        "support:proposition",
+        "support:left_subject",
+        "support:right_subject"
+       ],
+       "required_evidence_ids": [
+        "evidence:paper:page-1",
+        "evidence:paper:page-2"
+       ],
+       "required_evidence_coverage": 1.0
+      },
+      "verified_slot_state": "verified_conflict",
+      "predicate": "",
+      "arguments": [],
+      "scope": "",
+      "verified_support_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "typed_authority_contract": "typed_proposition_authority.v1"
+     }
+    ],
+    "input_answer_polarity": "yes",
+    "canonical_answer_polarity": "",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "verified_conflict",
+    "authoritative_evidence_id": "",
+    "authoritative_evidence_ref": "",
+    "authoritative_span_id": "",
+    "authoritative_quote": "",
+    "authoritative_span_start": null,
+    "authoritative_span_end": null,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "",
+    "section_scope": "",
+    "relation": "",
+    "object": "",
+    "predicate_arguments": {
+     "__tuple__": []
+    },
+    "qualifier": "",
+    "quantifier": "",
+    "verified_support_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {
+     "contract_id": "boolean_authoritative_conflict.v1",
+     "status": "verified_conflict",
+     "positive_authorities": [
+      {
+       "evidence_id": "evidence:paper:page-1",
+       "evidence_ref": "evidence:paper:page-1#quote:25:79",
+       "span_id": "evidence:paper:page-1#quote:25:79",
+       "quote": "The authors released the code publicly with the paper.",
+       "span_start": 25,
+       "span_end": 79,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "provide",
+       "section_scope": "current_paper",
+       "scope": "current_paper",
+       "relation": "provide",
+       "object": "code",
+       "arguments": [
+        "code"
+       ],
+       "quantifier": "none",
+       "polarity": "yes",
+       "qualifier": "none",
+       "reason": "claim_scope_relation_and_polarity_compatible",
+       "source_id": "paper",
+       "page_label": "1"
+      }
+     ],
+     "negative_authorities": [
+      {
+       "evidence_id": "evidence:paper:page-2",
+       "evidence_ref": "evidence:paper:page-2#quote:28:96",
+       "span_id": "evidence:paper:page-2#quote:28:96",
+       "quote": "The authors did not release the code for the final evaluated system.",
+       "span_start": 28,
+       "span_end": 96,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "provide",
+       "section_scope": "current_paper",
+       "scope": "current_paper",
+       "relation": "provide",
+       "object": "code",
+       "arguments": [
+        "code"
+       ],
+       "quantifier": "none",
+       "polarity": "no",
+       "qualifier": "none",
+       "reason": "scope_valid_opposite_proposition",
+       "source_id": "paper",
+       "page_label": "2"
+      }
+     ],
+     "required_slot_ids": [
+      "support:proposition",
+      "support:left_subject",
+      "support:right_subject"
+     ],
+     "verified_required_slot_ids": [
+      "support:proposition",
+      "support:left_subject",
+      "support:right_subject"
+     ],
+     "required_evidence_ids": [
+      "evidence:paper:page-1",
+      "evidence:paper:page-2"
+     ],
+     "required_evidence_coverage": 1.0
+    },
+    "typed_authority": {
+     "contract_id": "typed_proposition_authority.v1",
+     "state": "verified_conflict",
+     "reason": "authoritative_conflict_abstention",
+     "answer_type": "boolean",
+     "question": "Across pages 1 and 2, did the authors release the code?",
+     "candidate_answer": "yes",
+     "claim_ids": [
+      "claim:1"
+     ],
+     "required_slot_ids": [
+      "support:proposition",
+      "support:left_subject",
+      "support:right_subject"
+     ],
+     "verified_slot_ids": [
+      "support:proposition",
+      "support:left_subject",
+      "support:right_subject"
+     ],
+     "slot_bindings": {
+      "support:proposition": [
+       "evidence:paper:page-1",
+       "evidence:paper:page-2"
+      ],
+      "support:left_subject": [
+       "evidence:paper:page-1"
+      ],
+      "support:right_subject": [
+       "evidence:paper:page-2"
+      ]
+     },
+     "authority_atoms": [
+      {
+       "evidence_id": "evidence:paper:page-1",
+       "evidence_ref": "evidence:paper:page-1#quote:25:79",
+       "span_id": "evidence:paper:page-1#quote:25:79",
+       "quote": "The authors released the code publicly with the paper.",
+       "span_start": 25,
+       "span_end": 79,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "provide",
+       "section_scope": "current_paper",
+       "scope": "current_paper",
+       "relation": "provide",
+       "object": "code",
+       "arguments": [
+        "code"
+       ],
+       "quantifier": "none",
+       "polarity": "yes",
+       "qualifier": "none",
+       "reason": "claim_scope_relation_and_polarity_compatible",
+       "source_id": "paper",
+       "page_label": "1"
+      },
+      {
+       "evidence_id": "evidence:paper:page-2",
+       "evidence_ref": "evidence:paper:page-2#quote:28:96",
+       "span_id": "evidence:paper:page-2#quote:28:96",
+       "quote": "The authors did not release the code for the final evaluated system.",
+       "span_start": 28,
+       "span_end": 96,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "provide",
+       "section_scope": "current_paper",
+       "scope": "current_paper",
+       "relation": "provide",
+       "object": "code",
+       "arguments": [
+        "code"
+       ],
+       "quantifier": "none",
+       "polarity": "no",
+       "qualifier": "none",
+       "reason": "scope_valid_opposite_proposition",
+       "source_id": "paper",
+       "page_label": "2"
+      }
+     ],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "canonical_answer_polarity": "",
+     "query_plan_state_version": 2
+    },
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "",
+    "arguments": [],
+    "scope": ""
+   },
+   "guardrail_decision": {
+    "status": "verified_conflict",
+    "action": "abstain",
+    "reason": "authoritative_conflict_abstention"
+   },
+   "evidence_bundle": {
+    "route": "doc_text",
+    "items": [
+     {
+      "evidence_id": "page-1",
+      "source_id": "paper",
+      "source_name": "",
+      "source_aliases": [
+       "paper"
+      ],
+      "page_label": "1",
+      "modality": "image",
+      "element_id": "",
+      "canonical_id": "evidence:paper:page-1",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "9f0b9e262001db5af45c65c8df523c601eff9472022aae1898fa0088bddc8388",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:support:left_subject",
+        "slot_id": "support:left_subject",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:support:right_subject",
+        "slot_id": "support:right_subject",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "paper#page:1"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "image",
+        "field": "text",
+        "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1"
+       }
+      ],
+      "identity": {
+       "source_id": "paper",
+       "kind": "evidence",
+       "local_id": "page-1"
+      }
+     },
+     {
+      "evidence_id": "page-2",
+      "source_id": "paper",
+      "source_name": "",
+      "source_aliases": [
+       "paper"
+      ],
+      "page_label": "2",
+      "modality": "image",
+      "element_id": "",
+      "canonical_id": "evidence:paper:page-2",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "35f3e732da6e928f3ba2762d17750b2a9a41e58a25d0643b9ffbda5a23c2258a",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:support:left_subject",
+        "slot_id": "support:left_subject",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:support:right_subject",
+        "slot_id": "support:right_subject",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "paper#page:2"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "image",
+        "field": "text",
+        "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2"
+       }
+      ],
+      "identity": {
+       "source_id": "paper",
+       "kind": "evidence",
+       "local_id": "page-2"
+      }
+     }
+    ],
+    "metadata": {
+     "evidence": [
+      {
+       "evidence_id": "page-1",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "9f0b9e262001db5af45c65c8df523c601eff9472022aae1898fa0088bddc8388",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-1"
+       }
+      },
+      {
+       "evidence_id": "page-2",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "2",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "35f3e732da6e928f3ba2762d17750b2a9a41e58a25d0643b9ffbda5a23c2258a",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:2"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-2"
+       }
+      }
+     ],
+     "retrieval_query_contracts": [
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:support:left_subject",
+       "slot_id": "support:left_subject",
+       "query": "page 1"
+      },
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:support:right_subject",
+       "slot_id": "support:right_subject",
+       "query": "page 2"
+      }
+     ],
+     "visual_typed_projection": {
+      "contract_id": "typed_visual_evidence_path.v1",
+      "parent_count": 2,
+      "projected_count": 0,
+      "rejected_count": 0
+     },
+     "schema_version": "evidence_bundle.v2",
+     "dedupe_trace": {
+      "schema_version": "evidence_bundle.v2",
+      "input_count": 2,
+      "output_count": 2,
+      "structure_duplicate_count": 0,
+      "exact_text_duplicate_count": 0,
+      "overlap_duplicate_count": 0,
+      "minhash_duplicate_count": 0,
+      "semantic_duplicate_count": 0,
+      "conflict_guard_count": 0,
+      "duplicate_ratio": 0.0
+     },
+     "canonical_candidate_count": 2,
+     "canonical_candidate_evidence": [
+      {
+       "evidence_id": "page-2",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "2",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "35f3e732da6e928f3ba2762d17750b2a9a41e58a25d0643b9ffbda5a23c2258a",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:2"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-2"
+       }
+      },
+      {
+       "evidence_id": "page-1",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "9f0b9e262001db5af45c65c8df523c601eff9472022aae1898fa0088bddc8388",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-1"
+       }
+      }
+     ],
+     "candidate_evidence": [
+      {
+       "evidence_id": "page-2",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "2",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "35f3e732da6e928f3ba2762d17750b2a9a41e58a25d0643b9ffbda5a23c2258a",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:2"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-2"
+       }
+      },
+      {
+       "evidence_id": "page-1",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "9f0b9e262001db5af45c65c8df523c601eff9472022aae1898fa0088bddc8388",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-1"
+       }
+      }
+     ],
+     "candidate_ranked_evidence": [
+      {
+       "evidence_id": "page-2",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "2",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "35f3e732da6e928f3ba2762d17750b2a9a41e58a25d0643b9ffbda5a23c2258a",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:2"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-2"
+       }
+      },
+      {
+       "evidence_id": "page-1",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "9f0b9e262001db5af45c65c8df523c601eff9472022aae1898fa0088bddc8388",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-1"
+       }
+      }
+     ],
+     "candidate_ranking_contract": "global_ranked_v1",
+     "pre_rerank_required_slot_candidates_restored": 0,
+     "reranker_input_evidence": [],
+     "reranker_input_contract": "required_slot_restored.v1",
+     "fused_evidence": [
+      {
+       "evidence_id": "page-2",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "2",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "35f3e732da6e928f3ba2762d17750b2a9a41e58a25d0643b9ffbda5a23c2258a",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:2"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-2"
+       }
+      },
+      {
+       "evidence_id": "page-1",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "9f0b9e262001db5af45c65c8df523c601eff9472022aae1898fa0088bddc8388",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-1"
+       }
+      }
+     ],
+     "fusion_stage_snapshot": {
+      "contract_id": "fusion_stage_snapshot.v1",
+      "route": "doc_text",
+      "state": "passthrough",
+      "candidate_stage": "fusion_passthrough",
+      "reason": "route_does_not_use_cross_modal_fusion",
+      "input_count": 2,
+      "output_count": 2,
+      "input_identities": [
+       "evidence:paper:page-2",
+       "evidence:paper:page-1"
+      ],
+      "output_identities": [
+       "evidence:paper:page-2",
+       "evidence:paper:page-1"
+      ],
+      "identity_preserved": true,
+      "fusion_trace_present": false
+     },
+     "ranking_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 2,
+      "candidate_input_count": 2,
+      "input_count": 2,
+      "reranker_input_count": 2,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 2,
+       "output_count": 2,
+       "input_identities": [
+        "evidence:paper:page-2",
+        "evidence:paper:page-1"
+       ],
+       "output_identities": [
+        "evidence:paper:page-2",
+        "evidence:paper:page-1"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "reranker_aggregate_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 2,
+      "candidate_input_count": 2,
+      "input_count": 2,
+      "reranker_input_count": 2,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 2,
+       "output_count": 2,
+       "input_identities": [
+        "evidence:paper:page-2",
+        "evidence:paper:page-1"
+       ],
+       "output_identities": [
+        "evidence:paper:page-2",
+        "evidence:paper:page-1"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "page_coverage": [
+      "1",
+      "2"
+     ],
+     "source_ids": [
+      "paper"
+     ],
+     "evidence_ids": [
+      "page-1",
+      "page-2"
+     ],
+     "source_page_locators": [
+      {
+       "source_id": "paper",
+       "page_label": "1"
+      },
+      {
+       "source_id": "paper",
+       "page_label": "2"
+      }
+     ],
+     "source_page_alias_locators": [
+      {
+       "source_id": "paper",
+       "page_label": "1"
+      },
+      {
+       "source_id": "paper",
+       "page_label": "2"
+      }
+     ],
+     "modality_counts": {
+      "image": 2
+     },
+     "selected_evidence": [
+      {
+       "evidence_id": "page-1",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "9f0b9e262001db5af45c65c8df523c601eff9472022aae1898fa0088bddc8388",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-1"
+       }
+      },
+      {
+       "evidence_id": "page-2",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "2",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "35f3e732da6e928f3ba2762d17750b2a9a41e58a25d0643b9ffbda5a23c2258a",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:2"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-2"
+       }
+      }
+     ],
+     "generation_context_evidence": [
+      {
+       "evidence_id": "page-1",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "9f0b9e262001db5af45c65c8df523c601eff9472022aae1898fa0088bddc8388",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-1"
+       }
+      },
+      {
+       "evidence_id": "page-2",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "2",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "35f3e732da6e928f3ba2762d17750b2a9a41e58a25d0643b9ffbda5a23c2258a",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:2"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-2"
+       }
+      }
+     ],
+     "used_evidence": [
+      {
+       "evidence_id": "page-1",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-1",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "9f0b9e262001db5af45c65c8df523c601eff9472022aae1898fa0088bddc8388",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Methods\nThe authors released the code publicly with the paper. The release statement applies to the final evaluated system.\nPage 1"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-1"
+       }
+      },
+      {
+       "evidence_id": "page-2",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "2",
+       "modality": "image",
+       "element_id": "",
+       "canonical_id": "evidence:paper:page-2",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "35f3e732da6e928f3ba2762d17750b2a9a41e58a25d0643b9ffbda5a23c2258a",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:support:left_subject",
+         "slot_id": "support:left_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:support:right_subject",
+         "slot_id": "support:right_subject",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:2"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "image",
+         "field": "text",
+         "text": "Contract Study - Correction\nThe authors did not release the code for the final evaluated system. This correction explicitly supersedes the earlier release statement.\nPage 2"
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "page-2"
+       }
+      }
+     ],
+     "stage_aliases": {
+      "used_evidence": "generation_context_evidence"
+     },
+     "query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:a0ee0ceb01c40bb01bd3",
+      "answer_type": "boolean",
+      "question_type": "cross_page",
+      "subqueries": [
+       "Across pages 1 and 2, did the authors release the code?",
+       "page 1",
+       "page 2"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:proposition",
+        "role": "support",
+        "entity": "",
+        "metric": "authors release code",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "boolean_proposition",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": false,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_conflict",
+        "evidence_ids": [
+         "evidence:paper:page-1",
+         "evidence:paper:page-2"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "Across pages 1 and 2, did the authors release the code?",
+        "locator": null
+       },
+       {
+        "slot_id": "support:left_subject",
+        "role": "support",
+        "entity": "",
+        "metric": "page 1",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_conflict",
+        "evidence_ids": [
+         "evidence:paper:page-1"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "page 1",
+        "locator": {
+         "page_label": "1"
+        }
+       },
+       {
+        "slot_id": "support:right_subject",
+        "role": "support",
+        "entity": "",
+        "metric": "page 2",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_conflict",
+        "evidence_ids": [
+         "evidence:paper:page-2"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "page 2",
+        "locator": {
+         "page_label": "2"
+        }
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "qasper",
+       "requires_visual": false,
+       "requires_multiple_evidence": true,
+       "requires_distinct_source_pages": true,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": [
+         "1",
+         "2"
+        ]
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": true,
+       "requires_structure": true,
+       "question": "Across pages 1 and 2, did the authors release the code?",
+       "boolean_support_group": {
+        "operator": "all",
+        "premise_mode": "all_required",
+        "semantics": "open_world",
+        "rule_id": "same_source_argument_conjunction.v1",
+        "quantifier": "none",
+        "required_argument_tokens": [
+         "code",
+         "page"
+        ],
+        "max_premises": 4
+       },
+       "finance_formula_status": "not_applicable",
+       "distinct_source_page_slot_ids": {
+        "__tuple__": [
+         "support:left_subject",
+         "support:right_subject"
+        ]
+       }
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "verified",
+      "state_version": 2,
+      "state_authority": "boolean_authoritative_conflict.v1",
+      "authority_projection_contract": "typed_proposition_authority.v1"
+     },
+     "query_plan_id": "plan:a0ee0ceb01c40bb01bd3",
+     "planned_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:a0ee0ceb01c40bb01bd3",
+      "answer_type": "boolean",
+      "question_type": "cross_page",
+      "subqueries": [
+       "Across pages 1 and 2, did the authors release the code?",
+       "page 1",
+       "page 2"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:proposition",
+        "role": "support",
+        "entity": "",
+        "metric": "authors release code",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "boolean_proposition",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": false,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "Across pages 1 and 2, did the authors release the code?",
+        "locator": null
+       },
+       {
+        "slot_id": "support:left_subject",
+        "role": "support",
+        "entity": "",
+        "metric": "page 1",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "page 1",
+        "locator": {
+         "page_label": "1"
+        }
+       },
+       {
+        "slot_id": "support:right_subject",
+        "role": "support",
+        "entity": "",
+        "metric": "page 2",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "page 2",
+        "locator": {
+         "page_label": "2"
+        }
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "qasper",
+       "requires_visual": false,
+       "requires_multiple_evidence": true,
+       "requires_distinct_source_pages": true,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": [
+         "1",
+         "2"
+        ]
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": true,
+       "requires_structure": true,
+       "question": "Across pages 1 and 2, did the authors release the code?",
+       "boolean_support_group": {
+        "operator": "all",
+        "premise_mode": "all_required",
+        "semantics": "open_world",
+        "rule_id": "same_source_argument_conjunction.v1",
+        "quantifier": "none",
+        "required_argument_tokens": [
+         "code",
+         "page"
+        ],
+        "max_premises": 4
+       },
+       "finance_formula_status": "not_applicable",
+       "distinct_source_page_slot_ids": {
+        "__tuple__": [
+         "support:left_subject",
+         "support:right_subject"
+        ]
+       }
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "planned",
+      "state_version": 0
+     },
+     "bound_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:a0ee0ceb01c40bb01bd3",
+      "answer_type": "boolean",
+      "question_type": "cross_page",
+      "subqueries": [
+       "Across pages 1 and 2, did the authors release the code?",
+       "page 1",
+       "page 2"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:proposition",
+        "role": "support",
+        "entity": "",
+        "metric": "authors release code",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "boolean_proposition",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": false,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_conflict",
+        "evidence_ids": [
+         "evidence:paper:page-1",
+         "evidence:paper:page-2"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "Across pages 1 and 2, did the authors release the code?",
+        "locator": null
+       },
+       {
+        "slot_id": "support:left_subject",
+        "role": "support",
+        "entity": "",
+        "metric": "page 1",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_conflict",
+        "evidence_ids": [
+         "evidence:paper:page-1"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "page 1",
+        "locator": {
+         "page_label": "1"
+        }
+       },
+       {
+        "slot_id": "support:right_subject",
+        "role": "support",
+        "entity": "",
+        "metric": "page 2",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_conflict",
+        "evidence_ids": [
+         "evidence:paper:page-2"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "page 2",
+        "locator": {
+         "page_label": "2"
+        }
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "qasper",
+       "requires_visual": false,
+       "requires_multiple_evidence": true,
+       "requires_distinct_source_pages": true,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": [
+         "1",
+         "2"
+        ]
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": true,
+       "requires_structure": true,
+       "question": "Across pages 1 and 2, did the authors release the code?",
+       "boolean_support_group": {
+        "operator": "all",
+        "premise_mode": "all_required",
+        "semantics": "open_world",
+        "rule_id": "same_source_argument_conjunction.v1",
+        "quantifier": "none",
+        "required_argument_tokens": [
+         "code",
+         "page"
+        ],
+        "max_premises": 4
+       },
+       "finance_formula_status": "not_applicable",
+       "distinct_source_page_slot_ids": {
+        "__tuple__": [
+         "support:left_subject",
+         "support:right_subject"
+        ]
+       }
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "verified",
+      "state_version": 2,
+      "state_authority": "boolean_authoritative_conflict.v1",
+      "authority_projection_contract": "typed_proposition_authority.v1"
+     },
+     "evidence_selection_trace": {
+      "strategy": "marginal_evidence_set_selection_v3",
+      "candidate_count": 2,
+      "selected_count": 2,
+      "max_items": 16,
+      "max_pages": 6,
+      "unique_pages": 2,
+      "selected_pages": [
+       {
+        "source_id": "paper",
+        "page_label": "1"
+       },
+       {
+        "source_id": "paper",
+        "page_label": "2"
+       }
+      ],
+      "slot_coverage": 1.0,
+      "missing_required_slot_count": 0,
+      "continuation_expansion_count": 0,
+      "page_modality_expansion_count": 0,
+      "structure_expansion_enabled": false,
+      "mmr_lambda": 0.7,
+      "structure_metadata_coverage": 0.0,
+      "mixed_candidate_structure_metadata_coverage": 0.0,
+      "structure_coverage_scope": "legacy_mixed",
+      "required_slot_candidates_restored": 0,
+      "candidate_budget_partitions": {
+       "factual_narrative": 6,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "selected_budget_usage": {
+       "factual_narrative": 2,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "evidence_stage_trace": [
+       {
+        "evidence_id": "evidence:paper:page-1",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "support:proposition",
+         "support:left_subject"
+        ],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       },
+       {
+        "evidence_id": "evidence:paper:page-2",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "support:proposition",
+         "support:right_subject"
+        ],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       }
+      ],
+      "trace_validation_errors": [],
+      "required_slot_bindings": [
+       {
+        "slot_id": "support:proposition",
+        "status": "retrieved_unverified",
+        "retrieval_satisfied": true,
+        "execution_satisfied": null,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "evidence:paper:page-1",
+         "evidence:paper:page-2"
+        ],
+        "best_selected_slot_score": 3.125,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "evidence:paper:page-1",
+          "reason": "bound_to_slot",
+          "slot_score": 3.125
+         },
+         {
+          "evidence_id": "evidence:paper:page-2",
+          "reason": "bound_to_slot",
+          "slot_score": 3.125
+         }
+        ],
+        "candidate_drop_reasons": []
+       },
+       {
+        "slot_id": "support:left_subject",
+        "status": "filled",
+        "retrieval_satisfied": true,
+        "execution_satisfied": null,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "evidence:paper:page-1"
+        ],
+        "best_selected_slot_score": 2.0,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "evidence:paper:page-1",
+          "reason": "bound_to_slot",
+          "slot_score": 2.0
+         }
+        ],
+        "candidate_drop_reasons": [
+         {
+          "evidence_id": "evidence:paper:page-2",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         }
+        ]
+       },
+       {
+        "slot_id": "support:right_subject",
+        "status": "filled",
+        "retrieval_satisfied": true,
+        "execution_satisfied": null,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "evidence:paper:page-2"
+        ],
+        "best_selected_slot_score": 2.0,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "evidence:paper:page-2",
+          "reason": "bound_to_slot",
+          "slot_score": 2.0
+         }
+        ],
+        "candidate_drop_reasons": [
+         {
+          "evidence_id": "evidence:paper:page-1",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         }
+        ]
+       }
+      ],
+      "execution_slot_lineage": [],
+      "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+      "boolean_assessment_cache": {
+       "unique_semantic_candidates": 2,
+       "slots": 1,
+       "cache_entries": 2,
+       "cache_builds": 1,
+       "cache_hits": 26,
+       "cache_misses": 0,
+       "classification_calls": 2,
+       "mmr_hot_loop_misses": 0,
+       "time_spent_ms": "elapsed milliseconds"
+      }
+     },
+     "structure_metadata_coverage": 0.0,
+     "slot_coverage": 1.0,
+     "missing_required_slot_count": 0,
+     "second_round_queries": [],
+     "second_round_requests": [],
+     "boolean_assessment_cache": {
+      "unique_semantic_candidates": 2,
+      "slots": 1,
+      "cache_entries": 2,
+      "cache_builds": 1,
+      "cache_hits": 26,
+      "cache_misses": 0,
+      "classification_calls": 2,
+      "mmr_hot_loop_misses": 0,
+      "time_spent_ms": "elapsed milliseconds"
+     },
+     "typed_adequacy_status": "not_applicable",
+     "heuristic_adequacy_status": "good",
+     "final_adequacy_status": "good",
+     "adequacy_decision_authority": "general_heuristic",
+     "heuristic_overridden": false,
+     "heuristic_override_reason": "",
+     "typed_adequacy_reason": "non_finance_domain",
+     "retrieval_rounds": 1,
+     "pre_verification_answer": "yes",
+     "pre_guardrail_answer": "yes",
+     "verified_evidence": [],
+     "verified_claim_support_evidence": [],
+     "verified_claim_support_by_claim": {},
+     "boolean_authoritative_conflict": {
+      "contract_id": "boolean_authoritative_conflict.v1",
+      "status": "verified_conflict",
+      "positive_authorities": [
+       {
+        "evidence_id": "evidence:paper:page-1",
+        "evidence_ref": "evidence:paper:page-1#quote:25:79",
+        "span_id": "evidence:paper:page-1#quote:25:79",
+        "quote": "The authors released the code publicly with the paper.",
+        "span_start": 25,
+        "span_end": 79,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "yes",
+        "qualifier": "none",
+        "reason": "claim_scope_relation_and_polarity_compatible",
+        "source_id": "paper",
+        "page_label": "1"
+       }
+      ],
+      "negative_authorities": [
+       {
+        "evidence_id": "evidence:paper:page-2",
+        "evidence_ref": "evidence:paper:page-2#quote:28:96",
+        "span_id": "evidence:paper:page-2#quote:28:96",
+        "quote": "The authors did not release the code for the final evaluated system.",
+        "span_start": 28,
+        "span_end": 96,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "no",
+        "qualifier": "none",
+        "reason": "scope_valid_opposite_proposition",
+        "source_id": "paper",
+        "page_label": "2"
+       }
+      ],
+      "required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "verified_required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "required_evidence_ids": [
+       "evidence:paper:page-1",
+       "evidence:paper:page-2"
+      ],
+      "required_evidence_coverage": 1.0
+     },
+     "typed_authority": {
+      "contract_id": "typed_proposition_authority.v1",
+      "state": "verified_conflict",
+      "reason": "authoritative_conflict_abstention",
+      "answer_type": "boolean",
+      "question": "Across pages 1 and 2, did the authors release the code?",
+      "candidate_answer": "yes",
+      "claim_ids": [
+       "claim:1"
+      ],
+      "required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "verified_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "slot_bindings": {
+       "support:proposition": [
+        "evidence:paper:page-1",
+        "evidence:paper:page-2"
+       ],
+       "support:left_subject": [
+        "evidence:paper:page-1"
+       ],
+       "support:right_subject": [
+        "evidence:paper:page-2"
+       ]
+      },
+      "authority_atoms": [
+       {
+        "evidence_id": "evidence:paper:page-1",
+        "evidence_ref": "evidence:paper:page-1#quote:25:79",
+        "span_id": "evidence:paper:page-1#quote:25:79",
+        "quote": "The authors released the code publicly with the paper.",
+        "span_start": 25,
+        "span_end": 79,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "yes",
+        "qualifier": "none",
+        "reason": "claim_scope_relation_and_polarity_compatible",
+        "source_id": "paper",
+        "page_label": "1"
+       },
+       {
+        "evidence_id": "evidence:paper:page-2",
+        "evidence_ref": "evidence:paper:page-2#quote:28:96",
+        "span_id": "evidence:paper:page-2#quote:28:96",
+        "quote": "The authors did not release the code for the final evaluated system.",
+        "span_start": 28,
+        "span_end": 96,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "no",
+        "qualifier": "none",
+        "reason": "scope_valid_opposite_proposition",
+        "source_id": "paper",
+        "page_label": "2"
+       }
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "canonical_answer_polarity": "",
+      "query_plan_state_version": 2
+     },
+     "verification_slot_states": [
+      {
+       "slot_id": "support:proposition",
+       "status": "verified_conflict",
+       "evidence_ids": [
+        "evidence:paper:page-1",
+        "evidence:paper:page-2"
+       ]
+      },
+      {
+       "slot_id": "support:left_subject",
+       "status": "verified_conflict",
+       "evidence_ids": [
+        "evidence:paper:page-1"
+       ]
+      },
+      {
+       "slot_id": "support:right_subject",
+       "status": "verified_conflict",
+       "evidence_ids": [
+        "evidence:paper:page-2"
+       ]
+      }
+     ],
+     "verify_decision": {
+      "mode": "strict",
+      "status": "verified_conflict",
+      "reason": "authoritative_conflict_abstention",
+      "action": "abstain",
+      "claims": [
+       "yes: Across pages 1 and 2, did the authors release the code?"
+      ],
+      "unsupported_claims": [],
+      "unknown_claims": [],
+      "verified_citations": [],
+      "claim_results": [
+       {
+        "claim_id": "claim:1",
+        "claim": "yes: Across pages 1 and 2, did the authors release the code?",
+        "status": "conflicting",
+        "supporting_evidence_ids": [
+         "evidence:paper:page-1"
+        ],
+        "contradicting_evidence_ids": [
+         "evidence:paper:page-2"
+        ],
+        "input_answer_polarity": "yes",
+        "canonical_answer_polarity": "",
+        "semantic_correction_applied": false,
+        "authority_status": "verified_conflict",
+        "authoritative_evidence_id": "",
+        "authoritative_evidence_ref": "",
+        "authoritative_span_id": "",
+        "authoritative_quote": "",
+        "authoritative_span_start": null,
+        "authoritative_span_end": null,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "",
+        "section_scope": "",
+        "relation": "",
+        "object": "",
+        "predicate_arguments": {
+         "__tuple__": []
+        },
+        "qualifier": "",
+        "quantifier": "",
+        "supporting_evidence_spans": [
+         {
+          "evidence_id": "evidence:paper:page-1",
+          "evidence_ref": "evidence:paper:page-1#quote:25:79",
+          "span_id": "evidence:paper:page-1#quote:25:79",
+          "quote": "The authors released the code publicly with the paper.",
+          "span_start": 25,
+          "span_end": 79,
+          "canonical_start": null,
+          "canonical_end": null,
+          "actor": "current_paper",
+          "predicate": "provide",
+          "section_scope": "current_paper",
+          "scope": "current_paper",
+          "relation": "provide",
+          "object": "code",
+          "arguments": [
+           "code"
+          ],
+          "quantifier": "none",
+          "polarity": "yes",
+          "qualifier": "none",
+          "reason": "claim_scope_relation_and_polarity_compatible",
+          "source_id": "paper",
+          "page_label": "1"
+         }
+        ],
+        "contradicting_evidence_spans": [
+         {
+          "evidence_id": "evidence:paper:page-2",
+          "evidence_ref": "evidence:paper:page-2#quote:28:96",
+          "span_id": "evidence:paper:page-2#quote:28:96",
+          "quote": "The authors did not release the code for the final evaluated system.",
+          "span_start": 28,
+          "span_end": 96,
+          "canonical_start": null,
+          "canonical_end": null,
+          "actor": "current_paper",
+          "predicate": "provide",
+          "section_scope": "current_paper",
+          "scope": "current_paper",
+          "relation": "provide",
+          "object": "code",
+          "arguments": [
+           "code"
+          ],
+          "quantifier": "none",
+          "polarity": "no",
+          "qualifier": "none",
+          "reason": "scope_valid_opposite_proposition",
+          "source_id": "paper",
+          "page_label": "2"
+         }
+        ],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {
+         "contract_id": "boolean_authoritative_conflict.v1",
+         "status": "verified_conflict",
+         "positive_authorities": [
+          {
+           "evidence_id": "evidence:paper:page-1",
+           "evidence_ref": "evidence:paper:page-1#quote:25:79",
+           "span_id": "evidence:paper:page-1#quote:25:79",
+           "quote": "The authors released the code publicly with the paper.",
+           "span_start": 25,
+           "span_end": 79,
+           "canonical_start": null,
+           "canonical_end": null,
+           "actor": "current_paper",
+           "predicate": "provide",
+           "section_scope": "current_paper",
+           "scope": "current_paper",
+           "relation": "provide",
+           "object": "code",
+           "arguments": [
+            "code"
+           ],
+           "quantifier": "none",
+           "polarity": "yes",
+           "qualifier": "none",
+           "reason": "claim_scope_relation_and_polarity_compatible",
+           "source_id": "paper",
+           "page_label": "1"
+          }
+         ],
+         "negative_authorities": [
+          {
+           "evidence_id": "evidence:paper:page-2",
+           "evidence_ref": "evidence:paper:page-2#quote:28:96",
+           "span_id": "evidence:paper:page-2#quote:28:96",
+           "quote": "The authors did not release the code for the final evaluated system.",
+           "span_start": 28,
+           "span_end": 96,
+           "canonical_start": null,
+           "canonical_end": null,
+           "actor": "current_paper",
+           "predicate": "provide",
+           "section_scope": "current_paper",
+           "scope": "current_paper",
+           "relation": "provide",
+           "object": "code",
+           "arguments": [
+            "code"
+           ],
+           "quantifier": "none",
+           "polarity": "no",
+           "qualifier": "none",
+           "reason": "scope_valid_opposite_proposition",
+           "source_id": "paper",
+           "page_label": "2"
+          }
+         ],
+         "required_slot_ids": [
+          "support:proposition",
+          "support:left_subject",
+          "support:right_subject"
+         ],
+         "verified_required_slot_ids": [
+          "support:proposition",
+          "support:left_subject",
+          "support:right_subject"
+         ],
+         "required_evidence_ids": [
+          "evidence:paper:page-1",
+          "evidence:paper:page-2"
+         ],
+         "required_evidence_coverage": 1.0
+        },
+        "verified_slot_state": "verified_conflict",
+        "predicate": "",
+        "arguments": [],
+        "scope": "",
+        "verified_support_slot_ids": [
+         "support:proposition",
+         "support:left_subject",
+         "support:right_subject"
+        ],
+        "typed_authority_contract": "typed_proposition_authority.v1"
+       }
+      ],
+      "input_answer_polarity": "yes",
+      "canonical_answer_polarity": "",
+      "semantic_correction_applied": false,
+      "boolean_authority_status": "verified_conflict",
+      "authoritative_evidence_id": "",
+      "authoritative_evidence_ref": "",
+      "authoritative_span_id": "",
+      "authoritative_quote": "",
+      "authoritative_span_start": null,
+      "authoritative_span_end": null,
+      "authoritative_canonical_start": null,
+      "authoritative_canonical_end": null,
+      "actor": "",
+      "section_scope": "",
+      "relation": "",
+      "object": "",
+      "predicate_arguments": {
+       "__tuple__": []
+      },
+      "qualifier": "",
+      "quantifier": "",
+      "verified_support_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "authoritative_conflict": {
+       "contract_id": "boolean_authoritative_conflict.v1",
+       "status": "verified_conflict",
+       "positive_authorities": [
+        {
+         "evidence_id": "evidence:paper:page-1",
+         "evidence_ref": "evidence:paper:page-1#quote:25:79",
+         "span_id": "evidence:paper:page-1#quote:25:79",
+         "quote": "The authors released the code publicly with the paper.",
+         "span_start": 25,
+         "span_end": 79,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "predicate": "provide",
+         "section_scope": "current_paper",
+         "scope": "current_paper",
+         "relation": "provide",
+         "object": "code",
+         "arguments": [
+          "code"
+         ],
+         "quantifier": "none",
+         "polarity": "yes",
+         "qualifier": "none",
+         "reason": "claim_scope_relation_and_polarity_compatible",
+         "source_id": "paper",
+         "page_label": "1"
+        }
+       ],
+       "negative_authorities": [
+        {
+         "evidence_id": "evidence:paper:page-2",
+         "evidence_ref": "evidence:paper:page-2#quote:28:96",
+         "span_id": "evidence:paper:page-2#quote:28:96",
+         "quote": "The authors did not release the code for the final evaluated system.",
+         "span_start": 28,
+         "span_end": 96,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "predicate": "provide",
+         "section_scope": "current_paper",
+         "scope": "current_paper",
+         "relation": "provide",
+         "object": "code",
+         "arguments": [
+          "code"
+         ],
+         "quantifier": "none",
+         "polarity": "no",
+         "qualifier": "none",
+         "reason": "scope_valid_opposite_proposition",
+         "source_id": "paper",
+         "page_label": "2"
+        }
+       ],
+       "required_slot_ids": [
+        "support:proposition",
+        "support:left_subject",
+        "support:right_subject"
+       ],
+       "verified_required_slot_ids": [
+        "support:proposition",
+        "support:left_subject",
+        "support:right_subject"
+       ],
+       "required_evidence_ids": [
+        "evidence:paper:page-1",
+        "evidence:paper:page-2"
+       ],
+       "required_evidence_coverage": 1.0
+      },
+      "typed_authority": {
+       "contract_id": "typed_proposition_authority.v1",
+       "state": "verified_conflict",
+       "reason": "authoritative_conflict_abstention",
+       "answer_type": "boolean",
+       "question": "Across pages 1 and 2, did the authors release the code?",
+       "candidate_answer": "yes",
+       "claim_ids": [
+        "claim:1"
+       ],
+       "required_slot_ids": [
+        "support:proposition",
+        "support:left_subject",
+        "support:right_subject"
+       ],
+       "verified_slot_ids": [
+        "support:proposition",
+        "support:left_subject",
+        "support:right_subject"
+       ],
+       "slot_bindings": {
+        "support:proposition": [
+         "evidence:paper:page-1",
+         "evidence:paper:page-2"
+        ],
+        "support:left_subject": [
+         "evidence:paper:page-1"
+        ],
+        "support:right_subject": [
+         "evidence:paper:page-2"
+        ]
+       },
+       "authority_atoms": [
+        {
+         "evidence_id": "evidence:paper:page-1",
+         "evidence_ref": "evidence:paper:page-1#quote:25:79",
+         "span_id": "evidence:paper:page-1#quote:25:79",
+         "quote": "The authors released the code publicly with the paper.",
+         "span_start": 25,
+         "span_end": 79,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "predicate": "provide",
+         "section_scope": "current_paper",
+         "scope": "current_paper",
+         "relation": "provide",
+         "object": "code",
+         "arguments": [
+          "code"
+         ],
+         "quantifier": "none",
+         "polarity": "yes",
+         "qualifier": "none",
+         "reason": "claim_scope_relation_and_polarity_compatible",
+         "source_id": "paper",
+         "page_label": "1"
+        },
+        {
+         "evidence_id": "evidence:paper:page-2",
+         "evidence_ref": "evidence:paper:page-2#quote:28:96",
+         "span_id": "evidence:paper:page-2#quote:28:96",
+         "quote": "The authors did not release the code for the final evaluated system.",
+         "span_start": 28,
+         "span_end": 96,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "predicate": "provide",
+         "section_scope": "current_paper",
+         "scope": "current_paper",
+         "relation": "provide",
+         "object": "code",
+         "arguments": [
+          "code"
+         ],
+         "quantifier": "none",
+         "polarity": "no",
+         "qualifier": "none",
+         "reason": "scope_valid_opposite_proposition",
+         "source_id": "paper",
+         "page_label": "2"
+        }
+       ],
+       "authority_derivations": [],
+       "selected_derivation_id": "",
+       "canonical_answer_polarity": "",
+       "query_plan_state_version": 2
+      },
+      "candidate_contract_id": "",
+      "candidate_label": "",
+      "verifier_input_candidate": "",
+      "verifier_candidate_status": "",
+      "replacement_candidate_allowed": false,
+      "predicate": "",
+      "arguments": [],
+      "scope": ""
+     },
+     "pipeline_stage_timings": {
+      "planning_seconds": "elapsed seconds",
+      "retrieval_seconds": "elapsed seconds",
+      "generation_seconds": "elapsed seconds",
+      "retry_seconds": "elapsed seconds",
+      "verification_seconds": "elapsed seconds",
+      "finalization_seconds": "elapsed seconds"
+     }
+    }
+   },
+   "terminal_outcome": "safe_abstention",
+   "presentation_answer": "unanswerable",
+   "terminal_semantic_commit": {
+    "contract_id": "terminal_semantic_commit.v3",
+    "semantic_answer": "unanswerable",
+    "presentation_answer": "unanswerable",
+    "outcome": "safe_abstention",
+    "outcome_reason": "authoritative_conflict_abstention",
+    "answer_status": "abstained",
+    "verify_decision": {
+     "mode": "strict",
+     "status": "verified_conflict",
+     "reason": "authoritative_conflict_abstention",
+     "action": "abstain",
+     "claims": [
+      "yes: Across pages 1 and 2, did the authors release the code?"
+     ],
+     "unsupported_claims": [],
+     "unknown_claims": [],
+     "verified_citations": [],
+     "claim_results": [
+      {
+       "claim_id": "claim:1",
+       "claim": "yes: Across pages 1 and 2, did the authors release the code?",
+       "status": "conflicting",
+       "supporting_evidence_ids": [
+        "evidence:paper:page-1"
+       ],
+       "contradicting_evidence_ids": [
+        "evidence:paper:page-2"
+       ],
+       "input_answer_polarity": "yes",
+       "canonical_answer_polarity": "",
+       "semantic_correction_applied": false,
+       "authority_status": "verified_conflict",
+       "authoritative_evidence_id": "",
+       "authoritative_evidence_ref": "",
+       "authoritative_span_id": "",
+       "authoritative_quote": "",
+       "authoritative_span_start": null,
+       "authoritative_span_end": null,
+       "authoritative_canonical_start": null,
+       "authoritative_canonical_end": null,
+       "actor": "",
+       "section_scope": "",
+       "relation": "",
+       "object": "",
+       "predicate_arguments": {
+        "__tuple__": []
+       },
+       "qualifier": "",
+       "quantifier": "",
+       "supporting_evidence_spans": [
+        {
+         "evidence_id": "evidence:paper:page-1",
+         "evidence_ref": "evidence:paper:page-1#quote:25:79",
+         "span_id": "evidence:paper:page-1#quote:25:79",
+         "quote": "The authors released the code publicly with the paper.",
+         "span_start": 25,
+         "span_end": 79,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "predicate": "provide",
+         "section_scope": "current_paper",
+         "scope": "current_paper",
+         "relation": "provide",
+         "object": "code",
+         "arguments": [
+          "code"
+         ],
+         "quantifier": "none",
+         "polarity": "yes",
+         "qualifier": "none",
+         "reason": "claim_scope_relation_and_polarity_compatible",
+         "source_id": "paper",
+         "page_label": "1"
+        }
+       ],
+       "contradicting_evidence_spans": [
+        {
+         "evidence_id": "evidence:paper:page-2",
+         "evidence_ref": "evidence:paper:page-2#quote:28:96",
+         "span_id": "evidence:paper:page-2#quote:28:96",
+         "quote": "The authors did not release the code for the final evaluated system.",
+         "span_start": 28,
+         "span_end": 96,
+         "canonical_start": null,
+         "canonical_end": null,
+         "actor": "current_paper",
+         "predicate": "provide",
+         "section_scope": "current_paper",
+         "scope": "current_paper",
+         "relation": "provide",
+         "object": "code",
+         "arguments": [
+          "code"
+         ],
+         "quantifier": "none",
+         "polarity": "no",
+         "qualifier": "none",
+         "reason": "scope_valid_opposite_proposition",
+         "source_id": "paper",
+         "page_label": "2"
+        }
+       ],
+       "authority_derivations": [],
+       "selected_derivation_id": "",
+       "authoritative_conflict": {
+        "contract_id": "boolean_authoritative_conflict.v1",
+        "status": "verified_conflict",
+        "positive_authorities": [
+         {
+          "evidence_id": "evidence:paper:page-1",
+          "evidence_ref": "evidence:paper:page-1#quote:25:79",
+          "span_id": "evidence:paper:page-1#quote:25:79",
+          "quote": "The authors released the code publicly with the paper.",
+          "span_start": 25,
+          "span_end": 79,
+          "canonical_start": null,
+          "canonical_end": null,
+          "actor": "current_paper",
+          "predicate": "provide",
+          "section_scope": "current_paper",
+          "scope": "current_paper",
+          "relation": "provide",
+          "object": "code",
+          "arguments": [
+           "code"
+          ],
+          "quantifier": "none",
+          "polarity": "yes",
+          "qualifier": "none",
+          "reason": "claim_scope_relation_and_polarity_compatible",
+          "source_id": "paper",
+          "page_label": "1"
+         }
+        ],
+        "negative_authorities": [
+         {
+          "evidence_id": "evidence:paper:page-2",
+          "evidence_ref": "evidence:paper:page-2#quote:28:96",
+          "span_id": "evidence:paper:page-2#quote:28:96",
+          "quote": "The authors did not release the code for the final evaluated system.",
+          "span_start": 28,
+          "span_end": 96,
+          "canonical_start": null,
+          "canonical_end": null,
+          "actor": "current_paper",
+          "predicate": "provide",
+          "section_scope": "current_paper",
+          "scope": "current_paper",
+          "relation": "provide",
+          "object": "code",
+          "arguments": [
+           "code"
+          ],
+          "quantifier": "none",
+          "polarity": "no",
+          "qualifier": "none",
+          "reason": "scope_valid_opposite_proposition",
+          "source_id": "paper",
+          "page_label": "2"
+         }
+        ],
+        "required_slot_ids": [
+         "support:proposition",
+         "support:left_subject",
+         "support:right_subject"
+        ],
+        "verified_required_slot_ids": [
+         "support:proposition",
+         "support:left_subject",
+         "support:right_subject"
+        ],
+        "required_evidence_ids": [
+         "evidence:paper:page-1",
+         "evidence:paper:page-2"
+        ],
+        "required_evidence_coverage": 1.0
+       },
+       "verified_slot_state": "verified_conflict",
+       "predicate": "",
+       "arguments": [],
+       "scope": "",
+       "verified_support_slot_ids": [
+        "support:proposition",
+        "support:left_subject",
+        "support:right_subject"
+       ],
+       "typed_authority_contract": "typed_proposition_authority.v1"
+      }
+     ],
+     "input_answer_polarity": "yes",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "boolean_authority_status": "verified_conflict",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "verified_support_slot_ids": [
+      "support:proposition",
+      "support:left_subject",
+      "support:right_subject"
+     ],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {
+      "contract_id": "boolean_authoritative_conflict.v1",
+      "status": "verified_conflict",
+      "positive_authorities": [
+       {
+        "evidence_id": "evidence:paper:page-1",
+        "evidence_ref": "evidence:paper:page-1#quote:25:79",
+        "span_id": "evidence:paper:page-1#quote:25:79",
+        "quote": "The authors released the code publicly with the paper.",
+        "span_start": 25,
+        "span_end": 79,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "yes",
+        "qualifier": "none",
+        "reason": "claim_scope_relation_and_polarity_compatible",
+        "source_id": "paper",
+        "page_label": "1"
+       }
+      ],
+      "negative_authorities": [
+       {
+        "evidence_id": "evidence:paper:page-2",
+        "evidence_ref": "evidence:paper:page-2#quote:28:96",
+        "span_id": "evidence:paper:page-2#quote:28:96",
+        "quote": "The authors did not release the code for the final evaluated system.",
+        "span_start": 28,
+        "span_end": 96,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "no",
+        "qualifier": "none",
+        "reason": "scope_valid_opposite_proposition",
+        "source_id": "paper",
+        "page_label": "2"
+       }
+      ],
+      "required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "verified_required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "required_evidence_ids": [
+       "evidence:paper:page-1",
+       "evidence:paper:page-2"
+      ],
+      "required_evidence_coverage": 1.0
+     },
+     "typed_authority": {
+      "contract_id": "typed_proposition_authority.v1",
+      "state": "verified_conflict",
+      "reason": "authoritative_conflict_abstention",
+      "answer_type": "boolean",
+      "question": "Across pages 1 and 2, did the authors release the code?",
+      "candidate_answer": "yes",
+      "claim_ids": [
+       "claim:1"
+      ],
+      "required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "verified_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "slot_bindings": {
+       "support:proposition": [
+        "evidence:paper:page-1",
+        "evidence:paper:page-2"
+       ],
+       "support:left_subject": [
+        "evidence:paper:page-1"
+       ],
+       "support:right_subject": [
+        "evidence:paper:page-2"
+       ]
+      },
+      "authority_atoms": [
+       {
+        "evidence_id": "evidence:paper:page-1",
+        "evidence_ref": "evidence:paper:page-1#quote:25:79",
+        "span_id": "evidence:paper:page-1#quote:25:79",
+        "quote": "The authors released the code publicly with the paper.",
+        "span_start": 25,
+        "span_end": 79,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "yes",
+        "qualifier": "none",
+        "reason": "claim_scope_relation_and_polarity_compatible",
+        "source_id": "paper",
+        "page_label": "1"
+       },
+       {
+        "evidence_id": "evidence:paper:page-2",
+        "evidence_ref": "evidence:paper:page-2#quote:28:96",
+        "span_id": "evidence:paper:page-2#quote:28:96",
+        "quote": "The authors did not release the code for the final evaluated system.",
+        "span_start": 28,
+        "span_end": 96,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "no",
+        "qualifier": "none",
+        "reason": "scope_valid_opposite_proposition",
+        "source_id": "paper",
+        "page_label": "2"
+       }
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "canonical_answer_polarity": "",
+      "query_plan_state_version": 2
+     },
+     "candidate_contract_id": "",
+     "candidate_label": "",
+     "verifier_input_candidate": "",
+     "verifier_candidate_status": "",
+     "replacement_candidate_allowed": false,
+     "predicate": "",
+     "arguments": [],
+     "scope": ""
+    },
+    "guardrail_decision": {
+     "status": "verified_conflict",
+     "action": "abstain",
+     "reason": "authoritative_conflict_abstention"
+    },
+    "authoritative_evidence": [],
+    "citations": [],
+    "projection_hash": "b614e839cd99bf9a11bb68508848ce81aad27bfc2fe65f8a5e59004ca38f50c5",
+    "state_version": 3
+   }
+  },
+  "terminal_verification": {
+   "mode": "strict",
+   "status": "verified_conflict",
+   "reason": "authoritative_conflict_abstention",
+   "action": "abstain",
+   "claims": [
+    "yes: Across pages 1 and 2, did the authors release the code?"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "yes: Across pages 1 and 2, did the authors release the code?",
+     "status": "conflicting",
+     "supporting_evidence_ids": [
+      "evidence:paper:page-1"
+     ],
+     "contradicting_evidence_ids": [
+      "evidence:paper:page-2"
+     ],
+     "input_answer_polarity": "yes",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "authority_status": "verified_conflict",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "supporting_evidence_spans": [
+      {
+       "evidence_id": "evidence:paper:page-1",
+       "evidence_ref": "evidence:paper:page-1#quote:25:79",
+       "span_id": "evidence:paper:page-1#quote:25:79",
+       "quote": "The authors released the code publicly with the paper.",
+       "span_start": 25,
+       "span_end": 79,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "provide",
+       "section_scope": "current_paper",
+       "scope": "current_paper",
+       "relation": "provide",
+       "object": "code",
+       "arguments": [
+        "code"
+       ],
+       "quantifier": "none",
+       "polarity": "yes",
+       "qualifier": "none",
+       "reason": "claim_scope_relation_and_polarity_compatible",
+       "source_id": "paper",
+       "page_label": "1"
+      }
+     ],
+     "contradicting_evidence_spans": [
+      {
+       "evidence_id": "evidence:paper:page-2",
+       "evidence_ref": "evidence:paper:page-2#quote:28:96",
+       "span_id": "evidence:paper:page-2#quote:28:96",
+       "quote": "The authors did not release the code for the final evaluated system.",
+       "span_start": 28,
+       "span_end": 96,
+       "canonical_start": null,
+       "canonical_end": null,
+       "actor": "current_paper",
+       "predicate": "provide",
+       "section_scope": "current_paper",
+       "scope": "current_paper",
+       "relation": "provide",
+       "object": "code",
+       "arguments": [
+        "code"
+       ],
+       "quantifier": "none",
+       "polarity": "no",
+       "qualifier": "none",
+       "reason": "scope_valid_opposite_proposition",
+       "source_id": "paper",
+       "page_label": "2"
+      }
+     ],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {
+      "contract_id": "boolean_authoritative_conflict.v1",
+      "status": "verified_conflict",
+      "positive_authorities": [
+       {
+        "evidence_id": "evidence:paper:page-1",
+        "evidence_ref": "evidence:paper:page-1#quote:25:79",
+        "span_id": "evidence:paper:page-1#quote:25:79",
+        "quote": "The authors released the code publicly with the paper.",
+        "span_start": 25,
+        "span_end": 79,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "yes",
+        "qualifier": "none",
+        "reason": "claim_scope_relation_and_polarity_compatible",
+        "source_id": "paper",
+        "page_label": "1"
+       }
+      ],
+      "negative_authorities": [
+       {
+        "evidence_id": "evidence:paper:page-2",
+        "evidence_ref": "evidence:paper:page-2#quote:28:96",
+        "span_id": "evidence:paper:page-2#quote:28:96",
+        "quote": "The authors did not release the code for the final evaluated system.",
+        "span_start": 28,
+        "span_end": 96,
+        "canonical_start": null,
+        "canonical_end": null,
+        "actor": "current_paper",
+        "predicate": "provide",
+        "section_scope": "current_paper",
+        "scope": "current_paper",
+        "relation": "provide",
+        "object": "code",
+        "arguments": [
+         "code"
+        ],
+        "quantifier": "none",
+        "polarity": "no",
+        "qualifier": "none",
+        "reason": "scope_valid_opposite_proposition",
+        "source_id": "paper",
+        "page_label": "2"
+       }
+      ],
+      "required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "verified_required_slot_ids": [
+       "support:proposition",
+       "support:left_subject",
+       "support:right_subject"
+      ],
+      "required_evidence_ids": [
+       "evidence:paper:page-1",
+       "evidence:paper:page-2"
+      ],
+      "required_evidence_coverage": 1.0
+     },
+     "verified_slot_state": "verified_conflict",
+     "predicate": "",
+     "arguments": [],
+     "scope": "",
+     "verified_support_slot_ids": [
+      "support:proposition",
+      "support:left_subject",
+      "support:right_subject"
+     ],
+     "typed_authority_contract": "typed_proposition_authority.v1"
+    }
+   ],
+   "input_answer_polarity": "yes",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "verified_conflict",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [
+    "support:proposition",
+    "support:left_subject",
+    "support:right_subject"
+   ],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {
+    "contract_id": "boolean_authoritative_conflict.v1",
+    "status": "verified_conflict",
+    "positive_authorities": [
+     {
+      "evidence_id": "evidence:paper:page-1",
+      "evidence_ref": "evidence:paper:page-1#quote:25:79",
+      "span_id": "evidence:paper:page-1#quote:25:79",
+      "quote": "The authors released the code publicly with the paper.",
+      "span_start": 25,
+      "span_end": 79,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "yes",
+      "qualifier": "none",
+      "reason": "claim_scope_relation_and_polarity_compatible",
+      "source_id": "paper",
+      "page_label": "1"
+     }
+    ],
+    "negative_authorities": [
+     {
+      "evidence_id": "evidence:paper:page-2",
+      "evidence_ref": "evidence:paper:page-2#quote:28:96",
+      "span_id": "evidence:paper:page-2#quote:28:96",
+      "quote": "The authors did not release the code for the final evaluated system.",
+      "span_start": 28,
+      "span_end": 96,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "no",
+      "qualifier": "none",
+      "reason": "scope_valid_opposite_proposition",
+      "source_id": "paper",
+      "page_label": "2"
+     }
+    ],
+    "required_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "verified_required_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "required_evidence_ids": [
+     "evidence:paper:page-1",
+     "evidence:paper:page-2"
+    ],
+    "required_evidence_coverage": 1.0
+   },
+   "typed_authority": {
+    "contract_id": "typed_proposition_authority.v1",
+    "state": "verified_conflict",
+    "reason": "authoritative_conflict_abstention",
+    "answer_type": "boolean",
+    "question": "Across pages 1 and 2, did the authors release the code?",
+    "candidate_answer": "yes",
+    "claim_ids": [
+     "claim:1"
+    ],
+    "required_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "verified_slot_ids": [
+     "support:proposition",
+     "support:left_subject",
+     "support:right_subject"
+    ],
+    "slot_bindings": {
+     "support:proposition": [
+      "evidence:paper:page-1",
+      "evidence:paper:page-2"
+     ],
+     "support:left_subject": [
+      "evidence:paper:page-1"
+     ],
+     "support:right_subject": [
+      "evidence:paper:page-2"
+     ]
+    },
+    "authority_atoms": [
+     {
+      "evidence_id": "evidence:paper:page-1",
+      "evidence_ref": "evidence:paper:page-1#quote:25:79",
+      "span_id": "evidence:paper:page-1#quote:25:79",
+      "quote": "The authors released the code publicly with the paper.",
+      "span_start": 25,
+      "span_end": 79,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "yes",
+      "qualifier": "none",
+      "reason": "claim_scope_relation_and_polarity_compatible",
+      "source_id": "paper",
+      "page_label": "1"
+     },
+     {
+      "evidence_id": "evidence:paper:page-2",
+      "evidence_ref": "evidence:paper:page-2#quote:28:96",
+      "span_id": "evidence:paper:page-2#quote:28:96",
+      "quote": "The authors did not release the code for the final evaluated system.",
+      "span_start": 28,
+      "span_end": 96,
+      "canonical_start": null,
+      "canonical_end": null,
+      "actor": "current_paper",
+      "predicate": "provide",
+      "section_scope": "current_paper",
+      "scope": "current_paper",
+      "relation": "provide",
+      "object": "code",
+      "arguments": [
+       "code"
+      ],
+      "quantifier": "none",
+      "polarity": "no",
+      "qualifier": "none",
+      "reason": "scope_valid_opposite_proposition",
+      "source_id": "paper",
+      "page_label": "2"
+     }
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "canonical_answer_polarity": "",
+    "query_plan_state_version": 2
+   },
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "terminal_guardrail": {
+   "status": "verified_conflict",
+   "action": "abstain",
+   "reason": "authoritative_conflict_abstention"
+  },
+  "rounds": 1,
+  "recovery": null,
+  "numeric": {
+   "attempt_status": null,
+   "answer": null,
+   "formula": null,
+   "inputs": null,
+   "calculation_execution": null,
+   "calculation_verification": null,
+   "authoritative_query_plan": null
+  }
+ }
+}
