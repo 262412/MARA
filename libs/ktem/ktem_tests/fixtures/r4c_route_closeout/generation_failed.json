@@ -1,0 +1,3936 @@
+{
+  "source": "273e6173cb736a2f154f51daa69190393372c9b7",
+  "observation": {
+    "calls": [
+      {
+        "stage": "retrieve",
+        "route": "doc_text",
+        "query": "Do the authors conduct experiments on the dataset?",
+        "slot": "",
+        "round": 1,
+        "metadata": {
+          "contract_id": "initial_retrieval_query.v1",
+          "query_kind": "initial"
+        },
+        "budget": {
+          "max_items": 8,
+          "max_pages": 3
+        }
+      },
+      {
+        "stage": "generate",
+        "route": "doc_text"
+      }
+    ],
+    "planned": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:9acb1ff1400ed512785b",
+      "answer_type": "boolean",
+      "question_type": "simple_fact",
+      "subqueries": [
+        "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+      ],
+      "evidence_slots": [
+        {
+          "slot_id": "support:boolean_proposition",
+          "role": "support",
+          "entity": "",
+          "metric": "authors conduct experiments on dataset",
+          "period": "",
+          "period_kind": "",
+          "unit": "",
+          "scale": "",
+          "statement_kind": "boolean_proposition",
+          "financial_scope": "",
+          "modality": "auto",
+          "required": true,
+          "required_for_retrieval": false,
+          "required_for_execution": false,
+          "required_for_verification": true,
+          "status": "missing",
+          "evidence_ids": [],
+          "cardinality": 1,
+          "operator_role": "",
+          "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+          "locator": {}
+        }
+      ],
+      "constraints": {
+        "periods": [],
+        "verification_domain": "qasper",
+        "requires_visual": false,
+        "requires_multiple_evidence": false,
+        "requires_distinct_source_pages": false,
+        "requires_structured_elements": false,
+        "explicit_page_labels": [],
+        "figure_label": "",
+        "table_label": "",
+        "requires_distinct_evidence": false,
+        "requires_structure": false,
+        "question": "Do the authors conduct experiments on the dataset?",
+        "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2
+    },
+    "plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:9acb1ff1400ed512785b",
+      "answer_type": "boolean",
+      "question_type": "simple_fact",
+      "subqueries": [
+        "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+      ],
+      "evidence_slots": [
+        {
+          "slot_id": "support:boolean_proposition",
+          "role": "support",
+          "entity": "",
+          "metric": "authors conduct experiments on dataset",
+          "period": "",
+          "period_kind": "",
+          "unit": "",
+          "scale": "",
+          "statement_kind": "boolean_proposition",
+          "financial_scope": "",
+          "modality": "auto",
+          "required": true,
+          "required_for_retrieval": false,
+          "required_for_execution": false,
+          "required_for_verification": true,
+          "status": "retrieved_unverified",
+          "evidence_ids": [
+            "evidence:paper:round-1"
+          ],
+          "cardinality": 1,
+          "operator_role": "",
+          "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+          "locator": {}
+        }
+      ],
+      "constraints": {
+        "periods": [],
+        "verification_domain": "qasper",
+        "requires_visual": false,
+        "requires_multiple_evidence": false,
+        "requires_distinct_source_pages": false,
+        "requires_structured_elements": false,
+        "explicit_page_labels": [],
+        "figure_label": "",
+        "table_label": "",
+        "requires_distinct_evidence": false,
+        "requires_structure": false,
+        "question": "Do the authors conduct experiments on the dataset?",
+        "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2
+    },
+    "plan_id": "plan:9acb1ff1400ed512785b",
+    "version": 1,
+    "result": {
+      "controller_decision": {
+        "route": "text_rag",
+        "legacy_route": "doc_text",
+        "policy": "auto",
+        "controller_mode": "off",
+        "requires_retrieval": true,
+        "reason": "Automatic route policy selected the document text route."
+      },
+      "retrieve_decision": {
+        "status": "error",
+        "reason": "backend_failed",
+        "retry": false
+      },
+      "verify_decision": {
+        "mode": "strict",
+        "status": "execution_failed",
+        "reason": "backend_failed",
+        "action": "error",
+        "claims": [],
+        "unsupported_claims": [],
+        "unknown_claims": [],
+        "verified_citations": [],
+        "claim_results": [],
+        "input_answer_polarity": "",
+        "canonical_answer_polarity": "",
+        "semantic_correction_applied": false,
+        "boolean_authority_status": "",
+        "authoritative_evidence_id": "",
+        "authoritative_evidence_ref": "",
+        "authoritative_span_id": "",
+        "authoritative_quote": "",
+        "authoritative_span_start": null,
+        "authoritative_span_end": null,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "",
+        "section_scope": "",
+        "relation": "",
+        "object": "",
+        "predicate_arguments": [],
+        "qualifier": "",
+        "quantifier": "",
+        "verified_support_slot_ids": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {},
+        "typed_authority": {},
+        "candidate_contract_id": "",
+        "candidate_label": "",
+        "verifier_input_candidate": "",
+        "verifier_candidate_status": "",
+        "replacement_candidate_allowed": false,
+        "predicate": "",
+        "arguments": [],
+        "scope": ""
+      },
+      "guardrail_decision": {
+        "status": "execution_failed",
+        "action": "error",
+        "reason": "backend_failed"
+      },
+      "evidence_bundle": {
+        "route": "doc_text",
+        "items": [
+          {
+            "evidence_id": "round-1",
+            "source_id": "paper",
+            "source_name": "",
+            "source_aliases": [
+              "paper"
+            ],
+            "page_label": "",
+            "modality": "text",
+            "element_id": "",
+            "canonical_id": "evidence:paper:round-1",
+            "parent_element_id": "",
+            "neighbor_element_ids": [],
+            "section_id": "experiments",
+            "table_id": "",
+            "row_index": null,
+            "column_index": null,
+            "continuation_id": "",
+            "chunk_start": null,
+            "chunk_end": null,
+            "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+            "duplicate_evidence_ids": [],
+            "retrieval_lineage": [
+              {
+                "round_id": 1,
+                "query_id": "round1:primary",
+                "slot_id": "",
+                "retriever_name": "text",
+                "raw_rank": 1,
+                "raw_score": null,
+                "score_type": "not_recorded"
+              }
+            ],
+            "bbox": null,
+            "caption": "",
+            "text": "We conduct experiments on the dataset and report the results.",
+            "ocr_text": "",
+            "vlm_text": "",
+            "source_backrefs": [
+              "paper#source"
+            ],
+            "evidence_level": "page",
+            "metadata": {},
+            "cell_id": "",
+            "span_id": "",
+            "table_instance_id": null,
+            "table_group_id": null,
+            "block_id": null,
+            "row_label": null,
+            "column_label": null,
+            "period": null,
+            "period_kind": null,
+            "value": null,
+            "unit": null,
+            "scale": null,
+            "currency": null,
+            "statement_kind": null,
+            "financial_scope": null,
+            "representations": [
+              {
+                "modality": "text",
+                "field": "text",
+                "text": "We conduct experiments on the dataset and report the results."
+              }
+            ],
+            "identity": {
+              "source_id": "paper",
+              "kind": "evidence",
+              "local_id": "round-1"
+            }
+          }
+        ],
+        "metadata": {
+          "evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "retrieval_query_contracts": [
+            {
+              "contract_id": "initial_retrieval_query.v1",
+              "query_kind": "initial",
+              "round_id": 1,
+              "query_id": "round1:primary",
+              "slot_id": "",
+              "query": "Do the authors conduct experiments on the dataset?"
+            }
+          ],
+          "schema_version": "evidence_bundle.v2",
+          "dedupe_trace": {
+            "schema_version": "evidence_bundle.v2",
+            "input_count": 1,
+            "output_count": 1,
+            "structure_duplicate_count": 0,
+            "exact_text_duplicate_count": 0,
+            "overlap_duplicate_count": 0,
+            "minhash_duplicate_count": 0,
+            "semantic_duplicate_count": 0,
+            "conflict_guard_count": 0,
+            "duplicate_ratio": 0.0
+          },
+          "canonical_candidate_count": 1,
+          "canonical_candidate_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "candidate_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "candidate_ranked_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "candidate_ranking_contract": "global_ranked_v1",
+          "pre_rerank_required_slot_candidates_restored": 0,
+          "reranker_input_evidence": [],
+          "reranker_input_contract": "required_slot_restored.v1",
+          "fused_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "fusion_stage_snapshot": {
+            "contract_id": "fusion_stage_snapshot.v1",
+            "route": "doc_text",
+            "state": "passthrough",
+            "candidate_stage": "fusion_passthrough",
+            "reason": "route_does_not_use_cross_modal_fusion",
+            "input_count": 1,
+            "output_count": 1,
+            "input_identities": [
+              "evidence:paper:round-1"
+            ],
+            "output_identities": [
+              "evidence:paper:round-1"
+            ],
+            "identity_preserved": true,
+            "fusion_trace_present": false
+          },
+          "ranking_trace": {
+            "candidate_stage": "fusion_passthrough",
+            "candidate_limit": 1,
+            "candidate_input_count": 1,
+            "input_count": 1,
+            "reranker_input_count": 1,
+            "reranker_scored_count": 0,
+            "output_limit": 30,
+            "output_count": 0,
+            "backend_output_count": 0,
+            "reranker_output_count": 0,
+            "reranker_artifact_record_count": 0,
+            "selection_retained_reranked_count": null,
+            "backend_execution": false,
+            "configured": false,
+            "loaded": false,
+            "executed": false,
+            "backend": "",
+            "model": "",
+            "score_field": "",
+            "input_identities": [],
+            "output_identities": [],
+            "backend_output_identities": [],
+            "failure_reason": "missing_complete_execution_trace",
+            "score_tie_precision_decimals": 6,
+            "tie_breaker": "canonical_evidence_identity",
+            "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+            "fusion_stage_snapshot": {
+              "contract_id": "fusion_stage_snapshot.v1",
+              "route": "doc_text",
+              "state": "passthrough",
+              "candidate_stage": "fusion_passthrough",
+              "reason": "route_does_not_use_cross_modal_fusion",
+              "input_count": 1,
+              "output_count": 1,
+              "input_identities": [
+                "evidence:paper:round-1"
+              ],
+              "output_identities": [
+                "evidence:paper:round-1"
+              ],
+              "identity_preserved": true,
+              "fusion_trace_present": false
+            }
+          },
+          "reranker_aggregate_trace": {
+            "candidate_stage": "fusion_passthrough",
+            "candidate_limit": 1,
+            "candidate_input_count": 1,
+            "input_count": 1,
+            "reranker_input_count": 1,
+            "reranker_scored_count": 0,
+            "output_limit": 30,
+            "output_count": 0,
+            "backend_output_count": 0,
+            "reranker_output_count": 0,
+            "reranker_artifact_record_count": 0,
+            "selection_retained_reranked_count": null,
+            "backend_execution": false,
+            "configured": false,
+            "loaded": false,
+            "executed": false,
+            "backend": "",
+            "model": "",
+            "score_field": "",
+            "input_identities": [],
+            "output_identities": [],
+            "backend_output_identities": [],
+            "failure_reason": "missing_complete_execution_trace",
+            "score_tie_precision_decimals": 6,
+            "tie_breaker": "canonical_evidence_identity",
+            "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+            "fusion_stage_snapshot": {
+              "contract_id": "fusion_stage_snapshot.v1",
+              "route": "doc_text",
+              "state": "passthrough",
+              "candidate_stage": "fusion_passthrough",
+              "reason": "route_does_not_use_cross_modal_fusion",
+              "input_count": 1,
+              "output_count": 1,
+              "input_identities": [
+                "evidence:paper:round-1"
+              ],
+              "output_identities": [
+                "evidence:paper:round-1"
+              ],
+              "identity_preserved": true,
+              "fusion_trace_present": false
+            }
+          },
+          "page_coverage": [],
+          "source_ids": [
+            "paper"
+          ],
+          "evidence_ids": [
+            "round-1"
+          ],
+          "source_page_locators": [],
+          "source_page_alias_locators": [],
+          "modality_counts": {
+            "text": 1
+          },
+          "selected_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "generation_context_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "used_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "stage_aliases": {
+            "used_evidence": "generation_context_evidence"
+          },
+          "query_plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:9acb1ff1400ed512785b",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors conduct experiments on dataset",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_unverified",
+                "evidence_ids": [
+                  "evidence:paper:round-1"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": [],
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Do the authors conduct experiments on the dataset?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "query_plan_id": "plan:9acb1ff1400ed512785b",
+          "planned_query_plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:9acb1ff1400ed512785b",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors conduct experiments on dataset",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": [],
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Do the authors conduct experiments on the dataset?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2,
+            "stage": "planned",
+            "state_version": 0
+          },
+          "bound_query_plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:9acb1ff1400ed512785b",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors conduct experiments on dataset",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_unverified",
+                "evidence_ids": [
+                  "evidence:paper:round-1"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": [],
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Do the authors conduct experiments on the dataset?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2,
+            "stage": "bound",
+            "state_version": 1
+          },
+          "evidence_selection_trace": {
+            "strategy": "marginal_evidence_set_selection_v3",
+            "candidate_count": 1,
+            "selected_count": 1,
+            "max_items": 8,
+            "max_pages": 3,
+            "unique_pages": 0,
+            "selected_pages": [],
+            "slot_coverage": null,
+            "missing_required_slot_count": 0,
+            "continuation_expansion_count": 0,
+            "page_modality_expansion_count": 0,
+            "structure_expansion_enabled": false,
+            "mmr_lambda": 0.7,
+            "structure_metadata_coverage": 1.0,
+            "mixed_candidate_structure_metadata_coverage": 1.0,
+            "structure_coverage_scope": "legacy_mixed",
+            "required_slot_candidates_restored": 0,
+            "candidate_budget_partitions": {
+              "factual_narrative": 2,
+              "execution_operands": 0,
+              "parent_tables": 0,
+              "dimensions": 0
+            },
+            "selected_budget_usage": {
+              "factual_narrative": 1,
+              "execution_operands": 0,
+              "parent_tables": 0,
+              "dimensions": 0
+            },
+            "evidence_stage_trace": [
+              {
+                "evidence_id": "evidence:paper:round-1",
+                "retrieved_candidate": true,
+                "selected_in_context": true,
+                "parent_retained": false,
+                "materialized_for_slot_ids": [],
+                "bound_to_slot_ids": [
+                  "support:boolean_proposition"
+                ],
+                "executable_operand": false,
+                "verified_support": false,
+                "citation_emitted": false,
+                "stage_scope": "selection"
+              }
+            ],
+            "trace_validation_errors": [],
+            "required_slot_bindings": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "status": "retrieved_unverified",
+                "retrieval_satisfied": true,
+                "execution_satisfied": null,
+                "verification_satisfied": false,
+                "reason": "",
+                "selected_evidence_ids": [
+                  "evidence:paper:round-1"
+                ],
+                "best_selected_slot_score": 3.0,
+                "candidate_selection_reasons": [
+                  {
+                    "evidence_id": "evidence:paper:round-1",
+                    "reason": "bound_to_slot",
+                    "slot_score": 3.0
+                  }
+                ],
+                "candidate_drop_reasons": []
+              }
+            ],
+            "execution_slot_lineage": [],
+            "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+            "boolean_assessment_cache": {
+              "unique_semantic_candidates": 1,
+              "slots": 1,
+              "cache_entries": 1,
+              "cache_builds": 1,
+              "cache_hits": 11,
+              "cache_misses": 0,
+              "classification_calls": 1,
+              "mmr_hot_loop_misses": 0,
+              "time_spent_ms": 0.0
+            }
+          },
+          "structure_metadata_coverage": 1.0,
+          "slot_coverage": null,
+          "missing_required_slot_count": 0,
+          "second_round_queries": [],
+          "second_round_requests": [],
+          "boolean_assessment_cache": {
+            "unique_semantic_candidates": 1,
+            "slots": 1,
+            "cache_entries": 1,
+            "cache_builds": 1,
+            "cache_hits": 11,
+            "cache_misses": 0,
+            "classification_calls": 1,
+            "mmr_hot_loop_misses": 0,
+            "time_spent_ms": 0.0
+          },
+          "typed_adequacy_status": "not_applicable",
+          "heuristic_adequacy_status": "good",
+          "final_adequacy_status": "good",
+          "adequacy_decision_authority": "general_heuristic",
+          "heuristic_overridden": false,
+          "heuristic_override_reason": "",
+          "typed_adequacy_reason": "non_finance_domain",
+          "retrieval_rounds": 1,
+          "pipeline_stage_timings": {
+            "planning_seconds": 0.0,
+            "retrieval_seconds": 0.0,
+            "generation_seconds": 0.0,
+            "retry_seconds": 0.0,
+            "verification_seconds": 0.0,
+            "finalization_seconds": 0.0
+          }
+        }
+      },
+      "workflow_plan": {
+        "route": "doc_text",
+        "policy": "auto",
+        "controller_mode": "off",
+        "strategy": "route_default",
+        "agent_mode": "auto",
+        "verification_mode": "strict",
+        "execution_control": "fixed_state_machine",
+        "steps": [
+          {
+            "index": 1,
+            "executor": "retrieve_text",
+            "route": "doc_text",
+            "role": "retriever",
+            "status": "planned",
+            "cost_units": 1,
+            "reason": ""
+          },
+          {
+            "index": 2,
+            "executor": "generate_docqa_answer",
+            "route": "doc_text",
+            "role": "generator",
+            "status": "planned",
+            "cost_units": 2,
+            "reason": ""
+          },
+          {
+            "index": 3,
+            "executor": "verify_answer",
+            "route": "doc_text",
+            "role": "verifier",
+            "status": "planned",
+            "cost_units": 1,
+            "reason": ""
+          }
+        ],
+        "total_cost_units": 4,
+        "reward_features": {
+          "cost_units": 4,
+          "quality_signal": "verification_status"
+        }
+      },
+      "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+      "controller_trace": [
+        {
+          "stage": "route_budget",
+          "blocking_stage": "retrieval",
+          "absolute_deadline_monotonic": 200.0,
+          "remaining_route_seconds_before": 100.0,
+          "terminal_commit_reserve_seconds": 12.0,
+          "configured_call_timeout_seconds": null,
+          "call_timeout_budget_seconds": 88.0,
+          "status": "completed",
+          "elapsed_seconds": 0.0,
+          "remaining_route_seconds_after": 100.0
+        },
+        {
+          "stage": "route_budget",
+          "blocking_stage": "generation",
+          "absolute_deadline_monotonic": 200.0,
+          "remaining_route_seconds_before": 100.0,
+          "terminal_commit_reserve_seconds": 12.0,
+          "configured_call_timeout_seconds": null,
+          "call_timeout_budget_seconds": 88.0,
+          "status": "failed",
+          "error_type": "ValueError",
+          "elapsed_seconds": 0.0,
+          "remaining_route_seconds_after": 100.0
+        },
+        {
+          "stage": "terminal_outcome",
+          "outcome": "execution_failed",
+          "reason": "backend_failed",
+          "error_type": "ValueError"
+        },
+        {
+          "stage": "planner",
+          "route": "text_rag",
+          "legacy_route": "doc_text",
+          "policy": "auto",
+          "controller_mode": "off",
+          "requires_retrieval": true,
+          "reason": "Automatic route policy selected the document text route."
+        },
+        {
+          "stage": "workflow_plan",
+          "strategy": "route_default",
+          "agent_mode": "auto",
+          "verification_mode": "strict",
+          "execution_control": "fixed_state_machine",
+          "step_count": 3,
+          "total_cost_units": 4
+        },
+        {
+          "stage": "retrieval_evaluator",
+          "status": "error",
+          "reason": "backend_failed",
+          "retry": false
+        },
+        {
+          "stage": "guardrail",
+          "status": "execution_failed",
+          "action": "error",
+          "reason": "backend_failed"
+        },
+        {
+          "stage": "verifier",
+          "mode": "strict",
+          "status": "execution_failed",
+          "reason": "backend_failed",
+          "action": "error",
+          "claims": [],
+          "unsupported_claims": [],
+          "unknown_claims": [],
+          "verified_citations": [],
+          "claim_results": [],
+          "input_answer_polarity": "",
+          "canonical_answer_polarity": "",
+          "semantic_correction_applied": false,
+          "boolean_authority_status": "",
+          "authoritative_evidence_id": "",
+          "authoritative_evidence_ref": "",
+          "authoritative_span_id": "",
+          "authoritative_quote": "",
+          "authoritative_span_start": null,
+          "authoritative_span_end": null,
+          "authoritative_canonical_start": null,
+          "authoritative_canonical_end": null,
+          "actor": "",
+          "section_scope": "",
+          "relation": "",
+          "object": "",
+          "predicate_arguments": [],
+          "qualifier": "",
+          "quantifier": "",
+          "verified_support_slot_ids": [],
+          "authority_derivations": [],
+          "selected_derivation_id": "",
+          "authoritative_conflict": {},
+          "typed_authority": {},
+          "candidate_contract_id": "",
+          "candidate_label": "",
+          "verifier_input_candidate": "",
+          "verifier_candidate_status": "",
+          "replacement_candidate_allowed": false,
+          "predicate": "",
+          "arguments": [],
+          "scope": ""
+        }
+      ],
+      "engine_terminal_answer": "unanswerable",
+      "engine_terminal_state": {
+        "contract_id": "engine_terminal_state.v1",
+        "answer": "unanswerable",
+        "raw_generated_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+        "raw_candidate_label": "unanswerable",
+        "normalized_candidate_label": "unanswerable",
+        "verified_canonical_answer": "",
+        "semantic_correction_applied": false,
+        "correction_reason": "",
+        "authoritative_evidence_id": "",
+        "authoritative_evidence_ref": "",
+        "authoritative_quote": "",
+        "authoritative_conflict": {},
+        "typed_authority": {},
+        "terminal_reason": "",
+        "guardrail_result": {
+          "status": "execution_failed",
+          "action": "error",
+          "reason": "backend_failed"
+        },
+        "verify_decision": {
+          "mode": "strict",
+          "status": "execution_failed",
+          "reason": "backend_failed",
+          "action": "error",
+          "claims": [],
+          "unsupported_claims": [],
+          "unknown_claims": [],
+          "verified_citations": [],
+          "claim_results": [],
+          "input_answer_polarity": "",
+          "canonical_answer_polarity": "",
+          "semantic_correction_applied": false,
+          "boolean_authority_status": "",
+          "authoritative_evidence_id": "",
+          "authoritative_evidence_ref": "",
+          "authoritative_span_id": "",
+          "authoritative_quote": "",
+          "authoritative_span_start": null,
+          "authoritative_span_end": null,
+          "authoritative_canonical_start": null,
+          "authoritative_canonical_end": null,
+          "actor": "",
+          "section_scope": "",
+          "relation": "",
+          "object": "",
+          "predicate_arguments": [],
+          "qualifier": "",
+          "quantifier": "",
+          "verified_support_slot_ids": [],
+          "authority_derivations": [],
+          "selected_derivation_id": "",
+          "authoritative_conflict": {},
+          "typed_authority": {},
+          "candidate_contract_id": "",
+          "candidate_label": "",
+          "verifier_input_candidate": "",
+          "verifier_candidate_status": "",
+          "replacement_candidate_allowed": false,
+          "predicate": "",
+          "arguments": [],
+          "scope": ""
+        },
+        "guardrail_decision": {
+          "status": "execution_failed",
+          "action": "error",
+          "reason": "backend_failed"
+        },
+        "evidence_bundle": {
+          "route": "doc_text",
+          "items": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "metadata": {
+            "evidence": [
+              {
+                "evidence_id": "round-1",
+                "source_id": "paper",
+                "source_name": "",
+                "source_aliases": [
+                  "paper"
+                ],
+                "page_label": "",
+                "modality": "text",
+                "element_id": "",
+                "canonical_id": "evidence:paper:round-1",
+                "parent_element_id": "",
+                "neighbor_element_ids": [],
+                "section_id": "experiments",
+                "table_id": "",
+                "row_index": null,
+                "column_index": null,
+                "continuation_id": "",
+                "chunk_start": null,
+                "chunk_end": null,
+                "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+                "duplicate_evidence_ids": [],
+                "retrieval_lineage": [
+                  {
+                    "round_id": 1,
+                    "query_id": "round1:primary",
+                    "slot_id": "",
+                    "retriever_name": "text",
+                    "raw_rank": 1,
+                    "raw_score": null,
+                    "score_type": "not_recorded"
+                  }
+                ],
+                "bbox": null,
+                "caption": "",
+                "text": "We conduct experiments on the dataset and report the results.",
+                "ocr_text": "",
+                "vlm_text": "",
+                "source_backrefs": [
+                  "paper#source"
+                ],
+                "evidence_level": "page",
+                "metadata": {},
+                "cell_id": "",
+                "span_id": "",
+                "table_instance_id": null,
+                "table_group_id": null,
+                "block_id": null,
+                "row_label": null,
+                "column_label": null,
+                "period": null,
+                "period_kind": null,
+                "value": null,
+                "unit": null,
+                "scale": null,
+                "currency": null,
+                "statement_kind": null,
+                "financial_scope": null,
+                "representations": [
+                  {
+                    "modality": "text",
+                    "field": "text",
+                    "text": "We conduct experiments on the dataset and report the results."
+                  }
+                ],
+                "identity": {
+                  "source_id": "paper",
+                  "kind": "evidence",
+                  "local_id": "round-1"
+                }
+              }
+            ],
+            "retrieval_query_contracts": [
+              {
+                "contract_id": "initial_retrieval_query.v1",
+                "query_kind": "initial",
+                "round_id": 1,
+                "query_id": "round1:primary",
+                "slot_id": "",
+                "query": "Do the authors conduct experiments on the dataset?"
+              }
+            ],
+            "schema_version": "evidence_bundle.v2",
+            "dedupe_trace": {
+              "schema_version": "evidence_bundle.v2",
+              "input_count": 1,
+              "output_count": 1,
+              "structure_duplicate_count": 0,
+              "exact_text_duplicate_count": 0,
+              "overlap_duplicate_count": 0,
+              "minhash_duplicate_count": 0,
+              "semantic_duplicate_count": 0,
+              "conflict_guard_count": 0,
+              "duplicate_ratio": 0.0
+            },
+            "canonical_candidate_count": 1,
+            "canonical_candidate_evidence": [
+              {
+                "evidence_id": "round-1",
+                "source_id": "paper",
+                "source_name": "",
+                "source_aliases": [
+                  "paper"
+                ],
+                "page_label": "",
+                "modality": "text",
+                "element_id": "",
+                "canonical_id": "evidence:paper:round-1",
+                "parent_element_id": "",
+                "neighbor_element_ids": [],
+                "section_id": "experiments",
+                "table_id": "",
+                "row_index": null,
+                "column_index": null,
+                "continuation_id": "",
+                "chunk_start": null,
+                "chunk_end": null,
+                "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+                "duplicate_evidence_ids": [],
+                "retrieval_lineage": [
+                  {
+                    "round_id": 1,
+                    "query_id": "round1:primary",
+                    "slot_id": "",
+                    "retriever_name": "text",
+                    "raw_rank": 1,
+                    "raw_score": null,
+                    "score_type": "not_recorded"
+                  }
+                ],
+                "bbox": null,
+                "caption": "",
+                "text": "We conduct experiments on the dataset and report the results.",
+                "ocr_text": "",
+                "vlm_text": "",
+                "source_backrefs": [
+                  "paper#source"
+                ],
+                "evidence_level": "page",
+                "metadata": {},
+                "cell_id": "",
+                "span_id": "",
+                "table_instance_id": null,
+                "table_group_id": null,
+                "block_id": null,
+                "row_label": null,
+                "column_label": null,
+                "period": null,
+                "period_kind": null,
+                "value": null,
+                "unit": null,
+                "scale": null,
+                "currency": null,
+                "statement_kind": null,
+                "financial_scope": null,
+                "representations": [
+                  {
+                    "modality": "text",
+                    "field": "text",
+                    "text": "We conduct experiments on the dataset and report the results."
+                  }
+                ],
+                "identity": {
+                  "source_id": "paper",
+                  "kind": "evidence",
+                  "local_id": "round-1"
+                }
+              }
+            ],
+            "candidate_evidence": [
+              {
+                "evidence_id": "round-1",
+                "source_id": "paper",
+                "source_name": "",
+                "source_aliases": [
+                  "paper"
+                ],
+                "page_label": "",
+                "modality": "text",
+                "element_id": "",
+                "canonical_id": "evidence:paper:round-1",
+                "parent_element_id": "",
+                "neighbor_element_ids": [],
+                "section_id": "experiments",
+                "table_id": "",
+                "row_index": null,
+                "column_index": null,
+                "continuation_id": "",
+                "chunk_start": null,
+                "chunk_end": null,
+                "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+                "duplicate_evidence_ids": [],
+                "retrieval_lineage": [
+                  {
+                    "round_id": 1,
+                    "query_id": "round1:primary",
+                    "slot_id": "",
+                    "retriever_name": "text",
+                    "raw_rank": 1,
+                    "raw_score": null,
+                    "score_type": "not_recorded"
+                  }
+                ],
+                "bbox": null,
+                "caption": "",
+                "text": "We conduct experiments on the dataset and report the results.",
+                "ocr_text": "",
+                "vlm_text": "",
+                "source_backrefs": [
+                  "paper#source"
+                ],
+                "evidence_level": "page",
+                "metadata": {},
+                "cell_id": "",
+                "span_id": "",
+                "table_instance_id": null,
+                "table_group_id": null,
+                "block_id": null,
+                "row_label": null,
+                "column_label": null,
+                "period": null,
+                "period_kind": null,
+                "value": null,
+                "unit": null,
+                "scale": null,
+                "currency": null,
+                "statement_kind": null,
+                "financial_scope": null,
+                "representations": [
+                  {
+                    "modality": "text",
+                    "field": "text",
+                    "text": "We conduct experiments on the dataset and report the results."
+                  }
+                ],
+                "identity": {
+                  "source_id": "paper",
+                  "kind": "evidence",
+                  "local_id": "round-1"
+                }
+              }
+            ],
+            "candidate_ranked_evidence": [
+              {
+                "evidence_id": "round-1",
+                "source_id": "paper",
+                "source_name": "",
+                "source_aliases": [
+                  "paper"
+                ],
+                "page_label": "",
+                "modality": "text",
+                "element_id": "",
+                "canonical_id": "evidence:paper:round-1",
+                "parent_element_id": "",
+                "neighbor_element_ids": [],
+                "section_id": "experiments",
+                "table_id": "",
+                "row_index": null,
+                "column_index": null,
+                "continuation_id": "",
+                "chunk_start": null,
+                "chunk_end": null,
+                "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+                "duplicate_evidence_ids": [],
+                "retrieval_lineage": [
+                  {
+                    "round_id": 1,
+                    "query_id": "round1:primary",
+                    "slot_id": "",
+                    "retriever_name": "text",
+                    "raw_rank": 1,
+                    "raw_score": null,
+                    "score_type": "not_recorded"
+                  }
+                ],
+                "bbox": null,
+                "caption": "",
+                "text": "We conduct experiments on the dataset and report the results.",
+                "ocr_text": "",
+                "vlm_text": "",
+                "source_backrefs": [
+                  "paper#source"
+                ],
+                "evidence_level": "page",
+                "metadata": {},
+                "cell_id": "",
+                "span_id": "",
+                "table_instance_id": null,
+                "table_group_id": null,
+                "block_id": null,
+                "row_label": null,
+                "column_label": null,
+                "period": null,
+                "period_kind": null,
+                "value": null,
+                "unit": null,
+                "scale": null,
+                "currency": null,
+                "statement_kind": null,
+                "financial_scope": null,
+                "representations": [
+                  {
+                    "modality": "text",
+                    "field": "text",
+                    "text": "We conduct experiments on the dataset and report the results."
+                  }
+                ],
+                "identity": {
+                  "source_id": "paper",
+                  "kind": "evidence",
+                  "local_id": "round-1"
+                }
+              }
+            ],
+            "candidate_ranking_contract": "global_ranked_v1",
+            "pre_rerank_required_slot_candidates_restored": 0,
+            "reranker_input_evidence": [],
+            "reranker_input_contract": "required_slot_restored.v1",
+            "fused_evidence": [
+              {
+                "evidence_id": "round-1",
+                "source_id": "paper",
+                "source_name": "",
+                "source_aliases": [
+                  "paper"
+                ],
+                "page_label": "",
+                "modality": "text",
+                "element_id": "",
+                "canonical_id": "evidence:paper:round-1",
+                "parent_element_id": "",
+                "neighbor_element_ids": [],
+                "section_id": "experiments",
+                "table_id": "",
+                "row_index": null,
+                "column_index": null,
+                "continuation_id": "",
+                "chunk_start": null,
+                "chunk_end": null,
+                "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+                "duplicate_evidence_ids": [],
+                "retrieval_lineage": [
+                  {
+                    "round_id": 1,
+                    "query_id": "round1:primary",
+                    "slot_id": "",
+                    "retriever_name": "text",
+                    "raw_rank": 1,
+                    "raw_score": null,
+                    "score_type": "not_recorded"
+                  }
+                ],
+                "bbox": null,
+                "caption": "",
+                "text": "We conduct experiments on the dataset and report the results.",
+                "ocr_text": "",
+                "vlm_text": "",
+                "source_backrefs": [
+                  "paper#source"
+                ],
+                "evidence_level": "page",
+                "metadata": {},
+                "cell_id": "",
+                "span_id": "",
+                "table_instance_id": null,
+                "table_group_id": null,
+                "block_id": null,
+                "row_label": null,
+                "column_label": null,
+                "period": null,
+                "period_kind": null,
+                "value": null,
+                "unit": null,
+                "scale": null,
+                "currency": null,
+                "statement_kind": null,
+                "financial_scope": null,
+                "representations": [
+                  {
+                    "modality": "text",
+                    "field": "text",
+                    "text": "We conduct experiments on the dataset and report the results."
+                  }
+                ],
+                "identity": {
+                  "source_id": "paper",
+                  "kind": "evidence",
+                  "local_id": "round-1"
+                }
+              }
+            ],
+            "fusion_stage_snapshot": {
+              "contract_id": "fusion_stage_snapshot.v1",
+              "route": "doc_text",
+              "state": "passthrough",
+              "candidate_stage": "fusion_passthrough",
+              "reason": "route_does_not_use_cross_modal_fusion",
+              "input_count": 1,
+              "output_count": 1,
+              "input_identities": [
+                "evidence:paper:round-1"
+              ],
+              "output_identities": [
+                "evidence:paper:round-1"
+              ],
+              "identity_preserved": true,
+              "fusion_trace_present": false
+            },
+            "ranking_trace": {
+              "candidate_stage": "fusion_passthrough",
+              "candidate_limit": 1,
+              "candidate_input_count": 1,
+              "input_count": 1,
+              "reranker_input_count": 1,
+              "reranker_scored_count": 0,
+              "output_limit": 30,
+              "output_count": 0,
+              "backend_output_count": 0,
+              "reranker_output_count": 0,
+              "reranker_artifact_record_count": 0,
+              "selection_retained_reranked_count": null,
+              "backend_execution": false,
+              "configured": false,
+              "loaded": false,
+              "executed": false,
+              "backend": "",
+              "model": "",
+              "score_field": "",
+              "input_identities": [],
+              "output_identities": [],
+              "backend_output_identities": [],
+              "failure_reason": "missing_complete_execution_trace",
+              "score_tie_precision_decimals": 6,
+              "tie_breaker": "canonical_evidence_identity",
+              "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+              "fusion_stage_snapshot": {
+                "contract_id": "fusion_stage_snapshot.v1",
+                "route": "doc_text",
+                "state": "passthrough",
+                "candidate_stage": "fusion_passthrough",
+                "reason": "route_does_not_use_cross_modal_fusion",
+                "input_count": 1,
+                "output_count": 1,
+                "input_identities": [
+                  "evidence:paper:round-1"
+                ],
+                "output_identities": [
+                  "evidence:paper:round-1"
+                ],
+                "identity_preserved": true,
+                "fusion_trace_present": false
+              }
+            },
+            "reranker_aggregate_trace": {
+              "candidate_stage": "fusion_passthrough",
+              "candidate_limit": 1,
+              "candidate_input_count": 1,
+              "input_count": 1,
+              "reranker_input_count": 1,
+              "reranker_scored_count": 0,
+              "output_limit": 30,
+              "output_count": 0,
+              "backend_output_count": 0,
+              "reranker_output_count": 0,
+              "reranker_artifact_record_count": 0,
+              "selection_retained_reranked_count": null,
+              "backend_execution": false,
+              "configured": false,
+              "loaded": false,
+              "executed": false,
+              "backend": "",
+              "model": "",
+              "score_field": "",
+              "input_identities": [],
+              "output_identities": [],
+              "backend_output_identities": [],
+              "failure_reason": "missing_complete_execution_trace",
+              "score_tie_precision_decimals": 6,
+              "tie_breaker": "canonical_evidence_identity",
+              "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+              "fusion_stage_snapshot": {
+                "contract_id": "fusion_stage_snapshot.v1",
+                "route": "doc_text",
+                "state": "passthrough",
+                "candidate_stage": "fusion_passthrough",
+                "reason": "route_does_not_use_cross_modal_fusion",
+                "input_count": 1,
+                "output_count": 1,
+                "input_identities": [
+                  "evidence:paper:round-1"
+                ],
+                "output_identities": [
+                  "evidence:paper:round-1"
+                ],
+                "identity_preserved": true,
+                "fusion_trace_present": false
+              }
+            },
+            "page_coverage": [],
+            "source_ids": [
+              "paper"
+            ],
+            "evidence_ids": [
+              "round-1"
+            ],
+            "source_page_locators": [],
+            "source_page_alias_locators": [],
+            "modality_counts": {
+              "text": 1
+            },
+            "selected_evidence": [
+              {
+                "evidence_id": "round-1",
+                "source_id": "paper",
+                "source_name": "",
+                "source_aliases": [
+                  "paper"
+                ],
+                "page_label": "",
+                "modality": "text",
+                "element_id": "",
+                "canonical_id": "evidence:paper:round-1",
+                "parent_element_id": "",
+                "neighbor_element_ids": [],
+                "section_id": "experiments",
+                "table_id": "",
+                "row_index": null,
+                "column_index": null,
+                "continuation_id": "",
+                "chunk_start": null,
+                "chunk_end": null,
+                "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+                "duplicate_evidence_ids": [],
+                "retrieval_lineage": [
+                  {
+                    "round_id": 1,
+                    "query_id": "round1:primary",
+                    "slot_id": "",
+                    "retriever_name": "text",
+                    "raw_rank": 1,
+                    "raw_score": null,
+                    "score_type": "not_recorded"
+                  }
+                ],
+                "bbox": null,
+                "caption": "",
+                "text": "We conduct experiments on the dataset and report the results.",
+                "ocr_text": "",
+                "vlm_text": "",
+                "source_backrefs": [
+                  "paper#source"
+                ],
+                "evidence_level": "page",
+                "metadata": {},
+                "cell_id": "",
+                "span_id": "",
+                "table_instance_id": null,
+                "table_group_id": null,
+                "block_id": null,
+                "row_label": null,
+                "column_label": null,
+                "period": null,
+                "period_kind": null,
+                "value": null,
+                "unit": null,
+                "scale": null,
+                "currency": null,
+                "statement_kind": null,
+                "financial_scope": null,
+                "representations": [
+                  {
+                    "modality": "text",
+                    "field": "text",
+                    "text": "We conduct experiments on the dataset and report the results."
+                  }
+                ],
+                "identity": {
+                  "source_id": "paper",
+                  "kind": "evidence",
+                  "local_id": "round-1"
+                }
+              }
+            ],
+            "generation_context_evidence": [
+              {
+                "evidence_id": "round-1",
+                "source_id": "paper",
+                "source_name": "",
+                "source_aliases": [
+                  "paper"
+                ],
+                "page_label": "",
+                "modality": "text",
+                "element_id": "",
+                "canonical_id": "evidence:paper:round-1",
+                "parent_element_id": "",
+                "neighbor_element_ids": [],
+                "section_id": "experiments",
+                "table_id": "",
+                "row_index": null,
+                "column_index": null,
+                "continuation_id": "",
+                "chunk_start": null,
+                "chunk_end": null,
+                "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+                "duplicate_evidence_ids": [],
+                "retrieval_lineage": [
+                  {
+                    "round_id": 1,
+                    "query_id": "round1:primary",
+                    "slot_id": "",
+                    "retriever_name": "text",
+                    "raw_rank": 1,
+                    "raw_score": null,
+                    "score_type": "not_recorded"
+                  }
+                ],
+                "bbox": null,
+                "caption": "",
+                "text": "We conduct experiments on the dataset and report the results.",
+                "ocr_text": "",
+                "vlm_text": "",
+                "source_backrefs": [
+                  "paper#source"
+                ],
+                "evidence_level": "page",
+                "metadata": {},
+                "cell_id": "",
+                "span_id": "",
+                "table_instance_id": null,
+                "table_group_id": null,
+                "block_id": null,
+                "row_label": null,
+                "column_label": null,
+                "period": null,
+                "period_kind": null,
+                "value": null,
+                "unit": null,
+                "scale": null,
+                "currency": null,
+                "statement_kind": null,
+                "financial_scope": null,
+                "representations": [
+                  {
+                    "modality": "text",
+                    "field": "text",
+                    "text": "We conduct experiments on the dataset and report the results."
+                  }
+                ],
+                "identity": {
+                  "source_id": "paper",
+                  "kind": "evidence",
+                  "local_id": "round-1"
+                }
+              }
+            ],
+            "used_evidence": [
+              {
+                "evidence_id": "round-1",
+                "source_id": "paper",
+                "source_name": "",
+                "source_aliases": [
+                  "paper"
+                ],
+                "page_label": "",
+                "modality": "text",
+                "element_id": "",
+                "canonical_id": "evidence:paper:round-1",
+                "parent_element_id": "",
+                "neighbor_element_ids": [],
+                "section_id": "experiments",
+                "table_id": "",
+                "row_index": null,
+                "column_index": null,
+                "continuation_id": "",
+                "chunk_start": null,
+                "chunk_end": null,
+                "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+                "duplicate_evidence_ids": [],
+                "retrieval_lineage": [
+                  {
+                    "round_id": 1,
+                    "query_id": "round1:primary",
+                    "slot_id": "",
+                    "retriever_name": "text",
+                    "raw_rank": 1,
+                    "raw_score": null,
+                    "score_type": "not_recorded"
+                  }
+                ],
+                "bbox": null,
+                "caption": "",
+                "text": "We conduct experiments on the dataset and report the results.",
+                "ocr_text": "",
+                "vlm_text": "",
+                "source_backrefs": [
+                  "paper#source"
+                ],
+                "evidence_level": "page",
+                "metadata": {},
+                "cell_id": "",
+                "span_id": "",
+                "table_instance_id": null,
+                "table_group_id": null,
+                "block_id": null,
+                "row_label": null,
+                "column_label": null,
+                "period": null,
+                "period_kind": null,
+                "value": null,
+                "unit": null,
+                "scale": null,
+                "currency": null,
+                "statement_kind": null,
+                "financial_scope": null,
+                "representations": [
+                  {
+                    "modality": "text",
+                    "field": "text",
+                    "text": "We conduct experiments on the dataset and report the results."
+                  }
+                ],
+                "identity": {
+                  "source_id": "paper",
+                  "kind": "evidence",
+                  "local_id": "round-1"
+                }
+              }
+            ],
+            "stage_aliases": {
+              "used_evidence": "generation_context_evidence"
+            },
+            "query_plan": {
+              "contract_id": "query_plan.v1",
+              "plan_id": "plan:9acb1ff1400ed512785b",
+              "answer_type": "boolean",
+              "question_type": "simple_fact",
+              "subqueries": [
+                "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+              ],
+              "evidence_slots": [
+                {
+                  "slot_id": "support:boolean_proposition",
+                  "role": "support",
+                  "entity": "",
+                  "metric": "authors conduct experiments on dataset",
+                  "period": "",
+                  "period_kind": "",
+                  "unit": "",
+                  "scale": "",
+                  "statement_kind": "boolean_proposition",
+                  "financial_scope": "",
+                  "modality": "auto",
+                  "required": true,
+                  "required_for_retrieval": false,
+                  "required_for_execution": false,
+                  "required_for_verification": true,
+                  "status": "retrieved_unverified",
+                  "evidence_ids": [
+                    "evidence:paper:round-1"
+                  ],
+                  "cardinality": 1,
+                  "operator_role": "",
+                  "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+                  "locator": {}
+                }
+              ],
+              "constraints": {
+                "periods": [],
+                "verification_domain": "qasper",
+                "requires_visual": false,
+                "requires_multiple_evidence": false,
+                "requires_distinct_source_pages": false,
+                "requires_structured_elements": false,
+                "explicit_page_labels": [],
+                "figure_label": "",
+                "table_label": "",
+                "requires_distinct_evidence": false,
+                "requires_structure": false,
+                "question": "Do the authors conduct experiments on the dataset?",
+                "finance_formula_status": "not_applicable"
+              },
+              "max_retrieval_rounds": 2
+            },
+            "query_plan_id": "plan:9acb1ff1400ed512785b",
+            "planned_query_plan": {
+              "contract_id": "query_plan.v1",
+              "plan_id": "plan:9acb1ff1400ed512785b",
+              "answer_type": "boolean",
+              "question_type": "simple_fact",
+              "subqueries": [
+                "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+              ],
+              "evidence_slots": [
+                {
+                  "slot_id": "support:boolean_proposition",
+                  "role": "support",
+                  "entity": "",
+                  "metric": "authors conduct experiments on dataset",
+                  "period": "",
+                  "period_kind": "",
+                  "unit": "",
+                  "scale": "",
+                  "statement_kind": "boolean_proposition",
+                  "financial_scope": "",
+                  "modality": "auto",
+                  "required": true,
+                  "required_for_retrieval": false,
+                  "required_for_execution": false,
+                  "required_for_verification": true,
+                  "status": "missing",
+                  "evidence_ids": [],
+                  "cardinality": 1,
+                  "operator_role": "",
+                  "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+                  "locator": {}
+                }
+              ],
+              "constraints": {
+                "periods": [],
+                "verification_domain": "qasper",
+                "requires_visual": false,
+                "requires_multiple_evidence": false,
+                "requires_distinct_source_pages": false,
+                "requires_structured_elements": false,
+                "explicit_page_labels": [],
+                "figure_label": "",
+                "table_label": "",
+                "requires_distinct_evidence": false,
+                "requires_structure": false,
+                "question": "Do the authors conduct experiments on the dataset?",
+                "finance_formula_status": "not_applicable"
+              },
+              "max_retrieval_rounds": 2,
+              "stage": "planned",
+              "state_version": 0
+            },
+            "bound_query_plan": {
+              "contract_id": "query_plan.v1",
+              "plan_id": "plan:9acb1ff1400ed512785b",
+              "answer_type": "boolean",
+              "question_type": "simple_fact",
+              "subqueries": [
+                "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+              ],
+              "evidence_slots": [
+                {
+                  "slot_id": "support:boolean_proposition",
+                  "role": "support",
+                  "entity": "",
+                  "metric": "authors conduct experiments on dataset",
+                  "period": "",
+                  "period_kind": "",
+                  "unit": "",
+                  "scale": "",
+                  "statement_kind": "boolean_proposition",
+                  "financial_scope": "",
+                  "modality": "auto",
+                  "required": true,
+                  "required_for_retrieval": false,
+                  "required_for_execution": false,
+                  "required_for_verification": true,
+                  "status": "retrieved_unverified",
+                  "evidence_ids": [
+                    "evidence:paper:round-1"
+                  ],
+                  "cardinality": 1,
+                  "operator_role": "",
+                  "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+                  "locator": {}
+                }
+              ],
+              "constraints": {
+                "periods": [],
+                "verification_domain": "qasper",
+                "requires_visual": false,
+                "requires_multiple_evidence": false,
+                "requires_distinct_source_pages": false,
+                "requires_structured_elements": false,
+                "explicit_page_labels": [],
+                "figure_label": "",
+                "table_label": "",
+                "requires_distinct_evidence": false,
+                "requires_structure": false,
+                "question": "Do the authors conduct experiments on the dataset?",
+                "finance_formula_status": "not_applicable"
+              },
+              "max_retrieval_rounds": 2,
+              "stage": "bound",
+              "state_version": 1
+            },
+            "evidence_selection_trace": {
+              "strategy": "marginal_evidence_set_selection_v3",
+              "candidate_count": 1,
+              "selected_count": 1,
+              "max_items": 8,
+              "max_pages": 3,
+              "unique_pages": 0,
+              "selected_pages": [],
+              "slot_coverage": null,
+              "missing_required_slot_count": 0,
+              "continuation_expansion_count": 0,
+              "page_modality_expansion_count": 0,
+              "structure_expansion_enabled": false,
+              "mmr_lambda": 0.7,
+              "structure_metadata_coverage": 1.0,
+              "mixed_candidate_structure_metadata_coverage": 1.0,
+              "structure_coverage_scope": "legacy_mixed",
+              "required_slot_candidates_restored": 0,
+              "candidate_budget_partitions": {
+                "factual_narrative": 2,
+                "execution_operands": 0,
+                "parent_tables": 0,
+                "dimensions": 0
+              },
+              "selected_budget_usage": {
+                "factual_narrative": 1,
+                "execution_operands": 0,
+                "parent_tables": 0,
+                "dimensions": 0
+              },
+              "evidence_stage_trace": [
+                {
+                  "evidence_id": "evidence:paper:round-1",
+                  "retrieved_candidate": true,
+                  "selected_in_context": true,
+                  "parent_retained": false,
+                  "materialized_for_slot_ids": [],
+                  "bound_to_slot_ids": [
+                    "support:boolean_proposition"
+                  ],
+                  "executable_operand": false,
+                  "verified_support": false,
+                  "citation_emitted": false,
+                  "stage_scope": "selection"
+                }
+              ],
+              "trace_validation_errors": [],
+              "required_slot_bindings": [
+                {
+                  "slot_id": "support:boolean_proposition",
+                  "status": "retrieved_unverified",
+                  "retrieval_satisfied": true,
+                  "execution_satisfied": null,
+                  "verification_satisfied": false,
+                  "reason": "",
+                  "selected_evidence_ids": [
+                    "evidence:paper:round-1"
+                  ],
+                  "best_selected_slot_score": 3.0,
+                  "candidate_selection_reasons": [
+                    {
+                      "evidence_id": "evidence:paper:round-1",
+                      "reason": "bound_to_slot",
+                      "slot_score": 3.0
+                    }
+                  ],
+                  "candidate_drop_reasons": []
+                }
+              ],
+              "execution_slot_lineage": [],
+              "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+              "boolean_assessment_cache": {
+                "unique_semantic_candidates": 1,
+                "slots": 1,
+                "cache_entries": 1,
+                "cache_builds": 1,
+                "cache_hits": 11,
+                "cache_misses": 0,
+                "classification_calls": 1,
+                "mmr_hot_loop_misses": 0,
+                "time_spent_ms": 0.0
+              }
+            },
+            "structure_metadata_coverage": 1.0,
+            "slot_coverage": null,
+            "missing_required_slot_count": 0,
+            "second_round_queries": [],
+            "second_round_requests": [],
+            "boolean_assessment_cache": {
+              "unique_semantic_candidates": 1,
+              "slots": 1,
+              "cache_entries": 1,
+              "cache_builds": 1,
+              "cache_hits": 11,
+              "cache_misses": 0,
+              "classification_calls": 1,
+              "mmr_hot_loop_misses": 0,
+              "time_spent_ms": 0.0
+            },
+            "typed_adequacy_status": "not_applicable",
+            "heuristic_adequacy_status": "good",
+            "final_adequacy_status": "good",
+            "adequacy_decision_authority": "general_heuristic",
+            "heuristic_overridden": false,
+            "heuristic_override_reason": "",
+            "typed_adequacy_reason": "non_finance_domain",
+            "retrieval_rounds": 1,
+            "pipeline_stage_timings": {
+              "planning_seconds": 0.0,
+              "retrieval_seconds": 0.0,
+              "generation_seconds": 0.0,
+              "retry_seconds": 0.0,
+              "verification_seconds": 0.0,
+              "finalization_seconds": 0.0
+            }
+          }
+        },
+        "terminal_outcome": "execution_failed",
+        "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+        "terminal_semantic_commit": {
+          "contract_id": "terminal_semantic_commit.v3",
+          "semantic_answer": "unanswerable",
+          "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+          "outcome": "execution_failed",
+          "outcome_reason": "backend_failed",
+          "answer_status": "abstained",
+          "verify_decision": {
+            "mode": "strict",
+            "status": "execution_failed",
+            "reason": "backend_failed",
+            "action": "error",
+            "claims": [],
+            "unsupported_claims": [],
+            "unknown_claims": [],
+            "verified_citations": [],
+            "claim_results": [],
+            "input_answer_polarity": "",
+            "canonical_answer_polarity": "",
+            "semantic_correction_applied": false,
+            "boolean_authority_status": "",
+            "authoritative_evidence_id": "",
+            "authoritative_evidence_ref": "",
+            "authoritative_span_id": "",
+            "authoritative_quote": "",
+            "authoritative_span_start": null,
+            "authoritative_span_end": null,
+            "authoritative_canonical_start": null,
+            "authoritative_canonical_end": null,
+            "actor": "",
+            "section_scope": "",
+            "relation": "",
+            "object": "",
+            "predicate_arguments": [],
+            "qualifier": "",
+            "quantifier": "",
+            "verified_support_slot_ids": [],
+            "authority_derivations": [],
+            "selected_derivation_id": "",
+            "authoritative_conflict": {},
+            "typed_authority": {},
+            "candidate_contract_id": "",
+            "candidate_label": "",
+            "verifier_input_candidate": "",
+            "verifier_candidate_status": "",
+            "replacement_candidate_allowed": false,
+            "predicate": "",
+            "arguments": [],
+            "scope": ""
+          },
+          "guardrail_decision": {
+            "status": "execution_failed",
+            "action": "error",
+            "reason": "backend_failed"
+          },
+          "authoritative_evidence": [],
+          "citations": [],
+          "projection_hash": "4c7f9adb2ec9e36f12fd896fdcde2145a6e9783c72919d4b359fc2e3f6dd7f78",
+          "state_version": 3
+        }
+      },
+      "engine_verify_decision": {
+        "mode": "strict",
+        "status": "execution_failed",
+        "reason": "backend_failed",
+        "action": "error",
+        "claims": [],
+        "unsupported_claims": [],
+        "unknown_claims": [],
+        "verified_citations": [],
+        "claim_results": [],
+        "input_answer_polarity": "",
+        "canonical_answer_polarity": "",
+        "semantic_correction_applied": false,
+        "boolean_authority_status": "",
+        "authoritative_evidence_id": "",
+        "authoritative_evidence_ref": "",
+        "authoritative_span_id": "",
+        "authoritative_quote": "",
+        "authoritative_span_start": null,
+        "authoritative_span_end": null,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "",
+        "section_scope": "",
+        "relation": "",
+        "object": "",
+        "predicate_arguments": [],
+        "qualifier": "",
+        "quantifier": "",
+        "verified_support_slot_ids": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {},
+        "typed_authority": {},
+        "candidate_contract_id": "",
+        "candidate_label": "",
+        "verifier_input_candidate": "",
+        "verifier_candidate_status": "",
+        "replacement_candidate_allowed": false,
+        "predicate": "",
+        "arguments": [],
+        "scope": ""
+      },
+      "engine_terminal_guardrail_decision": {
+        "status": "execution_failed",
+        "action": "error",
+        "reason": "backend_failed"
+      },
+      "engine_terminal_evidence_bundle": {
+        "route": "doc_text",
+        "items": [
+          {
+            "evidence_id": "round-1",
+            "source_id": "paper",
+            "source_name": "",
+            "source_aliases": [
+              "paper"
+            ],
+            "page_label": "",
+            "modality": "text",
+            "element_id": "",
+            "canonical_id": "evidence:paper:round-1",
+            "parent_element_id": "",
+            "neighbor_element_ids": [],
+            "section_id": "experiments",
+            "table_id": "",
+            "row_index": null,
+            "column_index": null,
+            "continuation_id": "",
+            "chunk_start": null,
+            "chunk_end": null,
+            "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+            "duplicate_evidence_ids": [],
+            "retrieval_lineage": [
+              {
+                "round_id": 1,
+                "query_id": "round1:primary",
+                "slot_id": "",
+                "retriever_name": "text",
+                "raw_rank": 1,
+                "raw_score": null,
+                "score_type": "not_recorded"
+              }
+            ],
+            "bbox": null,
+            "caption": "",
+            "text": "We conduct experiments on the dataset and report the results.",
+            "ocr_text": "",
+            "vlm_text": "",
+            "source_backrefs": [
+              "paper#source"
+            ],
+            "evidence_level": "page",
+            "metadata": {},
+            "cell_id": "",
+            "span_id": "",
+            "table_instance_id": null,
+            "table_group_id": null,
+            "block_id": null,
+            "row_label": null,
+            "column_label": null,
+            "period": null,
+            "period_kind": null,
+            "value": null,
+            "unit": null,
+            "scale": null,
+            "currency": null,
+            "statement_kind": null,
+            "financial_scope": null,
+            "representations": [
+              {
+                "modality": "text",
+                "field": "text",
+                "text": "We conduct experiments on the dataset and report the results."
+              }
+            ],
+            "identity": {
+              "source_id": "paper",
+              "kind": "evidence",
+              "local_id": "round-1"
+            }
+          }
+        ],
+        "metadata": {
+          "evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "retrieval_query_contracts": [
+            {
+              "contract_id": "initial_retrieval_query.v1",
+              "query_kind": "initial",
+              "round_id": 1,
+              "query_id": "round1:primary",
+              "slot_id": "",
+              "query": "Do the authors conduct experiments on the dataset?"
+            }
+          ],
+          "schema_version": "evidence_bundle.v2",
+          "dedupe_trace": {
+            "schema_version": "evidence_bundle.v2",
+            "input_count": 1,
+            "output_count": 1,
+            "structure_duplicate_count": 0,
+            "exact_text_duplicate_count": 0,
+            "overlap_duplicate_count": 0,
+            "minhash_duplicate_count": 0,
+            "semantic_duplicate_count": 0,
+            "conflict_guard_count": 0,
+            "duplicate_ratio": 0.0
+          },
+          "canonical_candidate_count": 1,
+          "canonical_candidate_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "candidate_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "candidate_ranked_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "candidate_ranking_contract": "global_ranked_v1",
+          "pre_rerank_required_slot_candidates_restored": 0,
+          "reranker_input_evidence": [],
+          "reranker_input_contract": "required_slot_restored.v1",
+          "fused_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "fusion_stage_snapshot": {
+            "contract_id": "fusion_stage_snapshot.v1",
+            "route": "doc_text",
+            "state": "passthrough",
+            "candidate_stage": "fusion_passthrough",
+            "reason": "route_does_not_use_cross_modal_fusion",
+            "input_count": 1,
+            "output_count": 1,
+            "input_identities": [
+              "evidence:paper:round-1"
+            ],
+            "output_identities": [
+              "evidence:paper:round-1"
+            ],
+            "identity_preserved": true,
+            "fusion_trace_present": false
+          },
+          "ranking_trace": {
+            "candidate_stage": "fusion_passthrough",
+            "candidate_limit": 1,
+            "candidate_input_count": 1,
+            "input_count": 1,
+            "reranker_input_count": 1,
+            "reranker_scored_count": 0,
+            "output_limit": 30,
+            "output_count": 0,
+            "backend_output_count": 0,
+            "reranker_output_count": 0,
+            "reranker_artifact_record_count": 0,
+            "selection_retained_reranked_count": null,
+            "backend_execution": false,
+            "configured": false,
+            "loaded": false,
+            "executed": false,
+            "backend": "",
+            "model": "",
+            "score_field": "",
+            "input_identities": [],
+            "output_identities": [],
+            "backend_output_identities": [],
+            "failure_reason": "missing_complete_execution_trace",
+            "score_tie_precision_decimals": 6,
+            "tie_breaker": "canonical_evidence_identity",
+            "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+            "fusion_stage_snapshot": {
+              "contract_id": "fusion_stage_snapshot.v1",
+              "route": "doc_text",
+              "state": "passthrough",
+              "candidate_stage": "fusion_passthrough",
+              "reason": "route_does_not_use_cross_modal_fusion",
+              "input_count": 1,
+              "output_count": 1,
+              "input_identities": [
+                "evidence:paper:round-1"
+              ],
+              "output_identities": [
+                "evidence:paper:round-1"
+              ],
+              "identity_preserved": true,
+              "fusion_trace_present": false
+            }
+          },
+          "reranker_aggregate_trace": {
+            "candidate_stage": "fusion_passthrough",
+            "candidate_limit": 1,
+            "candidate_input_count": 1,
+            "input_count": 1,
+            "reranker_input_count": 1,
+            "reranker_scored_count": 0,
+            "output_limit": 30,
+            "output_count": 0,
+            "backend_output_count": 0,
+            "reranker_output_count": 0,
+            "reranker_artifact_record_count": 0,
+            "selection_retained_reranked_count": null,
+            "backend_execution": false,
+            "configured": false,
+            "loaded": false,
+            "executed": false,
+            "backend": "",
+            "model": "",
+            "score_field": "",
+            "input_identities": [],
+            "output_identities": [],
+            "backend_output_identities": [],
+            "failure_reason": "missing_complete_execution_trace",
+            "score_tie_precision_decimals": 6,
+            "tie_breaker": "canonical_evidence_identity",
+            "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+            "fusion_stage_snapshot": {
+              "contract_id": "fusion_stage_snapshot.v1",
+              "route": "doc_text",
+              "state": "passthrough",
+              "candidate_stage": "fusion_passthrough",
+              "reason": "route_does_not_use_cross_modal_fusion",
+              "input_count": 1,
+              "output_count": 1,
+              "input_identities": [
+                "evidence:paper:round-1"
+              ],
+              "output_identities": [
+                "evidence:paper:round-1"
+              ],
+              "identity_preserved": true,
+              "fusion_trace_present": false
+            }
+          },
+          "page_coverage": [],
+          "source_ids": [
+            "paper"
+          ],
+          "evidence_ids": [
+            "round-1"
+          ],
+          "source_page_locators": [],
+          "source_page_alias_locators": [],
+          "modality_counts": {
+            "text": 1
+          },
+          "selected_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "generation_context_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "used_evidence": [
+            {
+              "evidence_id": "round-1",
+              "source_id": "paper",
+              "source_name": "",
+              "source_aliases": [
+                "paper"
+              ],
+              "page_label": "",
+              "modality": "text",
+              "element_id": "",
+              "canonical_id": "evidence:paper:round-1",
+              "parent_element_id": "",
+              "neighbor_element_ids": [],
+              "section_id": "experiments",
+              "table_id": "",
+              "row_index": null,
+              "column_index": null,
+              "continuation_id": "",
+              "chunk_start": null,
+              "chunk_end": null,
+              "normalized_text_hash": "52c0a2dee4a3a006e8b9693a043fcba4a6d12916630e485eb677813b80fcd160",
+              "duplicate_evidence_ids": [],
+              "retrieval_lineage": [
+                {
+                  "round_id": 1,
+                  "query_id": "round1:primary",
+                  "slot_id": "",
+                  "retriever_name": "text",
+                  "raw_rank": 1,
+                  "raw_score": null,
+                  "score_type": "not_recorded"
+                }
+              ],
+              "bbox": null,
+              "caption": "",
+              "text": "We conduct experiments on the dataset and report the results.",
+              "ocr_text": "",
+              "vlm_text": "",
+              "source_backrefs": [
+                "paper#source"
+              ],
+              "evidence_level": "page",
+              "metadata": {},
+              "cell_id": "",
+              "span_id": "",
+              "table_instance_id": null,
+              "table_group_id": null,
+              "block_id": null,
+              "row_label": null,
+              "column_label": null,
+              "period": null,
+              "period_kind": null,
+              "value": null,
+              "unit": null,
+              "scale": null,
+              "currency": null,
+              "statement_kind": null,
+              "financial_scope": null,
+              "representations": [
+                {
+                  "modality": "text",
+                  "field": "text",
+                  "text": "We conduct experiments on the dataset and report the results."
+                }
+              ],
+              "identity": {
+                "source_id": "paper",
+                "kind": "evidence",
+                "local_id": "round-1"
+              }
+            }
+          ],
+          "stage_aliases": {
+            "used_evidence": "generation_context_evidence"
+          },
+          "query_plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:9acb1ff1400ed512785b",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors conduct experiments on dataset",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_unverified",
+                "evidence_ids": [
+                  "evidence:paper:round-1"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": [],
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Do the authors conduct experiments on the dataset?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "query_plan_id": "plan:9acb1ff1400ed512785b",
+          "planned_query_plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:9acb1ff1400ed512785b",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors conduct experiments on dataset",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": [],
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Do the authors conduct experiments on the dataset?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2,
+            "stage": "planned",
+            "state_version": 0
+          },
+          "bound_query_plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:9acb1ff1400ed512785b",
+            "answer_type": "boolean",
+            "question_type": "simple_fact",
+            "subqueries": [
+              "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "role": "support",
+                "entity": "",
+                "metric": "authors conduct experiments on dataset",
+                "period": "",
+                "period_kind": "",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "boolean_proposition",
+                "financial_scope": "",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": false,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "retrieved_unverified",
+                "evidence_ids": [
+                  "evidence:paper:round-1"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "Do the authors conduct experiments on the dataset? current study authors experiments evaluate tested examples results",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [],
+              "verification_domain": "qasper",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": [],
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": false,
+              "question": "Do the authors conduct experiments on the dataset?",
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2,
+            "stage": "bound",
+            "state_version": 1
+          },
+          "evidence_selection_trace": {
+            "strategy": "marginal_evidence_set_selection_v3",
+            "candidate_count": 1,
+            "selected_count": 1,
+            "max_items": 8,
+            "max_pages": 3,
+            "unique_pages": 0,
+            "selected_pages": [],
+            "slot_coverage": null,
+            "missing_required_slot_count": 0,
+            "continuation_expansion_count": 0,
+            "page_modality_expansion_count": 0,
+            "structure_expansion_enabled": false,
+            "mmr_lambda": 0.7,
+            "structure_metadata_coverage": 1.0,
+            "mixed_candidate_structure_metadata_coverage": 1.0,
+            "structure_coverage_scope": "legacy_mixed",
+            "required_slot_candidates_restored": 0,
+            "candidate_budget_partitions": {
+              "factual_narrative": 2,
+              "execution_operands": 0,
+              "parent_tables": 0,
+              "dimensions": 0
+            },
+            "selected_budget_usage": {
+              "factual_narrative": 1,
+              "execution_operands": 0,
+              "parent_tables": 0,
+              "dimensions": 0
+            },
+            "evidence_stage_trace": [
+              {
+                "evidence_id": "evidence:paper:round-1",
+                "retrieved_candidate": true,
+                "selected_in_context": true,
+                "parent_retained": false,
+                "materialized_for_slot_ids": [],
+                "bound_to_slot_ids": [
+                  "support:boolean_proposition"
+                ],
+                "executable_operand": false,
+                "verified_support": false,
+                "citation_emitted": false,
+                "stage_scope": "selection"
+              }
+            ],
+            "trace_validation_errors": [],
+            "required_slot_bindings": [
+              {
+                "slot_id": "support:boolean_proposition",
+                "status": "retrieved_unverified",
+                "retrieval_satisfied": true,
+                "execution_satisfied": null,
+                "verification_satisfied": false,
+                "reason": "",
+                "selected_evidence_ids": [
+                  "evidence:paper:round-1"
+                ],
+                "best_selected_slot_score": 3.0,
+                "candidate_selection_reasons": [
+                  {
+                    "evidence_id": "evidence:paper:round-1",
+                    "reason": "bound_to_slot",
+                    "slot_score": 3.0
+                  }
+                ],
+                "candidate_drop_reasons": []
+              }
+            ],
+            "execution_slot_lineage": [],
+            "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+            "boolean_assessment_cache": {
+              "unique_semantic_candidates": 1,
+              "slots": 1,
+              "cache_entries": 1,
+              "cache_builds": 1,
+              "cache_hits": 11,
+              "cache_misses": 0,
+              "classification_calls": 1,
+              "mmr_hot_loop_misses": 0,
+              "time_spent_ms": 0.0
+            }
+          },
+          "structure_metadata_coverage": 1.0,
+          "slot_coverage": null,
+          "missing_required_slot_count": 0,
+          "second_round_queries": [],
+          "second_round_requests": [],
+          "boolean_assessment_cache": {
+            "unique_semantic_candidates": 1,
+            "slots": 1,
+            "cache_entries": 1,
+            "cache_builds": 1,
+            "cache_hits": 11,
+            "cache_misses": 0,
+            "classification_calls": 1,
+            "mmr_hot_loop_misses": 0,
+            "time_spent_ms": 0.0
+          },
+          "typed_adequacy_status": "not_applicable",
+          "heuristic_adequacy_status": "good",
+          "final_adequacy_status": "good",
+          "adequacy_decision_authority": "general_heuristic",
+          "heuristic_overridden": false,
+          "heuristic_override_reason": "",
+          "typed_adequacy_reason": "non_finance_domain",
+          "retrieval_rounds": 1,
+          "pipeline_stage_timings": {
+            "planning_seconds": 0.0,
+            "retrieval_seconds": 0.0,
+            "generation_seconds": 0.0,
+            "retry_seconds": 0.0,
+            "verification_seconds": 0.0,
+            "finalization_seconds": 0.0
+          }
+        }
+      },
+      "engine_terminal_projection_hash": "40d8610d6faca97ddfd45650717ac172b9be995b0ec480d3ed2fc3ab04f9880f",
+      "engine_terminal_commit": {
+        "contract_id": "terminal_semantic_commit.v3",
+        "semantic_answer": "unanswerable",
+        "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+        "outcome": "execution_failed",
+        "outcome_reason": "backend_failed",
+        "answer_status": "abstained",
+        "verify_decision": {
+          "mode": "strict",
+          "status": "execution_failed",
+          "reason": "backend_failed",
+          "action": "error",
+          "claims": [],
+          "unsupported_claims": [],
+          "unknown_claims": [],
+          "verified_citations": [],
+          "claim_results": [],
+          "input_answer_polarity": "",
+          "canonical_answer_polarity": "",
+          "semantic_correction_applied": false,
+          "boolean_authority_status": "",
+          "authoritative_evidence_id": "",
+          "authoritative_evidence_ref": "",
+          "authoritative_span_id": "",
+          "authoritative_quote": "",
+          "authoritative_span_start": null,
+          "authoritative_span_end": null,
+          "authoritative_canonical_start": null,
+          "authoritative_canonical_end": null,
+          "actor": "",
+          "section_scope": "",
+          "relation": "",
+          "object": "",
+          "predicate_arguments": [],
+          "qualifier": "",
+          "quantifier": "",
+          "verified_support_slot_ids": [],
+          "authority_derivations": [],
+          "selected_derivation_id": "",
+          "authoritative_conflict": {},
+          "typed_authority": {},
+          "candidate_contract_id": "",
+          "candidate_label": "",
+          "verifier_input_candidate": "",
+          "verifier_candidate_status": "",
+          "replacement_candidate_allowed": false,
+          "predicate": "",
+          "arguments": [],
+          "scope": ""
+        },
+        "guardrail_decision": {
+          "status": "execution_failed",
+          "action": "error",
+          "reason": "backend_failed"
+        },
+        "authoritative_evidence": [],
+        "citations": [],
+        "projection_hash": "4c7f9adb2ec9e36f12fd896fdcde2145a6e9783c72919d4b359fc2e3f6dd7f78",
+        "state_version": 3
+      },
+      "terminal_semantic_commit": {
+        "contract_id": "terminal_semantic_commit.v3",
+        "semantic_answer": "unanswerable",
+        "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+        "outcome": "execution_failed",
+        "outcome_reason": "backend_failed",
+        "answer_status": "abstained",
+        "verify_decision": {
+          "mode": "strict",
+          "status": "execution_failed",
+          "reason": "backend_failed",
+          "action": "error",
+          "claims": [],
+          "unsupported_claims": [],
+          "unknown_claims": [],
+          "verified_citations": [],
+          "claim_results": [],
+          "input_answer_polarity": "",
+          "canonical_answer_polarity": "",
+          "semantic_correction_applied": false,
+          "boolean_authority_status": "",
+          "authoritative_evidence_id": "",
+          "authoritative_evidence_ref": "",
+          "authoritative_span_id": "",
+          "authoritative_quote": "",
+          "authoritative_span_start": null,
+          "authoritative_span_end": null,
+          "authoritative_canonical_start": null,
+          "authoritative_canonical_end": null,
+          "actor": "",
+          "section_scope": "",
+          "relation": "",
+          "object": "",
+          "predicate_arguments": [],
+          "qualifier": "",
+          "quantifier": "",
+          "verified_support_slot_ids": [],
+          "authority_derivations": [],
+          "selected_derivation_id": "",
+          "authoritative_conflict": {},
+          "typed_authority": {},
+          "candidate_contract_id": "",
+          "candidate_label": "",
+          "verifier_input_candidate": "",
+          "verifier_candidate_status": "",
+          "replacement_candidate_allowed": false,
+          "predicate": "",
+          "arguments": [],
+          "scope": ""
+        },
+        "guardrail_decision": {
+          "status": "execution_failed",
+          "action": "error",
+          "reason": "backend_failed"
+        },
+        "authoritative_evidence": [],
+        "citations": [],
+        "projection_hash": "4c7f9adb2ec9e36f12fd896fdcde2145a6e9783c72919d4b359fc2e3f6dd7f78",
+        "state_version": 3
+      }
+    },
+    "request_budget_trace": [
+      {
+        "stage": "route_budget",
+        "blocking_stage": "retrieval",
+        "absolute_deadline_monotonic": 200.0,
+        "remaining_route_seconds_before": 100.0,
+        "terminal_commit_reserve_seconds": 12.0,
+        "configured_call_timeout_seconds": null,
+        "call_timeout_budget_seconds": 88.0,
+        "status": "completed",
+        "elapsed_seconds": 0.0,
+        "remaining_route_seconds_after": 100.0
+      },
+      {
+        "stage": "route_budget",
+        "blocking_stage": "generation",
+        "absolute_deadline_monotonic": 200.0,
+        "remaining_route_seconds_before": 100.0,
+        "terminal_commit_reserve_seconds": 12.0,
+        "configured_call_timeout_seconds": null,
+        "call_timeout_budget_seconds": 88.0,
+        "status": "failed",
+        "error_type": "ValueError",
+        "elapsed_seconds": 0.0,
+        "remaining_route_seconds_after": 100.0
+      }
+    ],
+    "restored": [
+      "Do the authors conduct experiments on the dataset?",
+      "original-slot",
+      9
+    ],
+    "repeat_focused_result": null
+  }
+}
