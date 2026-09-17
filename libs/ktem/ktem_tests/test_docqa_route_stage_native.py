@@ -18,7 +18,11 @@ def _run_owned_child(mechanism):
         capture_output=True,
         text=True,
         timeout=20,
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        env={
+            **os.environ,
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONPATH": os.pathsep.join(sys.path),
+        },
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     record = json.loads(completed.stdout.splitlines()[-1])
@@ -37,3 +41,9 @@ def test_real_platform_mechanisms_in_exclusive_subprocesses():
         receipts.append(signals)
     # This is an explicit platform matrix, not a skip or a Windows signal pass.
     print("R4C_NATIVE_PLATFORM " + json.dumps(receipts, sort_keys=True))
+
+
+def test_native_child_does_not_require_inherited_pythonpath(monkeypatch):
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    record = _run_owned_child("worker")
+    assert record["mechanism"] == "worker" and len(record["records"]) == 6
