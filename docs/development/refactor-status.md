@@ -1,263 +1,331 @@
 # MARA refactor status — 2026-09-17
 
-## Current round: R4-B evidence candidate policy and binding orchestration
+## Current round: R4-C route execution, recovery and terminal closeout
 
-**G0 CLOSED; R4-A ACCEPTED (limited functional scope)**, following the user's
-independent review of `e3647e38b85c87f7bf9ded9f364691a0c4d6fb88`.
-R1/R2 and the agreed R3 Web scope, including F1–F4, remain accepted. The
-[accepted G0/R4-A report](https://github.com/262412/MARA/blob/7ed1b371cd942012b24e9654c191fcb843e7a9e4/docs/development/refactor-status.md)
-retains the previous evidence and its first browser observer failure and complete
-unchanged-batch repeat. Desktop remains configuration-only verification; other
-unverified artifact types and desktop binaries are not newly certified.
+**R4-B ACCEPTED (limited functional scope)** following the user's independent
+review of `c3446d505f200934f25ebd20c2c0ffaceadb20d4`. G0 remains CLOSED;
+R1/R2/R3, F1–F4 and R4-A remain accepted. The
+[accepted R4-B report](https://github.com/262412/MARA/blob/273e6173cb736a2f154f51daa69190393372c9b7/docs/development/refactor-status.md)
+retains its complete evidence, earlier failed browser attempts and CI rerun.
+Desktop application tests do not certify a desktop binary; other previously
+unverified artifact types remain unverified.
 
-This round's base is `7ed1b371cd942012b24e9654c191fcb843e7a9e4`; fixed original
-Dev is `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+Round base: `273e6173cb736a2f154f51daa69190393372c9b7`.
+Fixed original Dev: `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
 
-**R4-B 限定验证通过，等待独立审查。**
-**Overall stable-source CI: FAILURE (13 successful / 7 failed jobs).
-S1/PCRE2 remain open; merge/release remains NO-GO.**
-The completed 32-scenario browser matrix is one whole fresh run of unchanged
-sources and assertions. Earlier failed attempts, their diagnoses and remaining
-observer limitations are retained below. The first image secret scan timed out;
-one targeted rerun completed successfully. Neither failure is classified as NLTK.
+**R4-C 限定验证通过，等待独立审查。** C1/C2/C3 pass the scoped functional gates described below; this is not independent acceptance of R4.
+The two earlier complete browser failures remain failures. After a separately
+reproduced and tested observer repair, one complete final-source matrix passes
+all 32 scenarios. R4 acceptance still requires independent closeout review.
 
-### Source, tests and reviewable commits
+**Final full CI: FAILURE — {'success': 13, 'failure': 7}.** Actual results, rather than a projected failure count, are recorded below.
+**S1/PCRE2 remain open; merge/release remains NO-GO.** The new PCRE2 finding is
+separately identified below; it is not classified as NLTK or silently allowlisted.
 
-Stable source/test and verified source-push SHA:
-**`c3446d505f200934f25ebd20c2c0ffaceadb20d4`**. Last production change:
-**`96e3c52f5558b63bff4c781d6717bb749bc20717`**.
+### Source, tests and separate commits
 
-| Ordered change                                                                         | Commit                                     |
-| -------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Fixed old binding, snapshot and execution contracts, committed before production edits | `3d739ef3da3ead716279b0ddcaff11003d94507f` |
-| Extract candidate policy; preserve binding state and orchestration                     | `96e3c52f5558b63bff4c781d6717bb749bc20717` |
-| Correct the new isolated wheel smoke's entrypoint and fixture setup                    | `c3446d505f200934f25ebd20c2c0ffaceadb20d4` |
+Final source/test and verified source-push SHA:
+**`e955449264fbb15a9c9b2a7c009a1053c07cd5a1`**.
+Last production change: **`19340d6e54966cb1ac8847f21bd37b2be7bb7359`**.
 
-The final commit changes only `scripts/clean_wheel_binding_smoke.py`. `libs`,
-`tests`, `benchmark`, `apps`, isolation helpers, package metadata, lock, G0 and
-workflows have identical Git tree/blob IDs across the last two commits. The
-smoke helper is absent from all eight distribution archives. Local full tests,
-static checks and builds executed at `96e3c52f`; their functional inputs are
-therefore equivalent to `c3446d50`. The successful local clean-wheel used the
-exact final helper. Stable browser acceptance, the additional real-parent cold
-import and Linux CI use `c3446d50`. Evidence: `source-test-equivalence.json`.
+| Ordered change                                                                           | Commit                                     |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Commit fixed old budget/stage/native characterization before extraction                  | `507f8682583410766348ada38043801d43537126` |
+| Extract signal/worker mechanism without changing budget ownership                        | `6d4f9ee86c6b4846d88bae6d91f4a29b6a771c25` |
+| Separate red-first fix for earlier callable outer alarms                                 | `19340d6e54966cb1ac8847f21bd37b2be7bb7359` |
+| Complete recovery, metadata and terminal matrix                                          | `1cadd6a4f7fe454d624755307b9b92f1d081c4ca` |
+| Verify installed route boundary and preserve preparation smoke entry                     | `b444f670d4e4eedd7df6513ed0782edb5119c7fb` |
+| Repair native test child import setup after actual Linux failure                         | `67f79858f2c4bf736016379a98da1d04fb3c178b` |
+| Repair attribution of browser responses discarded by navigation, with red-first controls | `e955449264fbb15a9c9b2a7c009a1053c07cd5a1` |
 
-The later report-only commit's actual report/local/remote SHA and report blob
-are recorded in `r4b-report-commit.json` and `r4b-final-state.json`. Only this
-report changes after the stable source; functional/build/coverage inputs remain
-equal. The final report content receives its own pinned secret scan before
-commit, followed by a full-history scan after commit. Report-only equivalence
-does not automatically waive secret scanning.
+The native launcher commit changes only `test_docqa_route_stage_native.py`: it forwards
+pytest's actual `sys.path` into the child's `PYTHONPATH`, and adds a regression
+with inherited `PYTHONPATH` removed. The original native matrix function's AST,
+all child mechanism assertions and production code remain unchanged. The first
+Linux failure and local red reproduction are retained. This is a test bootstrap
+repair, not an exception to the native-platform requirement.
 
-### Responsibility boundary and retained contracts
+The first two full browser matrices use `b444f670`; the final successful matrix
+and new full CI use `e9554492`. Local core suites and build checks ran on
+`67f79858`. Its only differences from the final source are the browser observer
+and its two test files: all production, library tests, benchmark, sidecar,
+distribution verification and gate configuration inputs are unchanged.
+`final-input-equivalence.json` records this bounded reuse. The new observer test
+also passes separately and in final CI. Archive equivalence is not assumed:
+the final CI builds the final source directly, including its new root test.
 
-The equivalent-module check found existing scoring, assessment and identity
-helpers, but no equivalent owner of all six candidate rules. Production changes
-are limited to `query_evidence_binding.py` and `evidence_binding_policy.py`.
+The later report-only commit's report/local/remote SHA and report blob are in
+`r4c-report-commit.json` and `r4c-final-state.json`. Only this report changes after
+the final source. Its contents receive a pinned worktree secret scan before
+commit and a full-history scan afterward; source equivalence does not waive
+these scans.
 
-| Owner                                                                | Responsibility after extraction                                                                                                                                                               |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `evidence_binding_policy`                                            | Existing candidate IDs, verification, segment comparison, collection, dimension and distinct selection rules; narrow plan/slot/ranked inputs and necessary operand sets                       |
-| `query_evidence_binding`                                             | `_BindingState`, preprocessing/materialization, ranking orchestration, old-binding validity, operand accounting, slot status, monotonic replacement reasons, trace and boolean reconciliation |
-| Existing identity/ranking/support/assessment/snapshot/schema modules | Canonical identity, quantized score/quality, provenance/semantic/cardinality checks, cache lookup and original data types; unchanged production code                                          |
+### R4 owner — contract — evidence — status matrix
 
-The policy receives no Runtime, Controller or `_BindingState`, and does not
-import the binder, database or Gradio. It reuses existing helpers rather than
-duplicating scoring or identity rules. No strategy registry, DI framework or
-extra canonicalization/deduplication was introduced. AST checks prove all six
-moved bodies and signatures equivalent after name mapping, and all 11 retained
-binder definitions unchanged. Existing shared operand sets still mutate at the
-same stage. No top-k, threshold, formula, prompt, budget, route or dataset changes.
+| Boundary and owner                                                 | Preserved contract                                                                                                       | Evidence                                                                                     | Status                             |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------- |
+| R4-A `query_planning` / `finance_plan_policy`                      | General phase order, financial contributions, original plan/schema/ID                                                    | Accepted R4-A; retained nine full evidence seams and planning contracts                      | ACCEPTED, protected                |
+| R4-B binder / candidate policy; existing identity/scoring/snapshot | Binder owns state, ordered selection and replacement trace; identity/cache/schema unchanged                              | Accepted R4-B; retained six binding seams, snapshot and characterization suites              | ACCEPTED, protected                |
+| C1 `route_budget`                                                  | Formulas, request stage state, trace, cancellation integration, original exception and patch entries                     | Old fixed expectations; nested state/clock/call order; 19 retained definitions unchanged     | PASS; independent review pending   |
+| C1 `route_stage_runner`                                            | Narrow call/deadline/exception/cancel/primitive operations; no request/runtime or reverse import                         | Standalone tests, real-parent cold import, installed wheel; platform receipts                | PASS; independent review pending   |
+| C2 existing execution / route capabilities                         | Failed retrieval traverses candidates; commits only a qualifying transition; budget checked at each stage                | Eleven full baseline seams plus retained recovery tests                                      | PASS; independent review pending   |
+| C2 existing recovery / retrieval rounds                            | Rebind before same-route/switch recovery; verifier uses first candidate and one separate focused quota; no-progress stop | Full trace/call-count comparisons; ordinary rounds 1/2 and focused round 3                   | PASS; independent review pending   |
+| C2 query/slot/round context                                        | Install metadata only for the call; `finally` restores missing/None/dict and original references                         | 18 success/exception context cases                                                           | PASS; independent review pending   |
+| C1 timeout / cancellation                                          | Caller timeout, cancellation request and producer stop are distinct; late values/errors rejected                         | Controlled races; real Windows/non-main workers; Linux signal subprocesses                   | PASS; independent review pending   |
+| C3 verifier / terminal projection                                  | Candidate, semantic/display answer, guardrail, authority, citations, versions/hash and deep copies retained              | Complete serialized snapshots; QASPER regeneration/reverification; canonical vectors         | PASS                               |
+| C3 Runtime / Web persistence                                       | Terminal authority does not forbid Runtime then Web writes of the same projection; no late overwrite                     | Natural browser two-write assertions, runtime/sidecar tests                                  | PASS                               |
+| Cross-entry Web / CLI / benchmark / sidecar                        | Existing application-level entrypoints and original command surface retained                                             | Full affected suites, installed checks, unchanged consumer boundaries                        | PASS; desktop binary not certified |
+| Complete 32-scenario App gate                                      | One whole fresh run, unchanged business assertions, no stitched green batches                                            | Two failures retained; independent observer reproduction and controls; final complete matrix | PASS on `e9554492`                 |
 
-Six old private candidate names remain compatibility aliases. Public binders,
-return forms, original classes, `score_evidence_for_slot` export and the actual
-binder/query-planning patch paths remain covered. The general binder still
-invokes its legacy `_candidate_ids_for_slot` patch point. The planning facade's
-score wrapper is preserved; no new monotonic facade export was invented.
+No equivalent mechanism module was found. Production edits are confined to
+`route_budget.py` and `route_stage_runner.py`. The budget module retains its
+public/private signatures, `RouteDeadlineExhausted` definition/module, platform
+selection and call-time `monotonic`, `signal`, `threading` and worker patch paths.
+The runner receives explicit operations; it has no request, Runtime, Controller,
+request-global state, pool, asyncio or retry framework. Existing recovery,
+capabilities, retrieval, validation, identity, schema and terminal modules are
+retained. No threshold, prompt, top-k, budget formula/default, route, dataset,
+frozen result, permission or persistence change was made.
 
-The original implementation passed **219 targeted tests before extraction**;
-those fixed tests were committed first. The 36 characterization files, including
-complete golden observations, remain byte-identical afterward. They cover
-preprocessing `if/elif`, materialization and coherent-segment order; six-place
-score quantization, quality compensation and canonical identity ordering;
-`None` versus `[]`; early returns; slicing `ranked[:3]` before filtering;
-narrative override, dimension/operand alignment; facility/cardinality/date;
-distinct evidence/page sets; and generic operand truncation. No golden was
-regenerated after production edits. Initial fixture-authoring corrections were
-completed on the old source and remain recorded separately.
+### C1 execution and the separate outer-alarm fix
 
-**92 complete binding observations** cover 23 fixed cases × ordinary/monotonic
-× snapshot/None. Comparisons include full `as_dict`, `plan_id`, ordered evidence
-IDs, slot status, references, calls and trace. Two-round cases retain valid old
-bindings, original permitted replacements and `replacement_reason`, insufficient
-then sufficient/still insufficient evidence, invalid old identities and source
-conflicts. Outputs are not sorted to hide differences. Only explicitly named
-elapsed-time audit fields are normalized.
+The old implementation passed **87 targeted tests** before production edits;
+54 of these characterize budget/stage behavior. Cases include no/zero/insufficient
+budgets, strict `>`, terminal and dynamically observed optional reserve, exact
+clock reads, nested absent/None/value restoration, original call/exception order,
+trace copies, worker result-timeout races and cancellation error handling.
 
-Snapshot miss tests remove the relevant identity/semantic/cardinality entries
-and assert `SelectionAssessmentCacheMiss`; automatic build/expand is patched to
-fail. Selection does not classify missing entries or silently fall back. Counts
-are compared separately for snapshot and None paths. For example, the fixed
-monotonic boolean case performs seven classifications without a snapshot (the
-support item is classified twice), versus six classifications, one cache build,
-seven hits and zero misses with it. `contract-count-summary.json` retains all
-92 observations, including round-specific counts and original reconciliation.
+After extraction, four controlled regressions failed because a more imminent
+callable outer alarm was replaced by the longer inner timer. The separate fix
+honors that earlier deadline and exception identity, restores periodic remainder,
+and does not rearm a consumed one-shot. If the outer handler returns, the inner
+bound remains active. Later/no outer alarm behavior stays characterized.
+The actual benchmark `RouteExecutionTimeout` wrapper is included.
 
-### Downstream and independent-import verification
+Windows ran the six real owned-worker cases, including a non-main caller,
+cooperative and unresponsive cancellation, callback errors and late value/error
+rejection. Linux CI ran these worker cases and ten real signal subprocess cases
+(five original timer/handler contracts and five earlier-outer-alarm cases).
+Linux native tests passed in job `105096614289`; installed-wheel worker/signal
+checks passed in `105096614535`. Windows does not claim a signal pass. The
+platform tests contain no skip substituted for either mechanism.
 
-The retained nine R4-A evidence seams plus six new seams execute real planning,
-normalization/materialization, selection/binding, recovery, execution validation,
-citations and terminal-state handling. Financial operands, scale, collection,
-segment, QASPER relation, boolean cross-page and visual cases are covered. Only
-model/retrieval boundaries are fixed; query, budget, slot state, citations, route,
-trace and terminal results are frozen, not merely the answer string. A fixed
-hash seed preserves the original citation-set iteration without sorting outputs.
+Workers retain the original single daemon thread, accepting-result lock, original
+wait bound and 0.1-second cancellation observation. Cooperative completion and an
+unresponsive producer are reported separately. The production timeout path does
+not kill threads; test cleanup releases and joins only test-owned workers.
+Signal delivery also does not certify immediate interruption of every native
+extension call; [Python's signal semantics](https://docs.python.org/3.10/library/signal.html)
+remain applicable.
 
-The two segment execution fixtures preserve existing abstention paths: one raw
-Revenue-header fixture fails retrieval readiness, and the segment-ready fixture
-still fails final verification. They are not reported as successful segment
-answers. Existing direct segment-calculation tests also pass. The recovered
-revenue fixture reaches the original supported second-round result.
+A fresh process imports the real `ktem` parent before the runner, without
+prewarming runtime or faking the package. Only `ktem.docqa` and the runner are
+newly loaded; audited import activity adds no DB/network/write/thread/timer side
+effect. The audit ends before coverage's legitimate exit writes.
 
-The post-extraction targeted run passes **229 tests**, including ten independent
-policy/import tests. A fresh process imports the real `ktem` parent, then the
-policy without prewarming the binder/runtime or faking the parent package; the
-audit records no extra filesystem/network side effects or forbidden imports.
-The audit ends before coverage's legitimate shutdown writes. The 11 actual
-consumer boundaries inspected are unchanged: Web streaming, CLI turn execution,
-benchmark runtime/slot metrics, sidecar turn streaming, execution/retrieval/
-reasoning, selection binding, finance answer handling and public facades.
+### C2 recovery and complete terminal observations
 
-Evidence: `stable-targeted.log`, `stable-cold-import-evidence.log`,
-`extraction-verified.json`, `fixed-characterization-sha256.json`,
-`contract-count-summary.json`, `consumer-boundaries.json`.
+The retained nine R4-A and six R4-B fixed evidence seams remain intact. Eleven
+additional observations compare full `as_dict`, ordered IDs, complete plans,
+versions, trace, request budget and terminal projection hashes against base
+`273e6173`. They cover multi-candidate retrieval success/exhaustion/budget stop,
+first-candidate-only verifier recovery, ordinary second versus focused third
+round, same-route recovery, typed authority, optional-budget short circuit,
+retrieval/generation failure and timeout before any callback.
 
-### Complete browser matrix and retained failed attempts
+The baseline observation process loads the old `route_budget` from the base
+commit; every other production input involved is proven unchanged. The first
+repeatability check exposed elapsed-time inputs in the projection hash. Those
+explicit clock inputs were fixed before computing the original outputs; neither
+IDs nor hash fields were removed. Two complete baseline captures then matched,
+and these additional C2 goldens were written once against the original budget
+implementation. No later test or fix regenerated them.
+`c2-baseline-receipt.json` and the retained failed repeatability observation make
+that sequence reviewable.
 
-`tests/browser/run_chat_submission.py` and the real full App are unchanged.
-The accepted matrix uses fresh owned runtimes, empty application caches, actual
-browser uploads, natural events, real identity and persistence. It does not call
-intermediate naming/persistence APIs or replace the page/event/adapter logic.
-The exact scenario multiset matches the accepted R3-D/R4-A matrix:
+The 18 metadata cases assert original values and identity after success or
+exception. Two additional QASPER cases use real candidate preparation and the
+real verifier with a fixed model reply: improved evidence produces exactly one
+new generation/verification, linked transaction identity and the recovered
+citation; unchanged evidence stops without regeneration or reverification.
+Execution failure, safe abstention and timeout remain distinct terminal outcomes.
+No separate recovery state machine or production recovery rewrite was added.
 
-| Batch                   | Passing scenarios | Retained scope                                                                                                                                                               |
-| ----------------------- | ----------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Retained flows          |                12 | Two-turn stream/citation/cache/name/persist/reload; empty and same-file sessions; upload/URL and two users; error/disconnect; slow and late switch/delete; navigation/search |
-| Refresh ordering        |                11 | Initialization/filter overlap, reverse delivery, A→B→A, source selection, upload/URL/delete notifications, conversation switch and two browsers                              |
-| Index/Studio seams      |                 7 | Selection/reindex/delete/group operations, source revocation, notes/artifact, late generation, no-source failure, disconnect/restore                                         |
-| Separate public fixture |                 2 | Public conversation read versus owner mutation and Studio nonowner refusals                                                                                                  |
+### C3 full App runs and observer attribution
 
-All **32 scenarios pass in the single `network-restored-browser-*` matrix**,
-including the original failure scenarios and strict global error assertions.
-Preview revocation remains linked to typed `PreviewAccessError`; queued reads
-after authorized deletion are checked against actual delete/clear ordering.
-All owned runtimes are removed. This is separate from CI's browser security smoke.
+All three matrices use the real full App, Gradio 4.39.0, fresh browser/runtime/cache,
+actual uploads, natural events, real request identity and persistence. The page,
+event and adapter implementations are unchanged. Each matrix contains the
+original 32 scenarios: 12 retained conversation/upload/navigation flows, 11
+refresh-order cases, seven index/Studio seams and two separate public-fixture
+permission cases. No intermediate naming/persistence API replaces user actions.
 
-The following earlier attempts remain failures, not stitched into acceptance:
+| Whole run                                           | Retained 12                     | Refresh 11                            | Index/Studio 7                  | Public 2 | Actual verdict             |
+| --------------------------------------------------- | ------------------------------- | ------------------------------------- | ------------------------------- | -------- | -------------------------- |
+| `stable-browser-*`                                  | Pass                            | Fail: target dropdown click timed out | Fail: strict CDP observer error | Pass     | FAIL                       |
+| `accepted-browser-*` (prospective label only)       | Fail: strict CDP observer error | Pass                                  | Pass                            | Pass     | FAIL                       |
+| `final-browser-*`, after the tested observer repair | Pass                            | Pass                                  | Pass                            | Pass     | PASS, all 32 on `e9554492` |
 
-1. The first retained-flow batch missed the expected deleted-conversation toast.
-   The unchanged deterministic model fixture's 45-second release wait expired
-   before deletion completed. Its queue failure precedes the delete event in the
-   same browser session. The other three batches passed. Concurrent local
-   verification is recorded, but its causal role in the timeout is not proven.
-2. A complete second attempt used the final source. All 12 retained business
-   scenarios passed, but its strict observer caught `Failed to fetch`, so the
-   batch failed. Its observer lacks a URL/timestamp for that error; exact request
-   attribution remains unknown. The next three Apps failed during startup with
-   explicit proxy connection refusal while obtaining the public tokenizer data.
-   Those UI scenarios did not execute. Cleanup receipts prove their owned
-   runtimes were removed despite the outer failure message.
-3. After the proxy listener and the exact resource were independently verified
-   reachable (HTTP 200 and matching SHA), one further whole matrix was run. The
-   probe kept bytes only in memory and did not warm the App cache. All four
-   batches passed with unchanged source, harness, timeouts and assertions. There
-   were no further retries, relaxed errors or selected-green scenario assembly.
+The first click failure recorded an unstable, then detached option and no final
+switch-to-B callback; its concurrency postcondition was not reached. The complete
+same-source repeat passes that actual switch assertion. In each CDP failure,
+`response.json()` in the successful `/queue/join` response observer reports
+`Network.getResponseBody: No resource with given identifier found`. The exact
+session/response/time was not retained in that error, so a page-close cause is
+not retroactively asserted. This is distinct from NLTK.
 
-Evidence: all three `*-browser-matrix-execution.json` files and raw batch logs,
-`network-recovery-probe.json`, `browser-verified.json`,
-`browser-diagnostics-verification.json`, `browser-observer-disposition.json`.
-The unknown request attribution in attempt 2 remains an observer limitation;
-neither it nor the fixture timeout is asserted to be a new product fix.
+All 32 business assertions succeeded in the second matrix, but its strict global
+error assertion failed; that run remains **not accepted**. An independent real
+Edge page and task-owned HTTP server then reproduced the exact response-body
+error with the original observer: reading a successful queue acknowledgement
+after navigation fails while the new document remains open. A current-document
+response succeeds; closing the page produces the separately recognized close
+error. This reproduces a mechanism, without inventing missing historical timing.
+
+Ten Node controls exercise the actual registered observer callback. Seven fail
+before the repair; all ten pass afterward. The narrow test-only change records
+the original request session, index, navigation boundary, URL, time and error.
+Only the exact missing-body error for a request proven to precede navigation is
+classified as an observer closure. Current-document, unknown-request and other
+parse errors still fail globally. The real-browser reproduction then passes.
+No wait, retry, product event or business assertion was changed.
+
+Only then was the complete final-source matrix run. All 32 scenarios and all
+global error checks pass without stitching batches. The only recorded closure
+is the previously supported closed-page condition; there are no observer
+failures. Server diagnostics separately verify expected nonowner refusals,
+generation failure and stale reads after authorized deletion; preview revocation
+has typed `PreviewAccessError` evidence. All twelve task-owned runtimes from the
+three matrices are removed.
+
+Evidence: all three `*-browser-matrix-execution.json` files, raw batch logs/results,
+`browser-matrix-review.json`, `browser-first-failure-disposition.json`,
+`browser-first-protocol-disposition.json`, `browser-diagnostics-verification.json`.
+`observer-lifecycle-probe.json`, `observer-lifecycle-green.json`, red/green Node
+logs, `browser-verified.json`, `final-browser-diagnostics-verification.json` and
+`final-input-equivalence.json` bind the final result to its source and raw logs.
+This round does not reopen R3 production work.
 
 ### Full gates, build and coverage
 
-Local affected tests: **3694 passed / 99 failed / 7 skipped / 43 warnings**.
-All 99 failed nodes, their primary exceptions and failure expressions match the
-prior accepted local run; failing test bytes are unchanged. Normalization is
-limited to owned temporary roots, object addresses and the three preview-cache
-signatures derived from fixture path/size/mtime. No new failure node or changed
-failure nature is hidden under the prior labels. The seven existing skips were
-not expanded. Evidence: `local-failure-verification-final.json`, the retained
-first raw signature comparison, and `local-warning-comparison.json`.
+Core targeted checks: **187 passed**. All round hooks, static/hygiene, fixed-Dev
+and round debt checks, lock constraints, container lock parity and supply-chain
+policy checks pass. No omit, skip, debt baseline, collector scope or floor changes.
 
-Stable Linux CI passes the full affected suites: ktem **3596**, benchmark/root
-**1632**, kotaemon **381 on each Python 3.10/3.11** (ten existing skips each),
-CLI, and unified collection **5912**. Static/pre-commit, hygiene, fixed-Dev and
-round debt checks, locked constraints, container lock parity and supply-chain
-contract checks pass. No debt baseline, omit, skip, scope or threshold changes.
+The full affected Windows scope at `67f79858` produced **3833 passed, 99 failed,
+9 skipped, 43 warnings**. All 99 node IDs, primary errors and failing expressions
+match the retained R4-B failures; no new failure or changed failure nature was
+found, and the failing test files are unchanged. Local warning bodies also match.
+This local suite is not reported as green. Nine skips include two pre-existing
+POSIX permission tests newly included in the local sidecar scope; their Windows
+decorators are unchanged. Those two POSIX cases are not run by the existing
+Linux workflow and are **not claimed executed**. They are outside this route
+execution change; desktop binary and OS permission certification remain separate.
+Evidence: `local-failure-verification-final.json`, `local-warning-comparison.json`
+and `expanded-local-skip-scope-reviewed.json`.
 
-Four real wheels and four sdists were built locally; archive contents and the
-new policy were verified. The clean-wheel run executes outside the repository,
-checks installed module paths and real binding/score exports with strict import
-and network boundaries. Three initial errors in the newly written smoke fixture
-(inherited offline-guard `PYTHONPATH`, missing plan-ID argument, wrong facade for
-monotonic binding) were corrected only in that helper and retained in raw logs.
-The final helper passes locally and in all four CI clean-wheel installations.
-CI separately built, digest-verified and inspected all eight archives and their
-Python distribution SBOM/provenance at the exact stable SHA. Local archives may
-include the preserved user asset bytes; they are not claimed identical to CI's
-clean checkout archives.
+The final-source Linux suites pass: **3692 ktem tests**, **1633 benchmark/root
+tests**, and **381 kotaemon tests on each of Python 3.10 and 3.11** (the existing
+ten kotaemon skips remain). Unified collection finds **6009 tests**, retaining all
+5912 prior nodes and adding 97 (`collection-delta-verified.json`). Collection is
+not substituted for execution. CLI contracts,
+frontend contracts, static/hygiene and repository/image secret jobs pass. These
+are actual Linux executions, not relabelled Windows results.
 
-The downloaded CI coverage artifact digest is verified. Original collector,
-subprocess coverage, package scope and production-diff calculation are unchanged:
+Local Windows build and repository-external clean-wheel checks passed on
+`67f79858`: eight wheel/sdist archives and 44 retained source members were checked,
+including a real worker call. Final CI builds `e9554492` directly and passes
+external clean-wheel checks with installed module paths, no source `PYTHONPATH`,
+real worker and signal calls, old exports, preparation and Web resource aliases.
+Artifact `10483740938` contains eight digest-verified distributions with SBOM and
+matching provenance; 35 retained production members in ktem are checked against
+the final source, including both route modules. The existing preparation smoke
+entry remains a compatibility wrapper around byte-identical validation text.
+No unexecuted desktop binary test is inferred from these package checks.
 
-| Scope                          | Covered / statements | Coverage |                          Original floor |
-| ------------------------------ | -------------------: | -------: | --------------------------------------: |
-| benchmark                      |        17146 / 19005 |   90.22% |                                     90% |
-| slide_cli                      |          2144 / 2837 |   75.57% |                                     70% |
-| kotaemon                       |         7521 / 10727 |   70.11% |                                     60% |
-| ktem                           |        42994 / 51384 |   83.67% |                                     50% |
-| New policy                     |              82 / 83 |   98.80% | Included in original package/diff gates |
-| Binder                         |              85 / 85 |     100% | Included in original package/diff gates |
-| Fixed Dev production increment |          1092 / 1119 |   97.59% |                                     90% |
-| R4-B production increment      |              91 / 92 |   98.91% |                                     90% |
+The final CI coverage artifact `10484841160` is digest-verified.
+The existing collector includes both route modules, retained R1–R4 modules and
+subprocess execution; no temporary-runtime paths or package-relative aliases
+pollute the result. The unchanged production gate is independently recalculated:
 
-The policy's sole uncovered statement is the original missing-raw-item `continue`
-at line 159. It is not excluded. Coverage contains the new module and retained
-R1/R2/R3/R4-A modules, with no temporary-runtime or package-relative aliases.
+| Package   | Actual | Existing floor |
+| --------- | ------ | -------------- |
+| benchmark | 90.22% | 90%            |
+| slide_cli | 75.57% | 70%            |
+| kotaemon  | 70.11% | 60%            |
+| ktem      | 83.74% | 50%            |
 
-Warning review keeps two distinct facts: the unchanged template's `word,language`
-set iteration can reverse in a fresh process; and the existing asynchronous
-Gradio version notice appears once more in standalone ktem and once less in
-coverage. Removing only that duplicate node makes each raw warning section
-identical. The relevant tests, Gradio integration and lock are unchanged; logs
-do not identify the initiating Blocks thread. No other new warning body remains
-unexplained. These are not NLTK findings. Container warning bodies also match.
+| Module                  | Actual coverage |
+| ----------------------- | --------------- |
+| `route_budget.py`       | 96.89%          |
+| `route_stage_runner.py` | 100.00%         |
 
-### Actual CI and retained security blockers
+| Production diff            | Covered lines | Actual (floor 90%) |
+| -------------------------- | ------------- | ------------------ |
+| fixed_dev (`adab3f4d`)     | 1160/1187     | 97.73%             |
+| r4c_increment (`273e6173`) | 68/68         | 100.00%            |
 
-[Quality run 35102330690](https://github.com/262412/MARA/actions/runs/35102330690)
-uses source `c3446d505f200934f25ebd20c2c0ffaceadb20d4` and the fixed original Dev
-coverage base. Attempt 1 completed **12 successful / 8 failed**. Its additional
-failure was built-image secret job `104814607689`: Docker image export exceeded
-Trivy's unchanged deadline, so no completed scan conclusion was available.
+`coverage-verified.json` retains module summaries, executed/missing line lists and
+diff denominators; no omit/skip or debt-baseline refresh was used.
 
-One authorized targeted rerun completed the actual scan successfully in job
-[104911070755](https://github.com/262412/MARA/actions/runs/35102330690/job/104911070755).
-The aggregate then reran. The latest result is **13 successful / 7 failed**.
-Actions assigns new IDs to 18 carried-forward job records; their original
-timestamps and complete log bytes are identical. They are not claimed to be 18
-new executions. `ci-rerun-reconciliation.json` maps these IDs and rechecks audit
-keys. The first scan failure, rerun request and successful scan logs are retained.
+Warning bodies and counts are compared with R4-B rather than assigned a general
+historical label. The observed text delta is the same `language,word` template
+key set in reversed iteration order, from unchanged code. Count deltas, where
+present, are confined to the identical Gradio version notice at
+`gradio/analytics.py:106`; full before/after counts and source sites are retained.
+Container warning lines add no new body. No new unexplained test, warning or
+isolation failure remains; the independently investigated PCRE2 scan delta is
+recorded separately below. Evidence: `warning-count-comparison.json`,
+`warning-bodies-final.json`, `warning-review-final.json` and
+`image-warnings-reviewed.json`.
 
-G0 remains CLOSED with the exact unchanged allowlist. The native pinned v8.24.3
-controls again match **10/10** positive/negative expectations. The real CI
-repository/history scan passes both `git /repo` (1330 commits) and `dir /repo`,
-with the same scanner digest and exit policy. No exception was broadened. Final
-report dir/history scans supplement that source evidence.
+### Actual CI and separate security findings
 
-The three Python profiles (`root-py310`, `root-py311`, `container-py310`) still
-fail on the same actual package/version/ID keys:
+The first R4-C workflow [35186330856](https://github.com/262412/MARA/actions/runs/35186330856)
+(attempt 1, `b444f670`) retained a real native-child import failure in job
+`105089078159`: 1 failed / 3690 passed. The red-first launcher repair is separate.
+After the replacement source was ready, the obsolete coverage job was cancelled;
+that run concludes CANCELLED with 11 success / 8 failure / 1 cancelled. Its
+partial coverage output is not a pass. Raw logs and cancellation receipt remain.
+
+The new full workflow [35188815816](https://github.com/262412/MARA/actions/runs/35188815816) (attempt 1,
+`e955449264fbb15a9c9b2a7c009a1053c07cd5a1`) concludes **FAILURE**, with actual counts
+`{'success': 13, 'failure': 7}`. It is a new full execution on the final source; no targeted
+rerun is presented as a full suite. Dispatch uses the fixed original Dev input.
+
+| Job                                                        | Actual job ID  | Conclusion |
+| ---------------------------------------------------------- | -------------- | ---------- |
+| ktem isolated runtime                                      | `105096614289` | SUCCESS    |
+| slide_cli                                                  | `105096614447` | SUCCESS    |
+| Dependency audit root-py311                                | `105096614461` | FAILURE    |
+| kotaemon Python 3.10                                       | `105096614507` | SUCCESS    |
+| Static, hygiene, and baseline ratchet                      | `105096614529` | SUCCESS    |
+| Four clean wheel installations                             | `105096614535` | SUCCESS    |
+| Container full supply chain                                | `105096614586` | FAILURE    |
+| Unified pytest collection                                  | `105096614601` | SUCCESS    |
+| kotaemon Python 3.11                                       | `105096614641` | SUCCESS    |
+| Repository and image secret scans / Repository and history | `105096614652` | SUCCESS    |
+| Container lite supply chain                                | `105096614658` | FAILURE    |
+| Dependency audit container-py310                           | `105096614672` | FAILURE    |
+| Container ollama supply chain                              | `105096614691` | FAILURE    |
+| Coverage floors and production diff                        | `105096614746` | SUCCESS    |
+| Python distribution supply chain                           | `105096614789` | SUCCESS    |
+| Repository and image secret scans / Built image            | `105096614805` | SUCCESS    |
+| Dependency audit root-py310                                | `105096614829` | FAILURE    |
+| Benchmark and root contracts                               | `105096614895` | SUCCESS    |
+| Frontend and browser security                              | `105096614912` | SUCCESS    |
+| Required quality gates                                     | `105108364777` | FAILURE    |
+
+The failed audits and their required aggregate remain required. All outcomes
+above come from the final workflow; no old-source green jobs are substituted.
+
+G0 remains CLOSED. The pinned v8.24.3 exact exception still passes all ten
+positive/negative controls, including changed value/path/other credentials and
+the custom rule. Repository history and worktree scans retain their actual exit
+policy; no allowlist expansion or history rewrite occurred.
+
+All three fresh Python profiles retain the following blocking package/version/ID
+keys; the nine PYSEC aliases retain their existing evidence and decisions:
 
 | Package/version         | Blocking IDs                                                               |
 | ----------------------- | -------------------------------------------------------------------------- |
@@ -267,41 +335,56 @@ fail on the same actual package/version/ID keys:
 | `transformers==4.56.2`  | `PYSEC-2026-3929`                                                          |
 | `unstructured==0.15.14` | `PYSEC-2026-3930`                                                          |
 
-All three actual container targets (lite/full/ollama) still fail on
-`libpcre2-8-0==10.42-1`: `CVE-2026-86145` and `CVE-2026-89161`.
-Their scan/provenance artifacts are digest-verified and compared by raw and
-blocking keys; package/layer and warning evidence match R4-A. Image SBOM steps
-are skipped after the failing gate and are not reported as completed. These six
-failed audit jobs plus Required quality gates account for the latest seven.
-No security baseline, alias decision, dependency lock, scan scope or required job
-was changed. Exact findings come from this run, not an assumed failure count.
+All three final-source image artifacts have verified digests, target/source
+provenance and actual Trivy 0.70.0 records. Each blocks on `libpcre2-8-0==10.42-1`
+with `CVE-2026-86145`, `CVE-2026-89161` and newly observed `CVE-2026-89157`.
+The last ID is the sole new raw/blocking key relative to R4-B on every target.
+The inspection's new-finding guard fails deliberately and the separate
+`new-pcre2-finding-review.json` explains that exact delta. Container SBOM steps
+after the failed vulnerability gate did not execute; build/provenance success
+does not make the container supply-chain jobs pass. The baseline's old four
+NLTK 3.10.0 container IDs are recorded as resolved by the current scanner, while
+the independent Python NLTK 3.10.3 audit remains blocking.
 
-### Evidence and protection receipt
+The added `CVE-2026-89157` is separately researched. The
+[Debian tracker](https://security-tracker.debian.org/tracker/CVE-2026-89157)
+identifies a 32-bit pattern-conversion allocation overflow, with bookworm fix
+`10.42-1+deb12u1`. The [upstream advisory](https://github.com/PCRE2Project/pcre2/security/advisories/GHSA-q8g2-wprr-34m9)
+identifies the conversion API and automatic allocation, and believes 64-bit
+`size_t` systems unaffected. Actual scanned package records are amd64 and retain
+the same package/layer as R4-B. A newly listed finding with unchanged bytes and
+later advisory modification is consistent with refreshed vulnerability data;
+that is an inference, not a new exploitability certification. Architecture
+applicability is not used to remove the scanner finding. S1/PCRE2 stay blocking;
+no dependency, security baseline, alias logic, scan scope or required job changed.
 
-Primary local evidence root:
-`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4b-evidence-binding`.
-CI raw logs/artifacts and verified summaries:
-`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4b-stable-ci`.
-`execution.jsonl` records exact commands, source SHA, affected-file hashes and
-exit codes. Key build/CI receipts include `local-build-verified.json`,
-`clean-wheel-verified-entries.log`, `quality-attempt1.json`, `quality-final.json`,
-`coverage-verified.json`, `python-artifact-inspection.json`,
-`image-*-inspection.json`, `security-key-reconciliation-final.json`,
-`warning-final-verification.json` and `ci-rerun-reconciliation.json`.
+### Evidence, protection and stopping condition
 
-All **133 pre-existing user asset/instruction changes remain byte-identical**;
-the initial untracked `NUL`, existing worktrees and the three historically
-refused cleanup directories are preserved. Only explicit round paths were
-staged; the index is empty after commits. Canonical `.venv` metadata (98,853
-entries), real cache metadata (614 entries), office-cache and real configuration/
-database metadata match the initial snapshot. No canonical sync or real-data
-mutation was performed. `initial-state.json`, `protected-initial.json`, final
-snapshots, commit receipts and `r4b-final-state.json` retain the protection proof.
-The retained R0/R1 history below stays byte-identical; prior round reports remain
-available through their accepted Git commits.
+Local evidence: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4c-route-closeout`.
+First CI: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4c-stable-ci`.
+Final-source CI: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4c-final-ci`.
+`execution.jsonl` records commands, source SHA, modified-input hashes and exits.
+Raw failures and all three complete browser matrices remain available. CI artifacts
+are digest-verified; job IDs, attempts, step outcomes and summaries are retained,
+with no targeted rerun described as a new full workflow execution.
 
-Work stops at R4-B for independent review. No R4-C, reopened R3 work, safety
-upgrade, merge, deployment or release was started.
+The 133 existing user asset/instruction modifications are preserved by raw
+SHA-256 checks. The index is empty after each named-path commit; untracked `NUL`
+is retained untouched. Canonical `.venv` metadata (98,853 entries), real cache
+metadata (614 entries), office-cache and named real configuration/database
+metadata are unchanged. No user data content was read for verification. The
+three historical refused-cleanup directories retain their recorded metadata.
+Only task-owned browser runtimes were cleaned. Branch, remote and worktree
+inventory are preserved; pushes are ordinary fast-forward pushes. The original
+report-history suffix is byte-preserved. `r4c-final-state.json` records the final
+post-report snapshot, explicit-path commit and verified local/remote equality.
+
+C1/C2/C3 are ready for independent R4-C / R4 closeout review. The owner-contract-
+evidence matrix above is the review checklist, including unchanged modules that
+need no diff. This report does not confer independent acceptance, close S1/PCRE2,
+or certify previously unexecuted platform/artifact checks.
+Work stops at the R4-C / R4 independent closeout review point. No R5, reopened R3
+production work, security upgrade, merge, deployment or release is started.
 
 ## Previous R0/R1 evidence (retained history)
 
