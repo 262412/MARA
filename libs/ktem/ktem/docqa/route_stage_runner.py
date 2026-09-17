@@ -26,20 +26,33 @@ def run_signal_timeout(
     previous_handler = get_handler()
     previous_delay, previous_interval = get_timer()
     started = monotonic()
+    timeout = max(0.000001, float(timeout_seconds))
+    outer_first = 0 < previous_delay <= timeout and callable(previous_handler)
+    next_outer = previous_delay
 
-    def handle_timeout(_signum: int, _frame: Any) -> None:
+    def handle_timeout(signum: int, frame: Any) -> None:
+        nonlocal next_outer
+        if outer_first and 0 < next_outer <= timeout:
+            # Preserve the outer exception, or our own remaining bound if its
+            # handler returns. A consumed one-shot alarm must not be rearmed.
+            next_outer = next_outer + previous_interval if previous_interval else 0
+            next_delay = min(timeout, next_outer) if next_outer else timeout
+            set_timer(max(0.000001, next_delay - (monotonic() - started)))
+            previous_handler(signum, frame)
+            return
         raise on_timeout()
 
     set_handler(handle_timeout)
-    set_timer(max(0.000001, float(timeout_seconds)))
+    set_timer(previous_delay if outer_first else timeout)
     try:
         return call()
     finally:
         set_timer(0.0)
         set_handler(previous_handler)
-        if previous_delay > 0:
+        restore_delay = next_outer if outer_first else previous_delay
+        if restore_delay > 0:
             elapsed = monotonic() - started
-            set_timer(max(0.000001, previous_delay - elapsed), previous_interval)
+            set_timer(max(0.000001, restore_delay - elapsed), previous_interval)
 
 
 def run_worker_timeout(
