@@ -19,6 +19,7 @@ async function login(username = 'browser-owner', {initialize = true} = {}) {
   page.on('pageerror', error => results.errors.push(String(error)));
   const queue = [];
   queue.requestOrder = new WeakMap();
+  queue.requestSessions = new WeakMap();
   queue.requestIds = [];
   queue.navigationStart = 0;
   page.on('framenavigated', frame => {
@@ -29,6 +30,7 @@ async function login(username = 'browser-owner', {initialize = true} = {}) {
     if (request.url().includes('/queue/join')) {
       const payload = request.postDataJSON();
       queue.requestOrder.set(request, queue.length);
+      queue.requestSessions.set(request, payload.session_hash);
       queue.push(payload.fn_index);
       queue.sessionHash = payload.session_hash;
     }
@@ -39,10 +41,24 @@ async function login(username = 'browser-owner', {initialize = true} = {}) {
         const body = await response.json();
         queue.requestIds[queue.requestOrder.get(response.request())] = body.event_id;
       } catch (error) {
-        if (page.isClosed() && String(error).includes('Target page, context or browser has been closed')) {
+        const requestIndex = queue.requestOrder.get(response.request());
+        const pageClosed = page.isClosed();
+        const documentReplaced = Number.isInteger(requestIndex) && requestIndex < queue.navigationStart;
+        const observation = {
+          sessionHash: queue.requestSessions.get(response.request()),
+          url: response.url(), at: new Date().toISOString(), requestIndex,
+          navigationStart: queue.navigationStart, pageClosed, documentReplaced,
+          error: String(error),
+        };
+        const closed = pageClosed && String(error).includes('Target page, context or browser has been closed');
+        const discarded = documentReplaced && String(error).includes(
+          'Protocol error (Network.getResponseBody): No resource with given identifier found');
+        if (closed || discarded) {
           results.observerClosures ||= [];
-          results.observerClosures.push({sessionHash: queue.sessionHash, error: String(error)});
+          results.observerClosures.push(observation);
         } else {
+          results.observerFailures ||= [];
+          results.observerFailures.push(observation);
           results.errors.push(String(error));
         }
       }
