@@ -1,5 +1,7 @@
 """Task-owned backend and index layout receipts; no default collections."""
 
+from importlib import import_module
+
 import pytest
 from ktem.index.file.deletion import DeletionCoordinator, DeletionError
 from ktem.index.file.source_storage import store_source_file
@@ -7,12 +9,15 @@ from sqlalchemy.orm import Session
 
 from kotaemon.base import Document
 from kotaemon.storages import LanceDBDocumentStore
-from libs.kotaemon.tests.chroma_test_runtime import owned_chroma_stores
 
 from . import test_deletion_coordinator as fixtures
 from .test_deletion_coordinator import _coordinator, _row_counts, _seed_file
 
 deletion_db = fixtures.deletion_db
+# Reuse the same runtime helper without introducing a second static package name.
+owned_chroma_stores = import_module(
+    "libs.kotaemon.tests.chroma_test_runtime"
+).owned_chroma_stores
 
 
 def test_real_chroma_lancedb_delete_fts_and_external_missing_retry(
