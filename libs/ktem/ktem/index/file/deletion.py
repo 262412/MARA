@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
+from . import index_store_cleanup
 from .element_index import is_docstore_relation_type
 from .storage_lifetime import QuarantineMove, StorageLease, StorageLifetime
 
@@ -173,10 +174,9 @@ class DeletionCoordinator:
         store: Any,
         target_ids: tuple[str, ...],
     ) -> None:
-        if stage == "docstore":
-            self._delete_docstore_entries(store, target_ids)
-        else:
-            store.delete(list(target_ids))
+        index_store_cleanup.delete_store_batch(
+            stage, store, target_ids, delete_docstore=self._delete_docstore_entries
+        )
 
     def _delete_store_individually(
         self,
@@ -185,41 +185,27 @@ class DeletionCoordinator:
         target_ids: tuple[str, ...],
         file_id: str,
     ) -> None:
-        for target_id in target_ids:
-            try:
-                if stage == "docstore":
-                    self._delete_docstore_entries(store, (target_id,))
-                else:
-                    store.delete([target_id])
-            except Exception as exc:
-                if _is_missing_error(exc):
-                    continue
-                raise _stage_error(stage, file_id, exc) from exc
+        index_store_cleanup.delete_store_individually(
+            stage,
+            store,
+            target_ids,
+            file_id,
+            delete_docstore=self._delete_docstore_entries,
+            is_missing_error=_is_missing_error,
+            stage_error=_stage_error,
+        )
 
     def _delete_docstore_entries(
         self,
         store: Any,
         target_ids: tuple[str, ...],
     ) -> None:
-        try:
-            store.delete(list(target_ids), refresh_indices=False)
-        except TypeError as exc:
-            if "refresh_indices" not in str(exc):
-                raise
-            store.delete(list(target_ids))
+        index_store_cleanup.delete_docstore_entries(store, target_ids)
 
     def _refresh_docstore_index(self, store: Any, file_id: str) -> None:
-        create_fts_index = getattr(store, "create_fts_index", None)
-        if create_fts_index is None:
-            return
-        try:
-            create_fts_index(
-                "text",
-                tokenizer_name="en_stem",
-                replace=True,
-            )
-        except Exception as exc:
-            raise _stage_error("docstore", file_id, exc) from exc
+        index_store_cleanup.refresh_docstore_index(
+            store, file_id, stage_error=_stage_error
+        )
 
     def _delete_artifacts(self, file_id: str) -> None:
         if self._artifact_cleaner is None:
