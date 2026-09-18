@@ -1,390 +1,383 @@
-# MARA refactor status — 2026-09-17
+# MARA refactor status — 2026-09-18
 
-## Current round: R4-C route execution, recovery and terminal closeout
+## Current round: R5-A indexed-file deletion and external-store cleanup
 
-**R4-B ACCEPTED (limited functional scope)** following the user's independent
-review of `c3446d505f200934f25ebd20c2c0ffaceadb20d4`. G0 remains CLOSED;
-R1/R2/R3, F1–F4 and R4-A remain accepted. The
-[accepted R4-B report](https://github.com/262412/MARA/blob/273e6173cb736a2f154f51daa69190393372c9b7/docs/development/refactor-status.md)
-retains its complete evidence, earlier failed browser attempts and CI rerun.
-Desktop application tests do not certify a desktop binary; other previously
-unverified artifact types remain unverified.
+**R4 ACCEPTED (the agreed functional scope)** following the user's independent
+review of R4-C source/tests `e955449264fbb15a9c9b2a7c009a1053c07cd5a1`.
+R1/R2/R3, F1–F4 and R4-A/B remain accepted; G0 remains CLOSED. The
+[accepted R4 closeout report](https://github.com/262412/MARA/blob/2b3e3177c17493a05aebce109d2dd48154f57a46/docs/development/refactor-status.md)
+retains its owner/contract/evidence matrix, failed attempts and platform limits.
+Desktop application tests do not certify a desktop binary. Previously unexecuted
+platform/artifact checks remain unexecuted.
 
-Round base: `273e6173cb736a2f154f51daa69190393372c9b7`.
+Round base: `2b3e3177c17493a05aebce109d2dd48154f57a46`.
 Fixed original Dev: `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
 
-**R4-C 限定验证通过，等待独立审查。** C1/C2/C3 pass the scoped functional gates described below; this is not independent acceptance of R4.
-The two earlier complete browser failures remain failures. After a separately
-reproduced and tested observer repair, one complete final-source matrix passes
-all 32 scenarios. R4 acceptance still requires independent closeout review.
+**R5-A 限定验证通过，等待独立审查。** The extraction preserves the characterized
+deletion contract and passes the scoped functional gates below. It is not
+independent acceptance or a guarantee of cross-store atomicity.
 
-**Final full CI: FAILURE — {'success': 13, 'failure': 7}.** Actual results, rather than a projected failure count, are recorded below.
-**S1/PCRE2 remain open; merge/release remains NO-GO.** The new PCRE2 finding is
-separately identified below; it is not classified as NLTK or silently allowlisted.
+**Final full CI: FAILURE — {'success': 13, 'failure': 7}.**
+**S1/PCRE2 remain open; merge/release remains NO-GO.** Two newly reported
+SoupSieve advisories are separately recorded below; the security baseline is unchanged.
 
-### Source, tests and separate commits
+### Source, tests and evidence ownership
 
-Final source/test and verified source-push SHA:
-**`e955449264fbb15a9c9b2a7c009a1053c07cd5a1`**.
-Last production change: **`19340d6e54966cb1ac8847f21bd37b2be7bb7359`**.
+Final source/test and source-push SHA: **`03b052dcf9c9720d464704fba751bb43fbb1b920`**.
+Last production change: **`05d230696a6a8325d2668c82f86fa596327e82e0`**.
 
-| Ordered change                                                                           | Commit                                     |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Commit fixed old budget/stage/native characterization before extraction                  | `507f8682583410766348ada38043801d43537126` |
-| Extract signal/worker mechanism without changing budget ownership                        | `6d4f9ee86c6b4846d88bae6d91f4a29b6a771c25` |
-| Separate red-first fix for earlier callable outer alarms                                 | `19340d6e54966cb1ac8847f21bd37b2be7bb7359` |
-| Complete recovery, metadata and terminal matrix                                          | `1cadd6a4f7fe454d624755307b9b92f1d081c4ca` |
-| Verify installed route boundary and preserve preparation smoke entry                     | `b444f670d4e4eedd7df6513ed0782edb5119c7fb` |
-| Repair native test child import setup after actual Linux failure                         | `67f79858f2c4bf736016379a98da1d04fb3c178b` |
-| Repair attribution of browser responses discarded by navigation, with red-first controls | `e955449264fbb15a9c9b2a7c009a1053c07cd5a1` |
+| Ordered change                                                                    | Commit                                     |
+| --------------------------------------------------------------------------------- | ------------------------------------------ |
+| Fixed old store/lifecycle/caller/backend/process tests, before extraction         | `3f17b0c36fc017926c4c9f496961f90c150a77cd` |
+| Extract external deletion mechanics, retain coordinator ownership and old methods | `05d230696a6a8325d2668c82f86fa596327e82e0` |
+| Exercise installed cleanup and compatibility facade outside the checkout          | `a65f794fd39b429d5746df631144e364c255f4e2` |
+| Repair test helper import after CI's duplicate static module identity failure     | `03b052dcf9c9720d464704fba751bb43fbb1b920` |
 
-The native launcher commit changes only `test_docqa_route_stage_native.py`: it forwards
-pytest's actual `sys.path` into the child's `PYTHONPATH`, and adds a regression
-with inherited `PYTHONPATH` removed. The original native matrix function's AST,
-all child mechanism assertions and production code remain unchanged. The first
-Linux failure and local red reproduction are retained. This is a test bootstrap
-repair, not an exception to the native-platform requirement.
+The last commit changes only the import of the existing owned Chroma fixture in
+`test_deletion_real_stores.py`, using the same dynamic import pattern already used
+by the full-App fixture. Test functions/assertions have identical ASTs; production,
+package configuration and distribution verification scripts are unchanged.
+The exact full-tree mypy error was reproduced locally before repair; the focused
+backend checks and hooks passed afterward. No alias rule or gate was changed.
 
-The first two full browser matrices use `b444f670`; the final successful matrix
-and new full CI use `e9554492`. Local core suites and build checks ran on
-`67f79858`. Its only differences from the final source are the browser observer
-and its two test files: all production, library tests, benchmark, sidecar,
-distribution verification and gate configuration inputs are unchanged.
-`final-input-equivalence.json` records this bounded reuse. The new observer test
-also passes separately and in final CI. Archive equivalence is not assumed:
-the final CI builds the final source directly, including its new root test.
+Evidence is retained outside the checkout under
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`:
+`r5a-index-store-cleanup/` owns local execution/protection/browser receipts;
+`r5a-stable-ci/` retains the first CI attempt; `r5a-final-ci/` owns final-source CI.
+The report-only commit and final local/remote SHA are recorded in
+`r5a-report-commit.json` and `r5a-final-state.json` in the local evidence directory.
+Their functional-input equivalence is checked separately from the final report's
+worktree and full-history secret scans.
 
-The later report-only commit's report/local/remote SHA and report blob are in
-`r4c-report-commit.json` and `r4c-final-state.json`. Only this report changes after
-the final source. Its contents receive a pinned worktree secret scan before
-commit and a full-history scan afterward; source equivalence does not waive
-these scans.
+### Responsibility and compatibility boundary
 
-### R4 owner — contract — evidence — status matrix
+No equivalent cleanup module was found. Only `deletion.py` and the new
+`index_store_cleanup.py` change in production.
 
-| Boundary and owner                                                 | Preserved contract                                                                                                       | Evidence                                                                                     | Status                             |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------- |
-| R4-A `query_planning` / `finance_plan_policy`                      | General phase order, financial contributions, original plan/schema/ID                                                    | Accepted R4-A; retained nine full evidence seams and planning contracts                      | ACCEPTED, protected                |
-| R4-B binder / candidate policy; existing identity/scoring/snapshot | Binder owns state, ordered selection and replacement trace; identity/cache/schema unchanged                              | Accepted R4-B; retained six binding seams, snapshot and characterization suites              | ACCEPTED, protected                |
-| C1 `route_budget`                                                  | Formulas, request stage state, trace, cancellation integration, original exception and patch entries                     | Old fixed expectations; nested state/clock/call order; 19 retained definitions unchanged     | PASS; independent review pending   |
-| C1 `route_stage_runner`                                            | Narrow call/deadline/exception/cancel/primitive operations; no request/runtime or reverse import                         | Standalone tests, real-parent cold import, installed wheel; platform receipts                | PASS; independent review pending   |
-| C2 existing execution / route capabilities                         | Failed retrieval traverses candidates; commits only a qualifying transition; budget checked at each stage                | Eleven full baseline seams plus retained recovery tests                                      | PASS; independent review pending   |
-| C2 existing recovery / retrieval rounds                            | Rebind before same-route/switch recovery; verifier uses first candidate and one separate focused quota; no-progress stop | Full trace/call-count comparisons; ordinary rounds 1/2 and focused round 3                   | PASS; independent review pending   |
-| C2 query/slot/round context                                        | Install metadata only for the call; `finally` restores missing/None/dict and original references                         | 18 success/exception context cases                                                           | PASS; independent review pending   |
-| C1 timeout / cancellation                                          | Caller timeout, cancellation request and producer stop are distinct; late values/errors rejected                         | Controlled races; real Windows/non-main workers; Linux signal subprocesses                   | PASS; independent review pending   |
-| C3 verifier / terminal projection                                  | Candidate, semantic/display answer, guardrail, authority, citations, versions/hash and deep copies retained              | Complete serialized snapshots; QASPER regeneration/reverification; canonical vectors         | PASS                               |
-| C3 Runtime / Web persistence                                       | Terminal authority does not forbid Runtime then Web writes of the same projection; no late overwrite                     | Natural browser two-write assertions, runtime/sidecar tests                                  | PASS                               |
-| Cross-entry Web / CLI / benchmark / sidecar                        | Existing application-level entrypoints and original command surface retained                                             | Full affected suites, installed checks, unchanged consumer boundaries                        | PASS; desktop binary not certified |
-| Complete 32-scenario App gate                                      | One whole fresh run, unchanged business assertions, no stitched green batches                                            | Two failures retained; independent observer reproduction and controls; final complete matrix | PASS on `e9554492`                 |
+| Owner                                                | Responsibility and retained contract                                                                                                                 | Evidence                                                                                                        |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `DeletionCoordinator`                                | Authorization and plan; empty IDs/store=None; missing-error policy; lifecycle stage order; SQL/lease/reference count/quarantine/restore/purge/result | Fixed store/caller tests and complete lifecycle fault matrix                                                    |
+| `index_store_cleanup`                                | Ordered batch deletion, missing-only individual recovery, limited legacy docstore signature compatibility, optional FTS refresh                      | Frozen old expectations; independent narrow-operation tests; installed-wheel check                              |
+| Existing `StorageLifetime` and `FileArtifactCleaner` | Per-path cross-process lease, path checks, atomic publish/quarantine/restore/purge and file-ID artifacts                                             | Existing integration/security tests, real filesystem fault tests, four real process cases                       |
+| Existing Web / IndexPipeline / Runtime / CLI         | Same coordinator and public command surface; real request identity; original single/bulk failure semantics                                           | Existing caller suites, new bulk short-circuit tests, real full-App deletion flows and installed command checks |
 
-No equivalent mechanism module was found. Production edits are confined to
-`route_budget.py` and `route_stage_runner.py`. The budget module retains its
-public/private signatures, `RouteDeadlineExhausted` definition/module, platform
-selection and call-time `monotonic`, `signal`, `threading` and worker patch paths.
-The runner receives explicit operations; it has no request, Runtime, Controller,
-request-global state, pool, asyncio or retry framework. Existing recovery,
-capabilities, retrieval, validation, identity, schema and terminal modules are
-retained. No threshold, prompt, top-k, budget formula/default, route, dataset,
-frozen result, permission or persistence change was made.
+`DeletionCoordinator`, `DeletionError` and `DeletionResult` retain their definitions,
+module identities and original method signatures. The four old cleanup methods
+remain delegates. Their actual override/patch paths remain consumed through narrow
+callables. `_delete_store`, error classification/factory, authorization, lifecycle
+and SQL methods remain unchanged. An AST receipt checks all retained definitions.
+The new module imports only standard typing support; it has no reverse coordinator
+import and receives no coordinator/index/app/runtime. There is no new transaction,
+retry, background cleanup, storage reconstruction or generic dependency framework.
 
-### C1 execution and the separate outer-alarm fix
+The old implementation passed **72 fixed-expectation tests before extraction**;
+the extracted implementation passed **74**, including independent/cold import cases.
+Tests preserve ID order and duplicates, fresh list conversion, exact batch counts,
+missing-only fallback, nonmissing exception location and short circuit,
+`refresh_indices=False`, the original limited `TypeError` compatibility, and
+`create_fts_index("text", tokenizer_name="en_stem", replace=True)` timing/count/stage.
+They also preserve the old unwrapped descriptor-lookup failure. No sorting, dedupe,
+extra retry, parallel deletion, shared-handle closure or backend rebuild was added.
 
-The old implementation passed **87 targeted tests** before production edits;
-54 of these characterize budget/stage behavior. Cases include no/zero/insufficient
-budgets, strict `>`, terminal and dynamically observed optional reserve, exact
-clock reads, nested absent/None/value restoration, original call/exception order,
-trace copies, worker result-timeout races and cancellation error handling.
+A fresh process uses the real `ktem.index.file` parent as its import baseline.
+Importing the new leaf adds only that module, without extra audited I/O or loading
+the coordinator/runtime. The installed wheel repeats this outside the checkout
+without source `PYTHONPATH`; this is an incremental dependency check, not a claim
+that the existing parent package has no startup behavior.
 
-After extraction, four controlled regressions failed because a more imminent
-callable outer alarm was replaced by the longer inner timer. The separate fix
-honors that earlier deadline and exception identity, restores periodic remainder,
-and does not rearm a consumed one-shot. If the outer handler returns, the inner
-bound remains active. Later/no outer alarm behavior stays characterized.
-The actual benchmark `RouteExecutionTimeout` wrapper is included.
+### Fault and resource-state matrix
 
-Windows ran the six real owned-worker cases, including a non-main caller,
-cooperative and unresponsive cancellation, callback errors and late value/error
-rejection. Linux CI ran these worker cases and ten real signal subprocess cases
-(five original timer/handler contracts and five earlier-outer-alarm cases).
-Linux native tests passed in job `105096614289`; installed-wheel worker/signal
-checks passed in `105096614535`. Windows does not claim a signal pass. The
-platform tests contain no skip substituted for either mechanism.
+The preserved order is authorization/path planning → vector → docstore/FTS →
+file-ID artifacts → path lease → SQL delete/reference check → quarantine →
+commit → purge. Tests observe actual SQLAlchemy flushes, including autoflush;
+they do not replace that trace with a simplified expected sequence.
 
-Workers retain the original single daemon thread, accepting-result lock, original
-wait bound and 0.1-second cancellation observation. Cooperative completion and an
-unresponsive producer are reported separately. The production timeout path does
-not kill threads; test cleanup releases and joins only test-owned workers.
-Signal delivery also does not certify immediate interruption of every native
-extension call; [Python's signal semantics](https://docs.python.org/3.10/library/signal.html)
-remain applicable.
+The fault fixture starts with one source, four relations, one vector, three
+document records, four file-ID artifact directories and one original content file.
+The table describes the injected partial progress, not a promise that every backend
+fails atomically. `D3/D2/D0` denote three/two/zero surviving document records.
 
-A fresh process imports the real `ktem` parent before the runner, without
-prewarming runtime or faking the package. Only `ktem.docqa` and the runner are
-newly loaded; audited import activity adds no DB/network/write/thread/timer side
-effect. The audit ends before coverage's legitimate exit writes.
+| Failure / stage                              | SQL source + relations                         | External stores / FTS                         | Artifacts                       | Original / quarantine                                   | Result and retry                                                                                            |
+| -------------------------------------------- | ---------------------------------------------- | --------------------------------------------- | ------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Authorization or invalid plan/path           | Retained                                       | Untouched                                     | Retained                        | Untouched                                               | Validate failure before external calls                                                                      |
+| Vector partial failure                       | 1 + 4 retained                                 | Vector deletion already happened; D3; no FTS  | All four                        | Original retained                                       | Vector error; retry can finish                                                                              |
+| Docstore partial failure                     | 1 + 4 retained                                 | Vector gone; D2; FTS not reached              | All four                        | Original retained                                       | Docstore error; retry tolerates missing IDs                                                                 |
+| FTS refresh failure                          | 1 + 4 retained                                 | Vector gone; D0; refresh attempted and failed | All four                        | Original retained                                       | Docstore error; no later stage                                                                              |
+| Artifact partial failure                     | 1 + 4 retained                                 | Vector/docs gone; FTS already called          | Three of four                   | Original retained                                       | Artifacts error; previous deletions remain                                                                  |
+| Lease / SQL delete / flush / reference check | 1 + 4 retained after rollback where applicable | Already deleted                               | Gone                            | Original retained                                       | Original disk or SQL error; retry can finish                                                                |
+| Quarantine move failure                      | 1 + 4 retained                                 | Already deleted                               | Gone                            | Original retained                                       | Disk error and rollback                                                                                     |
+| Quarantine directory-sync failure            | 1 + 4 retained                                 | Already deleted                               | Gone                            | Move restored before rollback                           | Disk error; exact restore/rollback order retained                                                           |
+| Commit failure with successful restore       | 1 + 4 rolled back                              | Already deleted                               | Gone                            | Original restored; no quarantine                        | SQL error; retry can finish                                                                                 |
+| Commit failure plus restore failure          | 1 + 4 rolled back                              | Already deleted                               | Gone                            | Original absent; quarantine remains                     | SQL error includes restore failure and log; retry does not discover the old orphan                          |
+| Postcommit purge failure                     | 0 + 0 committed                                | Already deleted                               | Gone                            | Original absent; quarantine remains                     | Original successful logical-deletion result plus auditable orphan log; another full delete fails validation |
+| Normal completion                            | 0 + 0 committed                                | Selected IDs gone; unrelated IDs retained     | Selected file-ID artifacts gone | Original removed only for last reference; no quarantine | Original `DeletionResult`                                                                                   |
 
-### C2 recovery and complete terminal observations
+SQL rollback does **not** restore deleted external indexes or artifacts. This is
+not cross-store ACID. A committed purge failure is neither a rollback nor complete
+physical cleanup. Missing external IDs are tolerated under the original policy;
+that does not make a repeated complete `delete(file_id)` universally successful.
+The existing staged error/result/logging behavior is retained without compensation
+or an orphan-sweeper policy change.
 
-The retained nine R4-A and six R4-B fixed evidence seams remain intact. Eleven
-additional observations compare full `as_dict`, ordered IDs, complete plans,
-versions, trace, request budget and terminal projection hashes against base
-`273e6173`. They cover multi-candidate retrieval success/exhaustion/budget stop,
-first-candidate-only verifier recovery, ordinary second versus focused third
-round, same-route recovery, typed authority, optional-budget short circuit,
-retrieval/generation failure and timeout before any callback.
+### Shared paths, real backends and callers
 
-The baseline observation process loads the old `route_budget` from the base
-commit; every other production input involved is proven unchanged. The first
-repeatability check exposed elapsed-time inputs in the projection hash. Those
-explicit clock inputs were fixed before computing the original outputs; neither
-IDs nor hash fields were removed. Two complete baseline captures then matched,
-and these additional C2 goldens were written once against the original budget
-implementation. No later test or fix regenerated them.
-`c2-baseline-receipt.json` and the retained failed repeatability observation make
-that sequence reviewable.
+Four real child-process tests use task-owned SQL, files and native `FileLock`
+instances with bounded explicit barriers. They cover delete/delete across owners,
+publish/delete in each order and independent paths entering concurrently. Only
+test-owned children/resources are released or cleaned. Existing last-reference,
+path/symlink and artifact safety tests remain in the full affected gate.
 
-The 18 metadata cases assert original values and identity after success or
-exception. Two additional QASPER cases use real candidate preparation and the
-real verifier with a fixed model reply: improved evidence produces exactly one
-new generation/verification, linked transaction identity and the recovered
-citation; unchanged evidence stops without regeneration or reverification.
-Execution failure, safe abstention and timeout remain distinct terminal outcomes.
-No separate recovery state machine or production recovery rewrite was added.
+The actual `FileIndex` setup uses `index__{id}__source` and `index_{id}` storage
+roots. A real setup/publish/delete test confirms identical content in two indices
+has distinct physical roots; deleting one leaves the other's SQL/file intact.
+Reference counting still queries only the passed source table, including its
+other owners. These results do not establish global cross-index reference counting
+for an arbitrary custom shared-root layout. File-ID artifacts remain distinct
+from original content paths; no cascading delete was introduced.
 
-### C3 full App runs and observer attribution
+Task-owned Chroma and LanceDB collections exercise real deletion, production FTS
+queries, unrelated-record preservation, external deletion followed by an artifact
+failure, and retry against already missing IDs. The configured LanceDB wrapper has
+no `create_fts_index` coordinator hook; hook compatibility is tested separately.
+The first baseline backend assertion inspected a previously opened Lance table,
+which is a snapshot. A recorded probe showed the production query and newly opened
+table already returned no deleted hits. That observation was corrected before
+committing the old expectations; no production FTS change was made.
 
-All three matrices use the real full App, Gradio 4.39.0, fresh browser/runtime/cache,
-actual uploads, natural events, real request identity and persistence. The page,
-event and adapter implementations are unchanged. Each matrix contains the
-original 32 scenarios: 12 retained conversation/upload/navigation flows, 11
-refresh-order cases, seven index/Studio seams and two separate public-fixture
-permission cases. No intermediate naming/persistence API replaces user actions.
+Web's `index/file/_deletion.py` controller, `IndexPipeline.delete_file` in
+`index/file/pipelines.py`, and `RuntimeFileService.delete_files` through the
+original `DocQARuntime.delete_files` entry still invoke the same coordinator.
+The runtime's coordinator injection and actual Web/pipeline patch paths remain.
+New caller tests
+lock server-derived identity, authentication before resource access, one operation
+per ID, a committed earlier bulk item followed by an error, and no later item after
+that error. Public readability does not expand deletion rights. CLI command and
+desktop sidecar application contracts remain covered; no desktop binary is certified.
 
-| Whole run                                           | Retained 12                     | Refresh 11                            | Index/Studio 7                  | Public 2 | Actual verdict             |
-| --------------------------------------------------- | ------------------------------- | ------------------------------------- | ------------------------------- | -------- | -------------------------- |
-| `stable-browser-*`                                  | Pass                            | Fail: target dropdown click timed out | Fail: strict CDP observer error | Pass     | FAIL                       |
-| `accepted-browser-*` (prospective label only)       | Fail: strict CDP observer error | Pass                                  | Pass                            | Pass     | FAIL                       |
-| `final-browser-*`, after the tested observer repair | Pass                            | Pass                                  | Pass                            | Pass     | PASS, all 32 on `e9554492` |
+### Full App and local/Linux gates
 
-The first click failure recorded an unstable, then detached option and no final
-switch-to-B callback; its concurrency postcondition was not reached. The complete
-same-source repeat passes that actual switch assertion. In each CDP failure,
-`response.json()` in the successful `/queue/join` response observer reports
-`Network.getResponseBody: No resource with given identifier found`. The exact
-session/response/time was not retained in that error, so a page-close cause is
-not retroactively asserted. This is distinct from NLTK.
+The existing full App/Gradio 4.39.0 harness is unchanged. Each batch starts a
+fresh browser/runtime/cache and uses actual browser uploads, natural events,
+authenticated operations and real persistence. Model/network fixtures remain at
+their existing boundaries; no intermediate API or cache warming substitutes for
+a user workflow.
 
-All 32 business assertions succeeded in the second matrix, but its strict global
-error assertion failed; that run remains **not accepted**. An independent real
-Edge page and task-owned HTTP server then reproduced the exact response-body
-error with the original observer: reading a successful queue acknowledgement
-after navigation fails while the new document remains open. A current-document
-response succeeds; closing the page produces the separately recognized close
-error. This reproduces a mechanism, without inventing missing historical timing.
+| Whole matrix                                  | Retained 12 | Refresh 11 | Index/Studio 7                                  | Public 2 | Overall                             |
+| --------------------------------------------- | ----------- | ---------- | ----------------------------------------------- | -------- | ----------------------------------- |
+| First `final-browser-*`, source `a65f794f`    | PASS        | PASS       | App failed before readiness; seven not executed | PASS     | FAIL: 25 passed, seven not executed |
+| Final `verified-browser-*`, source `03b052dc` | PASS        | PASS       | PASS                                            | PASS     | PASS: all 32 in one whole run       |
 
-Ten Node controls exercise the actual registered observer callback. Seven fail
-before the repair; all ten pass afterward. The narrow test-only change records
-the original request session, index, navigation boundary, URL, time and error.
-Only the exact missing-body error for a request proven to precede navigation is
-classified as an observer closure. Current-document, unknown-request and other
-parse errors still fail globally. The real-browser reproduction then passes.
-No wait, retry, product event or business assertion was changed.
+The first seam App startup hit an SSL EOF fetching the immutable
+`cl100k_base.tiktoken` vocabulary, before any seam assertion. Its outer
+"server cleanup failed" label reflects the nonzero child exit: the retained
+cleanup receipt confirms that its owned directory was actually removed.
+No browser/product code was changed for that transport failure. Both attempts
+and all eight cleanup receipts remain; the final result is not assembled from
+successful batches of different attempts.
 
-Only then was the complete final-source matrix run. All 32 scenarios and all
-global error checks pass without stitching batches. The only recorded closure
-is the previously supported closed-page condition; there are no observer
-failures. Server diagnostics separately verify expected nonowner refusals,
-generation failure and stale reads after authorized deletion; preview revocation
-has typed `PreviewAccessError` evidence. All twelve task-owned runtimes from the
-three matrices are removed.
+The final run covers real index selection/cancel/reindex, single/bulk delete and
+group operations, delete notifications, typed preview revocation, late results,
+dual users and session switches, generation errors/cancel/disconnect, full/page
+history, completion/persistence tails, and the independent public fixture.
+Expected failure callbacks are checked against actual authentication/deletion
+order, not hidden by the global browser error check. No new unexplained callback
+or observer failure remains. Evidence: `browser-verified.json`,
+`verified-browser-diagnostics-verification.json`, both matrix receipts/raw results
+and `first-attempts-disposition.json`.
 
-Evidence: all three `*-browser-matrix-execution.json` files, raw batch logs/results,
-`browser-matrix-review.json`, `browser-first-failure-disposition.json`,
-`browser-first-protocol-disposition.json`, `browser-diagnostics-verification.json`.
-`observer-lifecycle-probe.json`, `observer-lifecycle-green.json`, red/green Node
-logs, `browser-verified.json`, `final-browser-diagnostics-verification.json` and
-`final-input-equivalence.json` bind the final result to its source and raw logs.
-This round does not reopen R3 production work.
+The final complete affected Windows suite on `03b052dc` reports
+**3921 passed, 99 failed,
+9 skipped, 45 warnings**.
+All 99 failure node IDs, primary errors and failing expressions match R4-C after
+only documented runtime-path/address normalizations. This local suite is not
+called green. The first suite had 100 failures: the additional real-registration
+child failed on the same vocabulary TLS fetch before registration assertions.
+That failure is retained separately; the complete final-source repeat passes it.
 
-### Full gates, build and coverage
+The existing Windows skip set is unchanged. Previously unexecuted POSIX sidecar
+permission cases remain unexecuted on Windows and are not claimed from the
+Linux package job. Sidecar application/indexing/deletion/storage-fault contracts
+were included in the local full scope; desktop binary/platform certification
+remains separate.
 
-Core targeted checks: **187 passed**. All round hooks, static/hygiene, fixed-Dev
-and round debt checks, lock constraints, container lock parity and supply-chain
-policy checks pass. No omit, skip, debt baseline, collector scope or floor changes.
+Final Linux jobs pass the complete `ktem` suite (**3763 passed, no skips**),
+benchmark/root (**1633 passed**), both kotaemon Python 3.10/3.11 suites
+(**381 passed, 10 existing skips each**), and the CLI job. Thus the new real
+backend/process cases and the existing Linux-only path/security assertions run
+in the complete ktem scope. Collection is **6080**
+nodes, retaining every prior node and adding 71 in this round's test files.
+Collection evidence is distinguished from suite execution evidence.
 
-The full affected Windows scope at `67f79858` produced **3833 passed, 99 failed,
-9 skipped, 43 warnings**. All 99 node IDs, primary errors and failing expressions
-match the retained R4-B failures; no new failure or changed failure nature was
-found, and the failing test files are unchanged. Local warning bodies also match.
-This local suite is not reported as green. Nine skips include two pre-existing
-POSIX permission tests newly included in the local sidecar scope; their Windows
-decorators are unchanged. Those two POSIX cases are not run by the existing
-Linux workflow and are **not claimed executed**. They are outside this route
-execution change; desktop binary and OS permission certification remain separate.
-Evidence: `local-failure-verification-final.json`, `local-warning-comparison.json`
-and `expanded-local-skip-scope-reviewed.json`.
+All round hooks, full static/hygiene, fixed-Dev and round debt ratchets, constraints,
+container-lock parity, supply-chain policy and G0 positive/negative controls pass.
+No omit, skip, threshold, collector, alias logic or debt-baseline change was made.
+The new final-source CI confirms the full-tree mypy repair.
 
-The final-source Linux suites pass: **3692 ktem tests**, **1633 benchmark/root
-tests**, and **381 kotaemon tests on each of Python 3.10 and 3.11** (the existing
-ten kotaemon skips remain). Unified collection finds **6009 tests**, retaining all
-5912 prior nodes and adding 97 (`collection-delta-verified.json`). Collection is
-not substituted for execution. CLI contracts,
-frontend contracts, static/hygiene and repository/image secret jobs pass. These
-are actual Linux executions, not relabelled Windows results.
+Warning bodies/counts were compared with R4-C. The real two-index layout test
+adds two SQLAlchemy `MovedIn20Warning` occurrences at unchanged `index.py:77`.
+The template-key warning's `word,language` versus `language,word` order comes
+from the unchanged set iteration at `llms/prompts/template.py:66-71`.
+In the coverage run, the same Gradio upgrade notice occurs four times instead
+of five; together with the two new deprecation occurrences, this explains the
+net warning-count increase from 48 to 49. Container warning bodies add no unexplained warning.
+These are not categorized as NLTK. Full evidence: `final-local-failure-verification.json`,
+`final-local-warning-comparison.json`, `collection-delta-verified.json`,
+`warning-count-comparison.json`, `warning-bodies-final.json`,
+`warning-review-final.json` and raw job logs.
 
-Local Windows build and repository-external clean-wheel checks passed on
-`67f79858`: eight wheel/sdist archives and 44 retained source members were checked,
-including a real worker call. Final CI builds `e9554492` directly and passes
-external clean-wheel checks with installed module paths, no source `PYTHONPATH`,
-real worker and signal calls, old exports, preparation and Web resource aliases.
-Artifact `10483740938` contains eight digest-verified distributions with SBOM and
-matching provenance; 35 retained production members in ktem are checked against
-the final source, including both route modules. The existing preparation smoke
-entry remains a compatibility wrapper around byte-identical validation text.
-No unexecuted desktop binary test is inferred from these package checks.
+### Build and coverage
 
-The final CI coverage artifact `10484841160` is digest-verified.
-The existing collector includes both route modules, retained R1–R4 modules and
-subprocess execution; no temporary-runtime paths or package-relative aliases
-pollute the result. The unchanged production gate is independently recalculated:
+Local actual builds produced four wheels and four sdists with successful twine
+and four clean installation checks. Their source was `a65f794f`; the subsequent
+test-helper import change leaves production and distribution scripts identical.
+The local archives include the preserved user assets and are explicitly attributed
+to that working copy, not represented as byte-identical to a clean Git checkout.
 
-| Package   | Actual | Existing floor |
-| --------- | ------ | -------------- |
-| benchmark | 90.22% | 90%            |
-| slide_cli | 75.57% | 70%            |
-| kotaemon  | 70.11% | 60%            |
-| ktem      | 83.74% | 50%            |
+The final CI builds **all eight artifacts directly from `03b052dc`**, verifies
+their SBOMs/provenance, and performs all four clean installations. The outside-repo
+installed smoke exercises the new leaf, actual old coordinator facade, missing-ID
+fallback, legacy signature, optional FTS refresh, original type modules and both
+public CLI command aliases. The downloaded artifact digest, embedded source members
+and build identity match the final SHA. No installed/source `PYTHONPATH` shortcut
+is used for the clean-wheel checks.
 
-| Module                  | Actual coverage |
-| ----------------------- | --------------- |
-| `route_budget.py`       | 96.89%          |
-| `route_stage_runner.py` | 100.00%         |
+Coverage artifact `10531343587` is bound by digest to the final CI.
+Subprocess collection remains enabled, with no raw package-relative aliases or
+temporary-runtime files. Original package floors remain unchanged.
 
-| Production diff            | Covered lines | Actual (floor 90%) |
-| -------------------------- | ------------- | ------------------ |
-| fixed_dev (`adab3f4d`)     | 1160/1187     | 97.73%             |
-| r4c_increment (`273e6173`) | 68/68         | 100.00%            |
+| Package   | Covered/statements | Actual | Floor |
+| --------- | ------------------ | ------ | ----- |
+| benchmark | 17146/19005        | 90.22% | 90%   |
+| slide_cli | 2144/2837          | 75.57% | 70%   |
+| kotaemon  | 7539/10727         | 70.28% | 60%   |
+| ktem      | 43075/51417        | 83.78% | 50%   |
 
-`coverage-verified.json` retains module summaries, executed/missing line lists and
-diff denominators; no omit/skip or debt-baseline refresh was used.
+| Changed production module                          | Covered/statements | Actual  |
+| -------------------------------------------------- | ------------------ | ------- |
+| `libs/ktem/ktem/index/file/deletion.py`            | 198/207            | 95.65%  |
+| `libs/ktem/ktem/index/file/index_store_cleanup.py` | 31/31              | 100.00% |
 
-Warning bodies and counts are compared with R4-B rather than assigned a general
-historical label. The observed text delta is the same `language,word` template
-key set in reversed iteration order, from unchanged code. Count deltas, where
-present, are confined to the identical Gradio version notice at
-`gradio/analytics.py:106`; full before/after counts and source sites are retained.
-Container warning lines add no new body. No new unexplained test, warning or
-isolation failure remains; the independently investigated PCRE2 scan delta is
-recorded separately below. Evidence: `warning-count-comparison.json`,
-`warning-bodies-final.json`, `warning-review-final.json` and
-`image-warnings-reviewed.json`.
+| Production increment       | Covered/changed | Actual  | Floor |
+| -------------------------- | --------------- | ------- | ----- |
+| fixed_dev (`adab3f4d`)     | 1197/1224       | 97.79%  | 90%   |
+| r5a_increment (`2b3e3177`) | 37/37           | 100.00% | 90%   |
 
-### Actual CI and separate security findings
+`coverage-verified.json` retains full line lists and prior R1–R4 module summaries.
+Both diff denominators use the unchanged production gate logic. Coverage does not
+replace lifecycle fault states, real backends or the browser acceptance evidence.
+`python-artifact-inspection.json` and `local-build-verified.json` retain build
+checks. The report is absent from all eight source artifacts; report-only reuse
+preserves functional build/test inputs, without claiming that a newly labeled
+OCI image or provenance record has the same bytes.
 
-The first R4-C workflow [35186330856](https://github.com/262412/MARA/actions/runs/35186330856)
-(attempt 1, `b444f670`) retained a real native-child import failure in job
-`105089078159`: 1 failed / 3690 passed. The red-first launcher repair is separate.
-After the replacement source was ready, the obsolete coverage job was cancelled;
-that run concludes CANCELLED with 11 success / 8 failure / 1 cancelled. Its
-partial coverage output is not a pass. Raw logs and cancellation receipt remain.
+### CI and fresh security evidence
 
-The new full workflow [35188815816](https://github.com/262412/MARA/actions/runs/35188815816) (attempt 1,
-`e955449264fbb15a9c9b2a7c009a1053c07cd5a1`) concludes **FAILURE**, with actual counts
-`{'success': 13, 'failure': 7}`. It is a new full execution on the final source; no targeted
-rerun is presented as a full suite. Dispatch uses the fixed original Dev input.
+The first workflow [35301008951](https://github.com/262412/MARA/actions/runs/35301008951)
+(attempt 1, `a65f794f`) failed full-tree mypy in job `105463449413`: the same
+Chroma test fixture was statically named both `tests.chroma_test_runtime` and
+`libs.kotaemon.tests.chroma_test_runtime`. The red reproduction and separate
+test-only fix are retained. After the replacement source was pushed, this owned
+obsolete run was cancelled: **11 success, seven failure, two cancelled**.
+Its incomplete coverage/container output is not a pass.
+
+The new complete workflow [35302130495](https://github.com/262412/MARA/actions/runs/35302130495) (attempt 1,
+`03b052dcf9c9720d464704fba751bb43fbb1b920`) concludes **FAILURE**, actual counts
+`{'success': 13, 'failure': 7}`. Dispatch uses the fixed original Dev input. Every result
+below belongs to this full final-source run, not a targeted or mixed-SHA rerun.
 
 | Job                                                        | Actual job ID  | Conclusion |
 | ---------------------------------------------------------- | -------------- | ---------- |
-| ktem isolated runtime                                      | `105096614289` | SUCCESS    |
-| slide_cli                                                  | `105096614447` | SUCCESS    |
-| Dependency audit root-py311                                | `105096614461` | FAILURE    |
-| kotaemon Python 3.10                                       | `105096614507` | SUCCESS    |
-| Static, hygiene, and baseline ratchet                      | `105096614529` | SUCCESS    |
-| Four clean wheel installations                             | `105096614535` | SUCCESS    |
-| Container full supply chain                                | `105096614586` | FAILURE    |
-| Unified pytest collection                                  | `105096614601` | SUCCESS    |
-| kotaemon Python 3.11                                       | `105096614641` | SUCCESS    |
-| Repository and image secret scans / Repository and history | `105096614652` | SUCCESS    |
-| Container lite supply chain                                | `105096614658` | FAILURE    |
-| Dependency audit container-py310                           | `105096614672` | FAILURE    |
-| Container ollama supply chain                              | `105096614691` | FAILURE    |
-| Coverage floors and production diff                        | `105096614746` | SUCCESS    |
-| Python distribution supply chain                           | `105096614789` | SUCCESS    |
-| Repository and image secret scans / Built image            | `105096614805` | SUCCESS    |
-| Dependency audit root-py310                                | `105096614829` | FAILURE    |
-| Benchmark and root contracts                               | `105096614895` | SUCCESS    |
-| Frontend and browser security                              | `105096614912` | SUCCESS    |
-| Required quality gates                                     | `105108364777` | FAILURE    |
+| Unified pytest collection                                  | `105466781800` | SUCCESS    |
+| Dependency audit root-py310                                | `105466781899` | FAILURE    |
+| kotaemon Python 3.11                                       | `105466781930` | SUCCESS    |
+| slide_cli                                                  | `105466781944` | SUCCESS    |
+| Static, hygiene, and baseline ratchet                      | `105466781948` | SUCCESS    |
+| Coverage floors and production diff                        | `105466781951` | SUCCESS    |
+| Benchmark and root contracts                               | `105466781958` | SUCCESS    |
+| ktem isolated runtime                                      | `105466781966` | SUCCESS    |
+| Container ollama supply chain                              | `105466781978` | FAILURE    |
+| Dependency audit root-py311                                | `105466781994` | FAILURE    |
+| kotaemon Python 3.10                                       | `105466781997` | SUCCESS    |
+| Frontend and browser security                              | `105466782001` | SUCCESS    |
+| Four clean wheel installations                             | `105466782071` | SUCCESS    |
+| Container lite supply chain                                | `105466782082` | FAILURE    |
+| Container full supply chain                                | `105466782095` | FAILURE    |
+| Repository and image secret scans / Built image            | `105466782111` | SUCCESS    |
+| Python distribution supply chain                           | `105466782116` | SUCCESS    |
+| Dependency audit container-py310                           | `105466782132` | FAILURE    |
+| Repository and image secret scans / Repository and history | `105466782228` | SUCCESS    |
+| Required quality gates                                     | `105476178189` | FAILURE    |
 
-The failed audits and their required aggregate remain required. All outcomes
-above come from the final workflow; no old-source green jobs are substituted.
+The fresh Python audits retain the original ten blocking keys and add two
+SoupSieve keys. Each original profile is recorded independently:
 
-G0 remains CLOSED. The pinned v8.24.3 exact exception still passes all ten
-positive/negative controls, including changed value/path/other credentials and
-the custom rule. Repository history and worktree scans retain their actual exit
-policy; no allowlist expansion or history rewrite occurred.
+| Profile         | Job            | Blocking keys |
+| --------------- | -------------- | ------------- |
+| root-py310      | `105466781899` | 12            |
+| root-py311      | `105466781994` | 12            |
+| container-py310 | `105466782132` | 12            |
 
-All three fresh Python profiles retain the following blocking package/version/ID
-keys; the nine PYSEC aliases retain their existing evidence and decisions:
+| Package/version in all three Python profiles | IDs                                                                                |
+| -------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `nltk==3.10.3`                               | `GHSA-8mgp-746c-j5xp`                                                              |
+| `chromadb==0.5.16`                           | `PYSEC-2026-3813`, `PYSEC-2026-3814`, `PYSEC-2026-3815`                            |
+| `pypdf==4.2.0`                               | `PYSEC-2026-3910`, `PYSEC-2026-3911`, `PYSEC-2026-3912`, `PYSEC-2026-3913`         |
+| `transformers==4.56.2`                       | `PYSEC-2026-3929`                                                                  |
+| `unstructured==0.15.14`                      | `PYSEC-2026-3930`                                                                  |
+| `soupsieve==2.8` (newly reported)            | `GHSA-gjv8-xp57-g29c` / `CVE-2026-86000`; `GHSA-j934-xhv5-fg8f` / `CVE-2026-85999` |
 
-| Package/version         | Blocking IDs                                                               |
-| ----------------------- | -------------------------------------------------------------------------- |
-| `nltk==3.10.3`          | `GHSA-8mgp-746c-j5xp`                                                      |
-| `chromadb==0.5.16`      | `PYSEC-2026-3813`, `PYSEC-2026-3814`, `PYSEC-2026-3815`                    |
-| `pypdf==4.2.0`          | `PYSEC-2026-3910`, `PYSEC-2026-3911`, `PYSEC-2026-3912`, `PYSEC-2026-3913` |
-| `transformers==4.56.2`  | `PYSEC-2026-3929`                                                          |
-| `unstructured==0.15.14` | `PYSEC-2026-3930`                                                          |
+The nine PYSEC records and prior raw alias evidence remain intact. The new
+SoupSieve findings concern quadratic selector regex/backtracking and trailing
+whitespace/comment processing. The
+[first advisory](https://github.com/advisories/GHSA-gjv8-xp57-g29c) and
+[second advisory](https://github.com/advisories/GHSA-j934-xhv5-fg8f) list versions
+below 2.9.0 as affected and 2.9.0 as patched. Maintainer pages display 2.8.4 in
+their affected-version field; this difference is recorded rather than used to
+waive the database's result for the locked 2.8. No application-wide exploitability
+or mitigation claim is made. Both locks already held 2.8 and remain byte-identical
+as Git blobs. These are fresh security records, not a dependency upgrade or NLTK.
 
-All three final-source image artifacts have verified digests, target/source
-provenance and actual Trivy 0.70.0 records. Each blocks on `libpcre2-8-0==10.42-1`
-with `CVE-2026-86145`, `CVE-2026-89161` and newly observed `CVE-2026-89157`.
-The last ID is the sole new raw/blocking key relative to R4-B on every target.
-The inspection's new-finding guard fails deliberately and the separate
-`new-pcre2-finding-review.json` explains that exact delta. Container SBOM steps
-after the failed vulnerability gate did not execute; build/provenance success
-does not make the container supply-chain jobs pass. The baseline's old four
-NLTK 3.10.0 container IDs are recorded as resolved by the current scanner, while
-the independent Python NLTK 3.10.3 audit remains blocking.
+All three actual built container targets (`lite`, `full`, `ollama`) retain
+`libpcre2-8-0==10.42-1` with **`CVE-2026-86145`, `CVE-2026-89161`, and
+`CVE-2026-89157`**. Their fresh Trivy 0.70.0 scan findings and PCRE2 package/layer
+match R4-C within the unchanged scan scope. No new raw/blocking image finding,
+secret or misconfiguration is hidden. Build/runtime smoke and OCI provenance
+are verified, but vulnerability failures prevent later image SBOM steps; those
+steps are not reported as complete. Python distribution SBOMs are separate and pass.
 
-The added `CVE-2026-89157` is separately researched. The
-[Debian tracker](https://security-tracker.debian.org/tracker/CVE-2026-89157)
-identifies a 32-bit pattern-conversion allocation overflow, with bookworm fix
-`10.42-1+deb12u1`. The [upstream advisory](https://github.com/PCRE2Project/pcre2/security/advisories/GHSA-q8g2-wprr-34m9)
-identifies the conversion API and automatic allocation, and believes 64-bit
-`size_t` systems unaffected. Actual scanned package records are amd64 and retain
-the same package/layer as R4-B. A newly listed finding with unchanged bytes and
-later advisory modification is consistent with refreshed vulnerability data;
-that is an inference, not a new exploitability certification. Architecture
-applicability is not used to remove the scanner finding. S1/PCRE2 stay blocking;
-no dependency, security baseline, alias logic, scan scope or required job changed.
+G0 remains CLOSED: its exact exception and ten controls are unchanged, and final
+source repository/history plus built-image secret jobs pass. S1 and all three
+PCRE2 records remain open. Dependency locks, vulnerability/alias baselines, scan
+scope and required jobs are unchanged; required audits/aggregate remain failures.
+Evidence: fresh per-profile raw logs and `security-key-reconciliation-final.json`,
+three `image-*-inspection.json` records, artifact digest/provenance receipts and
+`quality-final.json`. No future job/finding count is assumed.
 
-### Evidence, protection and stopping condition
+### Protection and stopping point
 
-Local evidence: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4c-route-closeout`.
-First CI: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4c-stable-ci`.
-Final-source CI: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r4c-final-ci`.
-`execution.jsonl` records commands, source SHA, modified-input hashes and exits.
-Raw failures and all three complete browser matrices remain available. CI artifacts
-are digest-verified; job IDs, attempts, step outcomes and summaries are retained,
-with no targeted rerun described as a new full workflow execution.
+The original 133 tracked asset/instruction modifications are byte-identical to
+the initial snapshot and remain unstaged. The only original untracked path, `NUL`,
+retains its 95 bytes and SHA-256. Only the round's 12 explicit source/test/build
+paths and this report are committed; no `git add .` is used.
 
-The 133 existing user asset/instruction modifications are preserved by raw
-SHA-256 checks. The index is empty after each named-path commit; untracked `NUL`
-is retained untouched. Canonical `.venv` metadata (98,853 entries), real cache
-metadata (614 entries), office-cache and named real configuration/database
-metadata are unchanged. No user data content was read for verification. The
-three historical refused-cleanup directories retain their recorded metadata.
-Only task-owned browser runtimes were cleaned. Branch, remote and worktree
-inventory are preserved; pushes are ordinary fast-forward pushes. The original
-report-history suffix is byte-preserved. `r4c-final-state.json` records the final
-post-report snapshot, explicit-path commit and verified local/remote equality.
+The canonical `.venv` metadata fingerprint (98,853 entries), real `.theflow` cache
+(614 entries), office cache, effective configuration and both real SQL databases
+remain unchanged. No default collection or real user data was used. All observed
+owned pytest roots and all eight browser roots were removed. The three historical
+refused-cleanup directories remain present and untouched. Existing worktrees are
+unchanged apart from this branch's current HEAD; no branch/worktree, force push,
+merge, deployment or release was created.
 
-C1/C2/C3 are ready for independent R4-C / R4 closeout review. The owner-contract-
-evidence matrix above is the review checklist, including unchanged modules that
-need no diff. This report does not confer independent acceptance, close S1/PCRE2,
-or certify previously unexecuted platform/artifact checks.
-Work stops at the R4-C / R4 independent closeout review point. No R5, reopened R3
-production work, security upgrade, merge, deployment or release is started.
+`initial-state.json`, `protected-before.json`, `protected-final-after-report.json`,
+`owned-pytest-runtime-disposition.json`, named commit/push receipts and
+`r5a-final-state.json` bind the protection facts to actual source/test/report/local/
+remote SHAs. The retained R0/R1 report suffix is preserved byte-for-byte, including
+all 853 original line breaks. The report commit changes only this report and
+receives pinned Gitleaks v8.24.3 worktree and full-history scans; functional-input
+equivalence does not waive secret scanning.
+
+Stop at **R5-A**, pending independent review. No R5-B/R5-C/R6 or security upgrade
+is started. S1/PCRE2 remain open and merge/release remains **NO-GO**.
 
 ## Previous R0/R1 evidence (retained history)
 
