@@ -37,11 +37,18 @@ class _ArtifactWriter(Future[None]):
     def __init__(self, factory: Callable[[], Iterable[Any]]) -> None:
         super().__init__()
         self.stop_requested = threading.Event()
+        self._startup_lock = threading.Lock()
+        self._producer_entered = False
+        self._start_failed = False
         self.thread = threading.Thread(
             target=self._consume, args=(factory,), daemon=True
         )
 
     def _consume(self, factory: Callable[[], Iterable[Any]]) -> None:
+        with self._startup_lock:
+            if self._start_failed:
+                return
+            self._producer_entered = True
         try:
             with owned_iterator(iter(factory())) as iterator:
                 while not self.stop_requested.is_set():
@@ -65,6 +72,16 @@ class _ArtifactWriter(Future[None]):
             self.set_exception(error)
         else:
             self.set_result(None)
+
+    def abort_start(self, error: BaseException) -> None:
+        with self._startup_lock:
+            self._start_failed = True
+            self.stop_requested.set()
+            if not self._producer_entered:
+                # A late native bootstrap must return without opening the input.
+                self.set_exception(error)
+        if self.thread.ident is not None:
+            self.thread.join()
 
 
 def _close_writer(writer: Future[None] | None) -> None:
@@ -156,7 +173,7 @@ def consume_in_background(factory: Callable[[], Iterable[Any]]) -> Future[None]:
     try:
         future.thread.start()
     except BaseException as exc:
-        future.set_exception(exc)
+        future.abort_start(exc)
         raise
     return future
 
