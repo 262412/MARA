@@ -60,7 +60,7 @@ from .artifact_lifecycle import begin_file_artifacts, finish_file_artifacts
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 from .deletion import DeletionCoordinator
 from .deterministic_chunks import prepare_chunks_for_indexing
-from .element_index import docstore_batches_and_index_rows
+from .element_index import docstore_batches_and_index_rows, set_index_row_owner
 from .office_policy import prepare_office_parse_file
 from .source_storage import store_source_file
 
@@ -516,6 +516,7 @@ class IndexPipeline(BaseComponent):
             self.vector_indexing.add_to_docstore(batch)
 
         # record in the index
+        set_index_row_owner(nodes, self.user_id)
         with Session(engine) as session:
             session.add_all(nodes)
             session.commit()
@@ -538,6 +539,7 @@ class IndexPipeline(BaseComponent):
                             relation_type="vector",
                         )
                     )
+                set_index_row_owner(nodes, self.user_id)
                 session.add_all(nodes)
                 session.commit()
 
