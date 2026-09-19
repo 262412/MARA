@@ -614,7 +614,7 @@ class IndexPipeline(BaseComponent):
             stmt = select(self.Source).where(self.Source.id == file_id)
             result = session.execute(stmt).first()
             if not result:
-                return file_id
+                raise RuntimeError(f"Source removed during indexing: {file_id}")
 
             item = result[0]
 
