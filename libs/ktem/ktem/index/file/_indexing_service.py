@@ -9,6 +9,8 @@ from typing import Any, Callable, Generator
 
 from sqlalchemy.orm import Session
 
+from kotaemon.artifact_pipeline import owned_iterator
+
 from .archive import ArchiveExtractionError, extract_supported_zip_files
 from .utils import download_arxiv_pdf, is_arxiv_url
 
@@ -114,12 +116,13 @@ class FileIndexingService:
         debugs: list[str] = []
         output_stream = pipeline.stream(files, reindex=reindex)
         try:
-            while True:
-                response = next(output_stream)
-                if response is None:
-                    continue
-                _capture_progress(response, outputs, debugs)
-                yield "\n".join(outputs), "\n".join(debugs)
+            with owned_iterator(output_stream):
+                while True:
+                    response = next(output_stream)
+                    if response is None:
+                        continue
+                    _capture_progress(response, outputs, debugs)
+                    yield "\n".join(outputs), "\n".join(debugs)
         except StopIteration as exc:
             results, _index_errors, _docs = exc.value or ([], [], [])
         except Exception as exc:
@@ -310,11 +313,12 @@ def _partition_existing(
 
 
 def _drain_updates(updates: IndexUpdates) -> list[str]:
-    while True:
-        try:
-            next(updates)
-        except StopIteration as exc:
-            return list(exc.value or [])
+    with owned_iterator(updates):
+        while True:
+            try:
+                next(updates)
+            except StopIteration as exc:
+                return list(exc.value or [])
 
 
 def _directory_files(folder_path: str) -> list[str]:

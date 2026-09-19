@@ -6,6 +6,7 @@ from typing import Any, Optional, cast
 
 from ktem.index.file.archive import extract_supported_zip_files
 
+from kotaemon.artifact_pipeline import owned_iterator
 from kotaemon.base import Document
 
 from ._runtime_models import DocQAIndexResult
@@ -137,8 +138,9 @@ def _consume_indexing_stream(
     failures: list[dict[str, Any]] = []
     debug_messages: list[str] = []
     index_inputs = cast(list[str | Path], expanded_paths)
-    for response in pipeline.stream(index_inputs, reindex=reindex):
-        _capture_indexing_response(response, successes, failures, debug_messages)
+    with owned_iterator(pipeline.stream(index_inputs, reindex=reindex)) as stream:
+        for response in stream:
+            _capture_indexing_response(response, successes, failures, debug_messages)
     return DocQAIndexResult(
         successes=successes,
         failures=failures,
