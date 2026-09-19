@@ -6,6 +6,7 @@ import pytest
 from ktem.index.file import pipelines
 from ktem.index.file.pipelines import IndexDocumentPipeline, IndexPipeline
 
+from kotaemon import artifact_pipeline as artifacts
 from kotaemon.base import Document
 
 
@@ -175,4 +176,39 @@ def test_batch_does_not_continue_after_cancelled_producer():
                 cast(Any, subject), ["https://first", "https://second"]
             )
         )
+    assert calls == ["https://first"]
+
+
+@pytest.mark.parametrize("termination", [GeneratorExit, KeyboardInterrupt])
+def test_background_termination_cannot_become_a_recoverable_file_error(termination):
+    calls = []
+    error = termination("owned producer terminated")
+
+    def produce():
+        raise error
+
+    def stream(path, **kwargs):
+        calls.append(path)
+        pipeline = SimpleNamespace(
+            run_embedding_in_thread=True, finish=lambda *args: pytest.fail()
+        )
+        artifacts.schedule_writer(pipeline, produce)
+        writer = pipeline._artifact_writer_future
+        try:
+            artifacts.finish_indexing(pipeline, "file", path)
+            yield Document("unreachable", channel="debug")
+        finally:
+            writer.thread.join(5)
+            assert not writer.thread.is_alive()
+
+    subject = SimpleNamespace(
+        is_url=lambda path: True, route=lambda _: SimpleNamespace(stream=stream)
+    )
+    with pytest.raises(termination) as caught:
+        drain(
+            IndexDocumentPipeline.stream(
+                cast(Any, subject), ["https://first", "https://second"]
+            )
+        )
+    assert caught.value is error
     assert calls == ["https://first"]
