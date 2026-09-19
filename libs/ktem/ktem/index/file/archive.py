@@ -1,16 +1,97 @@
 from __future__ import annotations
 
 import re
+import logging
+import os
 import shutil
 import stat
 import tempfile
 import zipfile
 from dataclasses import dataclass
+from contextvars import ContextVar
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import IO
 
 from kotaemon.artifact_paths import portable_member_key, validate_portable_component
 from kotaemon.artifact_types import ArtifactNamespaceError
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _OwnedArchiveDirectory:
+    path: Path
+    identity: tuple[int, int]
+
+    @classmethod
+    def created(cls, path: Path):
+        info = path.lstat()
+        return cls(path, (info.st_dev, info.st_ino))
+
+    def remove(self) -> None:
+        try:
+            info = self.path.lstat()
+        except FileNotFoundError:
+            return
+        if (
+            self.path.resolve() != self.path
+            or (info.st_dev, info.st_ino) != self.identity
+        ):
+            raise OSError(f"Refusing changed ZIP input directory: {self.path}")
+        pending = [self.path]
+        while pending:
+            path = pending.pop()
+            info = path.lstat()
+            if (
+                stat.S_ISLNK(info.st_mode)
+                or getattr(info, "st_file_attributes", 0)
+                & stat.FILE_ATTRIBUTE_REPARSE_POINT
+            ):
+                raise OSError(f"Refusing ZIP input link or reparse point: {path}")
+            if stat.S_ISDIR(info.st_mode):
+                with os.scandir(path) as entries:
+                    pending.extend(Path(entry.path) for entry in entries)
+        shutil.rmtree(self.path)
+
+
+# Only synchronous preparation installs a collector. It is reset before any
+# generator yield (Gradio can resume successive next() calls on other threads).
+# Public extract/expand calls outside this scope retain ownership as before.
+_owned_inputs: ContextVar[list[_OwnedArchiveDirectory] | None] = ContextVar(
+    "owned_zip_inputs", default=None
+)
+
+
+class OwnedZipInputs:
+    """Receipts for ZIP roots created by this preparation, never inferred paths."""
+
+    def __init__(self) -> None:
+        self._directories: list[_OwnedArchiveDirectory] = []
+
+    def __enter__(self):
+        return self
+
+    def prepare(self, operation, *args, **kwargs):
+        token = _owned_inputs.set(self._directories)
+        try:
+            return operation(*args, **kwargs)
+        finally:
+            _owned_inputs.reset(token)
+
+    def __exit__(self, exc_type, primary, traceback) -> None:
+        failure = None
+        for receipt in reversed(self._directories):
+            try:
+                receipt.remove()
+            except BaseException as exc:
+                logger.exception(
+                    "ZIP input cleanup failed: root=%s primary=%r",
+                    receipt.path,
+                    primary,
+                )
+                failure = failure or exc
+        if failure is not None and primary is None:
+            raise failure
 
 
 @dataclass(frozen=True)
@@ -276,6 +357,9 @@ def _extract_members(
         output_dir = Path(
             tempfile.mkdtemp(dir=destination_parent, prefix=f"{prefix}_")
         ).resolve()
+        receipt = _OwnedArchiveDirectory.created(output_dir)
+        if (owned := _owned_inputs.get()) is not None:
+            owned.append(receipt)
     except OSError as exc:
         raise ArchiveExtractionError(
             archive,
@@ -300,8 +384,15 @@ def _extract_members(
                     f"{member.info.file_size}"
                 )
             extracted.append(str(output_path.resolve()))
-    except Exception as exc:
-        shutil.rmtree(output_dir, ignore_errors=True)
+    except BaseException as exc:
+        try:
+            receipt.remove()
+        except BaseException:
+            logger.exception(
+                "ZIP extraction cleanup failed: root=%s primary=%r", output_dir, exc
+            )
+        if not isinstance(exc, Exception):
+            raise
         if isinstance(exc, ArchiveExtractionError):
             raise
         raise ArchiveExtractionError(

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from kotaemon.artifact_pipeline import owned_iterator
 
-from .archive import ArchiveExtractionError, extract_supported_zip_files
+from .archive import ArchiveExtractionError, OwnedZipInputs, extract_supported_zip_files
 from .utils import download_arxiv_pdf, is_arxiv_url
 
 logger = logging.getLogger(__name__)
@@ -71,24 +71,25 @@ class FileIndexingService:
         settings: dict[str, Any],
         user_id: Any,
     ) -> IndexUpdates:
-        prepared_files, errors = self._prepare_inputs(files, urls)
-        if prepared_files is None:
-            self._notify("info", "No uploaded file")
-            yield "", ""
-            return None
-        if errors:
-            self._notify("warning", ", ".join(errors))
-            yield "", ""
-            return None
-        self._notify("info", f"Start indexing {len(prepared_files)} files...")
-        return (
-            yield from self._stream_index(
-                prepared_files,
-                reindex=reindex,
-                settings=settings,
-                user_id=user_id,
+        with OwnedZipInputs() as inputs:
+            prepared_files, errors = inputs.prepare(self._prepare_inputs, files, urls)
+            if prepared_files is None:
+                self._notify("info", "No uploaded file")
+                yield "", ""
+                return None
+            if errors:
+                self._notify("warning", ", ".join(errors))
+                yield "", ""
+                return None
+            self._notify("info", f"Start indexing {len(prepared_files)} files...")
+            return (
+                yield from self._stream_index(
+                    prepared_files,
+                    reindex=reindex,
+                    settings=settings,
+                    user_id=user_id,
+                )
             )
-        )
 
     def _prepare_inputs(
         self,
