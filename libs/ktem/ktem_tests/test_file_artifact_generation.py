@@ -498,3 +498,8 @@ def test_quick_handle_docs_exposes_background_writer_future(tmp_path):
         assert pipeline._artifact_writer_future is not None
     finally:
         release.set()
+        writer = getattr(pipeline, "_artifact_writer_future", None)
+        if writer is not None:
+            writer.result(timeout=5)
+            writer.thread.join(5)
+            assert not writer.thread.is_alive()

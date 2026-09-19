@@ -19,6 +19,7 @@ if str(REPO_ROOT) not in sys.path:
 from pytest_runtime_isolation import TestRuntimePaths  # noqa: E402
 from scripts import clean_wheel_binding_smoke as binding_smoke  # noqa: E402
 from scripts import clean_wheel_deletion_smoke as deletion_smoke  # noqa: E402
+from scripts import clean_wheel_indexing_smoke as indexing_smoke  # noqa: E402
 from scripts import clean_wheel_route_smoke as route_smoke  # noqa: E402
 from scripts import clean_wheel_web_smoke as web_smoke  # noqa: E402
 
@@ -397,6 +398,7 @@ def _run_offline_runtime_smoke(
     binding_smoke.run_binding_smoke(_venv_python(venv), venv.parent, offline_env)
     route_smoke.run_route_smoke(_venv_python(venv), venv.parent, offline_env)
     deletion_smoke.run_deletion_smoke(_venv_python(venv), venv.parent, offline_env)
+    indexing_smoke.run_indexing_smoke(_venv_python(venv), venv.parent, offline_env)
     web_smoke.run_chat_callback_smoke(_venv_python(venv), venv.parent, offline_env)
     for executable in ("MARA", "MARA-cli"):
         _run(

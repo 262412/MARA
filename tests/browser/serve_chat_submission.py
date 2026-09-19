@@ -10,6 +10,7 @@ from importlib import import_module
 from pathlib import Path
 
 from file_browser_barriers import FileBrowserBarriers
+from indexing_lifetime_observer import IndexingLifetimeObserver
 from web_seam_observer import studio_exports
 
 from pytest_runtime_isolation import start_process_test_runtime
@@ -27,7 +28,11 @@ def serve(output):
         with pytest.MonkeyPatch.context() as patch:
             with submission_app(patch, runtime.paths.root) as (app, blocks):
                 _indexing_boundaries(patch)
-                _launch(app, blocks, runtime.paths.root, output)
+                observer = IndexingLifetimeObserver(patch)
+                try:
+                    _launch(app, blocks, runtime.paths.root, output, observer)
+                finally:
+                    observer.close()
     finally:
         threading.setprofile(None)
         sys.setprofile(None)
@@ -45,7 +50,7 @@ def serve(output):
         )
 
 
-def _launch(app, blocks, root, output):
+def _launch(app, blocks, root, output, observer):
     import gradio
     from ktem.assets import get_pdfjs_runtime_dir
     from ktem.auth.service import authenticate_password
@@ -106,6 +111,15 @@ def _launch(app, blocks, root, output):
 
     barriers.bind_delivery(blocks._queue)
     _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers)
+
+    @blocks.app.get("/owned-indexing-lifetime")
+    def indexing_lifetime():
+        return observer.snapshot()
+
+    @blocks.app.post("/owned-indexing-lifetime/release")
+    def release_embedding():
+        observer.release()
+        return {"released": True}
 
     _write_ready(output, root, roles, blocks, page._indices_input[1]._id)
     deadline = time.monotonic() + 600

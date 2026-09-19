@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 from ktem.docqa import _runtime_indexing as runtime
-from ktem.index.file._indexing_service import FileIndexingService
 from ktem.index.file import archive as archive_module
+from ktem.index.file._indexing_service import FileIndexingService
 
 from kotaemon.base import Document
 

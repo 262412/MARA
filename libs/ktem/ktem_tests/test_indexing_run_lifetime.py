@@ -13,11 +13,16 @@ def subject(monkeypatch, handle):
         pipelines.settings, "KH_FILE_INDEX_ARTIFACTS_ENABLED", False, raising=False
     )
     calls = []
+
+    def store(path):
+        calls.append("source")
+        return "file"
+
     pipeline = SimpleNamespace(
         collection_name="owned",
         run_embedding_in_thread=True,
         get_id_if_exists=lambda path: calls.append("lookup"),
-        store_url=lambda path: calls.append("source") or "file",
+        store_url=store,
         load_docs_with_parse_cache=lambda *a: SimpleNamespace(
             documents=[], cache_hit=False, stats={}
         ),

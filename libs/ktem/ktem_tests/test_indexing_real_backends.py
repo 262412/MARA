@@ -107,7 +107,7 @@ def test_delete_during_writer_exposes_unfenced_external_write_blocker(
     def consume():
         try:
             events.extend(pipeline.stream(backend.source, False))
-        except Exception as exc:
+        except RuntimeError as exc:
             failures.append(exc)
 
     consumer = threading.Thread(target=consume)
@@ -140,5 +140,27 @@ def test_delete_during_writer_exposes_unfenced_external_write_blocker(
         (
             "r5b_remaining_blocker",
             "deleted source has late vector and SQL relation; no producer/delete fencing",
+        )
+    )
+
+
+def test_unsplit_cache_replay_exposes_shared_identity_blocker(backend, request):
+    """The supported no-splitter variant retains cached IDs across source owners."""
+    backend.source.write_text("unsplitunique input", encoding="utf-8")
+    document_ids = []
+    source_ids = []
+    for owner in ("alice", "bob"):
+        pipeline = backend.pipeline(owner)
+        pipeline.splitter = None
+        _, (source_id, docs) = support.drain(pipeline.stream(backend.source, False))
+        source_ids.append(source_id)
+        document_ids.append([doc.doc_id for doc in docs])
+    assert source_ids[0] != source_ids[1]
+    assert document_ids[0] == document_ids[1]
+    assert len(backend.vectors._collection.get()["ids"]) == 1
+    request.node.user_properties.append(
+        (
+            "r5b_remaining_blocker",
+            "splitter=None and shared parse cache reuse document IDs across owners; cache/identity policy unchanged",
         )
     )

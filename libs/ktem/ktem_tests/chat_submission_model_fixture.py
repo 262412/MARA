@@ -9,6 +9,8 @@ from kotaemon.llms import ChatLLM
 
 held_started = Event()
 held_release = Event()
+embedding_started = Event()
+embedding_release = Event()
 
 
 class SubmissionChatModel(ChatLLM):
@@ -36,7 +38,15 @@ class SubmissionChatModel(ChatLLM):
 
 class SubmissionEmbeddings(BaseEmbeddings):
     def invoke(self, text, **kwargs):
+        documents = self.prepare_input(text)
+        combined = "\n".join(str(doc) for doc in documents)
+        if "R5B_FAIL_EMBEDDING" in combined:
+            raise ValueError("Owned R5-B embedding failure")
+        if "R5B_HELD_EMBEDDING" in combined:
+            embedding_started.set()
+            if not embedding_release.wait(45):
+                raise TimeoutError("Owned browser did not release embedding")
         return [
             DocumentWithEmbedding(content=doc, embedding=[1.0, 0.0, 0.0])
-            for doc in self.prepare_input(text)
+            for doc in documents
         ]

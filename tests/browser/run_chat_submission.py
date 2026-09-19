@@ -39,6 +39,7 @@ def run(output):
         )
     )
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    environment["MARA_BROWSER_PYTHON"] = sys.executable
     environment["NO_PROXY"] = "localhost,127.0.0.1,::1"
     with (output / "server.log").open("w", encoding="utf-8") as log:
         server = subprocess.Popen(
@@ -87,6 +88,13 @@ def _record_source(repository, output):
         "tests/browser/file_browser_concurrency.cjs",
         "tests/browser/file_browser_barriers.py",
         "tests/browser/index_management.cjs",
+        "tests/browser/indexing_lifetime.cjs",
+        "tests/browser/indexing_lifetime_observer.py",
+        "libs/kotaemon/kotaemon/artifact_pipeline.py",
+        "libs/ktem/ktem/index/file/archive.py",
+        "libs/ktem/ktem/index/file/pipelines.py",
+        "libs/ktem/ktem/index/file/_indexing_service.py",
+        "libs/ktem/ktem/docqa/_runtime_indexing.py",
         "tests/browser/studio_workflows.cjs",
         "tests/browser/studio_permissions.cjs",
         "libs/ktem/ktem/pages/chat/studio_callback_identity.py",

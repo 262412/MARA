@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 
 from kotaemon.base import DocumentWithEmbedding
 from kotaemon.embeddings.base import BaseEmbeddings
-from kotaemon.loaders.txt_loader import TxtReader
 from kotaemon.indices.splitters import TokenSplitter
+from kotaemon.loaders.txt_loader import TxtReader
 from kotaemon.storages import LanceDBDocumentStore
 
 owned_chroma_stores = import_module(

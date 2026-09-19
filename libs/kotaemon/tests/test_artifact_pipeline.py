@@ -16,7 +16,7 @@ def test_sync_writer_is_lazy_and_keeps_iterator_return():
         return "writer return"
 
     pipeline = SimpleNamespace(run_embedding_in_thread=False)
-    iterator = artifacts.schedule_writer(pipeline, produce)
+    iterator = iter(artifacts.schedule_writer(pipeline, produce))
     assert calls == []
     assert pipeline._artifact_writer_future is None
     assert next(iterator) == "progress"
@@ -29,7 +29,12 @@ def test_sync_writer_is_lazy_and_keeps_iterator_return():
 @pytest.mark.parametrize("enabled", [True, False])
 def test_generation_and_finish_facades_preserve_metadata_and_result(enabled):
     calls = []
-    pipeline = SimpleNamespace(finish=lambda *args: calls.append(args) or "finished")
+
+    def finish(*args):
+        calls.append(args)
+        return "finished"
+
+    pipeline = SimpleNamespace(finish=finish)
     metadata = {"file_id": "owner", "nested": {"keep": True}}
     nested = metadata["nested"]
     generation = artifacts.begin_indexing_artifacts(pipeline, metadata, enabled=enabled)
@@ -41,7 +46,7 @@ def test_generation_and_finish_facades_preserve_metadata_and_result(enabled):
     assert calls == [("owner", "input")]
 
 
-def test_background_completion_precedes_finish_with_real_thread():
+def test_background_completion_precedes_finish_with_real_thread(monkeypatch):
     entered, release, stopped, waiting = (Event() for _ in range(4))
     calls = []
     threads = []
@@ -72,7 +77,7 @@ def test_background_completion_precedes_finish_with_real_thread():
         waiting.set()
         return original_result(*args, **kwargs)
 
-    writer.result = observed_result
+    monkeypatch.setattr(writer, "result", observed_result)
     finalizer = Thread(target=artifacts.finish_indexing, args=(pipeline, "id", "path"))
     try:
         assert entered.wait(5)

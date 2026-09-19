@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from ktem.index.file import pipelines
@@ -15,5 +16,5 @@ def test_finish_rejects_deleted_source_instead_of_authorizing_publication(
     monkeypatch.setattr(pipelines, "engine", engine)
     with pytest.raises(RuntimeError, match="Source removed during indexing"):
         pipelines.IndexPipeline.finish(
-            SimpleNamespace(Source=Source), "deleted-file", "https://owned"
+            cast(Any, SimpleNamespace(Source=Source)), "deleted-file", "https://owned"
         )
