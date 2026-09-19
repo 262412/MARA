@@ -77,7 +77,14 @@ class _ArtifactWriter(Future[None]):
             self.set_exception(exc)
         except BaseException as exc:
             logger.exception("Artifact background writer failed")
-            self.set_exception(exc)
+            error = (
+                exc
+                if isinstance(exc, (Exception, GeneratorExit, KeyboardInterrupt))
+                else RuntimeError(
+                    f"Artifact background writer terminated: {type(exc).__name__}"
+                )
+            )
+            self.set_exception(error)
         else:
             self.set_result(None)
 
