@@ -1,5 +1,6 @@
 from concurrent.futures import CancelledError
 from importlib import import_module
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -107,6 +108,9 @@ def test_application_entry_interrupt_reaches_real_runtime_file_service(
     if entry == "cli":
         from click.testing import CliRunner
 
+        monkeypatch.syspath_prepend(
+            str(Path(__file__).resolve().parents[2] / "slide_cli")
+        )
         docqa_cli = import_module("slide_cli.docqa_cli")
 
         monkeypatch.setattr(docqa_cli, "create_docqa_runtime", lambda: runtime_service)
