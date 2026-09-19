@@ -663,6 +663,7 @@ class IndexPipeline(BaseComponent):
     ) -> tuple[str, list[Document]]:
         raise NotImplementedError
 
+    @artifacts.indexing_run
     def stream(
         self,
         file_path: str | Path,

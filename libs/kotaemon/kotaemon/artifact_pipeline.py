@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import sys
 import threading
-from concurrent.futures import Future
+from concurrent.futures import CancelledError, Future
 from contextlib import contextmanager
+from functools import wraps
 from typing import Any, Callable, Iterable
 from uuid import uuid4
 
@@ -18,6 +19,8 @@ def owned_iterator(iterator: Any):
         yield iterator
     finally:
         primary = sys.exc_info()[1]
+        if isinstance(primary, StopIteration):
+            primary = None
         close = getattr(iterator, "close", None)
         if close is not None:
             try:
@@ -46,6 +49,10 @@ class _ArtifactWriter(Future[None]):
                         next(iterator)
                     except StopIteration:
                         break
+                if self.stop_requested.is_set():
+                    raise CancelledError("Artifact writer stopped before completion")
+        except CancelledError as exc:
+            self.set_exception(exc)
         except BaseException as exc:
             logger.exception("Artifact background writer failed")
             error = (
@@ -58,6 +65,50 @@ class _ArtifactWriter(Future[None]):
             self.set_exception(error)
         else:
             self.set_result(None)
+
+
+def _close_writer(writer: Future[None] | None) -> None:
+    if writer is None:
+        return
+    primary = sys.exc_info()[1]
+    if isinstance(writer, _ArtifactWriter):
+        writer.stop_requested.set()
+        writer.thread.join()
+    try:
+        writer.result()
+    except BaseException as exc:
+        if isinstance(exc, CancelledError) and isinstance(writer, _ArtifactWriter):
+            return
+        if primary is None:
+            raise
+        if exc is not primary:
+            logger.exception("Artifact writer cleanup failed during %r", primary)
+
+
+def indexing_run(stream: Callable) -> Callable:
+    """Compatibility facade: keep a single run's writer owned through stream exit."""
+
+    @wraps(stream)
+    def generate(pipeline: Any, *args: Any, **kwargs: Any):
+        lock = vars(pipeline).setdefault("_artifact_run_lock", threading.Lock())
+        if not lock.acquire(blocking=False):
+            raise RuntimeError("Cannot replace an active indexing run")
+        try:
+            _check_writer_available(pipeline)
+            try:
+                with owned_iterator(stream(pipeline, *args, **kwargs)) as iterator:
+                    while True:
+                        try:
+                            item = next(iterator)
+                        except StopIteration as stopped:
+                            return stopped.value
+                        yield item
+            finally:
+                _close_writer(getattr(pipeline, "_artifact_writer_future", None))
+        finally:
+            lock.release()
+
+    return generate
 
 
 def _check_writer_available(pipeline: Any) -> None:
@@ -127,6 +178,8 @@ def finish_indexing(pipeline: Any, file_id: object, source_path: object) -> Any:
     writer = getattr(pipeline, "_artifact_writer_future", None)
     if writer is not None:
         writer.result()
+        if isinstance(writer, _ArtifactWriter):
+            writer.thread.join()
     return pipeline.finish(file_id, source_path)
 
 
@@ -135,6 +188,7 @@ __all__ = [
     "begin_indexing_artifacts",
     "consume_in_background",
     "finish_indexing",
+    "indexing_run",
     "owned_iterator",
     "schedule_writer",
     "strip_artifact_generation",
