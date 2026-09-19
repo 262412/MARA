@@ -42,10 +42,10 @@ class _OwnedArchiveDirectory:
         while pending:
             path = pending.pop()
             info = path.lstat()
-            if (
-                stat.S_ISLNK(info.st_mode)
-                or getattr(info, "st_file_attributes", 0)
-                & stat.FILE_ATTRIBUTE_REPARSE_POINT
+            if stat.S_ISLNK(info.st_mode) or (
+                os.name == "nt"
+                and getattr(info, "st_file_attributes", 0)
+                & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT")
             ):
                 raise OSError(f"Refusing ZIP input link or reparse point: {path}")
             if stat.S_ISDIR(info.st_mode):

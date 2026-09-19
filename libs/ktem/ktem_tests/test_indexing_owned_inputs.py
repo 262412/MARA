@@ -16,6 +16,28 @@ def archive(path, member="report.txt"):
     return str(path)
 
 
+def test_receipt_cleanup_without_windows_stat_constants(tmp_path, monkeypatch):
+    root = tmp_path / "owned"
+    root.mkdir()
+    (root / "input.txt").write_text("owned")
+    receipt = archive_module._OwnedArchiveDirectory.created(root.resolve())
+    monkeypatch.setattr(
+        archive_module,
+        "os",
+        SimpleNamespace(name="posix", scandir=archive_module.os.scandir),
+    )
+    monkeypatch.setattr(
+        archive_module,
+        "stat",
+        SimpleNamespace(
+            S_ISLNK=archive_module.stat.S_ISLNK,
+            S_ISDIR=archive_module.stat.S_ISDIR,
+        ),
+    )
+    receipt.remove()
+    assert not root.exists()
+
+
 def index_and_service(tmp_path, stream, **kwargs):
     index = SimpleNamespace(
         id=7,
