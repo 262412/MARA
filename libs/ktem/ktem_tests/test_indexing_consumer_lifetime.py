@@ -1,4 +1,5 @@
 from concurrent.futures import CancelledError
+from importlib import import_module
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -105,16 +106,17 @@ def test_application_entry_interrupt_reaches_real_runtime_file_service(
     )
     if entry == "cli":
         from click.testing import CliRunner
-        from slide_cli import docqa_cli
+
+        docqa_cli = import_module("slide_cli.docqa_cli")
 
         monkeypatch.setattr(docqa_cli, "create_docqa_runtime", lambda: runtime_service)
         result = CliRunner().invoke(docqa_cli.docqa, ["index", "https://owned"])
         assert result.exit_code == 1
         assert "Aborted" in result.output
     else:
-        from apps.desktop.sidecar.application import DesktopApplicationService
-
-        application = DesktopApplicationService(create_runtime=lambda: runtime_service)
+        application = import_module(
+            "apps.desktop.sidecar.application"
+        ).DesktopApplicationService(create_runtime=lambda: runtime_service)
         with pytest.raises(KeyboardInterrupt, match="cancel"):
             application.index_files(["https://owned"])
     assert stream.closed
