@@ -9,7 +9,7 @@ from typing import Any, Callable, Generator
 
 from sqlalchemy.orm import Session
 
-from kotaemon.artifact_pipeline import owned_iterator
+from kotaemon.artifact_pipeline import owned_iterator, report_indexing_error
 
 from .archive import ArchiveExtractionError, OwnedZipInputs, extract_supported_zip_files
 from .utils import download_arxiv_pdf, is_arxiv_url
@@ -127,7 +127,9 @@ class FileIndexingService:
         except StopIteration as exc:
             results, _index_errors, _docs = exc.value or ([], [], [])
         except Exception as exc:
-            logger.exception(
+            report_indexing_error(
+                exc,
+                logger,
                 "File indexing failed: index_id=%s user_id=%s stage=stream",
                 getattr(self._index, "id", None),
                 user_id,

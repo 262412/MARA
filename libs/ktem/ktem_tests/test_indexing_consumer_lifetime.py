@@ -1,4 +1,6 @@
+from concurrent.futures import CancelledError
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from ktem.docqa import _runtime_indexing as runtime
@@ -66,6 +68,53 @@ def test_quick_drain_interrupt_closes_owned_updates():
     error = KeyboardInterrupt("cancel")
     stream = RetainedStream(error)
     with pytest.raises(KeyboardInterrupt) as caught:
-        web._drain_updates(stream)
+        web._drain_updates(cast(Any, stream))
     assert caught.value is error
+    assert stream.closed
+
+
+def test_web_does_not_convert_producer_cancellation_to_file_failure(tmp_path):
+    stream = RetainedStream(CancelledError("cancelled producer"))
+    updates = service(tmp_path, stream)._stream_index(
+        ["file"], reindex=False, settings={}, user_id="owner"
+    )
+    with pytest.raises(CancelledError, match="cancelled producer"):
+        next(updates)
+    assert stream.closed
+
+
+@pytest.mark.parametrize("entry", ["cli", "sidecar"])
+def test_application_entry_interrupt_reaches_real_runtime_file_service(
+    tmp_path, monkeypatch, entry
+):
+    from ktem.docqa._runtime_file_service import RuntimeFileService
+
+    stream = RetainedStream(KeyboardInterrupt("cancel"))
+    file_index = SimpleNamespace(
+        config={"supported_file_types": ".txt"},
+        get_indexing_pipeline=lambda *args: SimpleNamespace(
+            stream=lambda *a, **kw: stream
+        ),
+    )
+    runtime_service = RuntimeFileService(
+        file_index=file_index,
+        engine=None,
+        resolve_user_id=lambda user: "owner",
+        load_settings=lambda user: {},
+        zip_input_dir=str(tmp_path / "zip"),
+    )
+    if entry == "cli":
+        from click.testing import CliRunner
+        from slide_cli import docqa_cli
+
+        monkeypatch.setattr(docqa_cli, "create_docqa_runtime", lambda: runtime_service)
+        result = CliRunner().invoke(docqa_cli.docqa, ["index", "https://owned"])
+        assert result.exit_code == 1
+        assert "Aborted" in result.output
+    else:
+        from apps.desktop.sidecar.application import DesktopApplicationService
+
+        application = DesktopApplicationService(create_runtime=lambda: runtime_service)
+        with pytest.raises(KeyboardInterrupt, match="cancel"):
+            application.index_files(["https://owned"])
     assert stream.closed

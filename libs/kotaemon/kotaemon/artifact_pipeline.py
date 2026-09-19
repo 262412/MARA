@@ -12,6 +12,15 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 
+def report_indexing_error(
+    error: Exception, log: logging.Logger, message: Any, *args: Any
+) -> None:
+    """Observe a file failure without converting producer cancellation to progress."""
+    if isinstance(error, CancelledError):
+        raise error
+    log.exception(message, *args)
+
+
 @contextmanager
 def owned_iterator(iterator: Any):
     """Close an iterator created by this consumer, preserving its primary error."""
@@ -207,6 +216,7 @@ __all__ = [
     "finish_indexing",
     "indexing_run",
     "owned_iterator",
+    "report_indexing_error",
     "schedule_writer",
     "strip_artifact_generation",
 ]

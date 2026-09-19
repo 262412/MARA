@@ -1,5 +1,6 @@
-from pathlib import Path
+from concurrent.futures import CancelledError
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from ktem.index.file import pipelines
@@ -29,14 +30,21 @@ def test_single_stream_original_order_metadata_and_return(
     original, parsed = tmp_path / "original.docx", tmp_path / "converted.pdf"
     original.write_text("original")
     parsed.write_text("parse")
-    calls = []
+    calls: list[tuple] = []
     docs = [Document(text="body", metadata={"artifact_generation": "temporary"})]
     subject = SimpleNamespace(collection_name="collection")
-    subject.get_id_if_exists = lambda path: calls.append(("lookup", path)) or (
-        "old" if reindex else None
-    )
+
+    def lookup(path):
+        calls.append(("lookup", path))
+        return "old" if reindex else None
+
+    def store(path):
+        calls.append(("source", path))
+        return "new"
+
+    subject.get_id_if_exists = lookup
     subject.delete_file = lambda identity: calls.append(("delete", identity))
-    subject.store_file = lambda path: calls.append(("source", path)) or "new"
+    subject.store_file = store
 
     def parse(path, metadata):
         calls.append(("parse", path))
@@ -68,7 +76,7 @@ def test_single_stream_original_order_metadata_and_return(
             layout_metadata={"layout": "preserved"},
         )
     )
-    expected = [("lookup", original)]
+    expected: list[tuple] = [("lookup", original)]
     if reindex:
         expected.append(("delete", "old"))
     expected.extend(
@@ -109,7 +117,7 @@ def test_batch_exception_continues_but_termination_does_not(failure):
         is_url=lambda path: True, route=lambda _: SimpleNamespace(stream=stream)
     )
     batch = IndexDocumentPipeline.stream(
-        subject, ["https://first", "https://second"], reindex=True
+        cast(Any, subject), ["https://first", "https://second"], reindex=True
     )
     if isinstance(failure, Exception):
         events, result = drain(batch)
@@ -148,3 +156,23 @@ def test_batch_exception_continues_but_termination_does_not(failure):
         "source_file_name": "https://first",
         "layout_metadata": None,
     }
+
+
+def test_batch_does_not_continue_after_cancelled_producer():
+    calls = []
+
+    def stream(path, **kwargs):
+        calls.append(path)
+        raise CancelledError("cancelled producer")
+        yield
+
+    subject = SimpleNamespace(
+        is_url=lambda path: True, route=lambda _: SimpleNamespace(stream=stream)
+    )
+    with pytest.raises(CancelledError, match="cancelled producer"):
+        drain(
+            IndexDocumentPipeline.stream(
+                cast(Any, subject), ["https://first", "https://second"]
+            )
+        )
+    assert calls == ["https://first"]
