@@ -12,13 +12,11 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 
-def report_indexing_error(
-    error: Exception, log: logging.Logger, message: Any, *args: Any
-) -> None:
-    """Observe a file failure without converting producer cancellation to progress."""
+def file_failure(error: Exception) -> Exception:
+    """Return the original per-file failure; cancellation must leave the batch."""
     if isinstance(error, CancelledError):
         raise error
-    log.exception(message, *args)
+    return error
 
 
 @contextmanager
@@ -46,6 +44,7 @@ class _ArtifactWriter(Future[None]):
     def __init__(self, factory: Callable[[], Iterable[Any]]) -> None:
         super().__init__()
         self.stop_requested = threading.Event()
+        self.input_released = threading.Event()
         self._startup_lock = threading.Lock()
         self._producer_entered = False
         self._start_failed = False
@@ -54,10 +53,17 @@ class _ArtifactWriter(Future[None]):
         )
 
     def _consume(self, factory: Callable[[], Iterable[Any]]) -> None:
-        with self._startup_lock:
-            if self._start_failed:
-                return
-            self._producer_entered = True
+        try:
+            with self._startup_lock:
+                if self._start_failed:
+                    return
+                self._producer_entered = True
+            self._produce(factory)
+        finally:
+            # The iterator has closed. Future.done() alone cannot prove this boundary.
+            self.input_released.set()
+
+    def _produce(self, factory: Callable[[], Iterable[Any]]) -> None:
         try:
             with owned_iterator(iter(factory())) as iterator:
                 while not self.stop_requested.is_set():
@@ -89,8 +95,27 @@ class _ArtifactWriter(Future[None]):
             if not self._producer_entered:
                 # A late native bootstrap must return without opening the input.
                 self.set_exception(error)
-        if self.thread.ident is not None:
-            self.thread.join()
+                self.input_released.set()
+        self.wait_until_stopped()
+
+    def wait_until_stopped(self) -> None:
+        primary = sys.exc_info()[1]
+        interrupted = None
+        while True:
+            try:
+                self.input_released.wait()
+                if self.thread.ident is not None:
+                    self.thread.join()
+                break
+            except BaseException as exc:
+                # Defer interruption until the owned input has no producer using it.
+                logger.exception(
+                    "Writer termination wait interrupted during %r", primary
+                )
+                if interrupted is None:
+                    interrupted = exc
+        if interrupted is not None and primary is None:
+            raise interrupted
 
 
 def _close_writer(writer: Future[None] | None) -> None:
@@ -99,7 +124,7 @@ def _close_writer(writer: Future[None] | None) -> None:
     primary = sys.exc_info()[1]
     if isinstance(writer, _ArtifactWriter):
         writer.stop_requested.set()
-        writer.thread.join()
+        writer.wait_until_stopped()
     try:
         writer.result()
     except BaseException as exc:
@@ -140,7 +165,7 @@ def indexing_run(stream: Callable) -> Callable:
 def _check_writer_available(pipeline: Any) -> None:
     writer = getattr(pipeline, "_artifact_writer_future", None)
     if writer is not None and (
-        writer.thread.is_alive()
+        not writer.input_released.is_set()
         if isinstance(writer, _ArtifactWriter)
         else not writer.done()
     ):
@@ -205,7 +230,7 @@ def finish_indexing(pipeline: Any, file_id: object, source_path: object) -> Any:
     if writer is not None:
         writer.result()
         if isinstance(writer, _ArtifactWriter):
-            writer.thread.join()
+            writer.wait_until_stopped()
     return pipeline.finish(file_id, source_path)
 
 
@@ -216,7 +241,7 @@ __all__ = [
     "finish_indexing",
     "indexing_run",
     "owned_iterator",
-    "report_indexing_error",
+    "file_failure",
     "schedule_writer",
     "strip_artifact_generation",
 ]

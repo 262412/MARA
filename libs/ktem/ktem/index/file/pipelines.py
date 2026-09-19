@@ -971,7 +971,7 @@ class IndexDocumentPipeline(BaseFileIndexIndexing):
                     channel="index",
                 )
             except Exception as e:
-                artifacts.report_indexing_error(e, logger, e)
+                logger.exception(artifacts.file_failure(e))
                 file_ids.append(None)
                 errors.append(str(e))
                 yield Document(

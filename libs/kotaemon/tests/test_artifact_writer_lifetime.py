@@ -165,3 +165,54 @@ def test_start_error_after_native_thread_started_joins_before_return(monkeypatch
             assert not writer.thread.is_alive()
         assert not caller.is_alive()
     assert errors == [failure]
+
+
+def test_cleanup_interruption_cannot_release_input_before_writer(monkeypatch, caplog):
+    entered, release, joined, returned = (threading.Event() for _ in range(4))
+    subject = SimpleNamespace(run_embedding_in_thread=True)
+    failures = []
+
+    def produce():
+        entered.set()
+        assert release.wait(5)
+        yield "in-flight write"
+
+    @artifacts.indexing_run
+    def run(pipeline):
+        artifacts.schedule_writer(pipeline, produce)
+        yield "scheduled"
+
+    stream = run(subject)
+    next(stream)
+    writer = subject._artifact_writer_future
+    original = writer.thread.join
+
+    def interrupted_join(*args, **kwargs):
+        if not joined.is_set():
+            joined.set()
+            raise KeyboardInterrupt("cleanup interrupted")
+        return original(*args, **kwargs)
+
+    def close():
+        try:
+            stream.close()
+        except (KeyboardInterrupt, RuntimeError) as exc:
+            failures.append(exc)
+        finally:
+            returned.set()
+
+    monkeypatch.setattr(writer.thread, "join", interrupted_join)
+    closer = threading.Thread(target=close)
+    try:
+        assert entered.wait(5)
+        closer.start()
+        assert writer.stop_requested.wait(2)
+        assert not returned.wait(0.1)
+    finally:
+        release.set()
+        closer.join(5)
+        original(5)
+        assert not closer.is_alive() and not writer.thread.is_alive()
+    assert failures == []
+    assert joined.is_set()
+    assert "Writer termination wait interrupted" in caplog.text
