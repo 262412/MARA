@@ -5,7 +5,7 @@ from ktem.index.file.deletion import DeletionError
 
 from . import test_deletion_coordinator as fixtures
 from .deletion_fault_test_support import FaultProbe
-from .test_deletion_coordinator import _coordinator, _row_counts, _seed_file
+from .test_deletion_coordinator import _row_counts, _seed_file
 
 deletion_db = fixtures.deletion_db
 
@@ -145,25 +145,51 @@ def test_authority_failure_precedes_every_external_operation(
     assert probe.trace == [] and _row_counts(deletion_db) == (1, 4)
 
 
-def test_changed_source_scope_rolls_back_relation_deletion(deletion_db, monkeypatch):
+@pytest.mark.parametrize(
+    "plan_number,stage,reason",
+    [
+        (1, "validate", "authenticated user scope"),
+        (2, "sql", "source scope changed"),
+    ],
+)
+def test_changed_source_scope_rolls_back_relation_deletion(
+    deletion_db, tmp_path, monkeypatch, plan_number, stage, reason
+):
     from sqlalchemy.orm import Session
 
     _seed_file(deletion_db)
-    subject = _coordinator(deletion_db)
+    probe = FaultProbe(deletion_db, tmp_path, None)
+    subject = probe.coordinator()
     gather = subject._gather_plan
+    calls = []
 
     def change_owner(*args):
+        calls.append(args)
         plan = gather(*args)
-        with Session(deletion_db[0]) as session:
-            source = session.get(deletion_db[1], "file-1")
-            assert source is not None
-            source.user = "new-owner"
-            session.commit()
+        if len(calls) == plan_number:
+            with Session(deletion_db[0]) as session:
+                source = session.get(deletion_db[1], "file-1")
+                assert source is not None
+                source.user = "new-owner"
+                session.commit()
         return plan
 
     monkeypatch.setattr(subject, "_gather_plan", change_owner)
-    with pytest.raises(DeletionError, match="source scope changed") as raised:
+    with pytest.raises(DeletionError, match=reason) as raised:
         subject.delete("file-1", user_id="user-1")
-    assert raised.value.stage == "sql"
+    assert raised.value.stage == stage and len(calls) == 2
     assert _row_counts(deletion_db) == (1, 4)
     assert (deletion_db[3] / "stored.bin").read_bytes() == b"document"
+    if plan_number == 1:
+        # Ownership changed before the source lease: revalidation must refuse
+        # every external deletion, rather than using the pre-wait plan.
+        assert probe.trace == []
+        assert probe.vector.values == {"vector-1"}
+        assert probe.docstore.values == {"document-1", "element-1", "graph-1"}
+        assert all(path.exists() for path in probe.artifacts)
+    else:
+        # Retain the original late-SQL rollback contract. Its external progress
+        # is irreversible and must not be described as a cross-store rollback.
+        assert probe.trace == SUCCESS_TRACE[:9] + ["rollback"]
+        assert probe.vector.values == probe.docstore.values == set()
+        assert not any(path.exists() for path in probe.artifacts)
