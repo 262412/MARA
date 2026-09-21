@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -52,6 +53,7 @@ def roots(tmp_path, monkeypatch):
 
 def _stream_probe(source: Path, capture):
     pipeline = SimpleNamespace(collection_name="test")
+    pipeline.source_write_scope = lambda _file_id: nullcontext()
     pipeline.get_id_if_exists = lambda _path: None
     pipeline.store_file = lambda _path: FILE_ID
 
@@ -82,6 +84,7 @@ def test_stream_strips_generation_before_docstore_and_passes_it_explicitly(tmp_p
     source.write_text("source", encoding="utf-8")
     captured = {}
     pipeline = SimpleNamespace(collection_name="test")
+    pipeline.source_write_scope = lambda _file_id: nullcontext()
     pipeline.get_id_if_exists = lambda _path: None
     pipeline.store_file = lambda _path: FILE_ID
 
@@ -470,6 +473,7 @@ def test_quick_handle_docs_exposes_background_writer_future(tmp_path):
     release = threading.Event()
     pipeline = SimpleNamespace(
         chunk_batch_size=200,
+        source_write_scope=lambda _file_id: nullcontext(),
         last_indexing_status=None,
         splitter=None,
         deterministic_chunk_ids=True,

@@ -4,7 +4,7 @@ import logging
 import sys
 import threading
 from concurrent.futures import CancelledError, Future
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from functools import wraps
 from typing import Any, Callable, Iterable
 from uuid import uuid4
@@ -225,13 +225,22 @@ def schedule_writer(
     return factory()
 
 
-def finish_indexing(pipeline: Any, file_id: object, source_path: object) -> Any:
+def finish_indexing(
+    pipeline: Any,
+    file_id: object,
+    source_path: object,
+    *,
+    publish: Callable[[], Any] | None = None,
+) -> Any:
     writer = getattr(pipeline, "_artifact_writer_future", None)
     if writer is not None:
         writer.result()
         if isinstance(writer, _ArtifactWriter):
             writer.wait_until_stopped()
-    return pipeline.finish(file_id, source_path)
+    scope = getattr(pipeline, "source_write_scope", lambda _file_id: nullcontext())
+    with scope(file_id):
+        result = pipeline.finish(file_id, source_path)
+        return result if publish is None else publish()
 
 
 __all__ = [

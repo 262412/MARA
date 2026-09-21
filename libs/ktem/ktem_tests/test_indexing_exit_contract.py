@@ -1,4 +1,5 @@
 from concurrent.futures import CancelledError
+from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -34,6 +35,7 @@ def test_single_stream_original_order_metadata_and_return(
     calls: list[tuple] = []
     docs = [Document(text="body", metadata={"artifact_generation": "temporary"})]
     subject = SimpleNamespace(collection_name="collection")
+    subject.source_write_scope = lambda _file_id: nullcontext()
 
     def lookup(path):
         calls.append(("lookup", path))

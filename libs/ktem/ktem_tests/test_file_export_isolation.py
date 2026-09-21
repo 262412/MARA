@@ -4,6 +4,7 @@ import json
 import threading
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -345,7 +346,9 @@ def test_failed_indexing_does_not_publish_downloadable_manifest(
     source.write_text("source", encoding="utf-8")
 
     def run(file_id: str, *, fail: bool):
-        pipeline = SimpleNamespace(collection_name="test")
+        pipeline = SimpleNamespace(
+            collection_name="test", source_write_scope=lambda _file_id: nullcontext()
+        )
         pipeline.get_id_if_exists = lambda _path: None
         pipeline.store_file = lambda _path: file_id
         pipeline.load_docs_with_parse_cache = lambda *_args: SimpleNamespace(

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from . import index_store_cleanup
 from .element_index import is_docstore_relation_type
+from .source_writes import source_lock
 from .storage_lifetime import QuarantineMove, StorageLease, StorageLifetime
 
 logger = logging.getLogger(__name__)
@@ -97,11 +98,22 @@ class DeletionCoordinator:
                 reason="file and authenticated user identifiers are required",
             )
 
-        plan = self._gather_plan(normalized_file_id, normalized_user_id)
-        self._delete_store("vector", self._vector_store, plan.vector_ids, plan.file_id)
-        self._delete_store("docstore", self._doc_store, plan.docstore_ids, plan.file_id)
-        self._delete_artifacts(plan.file_id)
-        self._delete_relational_and_storage(plan)
+        self._gather_plan(normalized_file_id, normalized_user_id)
+        try:
+            with source_lock(self._engine, self._source_table, normalized_file_id):
+                plan = self._gather_plan(normalized_file_id, normalized_user_id)
+                self._delete_store(
+                    "vector", self._vector_store, plan.vector_ids, plan.file_id
+                )
+                self._delete_store(
+                    "docstore", self._doc_store, plan.docstore_ids, plan.file_id
+                )
+                self._delete_artifacts(plan.file_id)
+                self._delete_relational_and_storage(plan)
+        except DeletionError:
+            raise
+        except Exception as exc:
+            raise _stage_error("validate", normalized_file_id, exc) from exc
         return DeletionResult(file_id=plan.file_id, name=plan.name)
 
     def _gather_plan(self, file_id: str, user_id: str) -> _DeletionPlan:

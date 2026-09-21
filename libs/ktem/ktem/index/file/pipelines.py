@@ -55,12 +55,13 @@ from kotaemon.indices.rankings import BaseReranking, LLMReranking, LLMTrulensSco
 from kotaemon.indices.splitters import BaseSplitter, TokenSplitter
 from kotaemon.loaders import MathpixPDFReader
 
+from . import source_writes
 from .artifact_cleanup import FileArtifactCleaner
 from .artifact_lifecycle import begin_file_artifacts, finish_file_artifacts
 from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 from .deletion import DeletionCoordinator
 from .deterministic_chunks import prepare_chunks_for_indexing
-from .element_index import docstore_batches_and_index_rows, set_index_row_owner
+from .element_index import docstore_batches_and_index_rows
 from .office_policy import prepare_office_parse_file
 from .source_storage import store_source_file
 
@@ -378,6 +379,15 @@ class IndexPipeline(BaseComponent):
             vector_store=self.VS, doc_store=self.DS, embedding=self.embedding
         )
 
+    def source_write_scope(self, file_id):
+        return source_writes.source_write(
+            engine,
+            self.Source,
+            file_id,
+            self.user_id,
+            session_factory=lambda: Session(engine),
+        )
+
     def load_docs_with_parse_cache(
         self, file_path: str | Path, extra_info: dict
     ) -> CachedLoadResult:
@@ -493,7 +503,8 @@ class IndexPipeline(BaseComponent):
             status_tracker.finish("vector_write", count=n_chunks)
             update_status()
             status_tracker.start("refresh", count=1 if self.VS else 0)
-            refresh_method = refresh_vector_store(self.VS) if self.VS else None
+            with self.source_write_scope(file_id):
+                refresh_method = refresh_vector_store(self.VS) if self.VS else None
             status_tracker.finish("refresh", count=1 if self.VS else 0)
             update_status()
             if self.VS:
@@ -509,39 +520,28 @@ class IndexPipeline(BaseComponent):
         return n_chunks
 
     def handle_chunks_docstore(self, chunks, file_id):
-        """Run chunks"""
-        # run embedding, add to both vector store and doc store
-        batches, nodes = docstore_batches_and_index_rows(self.Index, file_id, chunks)
-        for batch in batches:
-            self.vector_indexing.add_to_docstore(batch)
-
-        # record in the index
-        set_index_row_owner(nodes, self.user_id)
-        with Session(engine) as session:
-            session.add_all(nodes)
-            session.commit()
+        """Write document batches and register their deletion targets."""
+        with self.source_write_scope(file_id):
+            source_writes.persist_docstore_batches(
+                docstore_batches_and_index_rows(self.Index, file_id, chunks),
+                add=self.vector_indexing.add_to_docstore,
+                user_id=self.user_id,
+                session_factory=lambda: Session(engine),
+            )
 
     def handle_chunks_vectorstore(self, chunks, file_id, artifact_generation=None):
         """Run chunks"""
-        # run embedding, add to both vector store and doc store
-        self.vector_indexing.add_to_vectorstore(chunks)
-        self.vector_indexing.write_chunk_to_file(chunks, file_id, artifact_generation)
-
-        if self.VS:
-            # record in the index
-            with Session(engine) as session:
-                nodes = []
-                for chunk in chunks:
-                    nodes.append(
-                        self.Index(
-                            source_id=file_id,
-                            target_id=chunk.doc_id,
-                            relation_type="vector",
-                        )
-                    )
-                set_index_row_owner(nodes, self.user_id)
-                session.add_all(nodes)
-                session.commit()
+        source_writes.persist_vector_batch(
+            chunks,
+            file_id,
+            artifact_generation,
+            vector_indexing=self.vector_indexing,
+            index_table=self.Index,
+            user_id=self.user_id,
+            has_vector_store=bool(self.VS),
+            session_factory=lambda: Session(engine),
+            write_scope=lambda: self.source_write_scope(file_id),
+        )
 
     def get_id_if_exists(self, file_path: str | Path) -> Optional[str]:
         """Check if the file is already indexed
@@ -612,7 +612,7 @@ class IndexPipeline(BaseComponent):
 
     def finish(self, file_id: str, file_path: str | Path) -> str:
         """Finish the indexing"""
-        with Session(engine) as session:
+        with self.source_write_scope(file_id), Session(engine) as session:
             stmt = select(self.Source).where(self.Source.id == file_id)
             result = session.execute(stmt).first()
             if not result:
@@ -723,7 +723,11 @@ class IndexPipeline(BaseComponent):
         artifact_generation = begin_file_artifacts(self, extra_info, settings)
 
         yield Document(f" => Converting {file_name} to text", channel="debug")
-        parse_result = self.load_docs_with_parse_cache(file_path, extra_info)
+        # Readers and cache replay can write this generation's markdown. Their
+        # existing combined parse/write call is protected without holding a lease
+        # across an event yield or a worker join.
+        with self.source_write_scope(file_id):
+            parse_result = self.load_docs_with_parse_cache(file_path, extra_info)
         docs = artifacts.strip_artifact_generation(parse_result.documents)
         cache_status = "hit" if parse_result.cache_hit else "miss"
         yield Document(

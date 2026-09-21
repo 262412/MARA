@@ -1,4 +1,5 @@
 import threading
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -20,6 +21,7 @@ def subject(monkeypatch, handle):
 
     pipeline = SimpleNamespace(
         collection_name="owned",
+        source_write_scope=lambda _file_id: nullcontext(),
         run_embedding_in_thread=True,
         get_id_if_exists=lambda path: calls.append("lookup"),
         store_url=store,

@@ -76,11 +76,13 @@ def finish_and_publish_artifacts(
     settings: Any,
 ) -> Path:
     generation = namespace_token(getattr(pipeline, "_artifact_generation", None))
-    finish_indexing(pipeline, file_id, source_path)
-    return publish_runtime_manifest(
+    return finish_indexing(
+        pipeline,
         file_id,
-        settings,
-        artifact_generation=generation,
+        source_path,
+        publish=lambda: publish_runtime_manifest(
+            file_id, settings, artifact_generation=generation
+        ),
     )
 
 

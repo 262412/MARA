@@ -85,7 +85,8 @@ def backend(tmp_path, monkeypatch):
                 if writer is not None:
                     writer.thread.join(5)
                     assert not writer.thread.is_alive()
-            documents.drop()
+            if documents.collection_name in documents.db_connection.table_names():
+                documents.drop()
             engine.dispose()
 
 

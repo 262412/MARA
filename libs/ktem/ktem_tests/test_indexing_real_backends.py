@@ -87,12 +87,13 @@ def test_partial_persistent_state_is_not_rolled_back_or_reported_success(
     assert not pipeline._artifact_writer_future.thread.is_alive()
 
 
+@pytest.mark.parametrize("threaded", [False, True])
 def test_delete_during_embedding_rejects_all_late_persistent_writes(
-    backend, monkeypatch
+    backend, monkeypatch, threaded
 ):
     """A committed deletion invalidates the old producer before any late write."""
     backend.source.write_text("lateunique input", encoding="utf-8")
-    pipeline = backend.pipeline()
+    pipeline = backend.pipeline(threaded=threaded)
     entered, release = threading.Event(), threading.Event()
     original = pipeline.vector_indexing._embed_documents
 
