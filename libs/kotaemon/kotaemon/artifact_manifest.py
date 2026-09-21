@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
@@ -71,16 +72,14 @@ def load_manifest_artifacts(
     try:
         for entry in entries:
             artifact = resolve_entry(entry, file_id, artifact_roots)
+            artifacts.append(artifact)
             key = portable_member_key(artifact.archive_name)
             if key in archive_names:
-                artifact.close()
                 raise ArtifactNamespaceError("Duplicate artifact archive name")
             archive_names.add(key)
             total_size += artifact.size
             if total_size > MAX_TOTAL_ARTIFACT_BYTES:
-                artifact.close()
                 raise ArtifactNamespaceError("Artifact total size exceeds limit")
-            artifacts.append(artifact)
         return artifacts
     except BaseException:
         close_manifest_artifacts(artifacts)
@@ -150,7 +149,9 @@ def close_manifest_artifacts(artifacts: list[ManifestArtifact]) -> None:
         try:
             artifact.close()
         except OSError:
-            pass
+            logging.getLogger(__name__).exception(
+                "Failed to close manifest artifact %s", artifact.archive_name
+            )
 
 
 def _published_entries(

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
 import stat
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +20,8 @@ from .artifact_retention import (
 )
 from .artifact_secure_fs import create_exclusive_file_at, replace_at, unlink_at
 from .artifact_types import ArtifactNamespaceError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -58,7 +62,14 @@ class DownloadWorkspace:
             raise ArtifactNamespaceError("Download temporary file already exists")
         self._temporary_name = f".download-{uuid4().hex}.tmp"
         fd = create_exclusive_file_at(self._directory_fd, self._temporary_name)
-        return os.fdopen(fd, "w+b")
+        try:
+            return os.fdopen(fd, "w+b")
+        except BaseException:
+            try:
+                os.close(fd)
+            except OSError:
+                logger.exception("Failed to close download temporary descriptor")
+            raise
 
     def publish(self) -> Path:
         if self._temporary_name is None:
@@ -89,27 +100,54 @@ class DownloadWorkspace:
                     continue
                 unlink_at(self._directory_fd, name)
         finally:
-            self._release_active_lease()
-            os.close(self._directory_fd)
-            try:
-                os.rmdir(self._request_name, dir_fd=self._parent_fd)
-            except FileNotFoundError:
-                pass
-            finally:
-                os.close(self._parent_fd)
-                self._closed = True
+            self._finish(remove=True)
 
     def close(self) -> None:
+        self._finish(remove=False)
+
+    def _finish(self, *, remove: bool) -> None:
         if self._closed:
             return
-        self._release_active_lease()
-        os.close(self._directory_fd)
-        os.close(self._parent_fd)
+        primary = sys.exc_info()[1]
+        errors = []
         self._closed = True
+        for attribute in ("_active_fd", "_directory_fd", "_parent_fd"):
+            if remove and attribute == "_parent_fd":
+                try:
+                    os.rmdir(self._request_name, dir_fd=self._parent_fd)
+                except FileNotFoundError:
+                    pass
+                except OSError as exc:
+                    errors.append(exc)
+                    logger.exception(
+                        "Failed to remove owned download directory %s", self.directory
+                    )
+            fd = getattr(self, attribute)
+            # A failing close can already have released the OS handle. Never
+            # retry its numeric descriptor, which may now belong to another user.
+            setattr(self, attribute, -1)
+            if fd >= 0:
+                try:
+                    os.close(fd)
+                except OSError as exc:
+                    errors.append(exc)
+                    logger.exception(
+                        "Failed to release download descriptor %s", attribute
+                    )
+        if errors and primary is None:
+            raise errors[0]
 
     def _write_marker(self, name: str) -> None:
         fd = create_exclusive_file_at(self._directory_fd, name)
-        with os.fdopen(fd, "wb") as marker:
+        try:
+            marker = os.fdopen(fd, "wb")
+        except BaseException:
+            try:
+                os.close(fd)
+            except OSError:
+                logger.exception("Failed to close download marker descriptor")
+            raise
+        with marker:
             marker.write(str(time.time_ns()).encode("ascii"))
             marker.flush()
             os.fsync(marker.fileno())
@@ -117,8 +155,9 @@ class DownloadWorkspace:
 
     def _release_active_lease(self) -> None:
         if self._active_fd >= 0:
-            os.close(self._active_fd)
+            fd = self._active_fd
             self._active_fd = -1
+            os.close(fd)
 
 
 __all__ = [

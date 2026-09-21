@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import os
 import stat
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +33,7 @@ ACTIVE_WORKSPACE_TTL_SECONDS = 10 * 60
 # Lifecycle lock plus file-id, request, marker, and payload for every valid record.
 MAX_GLOBAL_SCAN_ENTRIES = 1 + (4 * READY_OUTPUT_HARD_LIMIT)
 _LIFECYCLE_LOCK_NAME = ".lifecycle.lock"
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -67,8 +70,10 @@ def allocate_workspace(
         ("downloads",),
         create=True,
     )
-    lock_fd = _acquire_lifecycle_lock(downloads_fd)
+    lock_fd = -1
+    allocation = None
     try:
+        lock_fd = _acquire_lifecycle_lock(downloads_fd)
         scan_budget = _ScanBudget(MAX_GLOBAL_SCAN_ENTRIES)
         records = _scan_and_prune(downloads_fd, scan_budget)
         records = _prune_ready_limits(downloads_fd, records, scan_budget)
@@ -76,11 +81,54 @@ def allocate_workspace(
             raise ArtifactNamespaceError(
                 "Download capacity is full; retry after active fetches complete"
             )
-        return _allocate_locked(downloads_path, downloads_fd, token)
+        allocation = _allocate_locked(downloads_path, downloads_fd, token)
     finally:
-        lock_api.flock(lock_fd, lock_api.LOCK_UN)
-        os.close(lock_fd)
-        os.close(downloads_fd)
+        primary = sys.exc_info()[1]
+        errors = []
+        if lock_fd >= 0:
+            try:
+                lock_api.flock(lock_fd, lock_api.LOCK_UN)
+            except OSError as exc:
+                logger.exception("Failed to unlock download lifecycle")
+                errors.append(exc)
+        errors.extend(_close_owned(lock_fd, downloads_fd))
+        if errors and primary is None:
+            if allocation is not None:
+                _discard_allocation(
+                    allocation.parent_fd,
+                    allocation.request_name,
+                    allocation.directory_fd,
+                    allocation.active_fd,
+                )
+            raise errors[0]
+    return allocation
+
+
+def _close_owned(*descriptors: int) -> list[OSError]:
+    errors = []
+    for fd in descriptors:
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except OSError as exc:
+                logger.exception("Failed to close owned download descriptor")
+                errors.append(exc)
+    return errors
+
+
+def _discard_allocation(parent_fd, request_name, directory_fd, active_fd) -> None:
+    if directory_fd >= 0:
+        try:
+            unlink_at(directory_fd, ".active")
+        except OSError:
+            logger.exception("Failed to remove owned active marker")
+    _close_owned(active_fd, directory_fd)
+    if request_name:
+        try:
+            os.rmdir(request_name, dir_fd=parent_fd)
+        except OSError:
+            logger.exception("Failed to remove owned download request")
+    _close_owned(parent_fd)
 
 
 def _acquire_lifecycle_lock(downloads_fd: int) -> int:
@@ -100,7 +148,7 @@ def _acquire_lifecycle_lock(downloads_fd: int) -> int:
         return lock_fd
     except BaseException:
         if "lock_fd" in locals():
-            os.close(lock_fd)
+            _close_owned(lock_fd)
         raise
 
 
@@ -128,16 +176,7 @@ def _allocate_locked(
             active_fd=active_fd,
         )
     except BaseException:
-        if active_fd >= 0:
-            os.close(active_fd)
-        if directory_fd >= 0:
-            os.close(directory_fd)
-        if request_name:
-            try:
-                os.rmdir(request_name, dir_fd=parent_fd)
-            except OSError:
-                pass
-        os.close(parent_fd)
+        _discard_allocation(parent_fd, request_name, directory_fd, active_fd)
         raise
 
 
@@ -148,11 +187,18 @@ def _create_request_directory(parent_fd: int) -> tuple[str, int]:
             os.mkdir(request_name, mode=0o700, dir_fd=parent_fd)
         except FileExistsError:
             continue
-        return request_name, open_child_directory(
-            parent_fd,
-            request_name,
-            create=False,
-        )
+        try:
+            return request_name, open_child_directory(
+                parent_fd,
+                request_name,
+                create=False,
+            )
+        except BaseException:
+            try:
+                os.rmdir(request_name, dir_fd=parent_fd)
+            except OSError:
+                logger.exception("Failed to remove unopened download request")
+            raise
     raise ArtifactNamespaceError("Unable to allocate a download workspace")
 
 
@@ -166,8 +212,11 @@ def _create_active_lease(directory_fd: int) -> int:
         os.fsync(directory_fd)
         return active_fd
     except BaseException:
-        os.close(active_fd)
-        unlink_at(directory_fd, ".active")
+        _close_owned(active_fd)
+        try:
+            unlink_at(directory_fd, ".active")
+        except OSError:
+            logger.exception("Failed to remove incomplete active marker")
         raise
 
 
