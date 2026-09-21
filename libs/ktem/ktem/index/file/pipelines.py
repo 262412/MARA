@@ -62,6 +62,7 @@ from .base import BaseFileIndexIndexing, BaseFileIndexRetriever
 from .deletion import DeletionCoordinator
 from .deterministic_chunks import prepare_chunks_for_indexing
 from .element_index import docstore_batches_and_index_rows
+from .index_materialization import materialize_index_chunks
 from .office_policy import prepare_office_parse_file
 from .source_storage import store_source_file
 
@@ -423,9 +424,6 @@ class IndexPipeline(BaseComponent):
     ) -> Generator[Document, None, int]:
         s_time = time.time()
         status_tracker = IndexingStatusTracker()
-        text_docs = []
-        non_text_docs = []
-        thumbnail_docs = []
 
         def update_status():
             self.last_indexing_status = status_tracker.to_dict()
@@ -433,27 +431,14 @@ class IndexPipeline(BaseComponent):
         status_tracker.start("parse", count=len(docs))
         status_tracker.finish("parse", count=len(docs))
         update_status()
-        for doc in docs:
-            doc_type = doc.metadata.get("type", "text")
-            if doc_type == "text":
-                text_docs.append(doc)
-            elif doc_type == "thumbnail":
-                thumbnail_docs.append(doc)
-            else:
-                non_text_docs.append(doc)
-
-        if self.splitter:
-            all_chunks = self.splitter(text_docs)
-        else:
-            all_chunks = text_docs
-
-        logger.debug("Got %d page thumbnails", len(thumbnail_docs))
-        to_index_chunks = prepare_chunks_for_indexing(
-            all_chunks,
-            non_text_docs,
-            thumbnail_docs,
+        to_index_chunks = materialize_index_chunks(
+            docs,
+            namespace=self.Source.__table__.fullname,
+            file_id=file_id,
             file_name=file_name,
+            splitter=self.splitter,
             deterministic_chunk_ids=self.deterministic_chunk_ids,
+            prepare_chunks=prepare_chunks_for_indexing,
         )
 
         status_tracker.start("chunk", count=len(to_index_chunks))

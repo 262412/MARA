@@ -473,6 +473,7 @@ def test_quick_handle_docs_exposes_background_writer_future(tmp_path):
     release = threading.Event()
     pipeline = SimpleNamespace(
         chunk_batch_size=200,
+        Source=SimpleNamespace(__table__=SimpleNamespace(fullname="owned_source")),
         source_write_scope=lambda _file_id: nullcontext(),
         last_indexing_status=None,
         splitter=None,

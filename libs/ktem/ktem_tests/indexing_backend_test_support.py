@@ -73,6 +73,7 @@ def backend(tmp_path, monkeypatch):
         try:
             yield SimpleNamespace(
                 engine=engine,
+                index=index,
                 resources=resources,
                 documents=documents,
                 vectors=vectors,
