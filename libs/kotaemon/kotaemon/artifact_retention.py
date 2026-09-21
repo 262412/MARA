@@ -120,7 +120,7 @@ def _discard_allocation(parent_fd, request_name, directory_fd, active_fd) -> Non
     if directory_fd >= 0:
         try:
             unlink_at(directory_fd, ".active")
-        except OSError:
+        except (OSError, ArtifactNamespaceError):
             logger.exception("Failed to remove owned active marker")
     _close_owned(active_fd, directory_fd)
     if request_name:
@@ -215,7 +215,7 @@ def _create_active_lease(directory_fd: int) -> int:
         _close_owned(active_fd)
         try:
             unlink_at(directory_fd, ".active")
-        except OSError:
+        except (OSError, ArtifactNamespaceError):
             logger.exception("Failed to remove incomplete active marker")
         raise
 
@@ -462,9 +462,17 @@ def _remove_workspace(
     active_fd: int | None = None,
     known_names: tuple[str, ...] | None = None,
 ) -> bool:
+    ready_fd = None
     try:
         if active_fd is None and _entry_exists(request_fd, ".active"):
             return False
+        ready_fd = _open_regular_entry(request_fd, ".ready")
+        if ready_fd is not None:
+            lock_api = _require_lifecycle_lock()
+            try:
+                lock_api.flock(ready_fd, lock_api.LOCK_EX | lock_api.LOCK_NB)
+            except BlockingIOError:
+                return False
         names = (
             known_names
             if known_names is not None
@@ -477,9 +485,11 @@ def _remove_workspace(
         for name in names:
             unlink_at(request_fd, name)
     finally:
-        if active_fd is not None:
-            os.close(active_fd)
-        os.close(request_fd)
+        _close_owned(
+            active_fd if active_fd is not None else -1,
+            ready_fd if ready_fd is not None else -1,
+            request_fd,
+        )
     try:
         os.rmdir(request_name, dir_fd=parent_fd)
     except FileNotFoundError:

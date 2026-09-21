@@ -16,6 +16,7 @@ from kotaemon.artifact_namespace import ArtifactNamespaceError, load_manifest_ar
 from ._group_service import GroupServiceError
 from ._identity import MISSING_REQUEST, resolve_file_index_user_id
 from ._selection_service import FileSelectionError
+from .download_scope import DownloadScope
 
 DOWNLOAD_MESSAGE = "Start download"
 DOWNLOAD_UNAVAILABLE_MESSAGE = (
@@ -34,6 +35,7 @@ def _cleanup_workspace(workspace: DownloadWorkspace) -> None:
 
 class ScopedFileIndexPageMixin:
     _listing_controller: Any
+    _index: Any
 
     def _get_file_selection_service(self) -> Any:
         raise NotImplementedError
@@ -96,6 +98,7 @@ class ScopedFileIndexPageMixin:
         self._authorize_download(file_id, user_id)
         if is_zipped_state:
             return False, gr.DownloadButton(label="Download", value=None)
+        scope = self._download_scope(file_id, user_id, request)
         artifacts = []
         workspace = None
         try:
@@ -119,7 +122,7 @@ class ScopedFileIndexPageMixin:
                             artifact.copy_to(target)
                 output.flush()
                 os.fsync(output.fileno())
-            zip_file_path = workspace.publish()
+            zip_file_path = self._publish_download(workspace, scope)
         except (
             ArtifactNamespaceError,
             OSError,
@@ -131,13 +134,14 @@ class ScopedFileIndexPageMixin:
             if workspace is not None:
                 _cleanup_workspace(workspace)
             raise gr.Error(DOWNLOAD_UNAVAILABLE_MESSAGE) from exc
+        except BaseException:
+            if workspace is not None:
+                _cleanup_workspace(workspace)
+            raise
         finally:
             close_manifest_artifacts(artifacts)
 
-        return True, gr.DownloadButton(
-            label=DOWNLOAD_MESSAGE,
-            value=str(zip_file_path),
-        )
+        return True, self._download_button(zip_file_path, file_id, request)
 
     def download_single_file_simple(
         self,
@@ -151,6 +155,7 @@ class ScopedFileIndexPageMixin:
         self._authorize_download(file_id, user_id)
         if is_zipped_state:
             return False, gr.DownloadButton(label="Download", value=None)
+        scope = self._download_scope(file_id, user_id, request)
         workspace = None
         try:
             workspace = DownloadWorkspace.create(
@@ -162,16 +167,41 @@ class ScopedFileIndexPageMixin:
                 output_file.write(str(file_html).encode("utf-8"))
                 output_file.flush()
                 os.fsync(output_file.fileno())
-            output_file_path = workspace.publish()
+            output_file_path = self._publish_download(workspace, scope)
         except (ArtifactNamespaceError, OSError, TypeError, ValueError) as exc:
             if workspace is not None:
                 _cleanup_workspace(workspace)
             raise gr.Error(DOWNLOAD_UNAVAILABLE_MESSAGE) from exc
+        except BaseException:
+            if workspace is not None:
+                _cleanup_workspace(workspace)
+            raise
 
-        return True, gr.DownloadButton(
-            label=DOWNLOAD_MESSAGE,
-            value=str(output_file_path),
-        )
+        return True, self._download_button(output_file_path, file_id, request)
+
+    def _download_scope(self, file_id, user_id, request):
+        if request is MISSING_REQUEST or request is None:
+            # Preserve trusted direct-call file results. Remote callbacks always
+            # receive Gradio's injected Request and use the scoped HTTP path.
+            return None
+        try:
+            return DownloadScope(self._get_file_selection_service(), file_id, user_id)
+        except FileSelectionError as exc:
+            raise gr.Error(DOWNLOAD_UNAVAILABLE_MESSAGE) from exc
+
+    @staticmethod
+    def _publish_download(workspace, scope):
+        if scope is None:
+            return workspace.publish()
+        with scope.current():
+            return workspace.publish(context=scope.context)
+
+    def _download_button(self, path, file_id, request):
+        if request is MISSING_REQUEST or request is None:
+            return gr.DownloadButton(label=DOWNLOAD_MESSAGE, value=str(path))
+        from .download_http import download_button
+
+        return download_button(path, self._index.id, file_id, request)
 
     def _authorize_download(self, file_id, user_id) -> None:
         try:

@@ -96,10 +96,13 @@ def _launch(app, blocks, root, output, observer):
         )
     )
     roles.update(_selection_roles(dependencies, page.chat_control.conversation._id))
+    from ktem.index.file.download_http import download_app_kwargs
+
     blocks.queue().launch(
         server_name="127.0.0.1",
         server_port=8768,
         auth=authenticate_password,
+        app_kwargs=download_app_kwargs(page._app),
         share=False,
         inbrowser=False,
         prevent_thread_lock=True,

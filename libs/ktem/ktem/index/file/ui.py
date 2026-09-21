@@ -28,6 +28,7 @@ from ._scoped_page import ScopedFileIndexPageMixin
 from ._selection_service import FileSelectionService
 from ._selector_ui import FileSelector
 from .archive import extract_supported_zip_files
+from .download_http import DownloadButton
 from .utils import download_arxiv_pdf, is_arxiv_url
 
 __all__ = ["DirectoryUpload", "File", "FileIndexPage", "FileSelector"]
@@ -185,7 +186,7 @@ class FileIndexPage(ScopedFileIndexPageMixin, BasePage):
                 visible=False,
             )
             self.is_zipped_state = gr.State(value=False)
-            self.download_single_button = gr.DownloadButton(
+            self.download_single_button = DownloadButton(
                 "Download",
                 visible=False,
             )

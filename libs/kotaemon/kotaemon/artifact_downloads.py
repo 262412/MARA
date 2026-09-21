@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import stat
@@ -16,6 +17,7 @@ from .artifact_retention import (
     READY_OUTPUT_HARD_LIMIT,
     READY_OUTPUT_LIMIT,
     READY_OUTPUT_TTL_SECONDS,
+    _require_lifecycle_lock,
     allocate_workspace,
 )
 from .artifact_secure_fs import create_exclusive_file_at, replace_at, unlink_at
@@ -35,6 +37,7 @@ class DownloadWorkspace:
     _active_fd: int
     _temporary_name: str | None = None
     _closed: bool = False
+    _ready_fd: int = -1
 
     @classmethod
     def create(
@@ -71,12 +74,12 @@ class DownloadWorkspace:
                 logger.exception("Failed to close download temporary descriptor")
             raise
 
-    def publish(self) -> Path:
+    def publish(self, *, context: dict | None = None) -> Path:
         if self._temporary_name is None:
             raise ArtifactNamespaceError("Download temporary file is unavailable")
         replace_at(self._directory_fd, self._temporary_name, self._output_name)
         self._temporary_name = None
-        self._write_marker(".ready")
+        self._write_marker(".ready", context=context)
         unlink_at(self._directory_fd, ".active")
         self._release_active_lease()
         os.fsync(self._directory_fd)
@@ -111,7 +114,7 @@ class DownloadWorkspace:
         primary = sys.exc_info()[1]
         errors = []
         self._closed = True
-        for attribute in ("_active_fd", "_directory_fd", "_parent_fd"):
+        for attribute in ("_ready_fd", "_active_fd", "_directory_fd", "_parent_fd"):
             if remove and attribute == "_parent_fd":
                 try:
                     os.rmdir(self._request_name, dir_fd=self._parent_fd)
@@ -137,7 +140,7 @@ class DownloadWorkspace:
         if errors and primary is None:
             raise errors[0]
 
-    def _write_marker(self, name: str) -> None:
+    def _write_marker(self, name: str, *, context: dict | None = None) -> None:
         fd = create_exclusive_file_at(self._directory_fd, name)
         try:
             marker = os.fdopen(fd, "wb")
@@ -148,9 +151,13 @@ class DownloadWorkspace:
                 logger.exception("Failed to close download marker descriptor")
             raise
         with marker:
-            marker.write(str(time.time_ns()).encode("ascii"))
+            lock_api = _require_lifecycle_lock()
+            lock_api.flock(marker.fileno(), lock_api.LOCK_EX | lock_api.LOCK_NB)
+            content = str(time.time_ns()) if context is None else json.dumps(context)
+            marker.write(content.encode("utf-8"))
             marker.flush()
             os.fsync(marker.fileno())
+            self._ready_fd = os.dup(marker.fileno())
         os.fsync(self._directory_fd)
 
     def _release_active_lease(self) -> None:

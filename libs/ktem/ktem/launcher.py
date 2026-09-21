@@ -12,6 +12,7 @@ from ktem.auth.policy import (
     resolve_legacy_bootstrap_credentials,
 )
 from ktem.auth.service import authenticate_password, validate_password_admin_readiness
+from ktem.index.file.download_http import download_app_kwargs
 from ktem.main import App
 from ktem.preview.allowed_paths import build_gradio_allowed_paths
 from theflow.settings import settings as flowsettings
@@ -158,5 +159,6 @@ def launch_app(
         server_name=launch_config.host,
         server_port=resolve_gradio_server_port(port),
         auth=launch_config.auth,
+        app_kwargs=download_app_kwargs(app),
     )
     return app
