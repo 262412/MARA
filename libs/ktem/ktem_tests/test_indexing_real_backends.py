@@ -87,10 +87,10 @@ def test_partial_persistent_state_is_not_rolled_back_or_reported_success(
     assert not pipeline._artifact_writer_future.thread.is_alive()
 
 
-def test_delete_during_writer_exposes_unfenced_external_write_blocker(
-    backend, monkeypatch, request
+def test_delete_during_embedding_rejects_all_late_persistent_writes(
+    backend, monkeypatch
 ):
-    """Characterize the remaining blocker, not an atomic-delete safety proof."""
+    """A committed deletion invalidates the old producer before any late write."""
     backend.source.write_text("lateunique input", encoding="utf-8")
     pipeline = backend.pipeline()
     entered, release = threading.Event(), threading.Event()
@@ -134,14 +134,9 @@ def test_delete_during_writer_exposes_unfenced_external_write_blocker(
     assert "Source removed during indexing" in str(failures[0])
     assert not any("Finished indexing" in event.text for event in events)
     assert support.rows(backend, "Source") == []
-    assert len(backend.vectors._collection.get()["ids"]) == 1
-    assert [row.relation_type for row in support.rows(backend, "Index")] == ["vector"]
-    request.node.user_properties.append(
-        (
-            "r5b_remaining_blocker",
-            "deleted source has late vector and SQL relation; no producer/delete fencing",
-        )
-    )
+    assert backend.vectors._collection.get()["ids"] == []
+    assert support.rows(backend, "Index") == []
+    assert backend.documents.query("lateunique") == []
 
 
 def test_unsplit_cache_replay_exposes_shared_identity_blocker(backend, request):
