@@ -111,7 +111,18 @@ def _launch(app, blocks, root, output, observer):
 
     barriers.bind_delivery(blocks._queue)
     _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers)
+    _bind_indexing_lifetime_routes(blocks, observer)
 
+    _write_ready(output, root, roles, blocks, page._indices_input[1]._id)
+    deadline = time.monotonic() + 600
+    try:
+        while time.monotonic() < deadline and not (output / "stop").exists():
+            time.sleep(0.2)
+    finally:
+        barriers.release_all()
+
+
+def _bind_indexing_lifetime_routes(blocks, observer):
     @blocks.app.get("/owned-indexing-lifetime")
     def indexing_lifetime():
         return observer.snapshot()
@@ -125,14 +136,6 @@ def _launch(app, blocks, root, output, observer):
     def release_deletion_embedding():
         observer.release_deletion()
         return {"released": True}
-
-    _write_ready(output, root, roles, blocks, page._indices_input[1]._id)
-    deadline = time.monotonic() + 600
-    try:
-        while time.monotonic() < deadline and not (output / "stop").exists():
-            time.sleep(0.2)
-    finally:
-        barriers.release_all()
 
 
 def _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers):
