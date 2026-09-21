@@ -1,5 +1,457 @@
 # Safe-refactor status
 
+## Current review point: R5-C resource lifecycle
+
+Branch: `codex/r0-r1-safe-refactor`. Round base:
+`703eef5fb6e597e049cc49d527d780764730afe4`; independently reviewed R5-B source/tests:
+`26e13211963618a5542eacb0f7aee36e59510b16`; fixed original Dev:
+`adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+The user has marked the agreed R5-B, L1/I1 and W1/W2 functional scopes
+**ACCEPTED**. Their prior failures, repairs and same-source double 36/36 evidence
+remain historical evidence; this round does not repeat their review or extend
+their acceptance to other platforms/security properties.
+
+**BLOCKED — required browser application observation and full confirmation are incomplete** Frozen source/test/package-input SHA: **`ae31c731b46bbc677ca64913c3ce2bdf9f62586e`**.
+R5-C is **BLOCKED** at its mandatory browser acceptance gate and is not
+independently ACCEPTED. Completed scoped work is delivered for review; the
+accepted R5-B/L1/I1/W1/W2 scope is not reclassified by this incomplete new round.
+S1/PCRE2 remain **OPEN**; G0's exact exception remains unchanged;
+merge/release remain **NO-GO**. Work stops at the R5-C/R5 review point, without R6,
+schema migration, security upgrades, merge, deployment or release.
+
+Evidence parent: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`.
+`r5c-lifecycle/` retains all characterization/red/fix/structural attempts and the
+retired 553da46d source results. `r5c-source-ci/` retains that source's CI failure.
+`r5c-final-verification/` preserves the 33716dda browser failure and TLS failure;
+`r5c-review-verification/` preserves the 5e4058c3 full local results and its partial
+browser run. `r5c-review-ci/` preserves the deliberately cancelled superseded CI.
+`r5c-contract-verification/` and `r5c-contract-ci/` contain the final frozen-source
+browser, local, build, coverage and CI receipts. None of the earlier failed
+attempts are replaced by these later runs.
+
+### Owner, contract, evidence and status
+
+| Scope         | Owner and boundary                                                       | Contract and evidence                                                                                                                              | Status                                                            |
+| ------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| R5-A          | Existing preview/office/binary services and safe filesystem layer        | Original fault matrix, FD/path/ownership tests retained in the complete suites; historical platform failures retained separately                   | ACCEPTED within prior reviewed scope                              |
+| R5-B          | Existing ingestion, writer/iterator/ZIP and Source lifecycle services    | L1 Source leases, I1 index identity, writer cancellation/failure and two-owner ZIP/indexing scenarios re-exercised; original double 36/36 retained | ACCEPTED by user within agreed scope                              |
+| W1/W2         | Existing browser observer and group event chain                          | Operation-identity counterexamples and close-before-list order unchanged; full Node/browser regressions                                            | ACCEPTED by user                                                  |
+| C1 I/O        | `knowledge_graph_cache` behind both original graph services              | Atomic snapshot, corrupt-cache diagnosis, old method/patch entrypoints and normal JSON envelope                                                    | Scoped test evidence verified; integrated R5-C acceptance BLOCKED |
+| C1 lifetime   | `knowledge_graph_lifetime`, original Source lease and Conversation lease | Current authorization plus source/index/scope snapshots; stale/ABA/session/source/reindex publication refusal; draft is not persisted              | Scoped test evidence verified; integrated R5-C acceptance BLOCKED |
+| C2 conversion | `_runtime_notebook`, `artifact_service`, existing Session services       | Existing normalize/merge, IDs, timestamps, copy/serialization and NotebookAccessError semantics                                                    | Scoped test evidence verified; integrated R5-C acceptance BLOCKED |
+| C2 commit     | `notebook_persistence` and `conversation_lifetime`                       | Independent Sessions/processes, both Notebook and chat write boundaries, fresh reload under short leases; no generic deep merge                    | Scoped test evidence verified; integrated R5-C acceptance BLOCKED |
+| C3 producer   | `DownloadWorkspace`, manifest and existing FD interfaces                 | Own temporary/active/ready/payload handles; partial allocation/copy/publication/cancellation and primary/secondary exception tests                 | Scoped test evidence verified; integrated R5-C acceptance BLOCKED |
+| C3 consumer   | `download_scope`, `download_http`, `artifact_transfers`                  | Current server identity and Source scope at HTTP claim, pinned payload FD and transfer lease through response completion/disconnect                | Scoped test evidence verified; integrated R5-C acceptance BLOCKED |
+| C3 retention  | Existing `artifact_retention`                                            | Existing TTL/capacity/scan budgets, live-transfer refusal, only owned unused resources; no background or root cleanup                              | Scoped test evidence verified; integrated R5-C acceptance BLOCKED |
+
+### Actual structure and preserved boundaries
+
+The source/test range changes 46 files, including 23 production/package-input files. New production resources: `libs/kotaemon/kotaemon/artifact_transfers.py`, `libs/ktem/ktem/docqa/conversation_lifetime.py`, `libs/ktem/ktem/docqa/knowledge_graph_cache.py`, `libs/ktem/ktem/docqa/knowledge_graph_lifetime.py`, `libs/ktem/ktem/docqa/notebook_persistence.py`, `libs/ktem/ktem/index/file/download_http.py`, `libs/ktem/ktem/index/file/download_http.pyi`, `libs/ktem/ktem/index/file/download_scope.py`. Production responsibility moves are limited to cache I/O,
+cache publication/authorization, short Conversation commits and download claim/
+transfer ownership. `knowledge_graph_cache.py` is the shared existing-method
+delegate; `notebook_persistence.py` is a narrow Session/authorized-load/commit
+helper. `conversation_lifetime.py` reuses the L1 locking implementation.
+The C1 and C2 mechanical extractions are separate commits from behavior fixes.
+
+The original graph services retain their algorithm bodies, builder/renderer,
+normal structures and `_get_storage_path`, `_load_cached_state`,
+`_save_cached_state` seams. The runtime cache reader now carries the current
+principal into its existing read path. A cached graph never supplies authority.
+`graph-method-boundary-proof.json` compares every original service method:
+all original signatures and every method body outside the named cache I/O and
+build/view publication methods are unchanged ASTs.
+`_runtime_notebook`, `artifact_service` and the original Session service remain;
+their public signatures and record conversion functions are preserved.
+`artifact_service`, graph builders, L1/I1 production, W2 event order, safe FD
+path implementation, dependency locks, security/hygiene baselines, coverage
+collectors/floors and required jobs have unchanged Git blobs, recorded in
+`frozen-scope-protection.json`.
+
+The Gradio output adapter retains the existing DownloadButton frontend and
+callback entrypoints but points it at a scoped HTTP route. Its generated `.pyi`
+is shipped as a runtime package resource, following the existing `File` component
+pattern. It is generated interface data, not a second service implementation.
+No shared backend is closed and no existing backend policy is replaced.
+
+### C1: atomic bytes and current publication are separate contracts
+
+Characterization and red evidence include `c1-cache-baseline-red`,
+`c1-interleavings-red`, `c1-runtime-read-red` and `c1-cache-permission-red`.
+The original implementations exposed partial files, accepted unusable top-level
+JSON, allowed older independent builders to publish late, and exposed a runtime
+cache read without sufficient current conversation authorization.
+
+The fix writes an exclusive sibling temporary, flushes/fsyncs/closes it, then
+replaces the snapshot. Corrupt JSON is diagnosed and treated as unusable;
+permission and other filesystem errors propagate. This atomic replacement alone
+is not the concurrency protocol. Short Source/Conversation leases re-read current
+SQL state. A per-conversation request receipt rejects superseded builders,
+including A→B→A. Source version includes current index relation IDs, and cache
+publication has a separate snapshot digest receipt. Publication rechecks source
+and conversation deletion, reindex, ownership and changes to the selected scope
+captured when that request began. Cache reads separately check current access,
+source/index version, snapshot bytes and changes during their short read window.
+
+Graph build/model work is outside those leases and SQL Sessions. Both original
+services are tested with independent instances, same file/different sessions,
+two users, draft, source/session deletion, reindex and late completion.
+The cache is rejected at its disk/read boundary, independently of UI stale-output
+guards. A failure after replacing the main snapshot but before its receipt can
+leave new bytes on disk; the next read refuses them as unverified. This is not
+reported as a multi-file rollback.
+
+Historical caches are not swept or rewritten. The original sanitized cache name
+mapping is retained, including its non-injective mapping for unusual historical
+IDs; no historical ID migration is claimed. Legacy snapshots without a current
+receipt are rebuildable/stale. The original graph algorithms are unchanged.
+
+### C2: fresh short commits and actual multi-store outcomes
+
+`c2-independent-sessions-red` demonstrates lost updates with genuinely independent
+Sessions. The repair coordinates every directly participating Notebook and chat
+JSON write boundary, including selected sources, export registration, artifact
+deletion and conversation deletion. Each writer opens its own Session and reloads
+the current row under the Conversation lease. It applies the existing domain
+transform once and commits briefly; it does not merge arbitrary stale JSON.
+Public conversation read access does not grant Notebook mutation/export access.
+
+Lock order is sorted Source leases → optional content lease → Conversation lease
+→ short SQL work when those boundaries are combined. Notebook-only changes take
+the Conversation lease directly. No Session is shared between threads, and no
+model call or worker join waits under a Source lock/SQL transaction. The process
+contract is same host, same database identity and shared lease directory; the
+independent process test demonstrates exclusion, unrelated-conversation progress,
+preservation of both commits and release. Multi-host fencing is not designed or
+certified.
+
+`test_notebook_storage_pipeline.py` exercises real Markdown materialization,
+the retained indexing pipeline, SQLite Source/Index relations, Lance documents,
+Chroma vector IDs and Notebook backfill, then reload. It also runs actual artifact
+export, registration and reload. Deterministic model inputs do not replace those
+storage boundaries. Observed outcomes are explicit:
+
+| Failing stage                                  | Materialized/exported bytes          | Source/index commit                                     | Notebook record                                        |
+| ---------------------------------------------- | ------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------ |
+| Before note materialization                    | Absent                               | Absent                                                  | Original note retained                                 |
+| Indexing stage failure                         | Note Markdown remains                | No successful Source in this injected path              | No indexed-source backfill                             |
+| Notebook backfill commit                       | Note Markdown remains                | Source, document/vector rows and backend records remain | Backfill rolled back                                   |
+| Session deleted after indexing                 | Note Markdown remains                | Source/index/backend records remain                     | Session remains deleted; late task cannot resurrect it |
+| Export registration commit                     | Export remains with verified content | Not a Source operation                                  | Export entry absent after reload                       |
+| Delete artifact record after successful export | Export remains                       | Unchanged                                               | Only selected Notebook artifact record removed         |
+
+Earlier test-fixture errors (missing note title and wrong Chroma accessor) are
+retained separately from the storage defects. Record deletion does not cascade
+to Source rows, shared blobs or historical exports. No cross-storage rollback or
+compensation platform is claimed.
+
+### C3: generation, claim, transfer and retention
+
+The red series covers partial workspace allocation, fdopen/marker/close failures,
+manifest normalization after FD acquisition, duplicate-handle release, cancellation,
+pruning while a ready payload is in use, and real Gradio/HTTP requests.
+The original HTTP path returned copied output to another owner and after
+Source deletion/revocation. A successful producer alone did not protect transfer.
+
+New output carries a scoped ready receipt. The HTTP claim derives the principal
+from server authentication, reloads Source access/version under its L1 lease,
+then uses the existing safe FD operations. The claim pins payload and ready-marker
+FDs; transfer holds a shared marker lease until GET/HEAD/range completion,
+disconnect or send failure. It releases the Source lease before sending bytes.
+Existing retention needs the exclusive marker lease and therefore cannot remove
+an active transfer. New claims after deletion/revocation fail. An already
+authorized pinned snapshot may finish after later deletion; the contract does
+not promise mid-stream byte revocation.
+
+HTTP claim lock order is Source → download lifecycle → nonblocking ready-marker
+lease; retention does not acquire Source or Conversation locks. This verification
+covers outputs issued by the current scoped pipeline. It makes no claim of
+retroactive revocation/migration of historical export or Gradio cache copies.
+
+| State          | Owner and release behavior                                                                                                             |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Generating     | Own request directory, active lease and temporary/payload FD; partial allocation and cancellation attempt all owned release boundaries |
+| Awaiting claim | Published payload plus ready receipt; creation must finish before any transfer can acquire the marker                                  |
+| In transfer    | Pinned payload and shared ready-marker lease; cleanup waits for unused resources without retaining Source/SQL locks                    |
+| Expired        | New claim refused; original bounded request-driven retention may remove only an unused owned workspace                                 |
+| Failed residue | Actual published/temp/marker state retained and diagnosed; cleanup failure never becomes a claim of successful rollback                |
+
+The original constants remain: 24-hour ready TTL, 60-second ready fetch window
+before capacity pruning, 600-second active TTL, 32 ready per file, 128 global
+hard capacity and 513-entry scan
+bound. No new background cleanup, root clear or cleanup of shared historical
+outputs is added. Numeric FDs are invalidated before close attempts, so retries
+cannot close a reused descriptor. All owned descriptors are attempted; secondary
+close/cleanup failures are logged without replacing the primary failure.
+
+POSIX executes real safe-dir-FD, flock, same-file concurrent generation, active
+transfer, expiry and pruning tests. Linux HTTP integration uses the real Gradio
+ASGI app and TestClient login/prediction/GET/HEAD/range routes, with actual payload
+bytes and native FDs; cancellation/send-failure tests drive its ASGI response.
+The complete interactive browser matrices run on native Windows; a successful
+POSIX browser/TCP transfer is not claimed. Native Windows retains fail-closed
+behavior where secure directory/lifecycle-lock capabilities are unavailable;
+the browser checks a visible refusal and no unprotected link, and HTTP checks
+owner capability refusal versus foreign/deleted-source denial. Eight new POSIX
+cases are explicit Windows skips and execute in both Linux kotaemon jobs.
+Windows tests do not relax path validation to manufacture successful downloads.
+
+### Retained failed source and packaging repair
+
+Source `553da46d2112b6aedd2aab40de06f682bc315314` passed its local/full Linux suites
+and four wheel-install smokes but failed actual non-root container startup:
+Gradio's metaclass could not create/read `download_http.pyi` in installed
+site-packages. Its CI is retained at run `35624958574`; this is a new R5-C runtime
+regression, not an old PCRE2 finding. Its partial browser matrix is not an
+acceptance run. Already active batches completed and cleaned their owned roots;
+remaining batches were stopped.
+
+`205a3bba819bf13d0efc230f89e367e59ea9487f` records the failing read-only component
+test before the fix. `33716dda50500ad027210f1decf5aaf6f5e76798` ships the generated
+interface, with no HTTP/authorization/timing logic change. The targeted 19-test
+green and subsequent full-source gates are separate evidence. The earlier outer
+browser collector's GBK/UTF-8 decoding failure and its exact 133-versus-135 hash
+guard correction are also retained; neither was a UI assertion failure or a
+selective green retry.
+
+At `33716dda`, the primary retained browser batch failed 1 of 12 records:
+the PDF search input remained hidden after its single search-button click.
+The other 11 records and all logs/screenshots remain; the failing run did not
+record the exact pre-click initialization state, so that specific causal state
+is not claimed as proven. A separate controlled full-App probe held PDF.js's
+viewer module: the button was visible while initialization/document readiness
+were false, the early click was ineffective, and a single click after readiness
+opened search. Commit `5e4058c3f1200627dc609d17f585475ae0dd3a4f` adds an explicit
+PDF initialization/document readiness wait before the existing click. Production
+preview/PDF assets and search/source-switch assertions are unchanged. It is a
+test precondition repair, with no repeated click, arbitrary sleep or blind retry.
+
+The 33716dda Windows kotaemon run had a fifth failure, separate from its four
+historical capability failures: an isolated child encountered an SSL EOF while
+fetching the public tokenizer resource. Its full traceback is retained. A bounded
+transport/hash check succeeded before a preregistered full run at 5e4058c3;
+that complete run returned to the same four failure nodes/natures. No dependency,
+application configuration or real user cache was changed to pass the check.
+
+The first complete coverage artifact measured production-equivalent code at
+551/620 R5-C incremental lines (88.87096774193549%), below the unchanged 90% gate.
+The 5e4058c3 browser sequence was stopped at the next batch boundary after its
+12/12 retained batch and successful owned cleanup; the following batch never
+started. CI `35628587479` was deliberately cancelled before completion once the
+new test-only scope was concrete, rather than treated as accepted evidence.
+Commit `ae31c731b46bbc677ca64913c3ce2bdf9f62586e` adds 19 substantive cases:
+authorized Runtime hits, reindex invalidation/rebuild, replacement between read
+and lease, unusable cache envelopes, completed-allocation release with secondary
+failures, and corrupt/oversized/foreign POSIX ready receipts with balanced FDs.
+It changes only three test files; production Python is byte-identical to
+5e4058c3. Coverage acceptance still requires the new final-source complete CI
+artifact; earlier lines/partial browser greens are not merged into acceptance.
+
+### Final source verification
+
+| Primary batch | Records | Passed | Failed               | Owned runtime removed |
+| ------------- | ------- | ------ | -------------------- | --------------------- |
+| retained      | 12      | 12     | None                 | True                  |
+| refresh       | 11      | 10     | repeatedFilterIntent | True                  |
+| seams         | 7       | 7      | None                 | True                  |
+| indexing      | 4       | 4      | None                 | True                  |
+| lifecycle     | 1       | 1      | None                 | True                  |
+| public        | 2       | 2      | None                 | True                  |
+
+The complete primary matrix ran all 36 original records plus one new download record on `ae31c731b46bbc677ca64913c3ce2bdf9f62586e`: **36/37 passed; 1 failed**. All six owned runtime roots were removed. The failed record was not retried, and the preregistered complete confirmation matrix is **not executed**. This is a failed complete attempt, not a limited verification pass.
+
+Confirmation was preregistered before the transport change. It was not started
+after the primary failure. Every failed callback is separately classified using
+its existing failure contract or exact owned revoked-Source evidence. Expected
+denial is not counted as successful download generation.
+No queue settlement, precise-ID, public permission, W1 or W2 guard is weakened.
+
+**B1 — A→B→A actual-application observation remains unresolved.** In
+`primary-browser-refresh`, `repeatedFilterIntent` times out at
+`tests/browser/file_browser_concurrency.cjs:131`. Session `t4uzkb6e5i` records first
+A request 3 at backend call/return/postprocess, but no `applyFiles` observation
+for request 3. Another A request 4 applied before the final A input, which alone
+is legal. B request 5 reached `applyFiles` and was rejected. The scenario stopped
+before proving old A's rejection and before validating latest A request 6's
+application. It is therefore not an acceptance pass.
+
+`aba-browser-blocker.json` preserves the correlated event IDs, exact stamps,
+frontend records, backend phases, queue results and source hashes. The scenario,
+W1 observer and production refresh guard are byte-identical to the independently
+accepted R5-B source. The available evidence does not establish whether Gradio
+discarded/coalesced a continuation, an observation was missed, or another timing
+defect intervened; it also does not establish causation by R5-C. No production
+fix, assertion relaxation or failed-case retry was made without that evidence.
+Only the previously unattempted primary batches were subsequently run once to
+complete failure isolation. The review blocker requires a proven explanation
+at the actual application boundary and then the preregistered complete source
+validation, not a selected green retry. A change to W1's accepted contract is not
+silently included in this lifecycle round.
+
+| Gate                         | Actual result                                                                              | Qualification                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| Windows affected full suite  | 99 failed, 4125 passed, 9 skipped, 135 warnings in 548.05s (0:09:08)                       | Exact old 99 nodes/errors/assertions retained                 |
+| Windows kotaemon full suite  | 4 failed, 405 passed, 23 skipped, 90 warnings in 147.64s (0:02:27)                         | Exact old four capability failures retained                   |
+| ktem isolated runtime        | 3,964 passed, 139 warnings                                                                 | Complete Linux job                                            |
+| kotaemon Python 3.10         | 422 passed, 10 skipped, 93 warnings                                                        | Complete Linux job                                            |
+| kotaemon Python 3.11         | 422 passed, 10 skipped, 93 warnings                                                        | Complete Linux job                                            |
+| slide_cli                    | Passed; quiet pytest progress reached 100% (no totals line emitted)                        | Complete Linux job                                            |
+| Benchmark and root contracts | 1,635 passed, 8 warnings                                                                   | Complete Linux job                                            |
+| Unified collection           | 6,324 nodes; 6,197 retained; 127 added; 0 removed                                          | Compared with accepted R5-B                                   |
+| Node                         | 51/51                                                                                      | Original observers and counterexamples retained               |
+| Full Linux-model mypy        | 1,971 files passed                                                                         | Actual Linux static CI also passed                            |
+| Native Windows hooks         | Three original os.pread capability errors only                                             | Existing call ASTs unchanged; all other applicable hooks pass |
+| Static and hygiene           | Full Ruff, hygiene, fixed-Dev/round ratchets, lock parity and supply-chain controls passed | No baseline widening                                          |
+| Build and clean wheel        | Eight wheel/sdist archives; four clean installation smokes passed locally and in CI        | Generated download_http.pyi bytes included                    |
+| G0 / secrets                 | Exact positive/negative controls and source history scan passed                            | Report scan receipts follow the report-only commit            |
+
+Windows's old 99 affected failures and four kotaemon capability failures are
+compared separately by exact node, primary error and assertion nature, with no
+new/resolved/changed failure. Full warning bodies are retained, including any
+explicitly proven unordered template-key equivalence. Native Windows mypy still
+reports the three pre-existing `os.pread` calls in two now-touched files; their
+AST calls are unchanged. Linux-model mypy and actual Linux static CI are separate
+checks; no Windows API shim or gate waiver was added.
+
+Local wheels/sdists preserve the user's existing working assets, so complete
+archive byte equality with committed CI builds is not claimed. Changed production
+members, including the required `.pyi`, are checked against the frozen source.
+CI independently verifies all eight archives, metadata, provenance and Python
+CycloneDX/SPDX artifacts. Final coverage uses the original collector and gates,
+with source-prefixed paths, subprocess coverage and no alias/omit expansion:
+
+| Package   | Covered / statements | Percentage | Original floor |
+| --------- | -------------------- | ---------- | -------------- |
+| benchmark | 17146 / 19005        | 90.2184%   | 90%            |
+| slide_cli | 2144 / 2837          | 75.5728%   | 70%            |
+| kotaemon  | 7833 / 11012         | 71.1315%   | 60%            |
+| ktem      | 43696 / 51886        | 84.2154%   | 50%            |
+
+| Production diff | Base                                       | Covered / total | Percentage | Unchanged floor |
+| --------------- | ------------------------------------------ | --------------- | ---------- | --------------- |
+| fixed_dev       | `adab3f4d8f221e3620494fab0a24ef8e5557d12a` | 2151 / 2235     | 96.2416%   | 90%             |
+| r5c_increment   | `703eef5fb6e597e049cc49d527d780764730afe4` | 580 / 620       | 93.5484%   | 90%             |
+
+Coverage artifact: `10655226975`, SHA-256 `544fcc99ef1be2f0eff4a8752e41117ffc317d6a61f5910566e474e3c1cbc68f`. Missing lines and each changed module's
+coverage remain in `coverage-verified.json`; high coverage does not replace the
+authorization, storage, concurrency or resource-state contracts above.
+
+### Actual CI and security disposition
+
+[Quality Gates run 35630211844](https://github.com/262412/MARA/actions/runs/35630211844) Overall conclusion/counts: **FAILURE; 13 success, 7 failure (20 actual jobs)**.
+Container failures are classified from their exact failed step, not their job
+name; any runtime/build failure remains a functional blocker.
+
+| Job                                                        | Job ID       | Actual conclusion | Failed step                                     |
+| ---------------------------------------------------------- | ------------ | ----------------- | ----------------------------------------------- |
+| Static, hygiene, and baseline ratchet                      | 106434320990 | success           | None                                            |
+| kotaemon Python 3.10                                       | 106434321247 | success           | None                                            |
+| Coverage floors and production diff                        | 106434321269 | success           | None                                            |
+| Container full supply chain                                | 106434321292 | failure           | Enforce frozen container vulnerability baseline |
+| Dependency audit root-py311                                | 106434321353 | failure           | Fail on known Python dependency vulnerabilities |
+| Unified pytest collection                                  | 106434321368 | success           | None                                            |
+| Four clean wheel installations                             | 106434321385 | success           | None                                            |
+| kotaemon Python 3.11                                       | 106434321398 | success           | None                                            |
+| Dependency audit container-py310                           | 106434321406 | failure           | Fail on known Python dependency vulnerabilities |
+| slide_cli                                                  | 106434321418 | success           | None                                            |
+| ktem isolated runtime                                      | 106434321428 | success           | None                                            |
+| Dependency audit root-py310                                | 106434321442 | failure           | Fail on known Python dependency vulnerabilities |
+| Repository and image secret scans / Repository and history | 106434321519 | success           | None                                            |
+| Benchmark and root contracts                               | 106434321524 | success           | None                                            |
+| Container ollama supply chain                              | 106434321561 | failure           | Enforce frozen container vulnerability baseline |
+| Container lite supply chain                                | 106434321592 | failure           | Enforce frozen container vulnerability baseline |
+| Repository and image secret scans / Built image            | 106434321601 | success           | None                                            |
+| Python distribution supply chain                           | 106434321631 | success           | None                                            |
+| Frontend and browser security                              | 106434321744 | success           | None                                            |
+| Required quality gates                                     | 106445018104 | failure           | Require every gate to succeed                   |
+
+| Audit profile   | Blocking keys | New / resolved against accepted R5-B |
+| --------------- | ------------- | ------------------------------------ |
+| root-py310      | 14            | 0 / 0                                |
+| root-py311      | 14            | 0 / 0                                |
+| container-py310 | 14            | 0 / 0                                |
+
+| Target | Blocking image keys | New raw / blocking keys | Verified image digest                                                     | Image SBOM generated |
+| ------ | ------------------- | ----------------------- | ------------------------------------------------------------------------- | -------------------- |
+| lite   | 4                   | 0 / 0                   | `sha256:196e064b7049cc93ed3d87ddc7c2e084670c88c2ea100b3f9559e6a15f9e3011` | False                |
+| full   | 4                   | 0 / 0                   | `sha256:4c98f235b2d52c2c402844e4c584933f0c03e567114d14c0d70ee63ace3bff61` | False                |
+| ollama | 4                   | 0 / 0                   | `sha256:00f94294c233624792a4d84317ad8d53c49243dc7f630b9d7be1716ef6d0b00a` | False                |
+
+Image runtime smoke steps passed after the generated-interface repair. Container security gates still stop before image SBOM generation; no such SBOM is claimed. Python distribution CycloneDX/SPDX and provenance were verified separately for all eight archives. PCRE2 package/layer evidence and the existing advisory alias evidence are retained.
+
+All listed blocking findings remain blocking; no new baseline,
+alias, dependency upgrade, scan-scope change, required-job change or exploitability
+waiver is introduced. G0 positive/negative controls and final source/report secret
+scans retain their actual evidence. S1/PCRE2 OPEN and merge/release NO-GO remain
+independent of this limited functional verification.
+
+### Commits, protection and review boundary
+
+| Actual SHA                                 | Change                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `eb7f2b8ba5421344241964deca61a79adb91eefa` | test(graph): characterize cache snapshots and reproduce partial publication          |
+| `44e678539d7d1d98f1960bc9b7590163300af5a2` | fix(graph): publish complete snapshots and diagnose malformed caches                 |
+| `986c9a7c87548ce575e06889d2b8a0d71efeac40` | refactor(graph): share snapshot IO behind existing service seams                     |
+| `7499618dc3a5a3a122e37787c93be4f775d69e2a` | test(notebook): reproduce lost updates across independent sessions                   |
+| `c4adce39867904756e0a39cd6f242f15e7fee22a` | fix(notebook): coordinate all conversation JSON commit boundaries                    |
+| `632d099a09f2bee321c4437040805fa74a4e378d` | refactor(notebook): isolate authorized short transactions from record rules          |
+| `134f7d59d125fde4438c5bd3cb7ed69ccf0ee259` | test(graph): reproduce stale publication and missing conversation scope              |
+| `ea0d806428dec8fdc074b96536f018a6a9239b49` | fix(graph): reject superseded builds and revalidate source and session scope         |
+| `60950beaf5b8013474937e4f9e0b9818e7ade932` | test(graph): reject unauthenticated Runtime cache reads                              |
+| `0f32eb86513541c186cad0c94aa5292d5bebcaec` | fix(graph): authorize Runtime cache reads with the current request identity          |
+| `5748340e271adb9b761d2ba46ae15ba2a3077fe5` | test(download): reproduce descriptor leaks and unsafe repeated closes                |
+| `2505a6cd4e7f0b2858d9daca02fcb96d0f18a64b` | test(download): cover partial allocation and secondary release failures              |
+| `023a51b220051af09a745da575f81d19a9160f4b` | fix(download): release partial allocations without masking primary failures          |
+| `5842e33500ec0507425c5f6235d5c03a70168f79` | test(download): demonstrate shared HTTP bytes after deletion and revocation          |
+| `7d8cd3317b33dc1cced98746edf865a948924edb` | test(download): cover cancellation transfer retention and descriptor reuse           |
+| `32cf7455a541ea907f764ce880b8e81bb9ec57c0` | fix(artifacts): close stream duplicates and retire released descriptor numbers       |
+| `5a9ef1d4f9d1c52cc8805607bbe4888d8b15c706` | fix(download): authorize HTTP claims and retain resources through transfer           |
+| `372acb0f3255b877ee0a7cb5cb17b80fca3442cb` | test(graph): exercise reindex scope changes and visible permission failures          |
+| `0530bc862ebd7675eae69aab680a77e9e985a32e` | fix(graph): preserve cache IO permission failures instead of treating them as misses |
+| `fd4e90b70dd005606cab7a22a8dd3e8a5b37068c` | test(notebook): verify real storage stages and same-host process coordination        |
+| `d5771af18ec5f60b9deb6da1a6b3c38802a059a1` | test(browser): cover scoped download revocation and native capabilities              |
+| `553da46d2112b6aedd2aab40de06f682bc315314` | test(download): require the scoped route in the final HTTP fixture                   |
+| `205a3bba819bf13d0efc230f89e367e59ea9487f` | test(download): reproduce read-only component import failure                         |
+| `33716dda50500ad027210f1decf5aaf6f5e76798` | fix(download): ship Gradio interface for read-only installations                     |
+| `5e4058c3f1200627dc609d17f585475ae0dd3a4f` | test(browser): wait for PDF viewer initialization before search                      |
+| `ae31c731b46bbc677ca64913c3ce2bdf9f62586e` | test: cover authorized cache reads and completed allocation cleanup                  |
+
+The original 133 user changes plus the two later modified paths remain byte
+identical to the initial 135-path inventory. The two later CRLF-only paths can be
+absent from normalized `git diff`; raw-byte protection covers both. `NUL` remains
+95 bytes with SHA-256 `bd28ac1693f0d94ea97696fed16879a2e2cfeecf19d350451f49224ba1955a3c`.
+Canonical environment/known real runtime metadata and the three historically
+refused cleanup directories are compared without mutating them. Only task-owned
+resources and explicit staged paths are used. The now-required committed `.pyi`
+is preserved as package data; its earlier untracked test-generated predecessor
+and removal receipt stay in the failed-source evidence.
+
+The first final metadata comparison mixed two collector representations and
+failed. The initial command is retained in the task transcript: it hashes sorted
+Windows relative paths, size, modification time and mode using non-following
+stat. The older standard collector instead uses POSIX relative paths and a
+directory flag. Repeating the exact original representation matches every
+initial directory fingerprint; the standard representation independently matches
+the accepted R5-B final snapshot. Neither failed comparison was a content change
+or grounds for replacing the initial fingerprints.
+
+`r5c-final-state.json` records source/test/package, report, local and remote SHAs,
+normal-push results, protection hashes and final secret scans. For a report-only
+commit, `report-functional-equivalence.json` proves that every other tracked
+mode/blob is unchanged before reusing the frozen functional evidence. The entire
+previous R5-B report is retained below as historical wording; its then-pending
+acceptance is superseded only by the user's explicit acceptance above. The
+original R0/R1 historical suffix remains byte-identical.
+
+`historical-attempt-index.json` hashes every retained local attempt from all
+superseded R5-C sources, including failed commands and their original working-input
+fingerprints in `execution.jsonl`. Original accepted R5-B double 36/36 evidence
+remains under `r5b-browser-closeout/` and `r5b-browser-ci/`.
+
+<details>
+<summary>Archived R5-B report at 703eef5f (historical acceptance wording)</summary>
+
+# Safe-refactor status
+
 ## Current review point: R5-B browser blocker closeout
 
 Branch: `codex/r0-r1-safe-refactor`. Round baseline/report:
@@ -338,6 +790,8 @@ no byte-identity claim is made for an unbuilt image at the later report commit.
 awaiting independent review; R5-B is not ACCEPTED.** Overall CI remains
 FAILURE; S1/PCRE2 OPEN and merge/release NO-GO are separate outcomes.
 Work stops here without R5-C, R6 or reopening earlier accepted phases.
+
+</details>
 
 ## Previous R0/R1 evidence (retained history)
 
