@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
 import threading
 from collections import Counter
@@ -9,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ktem.db.engine import engine
-from ktem.docqa.knowledge_graph_cache import save_snapshot
+from ktem.docqa.knowledge_graph_cache import load_snapshot, save_snapshot, storage_path
 from ktem.llms.manager import llms
 from ktem.preview.context import preview_access_for_user
 from ktem.preview.service import PreviewService
@@ -145,9 +144,7 @@ class GlobalKnowledgeGraphService:
         return results
 
     def _get_storage_path(self, conversation_id: str) -> Path:
-        conversation_key = str(conversation_id or "draft")
-        safe_key = re.sub(r"[^A-Za-z0-9_\-]", "_", conversation_key)
-        return self._storage_dir / f"{safe_key}.json"
+        return storage_path(self._storage_dir, conversation_id)
 
     @staticmethod
     def _graph_schema_version(graph: dict[str, Any] | None) -> int:
@@ -159,27 +156,15 @@ class GlobalKnowledgeGraphService:
             return 0
 
     def _load_cached_state(self, conversation_id: str) -> dict[str, Any]:
-        path = self._get_storage_path(conversation_id)
-        empty = dict(
-            conversation_id=conversation_id, schema_version=0, manifest={}, graph=None
+        return load_snapshot(
+            self._get_storage_path(conversation_id),
+            {
+                "conversation_id": conversation_id,
+                "schema_version": 0,
+                "manifest": {},
+                "graph": None,
+            },
         )
-        if not path.exists():
-            return empty
-        try:
-            with path.open("r", encoding="utf-8") as file_obj:
-                data = json.load(file_obj)
-            if not isinstance(data, dict):
-                raise ValueError("Graph cache must contain a JSON object")
-        except Exception:
-            logging.getLogger(__name__).warning(
-                "Unusable graph cache: %s", path, exc_info=True
-            )
-            return empty
-        data.setdefault("conversation_id", conversation_id)
-        data.setdefault("schema_version", 0)
-        data.setdefault("manifest", {})
-        data.setdefault("graph", None)
-        return data
 
     def _save_cached_state(self, conversation_id: str, state: dict[str, Any]) -> None:
         path = self._get_storage_path(conversation_id)
