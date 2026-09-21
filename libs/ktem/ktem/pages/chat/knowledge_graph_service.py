@@ -9,6 +9,7 @@ from typing import Any
 
 from ktem.db.engine import engine
 from ktem.docqa.knowledge_graph_cache import load_snapshot, save_snapshot, storage_path
+from ktem.docqa.knowledge_graph_lifetime import begin_graph_request, resolve_graph_view
 from ktem.llms.manager import llms
 from ktem.preview.context import preview_access_for_user
 from ktem.preview.service import PreviewService
@@ -535,6 +536,18 @@ class GlobalKnowledgeGraphService:
     ) -> str:
         return self._renderer.render_graph_html(graph, focus_file_id, status)
 
+    def _cache_request(self, conversation_id, user_id, sources):
+        access = preview_access_for_user(self._app, user_id)
+        return begin_graph_request(
+            self._storage_dir,
+            engine,
+            self._index,
+            conversation_id,
+            access.user_id,
+            sources,
+            owner_required=access.owner_required,
+        )
+
     def get_graph_view(
         self,
         conversation_id: str,
@@ -553,14 +566,7 @@ class GlobalKnowledgeGraphService:
                 file_id: self._make_signature(source)
                 for file_id, source in sources.items()
             }
-            cached_state = self._load_cached_state(conversation_id)
-            cached_manifest = cached_state.get("manifest", {}) or {}
-            cached_graph = cached_state.get("graph")
-            cached_schema_version = int(
-                cached_state.get("schema_version")
-                or self._graph_schema_version(cached_graph)
-                or 0
-            )
+            request = self._cache_request(conversation_id, user_id, sources)
             missing_count = max(0, len(source_ids) - len(valid_source_ids))
             if not valid_source_ids:
                 html_content = self._render_empty_html(
@@ -580,33 +586,17 @@ class GlobalKnowledgeGraphService:
                     "support_chunk_ids": {},
                 }
 
-            is_fresh = (
-                bool(cached_graph)
-                and cached_manifest == manifest
-                and cached_schema_version == self.EXPECTED_SCHEMA_VERSION
+            graph, status, schema_outdated = resolve_graph_view(
+                request,
+                conversation_id,
+                manifest,
+                self.EXPECTED_SCHEMA_VERSION,
+                force_rebuild=force_rebuild,
+                load=self._load_cached_state,
+                save=self._save_cached_state,
+                build=lambda: self._build_conversation_graph(conversation_id, sources),
+                graph_schema=self._graph_schema_version,
             )
-            graph: dict[str, Any] | None
-            schema_outdated = (
-                bool(cached_graph)
-                and cached_manifest == manifest
-                and cached_schema_version != self.EXPECTED_SCHEMA_VERSION
-            )
-            if force_rebuild:
-                graph = self._build_conversation_graph(conversation_id, sources)
-                cached_state = {
-                    "conversation_id": conversation_id,
-                    "schema_version": self.EXPECTED_SCHEMA_VERSION,
-                    "manifest": manifest,
-                    "graph": graph,
-                }
-                self._save_cached_state(conversation_id, cached_state)
-                status = "ready"
-            elif is_fresh:
-                graph = cached_graph if isinstance(cached_graph, dict) else None
-                status = "ready"
-            else:
-                graph = cached_graph if isinstance(cached_graph, dict) else None
-                status = "stale"
 
             if not graph:
                 html_content = self._render_empty_html(

@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import pytest
 from gradio.helpers import special_args
+from ktem.db.models import Conversation
 from ktem.docqa.knowledge_graph import (
     GlobalKnowledgeGraphService as DocQAKnowledgeGraphService,
 )
@@ -51,9 +52,12 @@ def managed_graph_app(monkeypatch, tmp_path):
 
     db_engine = create_engine("sqlite://")
     base.metadata.create_all(db_engine)
+    Conversation.__table__.create(db_engine)
     with Session(db_engine) as session:
         session.add_all(
             [
+                Conversation(id="conversation-1", user="attacker"),
+                Conversation(id="conversation-empty", user="attacker"),
                 Source(
                     id="attacker-file",
                     name="Own.pdf",

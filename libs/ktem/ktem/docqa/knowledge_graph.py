@@ -14,6 +14,7 @@ from sqlmodel import Session
 from theflow.settings import settings as flowsettings
 
 from .knowledge_graph_cache import load_snapshot, save_snapshot, storage_path
+from .knowledge_graph_lifetime import begin_graph_request
 
 _EN_STOPWORDS = {
     "about",
@@ -352,10 +353,26 @@ class GlobalKnowledgeGraphService:
     ) -> dict[str, Any]:
         source_ids = self._normalize_source_ids(source_ids)
         sources = self._load_sources(source_ids, user_id=user_id)
-        cached_state = self._load_cached_state(conversation_id)
+        access = preview_access_for_user(self._app, user_id)
+        request = begin_graph_request(
+            self._storage_dir,
+            engine,
+            self._index,
+            conversation_id,
+            access.user_id,
+            sources,
+            owner_required=access.owner_required,
+        )
+        with request.current():
+            cached_state = (
+                {} if request.draft else self._load_cached_state(conversation_id)
+            )
         graph, manifest = self._build_nodes_and_edges(source_ids, sources=sources)
         cached_state["conversation_id"] = conversation_id
         cached_state["manifest"] = manifest
         cached_state["graph"] = graph
-        self._save_cached_state(conversation_id, cached_state)
+        with request.current():
+            if not request.draft:
+                self._save_cached_state(conversation_id, cached_state)
+                request.record_publication(cached_state)
         return cached_state
