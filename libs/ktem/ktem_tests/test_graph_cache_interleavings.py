@@ -8,6 +8,7 @@ import pytest
 from ktem.db.models import Conversation
 from ktem.docqa import knowledge_graph as runtime_graph
 from ktem.pages.chat import knowledge_graph_service as web_graph
+from ktem.preview.errors import PreviewAccessError
 from sqlalchemy import Column, DateTime, Integer, String
 from sqlalchemy.orm import declarative_base
 from sqlmodel import Session, create_engine
@@ -151,3 +152,69 @@ def test_cached_graph_does_not_authorize_another_conversation(graph_store):
         session.commit()
     with pytest.raises(PermissionError):
         build(store, service, ["a"])
+
+
+@pytest.mark.parametrize("change", ["reindex", "source_owner", "public_scope"])
+def test_changed_input_rejects_late_disk_publication(graph_store, monkeypatch, change):
+    store, service = graph_store, graph_store.service()
+
+    def modify():
+        with Session(store.engine) as session:
+            if change == "reindex":
+                session.add(
+                    store.Index(
+                        source_id="a",
+                        target_id="new-generation",
+                        relation_type="document",
+                    )
+                )
+            elif change == "source_owner":
+                row = session.get(store.Source, "a")
+                assert row is not None
+                row.user = "other-owner"
+                session.add(row)
+            else:
+                row = session.get(Conversation, "conv")
+                assert row is not None
+                row.data_source = {"graph_source_ids": ["b"]}
+                session.add(row)
+            session.commit()
+
+    intercept_build(store, service, monkeypatch, modify)
+    with pytest.raises(RuntimeError):
+        build(store, service, ["a"])
+    assert not service._get_storage_path("conv").exists()
+
+
+def test_same_source_in_two_conversations_has_independent_disk_state(graph_store):
+    store = graph_store
+    service = store.service()
+    build(store, service, ["a"], "conv")
+    first = service._get_storage_path("conv").read_bytes()
+    build(store, service, ["a"], "other")
+    assert service._get_storage_path("conv").read_bytes() == first
+    assert service._load_cached_state("other")["conversation_id"] == "other"
+
+
+def test_two_owners_cannot_hit_each_others_graph(graph_store):
+    store, service = graph_store, graph_store.service()
+    build(store, service, ["a"], "conv")
+    with Session(store.engine) as session:
+        other = session.get(Conversation, "other")
+        assert other is not None
+        other.user = "bob"
+        session.add(other)
+        source = session.get(store.Source, "b")
+        assert source is not None
+        source.user = "bob"
+        session.add(source)
+        session.commit()
+    if store.module is runtime_graph:
+        service.build_graph("other", ["b"], user_id="bob")
+        with pytest.raises(PreviewAccessError):
+            service.build_graph("other", ["a"], user_id="bob")
+    else:
+        service.get_graph_view("other", ["b"], force_rebuild=True, user_id="bob")
+        with pytest.raises(PreviewAccessError):
+            service.get_graph_view("other", ["a"], user_id="bob")
+    assert service._load_cached_state("conv")["conversation_id"] == "conv"

@@ -93,6 +93,22 @@ def test_wrong_top_level_cache_is_diagnosed_as_unusable(cache, raw, caplog):
     assert path.read_text("utf-8") == raw
 
 
+def test_cache_permission_failure_is_not_reported_as_a_cache_miss(cache, monkeypatch):
+    service, _module = cache
+    path = service._get_storage_path("conv-1")
+    path.write_text("{}", encoding="utf-8")
+    original = type(path).open
+
+    def forbidden(current, *args, **kwargs):
+        if current == path:
+            raise PermissionError("owned cache permission failure")
+        return original(current, *args, **kwargs)
+
+    monkeypatch.setattr(type(path), "open", forbidden)
+    with pytest.raises(PermissionError, match="owned cache permission"):
+        service._load_cached_state("conv-1")
+
+
 @pytest.mark.parametrize("stage", ["allocate", "flush", "fsync", "close", "replace"])
 def test_publication_failures_keep_old_bytes_and_release_owned_temp(
     cache, monkeypatch, stage
