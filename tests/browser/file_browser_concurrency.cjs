@@ -106,6 +106,7 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
   }
 
   async function repeatedFilterIntent() {
+    const {assertLatestFilter} = require('./web_operation_observer.cjs');
     const {page, queue} = await login();
     const old = 'filter-ABA-old', latest = 'filter-ABA-latest';
     try {
@@ -116,22 +117,30 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
       await page.evaluate(() => { window.ownedWebAction = 'ABA-first-A'; });
       await filter.fill('.txt');
       await expect.poll(async () => (await control(''))[old]?.entered).toBe(true);
-      await control('/arm', {key: latest, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
+      const first = (await control(''))[old].operation;
+      await control('/arm', {key: latest, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt', function_id: first.fn, filter_version: first.inputs.stamp.filterVersion + 2});
       await page.evaluate(() => { window.ownedWebAction = 'ABA-B'; });
       await filter.fill('.png');
       await page.evaluate(() => { window.ownedWebAction = 'ABA-last-A'; });
       await filter.fill('.txt');
       await control('/release/' + old, {});
       await expect.poll(async () => (await control(''))[latest]?.entered).toBe(true);
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const last = (await control(''))[latest].operation;
+      expect(last.event_id).not.toBe(first.event_id);
+      const observations = () => page.evaluate(() => window.ownedWebOperations);
+      await expect.poll(async () => (await observations()).some(item => item.phase === 'applyFiles' && item.stamp.fileRequest === first.inputs.stamp.fileRequest)).toBe(true);
       const beforeLatest = await ids();
       results.fileBrowserRaces ||= [];
       results.fileBrowserRaces.push({name: 'A-B-A-before-latest-return', initial, beforeLatest});
-      expect(beforeLatest, 'first A must not stand in for the last A').toEqual(initial);
+      assertLatestFilter(await observations(), first.inputs.stamp, last.inputs.stamp, false);
       await control('/release/' + latest, {});
+      await expect.poll(async () => (await observations()).some(item => item.phase === 'applyFiles' && item.stamp.fileRequest === last.inputs.stamp.fileRequest && item.applied)).toBe(true);
       await expect.poll(async () => (await ids()).sort()).toEqual(await expectedFiles('browser-owner', '.txt'));
-      await settled(queue);
-      results.scenarios.push({name: 'A-B-A-retains-issuance-order', initial, beforeLatest});
+      const applied = assertLatestFilter(await observations(), first.inputs.stamp, last.inputs.stamp, true);
+      expect(applied.ids.sort()).toEqual(await expectedFiles('browser-owner', '.txt'));
+      await expect.poll(async () => (await page.locator('#chat-selected-file').textContent()).trim()).toBe(applied.display[0]);
+      await expect.poll(async () => (await page.locator('#workbench-file-summary').textContent()).trim()).toBe(applied.display[1]);
+      results.scenarios.push({name: 'A-B-A-retains-issuance-order', initial, beforeLatest, first, last, applied});
     } finally {
       await control('/release/' + old, {});
       await control('/release/' + latest, {});

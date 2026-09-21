@@ -7,7 +7,12 @@ from pathlib import Path
 def test_queue_response_observer_contracts():
     repository = Path(__file__).resolve().parents[1]
     result = subprocess.run(
-        ["node", "--test", "tests/browser/queue_response_observer.test.cjs"],
+        [
+            "node",
+            "--test",
+            "tests/browser/queue_response_observer.test.cjs",
+            "tests/browser/web_operation_observer.test.cjs",
+        ],
         cwd=repository,
         capture_output=True,
         text=True,
