@@ -18,7 +18,7 @@ from .artifact_models import (
     build_artifact_record,
     normalize_artifact,
 )
-from .conversation_lifetime import conversation_write
+from .notebook_persistence import notebook_transaction
 
 NOTEBOOK_KEY = "mara_notebook"
 
@@ -318,6 +318,17 @@ def record_artifact_export(
     return _with_notebook(data_source, notebook), updated_artifact
 
 
+def _write_conversation(conversation_id: str, user_id: Any):
+    return notebook_transaction(
+        engine,
+        conversation_id,
+        user_id,
+        session_factory=Session,
+        load_row=_load_conversation,
+        now=datetime.now,
+    )
+
+
 def save_artifact_to_conversation(
     conversation_id: str,
     *,
@@ -334,10 +345,7 @@ def save_artifact_to_conversation(
     generation: dict[str, Any] | None = None,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with conversation_write(engine, conversation_id), Session(engine) as session:
-        row = _load_conversation(
-            session, conversation_id, user_id=user_id, access="write"
-        )
+    with _write_conversation(conversation_id, user_id) as row:
         updated, artifact = save_artifact(
             dict(row.data_source or {}),
             artifact_type=artifact_type,
@@ -353,9 +361,6 @@ def save_artifact_to_conversation(
             timestamp=timestamp,
         )
         row.data_source = updated
-        row.date_updated = datetime.now()
-        session.add(row)
-        session.commit()
         return artifact
 
 
@@ -365,15 +370,9 @@ def delete_artifact_from_conversation(
     *,
     user_id: Any,
 ) -> dict[str, Any]:
-    with conversation_write(engine, conversation_id), Session(engine) as session:
-        row = _load_conversation(
-            session, conversation_id, user_id=user_id, access="write"
-        )
+    with _write_conversation(conversation_id, user_id) as row:
         updated, artifact = delete_artifact(dict(row.data_source or {}), artifact_id)
         row.data_source = updated
-        row.date_updated = datetime.now()
-        session.add(row)
-        session.commit()
         return artifact
 
 
@@ -386,10 +385,7 @@ def record_artifact_export_to_conversation(
     path: str,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with conversation_write(engine, conversation_id), Session(engine) as session:
-        row = _load_conversation(
-            session, conversation_id, user_id=user_id, access="write"
-        )
+    with _write_conversation(conversation_id, user_id) as row:
         updated, artifact = record_artifact_export(
             dict(row.data_source or {}),
             artifact_id,
@@ -398,9 +394,6 @@ def record_artifact_export_to_conversation(
             timestamp=timestamp,
         )
         row.data_source = updated
-        row.date_updated = datetime.now()
-        session.add(row)
-        session.commit()
         return artifact
 
 
@@ -493,10 +486,7 @@ def add_note_to_conversation(
     note_id: str | None = None,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with conversation_write(engine, conversation_id), Session(engine) as session:
-        row = _load_conversation(
-            session, conversation_id, user_id=user_id, access="write"
-        )
+    with _write_conversation(conversation_id, user_id) as row:
         updated, note = add_note(
             dict(row.data_source or {}),
             title=title,
@@ -505,9 +495,6 @@ def add_note_to_conversation(
             timestamp=timestamp,
         )
         row.data_source = updated
-        row.date_updated = datetime.now()
-        session.add(row)
-        session.commit()
         return note
 
 
@@ -521,10 +508,7 @@ def save_answer_note_to_conversation(
     note_id: str | None = None,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with conversation_write(engine, conversation_id), Session(engine) as session:
-        row = _load_conversation(
-            session, conversation_id, user_id=user_id, access="write"
-        )
+    with _write_conversation(conversation_id, user_id) as row:
         updated, note = save_answer_as_note(
             dict(row.data_source or {}),
             answer=answer,
@@ -534,9 +518,6 @@ def save_answer_note_to_conversation(
             timestamp=timestamp,
         )
         row.data_source = updated
-        row.date_updated = datetime.now()
-        session.add(row)
-        session.commit()
         return note
 
 
@@ -546,15 +527,9 @@ def select_conversation_sources(
     *,
     user_id: Any,
 ) -> list[str]:
-    with conversation_write(engine, conversation_id), Session(engine) as session:
-        row = _load_conversation(
-            session, conversation_id, user_id=user_id, access="write"
-        )
+    with _write_conversation(conversation_id, user_id) as row:
         updated = set_selected_sources(dict(row.data_source or {}), source_ids)
         row.data_source = updated
-        row.date_updated = datetime.now()
-        session.add(row)
-        session.commit()
         return list(updated[NOTEBOOK_KEY]["selected_source_ids"])
 
 
@@ -567,10 +542,7 @@ def record_note_indexed_source_to_conversation(
     source_path: str,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with conversation_write(engine, conversation_id), Session(engine) as session:
-        row = _load_conversation(
-            session, conversation_id, user_id=user_id, access="write"
-        )
+    with _write_conversation(conversation_id, user_id) as row:
         updated, note = record_note_indexed_source(
             dict(row.data_source or {}),
             note_id,
@@ -579,7 +551,4 @@ def record_note_indexed_source_to_conversation(
             timestamp=timestamp,
         )
         row.data_source = updated
-        row.date_updated = datetime.now()
-        session.add(row)
-        session.commit()
         return note
