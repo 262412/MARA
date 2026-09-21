@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -12,6 +13,8 @@ from ktem.preview.service import PreviewService
 from sqlalchemy import select
 from sqlmodel import Session
 from theflow.settings import settings as flowsettings
+
+from .knowledge_graph_cache import save_snapshot
 
 _EN_STOPWORDS = {
     "about",
@@ -158,7 +161,12 @@ class GlobalKnowledgeGraphService:
         try:
             with path.open("r", encoding="utf-8") as file_obj:
                 data = json.load(file_obj)
+            if not isinstance(data, dict):
+                raise ValueError("Graph cache must contain a JSON object")
         except Exception:
+            logging.getLogger(__name__).warning(
+                "Unusable graph cache: %s", path, exc_info=True
+            )
             return {"conversation_id": conversation_id, "manifest": {}, "graph": None}
         data.setdefault("conversation_id", conversation_id)
         data.setdefault("manifest", {})
@@ -167,8 +175,7 @@ class GlobalKnowledgeGraphService:
 
     def _save_cached_state(self, conversation_id: str, state: dict[str, Any]) -> None:
         path = self._get_storage_path(conversation_id)
-        with path.open("w", encoding="utf-8") as file_obj:
-            json.dump(state, file_obj, ensure_ascii=False, indent=2)
+        save_snapshot(path, state)
 
     def _load_sources(
         self, source_ids: list[str], *, user_id: Any = None

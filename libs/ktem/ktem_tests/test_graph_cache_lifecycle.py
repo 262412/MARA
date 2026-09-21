@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from ktem.docqa import knowledge_graph as runtime_graph
+from ktem.docqa import knowledge_graph_cache as cache_io
 from ktem.pages.chat import knowledge_graph_service as web_graph
 
 
@@ -90,3 +91,81 @@ def test_wrong_top_level_cache_is_diagnosed_as_unusable(cache, raw, caplog):
     assert service._load_cached_state("conv-1")["graph"] is None
     assert "cache" in caplog.text.lower()
     assert path.read_text("utf-8") == raw
+
+
+@pytest.mark.parametrize("stage", ["allocate", "flush", "fsync", "close", "replace"])
+def test_publication_failures_keep_old_bytes_and_release_owned_temp(
+    cache, monkeypatch, stage
+):
+    service, _ = cache
+    service._save_cached_state("conv-1", {"graph": {"old": True}})
+    path = service._get_storage_path("conv-1")
+    before = path.read_bytes()
+
+    def fail(*args, **kwargs):
+        raise OSError(stage)
+
+    if stage in {"fsync", "replace"}:
+        monkeypatch.setattr(cache_io.os, stage, fail)
+    elif stage == "allocate":
+        monkeypatch.setattr(cache_io.tempfile, "NamedTemporaryFile", fail)
+    else:
+        allocate = cache_io.tempfile.NamedTemporaryFile
+
+        def instrument(*args, **kwargs):
+            stream = allocate(*args, **kwargs)
+            operation = getattr(stream, stage)
+            called = False
+
+            def fail_once():
+                nonlocal called
+                operation()
+                if not called:
+                    called = True
+                    fail()
+
+            setattr(stream, stage, fail_once)
+            return stream
+
+        monkeypatch.setattr(cache_io.tempfile, "NamedTemporaryFile", instrument)
+    with pytest.raises(OSError, match=stage):
+        service._save_cached_state("conv-1", {"graph": {"new": True}})
+    assert path.read_bytes() == before
+    assert list(path.parent.iterdir()) == [path]
+
+
+def test_post_replace_failure_is_published_and_never_rolled_back(cache, monkeypatch):
+    service, _ = cache
+    replace = cache_io.os.replace
+
+    def replace_then_fail(*args):
+        replace(*args)
+        raise OSError("after publication")
+
+    monkeypatch.setattr(cache_io.os, "replace", replace_then_fail)
+    with pytest.raises(OSError, match="after publication"):
+        service._save_cached_state("conv-1", {"graph": {"new": True}})
+    assert service._load_cached_state("conv-1")["graph"] == {"new": True}
+
+
+def test_cleanup_failure_retains_primary_error_and_reports_residue(
+    cache, monkeypatch, caplog
+):
+    service, _ = cache
+    path = service._get_storage_path("conv-1")
+    unlink = type(path).unlink
+
+    def deny_cleanup(self, **kwargs):
+        if self.suffix == ".tmp":
+            raise OSError("cleanup denied")
+        return unlink(self, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(type(path), "unlink", deny_cleanup)
+        with pytest.raises(TypeError):
+            service._save_cached_state("conv-1", {"graph": object()})
+    assert "cleanup denied" in caplog.text
+    assert not path.exists()
+    residues = list(path.parent.iterdir())
+    assert len(residues) == 1 and residues[0].suffix == ".tmp"
+    residues[0].unlink()

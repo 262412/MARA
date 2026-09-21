@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 from collections import Counter
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ktem.db.engine import engine
+from ktem.docqa.knowledge_graph_cache import save_snapshot
 from ktem.llms.manager import llms
 from ktem.preview.context import preview_access_for_user
 from ktem.preview.service import PreviewService
@@ -158,23 +160,21 @@ class GlobalKnowledgeGraphService:
 
     def _load_cached_state(self, conversation_id: str) -> dict[str, Any]:
         path = self._get_storage_path(conversation_id)
+        empty = dict(
+            conversation_id=conversation_id, schema_version=0, manifest={}, graph=None
+        )
         if not path.exists():
-            return {
-                "conversation_id": conversation_id,
-                "schema_version": 0,
-                "manifest": {},
-                "graph": None,
-            }
+            return empty
         try:
             with path.open("r", encoding="utf-8") as file_obj:
                 data = json.load(file_obj)
+            if not isinstance(data, dict):
+                raise ValueError("Graph cache must contain a JSON object")
         except Exception:
-            return {
-                "conversation_id": conversation_id,
-                "schema_version": 0,
-                "manifest": {},
-                "graph": None,
-            }
+            logging.getLogger(__name__).warning(
+                "Unusable graph cache: %s", path, exc_info=True
+            )
+            return empty
         data.setdefault("conversation_id", conversation_id)
         data.setdefault("schema_version", 0)
         data.setdefault("manifest", {})
@@ -183,8 +183,7 @@ class GlobalKnowledgeGraphService:
 
     def _save_cached_state(self, conversation_id: str, state: dict[str, Any]) -> None:
         path = self._get_storage_path(conversation_id)
-        with path.open("w", encoding="utf-8") as file_obj:
-            json.dump(state, file_obj, ensure_ascii=False, indent=2)
+        save_snapshot(path, state)
 
     def _load_sources(
         self, source_ids: list[str], *, user_id: Any = None
