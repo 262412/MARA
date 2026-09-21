@@ -11,6 +11,8 @@ held_started = Event()
 held_release = Event()
 embedding_started = Event()
 embedding_release = Event()
+deletion_embedding_started = Event()
+deletion_embedding_release = Event()
 
 
 class SubmissionChatModel(ChatLLM):
@@ -46,6 +48,10 @@ class SubmissionEmbeddings(BaseEmbeddings):
             embedding_started.set()
             if not embedding_release.wait(45):
                 raise TimeoutError("Owned browser did not release embedding")
+        if "R5B_DELETE_HELD" in combined:
+            deletion_embedding_started.set()
+            if not deletion_embedding_release.wait(90):
+                raise TimeoutError("Owned browser did not release deletion embedding")
         return [
             DocumentWithEmbedding(content=doc, embedding=[1.0, 0.0, 0.0])
             for doc in documents

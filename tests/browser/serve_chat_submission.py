@@ -28,7 +28,7 @@ def serve(output):
         with pytest.MonkeyPatch.context() as patch:
             with submission_app(patch, runtime.paths.root) as (app, blocks):
                 _indexing_boundaries(patch)
-                observer = IndexingLifetimeObserver(patch)
+                observer = IndexingLifetimeObserver(patch, app.chat_page.file_index)
                 try:
                     _launch(app, blocks, runtime.paths.root, output, observer)
                 finally:

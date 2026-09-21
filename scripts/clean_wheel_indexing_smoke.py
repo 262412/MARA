@@ -11,9 +11,20 @@ from pathlib import Path
 from types import SimpleNamespace
 assert 'PYTHONPATH' not in os.environ
 from kotaemon import artifact_pipeline
-from ktem.index.file import archive
-for module in (artifact_pipeline, archive):
+from ktem.index.file import archive, index_materialization, source_writes
+from ktem.index.file.deterministic_chunks import prepare_chunks_for_indexing
+from kotaemon.base import Document
+for module in (artifact_pipeline, archive, index_materialization, source_writes):
     assert Path(module.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
+borrowed = [Document(text='owned cached input', id_='parser-id')]
+materialized = [index_materialization.materialize_index_chunks(
+    borrowed, namespace='installed_source', file_id=identity, file_name='input.txt',
+    splitter=None, deterministic_chunk_ids=False,
+    prepare_chunks=prepare_chunks_for_indexing,
+) for identity in ('first', 'second')]
+assert borrowed[0].doc_id == 'parser-id' and borrowed[0].metadata == {}
+assert materialized[0][0].doc_id != materialized[1][0].doc_id
+assert all(batch[0].doc_id.startswith('index-chunk:v1:') for batch in materialized)
 entered, release = threading.Event(), threading.Event()
 calls = []
 def produce():

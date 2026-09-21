@@ -338,7 +338,8 @@ async function authenticatedIndexing() {
   const studio = require('./studio_workflows.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});
   const studioPermissions = require('./studio_permissions.cjs')({expect, login, evidence, settled, roles, results});
   const indexingLifetime = require('./indexing_lifetime.cjs')({expect, login, evidence, settled, results, output, base});
-  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime];
+  const indexingCloseout = require('./indexing_closeout.cjs')({expect, login, evidence, settled, send, tailFinished, results, base});
+  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
   for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : !['publicConversationPermissions', 'publicStudioPermissions'].includes(fn.name))) {
     console.log('Starting browser scenario:', scenario.name);
