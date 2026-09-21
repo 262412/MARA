@@ -188,6 +188,7 @@ def _write_ready(output, root, roles, blocks, selector_id):
                     dep["id"]: {
                         "name": blocks.fns[dep["id"]].name,
                         "targets": dep["targets"],
+                        "trigger_after": dep["trigger_after"],
                         "inputs": dep["inputs"],
                         "outputs": dep["outputs"],
                     }

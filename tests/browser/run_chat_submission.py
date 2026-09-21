@@ -88,6 +88,8 @@ def _record_source(repository, output):
         "tests/browser/file_browser_concurrency.cjs",
         "tests/browser/file_browser_barriers.py",
         "tests/browser/index_management.cjs",
+        "tests/browser/group_operations.cjs",
+        "libs/ktem/ktem/index/file/_events.py",
         "tests/browser/indexing_lifetime.cjs",
         "tests/browser/indexing_closeout.cjs",
         "tests/browser/indexing_lifetime_observer.py",

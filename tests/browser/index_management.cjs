@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 module.exports = function ({expect, login, evidence, settled, send, tailFinished, results, output, base}) {
+  const groups = require('./group_operations.cjs')({expect, base, output});
   const manager = page => page.locator('#indices-tab');
   const ownerFiles = (data, username) => data.files.filter(file => file.user === data.users[username]);
 
@@ -118,6 +119,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
     const username = 'browser-controls';
     const {page, queue} = await login(username);
     const names = ['r3d-group-a.txt', 'r3d-group-b.txt'];
+    let closeGate;
     try {
       await openManager(page);
       await upload(page, names);
@@ -129,13 +131,23 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
         await attached.fill(name);
         await page.getByRole('option', {name, exact: true}).click();
       }
+      closeGate = await groups.holdClose(queue, username, 'group-save-close');
       await manager(page).getByRole('button', {name: 'Save', exact: true}).click();
+      await closeGate.entered();
       await expect.poll(async () => (await evidence()).groups.find(group => group.name === 'Owned R3-D group')?.data.files.length).toBe(2);
       const group = (await evidence()).groups.find(group => group.name === 'Owned R3-D group');
-      await manager(page).locator('svelte-virtual-table-viewport').getByText('Owned R3-D group', {exact: true}).click();
+      const exposed = await manager(page).locator('svelte-virtual-table-viewport').getByText('Owned R3-D group', {exact: true}).count();
+      if (exposed) await groups.select(page, queue, 'Owned R3-D group', group.id);
+      await closeGate.release();
+      const closed = await closeGate.applied();
+      results.groupCloseRace = {groupId: group.id, exposed, closed};
+      expect(closed.selected_group_id, 'late save-close must not clear a newer real group selection').toBe(exposed ? group.id : null);
+      if (!exposed) await groups.select(page, queue, 'Owned R3-D group', group.id);
       await expect(manager(page).getByLabel('Group name', {exact: true})).toHaveValue('Owned R3-D group');
       await manager(page).getByRole('button', {name: 'Go to Chat', exact: true}).click();
       await expect(page.locator('#chat-input textarea')).toBeVisible();
+      results.groupOperations ||= [];
+      results.groupOperations.push(await groups.chatApplied(queue, group.id));
       await expect(page.locator('#index-0 .token')).toContainText('Owned R3-D group');
       await expect(page.locator('#chat-file-list .is-selected')).toHaveCount(2);
       await page.getByRole('radio', {name: 'Document', exact: true}).check();
@@ -159,17 +171,14 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
       } finally { await other.page.close(); }
       await openManager(page);
       await manager(page).getByRole('tab', {name: 'Groups', exact: true}).click();
-      const beforeSelection = queue.length;
-      await manager(page).locator('svelte-virtual-table-viewport').getByText('Owned R3-D group', {exact: true}).click();
-      await expect.poll(() => queue.length).toBeGreaterThan(beforeSelection);
-      await settled(queue);
+      await groups.select(page, queue, 'Owned R3-D group', group.id);
       await manager(page).getByLabel('Group name', {exact: true}).fill('Updated R3-D group');
       await manager(page).getByRole('button', {name: 'Save', exact: true}).click();
       await expect.poll(async () => (await evidence()).groups.find(row => row.id === group.id)?.name).toBe('Updated R3-D group');
-      await manager(page).locator('svelte-virtual-table-viewport').getByText('Updated R3-D group', {exact: true}).click();
+      await groups.select(page, queue, 'Updated R3-D group', group.id);
       await manager(page).getByRole('button', {name: 'Close', exact: true}).click();
       expect((await evidence()).groups.some(row => row.id === group.id)).toBe(true);
-      await manager(page).locator('svelte-virtual-table-viewport').getByText('Updated R3-D group', {exact: true}).click();
+      await groups.select(page, queue, 'Updated R3-D group', group.id);
       await manager(page).getByRole('button', {name: 'Delete', exact: true}).click();
       await expect.poll(async () => (await evidence()).groups.some(row => row.id === group.id)).toBe(false);
       await settled(queue);
@@ -177,6 +186,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
       expect(group.data.files.every(id => data.files.some(file => file.id === id))).toBe(true);
       results.scenarios.push({name: 'real-group-create-select-chat-update-close-delete-with-owner-isolation', groupId: group.id, retainedFiles: group.data.files});
     } finally {
+      if (closeGate) await closeGate.release();
       fs.writeFileSync(path.join(output, 'index-groups.html'), await manager(page).innerHTML());
       await page.screenshot({path: path.join(output, 'index-groups.png'), fullPage: true});
       await page.close();
