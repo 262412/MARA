@@ -64,6 +64,7 @@ def _build_turn_response(
     plot_history: list[Any],
     selected_mapping: dict[str, Any],
     graph_source_ids: list[str],
+    user_id: Any = None,
 ) -> DocQAResponse:
     return DocQAResponse(
         conversation_id=session_info.conversation_id,
@@ -89,7 +90,9 @@ def _build_turn_response(
         settings=_serialize_value(prepared.settings),
         stream_events=stream_result.stream_events,
         graph_cache=_serialize_value(
-            runtime.get_conversation_graph_cache(session_info.conversation_id)
+            runtime.get_conversation_graph_cache(
+                session_info.conversation_id, user_id=user_id
+            )
         ),
         **_serialize_value(
             stream_result.capture.as_response_kwargs(
@@ -497,14 +500,11 @@ class DocQARuntime(RuntimeSessionMutationFacade):
         return prepared.pipeline, prepared.reasoning_state
 
     def get_conversation_graph_cache(
-        self, conversation_id: str
+        self, conversation_id: str, *, user_id: Any = None
     ) -> Optional[dict[str, Any]]:
-        if not conversation_id or not self.knowledge_graph:
-            return None
-        try:
-            return self.knowledge_graph._load_cached_state(conversation_id)
-        except Exception:
-            return None
+        return _runtime_graph.read_conversation_cache(
+            self, conversation_id, user_id, engine
+        )
 
     def run_turn(self, request: DocQARequest) -> DocQAResponse:
         (
@@ -696,6 +696,7 @@ class DocQARuntime(RuntimeSessionMutationFacade):
             plot_history=plot_history,
             selected_mapping=selected_mapping,
             graph_source_ids=graph_source_ids,
+            user_id=resolved_user_id,
         )
         return response
 

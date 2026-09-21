@@ -41,18 +41,20 @@ class GraphCacheRequest:
         sources: dict[str, Any],
         *,
         owner_required: bool,
+        register: bool = True,
     ) -> None:
         self.engine, self.index = engine, index
         self.conversation_id, self.user_id = str(conversation_id or "draft"), user_id
         self.sources, self.owner_required = sources, owner_required
         self.draft = self.conversation_id == "draft"
+        self.register = register
         self.token = uuid4().hex
         self.receipt = root / (".request-" + _digest(self.conversation_id) + ".json")
         self.metadata = root / (".snapshot-" + _digest(self.conversation_id) + ".json")
         _ensure_real_directory(root)
         with self._locks():
             self.version, self.conversation = self._snapshot()
-            if not self.draft:
+            if not self.draft and self.register:
                 save_snapshot(self.receipt, {"token": self.token})
 
     @contextmanager
@@ -121,6 +123,7 @@ class GraphCacheRequest:
                 raise GraphCacheInvalidated("Graph input changed during construction")
             if (
                 not self.draft
+                and self.register
                 and load_snapshot(self.receipt, {}).get("token") != self.token
             ):
                 raise GraphCacheInvalidated(
