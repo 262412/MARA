@@ -2,10 +2,12 @@
 
 import os
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+from kotaemon import artifact_transfers as transfers
 from kotaemon.artifact_downloads import DownloadWorkspace
 from kotaemon.artifact_retention import READY_OUTPUT_TTL_SECONDS
 from kotaemon.artifact_transfers import claim_download
@@ -87,3 +89,54 @@ def test_failed_ready_publication_retains_no_claimable_result(
         claim_download(tmp_path, "file", workspace.directory.name, ".html", CONTEXT)
     workspace.cleanup()
     assert not workspace.directory.exists()
+
+
+@pytest.mark.parametrize(
+    "receipt",
+    [b"{", b"x" * 8193, b'{"owner":"bob"}'],
+    ids=["corrupt", "oversized", "foreign_scope"],
+)
+def test_invalid_ready_receipt_releases_every_claim_descriptor(
+    tmp_path, monkeypatch, receipt
+):
+    _workspace, path = _publish(tmp_path)
+    (path.parent / ".ready").write_bytes(receipt)
+    open_root, close_fd = transfers.open_directory_fd, os.close
+    opened, closed = [], []
+
+    def track_root(*args, **kwargs):
+        result = open_root(*args, **kwargs)
+        opened.append(result[1])
+        return result
+
+    def track_acquisition(operation):
+        def acquire(*args, **kwargs):
+            fd = operation(*args, **kwargs)
+            if fd is not None:
+                opened.append(fd)
+            return fd
+
+        return acquire
+
+    def track_close(fd):
+        close_fd(fd)
+        if fd in opened:
+            closed.append(fd)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(transfers, "open_directory_fd", track_root)
+        for name in (
+            "open_child_directory",
+            "_acquire_lifecycle_lock",
+            "_open_regular_entry",
+        ):
+            patch.setattr(transfers, name, track_acquisition(getattr(transfers, name)))
+        patch.setattr(os, "close", track_close)
+        with pytest.raises(ArtifactNamespaceError):
+            claim_download(tmp_path, "file", path.parent.name, ".html", CONTEXT)
+    assert opened and Counter(opened) == Counter(closed)
+    for fd in set(opened):
+        with pytest.raises(OSError):
+            os.fstat(fd)
+    assert path.read_bytes() == b"owned"
+    assert (path.parent / ".ready").read_bytes() == receipt

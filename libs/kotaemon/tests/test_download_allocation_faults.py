@@ -75,3 +75,78 @@ def test_allocation_preserves_scan_failure_after_close_error(tmp_path, monkeypat
     with pytest.raises(RuntimeError, match="primary scan failure"):
         retention.allocate_workspace(tmp_path, "owned")
     assert closed == [lock_fd, fd]
+
+
+@pytest.mark.parametrize("secondary", [None, "unlink", "close", "rmdir"])
+def test_unlock_failure_discards_completed_allocation_and_preserves_primary(
+    tmp_path, monkeypatch, secondary
+):
+    # Real handles exercise release; directory operations are portable fault seams.
+    descriptors = {
+        name: os.open(tmp_path / name, os.O_CREAT | os.O_RDWR, 0o600)
+        for name in ("root", "lock", "parent", "request", "active")
+    }
+    close = os.close
+    closed, removed = [], []
+    unrelated = tmp_path / "unrelated"
+    unrelated.write_bytes(b"preserve")
+    allocation = retention.WorkspaceAllocation(
+        tmp_path / "owned",
+        "owned",
+        descriptors["parent"],
+        descriptors["request"],
+        descriptors["active"],
+    )
+
+    def unlock(*args):
+        raise OSError("primary unlock failure")
+
+    def close_owned(fd):
+        closed.append(fd)
+        close(fd)
+        if secondary == "close" and fd == descriptors["active"]:
+            raise OSError("secondary close failure")
+
+    def unlink(fd, name):
+        removed.append((fd, name))
+        if secondary == "unlink":
+            raise OSError("secondary unlink failure")
+
+    def rmdir(name, *, dir_fd):
+        removed.append((dir_fd, name))
+        if secondary == "rmdir":
+            raise OSError("secondary rmdir failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            retention,
+            "_require_lifecycle_lock",
+            lambda: SimpleNamespace(flock=unlock, LOCK_UN=8),
+        )
+        patch.setattr(
+            retention,
+            "open_directory_fd",
+            lambda *a, **kw: (tmp_path, descriptors["root"]),
+        )
+        patch.setattr(
+            retention, "_acquire_lifecycle_lock", lambda *_: descriptors["lock"]
+        )
+        patch.setattr(retention, "_scan_and_prune", lambda *_: [])
+        patch.setattr(retention, "_prune_ready_limits", lambda *args: args[1])
+        patch.setattr(retention, "_allocate_locked", lambda *_: allocation)
+        patch.setattr(retention, "unlink_at", unlink)
+        patch.setattr(retention.os, "rmdir", rmdir)
+        patch.setattr(retention.os, "close", close_owned)
+        with pytest.raises(OSError, match="primary unlock failure"):
+            retention.allocate_workspace(tmp_path, "file")
+    assert closed == [
+        descriptors[key] for key in ("lock", "root", "active", "request", "parent")
+    ]
+    assert removed == [
+        (descriptors["request"], ".active"),
+        (descriptors["parent"], "owned"),
+    ]
+    for fd in descriptors.values():
+        with pytest.raises(OSError):
+            os.fstat(fd)
+    assert unrelated.read_bytes() == b"preserve"
