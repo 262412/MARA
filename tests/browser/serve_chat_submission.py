@@ -11,6 +11,7 @@ from pathlib import Path
 
 from file_browser_barriers import FileBrowserBarriers
 from indexing_lifetime_observer import IndexingLifetimeObserver
+from web_operation_observer import bind_operation_observer
 from web_seam_observer import studio_exports
 
 from pytest_runtime_isolation import start_process_test_runtime
@@ -71,6 +72,7 @@ def _launch(app, blocks, root, output, observer):
     page = app.chat_page
     barriers = FileBrowserBarriers()
     trace, writes = _observe(page, barriers)
+    operations = bind_operation_observer(blocks, page, barriers)
     dependencies = blocks.config["dependencies"]
     start = next(
         i
@@ -111,6 +113,7 @@ def _launch(app, blocks, root, output, observer):
 
     barriers.bind_delivery(blocks._queue)
     _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers)
+    blocks.app.get("/owned-web-operations")(lambda: list(operations))
     _bind_indexing_lifetime_routes(blocks, observer)
 
     _write_ready(output, root, roles, blocks, page._indices_input[1]._id)

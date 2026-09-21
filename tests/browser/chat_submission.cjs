@@ -16,6 +16,16 @@ async function evidence() {
 
 async function login(username = 'browser-owner', {initialize = true} = {}) {
   const page = await browser.newPage({locale: 'en-US', viewport: {width: 1600, height: 1200}});
+  await page.addInitScript(require('./web_operation_observer.cjs').install);
+  const originalClose = page.close.bind(page);
+  page.close = async (...args) => {
+    if (!page.isClosed()) {
+      results.webOperations ||= [];
+      results.webOperations.push({username, sessionHash: queue.sessionHash,
+        records: await page.evaluate(() => window.ownedWebOperations || [])});
+    }
+    return originalClose(...args);
+  };
   page.on('pageerror', error => results.errors.push(String(error)));
   const queue = [];
   queue.requestOrder = new WeakMap();
@@ -347,6 +357,7 @@ async function authenticatedIndexing() {
     catch (error) { results.scenarios.push({name: scenario.name, failure: error.stack}); console.log('Failed browser scenario:', scenario.name, error.stack); }
   }
   results.evidence = await evidence();
+  results.serverOperations = await (await fetch(base + '/owned-web-operations')).json();
   for (const failure of results.evidence.callbacks.filter(item => item.preview_failed)) {
     // Deleting an owned source revokes an already queued timer request too.
     // Require that precise authorization failure; all other preview errors fail.

@@ -113,10 +113,13 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
       const ids = () => page.locator('#chat-file-list [data-chat-file-id]').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId));
       const initial = await ids();
       await control('/arm', {key: old, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
+      await page.evaluate(() => { window.ownedWebAction = 'ABA-first-A'; });
       await filter.fill('.txt');
       await expect.poll(async () => (await control(''))[old]?.entered).toBe(true);
       await control('/arm', {key: latest, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
+      await page.evaluate(() => { window.ownedWebAction = 'ABA-B'; });
       await filter.fill('.png');
+      await page.evaluate(() => { window.ownedWebAction = 'ABA-last-A'; });
       await filter.fill('.txt');
       await control('/release/' + old, {});
       await expect.poll(async () => (await control(''))[latest]?.entered).toBe(true);

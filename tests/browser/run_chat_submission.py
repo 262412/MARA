@@ -105,6 +105,8 @@ def _record_source(repository, output):
         "tests/browser/studio_permissions.cjs",
         "libs/ktem/ktem/pages/chat/studio_callback_identity.py",
         "tests/browser/web_seam_observer.py",
+        "tests/browser/web_operation_observer.py",
+        "tests/browser/web_operation_observer.cjs",
         "libs/ktem/ktem_tests/file_browser_app_fixture.py",
         "libs/ktem/ktem_tests/chat_submission_model_fixture.py",
         "tests/browser/run_chat_submission.py",

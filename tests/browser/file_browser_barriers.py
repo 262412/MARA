@@ -4,6 +4,8 @@ import asyncio
 import threading
 from types import SimpleNamespace
 
+from web_operation_observer import current_operation
+
 
 class FileBrowserBarriers:
     def __init__(self):
@@ -44,6 +46,7 @@ class FileBrowserBarriers:
                     "completed": gate["completed"],
                     "session_hash": gate.get("session_hash"),
                     "returned_ids": gate.get("returned_ids"),
+                    "operation": gate.get("operation"),
                 }
                 for key, gate in self.gates.items()
             }
@@ -58,11 +61,14 @@ class FileBrowserBarriers:
 
     def _claim(self, name, event, values, result):
         request = values.get("request")
+        operation = current_operation.get()
         with self.lock:
             matched = None
             for gate in self.gates.values():
                 spec = gate["spec"]
                 if gate["entered"] or name != spec["callback"]:
+                    continue
+                if "function_id" in spec and operation.get("fn") != spec["function_id"]:
                     continue
                 if event != spec.get("event", "return"):
                     continue
@@ -79,7 +85,16 @@ class FileBrowserBarriers:
                     continue
                 if "file_id" in spec and values.get("file_id") != spec["file_id"]:
                     continue
+                if (
+                    "filter_version" in spec
+                    and operation.get("inputs", {})
+                    .get("stamp", {})
+                    .get("filterVersion")
+                    != spec["filter_version"]
+                ):
+                    continue
                 gate["entered"] = True
+                gate["operation"] = operation
                 gate["session_hash"] = getattr(request, "session_hash", None)
                 if name == "ChatPage.refresh_chat_file_list" and result:
                     gate["returned_ids"] = [row["id"] for row in result[0]]
