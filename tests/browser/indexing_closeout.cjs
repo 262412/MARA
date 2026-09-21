@@ -52,7 +52,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
       expect(replacement.id).not.toBe(old.id);
       const currentTargets = targets(await snapshot(), replacement.id);
       expect(currentTargets.length).toBeGreaterThan(0);
-      await fetch(base + '/owned-indexing-lifetime/release', {method: 'POST'});
+      await fetch(base + '/owned-indexing-lifetime/release-deletion', {method: 'POST'});
       await expect(manager(original.page).getByLabel('Upload result', {exact: true})).toHaveValue(/Source removed during indexing/, {timeout: 30000});
       await settled(original.queue);
       const after = await snapshot();
@@ -62,7 +62,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
       expect(currentTargets.every(id => after.persistence.vector_ids.includes(id) && after.persistence.document_ids.includes(id))).toBe(true);
       results.scenarios.push({name: 'real-ui-delete-replace-reject-late-writer', old: old.id, replacement: replacement.id, before, after});
     } finally {
-      await fetch(base + '/owned-indexing-lifetime/release', {method: 'POST'});
+      await fetch(base + '/owned-indexing-lifetime/release-deletion', {method: 'POST'});
       await original.page.close();
       if (second) await second.page.close();
     }

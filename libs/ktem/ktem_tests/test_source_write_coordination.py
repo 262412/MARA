@@ -1,11 +1,16 @@
 """Real-store deletion barriers protect both writes and relation registration."""
 
 import logging
+import os
+import sys
 import threading
 from concurrent.futures import CancelledError
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
+from ktem.index.file import source_writes
 from ktem.index.file.deletion import DeletionCoordinator
 from ktem.index.file.source_writes import source_lock
 
@@ -181,3 +186,42 @@ def test_wrong_owner_is_rejected_before_any_persistent_write(backend):
     assert support.rows(backend, "Index") == []
     assert backend.vectors._collection.get()["ids"] == []
     assert support.rows(backend, "Source")[0].user == "alice"
+
+
+@pytest.mark.parametrize("fail_unlock", [False, True])
+def test_windows_release_closes_owned_descriptor_without_removing_shared_lock_path(
+    tmp_path, monkeypatch, fail_unlock
+):
+    # Real Windows process tests cover locking. This portable test also forces
+    # unlock failure, which must still close only this lease's owned descriptor.
+    path = tmp_path / "owned.lock"
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR)
+    context = SimpleNamespace(lock_file_fd=descriptor)
+    lease = cast(source_writes._SourceFileLock, SimpleNamespace(_context=context))
+    calls = []
+    failure = OSError("owned unlock failure")
+
+    def unlock(fd, operation, length):
+        calls.append((fd, operation, length))
+        if fail_unlock:
+            raise failure
+
+    monkeypatch.setitem(
+        sys.modules, "msvcrt", SimpleNamespace(locking=unlock, LK_UNLCK=0)
+    )
+    monkeypatch.setattr(source_writes, "os", SimpleNamespace(name="nt", close=os.close))
+    try:
+        if fail_unlock:
+            with pytest.raises(OSError) as caught:
+                source_writes._SourceFileLock._release(lease)
+            assert caught.value is failure
+        else:
+            source_writes._SourceFileLock._release(lease)
+        assert calls == [(descriptor, 0, 1)]
+        assert context.lock_file_fd is None
+        with pytest.raises(OSError):
+            os.fstat(descriptor)
+        assert path.exists()
+    finally:
+        if context.lock_file_fd is not None:
+            os.close(context.lock_file_fd)

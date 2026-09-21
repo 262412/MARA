@@ -121,6 +121,11 @@ def _launch(app, blocks, root, output, observer):
         observer.release()
         return {"released": True}
 
+    @blocks.app.post("/owned-indexing-lifetime/release-deletion")
+    def release_deletion_embedding():
+        observer.release_deletion()
+        return {"released": True}
+
     _write_ready(output, root, roles, blocks, page._indices_input[1]._id)
     deadline = time.monotonic() + 600
     try:

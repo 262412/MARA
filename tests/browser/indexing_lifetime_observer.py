@@ -84,9 +84,12 @@ class IndexingLifetimeObserver:
 
     def release(self):
         self.model.embedding_release.set()
+
+    def release_deletion(self):
         self.model.deletion_embedding_release.set()
 
     def close(self):
         self.release()
+        self.release_deletion()
         for writer in self.writers:
             writer.wait_until_stopped()
