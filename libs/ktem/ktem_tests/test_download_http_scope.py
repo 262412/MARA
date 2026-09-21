@@ -135,6 +135,12 @@ def test_generated_download_does_not_become_a_shared_gradio_cache_file(download_
     response = fixture.other.get(fixture.url)
     assert response.status_code in {403, 404}
     assert b"OWNER-BYTES" not in response.content
+    assert "/mara-download/" in fixture.url
+    assert not any(
+        "download-" in str(path)
+        for files in fixture.blocks.temp_file_sets
+        for path in files
+    )
 
 
 @pytest.mark.parametrize("change", ["delete", "revoke"])
@@ -150,3 +156,22 @@ def test_http_get_revalidates_source_after_generation(download_app, change):
             session.add(source)
         session.commit()
     assert fixture.owner.get(fixture.url).status_code in {403, 404}
+
+
+def test_http_bytes_head_range_and_native_capability(download_app):
+    fixture = download_app
+    response = fixture.owner.get(fixture.url)
+    if os.name != "posix":
+        assert response.status_code == 503
+        assert b"OWNER-BYTES" not in response.content
+        return
+    assert response.status_code == 200
+    assert response.content == b"OWNER-BYTES"
+    assert response.headers["cache-control"] == "private, no-store"
+    head = fixture.owner.head(fixture.url)
+    assert head.status_code == 200 and head.content == b""
+    assert head.headers["content-length"] == str(len(b"OWNER-BYTES"))
+    partial = fixture.owner.get(fixture.url, headers={"Range": "bytes=2-5"})
+    assert partial.status_code == 206 and partial.content == b"NER-"
+    assert partial.headers["content-range"] == "bytes 2-5/11"
+    assert fixture.owner.get(fixture.url, headers={"Range": "bytes=80-90"}).status_code == 416
