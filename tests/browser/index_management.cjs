@@ -236,5 +236,47 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
     }
   }
 
-  return [indexManagement, indexGroups, deletedSourcePreviewRevocation];
+  async function downloadAuthorizationAndPlatform() {
+    const owner = await login('browser-controls');
+    const other = await login('browser-other');
+    const name = 'r5c-owned-download.txt';
+    const ready = JSON.parse(fs.readFileSync(path.join(output, 'ready.json')));
+    try {
+      await openManager(owner.page);
+      await upload(owner.page, [name]);
+      const file = ownerFiles(await evidence(), 'browser-controls').find(row => row.name === name);
+      await selectFile(owner.page, name);
+      const before = owner.queue.length;
+      await manager(owner.page).getByRole('button', {name: 'Download', exact: true}).click();
+      await expect.poll(() => owner.queue.length).toBeGreaterThan(before);
+      await settled(owner.queue);
+      let url;
+      if (ready.native_platform === 'nt') {
+        await expect(owner.page.getByText('File export is unavailable; reindex the file and try again.', {exact: true})).toBeVisible();
+        await expect(manager(owner.page).locator('a[href*="/mara-download/"]')).toHaveCount(0);
+        const request = '0'.repeat(32);
+        url = `${base}/mara-download/${ready.download_index_id}/${file.id}/${request}/download-${request}.zip`;
+        expect((await owner.page.request.get(url)).status()).toBe(503);
+      } else {
+        const link = manager(owner.page).locator('a[href*="/mara-download/"]');
+        await expect(link).toHaveCount(1);
+        url = await link.getAttribute('href');
+        const response = await owner.page.request.get(url);
+        expect(response.status()).toBe(200);
+        expect((await response.body()).subarray(0, 2).toString()).toBe('PK');
+      }
+      expect((await other.page.request.get(url)).status()).toBe(404);
+      await manager(owner.page).getByRole('button', {name: 'Delete', exact: true}).click();
+      await expect.poll(async () => (await evidence()).files.some(row => row.id === file.id)).toBe(false);
+      await settled(owner.queue);
+      expect((await owner.page.request.get(url)).status()).toBe(404);
+      results.scenarios.push({name: 'download-current-owner-revocation-and-native-capability', fileId: file.id, platform: ready.native_platform});
+    } finally {
+      await owner.page.screenshot({path: path.join(output, 'download-lifecycle.png'), fullPage: true});
+      await owner.page.close();
+      await other.page.close();
+    }
+  }
+
+  return [indexManagement, indexGroups, deletedSourcePreviewRevocation, downloadAuthorizationAndPlatform];
 };

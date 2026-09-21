@@ -119,7 +119,9 @@ def _launch(app, blocks, root, output, observer):
     blocks.app.get("/owned-web-operations")(lambda: list(operations))
     _bind_indexing_lifetime_routes(blocks, observer)
 
-    _write_ready(output, root, roles, blocks, page._indices_input[1]._id)
+    _write_ready(
+        output, root, roles, blocks, page._indices_input[1]._id, page.file_index.id
+    )
     deadline = time.monotonic() + 600
     try:
         while time.monotonic() < deadline and not (output / "stop").exists():
@@ -174,7 +176,7 @@ def _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers)
         return barriers.release(key)
 
 
-def _write_ready(output, root, roles, blocks, selector_id):
+def _write_ready(output, root, roles, blocks, selector_id, download_index_id):
     import gradio
 
     dependencies = blocks.config["dependencies"]
@@ -184,6 +186,8 @@ def _write_ready(output, root, roles, blocks, selector_id):
                 "roles": roles,
                 "gradio": gradio.__version__,
                 "root": str(root),
+                "native_platform": os.name,
+                "download_index_id": download_index_id,
                 "initial_selection_events": _initial_selection_events(
                     dependencies, selector_id
                 ),
