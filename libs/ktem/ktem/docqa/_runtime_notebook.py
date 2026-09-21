@@ -18,6 +18,7 @@ from .artifact_models import (
     build_artifact_record,
     normalize_artifact,
 )
+from .conversation_lifetime import conversation_write
 
 NOTEBOOK_KEY = "mara_notebook"
 
@@ -333,7 +334,7 @@ def save_artifact_to_conversation(
     generation: dict[str, Any] | None = None,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with Session(engine) as session:
+    with conversation_write(engine, conversation_id), Session(engine) as session:
         row = _load_conversation(
             session, conversation_id, user_id=user_id, access="write"
         )
@@ -364,7 +365,7 @@ def delete_artifact_from_conversation(
     *,
     user_id: Any,
 ) -> dict[str, Any]:
-    with Session(engine) as session:
+    with conversation_write(engine, conversation_id), Session(engine) as session:
         row = _load_conversation(
             session, conversation_id, user_id=user_id, access="write"
         )
@@ -385,7 +386,7 @@ def record_artifact_export_to_conversation(
     path: str,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with Session(engine) as session:
+    with conversation_write(engine, conversation_id), Session(engine) as session:
         row = _load_conversation(
             session, conversation_id, user_id=user_id, access="write"
         )
@@ -492,7 +493,7 @@ def add_note_to_conversation(
     note_id: str | None = None,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with Session(engine) as session:
+    with conversation_write(engine, conversation_id), Session(engine) as session:
         row = _load_conversation(
             session, conversation_id, user_id=user_id, access="write"
         )
@@ -520,7 +521,7 @@ def save_answer_note_to_conversation(
     note_id: str | None = None,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with Session(engine) as session:
+    with conversation_write(engine, conversation_id), Session(engine) as session:
         row = _load_conversation(
             session, conversation_id, user_id=user_id, access="write"
         )
@@ -545,7 +546,7 @@ def select_conversation_sources(
     *,
     user_id: Any,
 ) -> list[str]:
-    with Session(engine) as session:
+    with conversation_write(engine, conversation_id), Session(engine) as session:
         row = _load_conversation(
             session, conversation_id, user_id=user_id, access="write"
         )
@@ -566,7 +567,7 @@ def record_note_indexed_source_to_conversation(
     source_path: str,
     timestamp: str | None = None,
 ) -> dict[str, Any]:
-    with Session(engine) as session:
+    with conversation_write(engine, conversation_id), Session(engine) as session:
         row = _load_conversation(
             session, conversation_id, user_id=user_id, access="write"
         )

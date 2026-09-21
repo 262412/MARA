@@ -7,6 +7,7 @@ from ktem.db.models import Conversation
 from sqlmodel import Session, select
 
 from . import _runtime_selection as _selection
+from .conversation_lifetime import conversation_write
 
 
 class RuntimeSessionMutationService:
@@ -21,7 +22,9 @@ class RuntimeSessionMutationService:
 
     def delete_session(self, conversation_id: str, user_id: Any = None) -> None:
         resolved_user_id = self._resolve_user_id(user_id)
-        with Session(self._engine) as session:
+        with conversation_write(self._engine, conversation_id), Session(
+            self._engine
+        ) as session:
             row = self._owner_row(session, conversation_id, resolved_user_id)
             session.delete(row)
             session.commit()
@@ -33,7 +36,9 @@ class RuntimeSessionMutationService:
         user_id: Any = None,
     ) -> None:
         resolved_user_id = self._resolve_user_id(user_id)
-        with Session(self._engine) as session:
+        with conversation_write(self._engine, conversation_id), Session(
+            self._engine
+        ) as session:
             row = self._owner_row(session, conversation_id, resolved_user_id)
             row.name = name
             session.add(row)
@@ -46,7 +51,9 @@ class RuntimeSessionMutationService:
         user_id: Any = None,
     ) -> None:
         resolved_user_id = self._resolve_user_id(user_id)
-        with Session(self._engine) as session:
+        with conversation_write(self._engine, conversation_id), Session(
+            self._engine
+        ) as session:
             row = self._owner_row(session, conversation_id, resolved_user_id)
             data_source = deepcopy(row.data_source or {})
             data_source["chat_suggestions"] = [[item] for item in suggestions]
@@ -61,7 +68,9 @@ class RuntimeSessionMutationService:
         user_id: Any = None,
     ) -> str:
         resolved_user_id = self._resolve_user_id(user_id)
-        with Session(self._engine) as session:
+        with conversation_write(self._engine, conversation_id), Session(
+            self._engine
+        ) as session:
             row = self._owner_row(session, conversation_id, resolved_user_id)
             if row.is_public != bool(is_public):
                 row.is_public = bool(is_public)
@@ -77,7 +86,9 @@ class RuntimeSessionMutationService:
     ) -> list[str]:
         resolved_user_id = self._resolve_user_id(user_id)
         normalized_ids = _selection.merge_unique_file_ids(source_ids)
-        with Session(self._engine) as session:
+        with conversation_write(self._engine, conversation_id), Session(
+            self._engine
+        ) as session:
             row = self._owner_row(session, conversation_id, resolved_user_id)
             data_source = deepcopy(row.data_source or {})
             if data_source.get("graph_source_ids") != normalized_ids:
@@ -97,7 +108,9 @@ class RuntimeSessionMutationService:
     ) -> None:
         """Record feedback only when the authenticated user owns the session."""
         resolved_user_id = self._resolve_user_id(user_id)
-        with Session(self._engine) as session:
+        with conversation_write(self._engine, conversation_id), Session(
+            self._engine
+        ) as session:
             row = self._owner_row(session, conversation_id, resolved_user_id)
             data_source = deepcopy(row.data_source or {})
             likes = list(data_source.get("likes", []) or [])

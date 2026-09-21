@@ -11,6 +11,7 @@ from . import _runtime_selection as _selection
 from . import _runtime_sessions as _sessions
 from . import session_projection
 from ._runtime_models import DocQASession, DocQASessionSummary
+from .conversation_lifetime import conversation_write
 
 
 class RuntimeSessionService:
@@ -103,7 +104,9 @@ class RuntimeSessionService:
             return []
 
         resolved_user_id = self._resolve_user_id(user_id)
-        with Session(self._engine) as session:
+        with conversation_write(self._engine, conversation_id), Session(
+            self._engine
+        ) as session:
             row = session.exec(
                 select(Conversation).where(
                     Conversation.id == conversation_id,
@@ -227,7 +230,9 @@ class RuntimeSessionService:
             state=state,
         )
 
-        with Session(self._engine) as session:
+        with conversation_write(self._engine, conversation_id), Session(
+            self._engine
+        ) as session:
             statement = select(Conversation).where(Conversation.id == conversation_id)
             row = session.exec(statement).one()
             if row.user != resolved_user_id and not row.is_public:
