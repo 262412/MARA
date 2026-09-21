@@ -28,7 +28,9 @@ def load_snapshot(path: Path, defaults: dict[str, Any]) -> dict[str, Any]:
             data = json.load(stream)
         if not isinstance(data, dict):
             raise ValueError("Graph cache must contain a JSON object")
-    except Exception:
+    except FileNotFoundError:
+        return defaults
+    except ValueError:
         logger.warning("Unusable graph cache: %s", path, exc_info=True)
         return defaults
     for key, value in defaults.items():
