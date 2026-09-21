@@ -234,12 +234,12 @@ def _register_group_save_event(page, on_group_closed_event):
                 page._app.user_id,
             ],
         )
+        .then(**on_group_closed_event)
         .then(
             fn=page.list_group,
             inputs=[page._app.user_id, page.file_list_state],
             outputs=[page.group_list_state, page.group_list],
         )
-        .then(**on_group_closed_event)
     )
 
 
@@ -249,12 +249,12 @@ def _register_group_delete_event(page, on_group_closed_event):
             fn=page.delete_group,
             inputs=[page.selected_group_id, page._app.user_id],
         )
+        .then(**on_group_closed_event)
         .then(
             fn=page.list_group,
             inputs=[page._app.user_id, page.file_list_state],
             outputs=[page.group_list_state, page.group_list],
         )
-        .then(**on_group_closed_event)
     )
 
 
