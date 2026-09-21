@@ -1,10 +1,13 @@
 import threading
+from copy import deepcopy
 
 import pytest
 from ktem.index.file import pipelines
 from ktem.index.file.deletion import DeletionCoordinator
 
 from kotaemon import artifact_namespace
+from kotaemon.artifact_pipeline import finish_indexing
+from kotaemon.base import Document
 
 from . import indexing_backend_test_support as support
 
@@ -140,23 +143,72 @@ def test_delete_during_embedding_rejects_all_late_persistent_writes(
     assert backend.documents.query("lateunique") == []
 
 
-def test_unsplit_cache_replay_exposes_shared_identity_blocker(backend, request):
-    """The supported no-splitter variant retains cached IDs across source owners."""
+@pytest.mark.parametrize("delete_first", [0, 1])
+def test_unsplit_cache_replay_uses_independent_persistent_identities(
+    backend, delete_first
+):
+    """Parser IDs may be reused; persistent documents and vectors must not be."""
     backend.source.write_text("unsplitunique input", encoding="utf-8")
     document_ids = []
     source_ids = []
+    pipelines_by_source = []
     for owner in ("alice", "bob"):
         pipeline = backend.pipeline(owner)
         pipeline.splitter = None
         _, (source_id, docs) = support.drain(pipeline.stream(backend.source, False))
         source_ids.append(source_id)
         document_ids.append([doc.doc_id for doc in docs])
+        pipelines_by_source.append(pipeline)
+        if owner == "bob":
+            assert pipeline.last_parse_cache_stats["hits"] == 1
     assert source_ids[0] != source_ids[1]
     assert document_ids[0] == document_ids[1]
-    assert len(backend.vectors._collection.get()["ids"]) == 1
-    request.node.user_properties.append(
-        (
-            "r5b_remaining_blocker",
-            "splitter=None and shared parse cache reuse document IDs across owners; cache/identity policy unchanged",
-        )
-    )
+    targets = [
+        [
+            row.target_id
+            for row in support.rows(backend, "Index")
+            if row.source_id == identity and row.relation_type == "document"
+        ]
+        for identity in source_ids
+    ]
+    assert targets[0] and targets[1] and not set(targets[0]).intersection(targets[1])
+    assert len(backend.vectors._collection.get()["ids"]) == 2
+    pipelines_by_source[delete_first].delete_file(source_ids[delete_first])
+    remaining = 1 - delete_first
+    assert backend.vectors._collection.get()["ids"] == targets[remaining]
+    retrieved = backend.documents.query("unsplitunique")
+    assert [doc.doc_id for doc in retrieved] == targets[remaining]
+    assert retrieved[0].metadata["file_id"] == source_ids[remaining]
+    assert support.rows(backend, "Source")[0].id == source_ids[remaining]
+
+
+def test_index_materialization_does_not_mutate_borrowed_parser_documents(backend):
+    backend.source.write_text("borrowedunique input", encoding="utf-8")
+    pipeline = backend.pipeline(threaded=False)
+    pipeline.splitter = None
+    pipeline.deterministic_chunk_ids = True
+    file_id = pipeline.store_file(backend.source)
+    documents = [
+        Document(
+            text="borrowedunique",
+            id_="parser-text",
+            metadata={
+                "type": "text",
+                "page_label": "1",
+                "file_id": file_id,
+            },
+        ),
+        Document(
+            text="thumbnail",
+            id_="parser-image",
+            metadata={
+                "type": "thumbnail",
+                "page_label": "1",
+                "file_id": file_id,
+            },
+        ),
+    ]
+    before = deepcopy([document.dict() for document in documents])
+    list(pipeline.handle_docs(documents, file_id, backend.source.name))
+    finish_indexing(pipeline, file_id, backend.source)
+    assert [document.dict() for document in documents] == before
