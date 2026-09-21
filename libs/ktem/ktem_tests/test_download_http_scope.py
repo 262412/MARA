@@ -95,19 +95,11 @@ def download_app(tmp_path, monkeypatch):
 
 
 def _http_app(page, index, engine):
-    # Kept until the red run: the original app has no scoped transport route.
-    try:
-        from ktem.index.file.download_http import DownloadButton as ButtonClass
-        from ktem.index.file.download_http import download_app_kwargs
-    except ImportError:
-        button_class = gr.DownloadButton
-        kwargs = {}
-    else:
-        button_class = ButtonClass
-        kwargs = download_app_kwargs(
-            SimpleNamespace(index_manager=SimpleNamespace(indices=[index])),
-            engine=engine,
-        )
+    from ktem.index.file.download_http import DownloadButton, download_app_kwargs
+
+    kwargs = download_app_kwargs(
+        SimpleNamespace(index_manager=SimpleNamespace(indices=[index])), engine=engine
+    )
     with gr.Blocks(analytics_enabled=False) as blocks:
         state, html, file_id, user_id = (
             gr.Checkbox(),
@@ -115,7 +107,7 @@ def _http_app(page, index, engine):
             gr.Textbox(),
             gr.Textbox(),
         )
-        button = button_class()
+        button = DownloadButton()
         button.click(
             page.download_single_file_simple,
             [state, html, file_id, user_id],
@@ -174,4 +166,7 @@ def test_http_bytes_head_range_and_native_capability(download_app):
     partial = fixture.owner.get(fixture.url, headers={"Range": "bytes=2-5"})
     assert partial.status_code == 206 and partial.content == b"NER-"
     assert partial.headers["content-range"] == "bytes 2-5/11"
-    assert fixture.owner.get(fixture.url, headers={"Range": "bytes=80-90"}).status_code == 416
+    assert (
+        fixture.owner.get(fixture.url, headers={"Range": "bytes=80-90"}).status_code
+        == 416
+    )
