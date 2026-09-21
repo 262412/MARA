@@ -87,6 +87,12 @@ module.exports = function ({expect, login, evidence, settled, send, selectSource
     try {
       await selectSource(page);
       const viewer = page.frameLocator('#main-pdf-preview-frame');
+      // The iframe HTML exposes controls before the PDF.js module binds them.
+      // Assert the viewer's actual readiness before the one search click.
+      await expect.poll(() => viewer.locator('body').evaluate(() => Boolean(
+        globalThis.PDFViewerApplication?.initialized &&
+        globalThis.PDFViewerApplication?.pdfDocument
+      )), {timeout: 15000}).toBe(true);
       await viewer.locator('#viewFindButton').click();
       await viewer.locator('#findInput').fill('telescopes');
       await expect.poll(async () => JSON.parse(await viewer.locator('#findResultsCount').getAttribute('data-l10n-args') || '{}')).toMatchObject({current: 1, total: 1});
