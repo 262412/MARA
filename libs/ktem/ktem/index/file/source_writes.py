@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from contextlib import AbstractContextManager, contextmanager
 from hashlib import sha256
 from pathlib import Path
@@ -24,7 +25,7 @@ from .storage_lifetime import _ensure_real_directory, _ensure_root, _require_reg
 
 class _SourceFileLock(FileLock):
     def _release(self) -> None:
-        if os.name != "nt":
+        if sys.platform != "win32":
             return super()._release()
         # filelock 3.19.1 otherwise unlinks on Windows. Keep the inode for waiters.
         import msvcrt

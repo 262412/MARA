@@ -209,7 +209,7 @@ def test_windows_release_closes_owned_descriptor_without_removing_shared_lock_pa
     monkeypatch.setitem(
         sys.modules, "msvcrt", SimpleNamespace(locking=unlock, LK_UNLCK=0)
     )
-    monkeypatch.setattr(source_writes, "os", SimpleNamespace(name="nt", close=os.close))
+    monkeypatch.setattr(source_writes, "sys", SimpleNamespace(platform="win32"))
     try:
         if fail_unlock:
             with pytest.raises(OSError) as caught:
