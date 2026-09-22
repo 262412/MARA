@@ -1,6 +1,7 @@
 // Finite controlled full-App interleavings; separate from the original 37 records.
 const fs = require('node:fs');
 const path = require('node:path');
+const exit = require('./browser_exit.cjs');
 
 module.exports = ({expect, login, evidence, send, tailFinished, results, output, base, ready}) => {
   async function control(route, spec) {
@@ -49,13 +50,18 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
       await setup.selected(b.id, start);
       await expect(page.locator('#chat-selected-file')).toContainText('.txt');
       results.scenarios.push({name: 'conversation-focus-' + timing, a, b, session: queue.sessionHash, gate: (await control(''))[key]});
+    } catch (error) {
+      exit.primary(results, output, error);
+      throw error;
     } finally {
-      if ((await control(''))[key]) await control('/release/' + key, {});
-      fs.writeFileSync(path.join(output, key + '.json'), JSON.stringify({a, b, queue, requestIds: queue.requestIds,
-        session: queue.sessionHash, gate: (await control(''))[key], dom: await page.evaluate(() => window.ownedConversationTrace)}, null, 2));
-      fs.writeFileSync(path.join(output, key + '.html'), await page.content());
-      await page.context().tracing.stop({path: path.join(output, key + '.zip')});
-      await page.close();
+      await exit.cleanup(results, [
+        ['focus snapshot', async () => fs.writeFileSync(path.join(output, key + '.json'), JSON.stringify({a, b, queue, requestIds: queue.requestIds,
+          session: queue.sessionHash, gate: (await control(''))[key], dom: await page.evaluate(() => window.ownedConversationTrace)}, null, 2))],
+        ['focus release', async () => { if ((await control(''))[key]) await control('/release/' + key, {}); }],
+        ['focus HTML', async () => fs.writeFileSync(path.join(output, key + '.html'), await page.content())],
+        ['focus trace', () => page.context().tracing.stop({path: path.join(output, key + '.zip')})],
+        ['focus page close', () => page.close()],
+      ]);
     }
   }
   async function conversationFocusBeforeOpen() { await focusCase('before-open'); }
@@ -104,11 +110,16 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
       await setup.selected(b.id, start);
       await expect(page.locator('#chat-selected-file')).toContainText('.txt');
       results.scenarios.push({name: key, a, b, session: queue.sessionHash, gate: (await control(''))[key]});
+    } catch (error) {
+      exit.primary(results, output, error);
+      throw error;
     } finally {
-      if ((await control(''))[key]) await control('/release/' + key, {});
-      fs.writeFileSync(path.join(output, key + '.json'), JSON.stringify({a, b, session: queue.sessionHash,
-        gate: (await control(''))[key], dom: await page.evaluate(() => window.ownedConversationTrace)}, null, 2));
-      await page.close();
+      await exit.cleanup(results, [
+        ['choices snapshot', async () => fs.writeFileSync(path.join(output, key + '.json'), JSON.stringify({a, b, session: queue.sessionHash,
+          gate: (await control(''))[key], dom: await page.evaluate(() => window.ownedConversationTrace)}, null, 2))],
+        ['choices release', async () => { if ((await control(''))[key]) await control('/release/' + key, {}); }],
+        ['choices page close', () => page.close()],
+      ]);
     }
   }
   async function conversationRenameChoices() { await choicesCase('rename'); }

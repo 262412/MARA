@@ -14,7 +14,7 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
     const {page, queue, refreshTrace} = await login('browser-owner', {traceConversation: true});
     const key = 'readiness-' + kind;
     const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready, refreshTrace});
-    let a, b, pending, after;
+    let a, b, pending, after, selected;
     try {
       await page.getByText('Conversation', {exact: true}).click();
       a = await setup.create('Ready A ' + kind, 'owned-observatory');
@@ -53,14 +53,16 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
         await expect(filter).toBeFocused();
       }
       await control('/release/' + key, {});
-      await setup.ended(fn, start);
+      await setup.ended(fn, start, kind === 'error' ? [fn.id] : []);
       await expect(dock).toHaveAttribute('aria-busy', 'false');
       if (kind === 'focus') await expect(filter).toBeFocused();
       if (kind === 'error') {
         await expect(page.getByRole('alert').filter({hasText: 'Owned U1 return failure'})).toBeVisible();
         expect((await evidence()).conversations.find(row => row.id === a.id).name).toBe(a.name + ' renamed');
       }
-      await setup.choose(b);
+      const bStart = await setup.choose(b);
+      selected = await setup.proof(b, bStart);
+      require('./conversation_contract.cjs').assertSelection(selected);
       expect((await setup.trace()).filter(row => row.phase === 'logpoints_state' && row.sequence >= start).every(row => row.active)).toBe(true);
       await expect(page.locator('#chat-selected-file')).toContainText('.txt');
       after = await page.evaluate(() => window.ownedConversationTrace);
@@ -73,7 +75,7 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
       await exit.cleanup(results, [
         ['readiness snapshot', async () => fs.writeFileSync(path.join(output, key + '.json'), JSON.stringify({a, b, pending, after,
           session: queue.sessionHash, dom: await page.evaluate(() => window.ownedConversationTrace),
-          framework: await refreshTrace.snapshot()}, null, 2))],
+          framework: await refreshTrace.snapshot(), endpoints: setup.endpoints, selected}, null, 2))],
         ['readiness release', async () => { if ((await control(''))[key]) await control('/release/' + key, {}); }],
         ['readiness page close', () => page.close()],
       ]);

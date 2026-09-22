@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const exit = require('./browser_exit.cjs');
 
 module.exports = ({expect, login, evidence, results, output, base, ready}) => {
   const control = async (route, spec) => {
@@ -46,11 +47,16 @@ module.exports = ({expect, login, evidence, results, output, base, ready}) => {
       afterRelease = await page.evaluate(() => window.ownedConversationTrace);
       await expect(page.locator('#conversation-dropdown input')).toHaveValue(created.name);
       results.scenarios.push({name: key, created, session: queue.sessionHash, gate: (await control(''))[key]});
+    } catch (error) {
+      exit.primary(results, output, error);
+      throw error;
     } finally {
-      await control('/release/' + key, {});
-      fs.writeFileSync(path.join(output, key + '.json'), JSON.stringify({created, beforeRelease, afterRelease,
-        session: queue.sessionHash, gate: (await control(''))[key], dom: await page.evaluate(() => window.ownedConversationTrace)}, null, 2));
-      await page.close();
+      await exit.cleanup(results, [
+        ['reload snapshot', async () => fs.writeFileSync(path.join(output, key + '.json'), JSON.stringify({created, beforeRelease, afterRelease,
+          session: queue.sessionHash, gate: (await control(''))[key], dom: await page.evaluate(() => window.ownedConversationTrace)}, null, 2))],
+        ['reload release', () => control('/release/' + key, {})],
+        ['reload page close', () => page.close()],
+      ]);
     }
   }
   async function conversationReloadLateWrite() { await run(false); }

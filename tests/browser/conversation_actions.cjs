@@ -1,5 +1,6 @@
 // Exercise the existing App through browser events; evidence routes are read-only.
 const path = require('node:path');
+const exit = require('./browser_exit.cjs');
 
 module.exports = function ({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites}) {
   async function ownedRows() {
@@ -215,10 +216,15 @@ module.exports = function ({expect, login, evidence, send, tailFinished, settled
       expect((await ownedRows()).some(row => row.id === held.id)).toBe(false);
       expect((await evidence()).writes.filter(item => item.conversation_id === protectedRow.id)).toEqual([]);
       results.scenarios.push({name: 'held-model-switch-delete-no-resurrection-or-view-overwrite', deleted: held.id, protected: protectedRow.id, queue});
+    } catch (error) {
+      exit.primary(results, output, error);
+      throw error;
     } finally {
-      await fetch(base + '/owned-model-gate/release', {method: 'POST'});
-      await page.screenshot({path: path.join(output, 'conversation-late.png'), fullPage: true});
-      await page.close();
+      await exit.cleanup(results, [
+        ['late model release', async () => { const response = await fetch(base + '/owned-model-gate/release', {method: 'POST'}); expect(response.ok).toBe(true); }],
+        ['late screenshot', () => page.screenshot({path: path.join(output, 'conversation-late.png'), fullPage: true})],
+        ['late page close', () => page.close()],
+      ]);
     }
   }
 

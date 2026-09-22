@@ -44,7 +44,8 @@ function assertSelection(proof) {
   assert.deepEqual(files.args[1], expected.sources);
   assert.equal(files.slots, 4); assert.equal(files.outputs.length, 4);
   assert.deepEqual(files.returned, files.outputs);
-  assert.deepEqual(dom.ids, files.outputs[0].map(row => row.id));
+  assert.deepEqual([...dom.ids].sort(), files.outputs[0].map(row => row.id).sort(), 'exact authorized file IDs');
+  assert.deepEqual(dom.ids, proof.renderedIds, 'DOM order must match the returned file HTML');
   assert.deepEqual(dom.selected, expected.sources);
   assert.equal(dom.focus.trim(), files.display[0]);
   assert.equal(dom.summary.trim(), files.display[1]);

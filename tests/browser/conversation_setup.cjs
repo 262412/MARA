@@ -1,22 +1,36 @@
 // Operation endpoints for the real UI; a queue snapshot is not chain completion.
 module.exports = ({expect, page, queue, evidence, send, tailFinished, ready, refreshTrace}) => {
+  const {chainFor, endpoint} = require('./conversation_endpoint.cjs');
   const entries = Object.entries(ready.functions).map(([id, fn]) => ({...fn, id: Number(id)}));
   const select = entries.find(fn => fn.id === ready.roles.conversation_select);
   const dropdownId = select.inputs[0];
   const newRoot = entries.find(fn => fn.name === 'new_conv');
   const root = fn => fn.trigger_after == null ? fn : root(entries.find(item => item.id === fn.trigger_after));
   const rename = entries.find(fn => fn.name === 'rename_conv' && root(fn).targets.some(([, event]) => event === 'submit'));
-  const last = root => {
-    let fn = root;
-    while (entries.some(item => item.trigger_after === fn.id)) fn = entries.find(item => item.trigger_after === fn.id);
-    return fn.id;
-  };
   const gestures = new Map();
+  const operations = new Map(), endpoints = [];
   const trace = () => page.evaluate(() => window.ownedFrameworkTrace.records);
-  const mark = () => page.evaluate(() => window.ownedFrameworkTrace.records.length);
-  const ended = async (root, start) => {
-    const tail = last(root);
-    await expect.poll(() => page.evaluate(({start, tail}) => window.ownedFrameworkTrace.records.some(row => row.sequence >= start && row.phase === 'js_result' && row.fn === tail), {start, tail}), {timeout: 30000}).toBe(true);
+  const mark = async (conversation) => {
+    const start = await page.evaluate(() => window.ownedFrameworkTrace.records.length);
+    operations.set(start, {queueStart: queue.length, session: queue.sessionHash, conversation});
+    return start;
+  };
+  const ended = async (root, start, allowFailure = []) => {
+    const chain = chainFor(ready.functions, root.id), operation = operations.get(start);
+    if (!operation) throw Error('Operation start was not recorded');
+    const observation = {root: root.id, start, session: operation.session};
+    endpoints.push(observation);
+    await expect.poll(async () => {
+      const framework = await page.evaluate(() => window.ownedFrameworkTrace);
+      const server = await (await fetch(new URL('/owned-web-operations', page.url()))).json();
+      const data = await evidence();
+      observation.last = endpoint({chain, framework, server, statuses: data.queue_events, start,
+        session: operation.session, conversation: operation.conversation, allowFailure,
+        queue: queue.map((fn, i) => ({fn, eventId: queue.requestIds[i]})).slice(operation.queueStart)});
+      return observation.last.complete;
+    // Locked-framework diagnostic measured a complete 13-request selection tail
+    // at 31.445 s. This is an observed-operation budget, not a product timeout.
+    }, {timeout: 45000, message: 'Exact conversation operation endpoint'}).toBe(true);
   };
   const selected = async (id, start) => {
     await expect.poll(() => page.evaluate(({id, start, dropdownId}) => window.ownedFrameworkTrace.records.some(row => row.sequence >= start && row.phase === 'flush_end' &&
@@ -26,7 +40,7 @@ module.exports = ({expect, page, queue, evidence, send, tailFinished, ready, ref
     window.ownedWebOperations.some(row => row.phase === 'applyFiles' && row.applied && row.args[2] === id &&
       JSON.stringify(row.args[1]) === JSON.stringify(selectedIds)), {id, selectedIds}), {timeout: 20000}).toBe(true);
   async function choose(row, {complete = true} = {}) {
-    const start = await mark();
+    const start = await mark(row.id);
     gestures.set(start, {queueStart: queue.length, domStart: await page.evaluate(() => window.ownedConversationTrace.records.length)});
     const input = page.locator('#conversation-dropdown input');
     await input.fill(row.name);
@@ -88,7 +102,11 @@ module.exports = ({expect, page, queue, evidence, send, tailFinished, ready, ref
       const template = document.createElement('template'); template.innerHTML = html;
       return template.content.textContent;
     }, citation.result);
-    const browser = await page.evaluate(({name, domStart}) => ({
+    const browser = await page.evaluate(({name, domStart}) => {
+      const rendered = document.createElement('template');
+      rendered.innerHTML = window.ownedWebOperations.findLast(row => row.phase === 'applyFiles' && row.applied)?.outputs[1] || '';
+      return {
+      renderedIds: [...rendered.content.querySelectorAll('[data-chat-file-id]')].map(node => node.dataset.chatFileId),
       framework: window.ownedFrameworkTrace,
       web: {records: window.ownedWebOperations, errors: window.ownedWebObserverErrors},
       gesture: window.ownedConversationTrace.records.find(item => item.sequence >= domStart && item.phase === 'pointerdown' && item.option && item.dom.options.some(option => option.name === name && option.node === item.option.node)),
@@ -99,7 +117,7 @@ module.exports = ({expect, page, queue, evidence, send, tailFinished, ready, ref
         summary: document.querySelector('#workbench-file-summary').textContent,
         answer: document.querySelector('#answer-panel').textContent,
         citations: document.querySelector('#citations-card').textContent}
-    }), {name: row.name, domStart: gesture.domStart});
+    }; }, {name: row.name, domStart: gesture.domStart});
     return {...browser, server, start, citationFn, citationsText, session: queue.sessionHash, username: 'browser-owner',
       user: data.users['browser-owner'], selectFn: select.id, dropdownId,
       sourceIndex: select.outputs.indexOf(refresh.inputs[3]),
@@ -107,5 +125,5 @@ module.exports = ({expect, page, queue, evidence, send, tailFinished, ready, ref
       expected: {...row, sources: [row.file], messages: row.data_source.messages, retrievalMessages: row.data_source.retrieval_messages,
         filename: data.files.find(file => file.id === row.file).name}};
   }
-  return {create, choose, mark, trace, selected, ended, proof, select, newRoot, rename, dropdownId};
+  return {create, choose, mark, trace, selected, ended, proof, select, newRoot, rename, dropdownId, endpoints};
 };

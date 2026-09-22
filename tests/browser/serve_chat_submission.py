@@ -251,6 +251,7 @@ def _write_ready(output, root, roles, blocks, selector_id, download_index_id):
                         "name": blocks.fns[dep["id"]].name,
                         "targets": dep["targets"],
                         "trigger_after": dep["trigger_after"],
+                        "trigger_only_on_success": dep["trigger_only_on_success"],
                         "inputs": dep["inputs"],
                         "outputs": dep["outputs"],
                         "backend_fn": dep["backend_fn"],
