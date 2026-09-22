@@ -2,9 +2,9 @@
 
 import hashlib
 
-# Captured from 4b8215c3 (unchanged ChatPage scripts from the round baseline).
+# Captured from 4b8215c3, except the U1 focus-ownership repair covered in Node.
 EXPECTED = {
-    "chat_input_focus_js": "da22684f54d3aa39e79f7c4eade5ad50684a679c4f793b1169eb57c97dfb76ac",
+    "chat_input_focus_js": "dd85cf74d5cc4592dcef16f84e08b84d7e35d17917b1299cf3fb8ad83bf3c333",
     "quick_urls_submit_js": "81c5eb898ed689c8a94ac4fdfc769e9704d5cc930f97dffc41e1aa6a1d6dd2ef",
     "recommended_papers_js": "f3965368f6bdb8a330108ab6be016e52a5ff87c78f7192970f6d09ba998e8135",
     "clear_bot_message_selection_js": "6d845ba92aee42548734cfb84f5c7294736caadb122f6056e623a455ea4bf3b8",
