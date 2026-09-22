@@ -229,6 +229,11 @@ def _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers)
     def release_file_browser_gate(key: str):
         return barriers.release(key)
 
+    @blocks.app.post("/owned-file-browser-gate/release-all")
+    def release_all_file_browser_gates():
+        barriers.release_all()
+        return barriers.status()
+
 
 def _write_ready(output, root, roles, blocks, selector_id, download_index_id):
     import gradio

@@ -381,7 +381,7 @@ async function authenticatedIndexing() {
   const reload = require('./conversation_reload.cjs')({expect, login, evidence, results, output, base, ready});
   const exitProbes = require('./fixture_exit_probes.cjs')({expect, login, selectSource, send, results, output, base});
   const controlledOnly = [...conversationTails, ...readiness, ...reload, ...exitProbes].map(fn => fn.name)
-    .concat('lateConversationWatchdogBoundary', 'heldModelShutdown', 'selectorChoicesAfterCard');
+    .concat('lateConversationWatchdogBoundary', 'heldModelShutdown', 'selectorChoicesAfterCard', 'selectorChoicesAlongsideCard');
   const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout, ...conversationTails, ...readiness, ...reload, ...exitProbes];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
   for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : !['publicConversationPermissions', 'publicStudioPermissions', ...controlledOnly].includes(fn.name))) {

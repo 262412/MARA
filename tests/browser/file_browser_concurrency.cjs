@@ -213,6 +213,41 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
     }
   }
 
+  async function selectorChoicesAlongsideCard() {
+    const keys = ['alongside-choice', 'alongside-initial', 'alongside-signin'];
+    await control('/arm', {key: keys[0], callback: 'select_chat_file', event: 'delivery',
+      file_id: 'r3c-browser-owner-text', username: 'browser-owner'});
+    for (const key of keys.slice(1)) {
+      await control('/arm', {key, callback: 'load_files', event: 'delivery', username: 'browser-owner'});
+    }
+    const {page, queue} = await login('browser-owner', {initialize: false, traceSelection: true});
+    try {
+      await expect.poll(async () => {
+        const gates = await control('');
+        return keys.slice(1).every(key => gates[key]?.entered);
+      }).toBe(true);
+      await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
+      await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
+      await expect.poll(async () => (await control(''))[keys[0]]?.entered).toBe(true);
+      results.selectorAlongsideDiagnostic = {sessionHash: queue.sessionHash,
+        gatesBeforeRelease: await control(''),
+        beforeRelease: await page.evaluate(() => window.ownedWebOperations)};
+      await control('/release-all', {});
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-text"]')).toHaveClass(/is-selected/);
+      await settled(queue);
+      await expect(page.locator('#chat-selected-file')).toContainText('.txt');
+      results.scenarios.push({name: 'selector-and-card-results-delivered-together'});
+    } catch (error) {
+      require('./browser_exit.cjs').primary(results, output, error);
+      throw error;
+    } finally {
+      await require('./browser_exit.cjs').cleanup(results, [
+        ['aligned selector release', () => control('/release-all', {})],
+        ['aligned selector page close', () => page.close()],
+      ]);
+    }
+  }
+
   async function conversationDuringFileRefresh() {
     const {page, queue, refreshTrace} = await login('browser-owner', {traceConversation: true});
     const key = 'old-conversation-refresh';
@@ -405,5 +440,5 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
   return [initializationFilterOverlap, filterWhileRefreshIsHeld, concurrentBrowserContexts,
     repeatedFilterIntent, selectorInitializationSelectionOverlap, conversationDuringFileRefresh,
     quickUploadThenChooseSource, reverseFilterDelivery, quickUrlThenChooseSource,
-    deletionNotificationDuringRefresh, successiveFileChoices, selectorChoicesAfterCard];
+    deletionNotificationDuringRefresh, successiveFileChoices, selectorChoicesAfterCard, selectorChoicesAlongsideCard];
 };
