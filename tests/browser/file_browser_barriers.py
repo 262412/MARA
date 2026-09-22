@@ -1,4 +1,4 @@
-"""Controlled delays around real callbacks; never substitute their results."""
+"""Controlled delays and explicit owned failures around real callbacks."""
 
 import asyncio
 import threading
@@ -58,6 +58,8 @@ class FileBrowserBarriers:
                 raise RuntimeError("Owned file-browser barrier was not released")
             with self.lock:
                 matched["completed"] = True
+            if matched["spec"].get("failure"):
+                raise RuntimeError("Owned U1 return failure")
 
     def _claim(self, name, event, values, result):
         request = values.get("request")

@@ -41,7 +41,10 @@ def fixture(module, *, error=None):
         )
 
     blocks = SimpleNamespace(
-        fns={7: fn}, call_function=call_function, process_api=process_api
+        fns={7: fn},
+        config={"dependencies": []},
+        call_function=call_function,
+        process_api=process_api,
     )
     observed_contexts = []
     barriers = SimpleNamespace(

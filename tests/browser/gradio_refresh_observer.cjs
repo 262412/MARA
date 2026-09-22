@@ -100,7 +100,7 @@ async function attach(page, ready, base, {conversation = false} = {}) {
   if (conversation) {
     for (const [id, definition] of definitions) {
       if (['new_conv', 'reload_conv', 'rename_conv', 'select_conv'].includes(definition.name) ||
-          definition.js?.includes('#chat-input textarea')) {
+          (definition.js?.includes('#chat-input textarea') || definition.js?.includes('#conversation-dock'))) {
         ids.functions.push(Number(id));
       }
     }

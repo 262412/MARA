@@ -237,11 +237,14 @@ def _initial_selection_events(dependencies, selector_id):
 
 def _selection_roles(dependencies, conversation_id):
     current = next(
-        dep for dep in dependencies if (conversation_id, "select") in dep["targets"]
+        dep
+        for dep in dependencies
+        if (conversation_id, "select") in dep["targets"] and dep["backend_fn"]
     )
-    roles = {"conversation_select": current["id"]}
+    roles: dict[str, int] = {}
     while True:
         if current["backend_fn"]:
+            roles.setdefault("conversation_select", current["id"])
             roles["conversation_select_tail"] = current["id"]
         children = [
             dep for dep in dependencies if dep["trigger_after"] == current["id"]

@@ -367,15 +367,17 @@ async function authenticatedIndexing() {
   const selected = process.env.MARA_BROWSER_SCENARIOS?.split(',');
   const operations = require('./conversation_actions.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});
   const fileBrowser = require('./file_browser_navigation.cjs')({expect, login, evidence, settled, send, selectSource, tailFinished, results, output});
-  const refreshRaces = require('./file_browser_concurrency.cjs')({expect, login, evidence, settled, send, tailFinished, results, base});
+  const refreshRaces = require('./file_browser_concurrency.cjs')({expect, login, evidence, settled, send, tailFinished, results, base, ready, output});
   const indexManagement = require('./index_management.cjs')({expect, login, evidence, settled, send, tailFinished, results, output, base});
   const studio = require('./studio_workflows.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});
   const studioPermissions = require('./studio_permissions.cjs')({expect, login, evidence, settled, roles, results});
   const indexingLifetime = require('./indexing_lifetime.cjs')({expect, login, evidence, settled, results, output, base});
   const indexingCloseout = require('./indexing_closeout.cjs')({expect, login, evidence, settled, send, tailFinished, results, base});
   const conversationTails = require('./conversation_tails.cjs')({expect, login, evidence, send, tailFinished, results, output, base, ready});
-  const controlledOnly = conversationTails.map(fn => fn.name);
-  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout, ...conversationTails];
+  const readiness = require('./conversation_readiness.cjs')({expect, login, evidence, send, tailFinished, results, output, base, ready});
+  const reload = require('./conversation_reload.cjs')({expect, login, evidence, results, output, base, ready});
+  const controlledOnly = [...conversationTails, ...readiness, ...reload].map(fn => fn.name);
+  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout, ...conversationTails, ...readiness, ...reload];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
   for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : !['publicConversationPermissions', 'publicStudioPermissions', ...controlledOnly].includes(fn.name))) {
     console.log('Starting browser scenario:', scenario.name);

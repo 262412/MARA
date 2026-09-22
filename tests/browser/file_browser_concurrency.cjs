@@ -1,5 +1,5 @@
 // Delays real refresh results while users continue to interact with the full App.
-module.exports = ({expect, login, evidence, settled, send, tailFinished, results, base}) => {
+module.exports = ({expect, login, evidence, settled, send, tailFinished, results, base, ready, output}) => {
   async function control(path, spec) {
     const response = await fetch(base + '/owned-file-browser-gate' + path,
       spec === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(spec)});
@@ -178,51 +178,40 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
   }
 
   async function conversationDuringFileRefresh() {
-    const {page, queue} = await login();
+    const {page, queue} = await login('browser-owner', {traceConversation: true});
     const key = 'old-conversation-refresh';
-    await control('/arm', {key, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
+    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready});
+    const {assertSelection, assertOldRefreshRejected} = require('./conversation_contract.cjs');
+    let beforeRelease, afterRelease;
     try {
       await page.getByText('Conversation', {exact: true}).click();
-      let turns = 0;
-      async function create(name, file) {
-        const before = (await evidence()).conversations.length;
-        await page.locator('#new-conv-button').click();
-        await expect.poll(async () => (await evidence()).conversations.length).toBe(before + 1);
-        await settled(queue);
-        await page.locator(`[data-chat-file-id="${file}"]`).click();
-        await expect(page.locator(`[data-chat-file-id="${file}"]`)).toHaveClass(/is-selected/);
-        await send(page, 'Save source selection for ' + name);
-        await tailFinished(queue, ++turns);
-        await page.locator('#rename-conv-button').click();
-        const input = page.getByPlaceholder('Conversation name', {exact: true});
-        await input.fill(name);
-        await input.press('Enter');
-        await expect(page.locator('#conversation-dropdown input')).toHaveValue(name);
-        await settled(queue);
-      }
-      await create('R3D context A', 'owned-observatory');
-      await create('R3D context B', 'r3c-browser-owner-text');
-      const dropdown = page.locator('#conversation-dropdown input');
-      await dropdown.fill('R3D context A');
-      await page.getByRole('option', {name: 'R3D context A', exact: true}).click();
+      const a = await setup.create('R3D context A', 'owned-observatory');
+      const b = await setup.create('R3D context B', 'r3c-browser-owner-text');
+      await setup.choose(a);
       await expect(page.locator('[data-chat-file-id="owned-observatory"]')).toHaveClass(/is-selected/);
-      await settled(queue);
+      await control('/arm', {key, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
       await page.locator('#chat-file-filter textarea, #chat-file-filter input').fill('.txt');
       await expect.poll(async () => (await control(''))[key]?.entered).toBe(true);
-      await dropdown.fill('R3D context B');
-      await page.getByRole('option', {name: 'R3D context B', exact: true}).click();
-      await expect(page.locator('#chat-selected-file')).toContainText('.txt');
+      const start = await setup.choose(b);
+      await expect.poll(() => page.evaluate(id => window.ownedWebOperations.findLast(row => row.phase === 'applyFiles' && row.applied)?.args[2] === id, b.id), {timeout: 20000}).toBe(true);
+      beforeRelease = await setup.proof(b, start);
+      const selected = assertSelection(beforeRelease);
+      const held = (await control(''))[key];
+      expect(held.completed).toBe(false);
+      expect(held.operation.inputs.conversation).toBe(a.id);
       await control('/release/' + key, {});
+      await expect.poll(async () => (await control(''))[key]?.completed).toBe(true);
+      await expect.poll(() => page.evaluate(stamp => window.ownedWebOperations.some(row => row.phase === 'applyFiles' && row.stamp?.epoch === stamp.epoch && row.stamp?.fileRequest === stamp.fileRequest), held.operation.inputs.stamp), {timeout: 20000}).toBe(true);
       await settled(queue);
-      const focus = await page.locator('#chat-selected-file').innerText();
-      const ids = await page.locator('#chat-file-list .is-selected').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId));
+      afterRelease = await setup.proof(b, start);
+      assertOldRefreshRejected(afterRelease, held.operation.inputs.stamp);
       results.fileBrowserRaces ||= [];
-      results.fileBrowserRaces.push({name: 'conversation-switch-during-file-refresh', focus, ids});
-      expect(focus).toContain('.txt');
-      expect(ids).toEqual(['r3c-browser-owner-text']);
-      results.scenarios.push({name: 'conversation-switch-during-file-refresh', focus, ids});
+      results.fileBrowserRaces.push({name: 'conversation-switch-during-file-refresh', a, b, selected, held});
+      results.scenarios.push({name: 'conversation-switch-during-file-refresh', ...selected, heldUntilBApplied: true});
     } finally {
-      await control('/release/' + key, {});
+      if ((await control(''))[key]) await control('/release/' + key, {});
+      require('node:fs').writeFileSync(require('node:path').join(output, 'conversation-selection-proof.json'),
+        JSON.stringify({beforeRelease, afterRelease}, null, 2));
       await page.close();
     }
   }

@@ -4,17 +4,19 @@ module.exports = ({expect, page, queue, evidence, send, tailFinished, ready}) =>
   const select = entries.find(fn => fn.id === ready.roles.conversation_select);
   const dropdownId = select.inputs[0];
   const newRoot = entries.find(fn => fn.name === 'new_conv');
-  const rename = entries.find(fn => fn.name === 'rename_conv' && fn.targets.some(([, event]) => event === 'submit'));
+  const root = fn => fn.trigger_after == null ? fn : root(entries.find(item => item.id === fn.trigger_after));
+  const rename = entries.find(fn => fn.name === 'rename_conv' && root(fn).targets.some(([, event]) => event === 'submit'));
   const last = root => {
     let fn = root;
     while (entries.some(item => item.trigger_after === fn.id)) fn = entries.find(item => item.trigger_after === fn.id);
     return fn.id;
   };
+  const gestures = new Map();
   const trace = () => page.evaluate(() => window.ownedFrameworkTrace.records);
   const mark = () => page.evaluate(() => window.ownedFrameworkTrace.records.length);
   const ended = async (root, start) => {
     const tail = last(root);
-    await expect.poll(() => page.evaluate(({start, tail}) => window.ownedFrameworkTrace.records.some(row => row.sequence >= start && row.phase === 'js_result' && row.fn === tail), {start, tail}), {timeout: 20000}).toBe(true);
+    await expect.poll(() => page.evaluate(({start, tail}) => window.ownedFrameworkTrace.records.some(row => row.sequence >= start && row.phase === 'js_result' && row.fn === tail), {start, tail}), {timeout: 30000}).toBe(true);
   };
   const selected = async (id, start) => {
     await expect.poll(() => page.evaluate(({id, start, dropdownId}) => window.ownedFrameworkTrace.records.some(row => row.sequence >= start && row.phase === 'flush_end' &&
@@ -25,6 +27,7 @@ module.exports = ({expect, page, queue, evidence, send, tailFinished, ready}) =>
       JSON.stringify(row.args[1]) === JSON.stringify(selectedIds)), {id, selectedIds}), {timeout: 20000}).toBe(true);
   async function choose(row, {complete = true} = {}) {
     const start = await mark();
+    gestures.set(start, {queueStart: queue.length, domStart: await page.evaluate(() => window.ownedConversationTrace.records.length)});
     const input = page.locator('#conversation-dropdown input');
     await input.fill(row.name);
     const option = page.getByRole('option', {name: row.name, exact: true});
@@ -59,8 +62,43 @@ module.exports = ({expect, page, queue, evidence, send, tailFinished, ready}) =>
       item.updates.some(update => update.id === dropdownId && update.prop === 'choices' && update.value.some(pair => pair[0] === name && pair[1] === id))), {start, dropdownId, name, id: row.id}), {timeout: 20000}).toBe(true);
     await selected(row.id, start);
     await expect(input).toBeHidden();
+    await ended(rename, start);
     await expect(page.locator('#conversation-dropdown input')).toHaveValue(name);
-    return {...row, name, file};
+    return {...(await evidence()).conversations.find(item => item.id === row.id), name, file};
   }
-  return {create, choose, mark, trace, selected, ended, select, newRoot, rename, dropdownId};
+  async function proof(row, start) {
+    const gesture = gestures.get(start);
+    const data = await evidence();
+    const server = await (await fetch(new URL('/owned-web-operations', page.url()))).json();
+    const refresh = entries.find(fn => fn.name === 'refresh_chat_file_list');
+    let current = select, citationFn;
+    while (current) {
+      if (current.name === 'render_latest_citations_card') citationFn = current.id;
+      current = entries.find(fn => fn.trigger_after === current.id);
+    }
+    const citation = server.findLast(item => item.phase === 'return' && item.fn === citationFn && item.session_hash === queue.sessionHash);
+    const citationsText = await page.evaluate(html => {
+      const template = document.createElement('template'); template.innerHTML = html;
+      return template.content.textContent;
+    }, citation.result);
+    const browser = await page.evaluate(({name, domStart}) => ({
+      framework: window.ownedFrameworkTrace,
+      web: {records: window.ownedWebOperations, errors: window.ownedWebObserverErrors},
+      gesture: window.ownedConversationTrace.records.find(item => item.sequence >= domStart && item.phase === 'pointerdown' && item.option && item.dom.options.some(option => option.name === name && option.node === item.option.node)),
+      dom: {conversation: document.querySelector('#conversation-dropdown input').value,
+        ids: [...document.querySelectorAll('#chat-file-list [data-chat-file-id]')].map(node => node.dataset.chatFileId),
+        selected: [...document.querySelectorAll('#chat-file-list .is-selected')].map(node => node.dataset.chatFileId),
+        focus: document.querySelector('#chat-selected-file').textContent,
+        summary: document.querySelector('#workbench-file-summary').textContent,
+        answer: document.querySelector('#answer-panel').textContent,
+        citations: document.querySelector('#citations-card').textContent}
+    }), {name: row.name, domStart: gesture.domStart});
+    return {...browser, server, start, citationFn, citationsText, session: queue.sessionHash, username: 'browser-owner',
+      user: data.users['browser-owner'], selectFn: select.id, dropdownId,
+      sourceIndex: select.outputs.indexOf(refresh.inputs[3]),
+      queue: queue.map((fn, index) => ({fn, eventId: queue.requestIds[index]})).slice(gesture.queueStart),
+      expected: {...row, sources: [row.file], messages: row.data_source.messages, retrievalMessages: row.data_source.retrieval_messages,
+        filename: data.files.find(file => file.id === row.file).name}};
+  }
+  return {create, choose, mark, trace, selected, ended, proof, select, newRoot, rename, dropdownId};
 };

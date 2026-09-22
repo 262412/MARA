@@ -14,7 +14,7 @@ function install() {
     return {active: identity(document.activeElement), input: identity(input),
       value: input?.value, expanded: input?.getAttribute('aria-expanded'),
       options: [...document.querySelectorAll('#conversation-dropdown [role=option]')].map(node => ({
-        ...identity(node), name: node.textContent.trim(), connected: node.isConnected,
+        ...identity(node), name: node.getAttribute('aria-label'), connected: node.isConnected,
         rect: node.getBoundingClientRect().toJSON()}))};
   };
   const record = (phase, detail = {}) => {
@@ -24,7 +24,8 @@ function install() {
   };
   for (const name of ['focusin', 'focusout', 'input', 'pointerdown', 'pointerup', 'click']) {
     document.addEventListener(name, event => record(name, {target: identity(event.target),
-      trusted: event.isTrusted, pointer: event.pointerId}), true);
+      trusted: event.isTrusted, pointer: event.pointerId,
+      option: identity(event.target.closest?.('[role=option]'))}), true);
   }
   let last = '';
   new MutationObserver(() => {

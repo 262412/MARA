@@ -27,6 +27,34 @@ def _fn_name(call):
     return getattr(fn, "name", getattr(fn, "__name__", None))
 
 
+def _business_chain(graph, root, operation):
+    busy = graph.roots(root.trigger)[1]
+    assert busy.params["js"] == chat_conversation_events.conversation_busy_js(
+        operation, True
+    )
+    assert busy.params["fn"] is None
+    assert linear_chain(graph, busy) == [busy]
+    chain = linear_chain(graph, root)
+    assert chain[0].params.get("js") is None
+    assert (
+        chain[-1].verb == "then"
+    )  # Release after errors, without changing trigger policy.
+    expected = chat_conversation_events.conversation_busy_js(operation, False)
+    if operation in {"new", "select"}:
+        assert expected in chain[-1].params["js"]
+        return chain
+    assert chain[-1].params["js"] == expected
+    return chain[:-1]
+
+
+def _business_roots(graph):
+    return [
+        root
+        for root in graph.roots()
+        if "maraConversationPending" not in root.params.get("js", "")
+    ]
+
+
 def test_conversation_ports_preserve_fixed_outputs_and_every_index_component():
     page = build_chat_page(EventGraphSpy(), index_count=7)
 
@@ -69,7 +97,7 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
 
     _bind_conversation(page, demo_mode=False)
 
-    assert [root.trigger for root in graph.roots()] == [
+    assert [root.trigger for root in _business_roots(graph)] == [
         "chat_control.btn_chat_expand",
         "chat_control.btn_new",
         "chat_control.btn_del",
@@ -79,7 +107,7 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
         "chat_control.conversation_rn",
         "chat_control.conversation",
     ]
-    new_chain = linear_chain(graph, graph.roots("chat_control.btn_new")[0])
+    new_chain = _business_chain(graph, graph.roots("chat_control.btn_new")[0], "new")
     assert [_fn_name(call) for call in new_chain] == [
         "chat_control.new_conv",
         "chat_control.select_conv",
@@ -93,7 +121,9 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
     ]
     assert new_chain[0].params["inputs"] is page._app.user_id
     assert new_chain[1].params["outputs"][-7:-1] == page._indices_input
-    delete_chain = linear_chain(graph, graph.roots("chat_control.btn_del_conf")[0])
+    delete_chain = _business_chain(
+        graph, graph.roots("chat_control.btn_del_conf")[0], "delete"
+    )
     assert [_fn_name(call) for call in delete_chain] == [
         "chat_control.delete_conv",
         "chat_control.select_conv",
@@ -103,7 +133,9 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
         "page.render_latest_reasoning_trace",
         "<lambda>",
     ]
-    rename = graph.roots("chat_control.conversation_rn")[0]
+    rename = _business_chain(
+        graph, graph.roots("chat_control.conversation_rn")[0], "rename"
+    )[0]
     assert _fn_name(rename) == "chat_control.rename_conv"
     assert rename.params["outputs"] == [
         page.chat_control.conversation,
@@ -111,7 +143,7 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
         page.chat_control.conversation_rn,
     ]
     select_root = graph.roots("chat_control.conversation")[0]
-    select_chain = linear_chain(graph, select_root)
+    select_chain = _business_chain(graph, select_root, "select")
     assert [_fn_name(call) for call in select_chain] == [
         "chat_control.select_conv",
         "page._json_to_plot",
@@ -133,7 +165,9 @@ def test_standard_conversation_registration_and_select_tail_are_exact():
     ]
     assert select_chain[6].params["js"] == "clear-selection-js"
     assert select_chain[8].params["js"] == "pdf-js"
-    assert select_chain[-1].params["js"] == "focus-js"
+    assert select_chain[-1].params[
+        "js"
+    ] == chat_conversation_events.conversation_finish_js("select", "focus-js")
     assert select_chain[0].params["outputs"][-7:-1] == page._indices_input
 
 
@@ -156,7 +190,9 @@ def test_delete_renders_remaining_history_and_clears_the_last_answer():
         answer,
     )
     _bind_conversation(page, demo_mode=False)
-    chain = linear_chain(graph, graph.roots("chat_control.btn_del_conf")[0])
+    chain = _business_chain(
+        graph, graph.roots("chat_control.btn_del_conf")[0], "delete"
+    )
     renderers = [
         call for call in chain if call.params.get("outputs") == [page.answer_panel]
     ]
@@ -177,13 +213,15 @@ def test_demo_conversation_adds_only_visibility_branch_and_keeps_root_order():
 
     _bind_conversation(page, demo_mode=True)
 
-    assert [root.trigger for root in graph.roots()] == [
+    assert [root.trigger for root in _business_roots(graph)] == [
         "chat_control.btn_chat_expand",
         "chat_control.btn_demo_logout",
         "chat_control.btn_new",
         "chat_control.conversation",
     ]
-    select_chain = linear_chain(graph, graph.roots("chat_control.conversation")[0])
+    select_chain = _business_chain(
+        graph, graph.roots("chat_control.conversation")[0], "select"
+    )
     assert len(select_chain) == 15
     assert _fn_name(select_chain[4]) == "<lambda>"
     assert select_chain[4].params["outputs"] == [
@@ -191,7 +229,7 @@ def test_demo_conversation_adds_only_visibility_branch_and_keeps_root_order():
         page.chat_settings,
     ]
     assert _fn_name(select_chain[5]) == "page_preview.refresh_selected_file_preview"
-    new_chain = linear_chain(graph, graph.roots("chat_control.btn_new")[0])
+    new_chain = _business_chain(graph, graph.roots("chat_control.btn_new")[0], "new")
     assert [_fn_name(call) for call in new_chain] == [
         "chat_control.clear_conv",
         "<lambda>",
@@ -203,7 +241,9 @@ def test_demo_conversation_adds_only_visibility_branch_and_keeps_root_order():
         None,
     ]
     assert new_chain[0].params["outputs"][-6:-1] == page._indices_input
-    assert new_chain[-1].params["js"] == "focus-js"
+    assert new_chain[-1].params[
+        "js"
+    ] == chat_conversation_events.conversation_finish_js("new", "focus-js")
 
 
 def test_sign_out_uses_named_conversation_outputs_and_clear_adapter():
@@ -223,8 +263,15 @@ def test_sign_out_uses_named_conversation_outputs_and_clear_adapter():
 
     ChatPage.on_subscribe_public_events(cast(ChatPage, page))
 
-    assert [item["name"] for item in subscriptions] == ["onSignIn", "onSignOut"]
-    sign_out = subscriptions[1]["definition"]
+    assert [item["name"] for item in subscriptions] == [
+        "onSignIn",
+        "onSignIn",
+        "onSignOut",
+    ]
+    ready = subscriptions[1]["definition"]
+    assert ready["fn"]() is None
+    assert ready["js"] == chat_conversation_events.conversation_busy_js("signin", False)
+    sign_out = subscriptions[2]["definition"]
     assert sign_out["outputs"] == list(
         chat_conversation_ports(page, demo_mode=False).selection.outputs
     )
