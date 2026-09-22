@@ -1,0 +1,32 @@
+{
+  "checked_at_utc": "2026-09-22T03:42:41.914625+00:00",
+  "archive": "submission/MARA-EACL2027-Overleaf.zip",
+  "sha256": "47025015bfee237aa977c602e06b18f20eb1ab2a630a7b9a7f6aec456c41540d",
+  "bytes": 658309,
+  "download_copy": "C:\\Users\\22826\\Downloads\\MARA-EACL2027-Overleaf.zip",
+  "entry_point": "main.tex",
+  "compiler": "pdfLaTeX / TeX Live 2025",
+  "archive_crc_ok": true,
+  "source_members_unchanged": [
+    "main.tex",
+    "paper_body.tex",
+    "appendix.tex",
+    "diagnostic_tables.tex",
+    "references.bib",
+    "acl.sty",
+    "acl_natbib.bst",
+    "figures/mara-ui-qa.png"
+  ],
+  "readme_member": "README-overleaf.txt",
+  "excluded_alternative_entries": [
+    "paper_venue.tex",
+    "paper_anonymous.tex"
+  ],
+  "clean_extraction_compile_exit_code": 0,
+  "compiled_pages": 11,
+  "all_page_text_and_dimensions_match_submission_pdf": true,
+  "all_page_content_streams_match_submission_pdf": true,
+  "critical_log_findings": [],
+  "overleaf_cloud_compilation_executed": false,
+  "smoke_directory": "audit/build/overleaf-upload-20260922T034232Z"
+}

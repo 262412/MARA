@@ -10,6 +10,7 @@ This directory contains the EACL revision and preserves the original EMNLP sourc
 - submission/ARTIFACT_GUIDE.md and REPRODUCTION.md: release/deployment instructions and analysis definitions.
 - submission/mara-eacl2027-demo.pdf: generated submission PDF.
 - submission/mara-eacl2027-source.zip: generated Overleaf/source package.
+- submission/MARA-EACL2027-Overleaf.zip: clean upload project with main.tex as its only entry point; see submission/OVERLEAF_IMPORT_ZH.md.
 - submission/mara-eacl2027-supplement.zip: guides, reanalysis evidence, and the unchanged public benchmark bundle.
 - submission/artifact-manifest.json: exported file sizes, SHA-256 checksums, and verified ZIP member lists.
 - archive/emnlp-submitted-source.zip and archive/source-manifest.json: unchanged original source and hashes.
