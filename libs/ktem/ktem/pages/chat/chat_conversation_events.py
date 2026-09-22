@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import gradio as gr
@@ -15,6 +16,39 @@ from .conversation_restore import (
     restored_answer,
     restored_studio_trace,
 )
+
+CONVERSATION_BUSY_JS = """
+function(operation, busy) {
+    const dock = document.querySelector('#conversation-dock');
+    const pending = dock.maraConversationPending ||= new Set();
+    if (busy) pending.add(operation);
+    else pending.delete(operation);
+    dock.inert = pending.size > 0;
+    dock.setAttribute('aria-busy', String(dock.inert));
+}
+"""
+
+
+def conversation_busy_js(operation: str, busy: bool) -> str:
+    return (
+        f"() => ({CONVERSATION_BUSY_JS})"
+        f"({json.dumps(operation)}, {json.dumps(busy)})"
+    )
+
+
+def conversation_finish_js(operation: str, focus_js: str) -> str:
+    release = conversation_busy_js(operation, False)
+    return f"function() {{ try {{ ({focus_js})(); }} finally {{ ({release})(); }} }}"
+
+
+def _conversation_start(trigger, operation):
+    # Keep the backend listener's normal trigger policy, without a JS preprocessor.
+    def bind(*args, **kwargs):
+        event = trigger(*args, **kwargs)
+        trigger(fn=None, js=conversation_busy_js(operation, True))
+        return event
+
+    return bind
 
 
 def bind_chat_conversation_events(
@@ -48,7 +82,7 @@ def _bind_demo_conversation_events(
     page: Any, ports: ChatConversationPorts, chat_input_focus_js: str
 ) -> None:
     page.chat_control.btn_demo_logout.click(fn=None, js=page.chat_control.logout_js)
-    page.chat_control.btn_new.click(
+    _conversation_start(page.chat_control.btn_new.click, "new")(
         fn=clear_conversation(page.chat_control.clear_conv),
         outputs=ports.selection.gradio_outputs,
     ).then(
@@ -75,14 +109,14 @@ def _bind_demo_conversation_events(
         inputs=ports.suggestions.gradio_inputs,
         outputs=ports.suggestions.gradio_outputs,
     ).then(
-        fn=None, inputs=None, js=chat_input_focus_js
+        fn=None, inputs=None, js=conversation_finish_js("new", chat_input_focus_js)
     )
 
 
 def _bind_standard_conversation_events(
     page: Any, ports: ChatConversationPorts, chat_input_focus_js: str
 ) -> None:
-    page.chat_control.btn_new.click(
+    _conversation_start(page.chat_control.btn_new.click, "new")(
         page.chat_control.new_conv,
         inputs=ports.new_conversation.gradio_inputs,
         outputs=ports.new_conversation.gradio_outputs,
@@ -117,7 +151,7 @@ def _bind_standard_conversation_events(
         inputs=ports.suggestions.gradio_inputs,
         outputs=ports.suggestions.gradio_outputs,
     ).then(
-        fn=None, inputs=None, js=chat_input_focus_js
+        fn=None, inputs=None, js=conversation_finish_js("new", chat_input_focus_js)
     )
 
 
@@ -127,7 +161,7 @@ def _bind_delete_conversation_events(page: Any, ports: ChatConversationPorts) ->
         inputs=ports.toggle_delete.gradio_inputs,
         outputs=ports.toggle_delete.gradio_outputs,
     )
-    page.chat_control.btn_del_conf.click(
+    _conversation_start(page.chat_control.btn_del_conf.click, "delete")(
         page.chat_control.delete_conv,
         inputs=ports.delete_conversation.gradio_inputs,
         outputs=ports.delete_conversation.gradio_outputs,
@@ -159,6 +193,8 @@ def _bind_delete_conversation_events(page: Any, ports: ChatConversationPorts) ->
     ).then(
         lambda: page.toggle_delete(""),
         outputs=ports.toggle_delete.gradio_outputs,
+    ).then(
+        fn=None, js=conversation_busy_js("delete", False)
     )
     page.chat_control.btn_del_cnl.click(
         lambda: page.toggle_delete(""),
@@ -169,12 +205,12 @@ def _bind_delete_conversation_events(page: Any, ports: ChatConversationPorts) ->
         outputs=[page.chat_control.conversation_rn],
     )
     rename_ports = conversation_rename_ports(page, gr.State(value=True))
-    page.chat_control.conversation_rn.submit(
+    _conversation_start(page.chat_control.conversation_rn.submit, "rename")(
         page.chat_control.rename_conv,
         inputs=rename_ports.gradio_inputs,
         outputs=rename_ports.gradio_outputs,
         show_progress="hidden",
-    )
+    ).then(fn=None, js=conversation_busy_js("rename", False))
 
 
 def _bind_conversation_select_event(
@@ -187,7 +223,7 @@ def _bind_conversation_select_event(
     pdfview_js: str,
 ) -> None:
     on_conv_select = (
-        page.chat_control.conversation.select(
+        _conversation_start(page.chat_control.conversation.select, "select")(
             restore_conversation(page.chat_control.select_conv),
             inputs=ports.selection.gradio_inputs,
             outputs=ports.selection.gradio_outputs,
@@ -279,5 +315,8 @@ def _append_conversation_preview_refresh(
         outputs=ports.reasoning.gradio_outputs,
         show_progress="hidden",
     ).then(
-        fn=None, inputs=None, outputs=None, js=chat_input_focus_js
+        fn=None,
+        inputs=None,
+        outputs=None,
+        js=conversation_finish_js("select", chat_input_focus_js),
     )

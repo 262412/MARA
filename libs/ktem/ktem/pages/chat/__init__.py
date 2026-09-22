@@ -39,7 +39,10 @@ from .chat_auxiliary_events import (
     bind_chat_post_studio_events,
     bind_chat_pre_studio_events,
 )
-from .chat_conversation_events import bind_chat_conversation_events
+from .chat_conversation_events import (
+    bind_chat_conversation_events,
+    conversation_busy_js,
+)
 from .chat_docqa_runtime import build_web_docqa_request
 from .chat_gradio_adapters import chat_app_load_ports, chat_conversation_ports
 from .chat_knowledge_graph_bindings import subscribe_public_knowledge_graph_events
@@ -1193,6 +1196,15 @@ class ChatPage(BasePage):
                     "inputs": [self._app.user_id],
                     "outputs": [self.chat_control.conversation],
                     "show_progress": "hidden",
+                },
+            )
+
+            # A backend completion keeps later sign-in subscribers running in 4.39.
+            self._app.subscribe_event(
+                name="onSignIn",
+                definition={
+                    "fn": lambda: None,
+                    "js": conversation_busy_js("signin", False),
                 },
             )
 

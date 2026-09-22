@@ -423,8 +423,18 @@ class ConversationControl(BasePage):
 
     def _on_app_created(self):
         """Reload the conversation once the app is created"""
+        from .chat_conversation_events import conversation_busy_js
+
         self._app.app.load(
             self.reload_conv,
             inputs=[self._app.user_id],
             outputs=[self.conversation],
+        ).then(fn=None, js=conversation_busy_js("reload", False))
+        begin = conversation_busy_js("reload", True)
+        if self._app.f_user_management:
+            signin = conversation_busy_js("signin", True)
+            begin = f"function() {{ ({begin})(); ({signin})(); }}"
+        self._app.app.load(
+            fn=None,
+            js=begin,
         )
