@@ -2,82 +2,281 @@
 
 ## Current recovery checkpoint: R6-A/U1 (2026-09-23)
 
-**R6-A/U1 remains BLOCKED. Current complete primary: NOT RUN; confirmation:
-NOT RUN.** Source/test/harness and verified remote head at recovery:
-`f2cc1af366e33ddad74e89b75c6e586c19e6eba8`. R5 remains ACCEPTED;
-S1/PCRE2 OPEN; merge/release NO-GO. No R6-B/C/D work is authorized here.
+**R6-A/U1 remains BLOCKED.** Frozen original primary: **37/37 PASS**;
+mandatory confirmation: **16 passed, 1 failed, 20 NOT RUN**. Both belong to
+`fd44f8776161c8aaf3048876134644d2723b3548`. The confirmation stopped at its first failure. No third
+complete matrix was run and no cross-batch result was combined. Current
+diagnostic source/tests/harness: **`40b187d9c08defd9a72d7278cb3fb0837b227cea`**; its complete primary and
+confirmation are **NOT RUN**. R5 remains ACCEPTED. S1/PCRE2 OPEN;
+merge/release NO-GO. Stop here; no R6-B/C/D or security upgrade.
 
 Evidence parent: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`.
-`r6a-u1-recovery/recovery-checkpoint.json` records the actual interrupted-task
-recovery, source hashes, logs, exit codes and a fresh owned-process/port census.
-All 135 protected modifications match their original bytes; no later changed
-tracked paths were found. No owned App/Node/browser process or 8768 listener
-remains. No process was terminated and no directory was deleted during recovery.
-The old launcher did not journal launch PID/parent/start identity: previously
-sampled PIDs are retained, and unavailable historical identities are not invented.
+This checkpoint uses `r6a-u1-recovery/` and `r6a-u1-selection-ci/`. The frozen
+failed candidate's CI is separately retained in `r6a-u1-recovery-ci/`.
 
-| Existing attempt                                  | Actual recovered state                                                                                                                                                                                                 |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `controlled-browser`                              | Invalid scenario selector; zero scenarios, exit 1; root removed                                                                                                                                                        |
-| `controlled-current`                              | 3 completed passes, rename endpoint assertion failed, focus scenario interrupted by the 600-second Node watchdog, 3 NOT RUN; exit 1; root removed; final `results.json` absent, partial DOM/backend evidence preserved |
-| `rename-isolated-diagnostic`                      | Natural exit 0 after 137.81 seconds; 1/1 PASS, session `0yck190mu4wb`; source manifest still matches f2cc1af3; owned root removed                                                                                      |
-| Current original 37-record primary / confirmation | **NOT RUN / NOT RUN**; diagnostic passes are not substitutes                                                                                                                                                           |
+### Recovery, exact tail and fixture exit
 
-The isolated rename pass does not explain or erase the failed controlled batch.
-Its rename event is `b5a04569139a4c45b5932eda71eab0ff`, fn 67, conversation
-`04dc16d8a88a423caa6ea2588819a33f`. The failed batch timed out in
-`conversation_setup.ended()` after B selection in `conversationRenameReadiness`.
-Session `krzviuvh2lr`, A `e11e352c7fb04b149c30bdb1f8d9d37a`, B
-`dc77ee28b723442db6c9d4b8b659fc6e` identify that trace. Its B label application
-and later focus are 30,555.4 ms apart. The missing final framework snapshot
-prevents claiming its complete JS/four-output contract passed. Host contention
-is a hypothesis, not an established cause. Tail-node selection, event identity,
-observer windows and possible barrier/wait cycles remain under investigation.
+`recovery-checkpoint.json` recovers real exit codes, input hashes, logs and
+sampled process identities. No historical launch PID was invented where the
+old launcher did not journal it. At recovery no owned App/Node/browser or 8768
+listener remained. The isolated f2 rename task actually exited 0 after 137.81 s;
+it was not presumed killed from the interruption message. The f2 controlled
+batch separately retains three completed passes, the rename endpoint failure,
+focus interruption by the 600-second Node watchdog and three NOT RUN, with
+partial evidence and no final results file. The invalid initial scenario
+selector remains an exit-1, zero-scenario attempt.
 
-The f2cc1af3 explicit model release design is retained. Its earlier controlled
-red proves the old 45-second model watchdog failed before explicit release;
-the long-hold and shutdown diagnostics pass independently. However,
-`held_finished` currently means **model wait exited**, not generator, request,
-worker or process completion. Release ordering, primary/secondary exceptions
-and assertion/Node/App-watchdog/release-failure exits still need controlled
-verification. Those checks are prerequisites for starting the complete matrix.
+The later controlled rename failure has exact root 70, last backend 83 and JS
+tail 84: session `6pdb120yn3s`, B `a2daeb17ed29406c8388940855d83fec`, root event
+`9984620b4e0a441bb804f713c8f175a7`, last backend
+`304989ff8e544ab8bbf681722cf8b171`. Its actual JS result arrived after
+**31.4447 s**, beyond the old 30-second test endpoint. `endpoint-budget-plan.json`
+predeclared 45 s for this operation predicate only; model, barrier, SDK, App
+and Node budgets were not enlarged. This explains that controlled failure,
+not the uniquely unobserved cause of the original 4fb/322 accident.
 
-| Existing budget                             | Start and meaning at this checkpoint                                               |
-| ------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Setup operation endpoint 30 s               | Each `ended()` call; specified JS result not observed is failure                   |
-| File-browser barrier 40 s                   | Matching callback enters its wait; expiration is an injected-boundary error        |
-| Model wait                                  | Explicit release only; `held_finished` covers this wait, not production completion |
-| App watchdog 600 s                          | After App ready; currently exits its serving loop                                  |
-| Node watchdog 600 s                         | Node subprocess start; expiration aborts the browser process                       |
-| Model release wait 5 s / App exit wait 45 s | Teardown bounds; success alone does not prove all owned producers stopped          |
+`ended()` now requires the unique root and required successor requests,
+matching session/conversation, terminal transport, active observer window and
+actual final JS result. Missing logs, database commits or `settled()` snapshots
+cannot satisfy it. Setup waits for the new-conversation operation's exact
+endpoint before proceeding. Original concurrency pressure is retained. Tests
+reject wrong UUID/session/request, absent backend/JS, disabled observer,
+ambiguous branches, wrong IDs/order and three-output substitutions.
 
-[Existing Quality run 35734702856](https://github.com/262412/MARA/actions/runs/35734702856),
-attempt 1 at f2cc1af3, is completed/failure: **13 success, 7 failure**.
-All 20 logs and current artifacts have been recovered into
-`r6a-u1-closure-ci/`; digests, package provenance and finding comparisons pass.
-Each dependency profile has 14 blocking keys; each container has four. There
-are no new keys against the previous review; all remain blocking. Container
-SBOM generation was skipped after the vulnerability failures. Original package
-floors and Dev/R6/U1 coverage pass; f2's test-only increment over c1 is N/A,
-not a claimed 100% production change.
-It was not dispatched again. CI success partitions do not establish local
-complete-browser acceptance. The truncated first package-artifact download and
-the independently verified replacement remain separate evidence.
+The f2 explicit model release remains. Fixture teardown independently attempts
+UI, model, embedding and deletion releases; `held_finished` means model wait
+exit only. Generator, requests, physical queue, workers/writers, process exits
+and root cleanup are separate evidence. Only an owned suspended iterator is
+closed after its requests/workers are idle. A failed monitor or nonquiescent
+producer retains the root before store owners unwind. Primary failures survive
+secondary release/close failures. Exact observed queued-event cancellation is
+recorded without rewriting Gradio analytics; missing/wrong-session/processing
+receipts and an active worker remain negative controls. The historical absent
+queue entry alone was not retroactively declared proof of `clean_events`.
 
-U1 as a whole includes five production files and 21 test/harness files;
-f2cc1af3 itself changes only four test files. Last production/local package SHA
-is `c1c7489ccc0911fcc8b950b47c59dcc479be449b`; its package-input and native-scope
-reuse proofs remain attributed to their original executions. The original
-4fb94927 **36/37**, older **11/12**, eb controlled **4/5**, 500289b2 partial
-**25 passed/5 failed/7 NOT RUN**, and c1 primary **37/37** with mandatory
-confirmation **11/12 failed/25 NOT RUN** are all retained, never combined.
-See `r6a-u1-closeout/`, `r6a-u1-delivery-verification/`,
-`r6a-u1-tail-gate/` and `r6a-u1-closure-verification/`.
+At fd44, controlled cases are **10/10** and real-App exit probes are **5/5
+expected outcomes**: normal 0; assertion, Node watchdog, App watchdog and
+release failure each 1. All five establish quiescence, stopped owned processes
+and safe root removal. The held model remains unreleased/processing at
+46.015 s before explicit release. These receipts precede the full matrix;
+they are not newly executed results for the later diagnostic harness.
 
-Next smallest proposition: identify the exact post-selection completion edge
-and prove independent release/exit attempts preserve the primary failure while
-waiting for actual owned producers to stop. Only after those controlled gates
-pass may a newly frozen complete primary and confirmation start.
+### Failed confirmation and bounded follow-up
+
+| Fixture   | fd44 primary | fd44 required confirmation    |
+| --------- | ------------ | ----------------------------- |
+| retained  | 12/12        | 12/12                         |
+| refresh   | 11/11        | 4 passed, 1 failed, 6 NOT RUN |
+| seams     | 7/7          | NOT RUN                       |
+| indexing  | 4/4          | NOT RUN                       |
+| lifecycle | 1/1          | NOT RUN                       |
+| public    | 2/2          | NOT RUN                       |
+
+Each executed fixture used an empty owned runtime/cache, exclusive port 8768,
+serial real App launch and the locked installed Gradio 4.39.0 frontend. All
+executed fixtures have matching frozen inputs, actual Node/App exits,
+quiescent producers and root removal. Primary exact B selection was observed
+before A release: session `mj2tccx1n6r`, B
+`19898f2bbdc240d5980e35a5d93d52f2`, event
+`1def3dc11a5f4013b22b7770aca0c48b`. The primary proves authorized IDs, four
+outputs, Focus/summary, messages/citations and old-result rejection for that
+batch. It does not rescue the failed confirmation.
+
+The failure is `selectorInitializationSelectionOverlap` at
+`file_browser_concurrency.cjs`'s selected-class assertion (original line 163).
+Session `mwe34r3rndl` has successful `select_chat_file` events
+`4620db4d74c6465a9f382688ea1b941d` and
+`ed29d3e6f053463a9f4fc075db53e9ef`, yet the text card remains unselected and
+the observed refresh uses `selected=[]`. The old observer did not record
+`applyFileSelection`/`applySelector` or selected-component assignments. This
+is not proof of a fixture defect, framework suppression or product overwrite.
+Cleanup passed separately. `failed-confirmation-checkpoint.json` preserves the
+complete counts and original results digests.
+
+Follow-up adds task-data-only input, guard, transport, component-value/choices
+and DOM observation. Three separate focused diagnostics pass: the natural
+isolated click; both initial selector returns held past a real click; and one
+release of held selector/card transport. The second request is the normal
+empty hidden-input reset in the observed isolated path. The aligned transport
+case still applied the guards **163.7 ms apart**, so it does not prove the
+same-frontend-flush case. Its pass does not identify the historical cause.
+One preceding diagnostic failed syntax validation before any scenario; that
+zero-scenario failure and its corrective commit are retained. No production
+guard change was made on this incomplete causal evidence.
+
+Next smallest proposition: determine the last writer of selected component
+40 during one real click, correlating selection fn 127, selector fn 139,
+mode/visibility fn 140 and Dropdown reconciliation in the same actual frontend
+flush. Establish whether an older `[]` input can commit after the latest
+authorized card value. Capture a deterministic failing event/assignment trace
+before a minimal production fix. No forced click, API selection, global retry,
+golden refresh or skip/xfail was used. See `selection-blocker-analysis.json`.
+
+### Ownership, local gates and platform scope
+
+| Scope                           | Owner / contract                                                     | Status                                                                      |
+| ------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| R5-A                            | Existing deletion coordinator; ordered external-store cleanup        | ACCEPTED; historical fault matrix retained                                  |
+| R5-B; L1/I1; W1/W2              | Writer/iterator/ZIP, Source leases/identity, browser/group contracts | ACCEPTED; original same-source double 36/36 retained                        |
+| C1                              | Graph cache I/O/publication and authorization lifetime               | ACCEPTED; no algorithm/cache cleanup change                                 |
+| C2                              | Notebook/artifact conversion and short Session commits               | ACCEPTED; no permission, copy/serialization or cross-store semantics change |
+| C3                              | DownloadWorkspace, manifest/FD, transfer ownership and retention     | ACCEPTED; download lifetime belongs here, not R5-A                          |
+| B1 / R5                         | Full App delivery plus independent production guard                  | ACCEPTED; original double 37/37 and all failures retained                   |
+| R6-A inspection / CLI / Sidecar | Inspection extraction, identity fix, CLI actor, Windows parent pipe  | Implemented results retained; overall R6-A BLOCKED                          |
+| R6-A/U1 recovery                | Test endpoint, producer/process exit and precise observations        | Controlled exit contracts pass; required full-browser confirmation failed   |
+| R6-B/C/D and security upgrade   | Existing remaining matrix below                                      | NOT STARTED                                                                 |
+
+This recovery changes only tests/observers/fixture/report. Prior U1 focus,
+conversation readiness and scoped CSS production fixes remain. No architecture,
+dependency, permission, schema, global concurrency or R5 lifecycle change.
+Current small contracts: Python **18/18**, Node **142/142**, no skips. A test
+ordering red (15 passed/1 failed) exposed Queue construction after a prior
+`asyncio.run` had closed its loop; the test now creates and cleans the real
+Gradio Queue on one running loop. This does not change production Queue code.
+
+Windows affected suite: **99 failed, 4156 passed, 9 skipped, 135 warnings in 524.03s (0:08:44)**.
+The same 99 nodes and failure nature remain against the original comparison;
+no new/resolved nodes. Kotaemon separately: **4 failed, 405 passed, 23 skipped, 90 warnings in 120.52s (0:02:00)**;
+the same four capability failures, no new/resolved nodes. Complete mypy with
+Linux target modelling passes locally; Win32 modelling retains its exact
+15 errors in six files. Native Linux CI is recorded independently below.
+Ten static/hygiene/supply-chain/secret/G0 checks pass with unchanged locks,
+baseline, aliases, scan scope, required jobs and coverage floors.
+
+### Actual CI, packages and coverage
+
+Recovered f2 [Quality 35734702856](https://github.com/262412/MARA/actions/runs/35734702856)
+remains completed/failure, 13 success/7 failure; no redispatch. Frozen fd44
+[Quality 35761447880](https://github.com/262412/MARA/actions/runs/35761447880)
+is independently completed/failure, 13 success/7 failure, no nonsecurity
+failures. Current 40b
+[Quality 35766364808](https://github.com/262412/MARA/actions/runs/35766364808)
+is **completed/failure**, actual
+**13 success / 7 failure**.
+All job logs and relevant artifacts are retained with digest/provenance checks.
+
+| Native Linux test group      | Actual summary                                           |
+| ---------------------------- | -------------------------------------------------------- |
+| Benchmark and root contracts | 1650 passed, 8 warnings in 615.11s (0:10:15)             |
+| ktem isolated runtime        | 3964 passed, 139 warnings in 697.17s (0:11:37)           |
+| slide_cli                    | 147 passed (pytest -qq progress; exit 0)                 |
+| kotaemon Python 3.10         | 422 passed, 10 skipped, 93 warnings in 176.26s (0:02:56) |
+| kotaemon Python 3.11         | 422 passed, 10 skipped, 93 warnings in 177.75s (0:02:57) |
+
+| Current job                                                | Actual result | Job ID         |
+| ---------------------------------------------------------- | ------------- | -------------- |
+| Benchmark and root contracts                               | success       | `106876814538` |
+| Frontend and browser security                              | success       | `106876814835` |
+| ktem isolated runtime                                      | success       | `106876814889` |
+| Unified pytest collection                                  | success       | `106876815020` |
+| slide_cli                                                  | success       | `106876815047` |
+| Container lite supply chain                                | failure       | `106876815072` |
+| Container ollama supply chain                              | failure       | `106876815079` |
+| Static, hygiene, and baseline ratchet                      | success       | `106876815158` |
+| Repository and image secret scans / Repository and history | success       | `106876815276` |
+| Coverage floors and production diff                        | success       | `106876815295` |
+| kotaemon Python 3.10                                       | success       | `106876815313` |
+| kotaemon Python 3.11                                       | success       | `106876815320` |
+| Python distribution supply chain                           | success       | `106876815386` |
+| Four clean wheel installations                             | success       | `106876815493` |
+| Container full supply chain                                | failure       | `106876815547` |
+| Repository and image secret scans / Built image            | success       | `106876815590` |
+| Dependency audit root-py310                                | failure       | `106876815967` |
+| Dependency audit root-py311                                | failure       | `106876815993` |
+| Dependency audit container-py310                           | failure       | `106876816026` |
+| Required quality gates                                     | failure       | `106889220911` |
+
+Current dependency blocking-key counts: root-py310: 14, root-py311: 14, container-py310: 14. No new/resolved keys
+against the previous review. Each container retains four blocking keys,
+including PCRE2, with no new blocking/raw keys; package/layer identity checks
+remain separate from scanner-database differences. Container SBOM generation
+was skipped after vulnerability failures. These failures stay blocking; S1 is
+not waived by functional tests or coverage.
+
+Current CI newly builds all four packages/eight archives and passes four clean
+wheel installations. Eight-old-archive reuse was explicitly rejected: the root
+sdist contains the changed `tests/test_web_operation_observer.py`; its newly
+built bytes are verified against 40b. The local installed CLI/Sidecar business
+flow remains attributed to **c1c7489ccc0911fcc8b950b47c59dcc479be449b**, with
+unchanged implementation trees, entrypoints and wheel inputs, not a claimed
+new local execution. Current CI uses the committed tree; protected uncommitted
+user assets are not asserted identical to CI wheel bytes.
+
+Desktop Gate2 remains the original **3/3** at
+**eb6e4d8306ca9083819b7934568a4153727b4a3c**, run 35723190831. Its actual
+Electron/PyInstaller input-scope proof excludes the later Gradio CSS change;
+desktop sources, build configuration and locks remain unchanged. This is no
+new native build, clean-VM sweep or unexecuted same-named pytest result.
+
+| Coverage package | Covered / statements   | Unchanged floor |
+| ---------------- | ---------------------- | --------------- |
+| benchmark        | 17146/19005 = 90.2184% | 90%             |
+| slide_cli        | 2293/2853 = 80.3715%   | 70%             |
+| kotaemon         | 7833/11012 = 71.1315%  | 60%             |
+| ktem             | 43721/51906 = 84.2311% | 50%             |
+
+| Production diff | Fixed base                                 | Covered / changed lines |
+| --------------- | ------------------------------------------ | ----------------------- |
+| fixed_dev       | `adab3f4d8f221e3620494fab0a24ef8e5557d12a` | 2420/2511 = 96.3759%    |
+| r6a_increment   | `3b210087ac057673b29af2b1777efeff82a0ecfb` | 269/276 = 97.4638%      |
+| u1_increment    | `32252dc07f5ca70aaa9e9f6f142f5381488c3234` | 25/25 = 100.0000%       |
+
+Recovery's new production increment is **0/0, N/A**, not a claimed 100% change.
+The original collector, subprocess patch and normalized paths remain intact;
+no temporary runtime files or raw aliases enter the report. Desktop Sidecar
+files remain outside the pre-existing production coverage scope. Coverage and
+Linux security smoke do not replace the required complete browser confirmation.
+
+### Commit identities, preservation and stop
+
+Recovery baseline: `f2cc1af366e33ddad74e89b75c6e586c19e6eba8`.
+Accepted R5: `41274852f1fda541b3162d5ae39a43beb8e92605`.
+Original Dev: `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+Full source/test/harness/package, report and remote identities are recorded in
+the manifests and `recovery-commit-ledger.json`; the final ordinary-push receipt
+records the actual report/local/remote SHA without a self-referential report hash.
+
+| Commit     | Actual change                                                                 |
+| ---------- | ----------------------------------------------------------------------------- |
+| `e737b523` | docs: record R6-A interruption recovery checkpoint                            |
+| `9fb35790` | test(web): expose fixture release and shutdown failures                       |
+| `dbfefe1e` | test(web): drain owned browser fixtures and preserve primary failures         |
+| `6cb44847` | test(web): reject unrelated or unobserved conversation endpoints              |
+| `9492a29e` | test(web): characterize grouped file DOM and endpoint counterexamples         |
+| `512d1372` | test(web): correlate conversation endpoints and preserve grouped DOM contract |
+| `0a6a8221` | test(web): wait for the new-conversation endpoint after reload                |
+| `242ced64` | test(web): expose unstarted queue cancellation at fixture exit                |
+| `fd44f877` | test(web): record exact queued cancellation before fixture cleanup            |
+| `f6dd0b56` | test(web): trace selector values and file selection application               |
+| `63062e1c` | test(web): hold initial choices past a real file card selection               |
+| `54e3db23` | test(web): correct late-selector diagnostic syntax                            |
+| `561975f5` | test(browser): create and close Gradio queue on one running loop              |
+| `40b187d9` | test(web): align owned selector and card transport delivery                   |
+
+All 135 protected modifications retain their original bytes; NUL and all
+historical retained roots are preserved. Final metadata matches all 98,853
+canonical entries, 614 `.theflow` entries, the cache and both real databases.
+The full five-file config/database comparison **failed**: `.env`, `.env.example`
+and `flowsettings.py` under the real Cinnamon/Kotaemon configuration directory
+have new mtimes at 2026-09-22 17:08:17 UTC, with unchanged sizes. Historical
+snapshots have no content hashes, so unchanged bytes are **not established**.
+The time overlaps an owned restore diagnostic but does not identify the writer.
+`runtime-protection-difference.json` preserves the failed comparison and current
+hashes. No configuration content was printed, overwritten or automatically
+restored during this investigation. This protection difference remains OPEN
+alongside the browser blocker; no blanket real-config-preservation claim is made.
+No owned
+App/Node/browser or port listener remains. Only explicit task paths were staged;
+no branch/worktree, force push, merge, deployment, release, root cleanup or
+environment sync occurred. No later unrelated tracked changes were found;
+existing user edits were not reverted.
+
+The report-only final commit reuses source/test/harness/package evidence only
+after input equivalence is checked; report hooks and final secret scan still
+run separately. Their actual receipts and the final protection/remote state
+are retained beside this checkpoint. All previous 36/37, 11/12, interrupted,
+invalid, failed and independently passing attempts remain historical evidence.
+**Stop at R6-A/U1 with BLOCKED; do not report browser blocker closed.**
 
 ## Previous R6-A checkpoint at 32252dc0 (retained historical evidence)
 
