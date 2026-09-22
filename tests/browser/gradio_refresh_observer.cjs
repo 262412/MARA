@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 
 function installTrace(ids) {
-  const trace = window.ownedFrameworkTrace = {records: [], errors: [], ids};
+  const trace = window.ownedFrameworkTrace = {records: [], errors: [], ids, logpointsActive: true};
   const clone = value => JSON.parse(JSON.stringify(value));
   window.ownedRecordFramework = (phase, value) => {
     try {
@@ -146,7 +146,13 @@ async function attach(page, ready, base, {conversation = false} = {}) {
       served.push(response.body().then(value => ({url: response.url(), sha256: crypto.createHash('sha256').update(value).digest('hex')})));
     }
   });
-  return {ids, async snapshot() {
+  return {ids, async setActive(active, reason) {
+    await cdp.send('Debugger.setBreakpointsActive', {active});
+    await page.evaluate(({active, reason}) => {
+      window.ownedFrameworkTrace.logpointsActive = active;
+      window.ownedRecordFramework('logpoints_state', {active, reason});
+    }, {active, reason});
+  }, async snapshot() {
     const responses = await Promise.allSettled(served);
     return {bundleSha256: hash, points, resolved, served: responses,
       state: await page.evaluate(() => window.ownedFrameworkTrace)};

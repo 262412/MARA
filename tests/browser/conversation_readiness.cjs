@@ -10,15 +10,16 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
     return response.json();
   };
   async function run(kind) {
-    const {page, queue} = await login('browser-owner', {traceConversation: true});
+    const {page, queue, refreshTrace} = await login('browser-owner', {traceConversation: true});
     const key = 'readiness-' + kind;
-    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready});
+    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready, refreshTrace});
     let a, b, pending, after;
     try {
       await page.getByText('Conversation', {exact: true}).click();
       a = await setup.create('Ready A ' + kind, 'owned-observatory');
       b = await setup.create('Ready B ' + kind, 'r3c-browser-owner-text');
       if (kind !== 'restore' && kind !== 'focus') await setup.choose(a);
+      expect(await page.evaluate(() => window.ownedFrameworkTrace.logpointsActive)).toBe(true);
       const fn = kind === 'new' ? setup.newRoot : kind === 'rename' || kind === 'error' ? setup.rename : setup.select;
       await control('/arm', {key, callback: 'WebOperation', event: 'return',
         function_id: kind === 'focus' ? ready.roles.conversation_select_tail : fn.id,
@@ -59,6 +60,7 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
         expect((await evidence()).conversations.find(row => row.id === a.id).name).toBe(a.name + ' renamed');
       }
       await setup.choose(b);
+      expect((await setup.trace()).filter(row => row.phase === 'logpoints_state' && row.sequence >= start).every(row => row.active)).toBe(true);
       await expect(page.locator('#chat-selected-file')).toContainText('.txt');
       after = await page.evaluate(() => window.ownedConversationTrace);
       results.scenarios.push({name: key, a, b, session: queue.sessionHash,

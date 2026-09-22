@@ -10,6 +10,11 @@ function assertSelection(proof) {
   assert.equal(proof.gesture.option.node, options[0].node);
   assert.deepEqual(framework.errors, []);
   assert.ok(framework.records.some(row => row.phase === 'installed'), 'framework observer must be installed');
+  const logpointStates = framework.records.filter(row => row.phase === 'logpoints_state');
+  assert.equal(logpointStates.findLast(row => row.sequence < start)?.active, true,
+    'logpoints must be active before the critical mouse action');
+  assert.ok(logpointStates.filter(row => row.sequence >= start).every(row => row.active),
+    'logpoints must remain active throughout the critical action');
   assert.ok(web.records.some(row => row.phase === 'installed'), 'production guard observer must be installed');
   assert.deepEqual(web.errors, []);
   const restored = server.findLast(row => row.phase === 'return' && row.fn === selectFn &&

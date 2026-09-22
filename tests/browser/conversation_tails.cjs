@@ -10,9 +10,9 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
     return response.json();
   }
   async function focusCase(timing) {
-    const {page, queue} = await login('browser-owner', {traceConversation: true});
+    const {page, queue, refreshTrace} = await login('browser-owner', {traceConversation: true});
     const key = 'conversation-focus-' + timing;
-    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready});
+    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready, refreshTrace});
     await page.context().tracing.start({screenshots: false, snapshots: false, sources: false});
     let a, b;
     try {
@@ -62,9 +62,9 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
   async function conversationFocusAfterOpen() { await focusCase('after-open'); }
   async function conversationFocusDuringClick() { await focusCase('pointer-down'); }
   async function choicesCase(kind) {
-    const {page, queue} = await login('browser-owner', {traceConversation: true});
+    const {page, queue, refreshTrace} = await login('browser-owner', {traceConversation: true});
     const key = 'conversation-' + kind;
-    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready});
+    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready, refreshTrace});
     let a, b;
     try {
       await page.getByText('Conversation', {exact: true}).click();

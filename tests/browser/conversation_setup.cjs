@@ -1,5 +1,5 @@
 // Operation endpoints for the real UI; a queue snapshot is not chain completion.
-module.exports = ({expect, page, queue, evidence, send, tailFinished, ready}) => {
+module.exports = ({expect, page, queue, evidence, send, tailFinished, ready, refreshTrace}) => {
   const entries = Object.entries(ready.functions).map(([id, fn]) => ({...fn, id: Number(id)}));
   const select = entries.find(fn => fn.id === ready.roles.conversation_select);
   const dropdownId = select.inputs[0];
@@ -50,8 +50,15 @@ module.exports = ({expect, page, queue, evidence, send, tailFinished, ready}) =>
     await page.locator(`[data-chat-file-id="${file}"]`).click();
     await sourcesApplied(row.id, [file]);
     await expect(page.locator(`[data-chat-file-id="${file}"]`)).toHaveClass(/is-selected/);
-    await send(page, 'Save source selection for ' + name);
-    await tailFinished(queue, ++turns);
+    // Streaming produces many unrelated component writes. Keep passive transport,
+    // DOM, production-guard and server evidence, without debugger logpoints here.
+    await refreshTrace.setActive(false, 'prepare stored messages for ' + row.id);
+    try {
+      await send(page, 'Save source selection for ' + name);
+      await tailFinished(queue, ++turns);
+    } finally {
+      await refreshTrace.setActive(true, 'stored messages preparation ended');
+    }
     await page.locator('#rename-conv-button').click();
     const input = page.getByPlaceholder('Conversation name', {exact: true});
     await input.fill(name);

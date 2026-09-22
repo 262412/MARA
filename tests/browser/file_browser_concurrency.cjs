@@ -178,9 +178,9 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
   }
 
   async function conversationDuringFileRefresh() {
-    const {page, queue} = await login('browser-owner', {traceConversation: true});
+    const {page, queue, refreshTrace} = await login('browser-owner', {traceConversation: true});
     const key = 'old-conversation-refresh';
-    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready});
+    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready, refreshTrace});
     const {assertSelection, assertOldRefreshRejected} = require('./conversation_contract.cjs');
     let beforeRelease, afterRelease;
     try {
