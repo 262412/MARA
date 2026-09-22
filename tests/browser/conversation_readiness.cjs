@@ -77,6 +77,28 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
   async function conversationRestoreReadiness() { await run('restore'); }
   async function conversationErrorReadiness() { await run('error'); }
   async function conversationTailFocusOwnership() { await run('focus'); }
+  async function conversationPanelLayout() {
+    const {page} = await login('browser-owner');
+    let panels;
+    try {
+      panels = await page.evaluate(() => ['answer-expand', 'info-expand', 'conversation-dock'].map(id => {
+        const node = document.getElementById(id), css = getComputedStyle(node);
+        return {id, opacity: css.opacity, flexShrink: css.flexShrink,
+          bounds: node.getBoundingClientRect().toJSON()};
+      }));
+      for (const panel of panels.slice(0, 2)) {
+        expect(panel.opacity, panel.id + ' stays readable').toBe('1');
+        expect(panel.flexShrink, panel.id + ' preserves content height').toBe('0');
+      }
+      await page.locator('#studio-notes-panel').getByText('Studio Notes', {exact: true}).click();
+      await page.locator('#studio-save-manual-note').click();
+      results.scenarios.push({name: 'conversation-readiness-preserves-adjacent-panel-layout', panels});
+    } finally {
+      fs.writeFileSync(path.join(output, 'conversation-panel-layout.json'), JSON.stringify(panels, null, 2));
+      await page.screenshot({path: path.join(output, 'conversation-panel-layout.png'), fullPage: true});
+      await page.close();
+    }
+  }
   return [conversationNewReadiness, conversationRenameReadiness, conversationRestoreReadiness,
-    conversationErrorReadiness, conversationTailFocusOwnership];
+    conversationErrorReadiness, conversationTailFocusOwnership, conversationPanelLayout];
 };
