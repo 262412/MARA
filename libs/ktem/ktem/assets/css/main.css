@@ -4908,8 +4908,6 @@ body.ktem-dark-mode .gradio-container {
   overflow-x: hidden !important;
 }
 
-#answer-expand,
-#info-expand,
 #conversation-dock[aria-busy="true"] {
   opacity: 0.6;
 }
@@ -4920,6 +4918,8 @@ body.ktem-dark-mode .gradio-container {
   padding: 0.5rem;
 }
 
+#answer-expand,
+#info-expand,
 #conversation-dock {
   height: auto !important;
   max-height: none !important;
