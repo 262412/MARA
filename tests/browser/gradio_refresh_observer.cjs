@@ -14,7 +14,7 @@ function installTrace(ids) {
   };
   window.ownedRecordUpdates = (phase, updates) => {
     try {
-      const values = (updates || []).filter(item => ids.components.includes(item.id) && item.prop === 'value');
+      const values = (updates || []).filter(item => ids.components.includes(item.id) && ids.props.includes(item.prop));
       if (values.length) window.ownedRecordFramework(phase, {updates: values});
     } catch (error) { trace.errors.push({phase, error: String(error)}); }
   };
@@ -67,7 +67,7 @@ function installTrace(ids) {
             const data = frame.split('\n').filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trim()).join('\n');
             if (!data) continue;
             const message = JSON.parse(data), payload = message.output?.data?.[0];
-            if (payload?.stamp?.fileRequest) window.ownedRecordFramework('transport',{url,message});
+            if (payload?.stamp?.fileRequest || ids.conversation) window.ownedRecordFramework('transport',{url,message});
           }
         }
       })().catch(error=>{
@@ -85,7 +85,7 @@ function installTrace(ids) {
   window.ownedRecordFramework('installed', {ids});
 }
 
-async function attach(page, ready, base) {
+async function attach(page, ready, base, {conversation = false} = {}) {
   if (ready.gradio !== '4.39.0') throw Error('Unexpected Gradio version');
   const filename = 'Blocks-BPGBf-rO.js';
   const bundle = fs.readFileSync(ready.frontend.path);
@@ -96,7 +96,19 @@ async function attach(page, ready, base) {
   const resultId = refresh[0][1].outputs[0];
   const [applyId, apply] = definitions.find(([, value]) => value.targets.some(([id, event]) => id === resultId && event === 'change'));
   const ids = {resultId, applyFn: Number(applyId), components: [resultId, ...apply.outputs],
-    functions: [...refresh.map(([id]) => Number(id)), Number(applyId)]};
+    functions: [...refresh.map(([id]) => Number(id)), Number(applyId)], props: ['value'], conversation};
+  if (conversation) {
+    for (const [id, definition] of definitions) {
+      if (['new_conv', 'reload_conv', 'rename_conv', 'select_conv'].includes(definition.name) ||
+          definition.js?.includes('#chat-input textarea')) {
+        ids.functions.push(Number(id));
+      }
+    }
+    const selection = ready.functions[ready.roles.conversation_select];
+    ids.components.push(...selection.outputs.slice(0, 2));
+    ids.components = [...new Set(ids.components)];
+    ids.props.push('choices');
+  }
   await page.addInitScript(installTrace, ids);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Debugger.enable');
@@ -104,7 +116,7 @@ async function attach(page, ready, base) {
   const definitionsToTrace = [
     ['update_value', 'h&&(Vt.push(h)', "window.ownedRecordUpdates?.('queued',h)"],
     ['assignment', '$.props[y.prop]=E', "window.ownedRecordUpdates?.('assignment',[{id:y.id,prop:y.prop,value:E,previous:$.props[y.prop]}])"],
-    ['flush_end', 'Vt=[],v=!1,p.set(!1)', "window.ownedRecordUpdates?.('flush_end',window.ownedFrameworkTrace.ids.components.map(id=>({id,prop:'value',value:s[id]?.props.value})))"],
+    ['flush_end', 'Vt=[],v=!1,p.set(!1)', "window.ownedRecordUpdates?.('flush_end',window.ownedFrameworkTrace.ids.components.flatMap(id=>window.ownedFrameworkTrace.ids.props.map(prop=>({id,prop,value:s[id]?.props[prop]}))))"],
     ['handle_update', 'const W=u.find(X=>X.id==ee).outputs', "window.ownedRecordData?.('handle_update',ee,A)"],
     ['js_schedule', 'B.frontend_fn?B.frontend_fn(X.data.concat', "window.ownedRecordData?.('js_schedule',A,X.data)"],
     ['js_result', 'Dl(x,A)}):B.types.cancel', "window.ownedFrameworkTrace?.ids.functions.includes(A)&&window.ownedRecordFramework('js_result',{fn:A,input:X.data,outputs:x})"],

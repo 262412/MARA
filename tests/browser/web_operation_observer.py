@@ -30,6 +30,7 @@ def bind_operation_observer(blocks, chat_page, barriers):
     }
     records: list[dict[str, Any]] = []
     by_event: dict[str, dict[str, Any]] = {}
+    conversation_functions = _conversation_functions(blocks)
     _bind_application_observer(blocks, manager, records, by_event)
     original = blocks.call_function
     signature = inspect.signature(original)
@@ -42,10 +43,11 @@ def bind_operation_observer(blocks, chat_page, barriers):
         if isinstance(fn, int):
             fn = blocks.fns[fn]
         is_files = fn.name == "refresh_chat_file_list"
+        is_conversation = fn._id in conversation_functions
         is_group = fn.name in group_functions or group_outputs.intersection(
             component._id for component in fn.outputs
         )
-        if not (is_files or is_group):
+        if not (is_files or is_group or is_conversation):
             return await original(*args, **kwargs)
         request = values["requests"]
         if isinstance(request, list):
@@ -55,6 +57,7 @@ def bind_operation_observer(blocks, chat_page, barriers):
             "event_id": values["event_id"],
             "fn": fn._id,
             "name": fn.name,
+            "conversation_operation": is_conversation,
             "session_hash": getattr(request, "session_hash", None),
             "username": getattr(request, "username", None),
             "inputs": _file_inputs(inputs) if is_files else _plain(inputs),
@@ -64,21 +67,20 @@ def bind_operation_observer(blocks, chat_page, barriers):
         by_event[record["event_id"]] = record
         token = current_operation.set(record)
         try:
-            if is_group:
+            if is_group or is_conversation:
                 await asyncio.to_thread(
                     barriers.observe, "WebOperation", "call", {"request": request}, None
                 )
             result = await original(*args, **kwargs)
-            prediction = result["prediction"]
-            records.append(
-                {
-                    **record,
-                    "phase": "return",
-                    "result": (
-                        _file_result(prediction) if is_files else _plain(prediction)
-                    ),
-                }
-            )
+            records.append(_operation_return(record, result["prediction"], is_files))
+            if is_conversation:
+                await asyncio.to_thread(
+                    barriers.observe,
+                    "WebOperation",
+                    "return",
+                    {"request": request},
+                    None,
+                )
             return result
         except BaseException as error:
             records.append({**record, "phase": "error", "error": type(error).__name__})
@@ -88,6 +90,27 @@ def bind_operation_observer(blocks, chat_page, barriers):
 
     blocks.call_function = call_function
     return records
+
+
+def _operation_return(record, prediction, is_files):
+    return {
+        **record,
+        "phase": "return",
+        "result": _file_result(prediction) if is_files else _plain(prediction),
+    }
+
+
+def _conversation_functions(blocks):
+    """Trace descendants of actual conversation controls, including JS tails."""
+    ids = {
+        fn._id
+        for fn in blocks.fns.values()
+        if fn.name in {"new_conv", "reload_conv", "rename_conv", "select_conv"}
+    }
+    for dep in blocks.config["dependencies"]:
+        if dep["trigger_after"] in ids:
+            ids.add(dep["id"])
+    return ids
 
 
 def _bind_application_observer(blocks, manager, records, by_event):
@@ -100,6 +123,11 @@ def _bind_application_observer(blocks, manager, records, by_event):
         result = await original(*args, **kwargs)
         record = by_event.get(bound.arguments["event_id"])
         if record is not None:
+            if record["conversation_operation"]:
+                records.append(
+                    {**record, "phase": "postprocess", "data": _plain(result["data"])}
+                )
+                return result
             state = bound.arguments["state"]
             groups = state[manager.group_list_state._id]
             records.append(

@@ -15,10 +15,11 @@ async function evidence() {
   return response.json();
 }
 
-async function login(username = 'browser-owner', {initialize = true, traceRefresh = false} = {}) {
+async function login(username = 'browser-owner', {initialize = true, traceRefresh = false, traceConversation = false} = {}) {
   const page = await browser.newPage({locale: 'en-US', viewport: {width: 1600, height: 1200}});
   await page.addInitScript(require('./web_operation_observer.cjs').install);
-  const refreshTrace = traceRefresh ? await require('./gradio_refresh_observer.cjs').attach(page, ready, base) : null;
+  const refreshTrace = traceRefresh || traceConversation ? await require('./gradio_refresh_observer.cjs').attach(page, ready, base, {conversation: traceConversation}) : null;
+  if (traceConversation) await page.addInitScript(require('./conversation_observer.cjs').install);
   const originalClose = page.close.bind(page);
   page.close = async (...args) => {
     if (!page.isClosed()) {
@@ -27,6 +28,11 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
         records: await page.evaluate(() => window.ownedWebOperations || []),
         observerErrors: await page.evaluate(() => window.ownedWebObserverErrors || []),
         framework: refreshTrace ? await refreshTrace.snapshot() : null});
+      if (traceConversation) {
+        results.conversationOperations ||= [];
+        results.conversationOperations.push({username, sessionHash: queue.sessionHash,
+          observation: await page.evaluate(() => window.ownedConversationTrace)});
+      }
     }
     return originalClose(...args);
   };
@@ -353,9 +359,11 @@ async function authenticatedIndexing() {
   const studioPermissions = require('./studio_permissions.cjs')({expect, login, evidence, settled, roles, results});
   const indexingLifetime = require('./indexing_lifetime.cjs')({expect, login, evidence, settled, results, output, base});
   const indexingCloseout = require('./indexing_closeout.cjs')({expect, login, evidence, settled, send, tailFinished, results, base});
-  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout];
+  const conversationTails = require('./conversation_tails.cjs')({expect, login, evidence, send, tailFinished, results, output, base, ready});
+  const controlledOnly = conversationTails.map(fn => fn.name);
+  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout, ...conversationTails];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
-  for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : !['publicConversationPermissions', 'publicStudioPermissions'].includes(fn.name))) {
+  for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : !['publicConversationPermissions', 'publicStudioPermissions', ...controlledOnly].includes(fn.name))) {
     console.log('Starting browser scenario:', scenario.name);
     try { await scenario(); console.log('Passed browser scenario:', scenario.name); }
     catch (error) { results.scenarios.push({name: scenario.name, failure: error.stack}); console.log('Failed browser scenario:', scenario.name, error.stack); }
