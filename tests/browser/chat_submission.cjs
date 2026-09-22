@@ -86,7 +86,21 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
   });
   await page.route('https://cdnjs.cloudflare.com/ajax/libs/tributejs/5.1.3/tribute.min.js',
     route => route.fulfill({path: path.join(output, 'tribute.min.js'), contentType: 'application/javascript'}));
-  await page.goto(base);
+  const navigation = {username, requested: [], finished: [], failed: []};
+  const requested = request => navigation.requested.push({url: request.url(), type: request.resourceType()});
+  const finished = request => navigation.finished.push(request.url());
+  const failed = request => navigation.failed.push({url: request.url(), error: request.failure()});
+  page.on('request', requested); page.on('requestfinished', finished); page.on('requestfailed', failed);
+  try { await page.goto(base); }
+  catch (error) {
+    results.navigationFailures ||= [];
+    results.navigationFailures.push({...navigation, error: String(error),
+      state: await page.evaluate(() => ({readyState: document.readyState, url: location.href}))});
+    await page.close();
+    throw error;
+  } finally {
+    page.off('request', requested); page.off('requestfinished', finished); page.off('requestfailed', failed);
+  }
   await page.locator('input[type=text]').fill(username);
   await page.locator('input[type=password]').fill('OwnedFixture7!');
   await page.getByRole('button', {name: /Login|登录/}).click();
