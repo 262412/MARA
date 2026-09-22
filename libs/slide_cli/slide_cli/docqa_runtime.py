@@ -324,12 +324,10 @@ def _count_saved_sessions(
 
     try:
         with Session(engine) as session:
-            statement = select(conversation_model)
-            if default_user_id:
-                statement = statement.where(
-                    (conversation_model.user == default_user_id)
-                    | conversation_model.is_public.is_(True)
-                )
+            statement = select(conversation_model).where(
+                (conversation_model.user == default_user_id)
+                | conversation_model.is_public.is_(True)
+            )
             rows = session.exec(statement).all()
         return len(rows), []
     except Exception as exc:
@@ -398,12 +396,9 @@ def collect_docqa_session_summaries() -> list[dict[str, Any]]:
     default_user_id, _issues = _resolve_default_user_id(flowsettings, engine, User)
 
     with Session(engine) as session:
-        statement = select(Conversation)
-        if default_user_id:
-            statement = statement.where(
-                (Conversation.user == default_user_id)
-                | Conversation.is_public.is_(True)
-            )
+        statement = select(Conversation).where(
+            (Conversation.user == default_user_id) | Conversation.is_public.is_(True)
+        )
         statement = statement.order_by(Conversation.date_created.desc())  # type: ignore[attr-defined]
         rows = session.exec(statement).all()
 
