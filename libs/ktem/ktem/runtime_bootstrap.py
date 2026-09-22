@@ -39,6 +39,17 @@ def get_runtime_paths() -> RuntimePaths:
             env_path=config_dir / ".env",
         )
 
+    app_home = str(os.environ.get("MARA_APP_HOME", "") or "").strip()
+    if app_home:
+        root = Path(app_home).expanduser().resolve()
+        return RuntimePaths(
+            config_dir=root / "config",
+            data_dir=root / "data",
+            cache_dir=root / "cache",
+            flowsettings_path=root / "config" / "flowsettings.py",
+            env_path=root / "config" / ".env",
+        )
+
     dirs = PlatformDirs(appname="Kotaemon", appauthor="Cinnamon")
     config_dir = Path(dirs.user_config_dir).resolve()
     data_dir = Path(dirs.user_data_dir).resolve()

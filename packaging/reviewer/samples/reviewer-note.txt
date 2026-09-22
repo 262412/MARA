@@ -1,0 +1,7 @@
+MARA reviewer sample
+
+This is a synthetic document for testing installation and document question answering.
+The project review marker is ORCHID-7429.
+The review meeting is scheduled for 14 October 2026.
+The approved sample budget is 37 units.
+This document does not specify a project manager.
