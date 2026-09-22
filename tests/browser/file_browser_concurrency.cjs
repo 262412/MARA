@@ -196,7 +196,7 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
       await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
       await expect.poll(() => page.evaluate(() => window.ownedWebOperations.some(row =>
         row.phase === 'applyFileSelection' && row.args[0]?.file_id === 'r3c-browser-owner-text' &&
-        row.returned[1]?.value?.[0] === 'r3c-browser-owner-text')))).toBe(true);
+        row.returned[1]?.value?.[0] === 'r3c-browser-owner-text'))).toBe(true);
       results.selectorChoiceDiagnostic = {sessionHash: queue.sessionHash,
         gatesBeforeRelease: await control(''),
         beforeRelease: await page.evaluate(() => window.ownedWebOperations)};
