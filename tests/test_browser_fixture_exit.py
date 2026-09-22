@@ -1,6 +1,7 @@
 """Failures in the owned browser fixture must not strand a later release."""
 
 import importlib
+import asyncio
 import json
 import subprocess
 import sys
@@ -250,3 +251,60 @@ def test_cleanup_does_not_unwind_stores_after_monitor_failure(
         )
     assert caught.value.code == 2
     assert json.loads((tmp_path / "cleanup.json").read_text())["removed"] is False
+
+
+def test_real_gradio_disconnect_records_unstarted_request_removal(modules):
+    import gradio
+    from fastapi import Request
+    from gradio.queueing import Event as QueueEvent
+    from gradio.queueing import EventQueue, Queue
+
+    assert gradio.__version__ == "4.39.0"
+    exit_module = importlib.import_module("browser_fixture_exit")
+    queue = Queue(False, 1, 1, None, SimpleNamespace())
+    fn = SimpleNamespace(concurrency_id="owned", _id=12)
+    events = [
+        QueueEvent(session, fn, Request({"type": "http"}), "owned-user")
+        for session in ("disconnecting", "other-session")
+    ]
+    group = EventQueue("owned", 1)
+    group.queue.extend(events)
+    queue.event_queue_per_concurrency_id["owned"] = group
+    for event in events:
+        queue.event_analytics[event._id] = {
+            "status": "queued",
+            "session_hash": event.session_hash,
+        }
+    exit_module.observe_queue_cancellations(queue)
+    asyncio.run(queue.clean_events(session_hash="disconnecting"))
+    assert group.queue == [events[1]]
+    assert queue.event_analytics[events[0]._id]["status"] == "queued"
+    cancellation = queue.owned_cancelled_queued_events
+    assert set(cancellation) == {events[0]._id}
+    assert cancellation[events[0]._id]["session_hash"] == "disconnecting"
+    assert cancellation[events[0]._id]["fn"] == 12
+
+
+@pytest.mark.parametrize(
+    "evidence", ["exact", "missing", "wrong-session", "processing"]
+)
+def test_only_observed_exact_queued_cancellation_is_terminal(modules, evidence):
+    exit_module = importlib.import_module("browser_fixture_exit")
+    state = {
+        "active_jobs": [],
+        "queued": [],
+        "writers": [],
+        "model_workers": {},
+        "generators": {},
+        "requests": {"owned": {"status": "queued", "session_hash": "session-a"}},
+        "cancelled_queued_events": {"owned": {"session_hash": "session-a", "fn": 12}},
+    }
+    if evidence == "missing":
+        state["cancelled_queued_events"] = {}
+    elif evidence == "wrong-session":
+        state["cancelled_queued_events"]["owned"]["session_hash"] = "session-b"
+    elif evidence == "processing":
+        state["requests"]["owned"]["status"] = "processing"
+    assert exit_module.quiescent(state) is (evidence == "exact")
+    state["active_jobs"] = ["owned"]
+    assert not exit_module.quiescent(state)
