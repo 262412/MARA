@@ -47,7 +47,11 @@ from sidecar.model_routes import settings_revision
 from sidecar.query_manager_factory import create_query_task_manager
 from sidecar.query_routes import register_query_routes
 from sidecar.query_tasks import QueryTaskManager
-from sidecar.server_runtime import apply_smoke_startup_delay, create_loopback_listener
+from sidecar.server_runtime import (
+    apply_smoke_startup_delay,
+    create_loopback_listener,
+    wait_for_parent_pipe,
+)
 from sidecar.session_routes import register_session_mutation_routes
 from sidecar.smoke_faults import inject_smoke_fault, query_smoke_fault_marker
 from sidecar.task_error_handlers import register_task_exception_handlers
@@ -502,9 +506,7 @@ def _query_task_journal_path() -> Path | None:
 
 def _watch_parent_pipe(server: uvicorn.Server) -> None:
     try:
-        stdin_fd = sys.stdin.fileno()
-        while os.read(stdin_fd, 1):
-            pass
+        wait_for_parent_pipe(sys.stdin.fileno())
     except OSError:
         pass
     finally:
