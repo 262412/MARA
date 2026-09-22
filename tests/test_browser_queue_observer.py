@@ -12,6 +12,7 @@ def test_queue_response_observer_contracts():
             "--test",
             "tests/browser/queue_response_observer.test.cjs",
             "tests/browser/web_operation_observer.test.cjs",
+            "tests/browser/refresh_delivery_contract.test.cjs",
         ],
         cwd=repository,
         capture_output=True,

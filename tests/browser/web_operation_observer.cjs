@@ -2,6 +2,7 @@
 function install() {
   const records = [];
   window.ownedWebOperations = records;
+  window.ownedWebObserverErrors = [];
   window.ownedWebAction = 'initialization';
   const copy = value => JSON.parse(JSON.stringify(value));
   const snapshot = () => ({
@@ -10,11 +11,15 @@ function install() {
     focus: document.querySelector('#chat-selected-file')?.textContent,
     summary: document.querySelector('#workbench-file-summary')?.textContent,
   });
-  const record = (phase, values) => records.push({sequence: records.length, action: window.ownedWebAction, phase, ...copy(values)});
+  const record = (phase, values) => {
+    try { records.push({sequence: records.length, action: window.ownedWebAction, phase, ...copy(values)}); }
+    catch (error) { window.ownedWebObserverErrors.push({phase, error: String(error)}); }
+  };
   const observe = () => {
     const guard = window.maraFileBrowserRefresh;
     if (guard && !guard.ownedObserved) {
       guard.ownedObserved = true;
+      record('installed', {});
       for (const name of ['captureFiles', 'captureSelector']) {
         const original = guard[name];
         guard[name] = function (...args) {
@@ -31,10 +36,13 @@ function install() {
           element.innerHTML = html;
           return element.textContent.trim();
         };
-        record('applyFiles', {stamp: payload?.stamp, filter: payload?.filter,
-          ids: payload?.outputs?.[0]?.map(row => row.id), args,
-          display: payload?.outputs?.slice(2).map(text),
-          applied: result === payload?.outputs, slots: result.length, dom: snapshot()});
+        try {
+          record('applyFiles', {stamp: payload?.stamp, filter: payload?.filter,
+            ids: payload?.outputs?.[0]?.map(row => row.id), args,
+            outputs: payload?.outputs, returned: result,
+            display: payload?.outputs?.slice(2).map(text),
+            applied: result === payload?.outputs, slots: result.length, dom: snapshot()});
+        } catch (error) { window.ownedWebObserverErrors.push({phase: 'applyFiles', error: String(error)}); }
         return result;
       };
     }
@@ -50,15 +58,15 @@ function install() {
   }, true);
 }
 
-function assertLatestFilter(records, first, latest, complete) {
+function assertLatestFilter(records, first, latest, complete, coalesced = false) {
   const assert = require('node:assert/strict');
   const lastInput = records.findLast(item => item.phase === 'input' && item.action === 'ABA-last-A');
   assert.ok(lastInput, 'last A must have a distinct real input event');
   assert.ok(latest.filterVersion > first.filterVersion);
   const applications = records.filter(item => item.phase === 'applyFiles' && item.sequence > lastInput.sequence);
   const old = applications.find(item => item.stamp.fileRequest === first.fileRequest && item.stamp.epoch === first.epoch);
-  assert.ok(old, 'observe old A at the actual apply boundary');
-  assert.equal(old.applied, false, 'old A must be rejected after last A was issued');
+  assert.ok(old || coalesced, 'observe old A at the actual apply boundary or prove component coalescing');
+  if (old) assert.equal(old.applied, false, 'old A must be rejected after last A was issued');
   assert.deepEqual(applications.filter(item => item.applied && item.stamp.filterVersion < latest.filterVersion), [], 'no obsolete filter may apply');
   if (complete) {
     const applied = applications.find(item => item.stamp.fileRequest === latest.fileRequest && item.applied);

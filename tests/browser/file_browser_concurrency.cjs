@@ -106,8 +106,8 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
   }
 
   async function repeatedFilterIntent() {
-    const {assertLatestFilter} = require('./web_operation_observer.cjs');
-    const {page, queue} = await login();
+    const {assertRefreshDelivery} = require('./refresh_delivery_contract.cjs');
+    const {page, queue, refreshTrace} = await login('browser-owner', {traceRefresh: true});
     const old = 'filter-ABA-old', latest = 'filter-ABA-latest';
     try {
       const filter = page.locator('#chat-file-filter textarea, #chat-file-filter input');
@@ -128,19 +128,23 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
       const last = (await control(''))[latest].operation;
       expect(last.event_id).not.toBe(first.event_id);
       const observations = () => page.evaluate(() => window.ownedWebOperations);
-      await expect.poll(async () => (await observations()).some(item => item.phase === 'applyFiles' && item.stamp.fileRequest === first.inputs.stamp.fileRequest)).toBe(true);
       const beforeLatest = await ids();
       results.fileBrowserRaces ||= [];
       results.fileBrowserRaces.push({name: 'A-B-A-before-latest-return', initial, beforeLatest});
-      assertLatestFilter(await observations(), first.inputs.stamp, last.inputs.stamp, false);
       await control('/release/' + latest, {});
       await expect.poll(async () => (await observations()).some(item => item.phase === 'applyFiles' && item.stamp.fileRequest === last.inputs.stamp.fileRequest && item.applied)).toBe(true);
       await expect.poll(async () => (await ids()).sort()).toEqual(await expectedFiles('browser-owner', '.txt'));
-      const applied = assertLatestFilter(await observations(), first.inputs.stamp, last.inputs.stamp, true);
+      const applied = (await observations()).find(item => item.phase === 'applyFiles' && item.stamp.fileRequest === last.inputs.stamp.fileRequest && item.applied);
       expect(applied.ids.sort()).toEqual(await expectedFiles('browser-owner', '.txt'));
       await expect.poll(async () => (await page.locator('#chat-selected-file').textContent()).trim()).toBe(applied.display[0]);
       await expect.poll(async () => (await page.locator('#workbench-file-summary').textContent()).trim()).toBe(applied.display[1]);
-      results.scenarios.push({name: 'A-B-A-retains-issuance-order', initial, beforeLatest, first, last, applied});
+      const proof = assertRefreshDelivery({framework: await refreshTrace.snapshot(),
+        backend: await (await fetch(base + '/owned-web-operations')).json(),
+        records: await observations(), observerErrors: await page.evaluate(() => window.ownedWebObserverErrors),
+        first, latest: last, expectedIds: await expectedFiles('browser-owner', '.txt'),
+        dom: {ids: await ids(), focus: await page.locator('#chat-selected-file').textContent(),
+          summary: await page.locator('#workbench-file-summary').textContent()}});
+      results.scenarios.push({name: 'A-B-A-retains-issuance-order', initial, beforeLatest, first, last, ...proof});
     } finally {
       await control('/release/' + old, {});
       await control('/release/' + latest, {});

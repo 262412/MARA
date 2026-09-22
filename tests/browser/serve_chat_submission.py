@@ -10,6 +10,7 @@ from importlib import import_module
 from pathlib import Path
 
 from file_browser_barriers import FileBrowserBarriers
+from gradio_frontend_evidence import installed_frontend
 from indexing_lifetime_observer import IndexingLifetimeObserver
 from web_operation_observer import bind_operation_observer
 from web_seam_observer import studio_exports
@@ -185,6 +186,7 @@ def _write_ready(output, root, roles, blocks, selector_id, download_index_id):
             {
                 "roles": roles,
                 "gradio": gradio.__version__,
+                "frontend": installed_frontend(),
                 "root": str(root),
                 "native_platform": os.name,
                 "download_index_id": download_index_id,
@@ -198,6 +200,12 @@ def _write_ready(output, root, roles, blocks, selector_id, download_index_id):
                         "trigger_after": dep["trigger_after"],
                         "inputs": dep["inputs"],
                         "outputs": dep["outputs"],
+                        "backend_fn": dep["backend_fn"],
+                        "js": dep["js"],
+                        "trigger_mode": dep["trigger_mode"],
+                        "queue": dep["queue"],
+                        "concurrency_limit": blocks.fns[dep["id"]].concurrency_limit,
+                        "concurrency_id": blocks.fns[dep["id"]].concurrency_id,
                     }
                     for dep in dependencies
                 },

@@ -3,7 +3,8 @@ const { chromium, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 const output = process.argv[2];
-const { roles, initial_selection_events } = JSON.parse(fs.readFileSync(path.join(output, 'ready.json')));
+const ready = JSON.parse(fs.readFileSync(path.join(output, 'ready.json')));
+const { roles, initial_selection_events } = ready;
 const base = 'http://127.0.0.1:8768';
 const results = { scenarios: [], errors: [], completions: [] };
 let browser;
@@ -14,15 +15,18 @@ async function evidence() {
   return response.json();
 }
 
-async function login(username = 'browser-owner', {initialize = true} = {}) {
+async function login(username = 'browser-owner', {initialize = true, traceRefresh = false} = {}) {
   const page = await browser.newPage({locale: 'en-US', viewport: {width: 1600, height: 1200}});
   await page.addInitScript(require('./web_operation_observer.cjs').install);
+  const refreshTrace = traceRefresh ? await require('./gradio_refresh_observer.cjs').attach(page, ready, base) : null;
   const originalClose = page.close.bind(page);
   page.close = async (...args) => {
     if (!page.isClosed()) {
       results.webOperations ||= [];
       results.webOperations.push({username, sessionHash: queue.sessionHash,
-        records: await page.evaluate(() => window.ownedWebOperations || [])});
+        records: await page.evaluate(() => window.ownedWebOperations || []),
+        observerErrors: await page.evaluate(() => window.ownedWebObserverErrors || []),
+        framework: refreshTrace ? await refreshTrace.snapshot() : null});
     }
     return originalClose(...args);
   };
@@ -83,7 +87,7 @@ async function login(username = 'browser-owner', {initialize = true} = {}) {
   await page.locator('#chat-input textarea').waitFor({state: 'visible', timeout: 60000});
   if (initialize) await initialized(queue);
   page.submissionQueue = queue;
-  return {page, queue};
+  return {page, queue, refreshTrace};
 }
 
 async function initialized(queue) {
