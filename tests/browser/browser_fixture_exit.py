@@ -7,6 +7,39 @@ import sys
 import time
 
 
+def observe_queue_cancellations(queue):
+    """Record Gradio 4.39's removal of unstarted events without rewriting analytics."""
+    original = queue.clean_events
+    queue.owned_cancelled_queued_events = {}
+
+    async def clean_events(*, session_hash=None, event_id=None):
+        candidates = [
+            event
+            for group in queue.event_queue_per_concurrency_id.values()
+            for event in group.queue
+            if event.session_hash == session_hash or event._id == event_id
+        ]
+        await original(session_hash=session_hash, event_id=event_id)
+        present = {
+            event._id
+            for group in queue.event_queue_per_concurrency_id.values()
+            for event in group.queue
+        }
+        present.update(event._id for job in queue.active_jobs if job for event in job)
+        for event in candidates:
+            analytics = queue.event_analytics.get(event._id, {})
+            if event._id not in present and analytics.get("status") == "queued":
+                queue.owned_cancelled_queued_events[event._id] = {
+                    "session_hash": event.session_hash,
+                    "fn": event.fn._id,
+                    "requested_session": session_hash,
+                    "requested_event": event_id,
+                    "observed_at": time.time(),
+                }
+
+    queue.clean_events = clean_events
+
+
 def release_model(model, output):
     waiting = model.held_started.is_set() and not model.held_finished.is_set()
     model.held_release.set()
@@ -38,6 +71,9 @@ def producer_state(blocks, model, observer):
             for group in queue.event_queue_per_concurrency_id.values()
             for event in group.queue
         ],
+        "cancelled_queued_events": dict(
+            getattr(queue, "owned_cancelled_queued_events", {})
+        ),
         "generators": model.stream_snapshot(),
         "model_workers": model.worker_snapshot(),
         "writers": [
@@ -63,7 +99,13 @@ def requests_idle(state):
         and not state["queued"]
         and all(
             item["status"] in {"success", "failed", "cancelled"}
-            for item in state["requests"].values()
+            or (
+                item["status"] == "queued"
+                and key in state.get("cancelled_queued_events", {})
+                and state["cancelled_queued_events"][key]["session_hash"]
+                == item["session_hash"]
+            )
+            for key, item in state["requests"].items()
         )
         and all(not item["project_frames"] for item in state["model_workers"].values())
         and all(not item["alive"] and item["done"] for item in state["writers"])

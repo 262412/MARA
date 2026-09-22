@@ -10,7 +10,7 @@ import time
 from importlib import import_module
 from pathlib import Path
 
-from browser_fixture_exit import finish_app, release_model
+from browser_fixture_exit import finish_app, observe_queue_cancellations, release_model
 from file_browser_barriers import FileBrowserBarriers
 from gradio_frontend_evidence import installed_frontend
 from indexing_lifetime_observer import IndexingLifetimeObserver
@@ -139,6 +139,7 @@ def _launch(app, blocks, root, output, observer):
     )
 
     barriers.bind_delivery(blocks._queue)
+    observe_queue_cancellations(blocks._queue)
     _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers)
     blocks.app.get("/owned-web-operations")(lambda: list(operations))
     _bind_indexing_lifetime_routes(blocks, observer)

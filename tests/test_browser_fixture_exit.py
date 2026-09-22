@@ -1,7 +1,7 @@
 """Failures in the owned browser fixture must not strand a later release."""
 
-import importlib
 import asyncio
+import importlib
 import json
 import subprocess
 import sys
@@ -76,6 +76,7 @@ def launch_fixture(monkeypatch, sut, output):
         monkeypatch.setattr(sut, name, lambda *args: None)
     monkeypatch.setattr(sut, "_observe", lambda *args: ([], []))
     monkeypatch.setattr(sut, "bind_operation_observer", lambda *args: [])
+    monkeypatch.setattr(sut, "observe_queue_cancellations", lambda *args: None)
     monkeypatch.setattr(sut, "_selection_roles", lambda *args: {})
     monkeypatch.setattr(
         sut, "_write_ready", lambda *args: (output / "stop").write_text("stop")
@@ -290,7 +291,7 @@ def test_real_gradio_disconnect_records_unstarted_request_removal(modules):
 )
 def test_only_observed_exact_queued_cancellation_is_terminal(modules, evidence):
     exit_module = importlib.import_module("browser_fixture_exit")
-    state = {
+    state: dict[str, Any] = {
         "active_jobs": [],
         "queued": [],
         "writers": [],
