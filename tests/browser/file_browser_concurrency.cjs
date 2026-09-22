@@ -177,6 +177,42 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
     }
   }
 
+  async function selectorChoicesAfterCard() {
+    const selectors = ready.initial_selection_events.filter(id =>
+      ready.functions[id].js?.includes('captureSelector'));
+    expect(selectors).toHaveLength(2);
+    const keys = selectors.map(id => 'choices-after-card-' + id);
+    for (const [index, id] of selectors.entries()) {
+      await control('/arm', {key: keys[index], callback: 'WebOperation', event: 'return',
+        function_id: id, username: 'browser-owner'});
+    }
+    const {page, queue} = await login('browser-owner', {initialize: false, traceSelection: true});
+    try {
+      await expect.poll(async () => {
+        const gates = await control('');
+        return keys.every(key => gates[key]?.entered);
+      }).toBe(true);
+      await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
+      await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
+      await expect.poll(() => page.evaluate(() => window.ownedWebOperations.some(row =>
+        row.phase === 'applyFileSelection' && row.args[0]?.file_id === 'r3c-browser-owner-text' &&
+        row.returned[1]?.value?.[0] === 'r3c-browser-owner-text')))).toBe(true);
+      results.selectorChoiceDiagnostic = {sessionHash: queue.sessionHash,
+        gatesBeforeRelease: await control(''),
+        beforeRelease: await page.evaluate(() => window.ownedWebOperations)};
+      for (const key of keys) await control('/release/' + key, {});
+      await expect.poll(() => page.evaluate(() => window.ownedWebOperations.filter(row =>
+        row.phase === 'applySelector').length)).toBeGreaterThan(0);
+      await settled(queue);
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-text"]')).toHaveClass(/is-selected/);
+      await expect(page.locator('#chat-selected-file')).toContainText('.txt');
+      results.scenarios.push({name: 'selector-choices-arrive-after-real-card-selection'});
+    } finally {
+      for (const key of keys) await control('/release/' + key, {});
+      await page.close();
+    }
+  }
+
   async function conversationDuringFileRefresh() {
     const {page, queue, refreshTrace} = await login('browser-owner', {traceConversation: true});
     const key = 'old-conversation-refresh';
@@ -369,5 +405,5 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
   return [initializationFilterOverlap, filterWhileRefreshIsHeld, concurrentBrowserContexts,
     repeatedFilterIntent, selectorInitializationSelectionOverlap, conversationDuringFileRefresh,
     quickUploadThenChooseSource, reverseFilterDelivery, quickUrlThenChooseSource,
-    deletionNotificationDuringRefresh, successiveFileChoices];
+    deletionNotificationDuringRefresh, successiveFileChoices, selectorChoicesAfterCard];
 };
