@@ -1,6 +1,7 @@
 """Controlled delays and explicit owned failures around real callbacks."""
 
 import asyncio
+import logging
 import threading
 from types import SimpleNamespace
 
@@ -34,8 +35,18 @@ class FileBrowserBarriers:
         return {"released": key}
 
     def release_all(self):
+        failures = []
         for key in list(self.gates):
-            self.release(key)
+            try:
+                self.release(key)
+            except Exception as error:
+                logging.exception("Owned barrier release failed: %s", key)
+                failures.append((key, error))
+        if failures:
+            raise RuntimeError(
+                "Owned barrier releases failed: "
+                + "; ".join(f"{key}: {error}" for key, error in failures)
+            ) from failures[0][1]
 
     def status(self):
         with self.lock:
@@ -44,6 +55,7 @@ class FileBrowserBarriers:
                     "spec": gate["spec"],
                     "entered": gate["entered"],
                     "completed": gate["completed"],
+                    "released": gate["release"].is_set(),
                     "session_hash": gate.get("session_hash"),
                     "returned_ids": gate.get("returned_ids"),
                     "operation": gate.get("operation"),

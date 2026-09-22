@@ -1,7 +1,10 @@
 """Deterministic model boundaries for the real submission browser fixture."""
 
+import sys
 import time
-from threading import Event
+from pathlib import Path
+from threading import Event, Lock, get_ident
+from uuid import uuid4
 
 from kotaemon.base import DocumentWithEmbedding, LLMInterface
 from kotaemon.embeddings.base import BaseEmbeddings
@@ -10,7 +13,11 @@ from kotaemon.llms import ChatLLM
 held_started = Event()
 held_release = Event()
 held_finished = Event()
+generator_finished = Event()
 held_times: dict[str, float] = {}
+stream_lock = Lock()
+streams: dict[str, dict] = {}
+stream_generators: dict = {}
 embedding_started = Event()
 embedding_release = Event()
 deletion_embedding_started = Event()
@@ -27,6 +34,21 @@ class SubmissionChatModel(ChatLLM):
 
     def stream(self, messages, **kwargs):
         prompt = "\n".join(str(message) for message in messages)
+        key = uuid4().hex
+        with stream_lock:
+            streams[key] = {
+                "thread": get_ident(),
+                "started": time.monotonic(),
+                "finished": None,
+                "held": "HELD_STREAM" in prompt,
+            }
+            iterator = _model_stream(prompt, key)
+            stream_generators[key] = iterator
+        return iterator
+
+
+def _model_stream(prompt, key):
+    try:
         yield LLMInterface(content="The owned document says ", logprobs=[])
         time.sleep(0.8)
         if "STREAM_FAILURE" in prompt:
@@ -37,13 +59,52 @@ class SubmissionChatModel(ChatLLM):
             held_times["started"] = time.monotonic()
             held_started.set()
             try:
-                # The owned App's watchdog and teardown bound this barrier.
-                # A slow UI interleaving must not become a model failure.
+                # Only explicit release or owned App teardown ends this wait.
                 held_release.wait()
             finally:
                 held_times["finished"] = time.monotonic()
                 held_finished.set()
         yield LLMInterface(content="the observatory has seven telescopes.", logprobs=[])
+    finally:
+        with stream_lock:
+            streams[key]["finished"] = time.monotonic()
+        if "HELD_STREAM" in prompt:
+            generator_finished.set()
+
+
+def stream_snapshot():
+    with stream_lock:
+        return {
+            key: {**value, "executing": stream_generators[key].gi_running}
+            for key, value in streams.items()
+        }
+
+
+def worker_snapshot():
+    frames = sys._current_frames()
+    project = str(Path(__file__).resolve().parents[3]).replace("\\", "/").lower()
+    workers = {}
+    for stream in stream_snapshot().values():
+        ident = stream["thread"]
+        frame = frames.get(ident)
+        active = []
+        while frame is not None:
+            filename = frame.f_code.co_filename.replace("\\", "/").lower()
+            if filename.startswith(project + "/"):
+                active.append({"file": filename, "function": frame.f_code.co_name})
+            frame = frame.f_back
+        workers[str(ident)] = {"alive": ident in frames, "project_frames": active}
+    return workers
+
+
+def close_idle_streams():
+    """Caller first proves all requests and producer workers are idle."""
+    for key, state in stream_snapshot().items():
+        if state["finished"] is None and not state["executing"]:
+            stream_generators[key].close()
+            with stream_lock:
+                streams[key]["closed_by_teardown"] = True
+                streams[key]["finished"] = time.monotonic()
 
 
 class SubmissionEmbeddings(BaseEmbeddings):

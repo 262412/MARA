@@ -7,6 +7,9 @@ const ready = JSON.parse(fs.readFileSync(path.join(output, 'ready.json')));
 const { roles, initial_selection_events } = ready;
 const base = 'http://127.0.0.1:8768';
 const results = { scenarios: [], errors: [], completions: [] };
+const exit = require('./browser_exit.cjs');
+const ownedFetch = globalThis.fetch;
+globalThis.fetch = (url, options = {}) => ownedFetch(url, {...options, signal: options.signal || AbortSignal.timeout(5000)});
 let browser;
 
 async function evidence() {
@@ -22,7 +25,7 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
   if (traceConversation) await page.addInitScript(require('./conversation_observer.cjs').install);
   const originalClose = page.close.bind(page);
   page.close = async (...args) => {
-    if (!page.isClosed()) {
+    await exit.cleanup(results, [['page observation', async () => { if (!page.isClosed()) {
       results.webOperations ||= [];
       results.webOperations.push({username, sessionHash: queue.sessionHash,
         records: await page.evaluate(() => window.ownedWebOperations || []),
@@ -33,8 +36,8 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
         results.conversationOperations.push({username, sessionHash: queue.sessionHash,
           observation: await page.evaluate(() => window.ownedConversationTrace)});
       }
-    }
-    return originalClose(...args);
+    }}], ['page close', () => originalClose(...args)]]);
+    exit.save(output, results);
   };
   page.on('pageerror', error => results.errors.push(String(error)));
   const queue = [];
@@ -376,14 +379,24 @@ async function authenticatedIndexing() {
   const conversationTails = require('./conversation_tails.cjs')({expect, login, evidence, send, tailFinished, results, output, base, ready});
   const readiness = require('./conversation_readiness.cjs')({expect, login, evidence, send, tailFinished, results, output, base, ready});
   const reload = require('./conversation_reload.cjs')({expect, login, evidence, results, output, base, ready});
-  const controlledOnly = [...conversationTails, ...readiness, ...reload].map(fn => fn.name)
+  const exitProbes = require('./fixture_exit_probes.cjs')({expect, login, selectSource, send, results, output, base});
+  const controlledOnly = [...conversationTails, ...readiness, ...reload, ...exitProbes].map(fn => fn.name)
     .concat('lateConversationWatchdogBoundary', 'heldModelShutdown');
-  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout, ...conversationTails, ...readiness, ...reload];
+  const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout, ...conversationTails, ...readiness, ...reload, ...exitProbes];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
   for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : !['publicConversationPermissions', 'publicStudioPermissions', ...controlledOnly].includes(fn.name))) {
+    results.currentScenario = scenario.name;
+    delete results.currentFailure;
+    exit.save(output, results);
     console.log('Starting browser scenario:', scenario.name);
     try { await scenario(); console.log('Passed browser scenario:', scenario.name); }
-    catch (error) { results.scenarios.push({name: scenario.name, failure: error.stack}); console.log('Failed browser scenario:', scenario.name, error.stack); }
+    catch (error) {
+      exit.primary(results, output, error);
+      results.scenarios.push({name: scenario.name, failure: results.currentFailure});
+      console.log('Failed browser scenario:', scenario.name, results.currentFailure);
+    }
+    exit.save(output, results);
+    if (results.scenarios.some(item => item.failure) || results.cleanupErrors?.length) break;
   }
   results.evidence = await evidence();
   results.serverOperations = await (await fetch(base + '/owned-web-operations')).json();
@@ -401,9 +414,26 @@ async function authenticatedIndexing() {
   }
   expect(results.errors).toEqual([]);
   if (results.scenarios.some(item => item.failure)) process.exitCode = 1;
-})().catch(error => { results.errors.push(String(error)); process.exitCode = 1; })
+})().catch(error => { exit.primary(results, output, error); results.errors.push(String(error)); process.exitCode = 1; })
   .finally(async () => {
-    fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(results, null, 2));
+    clearInterval(watchdog);
+    await exit.cleanup(results, [['browser close', async () => { if (browser) await browser.close(); }]]);
+    if (results.cleanupErrors?.length || results.currentFailure) process.exitCode = 1;
+    exit.save(output, results);
     console.log(JSON.stringify({scenarios: results.scenarios, errors: results.errors}, null, 2));
-    if (browser) await browser.close();
   });
+
+let stopping = false;
+const watchdog = setInterval(async () => {
+  if (stopping || !fs.existsSync(path.join(output, 'browser-stop'))) return;
+  stopping = true;
+  exit.primary(results, output, Error(fs.readFileSync(path.join(output, 'browser-stop'), 'utf8')), 'watchdog_abort');
+  process.exitCode = 1;
+  await exit.cleanup(results, [['browser contexts', async () => {
+    for (const context of browser?.contexts() || []) {
+      for (const page of context.pages()) await page.close();
+      await context.close();
+    }
+  }], ['browser close', async () => { if (browser) await browser.close(); }]]);
+  exit.save(output, results);
+}, 100);

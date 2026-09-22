@@ -1,6 +1,7 @@
 // Explicit UI readiness and fast user interaction, separate from file-refresh races.
 const fs = require('node:fs');
 const path = require('node:path');
+const exit = require('./browser_exit.cjs');
 
 module.exports = ({expect, login, evidence, send, tailFinished, results, output, base, ready}) => {
   const control = async (route, spec) => {
@@ -65,11 +66,17 @@ module.exports = ({expect, login, evidence, send, tailFinished, results, output,
       after = await page.evaluate(() => window.ownedConversationTrace);
       results.scenarios.push({name: key, a, b, session: queue.sessionHash,
         pendingGate: pending.gate, completedGate: (await control(''))[key]});
+    } catch (error) {
+      exit.primary(results, output, error);
+      throw error;
     } finally {
-      if ((await control(''))[key]) await control('/release/' + key, {});
-      fs.writeFileSync(path.join(output, key + '.json'), JSON.stringify({a, b, pending, after,
-        session: queue.sessionHash, dom: await page.evaluate(() => window.ownedConversationTrace)}, null, 2));
-      await page.close();
+      await exit.cleanup(results, [
+        ['readiness snapshot', async () => fs.writeFileSync(path.join(output, key + '.json'), JSON.stringify({a, b, pending, after,
+          session: queue.sessionHash, dom: await page.evaluate(() => window.ownedConversationTrace),
+          framework: await refreshTrace.snapshot()}, null, 2))],
+        ['readiness release', async () => { if ((await control(''))[key]) await control('/release/' + key, {}); }],
+        ['readiness page close', () => page.close()],
+      ]);
     }
   }
   async function conversationNewReadiness() { await run('new'); }

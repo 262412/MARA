@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import os
 import sys
 import threading
@@ -9,6 +10,7 @@ import time
 from importlib import import_module
 from pathlib import Path
 
+from browser_fixture_exit import finish_app, release_model
 from file_browser_barriers import FileBrowserBarriers
 from gradio_frontend_evidence import installed_frontend
 from indexing_lifetime_observer import IndexingLifetimeObserver
@@ -26,6 +28,7 @@ def serve(output):
     import pytest
     from ktem_tests.chat_submission_app_fixture import submission_app
 
+    errors = []
     try:
         with pytest.MonkeyPatch.context() as patch:
             with submission_app(patch, runtime.paths.root) as (app, blocks):
@@ -33,23 +36,43 @@ def serve(output):
                 observer = IndexingLifetimeObserver(patch, app.chat_page.file_index)
                 try:
                     _launch(app, blocks, runtime.paths.root, output, observer)
+                except Exception as error:
+                    logging.exception("Owned App failed before cleanup")
+                    errors.append(("app", error))
                 finally:
-                    observer.close()
+                    try:
+                        observer.close()
+                    except Exception as error:
+                        logging.exception("Owned indexing worker cleanup failed")
+                        errors.append(("indexing_workers", error))
+    except Exception as error:
+        logging.exception("Owned App resource cleanup failed")
+        errors.append(("app_resources", error))
     finally:
         threading.setprofile(None)
         sys.setprofile(None)
         threading.settrace(None)  # type: ignore[arg-type]  # Python 3.10 stub
         sys.settrace(None)
-        runtime.close()
+        try:
+            runtime.close()
+        except Exception as error:
+            logging.exception("Owned runtime directory cleanup failed")
+            errors.append(("directory_cleanup", error))
         (output / "cleanup.json").write_text(
             json.dumps(
                 {
                     "root": str(runtime.paths.root),
                     "removed": not runtime.paths.root.exists(),
+                    "errors": [
+                        {"stage": stage, "error": repr(error)}
+                        for stage, error in errors
+                    ],
                 }
             ),
             encoding="utf-8",
         )
+    if errors:
+        raise errors[0][1]
 
 
 def _launch(app, blocks, root, output, observer):
@@ -123,29 +146,34 @@ def _launch(app, blocks, root, output, observer):
     _write_ready(
         output, root, roles, blocks, page._indices_input[1]._id, page.file_index.id
     )
-    deadline = time.monotonic() + 600
     try:
-        while time.monotonic() < deadline and not (output / "stop").exists():
-            time.sleep(0.2)
+        _wait_for_stop(output, barriers)
     finally:
-        barriers.release_all()
-        _release_model_boundary(model_boundary, output)
+        finish_app(
+            blocks, model_boundary, barriers, observer, output, sys.exc_info()[1]
+        )
+
+
+def _wait_for_stop(output, barriers):
+    if os.environ.get("MARA_BROWSER_EXIT_PROBE") == "release-failure":
+        barriers.arm({"key": "exit-release-failure", "callback": "unused"})
+
+        def failed_delivery():
+            raise RuntimeError("Owned teardown release fault")
+
+        barriers.gates["exit-release-failure"]["deliver"] = failed_delivery
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline and not (output / "stop").exists():
+        if (output / "watchdog-app").exists():
+            break
+        time.sleep(0.2)
+    if not (output / "stop").exists():
+        (output / "browser-stop").write_text("App watchdog", encoding="utf-8")
+        raise TimeoutError("Owned App watchdog expired")
 
 
 def _release_model_boundary(model_boundary, output):
-    waiting = (
-        model_boundary.held_started.is_set()
-        and not model_boundary.held_finished.is_set()
-    )
-    model_boundary.held_release.set()
-    if waiting and not model_boundary.held_finished.wait(5):
-        raise RuntimeError("Owned model barrier did not stop during fixture teardown")
-    (output / "model-gate-teardown.json").write_text(
-        json.dumps(
-            {"waiting": waiting, "finished": model_boundary.held_finished.is_set()}
-        ),
-        encoding="utf-8",
-    )
+    release_model(model_boundary, output)
 
 
 def _bind_indexing_lifetime_routes(blocks, observer):
@@ -212,6 +240,7 @@ def _write_ready(output, root, roles, blocks, selector_id, download_index_id):
                 "gradio": gradio.__version__,
                 "frontend": installed_frontend(),
                 "root": str(root),
+                "pid": os.getpid(),
                 "native_platform": os.name,
                 "download_index_id": download_index_id,
                 "initial_selection_events": _initial_selection_events(

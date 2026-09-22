@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -38,7 +39,12 @@ def test_release_all_attempts_later_barrier_after_delivery_failure(modules):
 
 def launch_fixture(monkeypatch, sut, output):
     model = SimpleNamespace(
-        held_started=Event(), held_finished=Event(), held_release=Event()
+        held_started=Event(),
+        held_finished=Event(),
+        held_release=Event(),
+        generator_finished=Event(),
+        stream_snapshot=lambda: {},
+        worker_snapshot=lambda: {},
     )
     stubs = {
         "gradio": SimpleNamespace(__version__="4.39.0"),
@@ -74,7 +80,7 @@ def launch_fixture(monkeypatch, sut, output):
         sut, "_write_ready", lambda *args: (output / "stop").write_text("stop")
     )
     barriers = SimpleNamespace(
-        bind_delivery=lambda queue: None, release_all=fail_release
+        bind_delivery=lambda queue: None, release_all=fail_release, status=lambda: {}
     )
     monkeypatch.setattr(sut, "FileBrowserBarriers", lambda: barriers)
     component = SimpleNamespace(_id=1)
@@ -88,7 +94,9 @@ def launch_fixture(monkeypatch, sut, output):
     blocks = SimpleNamespace(
         config={"dependencies": [{"id": i} for i in range(9)]},
         fns={i: SimpleNamespace(fn=page.submit_msg) for i in range(9)},
-        _queue=object(),
+        _queue=SimpleNamespace(
+            event_analytics={}, active_jobs=[], event_queue_per_concurrency_id={}
+        ),
         app=SimpleNamespace(get=lambda path: lambda fn: fn),
         launch=lambda **kw: None,
     )
@@ -102,7 +110,15 @@ def test_ui_release_failure_cannot_prevent_model_release(
     serve = modules[0]
     app, blocks, model = launch_fixture(monkeypatch, serve, tmp_path)
     with pytest.raises(RuntimeError, match="owned delivery release failed"):
-        serve._launch(app, blocks, tmp_path, tmp_path, object())
+        serve._launch(
+            app,
+            blocks,
+            tmp_path,
+            tmp_path,
+            SimpleNamespace(
+                release=lambda: None, release_deletion=lambda: None, writers=[]
+            ),
+        )
     assert model.held_release.is_set()
 
 
@@ -121,13 +137,15 @@ def test_runner_preserves_node_watchdog_when_app_exit_also_fails(
 
     def launch(*args, **kwargs):
         (tmp_path / "attempt" / "ready.json").write_text("{}")
-        return SimpleNamespace(poll=lambda: None, wait=fail_release, pid=12345)
+        return SimpleNamespace(
+            poll=lambda: None, wait=fail_release, pid=12345, args=["owned-app"]
+        )
 
     def node(*args, **kwargs):
         raise primary
 
     monkeypatch.setattr(runner.subprocess, "Popen", launch)
-    monkeypatch.setattr(runner.subprocess, "run", node)
+    monkeypatch.setattr(runner, "_run_node", node)
     with pytest.raises(subprocess.TimeoutExpired) as caught:
         runner.run(tmp_path / "attempt")
     assert caught.value is primary
@@ -146,3 +164,89 @@ def test_wait_exit_is_not_generator_completion(modules, tmp_path):
     state = json.loads((tmp_path / "model-gate-teardown.json").read_text())
     assert state["wait_exited"] is True
     assert state["generator_finished"] is False
+
+
+def test_wait_exit_and_terminal_request_do_not_hide_live_generator(modules):
+    exit_module = importlib.import_module("browser_fixture_exit")
+    state: dict[str, Any] = {
+        "active_jobs": [],
+        "queued": [],
+        "writers": [],
+        "model_workers": {},
+        "requests": {"owned": {"status": "success"}},
+        "generators": {"held": {"finished": None}},
+    }
+    assert not exit_module.quiescent(state)
+    state["generators"]["held"]["finished"] = 1
+    assert exit_module.quiescent(state)
+    state["active_jobs"] = ["later-worker"]
+    assert not exit_module.quiescent(state)
+
+
+def test_app_primary_survives_all_release_failures(modules, monkeypatch, tmp_path):
+    serve = modules[0]
+    app, blocks, model = launch_fixture(monkeypatch, serve, tmp_path)
+    primary = AssertionError("original UI assertion")
+    monkeypatch.setattr(serve, "_write_ready", lambda *args: None)
+    monkeypatch.setattr(
+        serve.time, "sleep", lambda seconds: (_ for _ in ()).throw(primary)
+    )
+    observer = SimpleNamespace(
+        release=fail_release, release_deletion=fail_release, writers=[]
+    )
+    with pytest.raises(AssertionError) as caught:
+        serve._launch(app, blocks, tmp_path, tmp_path, observer)
+    assert caught.value is primary
+    assert model.held_release.is_set()
+    receipt = json.loads((tmp_path / "producer-teardown.json").read_text())
+    assert [item["boundary"] for item in receipt["releases"]] == [
+        "ui",
+        "model",
+        "embedding",
+        "deletion_embedding",
+    ]
+    assert len(receipt["secondary"]) == 3
+    assert receipt["quiescent"] is True
+
+
+def test_node_watchdog_survives_forced_exit_failure(modules, monkeypatch, tmp_path):
+    runner = modules[1]
+    node = SimpleNamespace(
+        pid=12345,
+        poll=lambda: None,
+        wait=lambda **kw: (_ for _ in ()).throw(
+            subprocess.TimeoutExpired("node", kw["timeout"])
+        ),
+    )
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *a, **kw: node)
+    monkeypatch.setattr(runner, "_terminate_owned", fail_release)
+    with pytest.raises(subprocess.TimeoutExpired):
+        runner._run_node(tmp_path, {}, tmp_path, timeout=0)
+
+
+def test_cleanup_does_not_unwind_stores_after_monitor_failure(
+    modules, monkeypatch, tmp_path
+):
+    exit_module = importlib.import_module("browser_fixture_exit")
+    serve = modules[0]
+    _, blocks, model = launch_fixture(monkeypatch, serve, tmp_path)
+    observer = SimpleNamespace(
+        release=lambda: None, release_deletion=lambda: None, writers=[]
+    )
+    barriers = SimpleNamespace(release_all=lambda: None, status=lambda: {})
+    monkeypatch.setattr(exit_module, "producer_state", fail_release)
+    monkeypatch.setattr(
+        exit_module.os, "_exit", lambda code: (_ for _ in ()).throw(SystemExit(code))
+    )
+    with pytest.raises(SystemExit) as caught:
+        exit_module.finish_app(
+            blocks,
+            model,
+            barriers,
+            observer,
+            tmp_path,
+            AssertionError("primary"),
+            timeout=0,
+        )
+    assert caught.value.code == 2
+    assert json.loads((tmp_path / "cleanup.json").read_text())["removed"] is False

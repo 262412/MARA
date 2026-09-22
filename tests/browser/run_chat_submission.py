@@ -3,10 +3,12 @@
 import argparse
 import hashlib
 import json
+import logging
 import os
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -54,6 +56,17 @@ def run(output):
             env=environment,
             stdout=log,
             stderr=subprocess.STDOUT,
+            start_new_session=os.name != "nt",
+        )
+        primary: BaseException | None = None
+        _process_record(
+            output,
+            "app",
+            server,
+            "started",
+            command=server.args,
+            cwd=str(repository),
+            source=str(output / "source.json"),
         )
         try:
             deadline = time.monotonic() + 120
@@ -63,20 +76,110 @@ def run(output):
                         f"Browser server did not become ready: {output / 'server.log'}"
                     )
                 time.sleep(0.2)
-            completed = subprocess.run(
-                ["node", "tests/browser/chat_submission.cjs", str(output)],
-                cwd=repository,
-                env=environment,
-                timeout=600,
-            )
-            return completed.returncode
+            code = _run_node(repository, environment, output)
+            if code:
+                primary = RuntimeError(f"Owned Node exited {code}; see results.json")
+            return code
+        except BaseException as error:
+            primary = error
+            raise
         finally:
-            (output / "stop").write_text("stop", encoding="utf-8")
+            _stop_server(server, output, primary)
+
+
+def _process_record(output, role, process, state, **fields):
+    with (output / "processes.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "role": role,
+                    "pid": process.pid,
+                    "state": state,
+                    **fields,
+                }
+            )
+            + "\n"
+        )
+
+
+def _terminate_owned(process, output, role):
+    if process.poll() is None:
+        _process_record(output, role, process, "forced_termination")
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                check=True,
+                capture_output=True,
+            )
+        else:
+            import signal
+
+            os.killpg(process.pid, signal.SIGKILL)
+        process.wait(timeout=10)
+
+
+def _run_node(repository, environment, output, *, timeout=600):
+    command = ["node", "tests/browser/chat_submission.cjs", str(output)]
+    node = subprocess.Popen(
+        command, cwd=repository, env=environment, start_new_session=os.name != "nt"
+    )
+    _process_record(
+        output,
+        "node",
+        node,
+        "started",
+        command=command,
+        cwd=str(repository),
+        watchdog_seconds=timeout,
+    )
+    try:
+        deadline = time.monotonic() + timeout
+        while node.poll() is None:
+            if time.monotonic() >= deadline or (output / "watchdog-node").exists():
+                raise subprocess.TimeoutExpired(command, timeout)
+            time.sleep(0.1)
+        return node.returncode
+    except subprocess.TimeoutExpired as primary:
+        (output / "browser-stop").write_text("Node watchdog", encoding="utf-8")
+        _process_record(output, "node", node, "watchdog", error=repr(primary))
+        try:
+            try:
+                node.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                _terminate_owned(node, output, "node")
+        except Exception as error:
+            logging.exception("Owned Node shutdown failed after watchdog")
+            (output / "node-stop-error.json").write_text(
+                json.dumps({"primary": repr(primary), "cleanup": repr(error)}),
+                encoding="utf-8",
+            )
+        raise primary
+    finally:
+        _process_record(output, "node", node, "exited", exit_code=node.poll())
+
+
+def _stop_server(server, output, primary):
+    try:
+        (output / "stop").write_text("stop", encoding="utf-8")
+        try:
             server.wait(timeout=45)
-            if server.returncode != 0:
-                raise RuntimeError(
-                    f"Browser server cleanup failed: {output / 'server.log'}"
-                )
+        except subprocess.TimeoutExpired:
+            _terminate_owned(server, output, "app")
+            raise
+        if server.returncode != 0:
+            raise RuntimeError(
+                f"Browser server cleanup failed: {output / 'server.log'}"
+            )
+    except Exception as error:
+        (output / "runner-cleanup-error.json").write_text(
+            json.dumps({"primary": repr(primary), "cleanup": repr(error)}),
+            encoding="utf-8",
+        )
+        if primary is None:
+            raise
+    finally:
+        _process_record(output, "app", server, "exited", exit_code=server.poll())
 
 
 BROWSER_INPUTS = [
@@ -127,6 +230,8 @@ BROWSER_INPUTS = [
     "libs/ktem/ktem_tests/file_browser_app_fixture.py",
     "libs/ktem/ktem_tests/chat_submission_model_fixture.py",
     "tests/browser/run_chat_submission.py",
+    "tests/browser/browser_fixture_exit.py",
+    "libs/ktem/ktem_tests/chat_submission_app_fixture.py",
     "libs/ktem/ktem/pages/chat/file_browser_updates.py",
     "libs/ktem/ktem/assets/js/file_browser_refresh.js",
     "libs/ktem/ktem/app.py",
@@ -148,6 +253,11 @@ BROWSER_INPUTS = [
 
 def _record_source(repository, output):
     names = list(BROWSER_INPUTS)
+    names.extend(
+        str(path.relative_to(repository))
+        for path in (repository / "tests/browser").iterdir()
+        if path.suffix in {".py", ".cjs"}
+    )
     names.extend(
         str(asset.relative_to(repository))
         for asset in (repository / "libs/ktem/ktem/assets/js").glob("*.js")
