@@ -39,6 +39,7 @@ function Set-BundleEnvironment {
     $cache = Join-Path $RuntimeRoot 'cache'
     New-Item -ItemType Directory -Path $RuntimeRoot,$appHome,$cache -Force | Out-Null
     $env:MARA_APP_HOME = $appHome
+    $env:MARA_ALLOW_REMOTE_HELP = 'False'
     $env:MARA_RUNTIME_DIR = $appHome
     $env:KH_APP_DATA_DIR = Join-Path $appHome 'data'
     $env:THEFLOW_SETTINGS_MODULE = 'ktem.default_flowsettings'

@@ -50,6 +50,8 @@ installation does not write a new success marker. The installer verifies file
 hashes and stops on failed commands. It never disables TLS verification and does
 not alter system PATH, the Windows registry, or persistent execution policy.
 The CMD launchers permit their own PowerShell script for that process only.
+Help pages are read from bundled files; remote help and release-note downloads are
+disabled for this package so they cannot hold up local UI startup.
 
 Distribution license: Apache-2.0; see `LICENSE.txt` and `NOTICE`. The bundled uv
 executable's license files are in `tools/licenses`. Third-party Python packages

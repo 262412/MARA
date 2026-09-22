@@ -11,6 +11,10 @@ The source baseline for this work is `main` at
 `MARA_APP_HOME` environment variable for isolated config, data, and cache paths.
 An unset variable retains the existing platform paths; Desktop paths keep their
 existing precedence. Command names, options, and document QA behavior are unchanged.
+The help page now uses its bundled Markdown when user documentation is absent,
+reads the correct release-note cache filename, and applies connection/read timeouts
+to optional remote help requests. The reviewer launcher sets
+`MARA_ALLOW_REMOTE_HELP=False` to keep UI startup independent of remote documentation.
 
 Build and validate locally before publishing. The existing release-containment
 workflow settings are unchanged. This procedure does not upload files or move tags.
