@@ -129,6 +129,23 @@ def _launch(app, blocks, root, output, observer):
             time.sleep(0.2)
     finally:
         barriers.release_all()
+        _release_model_boundary(model_boundary, output)
+
+
+def _release_model_boundary(model_boundary, output):
+    waiting = (
+        model_boundary.held_started.is_set()
+        and not model_boundary.held_finished.is_set()
+    )
+    model_boundary.held_release.set()
+    if waiting and not model_boundary.held_finished.wait(5):
+        raise RuntimeError("Owned model barrier did not stop during fixture teardown")
+    (output / "model-gate-teardown.json").write_text(
+        json.dumps(
+            {"waiting": waiting, "finished": model_boundary.held_finished.is_set()}
+        ),
+        encoding="utf-8",
+    )
 
 
 def _bind_indexing_lifetime_routes(blocks, observer):
@@ -157,6 +174,13 @@ def _bind_evidence_routes(blocks, page, trace, writes, model_boundary, barriers)
         return {
             "started": model_boundary.held_started.is_set(),
             "released": model_boundary.held_release.is_set(),
+            "finished": model_boundary.held_finished.is_set(),
+            "age": (
+                time.monotonic() - model_boundary.held_times["started"]
+                if model_boundary.held_started.is_set()
+                else None
+            ),
+            "times": dict(model_boundary.held_times),
         }
 
     @blocks.app.post("/owned-model-gate/release")

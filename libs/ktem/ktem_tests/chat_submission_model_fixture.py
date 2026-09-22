@@ -9,6 +9,8 @@ from kotaemon.llms import ChatLLM
 
 held_started = Event()
 held_release = Event()
+held_finished = Event()
+held_times: dict[str, float] = {}
 embedding_started = Event()
 embedding_release = Event()
 deletion_embedding_started = Event()
@@ -32,9 +34,15 @@ class SubmissionChatModel(ChatLLM):
         if "SLOW_STREAM" in prompt:
             time.sleep(4)
         if "HELD_STREAM" in prompt:
+            held_times["started"] = time.monotonic()
             held_started.set()
-            if not held_release.wait(45):
-                raise TimeoutError("Owned browser did not release the model boundary")
+            try:
+                # The owned App's watchdog and teardown bound this barrier.
+                # A slow UI interleaving must not become a model failure.
+                held_release.wait()
+            finally:
+                held_times["finished"] = time.monotonic()
+                held_finished.set()
         yield LLMInterface(content="the observatory has seven telescopes.", logprobs=[])
 
 

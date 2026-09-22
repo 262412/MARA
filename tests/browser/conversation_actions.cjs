@@ -158,7 +158,7 @@ module.exports = function ({expect, login, evidence, send, tailFinished, settled
     }
   }
 
-  async function lateConversationOperations() {
+  async function lateConversationOperations({holdPastWatchdog = false} = {}) {
     const {page, queue} = await login('browser-controls');
     try {
       const initial = await ownedRows();
@@ -190,6 +190,21 @@ module.exports = function ({expect, login, evidence, send, tailFinished, settled
       // Selection following deletion is the service's original first-row rule.
       const beforeRelease = (await evidence()).conversations;
       const beforeTail = (await evidence()).callbacks.filter(item => item.callback === 'CompletionTail.persist' && item.session_hash === queue.sessionHash).length;
+      if (holdPastWatchdog) {
+        // Controlled characterization of the fixture's old 45-second watchdog,
+        // after all the original UI interleavings, not an App readiness delay.
+        await expect.poll(async () => (await (await fetch(base + '/owned-model-gate')).json()).age,
+          {timeout: 50000}).toBeGreaterThanOrEqual(46);
+      }
+      const gate = await (await fetch(base + '/owned-model-gate')).json();
+      const runtimeEvent = queue.requestIds[queue.findLastIndex(fn => fn === roles.runtime)];
+      const runtime = (await evidence()).queue_events[runtimeEvent];
+      (results.modelGates ||= []).push({session: queue.sessionHash, runtimeEvent, runtime,
+        held: held.id, protected: protectedRow.id, gate, holdPastWatchdog});
+      expect(gate.released).toBe(false);
+      expect(gate.finished).toBe(false);
+      expect(runtime.session_hash).toBe(queue.sessionHash);
+      expect(runtime.status).toBe('processing');
       expect((await fetch(base + '/owned-model-gate/release', {method: 'POST'})).ok).toBeTruthy();
       // The unchanged finalizer rejects the deleted row; its failed success edge
       // must never start the Web tail or recreate the conversation.
@@ -207,5 +222,29 @@ module.exports = function ({expect, login, evidence, send, tailFinished, settled
     }
   }
 
-  return [conversationOperations, lateConversationOperations, publicConversationPermissions];
+  async function lateConversationWatchdogBoundary() {
+    await lateConversationOperations({holdPastWatchdog: true});
+  }
+
+  async function heldModelShutdown() {
+    const {page, queue} = await login('browser-controls');
+    try {
+      await upload(page, queue, 'SETUP source for fixture shutdown');
+      const file = (await evidence()).files.find(row => row.name === 'control-owned.txt');
+      await source(page, file.id);
+      await send(page, 'HELD_STREAM fixture shutdown');
+      await expect.poll(async () => (await (await fetch(base + '/owned-model-gate')).json()).started,
+        {timeout: 15000}).toBe(true);
+      const gate = await (await fetch(base + '/owned-model-gate')).json();
+      expect(gate.released).toBe(false);
+      expect(gate.finished).toBe(false);
+      results.scenarios.push({name: 'fixture-teardown-releases-held-model', session: queue.sessionHash, gate});
+    } finally {
+      // Deliberately leave this gate held: the owned App teardown must release it.
+      await page.close();
+    }
+  }
+
+  return [conversationOperations, lateConversationOperations, publicConversationPermissions,
+    lateConversationWatchdogBoundary, heldModelShutdown];
 };

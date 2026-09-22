@@ -376,7 +376,8 @@ async function authenticatedIndexing() {
   const conversationTails = require('./conversation_tails.cjs')({expect, login, evidence, send, tailFinished, results, output, base, ready});
   const readiness = require('./conversation_readiness.cjs')({expect, login, evidence, send, tailFinished, results, output, base, ready});
   const reload = require('./conversation_reload.cjs')({expect, login, evidence, results, output, base, ready});
-  const controlledOnly = [...conversationTails, ...readiness, ...reload].map(fn => fn.name);
+  const controlledOnly = [...conversationTails, ...readiness, ...reload].map(fn => fn.name)
+    .concat('lateConversationWatchdogBoundary', 'heldModelShutdown');
   const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout, ...conversationTails, ...readiness, ...reload];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
   for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : !['publicConversationPermissions', 'publicStudioPermissions', ...controlledOnly].includes(fn.name))) {
