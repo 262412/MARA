@@ -1,0 +1,3 @@
+# Keep the imported submission byte-for-byte reproducible across Windows checkouts.
+source/** -text
+archive/*.zip -text

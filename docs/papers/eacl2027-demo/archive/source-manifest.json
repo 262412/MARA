@@ -1,0 +1,61 @@
+{
+  "original_archive": "C:\\Users\\22826\\Downloads\\MARA__A_Local_First_Multimodal_Document_QA_Workbench_with_Self_RAG_Inspired_Routing.zip",
+  "archive_sha256": "57517b15761050d80902c5cfeea6244566d67291d26a23b52e27b6b70583b3a1",
+  "base_ref": "origin/Dev",
+  "base_commit": "adab3f4d8f221e3620494fab0a24ef8e5557d12a",
+  "branch": "codex/eacl-2027-demo",
+  "extracted_at": "2026-09-22T01:46:58.1610122Z",
+  "source_unchanged": true,
+  "files": [
+    {
+      "path": "README-overleaf.txt",
+      "bytes": 251,
+      "sha256": "5715b500537c883da7e2bf14ef0d764dbdce2c488c478656e827891300a6057a"
+    },
+    {
+      "path": "figures/mara-ui-qa.png",
+      "bytes": 651795,
+      "sha256": "f6cdea3cabefafb58678c920e4dab95fb7ce8e00046b126d5bd94ecc4be9781e"
+    },
+    {
+      "path": "references.bib",
+      "bytes": 15712,
+      "sha256": "1eaefb2b5f4ec7d389a9dadb3fbfebb59b0530060f803bb0e2dc3c4435539b50"
+    },
+    {
+      "path": "paper_venue.tex",
+      "bytes": 1212,
+      "sha256": "3fd67bb0ac764957147086d8396e6df10ede5d8bb081e48434ec40655129edab"
+    },
+    {
+      "path": "paper_body.tex",
+      "bytes": 36983,
+      "sha256": "e55ec1852a0204c89b263ed4adc1d89c0f6d2602146f4b3eb503cd871d9a7491"
+    },
+    {
+      "path": "paper_anonymous.tex",
+      "bytes": 1055,
+      "sha256": "4e018f00eee1f731c51b039cbc4005c6bd075b6d4cf0698ca95fd21497e4ca55"
+    },
+    {
+      "path": "main.tex",
+      "bytes": 1512,
+      "sha256": "242fc570bfdd4e0a0523144a7201b11fca55c5962f19f5e241c712b167915ec7"
+    },
+    {
+      "path": "appendix.tex",
+      "bytes": 10417,
+      "sha256": "952948be532cd74d740f92bad09c35023d97a4d186a24c22442950adef1a003b"
+    },
+    {
+      "path": "acl_natbib.bst",
+      "bytes": 45442,
+      "sha256": "6fbb306202290f4b68e74ac1460a8b27398500cb6dfeb4492e74c457eae7cd1e"
+    },
+    {
+      "path": "acl.sty",
+      "bytes": 11615,
+      "sha256": "19dfeddc2c0e448f3926a0bef048a9db3f3611b46265b760caabd7ada4f361de"
+    }
+  ]
+}
