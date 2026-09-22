@@ -5,6 +5,7 @@ This directory contains the EACL revision and preserves the original EMNLP sourc
 - source/main.tex: the EACL single-blind review entry point, with author names, line numbers, and page numbers.
 - source/diagnostic_tables.tex: complete existing benchmark quality, operational, and paired-comparison tables.
 - REVISION_STATUS_ZH.md: author decisions, issue-by-issue treatment, verified corrections, and remaining limitations.
+- REVIEWER_INSTALL_TEST_ZH.md: 23 September public-download and isolated Windows installation test; both README install paths failed and launch/index/query remain blocked.
 - SUBMISSION_AUDIT_ZH.md: the initial preparation audit, retained as a dated baseline.
 - submission/OPENREVIEW_FIELDS.md: copy-ready submission metadata and links; no form has been submitted.
 - submission/ARTIFACT_GUIDE.md and REPRODUCTION.md: release/deployment instructions and analysis definitions.

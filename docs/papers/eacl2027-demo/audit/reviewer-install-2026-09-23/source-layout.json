@@ -1,0 +1,30 @@
+{
+  "source_dir": "D:\\MARA-reviewer-test\\20260922T161319Z\\source-download\\MARA-0.0.40",
+  "has_git_metadata": false,
+  "files": {
+    ".python-version": {
+      "bytes": 5,
+      "sha256": "7a41a41354ab8049091ef1a00253ca00567f5a1d3f9aef5502c0b4b5ce9ae707"
+    },
+    "pyproject.toml": {
+      "bytes": 1698,
+      "sha256": "d99ca254e4b0cc85c90ba7db06db9cd7f59757a8b32d2ebc1d858bfbbd62a583"
+    },
+    "uv.lock": {
+      "bytes": 1269024,
+      "sha256": "180e5fc0b4d7dc38e07afaf368caef52b5a8ee67a82bd7d226f2f28552d8899c"
+    },
+    "README.md": {
+      "bytes": 42959,
+      "sha256": "c3dbc4554a2ceda9e43f18dac482e768d56764869b98e52d2d77c26be47b968c"
+    },
+    "AGENTS.md": {
+      "bytes": 870,
+      "sha256": "49e72ddf4efd90652f4cee2058a7b8cca7d2cc5d2793c8336f1bd2a4da9567a4"
+    },
+    "app.py": {
+      "bytes": 2321,
+      "sha256": "b46e5632f807418361c449b2becf3affabb7ea13e5a0e62c9e57e61f912dd4cf"
+    }
+  }
+}

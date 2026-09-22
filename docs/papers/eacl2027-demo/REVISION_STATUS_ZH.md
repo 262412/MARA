@@ -1,5 +1,7 @@
 # EACL 2027 Demo 修订记录
 
+> 2026-09-23 增补：已按公开下载链路完成 Windows 隔离安装测试。PyPI/TestPyPI 包入口失败，源码默认安装因缺少本地编译工具失败，尚未启动或执行问答。详见 [REVIEWER_INSTALL_TEST_ZH.md](REVIEWER_INSTALL_TEST_ZH.md)。下文保留 2026-09-22 改稿时的验证状态。
+
 本记录接续初始审核 SUBMISSION_AUDIT_ZH.md。初始审核保留 EMNLP 源码和当时的检查结论；本文记录作者授权修改后的状态，不能把初始审核中的“尚未执行”当作当前状态。
 
 ## 已确认的投稿决定

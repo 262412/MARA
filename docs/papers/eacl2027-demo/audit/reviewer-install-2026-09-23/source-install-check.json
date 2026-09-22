@@ -1,0 +1,17 @@
+{
+  "command": [
+    "uv",
+    "sync",
+    "--extra",
+    "mara"
+  ],
+  "cwd": "D:\\MARA-reviewer-test\\20260922T161319Z\\source-download\\MARA-0.0.40",
+  "started_at_unix": 1790093839.1017663,
+  "uv_lock_sha256_before": "180e5fc0b4d7dc38e07afaf368caef52b5a8ee67a82bd7d226f2f28552d8899c",
+  "isolated_environment": "D:\\MARA-reviewer-test\\20260922T161319Z\\environments\\source",
+  "source_archive_unmodified_before_install": true,
+  "pid": 93328,
+  "exit_code": 1,
+  "elapsed_seconds": 47.56,
+  "uv_lock_sha256_after": "180e5fc0b4d7dc38e07afaf368caef52b5a8ee67a82bd7d226f2f28552d8899c"
+}

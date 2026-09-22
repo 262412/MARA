@@ -1,0 +1,23 @@
+{
+  "platform": "Windows-11-10.0.26200-SP0",
+  "machine": "AMD64",
+  "package_indexes": [
+    {
+      "url": "https://pypi.org/pypi/mara-research-cli/json",
+      "http_status": 404
+    },
+    {
+      "url": "https://test.pypi.org/pypi/mara-research-cli/json",
+      "http_status": 404
+    }
+  ],
+  "native_build_and_docker_tools_on_path": {
+    "cl.exe": null,
+    "nmake.exe": null,
+    "clang.exe": null,
+    "gcc.exe": null,
+    "ninja.exe": null,
+    "docker.exe": null
+  },
+  "visual_studio_installer_present": false
+}

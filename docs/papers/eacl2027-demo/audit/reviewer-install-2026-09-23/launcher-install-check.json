@@ -1,0 +1,41 @@
+{
+  "scope": "Dependency commands from release run_windows.bat, reproduced in a separate Python 3.10 venv; bootstrap executable, TLS-disabling flags, cache purge, and automatic model setup were not executed.",
+  "stages": [
+    {
+      "stage": 0,
+      "command": [
+        "uv",
+        "venv",
+        "--seed",
+        "--python",
+        "C:\\Users\\22826\\.codex\\memories\\uv-python\\cpython-3.10.19-windows-x86_64-none\\python.exe",
+        "D:\\MARA-reviewer-test\\20260922T161319Z\\environments\\launcher"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.09,
+      "log": "logs\\launcher-install-0.log"
+    },
+    {
+      "stage": 1,
+      "command": [
+        "D:\\MARA-reviewer-test\\20260922T161319Z\\environments\\launcher\\Scripts\\python.exe",
+        "-m",
+        "pip",
+        "install",
+        "--index-url",
+        "https://pypi.org/simple",
+        "--disable-pip-version-check",
+        "--no-input",
+        "--timeout",
+        "20",
+        "--retries",
+        "1",
+        "-e",
+        "D:\\MARA-reviewer-test\\20260922T161319Z\\source-download\\MARA-0.0.40\\libs\\kotaemon"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 50.65,
+      "log": "logs\\launcher-install-1.log"
+    }
+  ]
+}
