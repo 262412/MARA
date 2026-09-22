@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import importlib
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from .indexing_readiness import (
     DesktopIndexingPreflightError,
@@ -40,8 +39,6 @@ class DesktopIndexingReadinessTest(unittest.TestCase):
     def test_runtime_configuration_remains_authoritative_after_database_scrub(
         self,
     ) -> None:
-        # Bootstrap with real settings before replacing the consumer's dependencies.
-        importlib.import_module("ktem.desktop_model_routes")
         configured = _embedding()
         persisted = {
             "desktop": {
@@ -64,15 +61,23 @@ class DesktopIndexingReadinessTest(unittest.TestCase):
         flowsettings = SimpleNamespace(KH_EMBEDDINGS=configured)
         settings_module = ModuleType("theflow.settings")
         settings_module.settings = flowsettings
+        routes_module = ModuleType("ktem.desktop_model_routes")
+        persisted_spec = Mock(return_value=persisted["desktop"]["spec"])
+        routes_module.persisted_desktop_spec = persisted_spec
 
         with patch.dict(
             sys.modules,
             {
                 "ktem.embeddings.manager": manager_module,
                 "theflow.settings": settings_module,
+                "ktem.desktop_model_routes": routes_module,
             },
         ):
             runtime_configurations = _desktop_embedding_configurations()
+
+        persisted_spec.assert_called_once_with(
+            configured["desktop"]["spec"], "embedding"
+        )
 
         self.assertEqual(
             runtime_configurations["desktop"]["spec"]["api_key"],
