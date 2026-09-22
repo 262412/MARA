@@ -12,6 +12,7 @@ from pytest_runtime_isolation import activate_test_runtime
 def test_inspection_import_is_inert_and_has_no_reverse_facade_dependency(tmp_path):
     env = os.environ.copy()
     _, paths = activate_test_runtime(env, tmp_path / "cold")
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
     code = """
 import json, os, sys
 before = dict(os.environ)
@@ -59,7 +60,7 @@ def test_sidecar_still_resolves_legacy_collector_patch_in_a_fresh_process():
     repo = Path(__file__).resolve().parents[3]
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join(
-        [str(repo / "apps/desktop"), env.get("PYTHONPATH", "")]
+        [str(repo / "apps/desktop"), str(repo / "libs/slide_cli")]
     )
     code = """
 import json
