@@ -262,22 +262,27 @@ def test_real_gradio_disconnect_records_unstarted_request_removal(modules):
 
     assert gradio.__version__ == "4.39.0"
     exit_module = importlib.import_module("browser_fixture_exit")
-    queue = Queue(False, 1, 1, None, SimpleNamespace())
-    fn = SimpleNamespace(concurrency_id="owned", _id=12)
-    events = [
-        QueueEvent(session, fn, Request({"type": "http"}), "owned-user")
-        for session in ("disconnecting", "other-session")
-    ]
-    group = EventQueue("owned", 1)
-    group.queue.extend(events)
-    queue.event_queue_per_concurrency_id["owned"] = group
-    for event in events:
-        queue.event_analytics[event._id] = {
-            "status": "queued",
-            "session_hash": event.session_hash,
-        }
-    exit_module.observe_queue_cancellations(queue)
-    asyncio.run(queue.clean_events(session_hash="disconnecting"))
+
+    async def disconnect():
+        queue = Queue(False, 1, 1, None, SimpleNamespace())
+        fn = SimpleNamespace(concurrency_id="owned", _id=12)
+        events = [
+            QueueEvent(session, fn, Request({"type": "http"}), "owned-user")
+            for session in ("disconnecting", "other-session")
+        ]
+        group = EventQueue("owned", 1)
+        group.queue.extend(events)
+        queue.event_queue_per_concurrency_id["owned"] = group
+        for event in events:
+            queue.event_analytics[event._id] = {
+                "status": "queued",
+                "session_hash": event.session_hash,
+            }
+        exit_module.observe_queue_cancellations(queue)
+        await queue.clean_events(session_hash="disconnecting")
+        return queue, group, events
+
+    queue, group, events = asyncio.run(disconnect())
     assert group.queue == [events[1]]
     assert queue.event_analytics[events[0]._id]["status"] == "queued"
     cancellation = queue.owned_cancelled_queued_events
