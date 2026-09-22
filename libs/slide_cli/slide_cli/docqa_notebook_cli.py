@@ -155,7 +155,9 @@ def _register_notes_commands(docqa: click.Group) -> None:
     def notes_list(conversation_id, json_output):
         runtime = _create_runtime()
         _require_session(runtime, conversation_id)
-        notes = _notebook_service().get_notebook(conversation_id)["notes"]
+        notes = _notebook_service().get_notebook(
+            conversation_id, user_id=runtime.user_id
+        )["notes"]
         if json_output:
             _echo_json(notes)
             return
@@ -174,9 +176,7 @@ def _register_notes_commands(docqa: click.Group) -> None:
         runtime = _create_runtime()
         _require_session(runtime, conversation_id)
         note = _notebook_service().add_note_to_conversation(
-            conversation_id,
-            title=title,
-            text=text,
+            conversation_id, title=title, text=text, user_id=runtime.user_id
         )
         if json_output:
             _echo_json(note)
@@ -202,7 +202,9 @@ def _register_note_conversion_command(notes_group: click.Group) -> None:
         runtime = _create_runtime()
         _require_session(runtime, conversation_id)
         service = _notebook_service()
-        note = _find_note(service.get_notebook(conversation_id), note_id)
+        note = _find_note(
+            service.get_notebook(conversation_id, user_id=runtime.user_id), note_id
+        )
         source_path = service.materialize_note_source(conversation_id, note)
         before_source_ids = _runtime_source_ids(runtime)
         result = runtime.index_paths([source_path], reindex=reindex)
@@ -219,6 +221,7 @@ def _register_note_conversion_command(notes_group: click.Group) -> None:
             note_id,
             source_ids=source_ids,
             source_path=source_path,
+            user_id=runtime.user_id,
         )
         payload = {
             "conversation_id": conversation_id,
@@ -248,6 +251,7 @@ def _register_note_conversion_command(notes_group: click.Group) -> None:
             title=title,
             answer=_last_answer(session),
             citation_refs=_last_citation_refs(session),
+            user_id=runtime.user_id,
         )
         if json_output:
             _echo_json(note)
@@ -266,7 +270,9 @@ def _register_sources_commands(docqa: click.Group) -> None:
     def sources_list(conversation_id, json_output):
         runtime = _create_runtime()
         _require_session(runtime, conversation_id)
-        notebook = _notebook_service().get_notebook(conversation_id)
+        notebook = _notebook_service().get_notebook(
+            conversation_id, user_id=runtime.user_id
+        )
         if json_output:
             _echo_json(notebook)
             return
@@ -286,6 +292,7 @@ def _register_sources_commands(docqa: click.Group) -> None:
         selected = _notebook_service().select_conversation_sources(
             conversation_id,
             [record.file_id for record in records],
+            user_id=runtime.user_id,
         )
         payload = {
             "conversation_id": conversation_id,
@@ -310,7 +317,11 @@ def _register_source_guide_command(sources_group: click.Group) -> None:
         service = _notebook_service()
         refs = list(file_refs)
         if not refs:
-            refs = list(service.get_notebook(conversation_id)["selected_source_ids"])
+            refs = list(
+                service.get_notebook(conversation_id, user_id=runtime.user_id)[
+                    "selected_source_ids"
+                ]
+            )
         records = runtime.resolve_file_refs(refs) if refs else []
         guides = service.build_source_guides(records)
         if json_output:
