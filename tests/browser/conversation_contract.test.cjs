@@ -7,7 +7,7 @@ function fixture() {
   const stamp = {epoch: 'page', fileRequest: 5};
   return {expected: {id: 'uuid-B', user: 'owner', name: 'B', messages: data[3], sources: ['same-file'], retrievalMessages: ['B evidence'], filename: 'exact.txt'},
     gesture: {trusted: true, phase: 'pointerdown', option: {node: 3}, dom: {options: [{name: 'B', node: 3, connected: true}]}},
-    user: 'owner', username: 'actor', session: 'browser', selectFn: 64, dropdownId: 164, sourceIndex: 4, start: 2, citationFn: 81, citationsText: 'exact.txt',
+    user: 'owner', username: 'actor', session: 'browser', selectFn: 64, dropdownId: 164, sourceIndex: 4, start: 2, citationFn: 81, citationsText: 'exact.txt', renderedIds: ['same-file'],
     queue: [{fn: 64, eventId: 'request-B'}, {fn: 81, eventId: 'citations-B'}], server: [
       {phase: 'return', fn: 64, session_hash: 'browser', username: 'actor', event_id: 'request-B',
         inputs: ['uuid-B', 'owner'], result: ['uuid-B', 'uuid-B', 'B', data[3], ['same-file']]},
@@ -28,6 +28,13 @@ function fixture() {
 test('complete request, application and exact UUID proof passes', () => {
   assertOldRefreshRejected(fixture(), {epoch: 'page', fileRequest: 4});
 });
+test('file HTML groups image rows before document rows without changing authorized IDs', () => {
+  const proof = fixture();
+  proof.web.records.at(-1).outputs[0].push({id: 'document'}, {id: 'image'});
+  proof.dom.ids = ['same-file', 'image', 'document'];
+  proof.renderedIds = [...proof.dom.ids];
+  assertOldRefreshRejected(proof, {epoch: 'page', fileRequest: 4});
+});
 const negatives = {
   'missing option': p => p.gesture.dom.options = [],
   'duplicate label': p => p.gesture.dom.options.push({...p.gesture.dom.options[0]}),
@@ -45,6 +52,8 @@ const negatives = {
   'logpoints disabled during selection': p => p.framework.records.push({phase: 'logpoints_state', sequence: 2, active: false}),
   'three output slots': p => p.web.records.at(-1).slots = 3,
   'wrong source IDs': p => p.dom.selected = ['wrong'],
+  'HTML and actual DOM order differ': p => p.renderedIds = ['different-file'],
+  'duplicate visible file ID': p => p.dom.ids.push('same-file'),
   'old restored messages': p => p.dom.answer = 'question A answer A',
   'wrong citation owner content': p => p.server[2].inputs = [['A evidence']],
   'wrong citation application': p => p.dom.citations = 'A evidence',

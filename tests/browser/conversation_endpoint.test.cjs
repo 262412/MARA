@@ -26,7 +26,7 @@ async function exercise(mutate) {
   global.fetch = async () => new Response(JSON.stringify(f.server));
   try {
     const setup = createSetup(f);
-    const start = await setup.mark();
+    const start = await setup.mark('uuid-B');
     f.queue.push(10, 20); f.queue.requestIds.push('event-10', 'event-20');
     f.framework.records.push(
       {sequence: 2, phase: 'transport', message: {msg: 'process_completed', event_id: 'event-10', success: true}},
@@ -40,10 +40,15 @@ async function exercise(mutate) {
 test('the current operation has a complete observed endpoint', () => exercise(() => {}));
 for (const [name, mutate] of Object.entries({
   'same tail but different request': f => f.queue.requestIds[0] = 'other-event',
+  'same request with wrong conversation': f => f.server[0].inputs[0] = 'uuid-A',
+  'duplicate operation': f => { f.queue.push(10); f.queue.requestIds.push('second-root'); },
   'cross-session root': f => f.server[0].session_hash = 'another-session',
   'missing required backend': f => f.server.pop(),
   'observer disabled after start': f => f.framework.records.splice(2, 0, {sequence: 2, phase: 'logpoints_state', active: false}),
   'tail result before required backend transport': f => f.framework.records[3].sequence = 9,
+  'backend done but JS absent': f => f.framework.records.pop(),
+  'observer never installed': f => f.framework.records.shift(),
+  'unexpected failed backend': f => f.framework.records[2].message.success = false,
   'multiple required branches': f => f.ready.functions[25] = {backend_fn: true, trigger_after: 10},
 })) test(name + ' cannot satisfy ended', async () => {
   await assert.rejects(exercise(mutate));
