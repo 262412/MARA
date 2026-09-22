@@ -30,10 +30,13 @@ Document question answering involves choices about evidence, retrieval, generati
 ## Links
 
 - Demo video: https://youtu.be/owRaHCzSVNg
-- Downloadable software / source release: https://github.com/262412/MARA/releases/tag/v0.0.40
+- Downloadable software / installation guide: https://github.com/262412/MARA/releases/tag/v0.0.40
+- Direct Windows x64 installer: https://github.com/262412/MARA/releases/download/v0.0.40/slide-app.zip
 - Repository: https://github.com/262412/MARA
 
 视频时长：作者确认正好 2 分 30 秒，未做媒体文件独立测量。视频与下载链接已同时出现在 PDF；提交时也须填入表单。
+
+安装包于 2026-09-23 更新，基于 main 加安装修复（`e6afa5dc`，包版本 0.0.41）；v0.0.40 标签和 benchmark 附件保留历史身份。Windows 安装和网页启动已测，真实模型问答及跨平台安装未验证。提交时使用 Release 页面作为带说明的下载入口，不把历史 `uv sync --extra mara` 命令写成已验证的通用安装路线。
 
 ## Suggested keywords
 

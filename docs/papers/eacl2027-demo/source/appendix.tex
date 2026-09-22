@@ -125,35 +125,37 @@ The synthesis report is dated 5 July 2026 and is distributed as a v0.0.40 releas
 \label{app:artifact}
 The public release is
 \url{https://github.com/262412/MARA/releases/tag/v0.0.40}.
-Its assets include
-\path{mara-full-system-benchmark-synthesis-v0.0.40.zip}
-and the release's source archive. The repository is
+Its assets include the updated Windows installer \path{slide-app.zip}, its SHA-256 file,
+\path{mara-full-system-benchmark-synthesis-v0.0.40.zip},
+and the historical release's source archive. The repository is
 \url{https://github.com/262412/MARA};
 the video is
 \url{https://youtu.be/owRaHCzSVNg}.
 These are also the links to enter in the submission form.
 
-\subsection{Source Installation}
-The reproducibility anchor is the tagged source tree. In a fresh standalone checkout, the release documents the following developer installation:
+\subsection{Reviewer Installation and Source Identity}
+For Windows x64, download \path{slide-app.zip} from the release page, extract it to a writable directory, and run \path{Install.cmd} followed by \path{Start.cmd}. The installer provisions Python 3.10.19 and pinned dependencies in an independent environment; it requires internet access but no existing Python, Git, or compiler for the included UI/CLI runtime. Configure both a chat model and an embedding model in the Web UI's resources tab before indexing the included sample document. No model weights or credentials are supplied.
+
+This replacement installer, published on 23 September 2026, is built from main plus installation fixes at commit \texttt{e6afa5dc}; its packages report 0.0.41 and its manifest records the full source commit and file hashes. It is not a rebuild of the historical benchmark executable. Isolated Windows installation, CLI checks, HTTP/UI startup, repeat installation preserving configuration, and checksum-failure handling were tested. A new real-model index/query run and a cross-platform installation matrix have not been established.
+
+The v0.0.40 tag remains the historical source anchor, at commit \texttt{37487f35}. For source inspection, it can still be retrieved with the following shell commands:
 \begin{verbatim}
 git clone --branch v0.0.40 \
   https://github.com/262412/MARA.git
 cd MARA
-uv sync --extra mara
 \end{verbatim}
-Configure the selected model and embedding providers using the release instructions before launching the Web UI or indexing documents. The repository's \path{app.py} is the source-mode entry point; the public command surface also includes \texttt{MARA app init}, \texttt{MARA app doctor}, and \texttt{MARA app run}. Provider health checks do not replace a successful end-to-end index/query check.
+Replacing a release asset does not change this tag. A fresh Windows check of the historical \texttt{uv sync --extra mara} command failed while building \path{llama-cpp-python==0.2.7}, pulled in by \path{kotaemon[all]}, because \texttt{nmake} and C/C++ compilers were unavailable. It is therefore not the reviewer quick-start route. The ZIP runtime omits that optional in-process backend; other local or visual routes require their own documented backend configuration.
 
-The historical README's \texttt{pip install mara-research-cli} route is unavailable on PyPI and TestPyPI as checked on 22 September 2026. This submission therefore points to source installation, not that command. The release retains Apache-2.0 licensing and Kotaemon attribution; its historical NOTICE still uses the earlier product name \emph{Slides}. Minimum RAM/VRAM and a complete cross-platform installation matrix have not been established.
+The historical README's \texttt{pip install mara-research-cli} route was unavailable on PyPI and TestPyPI when checked on 22 September 2026. The reviewer ZIP installs its included application wheels directly. Apache-2.0 licensing and Kotaemon attribution are retained; the historical NOTICE still uses the earlier product name \emph{Slides}. Minimum model-serving RAM/VRAM requirements have not been measured.
 
-After installation and provider configuration, representative existing commands are:
+After ZIP installation and provider configuration, representative Windows commands are:
 \begin{verbatim}
-MARA docqa index ./example.pdf
-MARA docqa files
-MARA docqa ask --file example.pdf \
-  --reasoning mara \
-  --prompt "Summarize this document"
+MARA.cmd app doctor --json
+MARA.cmd docqa index ./example.pdf
+MARA.cmd docqa files
+MARA.cmd docqa ask --help
 \end{verbatim}
-Users should inspect citations and status, and use an appropriate source document with permission to process it. Local-only and external-API configurations have different hardware and data-flow requirements.
+The package README supplies an example question and its source document. Provider health checks do not replace a successful end-to-end index/query check. Users should inspect citations and status, and use an appropriate source document with permission to process it. Local-only and external-API configurations have different hardware and data-flow requirements.
 
 \subsection{Video and Benchmark Identity}
 The unchanged video illustrates source selection, page preview, text questions, citations, and the reasoning-status card. Its user deployment uses Deepseek/Google APIs and a packaged UI label of 0.0.18. The benchmark identifies Qwen3-8B/bge-m3 and the repository release v0.0.40. These are deployment and distribution identifiers, not interchangeable claims about one executable. In the released code, the displayed app version may come from \path{KH_APP_VERSION} or installed package metadata; a UI version string alone is not a source-commit identifier. We do not infer binary equivalence between the recording and benchmark release.

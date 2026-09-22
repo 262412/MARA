@@ -1,0 +1,121 @@
+Using CPython 3.10.19 interpreter at: C:\Users\22826\.codex\memories\uv-python\cpython-3.10.19-windows-x86_64-none\python.exe
+Creating virtual environment at: D:\MARA-reviewer-build\20260923-release-v0.0.40\source-environment
+Resolved 376 packages in 3ms
+   Building mara-app @ file:///D:/MARA-reviewer-build/20260923-release-v0.0.40/source-check/MARA
+   Building mara-research-cli @ file:///D:/MARA-reviewer-build/20260923-release-v0.0.40/source-check/MARA/libs/slide_cli
+   Building ktem @ file:///D:/MARA-reviewer-build/20260923-release-v0.0.40/source-check/MARA/libs/ktem
+   Building kotaemon @ file:///D:/MARA-reviewer-build/20260923-release-v0.0.40/source-check/MARA/libs/kotaemon
+Downloading pygments (1.2MiB)
+Downloading setuptools (1.1MiB)
+Downloading onnxruntime (10.6MiB)
+Downloading ruff (11.1MiB)
+Downloading networkx (1.6MiB)
+Downloading jedi (1.5MiB)
+Downloading sympy (6.0MiB)
+Downloading grpcio-tools (1.0MiB)
+Downloading tokenizers (2.6MiB)
+Downloading black (1.3MiB)
+Downloading nltk (1.4MiB)
+Downloading numba (2.6MiB)
+Downloading fonttools (2.2MiB)
+Downloading llvmlite (36.4MiB)
+Downloading pymupdf (15.2MiB)
+Downloading lxml (3.8MiB)
+Downloading pillow (2.4MiB)
+Downloading matplotlib (7.7MiB)
+Downloading llama-index-legacy (1.1MiB)
+Downloading google-api-python-client (13.6MiB)
+Downloading rapidfuzz (1.5MiB)
+Downloading pandas (11.1MiB)
+Downloading langchain-community (2.2MiB)
+Downloading unstructured (2.0MiB)
+Downloading sphinx (3.3MiB)
+Downloading sqlalchemy (2.0MiB)
+Downloading grpcio (4.4MiB)
+Downloading babel (9.7MiB)
+Downloading pyarrow (25.0MiB)
+Downloading pydantic-core (1.9MiB)
+Downloading pyreqwest-impersonate (2.9MiB)
+Downloading cryptography (3.3MiB)
+Downloading llama-index-core (1.5MiB)
+Downloading scikit-learn (8.5MiB)
+Downloading plotly (18.2MiB)
+Downloading onnx (15.7MiB)
+Downloading gradio (11.9MiB)
+Downloading transformers (11.1MiB)
+Downloading pywin32 (9.1MiB)
+Downloading numpy (15.1MiB)
+Downloading lancedb (36.6MiB)
+Downloading pylance (44.9MiB)
+Downloading kubernetes (1.9MiB)
+Downloading llama-hub (99.1MiB)
+Downloading torch (230.2MiB)
+Downloading scipy (39.3MiB)
+Downloading tantivy (3.1MiB)
+Downloading virtualenv (5.7MiB)
+ Downloaded grpcio-tools
+ Downloaded setuptools
+ Downloaded pygments
+ Downloaded llama-index-legacy
+ Downloaded black
+ Downloaded networkx
+ Downloaded rapidfuzz
+ Downloaded nltk
+WARN Skipping symlink in tar archive: llama_cpp_python-0.2.7/vendor/llama.cpp/spm-headers/ggml.h
+WARN Skipping symlink in tar archive: llama_cpp_python-0.2.7/vendor/llama.cpp/spm-headers/llama.h
+   Building llama-cpp-python==0.2.7
+ Downloaded llama-index-core
+ Downloaded jedi
+   Building langdetect==1.0.9
+ Downloaded pydantic-core
+ Downloaded kubernetes
+ Downloaded sqlalchemy
+ Downloaded unstructured
+ Downloaded fonttools
+ Downloaded langchain-community
+ Downloaded pillow
+ Downloaded tokenizers
+ Downloaded numba
+ Downloaded pyreqwest-impersonate
+ Downloaded tantivy
+ Downloaded cryptography
+ Downloaded sphinx
+ Downloaded lxml
+   Building umap-learn==0.5.5
+   Building pypika==0.48.9
+   Building html2text==2024.2.26
+ Downloaded grpcio
+   Building wikipedia==1.4.0
+ Downloaded virtualenv
+ Downloaded sympy
+  × Failed to build `llama-cpp-python==0.2.7`
+  ├─▶ The build backend returned an error
+  ╰─▶ Call to `scikit_build_core.build.build_wheel` failed (exit code: 1)
+
+      [stdout]
+      *** scikit-build-core 1.0.3 using CMake 4.2.3 (wheel)
+      *** Configuring CMake...
+      loading initial cache file
+      C:\Users\22826\AppData\Local\Temp\tmp0vdjysx1\build\CMakeInit.txt
+      -- Building for: NMake Makefiles
+      -- Configuring incomplete, errors occurred!
+
+      [stderr]
+      CMake Error at CMakeLists.txt:3 (project):
+        Running
+
+         'nmake' '-?'
+
+        failed with:
+
+         no such file or directory
+
+
+      CMake Error: CMAKE_C_COMPILER not set, after EnableLanguage
+      CMake Error: CMAKE_CXX_COMPILER not set, after EnableLanguage
+
+      *** CMake configuration failed
+
+
+hint: `llama-cpp-python` (v0.2.7) was included because `mara-app` depends on `kotaemon[all]` which depends on `llama-cpp-python`
+hint: Build failures usually indicate a problem with the package or the build environment

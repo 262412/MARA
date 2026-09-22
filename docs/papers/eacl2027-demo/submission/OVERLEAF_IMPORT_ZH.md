@@ -2,6 +2,8 @@
 
 上传文件：MARA-EACL2027-Overleaf.zip。
 
+2026-09-23 更新：已同步公开 Release 的新版 Windows 安装包，移除将历史 `uv sync --extra mara` 当作评审快速安装路线的说明，并明确新安装包与 v0.0.40 源码/benchmark 的区别。
+
 在 Overleaf 中选择 New Project → Upload Project，直接选择 ZIP；无需先解压。上传后确认 Main document 为 main.tex，Compiler 为 pdfLaTeX。项目已用本地 TeX Live 2025 编译验证；若 Overleaf 提供 TeX Live 2025，可选择同一版本。
 
 项目根目录只保留 main.tex 一个编译入口，以避免误选匿名版。论文内容、作者、图和参考文献与当前 EACL 修订稿一致。main.tex 使用带作者的 ACL 审稿样式，保留行号和页码。

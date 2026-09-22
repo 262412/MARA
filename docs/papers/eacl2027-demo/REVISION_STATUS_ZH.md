@@ -1,5 +1,7 @@
 # EACL 2027 Demo 修订记录
 
+> 2026-09-23 安装入口更新：新的 Windows 评审 ZIP 已替换 v0.0.40 Release 的 `slide-app.zip`，匿名下载校验通过。原 tag 的 `uv sync --extra mara` 复测仍因原生编译依赖失败；论文已改为 ZIP 安装入口并保留历史源码身份。详见 [RELEASE_INSTALL_UPDATE_ZH.md](RELEASE_INSTALL_UPDATE_ZH.md)。
+
 > 2026-09-23 增补：已按公开下载链路完成 Windows 隔离安装测试。PyPI/TestPyPI 包入口失败，源码默认安装因缺少本地编译工具失败，尚未启动或执行问答。详见 [REVIEWER_INSTALL_TEST_ZH.md](REVIEWER_INSTALL_TEST_ZH.md)。下文保留 2026-09-22 改稿时的验证状态。
 
 本记录接续初始审核 SUBMISSION_AUDIT_ZH.md。初始审核保留 EMNLP 源码和当时的检查结论；本文记录作者授权修改后的状态，不能把初始审核中的“尚未执行”当作当前状态。

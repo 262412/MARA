@@ -1,25 +1,55 @@
 {
-  "created_at_utc": "2026-09-22T03:17:03.015820+00:00",
+  "created_at_utc": "2026-09-22T17:58:02.915861+00:00",
   "branch": "codex/eacl-2027-demo",
   "main_entry": "source/main.tex",
   "artifacts": [
     {
       "path": "mara-eacl2027-demo.pdf",
-      "bytes": 629722,
-      "sha256": "6de83f41c071ad1bcc384c4ada35c2554dc07f20623667d145d806f535327da0"
+      "bytes": 631593,
+      "sha256": "6433cb9ba1b1013a158930a25529e1fe7e7f1d326bb435ad31494a0fe5ad941c"
+    },
+    {
+      "path": "MARA-EACL2027-Overleaf.zip",
+      "bytes": 658840,
+      "sha256": "181292c20aea25e2de4eb7b13133c63fe007c7852e4af363ee937fd12fe671fd"
     },
     {
       "path": "mara-eacl2027-source.zip",
-      "bytes": 658443,
-      "sha256": "37e4775a0c86e5e7b667755f512b6e7d03ade1312befeacb6ffccb7bbc4fb96d"
+      "bytes": 658974,
+      "sha256": "b236171bfbe22cb13defec3db4b7d50cb3f3ccce5d856a9c9c2f8166792c47a3"
     },
     {
       "path": "mara-eacl2027-supplement.zip",
-      "bytes": 1046385,
-      "sha256": "fe4eaff447f699c69c0a9b39ec700f5885466affd5d826b74f393365668945e2"
+      "bytes": 1047395,
+      "sha256": "80f1e1c85de890083c80d338ca1ce5640cccf3ab7375a716667fe84292634b86"
     }
   ],
   "source_members": [
+    {
+      "path": "main.tex",
+      "bytes": 1400,
+      "sha256": "09c8c1efa1f475e966a542584df263c043838def1fbb00f7324b43c2b27f6ad0"
+    },
+    {
+      "path": "paper_body.tex",
+      "bytes": 20751,
+      "sha256": "cf414ce46cccc07aa6be02f2da01360963a16623fe1be5607c29f54f4cbd0e79"
+    },
+    {
+      "path": "appendix.tex",
+      "bytes": 18029,
+      "sha256": "f2db26a7af83e8c6d064aa108e945593ded2e02272570f348a39b6cd5a5e9456"
+    },
+    {
+      "path": "diagnostic_tables.tex",
+      "bytes": 5614,
+      "sha256": "a6893c6827e3a1aeb2fad5d7e75cbf46369ee61f01befa2617a854f9a1d75384"
+    },
+    {
+      "path": "references.bib",
+      "bytes": 15712,
+      "sha256": "1eaefb2b5f4ec7d389a9dadb3fbfebb59b0530060f803bb0e2dc3c4435539b50"
+    },
     {
       "path": "acl.sty",
       "bytes": 11615,
@@ -31,39 +61,9 @@
       "sha256": "6fbb306202290f4b68e74ac1460a8b27398500cb6dfeb4492e74c457eae7cd1e"
     },
     {
-      "path": "appendix.tex",
-      "bytes": 16697,
-      "sha256": "fa699d5406c0717f460fc6896c126d52127c4258ebf3e6530c8605cd0507932d"
-    },
-    {
-      "path": "diagnostic_tables.tex",
-      "bytes": 5614,
-      "sha256": "a6893c6827e3a1aeb2fad5d7e75cbf46369ee61f01befa2617a854f9a1d75384"
-    },
-    {
       "path": "figures/mara-ui-qa.png",
       "bytes": 651795,
       "sha256": "f6cdea3cabefafb58678c920e4dab95fb7ce8e00046b126d5bd94ecc4be9781e"
-    },
-    {
-      "path": "main.tex",
-      "bytes": 1400,
-      "sha256": "09c8c1efa1f475e966a542584df263c043838def1fbb00f7324b43c2b27f6ad0"
-    },
-    {
-      "path": "paper_anonymous.tex",
-      "bytes": 108,
-      "sha256": "6293d2381580c0773ea68949150b38ad6b2b279bb554696ce36a95a2a327a4cd"
-    },
-    {
-      "path": "paper_body.tex",
-      "bytes": 20718,
-      "sha256": "8d940d7c65033e52ccd4e113e8d425d06605f3778060659f6c6e32b7406fc68f"
-    },
-    {
-      "path": "paper_venue.tex",
-      "bytes": 87,
-      "sha256": "2c3ed8dbe0da8062ad463260321b428cce64e2fe6c8dde55d1c43253a53a940c"
     },
     {
       "path": "README-overleaf.txt",
@@ -71,9 +71,14 @@
       "sha256": "cd5dff5181124197076120a483e4d3509db3194cb378a2641bcc6a9ae9178f22"
     },
     {
-      "path": "references.bib",
-      "bytes": 15712,
-      "sha256": "1eaefb2b5f4ec7d389a9dadb3fbfebb59b0530060f803bb0e2dc3c4435539b50"
+      "path": "paper_venue.tex",
+      "bytes": 87,
+      "sha256": "2c3ed8dbe0da8062ad463260321b428cce64e2fe6c8dde55d1c43253a53a940c"
+    },
+    {
+      "path": "paper_anonymous.tex",
+      "bytes": 108,
+      "sha256": "6293d2381580c0773ea68949150b38ad6b2b279bb554696ce36a95a2a327a4cd"
     }
   ],
   "supplement_members": [
@@ -81,8 +86,5 @@
     "ARTIFACT_GUIDE.md",
     "REPRODUCTION.md",
     "revision-evidence.json"
-  ],
-  "benchmark_bundle_sha256": "7fabae169ef270dd2e6ee5edd1aa74841f3ffa100f3bf47bb5fa6139f866cafb",
-  "zip_crc_and_member_bytes_verified": true,
-  "publication_status": "Prepared locally; not submitted or uploaded."
+  ]
 }
