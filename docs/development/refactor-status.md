@@ -1,6 +1,85 @@
 # Safe-refactor status
 
-## Current review point: R6-A installed CLI and Sidecar inspection
+## Current recovery checkpoint: R6-A/U1 (2026-09-23)
+
+**R6-A/U1 remains BLOCKED. Current complete primary: NOT RUN; confirmation:
+NOT RUN.** Source/test/harness and verified remote head at recovery:
+`f2cc1af366e33ddad74e89b75c6e586c19e6eba8`. R5 remains ACCEPTED;
+S1/PCRE2 OPEN; merge/release NO-GO. No R6-B/C/D work is authorized here.
+
+Evidence parent: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`.
+`r6a-u1-recovery/recovery-checkpoint.json` records the actual interrupted-task
+recovery, source hashes, logs, exit codes and a fresh owned-process/port census.
+All 135 protected modifications match their original bytes; no later changed
+tracked paths were found. No owned App/Node/browser process or 8768 listener
+remains. No process was terminated and no directory was deleted during recovery.
+The old launcher did not journal launch PID/parent/start identity: previously
+sampled PIDs are retained, and unavailable historical identities are not invented.
+
+| Existing attempt                                  | Actual recovered state                                                                                                                                                                                                 |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `controlled-browser`                              | Invalid scenario selector; zero scenarios, exit 1; root removed                                                                                                                                                        |
+| `controlled-current`                              | 3 completed passes, rename endpoint assertion failed, focus scenario interrupted by the 600-second Node watchdog, 3 NOT RUN; exit 1; root removed; final `results.json` absent, partial DOM/backend evidence preserved |
+| `rename-isolated-diagnostic`                      | Natural exit 0 after 137.81 seconds; 1/1 PASS, session `0yck190mu4wb`; source manifest still matches f2cc1af3; owned root removed                                                                                      |
+| Current original 37-record primary / confirmation | **NOT RUN / NOT RUN**; diagnostic passes are not substitutes                                                                                                                                                           |
+
+The isolated rename pass does not explain or erase the failed controlled batch.
+Its rename event is `b5a04569139a4c45b5932eda71eab0ff`, fn 67, conversation
+`04dc16d8a88a423caa6ea2588819a33f`. The failed batch timed out in
+`conversation_setup.ended()` after B selection in `conversationRenameReadiness`.
+Session `krzviuvh2lr`, A `e11e352c7fb04b149c30bdb1f8d9d37a`, B
+`dc77ee28b723442db6c9d4b8b659fc6e` identify that trace. Its B label application
+and later focus are 30,555.4 ms apart. The missing final framework snapshot
+prevents claiming its complete JS/four-output contract passed. Host contention
+is a hypothesis, not an established cause. Tail-node selection, event identity,
+observer windows and possible barrier/wait cycles remain under investigation.
+
+The f2cc1af3 explicit model release design is retained. Its earlier controlled
+red proves the old 45-second model watchdog failed before explicit release;
+the long-hold and shutdown diagnostics pass independently. However,
+`held_finished` currently means **model wait exited**, not generator, request,
+worker or process completion. Release ordering, primary/secondary exceptions
+and assertion/Node/App-watchdog/release-failure exits still need controlled
+verification. Those checks are prerequisites for starting the complete matrix.
+
+| Existing budget                             | Start and meaning at this checkpoint                                               |
+| ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Setup operation endpoint 30 s               | Each `ended()` call; specified JS result not observed is failure                   |
+| File-browser barrier 40 s                   | Matching callback enters its wait; expiration is an injected-boundary error        |
+| Model wait                                  | Explicit release only; `held_finished` covers this wait, not production completion |
+| App watchdog 600 s                          | After App ready; currently exits its serving loop                                  |
+| Node watchdog 600 s                         | Node subprocess start; expiration aborts the browser process                       |
+| Model release wait 5 s / App exit wait 45 s | Teardown bounds; success alone does not prove all owned producers stopped          |
+
+[Existing Quality run 35734702856](https://github.com/262412/MARA/actions/runs/35734702856),
+attempt 1 at f2cc1af3, is completed/failure: **13 success, 7 failure**.
+All 20 logs and current artifacts have been recovered into
+`r6a-u1-closure-ci/`; digests, package provenance and finding comparisons pass.
+Each dependency profile has 14 blocking keys; each container has four. There
+are no new keys against the previous review; all remain blocking. Container
+SBOM generation was skipped after the vulnerability failures. Original package
+floors and Dev/R6/U1 coverage pass; f2's test-only increment over c1 is N/A,
+not a claimed 100% production change.
+It was not dispatched again. CI success partitions do not establish local
+complete-browser acceptance. The truncated first package-artifact download and
+the independently verified replacement remain separate evidence.
+
+U1 as a whole includes five production files and 21 test/harness files;
+f2cc1af3 itself changes only four test files. Last production/local package SHA
+is `c1c7489ccc0911fcc8b950b47c59dcc479be449b`; its package-input and native-scope
+reuse proofs remain attributed to their original executions. The original
+4fb94927 **36/37**, older **11/12**, eb controlled **4/5**, 500289b2 partial
+**25 passed/5 failed/7 NOT RUN**, and c1 primary **37/37** with mandatory
+confirmation **11/12 failed/25 NOT RUN** are all retained, never combined.
+See `r6a-u1-closeout/`, `r6a-u1-delivery-verification/`,
+`r6a-u1-tail-gate/` and `r6a-u1-closure-verification/`.
+
+Next smallest proposition: identify the exact post-selection completion edge
+and prove independent release/exit attempts preserve the primary failure while
+waiting for actual owned producers to stop. Only after those controlled gates
+pass may a newly frozen complete primary and confirmation start.
+
+## Previous R6-A checkpoint at 32252dc0 (retained historical evidence)
 
 Branch: `codex/r0-r1-safe-refactor`. R6-A baseline:
 `3b210087ac057673b29af2b1777efeff82a0ecfb`. Independently accepted R5
