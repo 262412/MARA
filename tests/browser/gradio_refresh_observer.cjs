@@ -67,7 +67,7 @@ function installTrace(ids) {
             const data = frame.split('\n').filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trim()).join('\n');
             if (!data) continue;
             const message = JSON.parse(data), payload = message.output?.data?.[0];
-            if (payload?.stamp?.fileRequest || ids.conversation) window.ownedRecordFramework('transport',{url,message});
+            if (payload?.stamp?.fileRequest || ids.conversation || ids.selection) window.ownedRecordFramework('transport',{url,message});
           }
         }
       })().catch(error=>{
@@ -85,7 +85,7 @@ function installTrace(ids) {
   window.ownedRecordFramework('installed', {ids});
 }
 
-async function attach(page, ready, base, {conversation = false} = {}) {
+async function attach(page, ready, base, {conversation = false, selection = false} = {}) {
   if (ready.gradio !== '4.39.0') throw Error('Unexpected Gradio version');
   const filename = 'Blocks-BPGBf-rO.js';
   const bundle = fs.readFileSync(ready.frontend.path);
@@ -96,7 +96,19 @@ async function attach(page, ready, base, {conversation = false} = {}) {
   const resultId = refresh[0][1].outputs[0];
   const [applyId, apply] = definitions.find(([, value]) => value.targets.some(([id, event]) => id === resultId && event === 'change'));
   const ids = {resultId, applyFn: Number(applyId), components: [resultId, ...apply.outputs],
-    functions: [...refresh.map(([id]) => Number(id)), Number(applyId)], props: ['value'], conversation};
+    functions: [...refresh.map(([id]) => Number(id)), Number(applyId)], props: ['value'], conversation, selection};
+  if (selection) {
+    for (const [id, definition] of definitions) {
+      if (definition.name === 'select_chat_file' ||
+          /captureSelector|applySelector|captureFileSelection|applyFileSelection/.test(definition.js || '')) {
+        ids.functions.push(Number(id));
+        ids.components.push(...definition.inputs, ...definition.outputs);
+      }
+    }
+    ids.components = [...new Set(ids.components)];
+    ids.functions = [...new Set(ids.functions)];
+    ids.props.push('choices');
+  }
   if (conversation) {
     for (const [id, definition] of definitions) {
       if (['new_conv', 'reload_conv', 'rename_conv', 'select_conv'].includes(definition.name) ||

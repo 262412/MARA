@@ -17,7 +17,7 @@ def observer_module():
     return module
 
 
-def fixture(module, *, error=None):
+def fixture(module, *, error=None, name="set_group_id_selector"):
     calls = []
     manager = SimpleNamespace(
         selected_group_id=SimpleNamespace(_id=1),
@@ -26,14 +26,14 @@ def fixture(module, *, error=None):
     chat = SimpleNamespace(
         _app=SimpleNamespace(_index_1=manager), file_index=SimpleNamespace(id=1)
     )
-    fn = SimpleNamespace(_id=7, name="set_group_id_selector", outputs=[])
+    fn = SimpleNamespace(_id=7, name=name, outputs=[])
     prediction = [['["file-id"]'], "select", {"selected": "chat-tab"}]
 
     async def call_function(block_fn, processed_input, requests=None, event_id=None):
         calls.append((event_id, list(processed_input)))
         if error:
             raise error
-        return {"prediction": prediction}
+        return {"prediction": prediction, "data": prediction}
 
     async def process_api(block_fn, inputs, state, request=None, event_id=None):
         return await blocks.call_function(
@@ -82,4 +82,22 @@ def test_observer_propagates_original_error_and_resets_context():
     assert calls == [("failed-event", [None, "owner"])]
     assert records[-1]["error"] == "ValueError"
     assert contexts[0]["event_id"] == "failed-event"
+    assert module.current_operation.get() == {}
+
+
+@pytest.mark.parametrize("name", ["select_chat_file", "load_files"])
+def test_selection_observer_retains_actual_values_and_request_identity(name):
+    module = observer_module()
+    blocks, records, calls, contexts, prediction = fixture(module, name=name)
+    request = SimpleNamespace(username="browser-owner", session_hash="owned-session")
+    result = asyncio.run(
+        blocks.process_api(7, ["file-id", {"epoch": "owned"}], {}, request, "event-2")
+    )
+    assert result["data"] is prediction
+    assert [record["phase"] for record in records] == ["call", "return", "postprocess"]
+    assert all(record["selection_operation"] for record in records)
+    assert records[-1]["data"] == prediction
+    assert records[0]["inputs"] == ["file-id", {"epoch": "owned"}]
+    assert [context["event_id"] for context in contexts] == ["event-2", "event-2"]
+    assert records[-1]["session_hash"] == "owned-session"
     assert module.current_operation.get() == {}

@@ -18,10 +18,10 @@ async function evidence() {
   return response.json();
 }
 
-async function login(username = 'browser-owner', {initialize = true, traceRefresh = false, traceConversation = false} = {}) {
+async function login(username = 'browser-owner', {initialize = true, traceRefresh = false, traceConversation = false, traceSelection = false} = {}) {
   const page = await browser.newPage({locale: 'en-US', viewport: {width: 1600, height: 1200}});
   await page.addInitScript(require('./web_operation_observer.cjs').install);
-  const refreshTrace = traceRefresh || traceConversation ? await require('./gradio_refresh_observer.cjs').attach(page, ready, base, {conversation: traceConversation}) : null;
+  const refreshTrace = traceRefresh || traceConversation || traceSelection ? await require('./gradio_refresh_observer.cjs').attach(page, ready, base, {conversation: traceConversation, selection: traceSelection}) : null;
   if (traceConversation) await page.addInitScript(require('./conversation_observer.cjs').install);
   const originalClose = page.close.bind(page);
   page.close = async (...args) => {

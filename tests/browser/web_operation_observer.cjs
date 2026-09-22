@@ -8,11 +8,12 @@ function install() {
   const snapshot = () => ({
     filter: document.querySelector('#chat-file-filter textarea, #chat-file-filter input')?.value,
     ids: [...document.querySelectorAll('#chat-file-list [data-chat-file-id]')].map(node => node.dataset.chatFileId),
+    selected: [...document.querySelectorAll('#chat-file-list .is-selected')].map(node => node.dataset.chatFileId),
     focus: document.querySelector('#chat-selected-file')?.textContent,
     summary: document.querySelector('#workbench-file-summary')?.textContent,
   });
   const record = (phase, values) => {
-    try { records.push({sequence: records.length, action: window.ownedWebAction, phase, ...copy(values)}); }
+    try { records.push({sequence: records.length, time: performance.now(), action: window.ownedWebAction, phase, ...copy(values)}); }
     catch (error) { window.ownedWebObserverErrors.push({phase, error: String(error)}); }
   };
   const observe = () => {
@@ -20,11 +21,19 @@ function install() {
     if (guard && !guard.ownedObserved) {
       guard.ownedObserved = true;
       record('installed', {});
-      for (const name of ['captureFiles', 'captureSelector']) {
+      for (const name of ['captureFiles', 'captureSelector', 'captureFileSelection']) {
         const original = guard[name];
         guard[name] = function (...args) {
           const result = original(...args);
           record(name, {args, stamp: result, dom: snapshot()});
+          return result;
+        };
+      }
+      for (const name of ['applySelector', 'applyFileSelection']) {
+        const original = guard[name];
+        guard[name] = function (...args) {
+          const result = original(...args);
+          record(name, {args, returned: result, dom: snapshot()});
           return result;
         };
       }
@@ -55,6 +64,11 @@ function install() {
   }).observe(document, {childList: true, subtree: true, attributes: true, characterData: true});
   document.addEventListener('input', event => {
     if (event.target.closest?.('#chat-file-filter')) record('input', {value: event.target.value, dom: snapshot()});
+    if (event.target.closest?.('#chat-file-click')) record('fileClickInput', {value: event.target.value, dom: snapshot()});
+  }, true);
+  document.addEventListener('click', event => {
+    const card = event.target.closest?.('[data-chat-file-id]');
+    if (card) record('fileCardClick', {id: card.dataset.chatFileId, trusted: event.isTrusted, dom: snapshot()});
   }, true);
 }
 

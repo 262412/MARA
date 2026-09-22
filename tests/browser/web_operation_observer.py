@@ -43,11 +43,12 @@ def bind_operation_observer(blocks, chat_page, barriers):
         if isinstance(fn, int):
             fn = blocks.fns[fn]
         is_files = fn.name == "refresh_chat_file_list"
+        is_selection = fn.name in {"select_chat_file", "load_files"}
         is_conversation = fn._id in conversation_functions
         is_group = fn.name in group_functions or group_outputs.intersection(
             component._id for component in fn.outputs
         )
-        if not (is_files or is_group or is_conversation):
+        if not (is_files or is_group or is_conversation or is_selection):
             return await original(*args, **kwargs)
         request = values["requests"]
         if isinstance(request, list):
@@ -58,6 +59,7 @@ def bind_operation_observer(blocks, chat_page, barriers):
             "fn": fn._id,
             "name": fn.name,
             "conversation_operation": is_conversation,
+            "selection_operation": is_selection,
             "session_hash": getattr(request, "session_hash", None),
             "username": getattr(request, "username", None),
             "inputs": _file_inputs(inputs) if is_files else _plain(inputs),
@@ -67,13 +69,13 @@ def bind_operation_observer(blocks, chat_page, barriers):
         by_event[record["event_id"]] = record
         token = current_operation.set(record)
         try:
-            if is_group or is_conversation:
+            if is_group or is_conversation or is_selection:
                 await asyncio.to_thread(
                     barriers.observe, "WebOperation", "call", {"request": request}, None
                 )
             result = await original(*args, **kwargs)
             records.append(_operation_return(record, result["prediction"], is_files))
-            if is_conversation:
+            if is_conversation or is_selection:
                 await asyncio.to_thread(
                     barriers.observe,
                     "WebOperation",
@@ -123,7 +125,7 @@ def _bind_application_observer(blocks, manager, records, by_event):
         result = await original(*args, **kwargs)
         record = by_event.get(bound.arguments["event_id"])
         if record is not None:
-            if record["conversation_operation"]:
+            if record["conversation_operation"] or record["selection_operation"]:
                 records.append(
                     {**record, "phase": "postprocess", "data": _plain(result["data"])}
                 )

@@ -155,7 +155,7 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
   async function selectorInitializationSelectionOverlap() {
     const key = 'initial-selector-before-file-choice';
     await control('/arm', {key, callback: 'FileSelector.load_files', username: 'browser-owner'});
-    const {page, queue} = await login('browser-owner', {initialize: false});
+    const {page, queue} = await login('browser-owner', {initialize: false, traceSelection: true});
     try {
       await expect.poll(async () => (await control(''))[key]?.entered).toBe(true);
       await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
