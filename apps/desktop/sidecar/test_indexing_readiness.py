@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import sys
 import tempfile
 import unittest
@@ -39,6 +40,8 @@ class DesktopIndexingReadinessTest(unittest.TestCase):
     def test_runtime_configuration_remains_authoritative_after_database_scrub(
         self,
     ) -> None:
+        # Bootstrap with real settings before replacing the consumer's dependencies.
+        importlib.import_module("ktem.desktop_model_routes")
         configured = _embedding()
         persisted = {
             "desktop": {
