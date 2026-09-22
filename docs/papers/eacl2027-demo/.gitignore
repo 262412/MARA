@@ -2,6 +2,8 @@
 /audit/rendered/
 /audit/reference-style/
 /audit/main-extracted-text.txt
+/submission/*.pdf
+/submission/*.zip
 
 # The repository-wide figures/ rule must not hide the submitted paper's asset.
 !/source/figures/

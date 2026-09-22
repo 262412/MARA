@@ -1,62 +1,41 @@
 \documentclass[11pt]{article}
-
-% ACL style options:
-% review   = anonymous review version
-% final    = camera-ready version
-% preprint = non-anonymous version with page numbers
-\usepackage[preprint]{acl}
-\usepackage{xcolor}
+% EACL Demo is single-blind. Keep ACL review line and page numbers,
+% while showing the author block. Do not modify the official style file.
+\usepackage[review]{acl}
+\makeatletter
+\ifdefined\MaraAnonymous\else\acl@anonymizefalse\fi
+\makeatother
 \usepackage{times}
 \usepackage{latexsym}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{microtype}
-\IfFileExists{inconsolata.sty}{\usepackage{inconsolata}}{}
+\usepackage{inconsolata}
 \usepackage{graphicx}
 \usepackage{booktabs}
-\usepackage[table]{xcolor}
 \usepackage{tabularx}
-\newcommand{\Xiao}[1]{#1}
 \usepackage{array}
 \usepackage{amsmath}
 \usepackage{enumitem}
 \usepackage{tikz}
-\usetikzlibrary{positioning,arrows.meta}
-\usepackage{placeins}
-\IfFileExists{xurl.sty}{\usepackage{xurl}}{}
-\usetikzlibrary{arrows.meta,positioning,fit}
-
+\usepackage{xurl}
+\usetikzlibrary{arrows.meta,positioning}
 \Urlmuskip=0mu plus 2mu\relax
 \setlist[itemize]{leftmargin=*,itemsep=1pt,topsep=2pt}
 \setlist[enumerate]{leftmargin=*,itemsep=1pt,topsep=2pt}
-\newcounter{algorithm}
-\newif\ifmaraanonymous
-\newif\ifmaramsc
-\newif\ifmaravenue
-\maraanonymousfalse
-\maramsctrue
-\maravenuefalse
-
-\author{
-Chenghao Zhang \quad Ke Xu \quad Xiao Xiao \quad Meng Fang\\
-%Student ID: 201844864 \\
-%COMP702 -- M.Sc. Project (2025/26) \\
-School of Computer Science and Informatics, University of Liverpool \\
-%Supervisor: Meng Fang \\
-%\texttt{tbczhang@liverpool.ac.uk}
-}
-
+\newcommand{\route}[1]{\texttt{#1}}
+\author{Chenghao Zhang \quad Ke Xu \quad Xiao Xiao \quad Meng Fang\\
+School of Computer Science and Informatics, University of Liverpool\\
+\texttt{tbczhang@liverpool.ac.uk}}
 \title{MARA: A Local-First Workbench for Multimodal Document Question Answering}
-
+\hypersetup{pdftitle={MARA: A Local-First Workbench for Multimodal Document Question Answering},
+pdfauthor={Chenghao Zhang, Ke Xu, Xiao Xiao, Meng Fang}}
+\ifdefined\MaraAnonymous\hypersetup{pdfauthor={Anonymous}}\fi
 \begin{document}
 \maketitle
-
-\input{paper_body}
-
 \raggedbottom
+\input{paper_body}
 \bibliography{references}
-
 \appendix
 \input{appendix}
-
 \end{document}

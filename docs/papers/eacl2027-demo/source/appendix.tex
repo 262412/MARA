@@ -1,126 +1,161 @@
-\section{Appendix}
+\section{Controller Rules and Execution Semantics}
+\label{app:rules}
+This appendix describes the public v0.0.40 source anchor, commit
+\path{37487f35610076c1016e1b59d3bf982388d1a275}.
+The run bundle does not include a source commit for each job. Consequently, this release anchor documents the distributed implementation, but is not a per-job build attestation.
 
-\ifmaraanonymous
-\paragraph{Anonymous note.}
+\subsection{Modality Confidence and Route Selection}
+The scorer is implemented in \path{libs/ktem/ktem/reasoning/mara_route_scorer.py}; cost adjustments and tie breaking are in \path{mara_route_costing.py} in the same directory. For modality $m$, its probe confidence is zero if no evidence is present. Otherwise it is the clipped and four-decimal-rounded value
+\begin{align}
+ c_m=\operatorname{clip}_{[0,1]}\big(&b_m+0.04\min(n_m,3)\nonumber\\
+ &+0.14s_m+0.08d_m+0.16\ell_m\nonumber\\
+ &+i_m+t_m-0.25(1-h_m)\big),
+\end{align}
+where $n_m$ is evidence count, $s_m$ is the bounded top score, $d_m$ is its margin over the second score, $\ell_m$ is source/page locator coverage, and $h_m$ is a backend-health indicator. These features are proxies, not calibrated probabilities.
 
-This anonymous version omits identity, student, course, and supervisor details. The technical appendix retains command families, evaluation protocol, project mapping, and diagnostic notes that do not identify the author.
-\fi
+The bases $(b_T,b_V,b_E,b_G)$ are $(0.45,0.35,0.35,0.30)$. Visual, element, and graph intent add $0.12$, $0.15$, and $0.20$ to the corresponding modality. Text/OCR availability adds $0.08$ for text or $0.05$ for visual/element evidence; graph has no such bonus. If every probe is empty, the implementation inserts a text prior with one item, locator quality $0.7$, and text availability; visual intent can also insert a visual prior. These defaults must not be read as observed retrieval success.
 
-% \noindent\textbf{MSc project mapping.}\par\smallskip
+Text/OCR intent terms, task type, and scope drive heuristic features. Examples include visual terms such as \emph{figure}, \emph{chart}, and \emph{layout}; element terms such as \emph{table}, \emph{row}, and \emph{cell}; and calculation terms such as \emph{ratio}, \emph{average}, and \emph{sum}. Graph intent includes summary/compare/study-guide tasks or corresponding question terms.
 
-% \noindent\begin{tabularx}{\linewidth}{@{}p{0.30\linewidth}>{\raggedright\arraybackslash}X@{}}
-% \toprule
-% Requirement area & MARA coverage \\
-% \midrule
-% Practical implementation & Local Web UI, CLI workflows, document indexing, route-aware DocQA runtime, evidence preview, citations, and benchmark artifacts. \\
-% Analytical evaluation & Full-system benchmark synthesis over 41 complete artifact sets and 3,540 prediction records, with route metrics, paired deltas, bootstrap CIs, route decisions, backend metadata, and diagnostics. \\
-% Innovation & Controller-centred extension of a basic local QA framework using Self-RAG-inspired route decisions, evidence checks, workflow-cost traces, route switches, and abstention. \\
-% Ethics & Public, synthetic, or self-provided non-sensitive documents; no human participants; local-first execution and visible backend metadata. \\
-% \ifmaramsc
-% Project context & COMP702 -- M.Sc. Project (2025/26), School of Computer Science and Informatics, University of Liverpool. \\
-% \else
-% Project context & MSc delivery mapping retained in the appendix for completeness; venue-facing versions omit course identifiers, student ID, and supervisor details. \\
-% \fi
-% \bottomrule
-% \end{tabularx}
+Element coverage is eligible when evidence is nonempty, locator quality is at least $0.5$, and text/OCR is present. Hybrid eligibility requires text confidence at least $0.45$, either visual or element confidence at least $0.45$, and no graph intent. On MMDocRAG without visual intent and with text confidence at least $0.65$, effective visual confidence is capped at $0.45$.
 
-% \ifmaramsc
-% For MSc delivery, these constraints define a clear prototype boundary: a usable local workbench, a controller with inspectable routes, and benchmark evidence that explains the system's behaviour. For a later submission, the strongest path is to keep the system/demo framing, include a real UI screenshot and short video, and avoid overstating results as leaderboard performance.
-% \else
-% For venue-facing versions, this mapping is supplementary project context rather than a main-paper claim. The main paper is framed as a system demo with a public release, screenshot, command surface, and route-level evaluation.
-% \fi
-
-\paragraph{Full-system benchmark coverage.}
-
-The main paper reports the three datasets that best support the demo narrative: QASPER for text-heavy scientific QA, ALCE-ASQA for citation-grounded QA, and MMDocRAG for multimodal QA. The full-system benchmark claim in the abstract is broader than this selected table. Table~\ref{tab:appendix-coverage} accounts for all 41 complete artifact sets and all 3,540 per-example prediction records in the synthesis bundle. Records count route-level prediction rows, not unique questions. Table~\ref{tab:appendix-diagnostic-results} reports the remaining diagnostic dataset results on the same 0--100 scale as the main table; the source CSV files keep the original 0--1 scores.
-
-\begin{center}
-\small
-\setlength{\tabcolsep}{3pt}
-\begin{tabularx}{\linewidth}{@{}lrr>{\raggedright\arraybackslash}X@{}}
-\toprule
-\rowcolor{gray!10}
-Dataset & Sets & Records & Paper role \\
-\midrule
-ALCE-ASQA & 4 & 600 & Main citation-grounded dataset. \\
-FinanceBench & 3 & 600 & Diagnostic numeric and financial QA dataset. \\
-MMDocRAG & 20 & 600 & Main multimodal and visual dataset. \\
-QASPER & 4 & 600 & Main text-heavy scientific QA dataset. \\
-RAGTruth & 6 & 900 & Diagnostic groundedness and abstention dataset. \\
-SlideVQA & 4 & 240 & Diagnostic visual slide QA dataset. \\
-\bottomrule
-\end{tabularx}
-\refstepcounter{table}
-\label{tab:appendix-coverage}
-\smallskip
-Table~\thetable: Full-system benchmark coverage.
-\end{center}
+Using these effective confidences, the initial quality proxies are
+\begin{align*}
+ \widehat Q_T&=0.15+c_T,\\
+ \widehat Q_V&=0.10+c_V,\\
+ \widehat Q_E&=0.10+c_E,\\
+ \widehat Q_G&=0.05+c_G,\\
+ \widehat Q_H&=0.20+(c_T+\max(c_V,c_E))/2.
+\end{align*}
+The element and hybrid expressions start at zero when their eligibility conditions fail. Table~\ref{tab:quality-rules} lists subsequent additions. Quality values are then floored at zero, with four-decimal rounding.
 
 \begin{table*}[t]
 \centering
 \small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{llrrrrrr}
+\begin{tabularx}{\textwidth}{@{}Xrrrrr@{}}
 \toprule
-\rowcolor{gray!10}
-Dataset & Route & N & F1 & Native & Citation & Page hit & False abs. \\
+Condition & Text & Page & Element & Graph & Hybrid \\
 \midrule
-FinanceBench & controller\_auto & 150 & 15.10 & 8.67 & 51.00 & 60.00 & 2.67 \\
-FinanceBench & crag\_guarded & 150 & 15.33 & 8.67 & 51.00 & 60.00 & 2.67 \\
-FinanceBench & direct\_answer & 150 & 17.34 & 2.67 & 0.00 & 0.00 & 0.00 \\
-FinanceBench & text\_rag & 150 & 14.83 & 8.67 & 48.56 & 60.00 & 7.33 \\
-\midrule
-RAGTruth & controller\_auto & 300 & 21.68 & 54.00 & 55.67 & -- & 0.00 \\
-RAGTruth & crag\_guarded & 300 & 21.45 & 54.00 & 55.67 & -- & 1.00 \\
-RAGTruth & text\_rag & 300 & 23.06 & 54.00 & 98.33 & -- & 0.00 \\
-\midrule
-SlideVQA & controller\_auto & 120 & 43.25 & 43.25 & 100.00 & 100.00 & 0.00 \\
-SlideVQA & page\_image\_rag\_vlm & 120 & 43.25 & 43.25 & 100.00 & 100.00 & 0.00 \\
+Visual intent & $-0.08$ & $+0.32$ & 0 & 0 & 0 \\
+Element intent & 0 & 0 & $+0.25$ if eligible & 0 & $+0.10$ if eligible \\
+Structured calculation & $+0.10$ & 0 & $+0.15$ if eligible & 0 & $+0.12$ if eligible \\
+Graph intent present / absent & 0 & 0 & 0 & $+0.35$ / $-0.25$ & 0 \\
+$c_T\geq0.65$ and no visual intent & $+0.25$ & $-0.20$ & 0 & 0 & $-0.10$ \\
+MMDocRAG and no visual intent & $+0.20$ & $-0.20$ & 0 & 0 & $-0.12$ \\
+Finance and structured calculation & $+0.20$ & 0 & 0 & 0 & $-0.05$ \\
 \bottomrule
-\end{tabular}
-\caption{Diagnostic dataset route results.}
-\label{tab:appendix-diagnostic-results}
+\end{tabularx}
+\caption{Additive quality-proxy rules. Conditions can accumulate. Dataset-family rules are explicit implementation choices, not learned generalization.}
+\label{tab:quality-rules}
 \end{table*}
 
-\paragraph{Command and skill surface.}
+The base cost penalties are reported in Section~\ref{sec:controller}. Visual intent reduces page-image cost by $0.18$; eligible element intent reduces element cost by $0.05$. MMDocRAG adds $0.22$ to page-image and $0.18$ to hybrid cost. A missing visual generator adds $0.05$ to page-image cost with visual intent, or $0.25$ without it, and adds $0.12$ to hybrid cost. Costs are floored at zero and rounded to four decimals.
 
-MARA separates high-permission product commands from the specialist document-QA workflow. The paper's system claims refer to the shared runtime and persisted state behind these commands, not to independent QA implementations. This reduces Web/CLI drift, but contract tests remain necessary because the codebase still has entry points across \texttt{ktem}, \texttt{kotaemon}, and \texttt{slide\_cli}.
+The scorer skips ineligible element retrieval. It skips page-image and hybrid routes on MMDocRAG when $c_T\geq0.65$ and visual intent is absent. It also skips either of those routes when cost is at least $0.55$ and its quality proxy does not exceed the text proxy. Among allowed, non-skipped candidates it maximizes $\max(0,\widehat Q-\widehat C)$. Equal scores prefer text, page-image, element, hybrid, then global graph. If no candidate remains, it falls back to permitted text or the first permitted route. The automatic benchmark route list contains those five evidence routes, rather than the separate direct-answer and guarded comparison configurations.
 
-\begin{small}
-\begin{description}[leftmargin=0pt,labelindent=0pt,style=nextline,itemsep=2pt,topsep=2pt]
-    \item[App lifecycle] \texttt{MARA app init}, \texttt{MARA app doctor}, \texttt{MARA app run}.
-    \item[DocQA indexing] \texttt{MARA docqa index ./docs/report.pdf}, \texttt{MARA docqa files}, \texttt{MARA docqa delete \textless file-id\textgreater}.
-    \item[DocQA answering] \texttt{MARA docqa ask -{}-file report.pdf -{}-reasoning mara -{}-prompt "..."}; \texttt{MARA docqa chat -{}-file report.pdf}.
-    \item[Sessions and sources] \texttt{MARA docqa sessions}, \texttt{MARA docqa resume \textless conversation-id\textgreater}, \texttt{MARA docqa sources select \textless conversation-id\textgreater{} -{}-file paper.pdf}.
-    \item[Notes and artifacts] \texttt{MARA docqa notes save-answer \textless conversation-id\textgreater}; \texttt{MARA docqa artifacts generate \textless conversation-id\textgreater{} -{}-type quiz}.
-    \item[Agent support assets] \texttt{MARA platform install -{}-platform codex -{}-mode full -{}-yes}; \texttt{MARA platform install -{}-platform claude-code -{}-mode full -{}-yes}; \texttt{MARA platform validate}.
-\end{description}
-\end{small}
+\subsection{Adequacy, Verification, and Recovery}
+The relevant sources are \path{libs/ktem/ktem/docqa/controller.py}, \path{retrieval_adequacy.py}, \path{verification.py}, and \path{execution.py} in that DocQA directory, together with \path{libs/ktem/ktem/reasoning/mara.py}.
 
-{\raggedright
-Focused skill wrappers include \texttt{MARA-docqa-index}, \texttt{MARA-docqa-ask}, \texttt{MARA-docqa-chat}, \texttt{MARA-docqa-resume}, \texttt{MARA-app-run}, \texttt{MARA-model-run}, and platform installation/status skills. They provide agent-facing documentation around the same CLI surface. The local Web app default is port 7860; \texttt{MARA app run -{}-port}, \texttt{GRADIO\_SERVER\_PORT}, or platform \texttt{PORT} can override it.
-\par}
+For ordinary retrieval, captured concrete evidence yields a \emph{good} decision unless a domain adequacy rule fails. Metadata without concrete evidence is \emph{ambiguous}; absent evidence is \emph{poor}. Finance checks look for required statement fields and, depending on origin, page-scoped support. These are permissive heuristics, not a universal numeric retrieval-quality threshold. For example, a finance request can pass when some required field aliases are present even if others are absent; benchmark-origin finance requests relax the page-scoping requirement.
 
-\paragraph{Kotaemon increment boundary.}
+Verification first checks domain support, contradictions, semantic rules, and token overlap. The general lexical path accepts overlap of at least $\min(2,\text{number of claim tokens})$, with additional short-evidence and source-summary rules. For claims that do not pass support checks, the unsupported-confidence threshold is $0.85$ in light mode, $0.75$ in strict mode, and $0.90$ in the finance domain. These thresholds act on heuristic values: explicit domain rejection gives $1.0$, contradiction $0.95$, certain unsupported summaries $0.85$, a strict directional-conflict condition $0.78$, and missing evidence tokens $0.80$; the remaining default is $0.55$. None is an independently calibrated probability. Unsupported claims request revision; insufficient evidence can request retry or abstention, and guardrail handling determines the returned answer.
 
-MARA is a branded fork of Kotaemon. The inherited substrate provides upload, model configuration, indexing, and ordinary local document QA. MARA's paper contribution is the controller-centred extension: explicit route decisions, evidence and verification traces, multimodal route interfaces, DocQA CLI reuse, platform command wrappers, and route-level benchmark artifacts. Internal package names remain compatible with the fork history, but the user-facing product surface is \texttt{MARA} / \texttt{MARA-cli}.
+There are two retrieval mechanisms. The pipeline-level \path{_should_retry_retrieval} returns true only for thorough mode with no retrieved documents. In the structured controller, \path{_retrieve_and_evaluate} repeats an ambiguous retrieval once. If retrieval remains non-good, \path{_switch_after_failed_retrieval} iterates alternative permitted routes until one yields good evidence. Each candidate can itself undergo the ambiguous-retrieval repeat. The result records the successful alternative; if none succeeds, execution returns the guarded result for the failed initial decision. Therefore the switch flag counts recorded successful recovery, not all attempted routes. The release does not implement the blanket assertion that total execution is capped at one retrieval retry.
 
-\paragraph{Additional route interpretation.}
+\subsection{Visual Evidence Versus Visual Generation}
+The source \path{libs/ktem/ktem/reasoning/mara_visual_answering.py} can return an OCR-extracted short answer before calling a VLM. For benchmark-origin requests, it searches visual evidence text for short answer-bearing patterns. With no visual generator it can return an evidence-only message or let another generation path handle the request, depending on configuration. The synthesis column \path{generator_backend} records configured identities such as \path{Qwen/Qwen3-8B} and \path{local_qwen3_vl}; the metric CSV does not contain the per-answer \path{generation_backend} or \path{visual_generation_gate} fields needed to identify these paths. A future generator comparison must export those fields and generated answers before attributing differences to a VLM.
 
-Routes outside the main top-five are still part of the implemented system.
-\texttt{direct\_answer} is a baseline and a useful non-document control.
-\texttt{element\_rag} exposes table, formula, and element metadata but showed weak MMDocRAG quality in the full-system benchmark, consistent with sparse element evidence and high false abstention.
-Graph routes are scoped routes for summaries, comparison, and global context; they are visible in controller decisions but need stronger standalone graph evaluation before being promoted to a headline route.
-\texttt{visual\_retriever\_only} is best understood as a retrieval diagnostic rather than a full QA route.
+\section{Coverage and Complete Diagnostics}
+\label{app:results}
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Dataset & Questions & Sets & Records \\
+\midrule
+QASPER & 200 & 4 & 600 \\
+ALCE-ASQA & 200 & 4 & 600 \\
+MMDocRAG & 120 & 20 & 600 \\
+FinanceBench & 150 & 3 & 600 \\
+RAGTruth & 300 & 6 & 900 \\
+SlideVQA & 120 & 4 & 240 \\
+\midrule
+Total & 1,090 & 41 & 3,540 \\
+\bottomrule
+\end{tabular}
+\caption{An artifact set is a completed run/shard directory with prediction and report outputs. One set can contain multiple route configurations. Questions count unique dataset--example identifiers, and records count configuration-specific outputs.}
+\label{tab:coverage}
+\end{table}
 
-\paragraph{Post-benchmark diagnostic.}
+\subsection{Metrics and Interpretation}
+Tables~\ref{tab:all-quality} and \ref{tab:all-operations} include every dataset/configuration row in the released aggregate table. Missing metrics are shown as dashes, not zeros. Citation metadata recall and inline recall are kept separate. Metadata can include evidence attached by an adapter and must not be interpreted as verified support for every generated claim. Unsupported-claim rates come from the system's own verifier. False abstention is the harness flag against a nonempty reference answer, not a human assessment of answerability.
 
-After the full-system benchmark, a targeted RAGTruth prompt-budget rerun inspected a prompt-length failure mode. The repair was verified on a small diagnostic subset, but it was not part of the same full-system protocol. The paper therefore treats it as a resolved engineering diagnostic, not as a replacement for the main RAGTruth or route-ranking results.
+F1 and EM score the harness's normalized \path{answer_for_scoring}, which can differ from the user-facing answer. The synthesis does not include either answer string. SlideVQA's two configurations tie on all six published paired quality/locator metrics, despite 25 distinct per-example F1 values. Their mean recorded generation times are 4.61 and 2.55 seconds. This limits generator comparison even though routing probes are observable. The RAGTruth rows likewise belong to the local document-QA adaptation; token F1 is not the official hallucination-detection evaluation.
 
-\paragraph{Reproducibility notes.}
+The instrumented \path{total_seconds} values have separate index and generation fields, while parse/retrieval fields in this bundle are zero. Zero instrumented retrieval time must not be interpreted as free retrieval. These logs do not establish full interactive startup latency, comparable cache state, or monetary/energy cost. The table's p95 is the sorted value at rounded index $0.95(n-1)$, as in the released synthesis script. Runtime scoring penalties in Section~\ref{sec:controller} are unrelated units.
 
-The software artifact for this paper is the public MARA release \texttt{v0.0.40}\footnote{\url{https://github.com/262412/MARA/releases/tag/v0.0.40}}. The release tag identifies the application version used for the demo. Benchmark evidence is packaged separately as the companion supplementary bundle\footnote{\path{mara-full-system-benchmark-synthesis-v0.0.40.zip}}, rather than referenced through environment-specific runtime locations. In an external submission, that bundle accompanies the paper and contains a README, the synthesis report, aggregate result tables, route-decision summaries, failure/latency/backend summaries, paired-delta tables, bootstrap confidence intervals, controller-oracle regret diagnostics, win/loss/tie diagnostics, the Slurm submission ledger, the synthesis input manifest, per-example metric records, and the synthesis script. Exact filenames are listed in the bundle README.
+\input{diagnostic_tables}
 
-Inside the supplementary files, runtime roots are replaced by a symbolic benchmark-run root while dataset, route, backend, score, and manifest fields are preserved. The artifact files themselves should be treated as the authority for scores and backend metadata; the external-facing paper uses the public release tag and supplement filename as its reproducibility anchors.
+\subsection{Oracle Definitions and Pairing}
+Let $a_i$ be controller F1 and $b_i$ the largest observed F1 among fixed comparison configurations for question $i$. The bundle excludes \path{controller_auto} when constructing $b_i$. We distinguish the signed difference of means
+\[
+ D=\frac1n\sum_i(b_i-a_i)
+\]
+from its recorded positive-part regret
+\[
+ R_+=\frac1n\sum_i\max(b_i-a_i,0).
+\]
+The two differ when auto beats every fixed comparison on some examples. MMDocRAG has $D=8.66$ and $R_+=11.05$ on a 0--100 F1 scale. Neither is a clean estimate of recoverable routing loss because fixed configurations can differ in generators, guards, and execution budgets. On FinanceBench the best comparison is direct-answer for 79 questions and guarded for 22; neither is an automatic evidence-route option. We therefore report this as a diagnostic envelope and avoid a claimed reachable-oracle percentage.
 
-The run used local model and retrieval backends recorded in the benchmark metadata, including Qwen/Qwen3-8B for text generation and BAAI/bge-m3 for text retrieval. Visual route metadata must be read per run: the default local visual retriever is \texttt{local\_late\_interaction} with backend type \texttt{deterministic\_smoke}; ColPali/ColQwen-style retrievers are configured HTTP backends when available; and local Qwen3-VL generation is used only when the VLM endpoint is configured and healthy. Paper-grade external evaluators were not configured for the main result table; results are reported as local dataset-native scores and MARA diagnostic metrics.
+Bootstrap analysis joins by dataset and example ID. Each resample draws $n$ paired differences with replacement; 1,000 resampled means are sorted and the rounded-index 2.5th and 97.5th percentiles are used. The seed is reset to 20260705 for each comparison, matching the release script. Wins and losses are based on rounded four-decimal paired differences. These intervals describe the fixed existing sample and do not measure robustness across seeds, model families, or independent reruns.
+
+\subsection{Execution Provenance and Resource Limits}
+The input manifest identifies two A100 GPUs per shard for QASPER, ALCE-ASQA, FinanceBench, and RAGTruth, and two L40S GPUs for MMDocRAG and SlideVQA. The common text job timeout field is 180 seconds. MMDocRAG text and element jobs record 360 seconds, hybrid and page-image jobs 600 seconds, and controller jobs 360 seconds; SlideVQA records 360 seconds. These manifest timeout fields must not be conflated with the route-level timeout, which defaults to 90 seconds for auto/guarded in the distributed route configuration.
+
+All four MMDocRAG controller shards use a distinct manifest named
+\path{mmdocrag-dev15-stat120-controller-t360.routes.json};
+other MMDocRAG configurations use
+\path{mmdocrag-dev15-stat120.routes.json}.
+The controller run names identify an extended-timeout repair. The synthesis lists manifest paths but does not embed their effective JSON, so their exact setting differences cannot be independently reconstructed from this ZIP. One text shard also comes from a missing-PDF repair run. Zero recorded route timeouts in the retained runs therefore does not demonstrate equivalent timeout tolerance.
+
+The synthesis report is dated 5 July 2026 and is distributed as a v0.0.40 release asset. It includes aggregate metrics, paired deltas, bootstrap intervals, oracle rows, win/loss/tie counts, per-example metric records, the run ledger, input manifest, and synthesis script. Original raw predictions, effective route manifests, and per-job source/build identities are not included. The released tables can be reproduced from their metric records; exact end-to-end reruns require additional source data and configuration provenance. Separate post-hoc RAGTruth prompt-budget diagnostics are not pooled into these numbers.
+
+\section{Artifact Access and Demonstration Deployment}
+\label{app:artifact}
+The public release is
+\url{https://github.com/262412/MARA/releases/tag/v0.0.40}.
+Its assets include
+\path{mara-full-system-benchmark-synthesis-v0.0.40.zip}
+and the release's source archive. The repository is
+\url{https://github.com/262412/MARA};
+the video is
+\url{https://youtu.be/owRaHCzSVNg}.
+These are also the links to enter in the submission form.
+
+\subsection{Source Installation}
+The reproducibility anchor is the tagged source tree. In a fresh standalone checkout, the release documents the following developer installation:
+\begin{verbatim}
+git clone --branch v0.0.40 \
+  https://github.com/262412/MARA.git
+cd MARA
+uv sync --extra mara
+\end{verbatim}
+Configure the selected model and embedding providers using the release instructions before launching the Web UI or indexing documents. The repository's \path{app.py} is the source-mode entry point; the public command surface also includes \texttt{MARA app init}, \texttt{MARA app doctor}, and \texttt{MARA app run}. Provider health checks do not replace a successful end-to-end index/query check.
+
+The historical README's \texttt{pip install mara-research-cli} route is unavailable on PyPI and TestPyPI as checked on 22 September 2026. This submission therefore points to source installation, not that command. The release retains Apache-2.0 licensing and Kotaemon attribution; its historical NOTICE still uses the earlier product name \emph{Slides}. Minimum RAM/VRAM and a complete cross-platform installation matrix have not been established.
+
+After installation and provider configuration, representative existing commands are:
+\begin{verbatim}
+MARA docqa index ./example.pdf
+MARA docqa files
+MARA docqa ask --file example.pdf \
+  --reasoning mara \
+  --prompt "Summarize this document"
+\end{verbatim}
+Users should inspect citations and status, and use an appropriate source document with permission to process it. Local-only and external-API configurations have different hardware and data-flow requirements.
+
+\subsection{Video and Benchmark Identity}
+The unchanged video illustrates source selection, page preview, text questions, citations, and the reasoning-status card. Its user deployment uses Deepseek/Google APIs and a packaged UI label of 0.0.18. The benchmark identifies Qwen3-8B/bge-m3 and the repository release v0.0.40. These are deployment and distribution identifiers, not interchangeable claims about one executable. In the released code, the displayed app version may come from \path{KH_APP_VERSION} or installed package metadata; a UI version string alone is not a source-commit identifier. We do not infer binary equivalence between the recording and benchmark release.
+
+The recording is a user-workflow demonstration, not a visual-generator comparison or an offline-privacy demonstration. The paper's multimodal and recovery limitations remain applicable even when the interface reports a successful text answer.
