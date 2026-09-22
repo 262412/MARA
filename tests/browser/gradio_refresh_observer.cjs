@@ -22,6 +22,8 @@ function installTrace(ids) {
     if (ids.functions.includes(fn)) window.ownedRecordFramework(phase, {fn, data});
   };
   const scheduledChanges = [];
+  let currentChange;
+  const waiting = new WeakMap();
   window.ownedChangeSchedule = (fn, id) => {
     if (fn !== ids.applyFn || id !== ids.resultId) return;
     const flush = trace.records.findLast(row => row.phase === 'flush_end');
@@ -32,7 +34,19 @@ function installTrace(ids) {
   };
   window.ownedChangeCallback = (fn, id) => {
     if (fn === ids.applyFn && id === ids.resultId) {
-      window.ownedRecordFramework('change_callback', {fn, id, scheduled: scheduledChanges.shift()});
+      currentChange = scheduledChanges.shift();
+      window.ownedRecordFramework('change_callback', {fn, id, scheduled: currentChange});
+    }
+  };
+  window.ownedWaitForFlush = (fn, id, pending, invocation) => {
+    if (fn !== ids.applyFn || id !== ids.resultId) return;
+    const wait = trace.records.length;
+    waiting.set(invocation, wait);
+    window.ownedRecordFramework('wait_for_flush', {fn, id, pending, wait, scheduled: currentChange});
+  };
+  window.ownedResumeFlush = (fn, id, invocation) => {
+    if (fn === ids.applyFn && id === ids.resultId) {
+      window.ownedRecordFramework('wait_resumed', {fn, id, wait: waiting.get(invocation)});
     }
   };
   const originalFetch = window.fetch.bind(window);
@@ -97,6 +111,8 @@ async function attach(page, ready, base) {
     ['handle_data', 'const{data:$e,fn_index:le}=he;B.pending_request', "window.ownedRecordData?.('handle_data',he.fn_index,he.data)"],
     ['change_schedule', 'requestAnimationFrame(()=>{Dt(x,B,X)})', "window.ownedChangeSchedule?.(x,B)"],
     ['change_callback', 'Dt(x,B,X)', "window.ownedChangeCallback?.(x,B)"],
+    ['wait_for_flush', 'o?B=V.subscribe(X=>{X||(Nl(A,ee,W),ne())}):Nl(A,ee,W)', "window.ownedWaitForFlush?.(A,ee,o,ne)"],
+    ['wait_resumed', 'Nl(A,ee,W),ne()', "window.ownedResumeFlush?.(A,ee,ne)"],
   ];
   const points = [];
   for (const [name, needle, expression] of definitionsToTrace) {

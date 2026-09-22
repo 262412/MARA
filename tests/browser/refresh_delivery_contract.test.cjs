@@ -42,14 +42,19 @@ function fixture(coalesced = false) {
   const firstOp = operation('first-event', old), latestOp = operation('latest-event', latest);
   delivered(firstOp, old);
   if (coalesced) {
-    if (coalesced === 'deferred') {
+    if (coalesced === 'deferred' || coalesced === 'pending') {
       log('flush_end', {updates: [{id: 31, value: old}]});
       log('change', {detail: {id: 31, event: 'change'}});
       log('change_schedule', {fn: 116, id: 31, scheduled: 'old-change', stamp: old.stamp});
     }
+    if (coalesced === 'pending') {
+      log('change_callback', {fn: 116, id: 31, scheduled: 'old-change'});
+      log('wait_for_flush', {fn: 116, id: 31, scheduled: 'old-change', pending: true, wait: 'exact-invocation'});
+    }
     delivered(operation('middle-event', middle), middle);
     log('flush_end', {updates: [{id: 31, value: middle}]});
     if (coalesced === 'deferred') log('change_callback', {fn: 116, id: 31, scheduled: 'old-change'});
+    if (coalesced === 'pending') log('wait_resumed', {fn: 116, id: 31, wait: 'exact-invocation'});
     apply(middle);
   } else {
     log('flush_end', {updates: [{id: 31, value: old}]}); apply(old);
@@ -72,6 +77,9 @@ test('explicit same-flush replacement, change and guard evidence proves coalesci
 });
 test('exact deferred change callback reads a newer component value', () => {
   assert.equal(assertRefreshDelivery(fixture('deferred')).fate.kind, 'coalesced-before-js');
+});
+test('an already started callback waits for pending values and reads the replacement on resume', () => {
+  assert.equal(assertRefreshDelivery(fixture('pending')).fate.kind, 'coalesced-waiting-flush');
 });
 
 const negative = {
@@ -129,5 +137,22 @@ test('an unobserved old guard result cannot masquerade as component coalescing',
 test('a replacement from another session cannot prove safe coalescing', () => {
   const value = fixture(true);
   value.backend.find(row => row.event_id === 'middle-event' && row.phase === 'call').session_hash = 'foreign';
+  assert.throws(() => assertRefreshDelivery(value));
+});
+for (const phase of ['wait_for_flush', 'wait_resumed', 'change_callback', 'assignment', 'flush_end']) {
+  test(`pending-flush coalescing requires ${phase}`, () => {
+    const value = fixture('pending');
+    value.framework.state.records = value.framework.state.records.filter(row => row.phase !== phase);
+    assert.throws(() => assertRefreshDelivery(value));
+  });
+}
+test('resume of a different wait invocation is not evidence for the old callback', () => {
+  const value = fixture('pending');
+  value.framework.state.records.find(row => row.phase === 'wait_resumed').wait = 'unrelated-invocation';
+  assert.throws(() => assertRefreshDelivery(value));
+});
+test('a non-pending callback cannot borrow a later replacement', () => {
+  const value = fixture('pending');
+  value.framework.state.records.find(row => row.phase === 'wait_for_flush').pending = false;
   assert.throws(() => assertRefreshDelivery(value));
 });

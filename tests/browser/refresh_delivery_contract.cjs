@@ -74,19 +74,25 @@ function deferredChangeFate(trace, records, stamp, flush, resultId, applyFn) {
   assert.ok(schedule, 'missing guard log alone is not coalescing evidence');
   const callback = trace.find(row => row.phase === 'change_callback' && row.scheduled === schedule.scheduled);
   assert.ok(callback && callback.sequence > schedule.sequence, 'exact deferred change callback required');
+  const wait = trace.find(row => row.phase === 'wait_for_flush' && row.scheduled === schedule.scheduled &&
+    row.sequence > callback.sequence && row.pending);
+  const resumed = wait && trace.find(row => row.phase === 'wait_resumed' && row.wait === wait.wait && row.sequence > wait.sequence);
+  if (wait) assert.ok(resumed, 'the exact pending-flush invocation must resume');
+  const readAfter = resumed || callback;
   const replacement = trace.findLast(row => row.phase === 'assignment' && row.sequence > schedule.sequence &&
-    row.sequence < callback.sequence && valueAt(row, resultId)?.stamp);
-  assert.ok(replacement, 'replacement must precede the actual deferred callback');
+    row.sequence < readAfter.sequence && valueAt(row, resultId)?.stamp);
+  assert.ok(replacement, 'replacement must precede the actual callback or its proven flush resume');
   const payload = valueAt(replacement, resultId);
   assert.equal(payload.stamp.epoch, stamp.epoch);
   assert.ok(payload.stamp.filterVersion > stamp.filterVersion && payload.stamp.fileRequest > stamp.fileRequest);
   const replacementFlush = trace.find(row => row.phase === 'flush_end' && row.sequence > replacement.sequence &&
-    row.sequence < callback.sequence && equal(valueAt(row, resultId), payload));
+    row.sequence < readAfter.sequence && equal(valueAt(row, resultId), payload));
   const scheduled = trace.find(row => row.phase === 'js_schedule' && row.fn === applyFn &&
-    row.sequence > callback.sequence && same(row.data[0], payload.stamp));
+    row.sequence > readAfter.sequence && same(row.data[0], payload.stamp));
   assert.ok(replacementFlush && scheduled, 'deferred JS must read the replacement component value');
   assert.ok(records.some(row => row.phase === 'applyFiles' && equal(row.stamp, payload.stamp)));
-  return {kind: 'coalesced-before-js', flush: flush.sequence, scheduledChange: schedule.sequence,
+  return {kind: resumed ? 'coalesced-waiting-flush' : 'coalesced-before-js',
+    wait: wait?.sequence, resumed: resumed?.sequence, flush: flush.sequence, scheduledChange: schedule.sequence,
     callback: callback.sequence, replacement: replacement.sequence, replacementFlush: replacementFlush.sequence,
     scheduled: scheduled.sequence, replacementStamp: payload.stamp};
 }
