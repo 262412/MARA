@@ -13,6 +13,7 @@
     let appliedFileRequest = 0;
     let uploads = new Map();
     let fileIntentId = "";
+    let fileIntentIndex = null;
 
     function mount() {
       const current = document.querySelector("#chat-file-list");
@@ -25,6 +26,7 @@
         appliedSelectors = new Map();
         uploads = new Map();
         fileIntentId = "";
+        fileIntentIndex = null;
       }
     }
 
@@ -37,10 +39,12 @@
       mount();
       viewVersion += 1;
       fileIntentId = "";
+      fileIntentIndex = null;
     }
 
-    function captureFileSelection() {
+    function captureFileSelection(index) {
       mount();
+      fileIntentIndex = index;
       return {epoch, viewVersion};
     }
 
@@ -125,6 +129,12 @@
       const update = { ...payload.update };
       if (!same(payload.selected, selected)) {
         update.value = (selected || []).filter(id => payload.available_ids.includes(id));
+      } else if (stamp.index === fileIntentIndex && fileIntentId &&
+                 payload.available_ids.includes(fileIntentId) &&
+                 !same(selected, [fileIntentId]) && same(update.value, selected)) {
+        // Both JS calls may capture the pre-flush value. Keep the new card's
+        // assignment; this unchanged read must not enqueue that old value again.
+        delete update.value;
       }
       return [update, payload.options];
     }

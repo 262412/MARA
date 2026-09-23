@@ -24,7 +24,7 @@ APPLY_UPLOAD_SELECTION_JS = """function (payload, conversation) {
     return window.maraFileBrowserRefresh.applyUploadSelection(payload, conversation);
 }"""
 CAPTURE_SELECTION_JS = """function (file_id) {
-    return [file_id, window.maraFileBrowserRefresh.captureFileSelection()];
+    return [file_id, window.maraFileBrowserRefresh.captureFileSelection(INDEX_ID)];
 }"""
 APPLY_SELECTION_JS = """function (payload) {
     return window.maraFileBrowserRefresh.applyFileSelection(payload);
@@ -141,7 +141,7 @@ def bind_file_selection_result(page):
         fn=file_selection_result(page.select_chat_file),
         inputs=[page._chat_file_click, page._file_browser_stamp],
         outputs=[page._file_browser_selection_result],
-        js=CAPTURE_SELECTION_JS,
+        js=CAPTURE_SELECTION_JS.replace("INDEX_ID", str(page.file_index.id)),
         show_progress="hidden",
     )
     page._file_browser_selection_result.change(
