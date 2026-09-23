@@ -38,6 +38,43 @@ def test_release_all_attempts_later_barrier_after_delivery_failure(modules):
     assert barriers.gates["later"]["release"].is_set()
 
 
+def test_delivery_identity_comes_from_queue_after_callback_context_ended(modules):
+    async def complete():
+        barriers = modules[2].FileBrowserBarriers()
+        barriers.arm(
+            {
+                "key": "owned",
+                "callback": "load_files",
+                "event": "delivery",
+                "username": "owner",
+            }
+        )
+        sent = []
+        queue = SimpleNamespace(send_message=lambda event, message: sent.append(event))
+        barriers.bind_delivery(queue)
+        event = SimpleNamespace(
+            _id="exact-event",
+            username="owner",
+            session_hash="session",
+            data=SimpleNamespace(data=[[], "actor", {"epoch": "mount"}]),
+            fn=SimpleNamespace(
+                _id=7, name="load_files", outputs=[SimpleNamespace(_id=8)]
+            ),
+        )
+        queue.send_message(event, SimpleNamespace(msg="process_completed"))
+        operation = barriers.status()["owned"]["operation"]
+        assert operation["event_id"] == event._id
+        assert operation["fn"] == event.fn._id
+        assert operation["outputs"] == [8]
+        assert operation["session_hash"] == "session"
+        assert sent == []
+        barriers.release("owned")
+        await asyncio.sleep(0)
+        assert sent == [event]
+
+    asyncio.run(complete())
+
+
 def launch_fixture(monkeypatch, sut, output):
     model = SimpleNamespace(
         held_started=Event(),

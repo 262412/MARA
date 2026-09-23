@@ -20,9 +20,10 @@ async function evidence() {
   return response.json();
 }
 
-async function login(username = 'browser-owner', {initialize = true, traceRefresh = false, traceConversation = false, traceSelection = false} = {}) {
+async function login(username = 'browser-owner', {initialize = true, traceRefresh = false, traceConversation = false, traceSelection = false, holdSelectorFlush = false} = {}) {
   const page = await browser.newPage({locale: 'en-US', viewport: {width: 1600, height: 1200}});
   await page.addInitScript(require('./web_operation_observer.cjs').install);
+  if (holdSelectorFlush) await page.addInitScript(require('./selector_flush_gate.cjs').install);
   if (process.env.MARA_BROWSER_LOGIN_DIAGNOSTIC === '1') await page.addInitScript(() => {
     window.ownedLoginFrames = {frames: 0, ticks: 0, samples: []};
     const observe = kind => {
@@ -33,9 +34,8 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
         visibility: document.visibilityState, focus: document.hasFocus(),
         rect: button.getBoundingClientRect().toJSON(), disabled: button.disabled});
     };
-    // Observe callbacks already requested by the page; do not request frames.
-    const raf = window.requestAnimationFrame.bind(window);
-    window.requestAnimationFrame = callback => raf(time => { observe('frames'); callback(time); });
+    // Do not wrap/request RAF here: a wrapper changes callback identity for the
+    // controlled component-flush probe. This observer records DOM/focus only.
     const timer = setInterval(() => { observe('ticks'); if (window.ownedLoginFrames.ticks >= 400) clearInterval(timer); }, 100);
   });
   const refreshTrace = traceRefresh || traceConversation || traceSelection ? await require('./gradio_refresh_observer.cjs').attach(page, ready, base, {conversation: traceConversation, selection: traceSelection}) : null;
@@ -125,6 +125,12 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
   await page.locator('input[type=password]').fill('OwnedFixture7!');
   try { await page.getByRole('button', {name: /Login|登录/}).click(); }
   catch (error) {
+    exit.primary(results, output, error, 'login_failure');
+    if (refreshTrace) results.loginFramework = await refreshTrace.snapshot();
+    results.loginAnimationFrame = await page.evaluate(() => Promise.race([
+      new Promise(resolve => requestAnimationFrame(time => resolve({time}))),
+      new Promise(resolve => setTimeout(() => resolve({timeout: true}), 2000)),
+    ]));
     results.loginFailure = await page.evaluate(() => ({frames: window.ownedLoginFrames,
       state: document.readyState, visibility: document.visibilityState, focus: document.hasFocus(),
       buttons: [...document.querySelectorAll('button')].map(node => ({text: node.textContent,
@@ -132,7 +138,8 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
         visibility: getComputedStyle(node).visibility, opacity: getComputedStyle(node).opacity,
         animations: node.getAnimations().map(value => ({state: value.playState}))}))}));
     fs.writeFileSync(path.join(output, 'login-failure.json'), JSON.stringify(results.loginFailure, null, 2));
-    await page.screenshot({path: path.join(output, 'login-failure.png')});
+    exit.save(output, results);
+    await exit.cleanup(results, [['login screenshot', () => page.screenshot({path: path.join(output, 'login-failure.png'), timeout: 3000})]]);
     throw error;
   }
   if (process.env.MARA_BROWSER_LOGIN_DIAGNOSTIC === '1') {
@@ -417,7 +424,8 @@ async function authenticatedIndexing() {
   const reload = require('./conversation_reload.cjs')({expect, login, evidence, results, output, base, ready});
   const exitProbes = require('./fixture_exit_probes.cjs')({expect, login, selectSource, send, results, output, base});
   const controlledOnly = [...conversationTails, ...readiness, ...reload, ...exitProbes].map(fn => fn.name)
-    .concat('lateConversationWatchdogBoundary', 'heldModelShutdown', 'selectorChoicesAfterCard', 'selectorChoicesAlongsideCard');
+    .concat('lateConversationWatchdogBoundary', 'heldModelShutdown', 'selectorChoicesAfterCard', 'selectorChoicesAlongsideCard',
+      'selectorSameFlush', 'selectorCardBeforeChoices');
   const scenarios = [normalSubmission, conversationIsolation, streamFailure, slowViewSwitch, disconnectStream, authenticatedIndexing, ...operations, ...fileBrowser, ...refreshRaces, ...indexManagement, ...studio, ...studioPermissions, ...indexingLifetime, ...indexingCloseout, ...conversationTails, ...readiness, ...reload, ...exitProbes];
   if (selected) expect(selected.every(name => scenarios.some(fn => fn.name === name))).toBeTruthy();
   for (const scenario of scenarios.filter(fn => selected ? selected.includes(fn.name) : !['publicConversationPermissions', 'publicStudioPermissions', ...controlledOnly].includes(fn.name))) {

@@ -4,12 +4,12 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 
 function installTrace(ids) {
-  const trace = window.ownedFrameworkTrace = {records: [], errors: [], ids, logpointsActive: true};
+  const trace = window.ownedFrameworkTrace = {records: [], errors: [], ids, logpointsActive: true, flush: 0};
   const clone = value => JSON.parse(JSON.stringify(value));
   window.ownedRecordFramework = (phase, value) => {
     try {
       trace.records.push({sequence: trace.records.length, action: window.ownedWebAction,
-        time: performance.now(), phase, ...clone(value)});
+        time: performance.now(), flush: trace.flush, phase, ...clone(value)});
     } catch (error) { trace.errors.push({phase, error: String(error)}); }
   };
   window.ownedRecordUpdates = (phase, updates) => {
@@ -99,7 +99,7 @@ async function attach(page, ready, base, {conversation = false, selection = fals
     functions: [...refresh.map(([id]) => Number(id)), Number(applyId)], props: ['value'], conversation, selection};
   if (selection) {
     for (const [id, definition] of definitions) {
-      if (definition.name === 'select_chat_file' ||
+      if (['select_chat_file', 'mode_changed', 'load_files'].includes(definition.name) ||
           /captureSelector|applySelector|captureFileSelection|applyFileSelection/.test(definition.js || '')) {
         ids.functions.push(Number(id));
         ids.components.push(...definition.inputs, ...definition.outputs);
@@ -107,7 +107,7 @@ async function attach(page, ready, base, {conversation = false, selection = fals
     }
     ids.components = [...new Set(ids.components)];
     ids.functions = [...new Set(ids.functions)];
-    ids.props.push('choices');
+    ids.props.push('choices', 'visible');
   }
   if (conversation) {
     for (const [id, definition] of definitions) {
@@ -126,8 +126,10 @@ async function attach(page, ready, base, {conversation = false, selection = fals
   await cdp.send('Debugger.enable');
   const code = bundle.toString('utf8');
   const definitionsToTrace = [
+    ['flush_start', '_.update(h=>{for(let k=0;k<Vt.length;k++)', "window.ownedFrameworkTrace&&(window.ownedFrameworkTrace.flush++,window.ownedRecordFramework('flush_start',{}))"],
     ['update_value', 'h&&(Vt.push(h)', "window.ownedRecordUpdates?.('queued',h)"],
     ['assignment', '$.props[y.prop]=E', "window.ownedRecordUpdates?.('assignment',[{id:y.id,prop:y.prop,value:E,previous:$.props[y.prop]}])"],
+    ['component_bind', 'o.props.value=w,t(0,o)', "window.ownedRecordUpdates?.('component_bind',[{id:o.id,prop:'value',value:w,previous:o.props.value,choices:o.props.choices,visible:o.props.visible}])"],
     ['flush_end', 'Vt=[],v=!1,p.set(!1)', "window.ownedRecordUpdates?.('flush_end',window.ownedFrameworkTrace.ids.components.flatMap(id=>window.ownedFrameworkTrace.ids.props.map(prop=>({id,prop,value:s[id]?.props[prop]}))))"],
     ['handle_update', 'const W=u.find(X=>X.id==ee).outputs', "window.ownedRecordData?.('handle_update',ee,A)"],
     ['js_schedule', 'B.frontend_fn?B.frontend_fn(X.data.concat', "window.ownedRecordData?.('js_schedule',A,X.data)"],
@@ -150,12 +152,38 @@ async function attach(page, ready, base, {conversation = false, selection = fals
     });
     points.push({name, needle, ...position, ...receipt});
   }
+  let dropdown;
+  if (selection) {
+    const filename = 'Index-BwXb1GqD.js';
+    const file = require('node:path').join(require('node:path').dirname(ready.frontend.path), filename);
+    const code = fs.readFileSync(file, 'utf8');
+    const sha256 = crypto.createHash('sha256').update(code).digest('hex');
+    if (sha256 !== '1fac76bf2142a6b220899b9c3b93ab0e0d4612086b926afff4cf4479d1a1265a') throw Error('Unexpected installed Dropdown bundle');
+    dropdown = {filename, sha256};
+    const observations = [
+      ['dropdown_normalize', 'u===void 0?t(12,A=[]):Array.isArray(u)', "window.ownedRecordFramework?.('dropdown_normalize',{label:s,value:u,choices:f,indices:A,previousIndices:U,container:h?.closest('[id]')?.id})"],
+      ['dropdown_write', 't(24,u=A.map(a=>typeof a=="number"?D[a]:a))', "window.ownedRecordFramework?.('dropdown_write',{label:s,previous:u,value:A.map(a=>typeof a==='number'?D[a]:a),choices:f,indices:A,container:h?.closest('[id]')?.id})"],
+    ];
+    for (const [name, needle, expression] of observations) {
+      const offset = code.indexOf(needle);
+      if (offset < 0 || code.indexOf(needle, offset + 1) >= 0) throw Error('Nonunique logpoint: ' + name);
+      const before = code.slice(0, offset).split('\n');
+      const position = {lineNumber: before.length - 1, columnNumber: before.at(-1).length};
+      const receipt = await cdp.send('Debugger.setBreakpointByUrl', {
+        url: base + '/assets/' + filename, ...position, condition: '(' + expression + ',false)',
+      });
+      points.push({name, filename, needle, ...position, ...receipt});
+    }
+  }
   const resolved = [];
   cdp.on('Debugger.breakpointResolved', record => resolved.push(record));
-  const served = [];
+  const served = [], dropdownServed = [];
   page.on('response', response => {
     if (new URL(response.url()).pathname.endsWith('/' + filename)) {
       served.push(response.body().then(value => ({url: response.url(), sha256: crypto.createHash('sha256').update(value).digest('hex')})));
+    }
+    if (dropdown && new URL(response.url()).pathname.endsWith('/' + dropdown.filename)) {
+      dropdownServed.push(response.body().then(value => ({url: response.url(), sha256: crypto.createHash('sha256').update(value).digest('hex')})));
     }
   });
   return {ids, async setActive(active, reason) {
@@ -166,7 +194,7 @@ async function attach(page, ready, base, {conversation = false, selection = fals
     }, {active, reason});
   }, async snapshot() {
     const responses = await Promise.allSettled(served);
-    return {bundleSha256: hash, points, resolved, served: responses,
+    return {bundleSha256: hash, dropdown, dropdownServed: await Promise.allSettled(dropdownServed), points, resolved, served: responses,
       state: await page.evaluate(() => window.ownedFrameworkTrace)};
   }};
 }

@@ -167,3 +167,49 @@ test("card choices reject both late results and stale input snapshots before pre
   assert.deepEqual(guard.applyUploadReset(null), skipped(2));
   assert.deepEqual(guard.applyUploadSelection(null, ""), skipped(1));
 });
+
+function card(guard, listeners, id, index = 1) {
+  listeners.click({target: {closest: query => query === "[data-chat-file-id]" ? {dataset: {chatFileId: id}} : null}});
+  return {stamp: guard.captureFileSelection(index), file_id: id,
+    outputs: ["select", {__type__: "update", value: [id]}, ""]};
+}
+
+test("old initialization cannot clear a newer card choice in either assignment order", () => {
+  for (const order of [["card", "selector"], ["selector", "card"]]) {
+    const {guard, listeners} = browser();
+    const initial = selector(guard);
+    const choice = card(guard, listeners, "owned");
+    // Real Gradio's async input collection can snapshot both calls before a flush.
+    const updates = {card: guard.applyFileSelection(choice)[1], selector: guard.applySelector(initial, [])[0]};
+    const component = {value: [], choices: []};
+    for (const writer of order) {
+      const {__type__, ...properties} = updates[writer];
+      Object.assign(component, properties);
+    }
+    assert.deepEqual(component.value, ["owned"]);
+    assert.deepEqual(component.choices, initial.update.choices);
+    assert.deepEqual(initial.update.value, [], "the backend payload is not mutated");
+  }
+});
+
+test("empty, revoked and unrelated selector updates still apply after a card intent", () => {
+  const {guard, listeners} = browser();
+  const initial = selector(guard), otherIndex = selector(guard, [], 2);
+  card(guard, listeners, "owned");
+  assert.deepEqual(guard.applySelector(otherIndex, [])[0].value, []);
+  const revoked = {...initial, available_ids: [], update: {...initial.update, choices: [], value: []}};
+  assert.deepEqual(guard.applySelector(revoked, [])[0].value, []);
+  assert.deepEqual(guard.applySelector(initial, ["owned", "deleted"])[0].value, ["owned"]);
+  guard.viewChanged(); // mode switch, explicit scope/clear, conversation or Group intent
+  assert.deepEqual(guard.applySelector(initial, [])[0].value, []);
+  assert.deepEqual(guard.applySelector(initial, ["owned"])[0].value, ["owned"]);
+  const current = selector(guard);
+  assert.deepEqual(guard.applySelector(current, [])[0].value, []);
+});
+
+test("a different browser's pending card does not change initialization", () => {
+  const first = browser(), other = browser();
+  const initial = selector(other.guard);
+  card(first.guard, first.listeners, "owned");
+  assert.deepEqual(other.guard.applySelector(initial, [])[0].value, []);
+});

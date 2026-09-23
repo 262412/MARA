@@ -133,6 +133,18 @@ class FileBrowserBarriers:
             gate = self._claim(event.fn.name, "delivery", values, None)
             if gate is None:
                 return original(event, message)
+            # Completion delivery is outside call_function's ContextVar window.
+            # Correlate from the actual queued event, not an absent context.
+            with self.lock:
+                gate["operation"] = {
+                    "event_id": event._id,
+                    "fn": event.fn._id,
+                    "name": event.fn.name,
+                    "session_hash": event.session_hash,
+                    "username": event.username,
+                    "inputs": event.data.data,
+                    "outputs": [component._id for component in event.fn.outputs],
+                }
             loop = asyncio.get_running_loop()
 
             def deliver():

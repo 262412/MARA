@@ -248,6 +248,92 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
     }
   }
 
+  async function selectorSameFlush() {
+    const keys = ['same-flush-card', 'same-flush-initial', 'same-flush-signin'];
+    await control('/arm', {key: keys[0], callback: 'select_chat_file', event: 'delivery',
+      file_id: 'r3c-browser-owner-text', username: 'browser-owner'});
+    for (const key of keys.slice(1)) await control('/arm', {
+      key, callback: 'load_files', event: 'delivery', username: 'browser-owner'});
+    const {page, queue, refreshTrace} = await login('browser-owner', {
+      initialize: false, traceSelection: true, holdSelectorFlush: true});
+    try {
+      await expect.poll(async () => {
+        const gates = await control(''); return keys.slice(1).every(key => gates[key]?.entered);
+      }).toBe(true);
+      await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
+      await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
+      await expect.poll(async () => (await control(''))[keys[0]]?.entered).toBe(true);
+      const gates = await control('');
+      const payloadIds = [...new Set(keys.map(key => gates[key].operation.outputs[0]))];
+      expect(payloadIds).toHaveLength(2);
+      await page.evaluate(() => { window.ownedSelectorFlush.armed = true; window.ownedWebAction = 'same-flush-release'; });
+      await control('/release-all', {});
+      await expect.poll(() => page.evaluate(ids => ids.every(id => window.ownedFrameworkTrace.records.some(
+        row => row.action === 'same-flush-release' && row.phase === 'queued' &&
+          row.updates.some(update => update.id === id && update.value?.stamp))), payloadIds)).toBe(true);
+      await expect.poll(() => page.evaluate(() => window.ownedSelectorFlush.held)).toBe(1);
+      await page.evaluate(() => window.ownedSelectorFlush.release());
+      for (let step = 0; step < 8; step++) {
+        const completed = await page.evaluate(() => ['applySelector', 'applyFileSelection'].every(
+          phase => window.ownedWebOperations.some(row => row.action === 'same-flush-release' && row.phase === phase)));
+        if (completed) break;
+        await expect.poll(() => page.evaluate(() => window.ownedSelectorFlush.held > window.ownedSelectorFlush.released)).toBe(true);
+        await page.evaluate(() => window.ownedSelectorFlush.release());
+      }
+      const proof = await refreshTrace.snapshot();
+      const assignments = proof.state.records.filter(row => row.phase === 'assignment' && row.action === 'same-flush-release');
+      expect(assignments.some(row => payloadIds.every(id => assignments.some(other =>
+        other.flush === row.flush && other.updates.some(update => update.id === id && update.value?.stamp))))).toBe(true);
+      results.selectorSameFlush = {gates, payloadIds, framework: proof};
+      await page.evaluate(() => window.ownedSelectorFlush.close());
+      await settled(queue);
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-text"]')).toHaveClass(/is-selected/);
+      await expect(page.locator('#chat-selected-file')).toContainText('.txt');
+      results.scenarios.push({name: 'selector-and-card-payloads-committed-in-one-proven-flush'});
+    } catch (error) {
+      require('./browser_exit.cjs').primary(results, output, error); throw error;
+    } finally {
+      await require('./browser_exit.cjs').cleanup(results, [
+        ['component flush release', () => page.evaluate(() => window.ownedSelectorFlush.close())],
+        ['backend release', () => control('/release-all', {})], ['page close', () => page.close()],
+      ]);
+    }
+  }
+
+  async function selectorCardBeforeChoices() {
+    const selectors = ready.initial_selection_events.filter(id => ready.functions[id].js?.includes('captureSelector'));
+    expect(selectors).toHaveLength(2);
+    const keys = selectors.map(id => 'card-before-choices-' + id);
+    for (const [i, id] of selectors.entries()) await control('/arm', {key: keys[i], callback: 'WebOperation',
+      event: 'return', function_id: id, username: 'browser-owner'});
+    const {page, queue, refreshTrace} = await login('browser-owner', {initialize: false, traceSelection: true});
+    try {
+      await expect.poll(async () => { const gates = await control(''); return keys.every(key => gates[key]?.entered); }).toBe(true);
+      await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
+      await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
+      // The advanced selector's ancestor is intentionally hidden in this App.
+      // Observe its actual component assignment, not impossible DOM visibility.
+      const apply = Object.values(ready.functions).find(fn => fn.js?.includes('applyFileSelection'));
+      const selectorId = apply.outputs[1];
+      await expect.poll(() => page.evaluate(id => window.ownedFrameworkTrace.records.some(row =>
+        row.phase === 'assignment' && row.updates.some(update => update.id === id &&
+          update.prop === 'visible' && update.value === true)), selectorId)).toBe(true);
+      results.selectorCardBeforeChoices = {gates: await control(''), session: queue.sessionHash,
+        beforeRelease: await refreshTrace.snapshot(), operations: await page.evaluate(() => window.ownedWebOperations)};
+      for (const key of keys) await control('/release/' + key, {});
+      await settled(queue);
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-text"]')).toHaveClass(/is-selected/);
+      await expect(page.locator('#chat-selected-file')).toContainText('.txt');
+      results.scenarios.push({name: 'card-selection-survives-dropdown-mode-before-initial-choices'});
+    } catch (error) {
+      require('./browser_exit.cjs').primary(results, output, error); throw error;
+    } finally {
+      await require('./browser_exit.cjs').cleanup(results, [
+        ['backend release', () => control('/release-all', {})], ['page close', () => page.close()],
+      ]);
+    }
+  }
+
   async function conversationDuringFileRefresh() {
     const {page, queue, refreshTrace} = await login('browser-owner', {traceConversation: true});
     const key = 'old-conversation-refresh';
@@ -440,5 +526,6 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
   return [initializationFilterOverlap, filterWhileRefreshIsHeld, concurrentBrowserContexts,
     repeatedFilterIntent, selectorInitializationSelectionOverlap, conversationDuringFileRefresh,
     quickUploadThenChooseSource, reverseFilterDelivery, quickUrlThenChooseSource,
-    deletionNotificationDuringRefresh, successiveFileChoices, selectorChoicesAfterCard, selectorChoicesAlongsideCard];
+    deletionNotificationDuringRefresh, successiveFileChoices, selectorChoicesAfterCard, selectorChoicesAlongsideCard,
+    selectorSameFlush, selectorCardBeforeChoices];
 };
