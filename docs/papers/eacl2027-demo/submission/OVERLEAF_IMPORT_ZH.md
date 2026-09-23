@@ -1,6 +1,6 @@
-# DocQA-Inspect EACL 2027 Overleaf 项目
+# LMDoc EACL 2027 Overleaf 项目
 
-上传文件：DocQA-Inspect-EACL2027-Overleaf.zip。
+上传文件：LMDoc-EACL2027-Overleaf.zip。
 
 2026-09-23 更新：已同步公开 Release 的新版 Windows 安装包，移除将历史 `uv sync --extra mara` 当作评审快速安装路线的说明，并明确新安装包与 v0.0.40 源码/benchmark 的区别。
 
@@ -26,4 +26,4 @@
 
 保留四位作者及单位，按提交版要求去掉邮箱。原视频链接不变。诊断证据在独立补充包内，不需要放进 Overleaf 项目。
 
-名称已统一为 DocQA-Inspect；演示部分和图注解释原视频与截图仍使用发布名称 MARA。
+名称已统一为 LMDoc；演示部分和图注解释原视频与截图仍使用发布名称 MARA。

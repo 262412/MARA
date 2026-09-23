@@ -5,7 +5,7 @@
 - PDF: 13 pages; substantive content ends on page 6. References and informative
   appendices follow. Original ACL styles, font sizes and margins are preserved.
 - Four authors and affiliation retained; the title page has no email.
-- The paper uses DocQA-Inspect consistently; title/abstract/TL;DR/PDF metadata
+- The paper uses LMDoc consistently; title/abstract/TL;DR/PDF metadata
   agree. Remaining MARA identifiers are explicit release names, executable
   commands, URLs, source paths, or verbatim captured output. See
   audit/name-migration.json for the occurrence audit and original-file checks.
@@ -26,3 +26,8 @@
 Detailed records: audit/diagnostic-case-verification.json and
 audit/diagnostic-package-check.json. The original video, historical synthesis,
 submitted PDF and primary refactor checkout are preserved.
+
+LMDoc follow-up: refreshed all current packages and PDF metadata. Verified
+39 frozen evidence/source/table/bibliography files byte-for-byte, no previous
+paper name in the PDF or current ZIP contents, and no changes to manuscript
+URLs. The original screenshot/video and command identifiers retain MARA.

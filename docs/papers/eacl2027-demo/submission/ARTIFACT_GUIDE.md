@@ -1,8 +1,8 @@
-# DocQA-Inspect artifact and deployment guide
+# LMDoc artifact and deployment guide
 
-This submission positions DocQA-Inspect as an observable document-QA workbench. It does not claim that automatic routing improves QA accuracy or that its heuristic verifier guarantees factual correctness.
+This submission positions LMDoc as an observable document-QA workbench. It does not claim that automatic routing improves QA accuracy or that its heuristic verifier guarantees factual correctness.
 
-DocQA-Inspect is the name used in the paper. The software, original video and screenshot, executable commands, and historical records retain the release name MARA. Links and verbatim outputs below preserve those actual identifiers.
+LMDoc is the name used in the paper. The software, original video and screenshot, executable commands, and historical records retain the release name MARA. Links and verbatim outputs below preserve those actual identifiers.
 
 ## Public artifacts
 
@@ -49,7 +49,7 @@ A fully local setup requires local providers for all selected operations. Hosted
 
 ## What the video demonstrates
 
-The unchanged recording shows the workbench under the release name MARA. The paper now calls it DocQA-Inspect; this naming change does not add scenes or change the recorded build.
+The unchanged recording shows the workbench under the release name MARA. The paper now calls it LMDoc; this naming change does not add scenes or change the recorded build.
 
 Source selection, page preview, questions over a text document, citations, and route/retrieval/verification status. It does not demonstrate VLM reasoning, graph retrieval, recovery, or abstention. The paper reports those limitations explicitly. The existing video is retained unchanged; the author confirms its duration is 150 seconds.
 

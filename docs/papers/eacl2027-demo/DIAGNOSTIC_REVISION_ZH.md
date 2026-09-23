@@ -17,4 +17,4 @@
 
 重新上传时，替换新版 PDF、补充 ZIP，并同步 `submission/OPENREVIEW_FIELDS.md` 中的摘要。视频和软件下载链接保持原值。Overleaf ZIP 可作为新项目直接上传，入口为 `main.tex`、编译器为 pdfLaTeX。本轮没有替作者提交 OpenReview，也没有修改 GitHub release。
 
-后续名称修订：论文系统名统一为 DocQA-Inspect，标题为 “DocQA-Inspect: A Local-First Workbench for Observable Multimodal Document Question Answering”。演示部分、Figure 1 图注及附录 C.2 解释原视频、截图与发布软件仍使用 MARA。实际命令、链接和原始记录保留；新版文件使用 DocQA-Inspect-EACL2027 前缀。
+后续名称修订：论文系统名统一为 LMDoc，标题为 “LMDoc: A Local-First Workbench for Observable Multimodal Document Question Answering”。演示部分、Figure 1 图注及附录 C.2 解释原视频、截图与发布软件仍使用 MARA。实际命令、链接和原始记录保留；新版文件使用 LMDoc-EACL2027 前缀。

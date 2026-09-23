@@ -3,12 +3,13 @@
 % while showing the author block. Do not modify the official style file.
 \usepackage[review]{acl}
 \makeatletter
-\ifdefined\DocQAInspectAnonymous\else\acl@anonymizefalse\fi
+\ifdefined\LMDocAnonymous\else\acl@anonymizefalse\fi
 \makeatother
 \usepackage{times}
 \usepackage{latexsym}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
+\hyphenation{LMDoc}
 \usepackage{microtype}
 \usepackage{inconsolata}
 \usepackage{graphicx}
@@ -26,10 +27,10 @@
 \newcommand{\route}[1]{\texttt{#1}}
 \author{Chenghao Zhang \quad Ke Xu \quad Xiao Xiao \quad Meng Fang\\
 School of Computer Science and Informatics, University of Liverpool}
-\title{DocQA-Inspect: A Local-First Workbench for Observable Multimodal Document Question Answering}
-\hypersetup{pdftitle={DocQA-Inspect: A Local-First Workbench for Observable Multimodal Document Question Answering},
+\title{LMDoc: A Local-First Workbench for Observable Multimodal Document Question Answering}
+\hypersetup{pdftitle={LMDoc: A Local-First Workbench for Observable Multimodal Document Question Answering},
 pdfauthor={Chenghao Zhang, Ke Xu, Xiao Xiao, Meng Fang}}
-\ifdefined\DocQAInspectAnonymous\hypersetup{pdfauthor={Anonymous}}\fi
+\ifdefined\LMDocAnonymous\hypersetup{pdfauthor={Anonymous}}\fi
 \begin{document}
 \maketitle
 \raggedbottom

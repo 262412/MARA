@@ -54,12 +54,12 @@ def build():
     quote = html.escape(before["answer"])
     answer = html.escape(after["answer"])
     document = f"""<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>DocQA-Inspect diagnostic walkthrough</title><style>{STYLE}</style>
-<main><div class="eyebrow">DocQA-Inspect · Captured diagnostic case · 23 September 2026</div>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>LMDoc diagnostic walkthrough</title><style>{STYLE}</style>
+<main><div class="eyebrow">LMDoc · Captured diagnostic case · 23 September 2026</div>
 <h1>Why did successful retrieval still end in a refusal?</h1>
 <p class="lead">Follow one unresolved question from the displayed answer to its evidence, the blocking decision, and a source correction.</p>
-<p class="note">An author-constructed task, executed with real APIs on the installed reviewer build. This page presents captured records; it is not an additional native DocQA-Inspect interface or a new model execution.</p>
-<p class="note">DocQA-Inspect is the paper name. The released software, original video and screenshot, commands, and recorded answers retain the name MARA. Original evidence is shown verbatim.</p>
+<p class="note">An author-constructed task, executed with real APIs on the installed reviewer build. This page presents captured records; it is not an additional native LMDoc interface or a new model execution.</p>
+<p class="note">LMDoc is the paper name. The released software, original video and screenshot, commands, and recorded answers retain the name MARA. Original evidence is shown verbatim.</p>
 <div class="panel"><strong>Question</strong><p>For how many days does the Harbor sensor pilot retain raw sensor logs?</p>
 <a href="inputs/harbor-operations.txt">Operating guide</a> · <a href="inputs/harbor-data-policy.txt">Data policy</a></div>
 <nav aria-label="Diagnostic steps">{''.join(f'<button data-target="step{i}" aria-pressed="{str(i == 1).lower()}">{i}. {name}</button>' for i,name in enumerate(['Notice','Inspect','Diagnose','Act','Verify'],1))}</nav>

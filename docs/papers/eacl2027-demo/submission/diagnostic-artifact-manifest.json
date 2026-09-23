@@ -1,20 +1,20 @@
 {
   "pdf": {
-    "name": "DocQA-Inspect-EACL2027.pdf",
-    "bytes": 642644,
-    "sha256": "170fc4705f0aa17ed6f0caff0320970ccdd8b94c442118b0d1afa98c48a1768b",
-    "download_path": "C:\\Users\\22826\\Downloads\\DocQA-Inspect-EACL2027.pdf"
+    "name": "LMDoc-EACL2027.pdf",
+    "bytes": 642612,
+    "sha256": "3d0ed32079a3b134b198b6639a7c64ddb43029e8d01abf1bd1042cb22ecdb792",
+    "download_path": "C:\\Users\\22826\\Downloads\\LMDoc-EACL2027.pdf"
   },
   "overleaf": {
-    "name": "DocQA-Inspect-EACL2027-Overleaf.zip",
-    "bytes": 662222,
-    "sha256": "469484c545b44e915d091de8d990494850ad6bda5c3bb4f8c978ea518f254b6e",
-    "download_path": "C:\\Users\\22826\\Downloads\\DocQA-Inspect-EACL2027-Overleaf.zip"
+    "name": "LMDoc-EACL2027-Overleaf.zip",
+    "bytes": 662271,
+    "sha256": "1e04b640ba2209ce20c14bf519e6da396a49c1bd621cc1e8dc58e062688453d0",
+    "download_path": "C:\\Users\\22826\\Downloads\\LMDoc-EACL2027-Overleaf.zip"
   },
   "supplement": {
-    "name": "DocQA-Inspect-EACL2027-supplement.zip",
-    "bytes": 1301236,
-    "sha256": "aec92278d4ed417174dd8c5b1ed1cce4a0c6738719559a4dbb9985a55d2bff8b",
-    "download_path": "C:\\Users\\22826\\Downloads\\DocQA-Inspect-EACL2027-supplement.zip"
+    "name": "LMDoc-EACL2027-supplement.zip",
+    "bytes": 1301211,
+    "sha256": "7c41a0a33568f6e8f353b6a7fc27903220428447bf29a0d103f1e6089e4a8cf5",
+    "download_path": "C:\\Users\\22826\\Downloads\\LMDoc-EACL2027-supplement.zip"
   }
 }

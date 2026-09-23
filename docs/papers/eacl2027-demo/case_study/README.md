@@ -1,10 +1,10 @@
-# DocQA-Inspect: a recorded diagnosis
+# LMDoc: a recorded diagnosis
 
-The paper uses DocQA-Inspect. Its released runtime, original video/screenshot, commands, and captured output strings retain the name MARA. Naming changes affect this explanatory material only; recorded evidence is unchanged.
+The paper uses LMDoc. Its released runtime, original video/screenshot, commands, and captured output strings retain the name MARA. Naming changes affect this explanatory material only; recorded evidence is unchanged.
 
 Open **walkthrough.html** for the complete sequence. No server, API key, or
 installation is required to view it. This is a presentation of captured runtime
-records, not a screenshot of an additional native DocQA-Inspect interface.
+records, not a screenshot of an additional native LMDoc interface.
 
 The fictional Harbor pilot has two documents. The operating guide points to the
 data policy, and the latter says to retain raw sensor logs for 17 days. A user

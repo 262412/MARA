@@ -1,14 +1,14 @@
 {
   "schema": "mara-diagnostic-case-sha256-v1",
   "sha256": {
-    "build_viewer.py": "dad4815405a275c1962fcf63e47dd67a937dd9c5e772e178203c2afdbba27771",
+    "build_viewer.py": "513bb6be65a5fb9c8d2d473bed846cd8e24a6ad0a2e76fc2bbbb26e021fadbb3",
     "capture_provider.py": "8bdbf67d0fc75b009e2d5d418924197a291bf038613f8d180258ac8cb8cb8391",
     "case-protocol.json": "b316370417cc676d6e7acff1d65e3a9e7d7bd3e57e6c3946f6ec559877169392",
     "configuration.py": "b3fbc3ece6f5f1afa4210b90ffb74c4ac3b66e23a1093de198a8507535858086",
     "inputs/harbor-data-policy.txt": "e2ad77672b79eea4a09315168588692bf74b56f86623ad2a6c542c66fa1d1010",
     "inputs/harbor-operations.txt": "627fb5e206dc5ef800db7efc095dbe14274c0fb7b3ef5032adc16fddf5ea6c36",
     "LICENSE.txt": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6",
-    "README.md": "a7bbef403665d2b21ebc3eb07123151725135bb23048a2cf7bb91c3ac8c92e4f",
+    "README.md": "fa1d2b47e1a19515dc236dab620b1fdc0077270d7c43411f3cee90e4cdd184e0",
     "records/after-cli-rendered.txt": "4e85c933c786ecd25691190b912f68774f15542b603402005ff2c198fb72a1e8",
     "records/after-provider-calls.json": "fdd3b9c3dba4c81ad22d1bb2697590d4684b0cfb23fa50968795f417dc38737e",
     "records/after-request.json": "67417802c58130d5e369aebdef8a8b8d704f19b5a96246804612043d000628eb",
@@ -30,10 +30,10 @@
     "repeat/index.json": "b4d352c217ae5dcfea6ad6fca98942ef05cd9043e2ee1b6e42be10897fcb5b7e",
     "repeat/summary.json": "675cd378bac8a7af1b87d84c4eb8ca7d6d3911e07201c87c24ee5e58c1956511",
     "run_case.py": "a9f4093dec11495dbab645e1a878267f64f2eb1727d75d90f3dbc81883996bd7",
-    "upstream/COMPARISON.md": "d5b03f0c9c1c5e73ee2fe47d3781b496405d81bfecd6d93570f3dfda3f1523e1",
+    "upstream/COMPARISON.md": "e8e6a02769fc556e9d4c48a6f94cae45f59aed4c770033e21d4cc7061c15b7e9",
     "upstream/inspected-source.zip": "20cb27feea411d977a55a96b24b6b0d6a82192056a8e9d2f0d40829654a68a7e",
     "upstream/provenance.json": "ed516d284e200d958ab9ab61d2fceb02e480ac6779c71de12414a4d99266d69d",
     "verify_case.py": "85e50d211e32d861b35b09400714b57089a651a54c5155af0c439a532858acab",
-    "walkthrough.html": "8e3fc0c45bf0b441a9090efb9f8416d742982b60f8a060ff2189a3aa7c81b99e"
+    "walkthrough.html": "5d9e1870c015aa27b76eb5f3175f71e5fc39e612b5e286ef2e57d300ca6789a9"
   }
 }

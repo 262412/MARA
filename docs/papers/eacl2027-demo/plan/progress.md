@@ -30,3 +30,17 @@ the retained MARA release name. The renamed Overleaf ZIP compiles and the
 supplement verifies after extraction. Visually checked the revised PDF and HTML.
 Byte comparisons confirm 33 original evidence/source/table/bibliography files
 are unchanged. New deliverables use the DocQA-Inspect-EACL2027 filename prefix.
+
+2026-09-23 final naming revision: The author and adviser selected LMDoc.
+Updating current manuscript prose, PDF metadata, submission fields and artifact
+guides; preserve MARA as the actual original release name in demonstrations,
+commands, links and verbatim evidence. Rebuild and package with an LMDoc prefix.
+
+Completed the LMDoc revision. Current manuscript, metadata, submission fields,
+guides and offline viewer use LMDoc. Section 5 and Appendix C.2 explain the
+original MARA release name. The PDF remains 13 pages with content ending on
+page 6; rendered pages were inspected and name hyphenation was disabled.
+The extracted Overleaf project compiles to identical text; the extracted
+supplement verifies. All 39 frozen evidence/source/table/bibliography files
+checked are byte-identical. Naming audit, code hygiene and pre-commit passed.
+The LMDoc deliverables are copied to Downloads; no external submission occurs.

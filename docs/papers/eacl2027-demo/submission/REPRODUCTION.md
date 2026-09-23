@@ -1,6 +1,6 @@
-# Reproducing the DocQA-Inspect diagnostic analysis
+# Reproducing the LMDoc diagnostic analysis
 
-The paper uses DocQA-Inspect; released software and historical artifacts retain the name MARA. Original filenames, commands, schemas, and captured answer strings are preserved.
+The paper uses LMDoc; released software and historical artifacts retain the name MARA. Original filenames, commands, schemas, and captured answer strings are preserved.
 
 No model calls or new predictions are required to reproduce the tables from the released metric records. This is a reanalysis of existing artifacts, not an end-to-end system rerun.
 
