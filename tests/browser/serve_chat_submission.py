@@ -105,7 +105,9 @@ def _resolved_runtime_receipt(runtime, output):
     for name in ("KH_DOC_DIR", "STORAGE", "KH_DOCSTORE", "KH_VECTORSTORE"):
         actual[name] = getattr(settings, name)
     validate_test_runtime_paths(actual)
-    database = Path(engine.url.database).resolve()
+    database_name = engine.url.database
+    assert database_name is not None
+    database = Path(database_name).resolve()
     assert database.is_relative_to(runtime.paths.root)
     assert Path(tempfile.gettempdir()).resolve().is_relative_to(runtime.paths.root)
     # Only path fields are evidence; never serialize provider settings or secrets.
