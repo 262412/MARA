@@ -4,6 +4,9 @@
 /audit/main-extracted-text.txt
 /submission/*.pdf
 /submission/*.zip
+/build-diagnostic/
+/source/build-attestation.log
+/case_study/__pycache__/
 
 # The repository-wide figures/ rule must not hide the submitted paper's asset.
 !/source/figures/

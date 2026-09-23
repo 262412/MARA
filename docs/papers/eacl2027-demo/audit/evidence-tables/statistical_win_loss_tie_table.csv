@@ -1,0 +1,15 @@
+baseline_route,candidate_route,dataset,losses,n,ties,wins
+direct_answer,controller_auto,financebench,48,150,44,58
+text_rag,controller_auto,financebench,29,150,98,23
+crag_guarded,controller_auto,financebench,2,150,146,2
+text_rag,controller_auto,qasper,9,200,185,6
+crag_guarded,controller_auto,qasper,2,200,190,8
+text_rag,controller_auto,ragtruth,129,300,81,90
+crag_guarded,controller_auto,ragtruth,0,300,297,3
+text_rag,controller_auto,alce_asqa,5,200,194,1
+crag_guarded,controller_auto,alce_asqa,3,200,142,55
+page_image_rag_vlm,controller_auto,slidevqa,0,120,120,0
+text_rag,controller_auto,mmdocrag,54,120,21,45
+element_rag,controller_auto,mmdocrag,4,120,14,102
+page_image_rag_vlm,controller_auto,mmdocrag,18,120,20,82
+hybrid_rag,controller_auto,mmdocrag,49,120,26,45

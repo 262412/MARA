@@ -1,0 +1,20 @@
+{
+  "pdf": {
+    "name": "MARA-EACL2027-diagnostic-revision.pdf",
+    "bytes": 644818,
+    "sha256": "9fa7ebf1be7fb7990fed720e4369a21593fc673c46a2cc66629dd0e1edeceeb5",
+    "download_path": "C:\\Users\\22826\\Downloads\\MARA-EACL2027-diagnostic-revision.pdf"
+  },
+  "overleaf": {
+    "name": "MARA-EACL2027-diagnostic-Overleaf.zip",
+    "bytes": 662733,
+    "sha256": "90d59fee8ee522daba33f2531795a1ed5b60c3f2bfd1480385577150e44ca411",
+    "download_path": "C:\\Users\\22826\\Downloads\\MARA-EACL2027-diagnostic-Overleaf.zip"
+  },
+  "supplement": {
+    "name": "MARA-EACL2027-diagnostic-supplement.zip",
+    "bytes": 1300768,
+    "sha256": "384d948ace9c9041208cb0a7d3ba3c174ab13715a00d3cf42ef7b748e6b58dca",
+    "download_path": "C:\\Users\\22826\\Downloads\\MARA-EACL2027-diagnostic-supplement.zip"
+  }
+}

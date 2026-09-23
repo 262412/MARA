@@ -1,0 +1,7 @@
+Harbor sensor pilot: operating instructions
+
+This document describes the operating procedure, not the data-retention policy.
+Inspect each sensor every Monday. Record the sensor identifier in the inspection
+log. Staff must use the blue dashboard for routine maintenance. Escalate a
+damaged sensor to the laboratory coordinator. Data retention is specified in
+the separate Harbor data policy; this operating guide does not state a duration.

@@ -1,5 +1,5 @@
 \begin{abstract}
-Document question answering involves choices about evidence, retrieval, generation, and verification that are often difficult to inspect together. We present MARA, a local-first workbench extending Kotaemon with observable route control and a shared diagnostic interface across Web, command-line, and benchmark workflows. A rule-based controller records its proposed, scored, and final evidence routes, heuristic quality and cost estimates, retrieval status, and verification outcomes. We analyze a released benchmark bundle covering six datasets, 1,090 dataset--question pairs, and 3,540 route-level records. Automatic routing does not consistently improve answer F1 over fixed text retrieval. Instead, the records expose largely inactive routing on text-heavy datasets, a graph-route failure on RAGTruth, substantial multimodal latency, and a non-discriminating SlideVQA comparison. These findings illustrate the workbench's diagnostic use while delimiting its current capabilities. We release the Apache-2.0 implementation and benchmark artifacts, and demonstrate source selection, page inspection, citation review, and visible reasoning status in a configurable user deployment.
+Document question answering involves choices about evidence, retrieval, generation, and verification that are difficult to inspect together. We present MARA, a local-first workbench extending Kotaemon with observable route control and shared diagnostic records across Web, command-line, and benchmark workflows. We analyze a released bundle covering six datasets, 1,090 dataset--question pairs, and 3,540 route-level records. Automatic routing does not consistently improve answer F1 over fixed text retrieval; the records expose inactive routing, a weak graph route, multimodal latency, and a non-discriminating visual comparison. A separate, executed diagnostic case follows an unresolved question through successful retrieval, a verification-triggered refusal, source correction, and a supported answer. We provide the case's raw provider outputs, displayed and scoring answers, evidence, effective settings, and offline checks. MARA's contribution is an inspectable workflow for locating such failures, with explicit limits on what the retained evidence can reproduce. We release the Apache-2.0 implementation and diagnostic materials, alongside a user-workflow demonstration.
 \end{abstract}
 
 \section{Introduction}
@@ -9,38 +9,41 @@ MARA addresses this inspection problem. It extends the open-source Kotaemon appl
 
 This distinction matters empirically. In our released runs, the controller's token F1 is slightly below fixed text RAG on QASPER, ALCE-ASQA, and MMDocRAG. It chooses text evidence on all ALCE-ASQA examples and 97\% of QASPER examples. On RAGTruth it frequently selects a weak graph route. Reporting these outcomes alongside uncertainty, route frequencies, and latency makes the limits of the implemented policy inspectable, rather than treating the existence of routing as evidence of its benefit.
 
-Our contributions are: (1) a local-first document-QA workbench with Web and CLI access to shared state and runtime records; (2) explicit, configurable evidence routing with retrieval and verification diagnostics; and (3) a reproducible analysis of a released six-dataset bundle that connects aggregate results to route-level failures and measurement limitations.
+Our contributions are: (1) a local-first document-QA workbench with Web and CLI access to shared state and runtime records; (2) explicit, configurable evidence routing with retrieval and verification diagnostics; and (3) an artifact-backed analysis of a released six-dataset bundle, complemented by an executed diagnostic walkthrough with raw outputs and a reproducible source-selection intervention.
 
 \paragraph{Relation to prior work.}
-Self-RAG makes retrieval and critique explicit model decisions \citep{asai2023selfrag}; Adaptive-RAG motivates adaptive retrieval \citep{jeong2024adaptiverag}; and CRAG studies corrective retrieval \citep{yan2024crag}. MARA draws on these decision structures but uses ordinary application rules and records, without reflection-token training. Page-image retrieval \citep{faysse2024colpali} and graph-based retrieval \citep{edge2024graphrag} motivate available evidence paths, rather than constituting new algorithms here. Kotaemon supplies the underlying document application. MARA's specific extension is the connection between route decisions, user-visible status, and exported diagnostics. Our comparisons are between MARA configurations; an unmodified-Kotaemon or external-system performance baseline remains absent.
+Self-RAG makes retrieval and critique explicit model decisions \citep{asai2023selfrag}; Adaptive-RAG motivates adaptive retrieval \citep{jeong2024adaptiverag}; and CRAG studies corrective retrieval \citep{yan2024crag}. MARA draws on these decision structures but uses ordinary application rules and records, without reflection-token training. Page-image retrieval \citep{faysse2024colpali} and graph-based retrieval \citep{edge2024graphrag} motivate available evidence paths, rather than constituting new algorithms here. Kotaemon supplies the underlying document application. MARA's specific extension is the connection between route decisions, user-visible status, and exported diagnostics. Our quantitative comparisons are between MARA configurations; the task-level upstream comparison in Table~\ref{tab:boundary} is a static source walkthrough.
 
 \section{Workbench and Observable Execution}
 \label{sec:system}
 \subsection{User Workflow and System Boundary}
-The Web interface lets users upload and select documents, inspect a page, ask a question, and follow citations back to evidence (Figure~\ref{fig:ui}). A compact status card shows the selected route, retrieval status, and verification outcome. Detailed evidence bundles and controller traces are retained as runtime artifacts; the interface does not display every internal field. Users can inspect these records when a plausible answer has weak support or a costly route provides no benefit.
+The Web interface lets users upload and select documents, inspect a page, ask a question, and follow citations back to evidence (Figure~\ref{fig:ui}). A compact status card shows the selected route, retrieval status, and verification outcome. Detailed evidence bundles and controller traces are retained as runtime artifacts; the interface does not display every internal field. Section~\ref{sec:case} shows how inspecting these records separates a retrieval problem from a verification-triggered refusal and identifies a source-selection correction.
 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.96\textwidth]{figures/mara-ui-qa.png}
-\caption{MARA's document workspace: source selection, page preview, question answering, citations, and a compact route/retrieval/verification card. This screenshot illustrates a text-document workflow; it is not evidence of visual reasoning or a benchmark run.}
+\caption{MARA's document workspace: source selection, page preview, question answering, citations, and a compact route/retrieval/verification card. The diagnostic walkthrough in Figure~\ref{fig:diagnosis} complements this existing text-workflow screenshot with captured decisions and an intervention.}
 \label{fig:ui}
 \end{figure*}
 
 The public commands \texttt{MARA} and \texttt{MARA-cli} expose application startup and document-QA operations. The \texttt{MARA docqa} group supports indexing, file inspection, questions, saved conversations, source selection, notes, and derived study artifacts. Optional agent-platform wrappers invoke these commands. The Web and CLI surfaces reuse DocQA settings, indices, and persisted state, while the benchmark drives that runtime through dataset and route adapters. Multiple entry points remain and require compatibility checks; shared records do not by themselves prove behavior is identical across every interface.
 
+Kotaemon supplies upload, indexing, model configuration, chat, and evidence presentation. MARA adds structured route/retrieval/verification decisions and their connection to CLI and benchmark records. The extension supports the diagnostic task in Table~\ref{tab:boundary}.
+
 \begin{table}[t]
 \small
 \centering
-\begin{tabularx}{\columnwidth}{@{}p{0.23\columnwidth}X@{}}
+\begin{tabularx}{\columnwidth}{@{}p{0.15\columnwidth}XX@{}}
 \toprule
-Boundary & Functionality in this workbench \\
+Task & Kotaemon & MARA extension \\
 \midrule
-Inherited & Kotaemon upload, indexing, model configuration, document chat, and evidence presentation. \\
-MARA layer & Route proposals and scores; evidence/retrieval/verification records; route recovery metadata; CLI integration and diagnostic exports. \\
-Evaluation & Dataset adapters, fixed-route configurations, per-example records, paired comparisons, and run ledger. \\
+Inspect & Read answer and evidence; inspect selected files and context warnings. & Also inspect route, retrieval, verification, and guardrail decisions separately. \\
+Localize & Relate answer/refusal to evidence and pipeline settings. & In the case: retrieval is good, generation completes, verification is unknown. \\
+Act & Select another source and ask again. & Same correction; compare records while holding other settings fixed. \\
+Export & Conversation storage retains messages, evidence, selection, and state. & Structured response exports decision records; the case adds captured provider outputs and replay checks. \\
 \bottomrule
 \end{tabularx}
-\caption{Implementation attribution. This describes the extension boundary, not a measured advantage over upstream Kotaemon.}
+\caption{Operations for the same source-scope diagnosis. Upstream Kotaemon commit \texttt{9ad3e4e4} was inspected statically; its UI/runtime was not executed. This is not a measured usability advantage. Source anchors are included in the case package.}
 \label{tab:boundary}
 \end{table}
 
@@ -57,22 +60,7 @@ For a permitted, non-skipped route $r$, the selection score is
 \end{equation}
 Here $\widehat Q$ and $\widehat C$ are uncalibrated rule-based proxies, not probabilities, measured seconds, or monetary costs. Text, page-image, element, graph, and hybrid routes have base cost penalties of $0.05$, $0.45$, $0.15$, $0.10$, and $0.35$, respectively. Intent and backend availability modify these penalties and the quality proxies. Some rules depend explicitly on the dataset family, including MMDocRAG and finance. Appendix~\ref{app:rules} gives the formulas, thresholds, skip conditions, and source anchors; we do not present this policy as dataset-independent generalization.
 
-\begin{figure}[t]
-\centering
-\begin{tikzpicture}[font=\small, node distance=4mm,
-box/.style={draw,rounded corners,align=center,text width=6.9cm,inner sep=4pt},
-arr/.style={-{Stealth[length=2mm]}}]
-\node[box] (q) {Question, selected sources, provider configuration};
-\node[box,below=of q] (p) {Planner $\rightarrow$ modality probes $\rightarrow$ route scores};
-\node[box,below=of p] (r) {Retrieve evidence and assess adequacy\\Recovery candidates if retrieval fails};
-\node[box,below=of r] (g) {Generate answer $\rightarrow$ heuristic verification\\Return, revise, or withhold according to guardrails};
-\node[box,below=of g] (t) {UI status + evidence bundle + execution trace\\CLI access and benchmark aggregation};
-\draw[arr] (q)--(p); \draw[arr] (p)--(r);
-\draw[arr] (r)--(g); \draw[arr] (g)--(t);
-\end{tikzpicture}
-\caption{Observable execution. Retrieval family and generation backend are separate attributes. Recovery is conditional, and a successful route switch is recorded separately from a planner override.}
-\label{fig:architecture}
-\end{figure}
+
 
 Retrieval adequacy is a heuristic assessment of captured evidence, with additional domain rules. Verification uses evidence, citations, lexical/semantic rules, and domain-specific checks; it is not an independent factuality oracle. Light and strict modes apply different unsupported-claim thresholds. The guarded benchmark configuration combines strict verification with thorough retrieval, so its comparison changes more than one setting.
 
@@ -83,7 +71,7 @@ Crucially, selecting page-image evidence does not establish that a VLM generated
 \section{Benchmark Diagnostics}
 \label{sec:evaluation}
 \subsection{Released Evidence and Measurement Scope}
-We analyze the existing v0.0.40 synthesis bundle, without new model runs. It contains 41 completed run/shard artifact sets and 3,540 route-level metric records for 1,090 dataset--question pairs. These are repeated evaluations across configurations, not 3,540 distinct questions. The datasets are QASPER \citep{dasigi2021qasper}, ALCE-ASQA \citep{gao2023alce}, MMDocRAG \citep{dong2025mmdocrag}, FinanceBench \citep{islam2023financebench}, RAGTruth \citep{niu2024ragtruth}, and SlideVQA \citep{tanaka2023slidevqa}. Dataset coverage and all configuration-level results appear in Appendix~\ref{app:results}.
+This section reanalyzes the existing v0.0.40 synthesis bundle. The new case in Section~\ref{sec:case} is reported separately and does not alter these benchmark results. The historical bundle contains 41 completed run/shard artifact sets and 3,540 route-level metric records for 1,090 dataset--question pairs. These are repeated evaluations across configurations, not 3,540 distinct questions. The datasets are QASPER \citep{dasigi2021qasper}, ALCE-ASQA \citep{gao2023alce}, MMDocRAG \citep{dong2025mmdocrag}, FinanceBench \citep{islam2023financebench}, RAGTruth \citep{niu2024ragtruth}, and SlideVQA \citep{tanaka2023slidevqa}. Dataset coverage and all configuration-level results appear in Appendix~\ref{app:results}.
 
 The benchmark configures Qwen3-8B for text generation \citep{yang2025qwen3} and bge-m3 for text retrieval \citep{chen2024bgem3}. Multimodal records identify a ColQwen visual retriever; the fixed page-image configuration identifies a local Qwen3-VL generator. These are configured backend identities and do not certify which generation path produced each answer. The run ledger allocates two A100 GPUs per text shard and two L40S GPUs per multimodal shard. These allocations are experimental resources, not minimum deployment requirements.
 
@@ -143,11 +131,13 @@ The per-question best fixed comparison on MMDocRAG averages 43.26 F1, versus 34.
 \paragraph{SlideVQA diagnoses routing, not generator quality.}
 The heuristic planner proposes text on 87/120 questions, but the probe scorer chooses page-image evidence on all 120; recorded visual confidence is 0.77--0.89 and text confidence is zero. This is evidence that probes can change a route decision. However, auto and the fixed page-image configuration have identical F1, EM, native score, both citation-recall measures, and page hit on every paired example. Different configured generators and generation times do not make this comparison discriminating. The implementation has an OCR-first path, and the metric-only bundle omits generated answers and actual generation-path traces. We cannot identify the cause from these records and do not use the equality as evidence of equivalent visual QA quality.
 
+\input{diagnostic_case}
+
 \section{Demonstration and Availability}
 \label{sec:demo}
-The accompanying screencast demonstrates the user workflow: selecting a document, previewing pages, asking document questions, following citation chips, and inspecting route/retrieval/verification status. It uses a seven-page word-processing document and text evidence. It does not demonstrate visual reasoning, graph retrieval, recovery, or abstention; those behaviors are examined through the released diagnostics rather than attributed to the recording.
+The accompanying screencast demonstrates the user workflow: selecting a document, previewing pages, asking document questions, following citation chips, and inspecting route/retrieval/verification status. It uses a seven-page word-processing document and text evidence. The unchanged recording does not demonstrate visual reasoning, graph retrieval, recovery, or abstention. The supplementary offline walkthrough now demonstrates the captured verification refusal, source correction, and evidence-supported return; it does not add those scenes to the video.
 
-The video uses a user-configured Deepseek generation API and Google embeddings, while the benchmark uses the research-computing Qwen/bge deployment. No model training is involved in this distinction. The recording displays the packaged application's 0.0.18 label; v0.0.40 is the repository release and benchmark-bundle anchor. These identify different distributed artifacts. We do not claim that the video reproduces benchmark timings, results, or an identical executable build.
+The video uses Deepseek/Google APIs, whereas the benchmark uses Qwen/bge on research computing resources. Its packaged UI label 0.0.18 and the v0.0.40 repository/bundle anchor identify different distributed artifacts, not training stages or identical executables. The new case uses the installed reviewer build (Appendix~\ref{app:case}).
 
 \paragraph{Access and license.}
 The source repository and downloadable release are public under Apache 2.0, with upstream Kotaemon attribution retained. The release page provides an updated Windows reviewer ZIP with installation and launch scripts, described in Appendix~\ref{app:artifact}. This current-main installation build is distinct from the historical v0.0.40 benchmark anchor. Required access links are:
@@ -158,7 +148,7 @@ The source repository and downloadable release are public under Apache 2.0, with
 \end{itemize}
 
 \section{Limitations and Conclusion}
-MARA provides an inspectable workbench and an artifact-backed way to diagnose route behavior. The current evidence does not establish higher QA accuracy, lower cost, a reliable factuality guarantee, or a performance advantage over unmodified Kotaemon. There is no user study, and dataset-aware heuristics, incomplete execution provenance, prototype routes, and the non-discriminating visual comparison constrain generalization. Minimum local hardware requirements have not been measured. Preserving these negative findings is central to the diagnostic contribution: users and developers can see which decisions warrant improvement and which conclusions the current records cannot support.
+MARA provides an inspectable workbench and an artifact-backed way to diagnose route behavior. The current evidence does not establish higher QA accuracy, lower cost, a reliable factuality guarantee, or a performance advantage over unmodified Kotaemon. The author-constructed case establishes one inspectable diagnostic sequence, not a user-study benefit or general recovery rate. Dataset-aware heuristics, missing historical execution provenance, prototype routes, and the non-discriminating visual comparison constrain generalization. Minimum local hardware requirements have not been measured. Preserving these negative findings is central to the diagnostic contribution: users and developers can see which decisions warrant improvement and which conclusions the current records cannot support.
 
 \section*{Ethics and Broader Impact}
-Local storage can help users control documents, but privacy depends on the configured services. Hosted generation or embedding APIs can receive document content; users should choose providers and material appropriate to their permissions and data requirements. Citation and verification indicators can be wrong and should support inspection rather than substitute for expert judgment. We use the existing benchmark artifacts without introducing new human-subject data. Public datasets remain subject to their original terms; releasing software or diagnostic records does not grant permission to redistribute every source document. The financial subset evaluates document-QA behavior and is not financial advice.
+Local storage can help users control documents, but privacy depends on the configured services. Hosted generation or embedding APIs can receive document content; users should choose providers and material appropriate to their permissions and data requirements. Citation and verification indicators can be wrong and should support inspection rather than substitute for expert judgment. We use the existing benchmark artifacts and author-constructed fictional case documents, without new human-subject data. Public datasets remain subject to their original terms; releasing software or diagnostic records does not grant permission to redistribute every source document. The financial subset evaluates document-QA behavior and is not financial advice.

@@ -34,3 +34,12 @@ The supplementary revision-evidence.json records the checked values and interpre
 - Parse/retrieval timing fields are zero in this bundle and cannot establish that these operations cost no time.
 - Different MMDocRAG manifests and timeout budgets limit causal latency/reliability comparisons.
 - The ZIP lacks answer strings and effective per-job route manifests. Do not infer the cause of SlideVQA score equality from the metric CSV alone.
+
+## New case, separate from the historical synthesis
+
+`case_study/README.md` explains the executed source-selection task, offline checks,
+and optional new API execution. The complete first before/after pair and negative
+independent repetition are retained. `answer-stages.json` keeps provider output,
+pre-verification, pre-guardrail, displayed and scoring answers distinct. Its
+scoring projection is explicitly identity, not the historical benchmark adapter.
+No historical aggregate, row, or input archive is replaced by these case records.

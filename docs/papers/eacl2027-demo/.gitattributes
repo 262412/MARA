@@ -1,3 +1,6 @@
 # Keep the imported submission byte-for-byte reproducible across Windows checkouts.
 source/** -text
 archive/*.zip -text
+# Retain exact bytes for hashed case records and copied benchmark tables.
+case_study/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+audit/evidence-tables/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

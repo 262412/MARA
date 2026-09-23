@@ -12,7 +12,8 @@ MARA: A Local-First Workbench for Multimodal Document Question Answering
 
 ## Abstract
 
-Document question answering involves choices about evidence, retrieval, generation, and verification that are often difficult to inspect together. We present MARA, a local-first workbench extending Kotaemon with observable route control and a shared diagnostic interface across Web, command-line, and benchmark workflows. A rule-based controller records its proposed, scored, and final evidence routes, heuristic quality and cost estimates, retrieval status, and verification outcomes. We analyze a released benchmark bundle covering six datasets, 1,090 dataset–question pairs, and 3,540 route-level records. Automatic routing does not consistently improve answer F1 over fixed text retrieval. Instead, the records expose largely inactive routing on text-heavy datasets, a graph-route failure on RAGTruth, substantial multimodal latency, and a non-discriminating SlideVQA comparison. These findings illustrate the workbench's diagnostic use while delimiting its current capabilities. We release the Apache-2.0 implementation and benchmark artifacts, and demonstrate source selection, page inspection, citation review, and visible reasoning status in a configurable user deployment.
+
+Document question answering involves choices about evidence, retrieval, generation, and verification that are difficult to inspect together. We present MARA, a local-first workbench extending Kotaemon with observable route control and shared diagnostic records across Web, command-line, and benchmark workflows. We analyze a released bundle covering six datasets, 1,090 dataset–question pairs, and 3,540 route-level records. Automatic routing does not consistently improve answer F1 over fixed text retrieval; the records expose inactive routing, a weak graph route, multimodal latency, and a non-discriminating visual comparison. A separate, executed diagnostic case follows an unresolved question through successful retrieval, a verification-triggered refusal, source correction, and a supported answer. We provide the case's raw provider outputs, displayed and scoring answers, evidence, effective settings, and offline checks. MARA's contribution is an inspectable workflow for locating such failures, with explicit limits on what the retained evidence can reproduce. We release the Apache-2.0 implementation and diagnostic materials, alongside a user-workflow demonstration.
 
 ## Authors（按此顺序）
 
@@ -23,7 +24,7 @@ Document question answering involves choices about evidence, retrieval, generati
 
 单位：School of Computer Science and Informatics, University of Liverpool
 
-联系邮箱：tbczhang@liverpool.ac.uk
+PDF 按要求不显示邮箱；OpenReview 账户联系信息不由本次论文修订更改。
 
 互惠审稿人：Chenghao Zhang（作者已确认）。各作者 OpenReview profile 应由提交人选取匹配记录，不虚构 profile ID 或其他作者邮箱。
 
@@ -36,7 +37,7 @@ Document question answering involves choices about evidence, retrieval, generati
 
 视频时长：作者确认正好 2 分 30 秒，未做媒体文件独立测量。视频与下载链接已同时出现在 PDF；提交时也须填入表单。
 
-安装包于 2026-09-23 更新，基于 main 加安装修复（`e6afa5dc`，包版本 0.0.41）；v0.0.40 标签和 benchmark 附件保留历史身份。Windows 安装和网页启动已测，真实模型问答及跨平台安装未验证。提交时使用 Release 页面作为带说明的下载入口，不把历史 `uv sync --extra mara` 命令写成已验证的通用安装路线。
+安装包于 2026-09-23 更新，基于 main 加安装修复（`e6afa5dc`，包版本 0.0.41）；v0.0.40 标签和 benchmark 附件保留历史身份。Windows 安装、网页启动，以及新增案例中的真实模型索引/问答已测；独立重跑仍出现严格验证拒答，结果已保留。跨平台安装未验证。提交时使用 Release 页面作为带说明的下载入口，不把历史 `uv sync --extra mara` 命令写成已验证的通用安装路线。
 
 ## Suggested keywords
 
@@ -44,9 +45,9 @@ Document question answering; retrieval-augmented generation; system observabilit
 
 ## Attachments
 
-- Paper: mara-eacl2027-demo.pdf
-- Supplementary artifacts: mara-eacl2027-supplement.zip（若表单有相应附件入口）
-- Source backup: mara-eacl2027-source.zip（供 Overleaf/归档；不是论文 PDF 的替代品）
+- Paper: MARA-EACL2027-diagnostic-revision.pdf
+- Supplementary artifacts: MARA-EACL2027-diagnostic-supplement.zip（若表单有相应附件入口）
+- Source backup: MARA-EACL2027-diagnostic-Overleaf.zip（供 Overleaf/归档；不是论文 PDF 的替代品）
 
 ## Already confirmed
 
@@ -55,3 +56,9 @@ Document question answering; retrieval-augmented generation; system observabilit
 ## Before pressing Submit
 
 核对作者 profile、PDF 和正确附件，确认链接在审稿人视角可访问，按表单填写必填声明并确认实际提交状态。本地文件生成和 Git commit 不等于 OpenReview 投稿成功。接受后至少一名作者须注册并现场演示及提供海报；该安排尚未执行。
+
+## TL;DR
+
+MARA exposes document-QA decisions and answer stages to support inspectable, reproducible failure diagnosis.
+
+本轮需同步替换 PDF、补充包和摘要；视频及软件下载链接保持不变。尚未在 OpenReview 替作者提交。

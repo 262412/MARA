@@ -1,6 +1,6 @@
 # MARA EACL 2027 Overleaf 项目
 
-上传文件：MARA-EACL2027-Overleaf.zip。
+上传文件：MARA-EACL2027-diagnostic-Overleaf.zip。
 
 2026-09-23 更新：已同步公开 Release 的新版 Windows 安装包，移除将历史 `uv sync --extra mara` 当作评审快速安装路线的说明，并明确新安装包与 v0.0.40 源码/benchmark 的区别。
 
@@ -12,7 +12,8 @@
 
 - main.tex：标题、作者、宏包、主文件结构。
 - paper_body.tex：摘要和正文。
-- appendix.tex：附录文字及实现细节。
+- diagnostic_case.tex：完整诊断案例和新的 Figure 2。
+- appendix.tex：附录文字、实现细节及案例复现说明。
 - diagnostic_tables.tex：完整诊断表。
 - references.bib：参考文献。
 - figures/mara-ui-qa.png：界面截图。
@@ -21,4 +22,6 @@
 
 参考文献由 BibTeX 自动处理。首次编译等待其完成；无需上传本地 PDF、编译日志、benchmark ZIP 或 Git 文件。本包不包含旧 EMNLP 稿件和匿名备用入口。
 
-预期输出为 11 页，主内容在第 5 页结束。Overleaf 云端编译尚未实际执行；本地解压编译检查见 audit/overleaf-package-check.json。
+预期输出为 13 页，主内容在第 6 页结束。Overleaf 云端编译尚未实际执行；本地解压编译检查见 audit/diagnostic-package-check.json。
+
+保留四位作者及单位，按提交版要求去掉邮箱。原视频链接不变。诊断证据在独立补充包内，不需要放进 Overleaf 项目。

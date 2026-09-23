@@ -1,0 +1,15 @@
+baseline_route,candidate_route,ci_high_f1,ci_low_f1,dataset,mean_delta_f1,n
+direct_answer,controller_auto,0.0289,-0.0754,financebench,-0.0224,150
+text_rag,controller_auto,0.0264,-0.022,financebench,0.0027,150
+crag_guarded,controller_auto,0.0041,-0.0103,financebench,-0.0023,150
+text_rag,controller_auto,0.0039,-0.004,qasper,-0.0001,200
+crag_guarded,controller_auto,0.0268,0.0028,qasper,0.0138,200
+text_rag,controller_auto,-0.003,-0.0241,ragtruth,-0.0138,300
+crag_guarded,controller_auto,0.005,0.0,ragtruth,0.0022,300
+text_rag,controller_auto,0.0008,-0.0222,alce_asqa,-0.0094,200
+crag_guarded,controller_auto,0.1398,0.073,alce_asqa,0.1057,200
+page_image_rag_vlm,controller_auto,0.0,0.0,slidevqa,0.0,120
+text_rag,controller_auto,0.0232,-0.0402,mmdocrag,-0.0084,120
+element_rag,controller_auto,0.3289,0.2511,mmdocrag,0.2903,120
+page_image_rag_vlm,controller_auto,0.2296,0.1319,mmdocrag,0.1822,120
+hybrid_rag,controller_auto,0.0497,-0.0379,mmdocrag,0.0061,120

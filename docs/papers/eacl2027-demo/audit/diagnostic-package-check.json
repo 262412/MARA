@@ -1,0 +1,18 @@
+{
+  "overleaf_file_count": 10,
+  "overleaf_sha256": "90d59fee8ee522daba33f2531795a1ed5b60c3f2bfd1480385577150e44ca411",
+  "supplement_file_count": 40,
+  "supplement_sha256": "384d948ace9c9041208cb0a7d3ba3c174ab13715a00d3cf42ef7b748e6b58dca",
+  "paper_pages": 13,
+  "main_content_ends_on_page": 6,
+  "paper_has_no_email": true,
+  "four_authors_retained": true,
+  "overleaf_extracted_build_exit": 0,
+  "extracted_pdf_text_matches": true,
+  "supplement_extracted_verify_exit": 0,
+  "overleaf_cloud_build_executed": false,
+  "body_page_limit": 6,
+  "all_fonts_embedded": true,
+  "overfull_or_undefined_references": false,
+  "pdf_sha256": "9fa7ebf1be7fb7990fed720e4369a21593fc673c46a2cc66629dd0e1edeceeb5"
+}

@@ -21,7 +21,7 @@ Configure a chat model and an embedding model in the Web UI resources tab, then 
 
 The replacement installer is 33,918,912 bytes and has SHA-256 `886b949135ce74f123e0ae7b8a81c533594f0e98739b8057c277485ec3fb1432`. It is based on main commit `dfcca9987fa4f4d3c5e4da303217c32692032b65` plus installation fixes, with application source commit `e6afa5dcda18ef6d5d6aae2efb0f1a6b806187b3` and package version `0.0.41`. Its internal directory is `MARA-reviewer-windows-x64-e6afa5dc`. This updated installation artifact is hosted on the historical release page; it did not produce the paper's original benchmark numbers.
 
-Verified on Windows: isolated installation with Python/Git absent from the process PATH, CLI checks, HTTP/UI startup, repeat installation preserving config/data, and checksum-failure handling. New real-model indexing/QA and other operating systems have not been validated. In the package directory, use:
+Verified on Windows: isolated installation with Python/Git absent from the process PATH, CLI checks, HTTP/UI startup, repeat installation preserving config/data, and checksum-failure handling. The new Harbor case additionally validates real-model indexing/QA in this Windows package. A separate fresh-runtime repetition fails strict verification even after source correction; both runs are retained. Other operating systems have not been validated. In the package directory, use:
 
 ~~~powershell
 .\MARA.cmd app doctor --json
@@ -54,3 +54,18 @@ Source selection, page preview, questions over a text document, citations, and r
 The synthesis contains 41 run/shard artifact sets, represented by ledger/manifest entries, and 3,540 metric records for 1,090 dataset--question pairs. It supports aggregate, pairing, route-count, and bootstrap checks. It does not include generated answers, effective per-job route manifests, actual per-answer generation-path traces, or per-job source commits. It therefore does not by itself support an exact end-to-end rerun or diagnosis of the cause of SlideVQA's identical scores.
 
 The original synthesis ZIP is included unchanged in the supplementary submission package. REPRODUCTION.md explains the numerical checks. The source code is Apache 2.0 with Kotaemon attribution; dataset terms remain separate. The historical release NOTICE retains the earlier product name Slides.
+
+## New diagnostic walkthrough
+
+Open `case_study/walkthrough.html` in the supplementary ZIP. It presents a complete
+source-scope diagnosis and links directly to original inputs, provider outputs,
+intermediate/displayed answers, effective settings, and decisions. Run
+`python case_study/verify_case.py` for the offline audit without API credentials.
+
+The constructed Harbor case uses the installed reviewer build, Deepseek generation
+and OpenAI embeddings. It is separate from the unchanged six-dataset benchmark.
+The captured first pair corrects an unresolved question by selecting the data
+policy. An independent repetition still abstains because strict verification
+rejects extra generated explanation; its raw records are included, not discarded.
+This demonstrates inspectability, not reliable recovery. It does not fill the old
+SlideVQA provenance gaps. The original video and public links stay unchanged.

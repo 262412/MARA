@@ -1,0 +1,26 @@
+[
+  {
+    "path": "ktem/docqa/runtime.py",
+    "installed_sha256": "1a007eb0955baf0ac0f1cd8f2f1fb553af3b5decd23784645c0b833041d3d7f5",
+    "source_sha256": "1a007eb0955baf0ac0f1cd8f2f1fb553af3b5decd23784645c0b833041d3d7f5",
+    "equal": true
+  },
+  {
+    "path": "ktem/docqa/_runtime_models.py",
+    "installed_sha256": "b72729d76d76b684a3585106e270f7216b05c55ead30004fea362b3e03d31c57",
+    "source_sha256": "b72729d76d76b684a3585106e270f7216b05c55ead30004fea362b3e03d31c57",
+    "equal": true
+  },
+  {
+    "path": "ktem/reasoning/mara.py",
+    "installed_sha256": "10b3bc4a24babfbd6a0da52746e607df43c89dfe07e3a857837d6e14b25c90ba",
+    "source_sha256": "10b3bc4a24babfbd6a0da52746e607df43c89dfe07e3a857837d6e14b25c90ba",
+    "equal": true
+  },
+  {
+    "path": "ktem/reasoning/mara_visual_answering.py",
+    "installed_sha256": "d9cefd22e15634c34ac70bb27b5e807e639dfbf90b9323a5d762363cd3e19ef8",
+    "source_sha256": "d9cefd22e15634c34ac70bb27b5e807e639dfbf90b9323a5d762363cd3e19ef8",
+    "equal": true
+  }
+]
