@@ -148,8 +148,9 @@ def test_runner_preserves_node_watchdog_when_app_exit_also_fails(
 
     monkeypatch.setattr(runner.subprocess, "Popen", launch)
     monkeypatch.setattr(runner, "_run_node", node)
+    (tmp_path / "attempt").mkdir()
     with pytest.raises(subprocess.TimeoutExpired) as caught:
-        runner.run(tmp_path / "attempt")
+        runner._run(tmp_path / "attempt")
     assert caught.value is primary
 
 
@@ -223,7 +224,9 @@ def test_node_watchdog_survives_forced_exit_failure(modules, monkeypatch, tmp_pa
     monkeypatch.setattr(runner.subprocess, "Popen", lambda *a, **kw: node)
     monkeypatch.setattr(runner, "_terminate_owned", fail_release)
     with pytest.raises(subprocess.TimeoutExpired):
-        runner._run_node(tmp_path, {}, tmp_path, timeout=0)
+        runner._run_node(
+            tmp_path, {"MARA_PYTEST_RUNTIME_ROOT": str(tmp_path)}, tmp_path, timeout=0
+        )
 
 
 def test_cleanup_does_not_unwind_stores_after_monitor_failure(

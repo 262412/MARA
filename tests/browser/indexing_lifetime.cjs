@@ -10,7 +10,8 @@ module.exports = function ({expect, login, evidence, settled, results, output, b
   async function uploadZip(page, filename, text, quick = false) {
     const zip = path.join(output, filename);
     const python = process.env.MARA_BROWSER_PYTHON;
-    execFileSync(python, ['-B', '-c', 'import sys,zipfile; z=zipfile.ZipFile(sys.argv[1],"w"); z.writestr(sys.argv[2],sys.argv[3]); z.close()', zip, filename.replace('.zip', '.txt'), text]);
+    require('./runtime_isolation.cjs').validate(process.env);
+    execFileSync(python, ['-B', path.join(__dirname, 'write_owned_archive.py'), zip, filename.replace('.zip', '.txt'), text]);
     if (!quick) {
       await page.getByRole('tab', {name: 'files', exact: true}).click();
       await manager(page).getByRole('tab', {name: 'Upload Files', exact: true}).click();

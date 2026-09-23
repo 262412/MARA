@@ -17,8 +17,107 @@ TRIBUTE_SHA256 = "40703cceb4b468e72ae1eda73afdebdff4acc184b76a047bdd8dd487dd837a
 
 
 def run(output):
+    from pytest_runtime_isolation import start_process_test_runtime
+
+    output.mkdir(parents=True, exist_ok=False)
+    os.environ["MARA_DIAGNOSTIC_ISOLATION_REQUIRED"] = "1"
+    runtime = start_process_test_runtime(evidence_dir=output)
+    primary = None
+    try:
+        _isolation_receipt(runtime, output, "launcher")
+        return _run(output)
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        _finish_runtime(runtime, output, primary)
+
+
+def _finish_runtime(runtime, output, primary):
+    try:
+        journal = output / "processes.jsonl"
+        records = (
+            [json.loads(line) for line in journal.read_text().splitlines()]
+            if journal.exists()
+            else []
+        )
+        started = {row["pid"] for row in records if row["state"] == "started"}
+        exited = {
+            row["pid"]
+            for row in records
+            if row["state"] == "exited" and row["exit_code"] is not None
+        }
+        if started - exited:
+            raise RuntimeError(
+                "Retaining diagnostic root: owned process exit is unproved"
+            )
+        runtime.close()
+    except Exception as error:
+        (output / "launcher-cleanup-error.json").write_text(
+            json.dumps(
+                {
+                    "primary": repr(primary),
+                    "cleanup": repr(error),
+                    "root": str(runtime.paths.root),
+                }
+            ),
+            encoding="utf-8",
+        )
+        if primary is None:
+            raise
+    finally:
+        (output / "launcher-cleanup.json").write_text(
+            json.dumps(
+                {
+                    "root": str(runtime.paths.root),
+                    "removed": not runtime.paths.root.exists(),
+                }
+            ),
+            encoding="utf-8",
+        )
+
+
+def _isolation_receipt(runtime, output, role):
+    from importlib.machinery import PathFinder
+
+    guard = runtime.process_guard
+    assert guard is not None
+    guard.check_environment(os.environ)
     repository = Path(__file__).resolve().parents[2]
-    output.mkdir(parents=True, exist_ok=True)
+    modules = {}
+    for name in ("ktem", "kotaemon", "slide_cli", "theflow", "gradio"):
+        spec = PathFinder.find_spec(name)
+        if spec is None or spec.origin is None:
+            raise RuntimeError(f"Missing diagnostic package: {name}")
+        source = Path(spec.origin).resolve()
+        if name in {"ktem", "kotaemon", "slide_cli"} and not source.is_relative_to(
+            repository
+        ):
+            raise RuntimeError(f"Unexpected diagnostic package source: {name}")
+        modules[name] = str(source)
+    (output / f"isolation-{role}.json").write_text(
+        json.dumps(
+            {
+                "before_business_import": not any(
+                    name in sys.modules for name in modules if name != "gradio"
+                ),
+                "pid": os.getpid(),
+                "root": str(runtime.paths.root),
+                "python": sys.executable,
+                "prefix": sys.prefix,
+                "cwd": os.getcwd(),
+                "packages": modules,
+                "paths": runtime.paths.environment(),
+                "python_audit_guard": True,
+                "native_os_sandbox": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _run(output):
+    repository = Path(__file__).resolve().parents[2]
     if any((output / name).exists() for name in ("ready.json", "stop", "server.log")):
         raise ValueError("Use a fresh browser evidence directory")
     source = os.environ.get("MARA_BROWSER_TRIBUTE")
@@ -43,16 +142,17 @@ def run(output):
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     environment["MARA_BROWSER_PYTHON"] = sys.executable
     environment["NO_PROXY"] = "localhost,127.0.0.1,::1"
+    environment.pop("NODE_OPTIONS", None)
     with (output / "server.log").open("w", encoding="utf-8") as log:
         server = subprocess.Popen(
             [
                 sys.executable,
                 "-B",
-                "tests/browser/serve_chat_submission.py",
+                str(repository / "tests/browser/serve_chat_submission.py"),
                 "--output",
                 str(output),
             ],
-            cwd=repository,
+            cwd=environment["MARA_PYTEST_RUNTIME_ROOT"],
             env=environment,
             stdout=log,
             stderr=subprocess.STDOUT,
@@ -65,7 +165,7 @@ def run(output):
             server,
             "started",
             command=server.args,
-            cwd=str(repository),
+            cwd=environment["MARA_PYTEST_RUNTIME_ROOT"],
             source=str(output / "source.json"),
         )
         try:
@@ -120,9 +220,16 @@ def _terminate_owned(process, output, role):
 
 
 def _run_node(repository, environment, output, *, timeout=600):
-    command = ["node", "tests/browser/chat_submission.cjs", str(output)]
+    command = [
+        "node",
+        str(repository / "tests/browser/chat_submission.cjs"),
+        str(output),
+    ]
     node = subprocess.Popen(
-        command, cwd=repository, env=environment, start_new_session=os.name != "nt"
+        command,
+        cwd=environment["MARA_PYTEST_RUNTIME_ROOT"],
+        env=environment,
+        start_new_session=os.name != "nt",
     )
     _process_record(
         output,
@@ -130,7 +237,7 @@ def _run_node(repository, environment, output, *, timeout=600):
         node,
         "started",
         command=command,
-        cwd=str(repository),
+        cwd=environment["MARA_PYTEST_RUNTIME_ROOT"],
         watchdog_seconds=timeout,
     )
     try:
@@ -183,6 +290,8 @@ def _stop_server(server, output, primary):
 
 
 BROWSER_INPUTS = [
+    "pytest_runtime_isolation.py",
+    "tests/test_runtime_process_guard.py",
     "tests/browser/serve_chat_submission.py",
     "tests/browser/chat_submission.cjs",
     "tests/browser/conversation_actions.cjs",

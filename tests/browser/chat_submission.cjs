@@ -1,4 +1,6 @@
 // Full production App regression: model/CDN boundaries only are deterministic.
+const isolation = require('./runtime_isolation.cjs');
+const ownedRuntime = isolation.validate(process.env);
 const { chromium, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -21,6 +23,21 @@ async function evidence() {
 async function login(username = 'browser-owner', {initialize = true, traceRefresh = false, traceConversation = false, traceSelection = false} = {}) {
   const page = await browser.newPage({locale: 'en-US', viewport: {width: 1600, height: 1200}});
   await page.addInitScript(require('./web_operation_observer.cjs').install);
+  if (process.env.MARA_BROWSER_LOGIN_DIAGNOSTIC === '1') await page.addInitScript(() => {
+    window.ownedLoginFrames = {frames: 0, ticks: 0, samples: []};
+    const observe = kind => {
+      const state = window.ownedLoginFrames;
+      state[kind] += 1;
+      const button = document.querySelector('button');
+      if (button && state.samples.length < 100) state.samples.push({kind, at: performance.now(),
+        visibility: document.visibilityState, focus: document.hasFocus(),
+        rect: button.getBoundingClientRect().toJSON(), disabled: button.disabled});
+    };
+    // Observe callbacks already requested by the page; do not request frames.
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = callback => raf(time => { observe('frames'); callback(time); });
+    const timer = setInterval(() => { observe('ticks'); if (window.ownedLoginFrames.ticks >= 400) clearInterval(timer); }, 100);
+  });
   const refreshTrace = traceRefresh || traceConversation || traceSelection ? await require('./gradio_refresh_observer.cjs').attach(page, ready, base, {conversation: traceConversation, selection: traceSelection}) : null;
   if (traceConversation) await page.addInitScript(require('./conversation_observer.cjs').install);
   const originalClose = page.close.bind(page);
@@ -106,7 +123,23 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
   }
   await page.locator('input[type=text]').fill(username);
   await page.locator('input[type=password]').fill('OwnedFixture7!');
-  await page.getByRole('button', {name: /Login|登录/}).click();
+  try { await page.getByRole('button', {name: /Login|登录/}).click(); }
+  catch (error) {
+    results.loginFailure = await page.evaluate(() => ({frames: window.ownedLoginFrames,
+      state: document.readyState, visibility: document.visibilityState, focus: document.hasFocus(),
+      buttons: [...document.querySelectorAll('button')].map(node => ({text: node.textContent,
+        rect: node.getBoundingClientRect().toJSON(), display: getComputedStyle(node).display,
+        visibility: getComputedStyle(node).visibility, opacity: getComputedStyle(node).opacity,
+        animations: node.getAnimations().map(value => ({state: value.playState}))}))}));
+    fs.writeFileSync(path.join(output, 'login-failure.json'), JSON.stringify(results.loginFailure, null, 2));
+    await page.screenshot({path: path.join(output, 'login-failure.png')});
+    throw error;
+  }
+  if (process.env.MARA_BROWSER_LOGIN_DIAGNOSTIC === '1') {
+    results.loginDiagnostics ||= [];
+    results.loginDiagnostics.push(await page.evaluate(() => window.ownedLoginFrames));
+    exit.save(output, results);
+  }
   await page.locator('#chat-input textarea').waitFor({state: 'visible', timeout: 60000});
   if (initialize) await initialized(queue);
   page.submissionQueue = queue;
@@ -366,7 +399,10 @@ async function authenticatedIndexing() {
 }
 
 (async () => {
-  browser = await chromium.launch({headless: true, ...(process.env.MARA_BROWSER_CHANNEL ? {channel: process.env.MARA_BROWSER_CHANNEL} : {})});
+  browser = await chromium.launch({headless: true,
+    downloadsPath: path.join(ownedRuntime.root, 'tmp', 'browser-downloads'),
+    args: ['--disk-cache-dir=' + path.join(ownedRuntime.root, 'cache', 'browser')],
+    ...(process.env.MARA_BROWSER_CHANNEL ? {channel: process.env.MARA_BROWSER_CHANNEL} : {})});
   const selected = process.env.MARA_BROWSER_SCENARIOS?.split(',');
   const operations = require('./conversation_actions.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});
   const fileBrowser = require('./file_browser_navigation.cjs')({expect, login, evidence, settled, send, selectSource, tailFinished, results, output});

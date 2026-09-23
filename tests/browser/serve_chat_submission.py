@@ -21,17 +21,27 @@ from pytest_runtime_isolation import start_process_test_runtime
 
 
 def serve(output):
+    if (
+        os.environ.get("MARA_DIAGNOSTIC_ISOLATION_REQUIRED") != "1"
+        or os.environ.get("MARA_DIAGNOSTIC_CHILD") != "1"
+    ):
+        raise RuntimeError("Launch the diagnostic App through its isolated runner")
     runtime = start_process_test_runtime()
+    os.chdir(runtime.paths.root)
+    from run_chat_submission import _isolation_receipt
+
     os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
     os.environ["ANONYMIZED_TELEMETRY"] = "False"
     os.environ["NO_PROXY"] = "localhost,127.0.0.1,::1"
-    import pytest
-    from ktem_tests.chat_submission_app_fixture import submission_app
-
     errors = []
     try:
+        _isolation_receipt(runtime, output, "app")
+        import pytest
+        from ktem_tests.chat_submission_app_fixture import submission_app
+
         with pytest.MonkeyPatch.context() as patch:
             with submission_app(patch, runtime.paths.root) as (app, blocks):
+                _resolved_runtime_receipt(runtime, output)
                 _indexing_boundaries(patch)
                 observer = IndexingLifetimeObserver(patch, app.chat_page.file_index)
                 try:
@@ -54,6 +64,7 @@ def serve(output):
         threading.settrace(None)  # type: ignore[arg-type]  # Python 3.10 stub
         sys.settrace(None)
         try:
+            os.chdir(output)
             runtime.close()
         except Exception as error:
             logging.exception("Owned runtime directory cleanup failed")
@@ -63,6 +74,9 @@ def serve(output):
                 {
                     "root": str(runtime.paths.root),
                     "removed": not runtime.paths.root.exists(),
+                    "guard_denials": runtime.process_guard.denials
+                    if runtime.process_guard
+                    else [],
                     "errors": [
                         {"stage": stage, "error": repr(error)}
                         for stage, error in errors
@@ -73,6 +87,46 @@ def serve(output):
         )
     if errors:
         raise errors[0][1]
+
+
+def _resolved_runtime_receipt(runtime, output):
+    import tempfile
+
+    from ktem.db.engine import engine
+    from ktem.runtime_bootstrap import get_runtime_paths, validate_test_runtime_paths
+    from theflow.settings import settings
+
+    paths = get_runtime_paths()
+    actual = {
+        name: getattr(settings, name)
+        for name in runtime.paths.environment()
+        if name.startswith("KH_") and hasattr(settings, name)
+    }
+    for name in ("KH_DOC_DIR", "STORAGE", "KH_DOCSTORE", "KH_VECTORSTORE"):
+        actual[name] = getattr(settings, name)
+    validate_test_runtime_paths(actual)
+    database = Path(engine.url.database).resolve()
+    assert database.is_relative_to(runtime.paths.root)
+    assert Path(tempfile.gettempdir()).resolve().is_relative_to(runtime.paths.root)
+    # Only path fields are evidence; never serialize provider settings or secrets.
+    selected = {
+        name: value.get("prefix" if name == "STORAGE" else "path")
+        if isinstance(value, dict)
+        else value
+        for name, value in actual.items()
+    }
+    (output / "isolation-resolved.json").write_text(
+        json.dumps(
+            {
+                "runtime": vars(paths),
+                "settings_paths": selected,
+                "database": database,
+                "temp": tempfile.gettempdir(),
+            },
+            default=str,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _launch(app, blocks, root, output, observer):

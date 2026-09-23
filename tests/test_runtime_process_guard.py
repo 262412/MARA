@@ -62,8 +62,36 @@ try:
         (runtime.paths.root / '.mara-pytest-owner').unlink()
     elif scenario == 'external-settings':
         os.environ['THEFLOW_SETTINGS_MODULE'] = str(fake_user / 'flowsettings.py')
-    elif scenario == 'late-after-close':
+    elif scenario in {'late-after-close', 'late-worker', 'cleanup-secondary'}:
+        if scenario == 'cleanup-secondary':
+            (runtime.paths.root / '.mara-pytest-owner').unlink()
+            try:
+                runtime.close()
+            except RuntimeError:
+                pass
         runtime.close()
+        if scenario == 'late-worker':
+            import threading
+            errors = []
+            def late():
+                try:
+                    bootstrap.load_packaged_runtime_env()
+                except RuntimeError:
+                    errors.append('blocked')
+            worker = threading.Thread(target=late)
+            worker.start()
+            worker.join(5)
+            assert not worker.is_alive() and errors == ['blocked']
+    elif scenario == 'disabled-required-marker':
+        os.environ.pop('MARA_DIAGNOSTIC_ISOLATION_REQUIRED')
+    elif scenario == 'normal-child':
+        import subprocess
+        child = subprocess.run([sys.executable, '-B', '-c',
+            'from pytest_runtime_isolation import start_process_test_runtime; '
+            'r=start_process_test_runtime(); print(r.paths.root); r.close()'],
+            env=dict(os.environ), capture_output=True, text=True, check=True)
+        assert Path(child.stdout.strip()).is_relative_to(runtime.paths.root)
+        assert not Path(child.stdout.strip()).exists()
     elif scenario == 'lost-child-environment':
         import subprocess
         environment = dict(os.environ)
@@ -105,15 +133,18 @@ class ProcessIsolationContract(unittest.TestCase):
             timeout=45,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("Exception ignored", result.stderr)
         payload = json.loads(result.stdout.strip().splitlines()[-1])
         (root / "result.json").write_text(json.dumps(payload, indent=2))
         return payload
 
     def test_normal_owned_configuration(self):
-        result = self.probe("normal")
-        self.assertTrue(result["normal"], result)
-        self.assertFalse(result["blocked"], result)
-        self.assertEqual(result["outside_accesses"], [])
+        for scenario in ("normal", "normal-child"):
+            with self.subTest(scenario=scenario):
+                result = self.probe(scenario)
+                self.assertTrue(result["normal"], result)
+                self.assertFalse(result["blocked"], result)
+                self.assertEqual(result["outside_accesses"], [])
 
     def test_rejects_bypass_before_fake_user_access(self):
         for scenario in (
@@ -124,6 +155,9 @@ class ProcessIsolationContract(unittest.TestCase):
             "early-ktem",
             "early-theflow",
             "late-after-close",
+            "late-worker",
+            "cleanup-secondary",
+            "disabled-required-marker",
             "lost-child-environment",
         ):
             with self.subTest(scenario=scenario):
