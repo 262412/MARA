@@ -1,6 +1,9 @@
 # Keep the imported submission byte-for-byte reproducible across Windows checkouts.
-source/** -text
+source/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 archive/*.zip -text
 # Retain exact bytes for hashed case records and copied benchmark tables.
 case_study/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+review_followup/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# A unified diff's empty context lines intentionally contain a leading space.
+review_followup/*.patch -text whitespace=-blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 audit/evidence-tables/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

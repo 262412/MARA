@@ -27,7 +27,7 @@ The supplementary revision-evidence.json records the checked values and interpre
 ## Definitions needed for interpretation
 
 - Four-decimal rounding is inherited from the released per-example metrics.
-- Bootstrap percentiles use the sorted value at Python round((n - 1) * fraction), with fractions 0.025 and 0.975 across 1,000 resampled means.
+- Bootstrap percentiles use the sorted value at Python round((n - 1) \* fraction), with fractions 0.025 and 0.975 across 1,000 resampled means.
 - Reported p95 time uses the same nearest rounded-index convention on recorded total_seconds.
 - Missing cells are not zero. Configured generator identity does not certify actual invocation.
 - The oracle compares whole configurations, can include an unselectable direct or guarded configuration, and can use another generator. It is not a strict reachable-route oracle.
@@ -37,7 +37,7 @@ The supplementary revision-evidence.json records the checked values and interpre
 - Different MMDocRAG manifests and timeout budgets limit causal latency/reliability comparisons.
 - The ZIP lacks answer strings and effective per-job route manifests. Do not infer the cause of SlideVQA score equality from the metric CSV alone.
 
-## New case, separate from the historical synthesis
+## Original case, separate from the historical synthesis
 
 `case_study/README.md` explains the executed source-selection task, offline checks,
 and optional new API execution. The complete first before/after pair and negative
@@ -45,3 +45,14 @@ independent repetition are retained. `answer-stages.json` keeps provider output,
 pre-verification, pre-guardrail, displayed and scoring answers distinct. Its
 scoring projection is explicitly identity, not the historical benchmark adapter.
 No historical aggregate, row, or input archive is replaced by these case records.
+
+## Follow-up: verifier repair and actual visual input
+
+Start with `review_followup/walkthrough.html` and `review_followup/README.md`.
+The added records compare the original raw answer with decision stages, isolate
+a supported-policy false rejection, include its source patch and five live
+pairs, and show a real NOAA/NASA chart intervention with an image-removed
+control. Run `python review_followup/verify_followup.py` for the offline audit.
+The patch is separate from the original installed release. All preliminary
+failures are retained. Neither user efficiency, automatic recovery nor restored
+historical SlideVQA output provenance is claimed. The video remains unchanged.

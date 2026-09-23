@@ -12,8 +12,7 @@ LMDoc: A Local-First Workbench for Observable Multimodal Document Question Answe
 
 ## Abstract
 
-
-Document question answering involves choices about evidence, retrieval, generation, and verification that are difficult to inspect together. We present LMDoc, a local-first workbench extending Kotaemon with observable route control and shared diagnostic records across Web, command-line, and benchmark workflows. We analyze a released bundle covering six datasets, 1,090 dataset–question pairs, and 3,540 route-level records. Automatic routing does not consistently improve answer F1 over fixed text retrieval; the records expose inactive routing, a weak graph route, multimodal latency, and a non-discriminating visual comparison. A separate, executed diagnostic case follows an unresolved question through successful retrieval, a verification-triggered refusal, source correction, and a supported answer. We provide the case's raw provider outputs, displayed and scoring answers, evidence, effective settings, and offline checks. LMDoc's contribution is an inspectable workflow for locating such failures, with explicit limits on what the retained evidence can reproduce. We release the Apache-2.0 implementation and diagnostic materials, alongside a user-workflow demonstration.
+Document question answering involves choices about evidence, retrieval, generation, and verification that are difficult to inspect together. We present LMDoc, a local-first workbench extending Kotaemon with observable route control and shared diagnostic records across Web, command-line, and benchmark workflows. We analyze a released bundle covering six datasets, 1,090 dataset–question pairs, and 3,540 route-level records. Automatic routing does not consistently improve answer F1 over fixed text retrieval; the records expose inactive routing, a weak graph route, multimodal latency, and a non-discriminating visual comparison. A separate executed case reveals a supported answer rejected by a lexical verifier. Identical-output replay tests a targeted repair, while repeated live runs retain both abstentions and answers. A public-chart case adds captured image input and an image-removed control. We supply raw outputs, displayed answers, evidence, settings, and offline checks. LMDoc's contribution is an inspectable workflow for locating such failures, with explicit limits on what the retained evidence can reproduce. We release the Apache-2.0 implementation and diagnostic materials, alongside a user-workflow demonstration.
 
 ## Authors（按此顺序）
 
@@ -51,7 +50,7 @@ Document question answering; retrieval-augmented generation; system observabilit
 
 ## Already confirmed
 
-四位作者信息按原 main.tex 保留；不存在显著重叠的其他在审或已发表稿件；Chenghao Zhang 作为互惠审稿人；沿用原视频；本轮没有新的 benchmark。
+四位作者信息按原 main.tex 保留；不存在显著重叠的其他在审或已发表稿件；Chenghao Zhang 作为互惠审稿人；沿用原视频；本轮保留历史 benchmark，另增小规模诊断执行与对照，不作为新 benchmark。
 
 ## Before pressing Submit
 
@@ -66,3 +65,5 @@ LMDoc exposes document-QA decisions and answer stages to support inspectable, re
 ## 演示名称说明
 
 论文统一使用 LMDoc。原视频、界面截图、已发布软件和历史记录继续显示 MARA；正文演示部分及附录 C.2 已解释二者的对应关系。实际命令和链接保持原值。重新上传时同步修改标题、摘要、TL;DR、PDF 和补充 ZIP。
+
+本轮修订收窄有用性结论，加入原始回答对照、具体验证器修复和真实图表干预。修复补丁随补充包提供，尚未替换已发布安装包；历史 SlideVQA 原始输出暂无副本。

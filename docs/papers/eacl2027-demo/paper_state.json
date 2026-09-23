@@ -16,7 +16,11 @@
     "case_study/manifest.json",
     "audit/diagnostic-case-verification.json",
     "audit/diagnostic-package-check.json",
-    "plan/task-packets/lmdoc-naming.md"
+    "plan/task-packets/lmdoc-naming.md",
+    "plan/task-packets/reviewer-followup.md",
+    "reviewer_analysis.md",
+    "review_followup/manifest.json",
+    "audit/followup-verification.json"
   ],
   "blockers": [],
   "build": {
@@ -24,13 +28,13 @@
     "command": "latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=../build-diagnostic main.tex",
     "pdf": "build-diagnostic/main.pdf",
     "external_inputs": [],
-    "input_sha256": "92b2b39bdcf5ff4badfe3cbcb3ef55bbb67bf1ddea72835cd8a1effd726413d1",
-    "pdf_sha256": "3d0ed32079a3b134b198b6639a7c64ddb43029e8d01abf1bd1042cb22ecdb792",
+    "input_sha256": "c427a6dc422d53071804488d1fd0853cd3ae3784101388c0245082d739640a1d",
+    "pdf_sha256": "90c513f800009fef4a8b84e47299c98492848f44d8709435304afa0833e5dcdb",
     "log": "source\\build-attestation.log",
-    "log_sha256": "76e9d1fd2c59d330b32fa9148f3c6368899bbfe2cf6a69d4c5ada69318fefdbe",
+    "log_sha256": "6073eabad5b0cb83cfbc1143f15ac6150acd520eea0b07c2c1b7873dd30a28cb",
     "exit_code": 0,
     "tool_version": "Initial Win CP for (console input, console output, system): (CP936, CP65001, CP936)",
     "attestation": "executed",
-    "ran_at": "2026-09-23T08:56:25.082274+00:00"
+    "ran_at": "2026-09-23T10:35:26.012208+00:00"
   }
 }

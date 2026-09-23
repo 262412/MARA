@@ -11,6 +11,7 @@ diagnostic_tables.tex contains complete existing benchmark tables.
 
 The untouched EMNLP archive is preserved outside this source package.
 
-diagnostic_case.tex contains the executed case and record-based Figure 2.
+diagnostic_case.tex contains the verifier repair and visual intervention.
+Figure 2 uses figures/arctic-page9.png, the actual NOAA/NASA page input.
 Four authors and affiliation are preserved; no email is printed.
 The original video link remains unchanged. The paper calls the workbench LMDoc; the video and screenshot retain its original release name, MARA, as explained in the demonstration section and Appendix C.2.

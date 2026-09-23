@@ -1,0 +1,99 @@
+diff --git a/libs/ktem/ktem/docqa/claim_support.py b/libs/ktem/ktem/docqa/claim_support.py
+index 99f5fbd0..eb1a1062 100644
+--- a/libs/ktem/ktem/docqa/claim_support.py
++++ b/libs/ktem/ktem/docqa/claim_support.py
+@@ -170,11 +170,23 @@ def _fact_coverage_supports_claim(
+ ) -> bool:
+     if not evidence_tokens or not claim_tokens:
+         return False
+-    overlap = claim_tokens & evidence_tokens
++    overlap = {
++        token
++        for token in claim_tokens
++        if token in evidence_tokens
++        or any(_same_regular_past_form(token, source) for source in evidence_tokens)
++    }
+     required = max(3, math.ceil(len(claim_tokens) * 0.75))
+     return len(overlap) >= min(len(claim_tokens), required)
+ 
+ 
++def _same_regular_past_form(left: str, right: str) -> bool:
++    """Match regular -d/-ed variants without relaxing factual coverage."""
++    left_past = left + ("d" if left.endswith("e") else "ed")
++    right_past = right + ("d" if right.endswith("e") else "ed")
++    return left_past == right or right_past == left
++
++
+ def _short_evidence_supports_claim(
+     evidence_tokens: set[str],
+     claim_tokens: set[str],
+diff --git a/libs/ktem/ktem_tests/test_docqa_regular_inflection_support.py b/libs/ktem/ktem_tests/test_docqa_regular_inflection_support.py
+new file mode 100644
+index 00000000..447e3c61
+--- /dev/null
++++ b/libs/ktem/ktem_tests/test_docqa_regular_inflection_support.py
+@@ -0,0 +1,64 @@
++import pytest
++from ktem.docqa._runtime_models import DocQARequest
++from ktem.docqa.controller import RetrieveDecision
++from ktem.docqa.evidence import EvidenceBundle
++from ktem.docqa.verification import verify_decision
++
++POLICY = (
++    "The Harbor sensor pilot retains raw sensor logs for exactly 17 days. "
++    "Delete raw sensor logs after 17 days. "
++    "The policy applies to raw sensor logs collected by the Harbor pilot. "
++    "Aggregated daily summaries are kept separately and are not covered by "
++    "this raw-log retention period. The laboratory coordinator owns this policy."
++)
++CORE = "The Harbor sensor pilot retains raw sensor logs for exactly 17 days."
++RECORDED_EXTENSION = (
++    "The policy states that raw sensor logs must be deleted after 17 days "
++    "it applies specifically to raw sensor logs collected by the Harbor pilot."
++)
++
++
++def verification(answer, text=POLICY):
++    request = DocQARequest(
++        prompt="For how many days does the Harbor sensor pilot retain raw sensor logs?",
++        verification_mode="strict",
++    )
++    bundle = EvidenceBundle(
++        route="doc_text",
++        items=[{"evidence_id": "policy", "file_id": "policy", "text": text}],
++    )
++    return verify_decision(
++        request,
++        RetrieveDecision(status="good", reason="Source retrieved"),
++        bundle,
++        answer,
++    )
++
++
++def test_recorded_supported_extension_is_not_rejected():
++    decision = verification(CORE + " " + RECORDED_EXTENSION)
++    assert decision.status == "supported"
++    assert not decision.unsupported_claims
++    assert not decision.unknown_claims
++
++
++@pytest.mark.parametrize(
++    "answer",
++    [
++        CORE.replace("17", "27"),
++        "The Harbor sensor pilot does not retain raw sensor logs for exactly 17 days.",
++        CORE + " " + RECORDED_EXTENSION.replace("17", "27"),
++        CORE
++        + " "
++        + RECORDED_EXTENSION.replace("must be deleted", "must not be deleted"),
++    ],
++)
++def test_inflection_support_preserves_contradiction_rejection(answer):
++    assert verification(answer).status != "supported"
++
++
++def test_missing_duration_remains_unverified():
++    assert (
++        verification(CORE, "The operating guide does not state a duration.").status
++        != "supported"
++    )

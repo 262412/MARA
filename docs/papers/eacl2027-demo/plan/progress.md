@@ -44,3 +44,34 @@ The extracted Overleaf project compiles to identical text; the extracted
 supplement verifies. All 39 frozen evidence/source/table/bibliography files
 checked are byte-identical. Naming audit, code hygiene and pre-commit passed.
 The LMDoc deliverables are copied to Downloads; no external submission occurs.
+
+2026-09-23 reviewer follow-up: audit the raw-answer comparator, reproduce and
+repair the supported-policy false rejection on an isolated installed-source
+worktree, execute all predeclared repetitions, and attempt a real chart case.
+Preserve the original video, case, and historical benchmark. User-benefit and
+historical-provenance claims remain bounded by the available evidence.
+
+Completed the reviewer follow-up. The author confirmed that historical outputs
+have no accessible copy and chose a verifiable functional comparison instead
+of a participant study. Table 1 now compares raw answer/evidence inspection
+with added stage records and replay on the same execution; no ease-of-use
+advantage is claimed. The policy false rejection was isolated and fixed in
+source commit 9472e9e1 after regression commit 39d9b248; 129 relevant tests pass.
+All five predeclared policy-selected turns answer correctly and all five
+guide-only turns abstain. The old verifier also accepts the new policy strings,
+so repair attribution uses the identical historical-claim replay only.
+
+Added a real NOAA/NASA chart input with observed visual-provider calls and an
+image-removed control. The manual visual route returns about -40%, while the
+automatic/text and image-removed runs return about -50%. A fresh execution of
+the public recipe repeats this same task. Preliminary setup and routing/gating
+failures remain in the supplement. Neither this case nor the unchanged video
+is presented as automatic recovery or a historical SlideVQA reconstruction.
+
+The final PDF has 14 pages with substantive content within six pages; all pages
+were rendered and inspected. The extracted Overleaf project compiles to
+identical text. Both offline verifiers pass from the extracted supplement,
+and its 2,886,759 bytes are below the upload limit. Browser security policy
+blocked local HTML preview; content and local-link checks pass. Original case
+and historical benchmark bytes remain unchanged. See build_check.md for the
+bounded mypy and bibliography-spelling exceptions and artifact hashes.

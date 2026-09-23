@@ -1,32 +1,25 @@
-\section{A Reproducible Diagnostic Walkthrough}
+\section{Recorded Diagnosis and Targeted Repair}
 \label{sec:case}
-The benchmark diagnoses aggregate behavior; the following case demonstrates a user's complete inspection and intervention. We constructed two short documents about a fictional Harbor sensor pilot and executed the installed reviewer package with real generation and embedding APIs. This new deployment case is separate from the historical benchmark. The question is: ``For how many days does the Harbor sensor pilot retain raw sensor logs?'' The operating guide refers to a separate data policy; only that policy gives the answer, 17 days.
+We examine what the records reveal beyond the displayed answer, then test a repair. The Harbor task uses two author-constructed documents about a fictional sensor pilot, executed with real APIs. The operating guide refers to a separate policy; that policy specifies a 17-day raw-log retention period. These new deployment records are separate from the historical benchmark.
 
-\paragraph{Trigger and inspection.}
-With only the operating guide selected, the user receives the generic message ``MARA could not retrieve enough evidence to answer reliably.'' Opening the structured response, however, shows \texttt{route=doc\_text} and retrieval \texttt{status=good}. The captured provider call also completed. The blocking decision is instead verification \texttt{status=unknown}, with guardrail \texttt{action=abstain}. The evidence bundle names the operating guide and preserves its sentence directing the reader to the data policy (Figure~\ref{fig:diagnosis}). Thus the message alone does not accurately localize the failed stage: retrieving a relevant document did not establish support for the requested duration.
+\paragraph{A raw-answer baseline matters.}
+With only the operating guide selected, the original model already explains that the duration is absent and points to the policy. Preserving that explanation is sufficient to suggest source reselection, a capability inherited from Kotaemon. LMDoc's generic final refusal obscures this useful explanation. We therefore do not count finding the missing policy as evidence of superior diagnosis. The additional records instead locate the transformation: retrieval is \texttt{good}, generation completes, verification is \texttt{unknown}, and the guardrail abstains. Table~\ref{tab:boundary} compares the saved observations without inferring a user advantage.
+
+\paragraph{A supported answer is falsely rejected.}
+Selecting the policy yields a cited 17-day answer in the original run. A retained independent repetition instead rejects the extra explanation that logs are deleted after that period and that the policy applies to Harbor raw logs. Both statements are supported by the supplied policy. This is a verifier false rejection, not an unsupported model answer. Inspecting its claim record and lexical matcher identifies the cause: eight of twelve content tokens match, below the nine required, because \emph{delete} and \emph{deleted} are treated as different words. Raw answer and evidence alone expose the incorrect rejection; the stage record and source replay identify the responsible check.
+
+\paragraph{Repair and bounded verification.}
+A small patch matches regular \emph{-d/-ed} variants while retaining the coverage threshold and numerical/negation conflict checks. Replaying the identical recorded claims changes verification from unsupported to supported; wrong-duration and negated controls remain rejected. We then execute five predeclared source pairs with the patched source: all policy-selected turns return the supported duration, and all operating-guide-only turns abstain. The unpatched verifier also accepts the five newly generated policy answers in an identical-claim replay. Thus the controlled replay establishes the specific repair; these fresh runs show successful execution but do not establish a general reliability gain. The supplementary patch and all outcomes are retained. No timed participant task or matched upstream run has been conducted.
+
+\paragraph{Visual evidence changes an answer.}
+A second case asks for the pink curve's rightmost value on a public Arctic sea-ice chart (Figure~\ref{fig:diagnosis}). Auto selects text and answers approximately $-50\%$. The record shows a text-provider call and no image input. Manually selecting the page-image route sends the rendered page to the same model and returns approximately $-40\%$, consistent with the plotted endpoint. Removing only the image from that captured generation request yields $-50\%$ again. This single component ablation demonstrates an observed image-dependent answer, not general visual accuracy. The intervention is manual, not an automatic recovery switch. Both runtime conditions disable verification to isolate generation; the local image selector searches one preselected page.
 
 \begin{figure}[t]
 \centering
-\begin{tikzpicture}[font=\small,node distance=3mm,
-box/.style={draw,rounded corners,align=left,text width=7.0cm,inner sep=4pt},
-arr/.style={-{Stealth[length=2mm]}}]
-\node[box] (a) {\textbf{1. Task unresolved}\\Operating guide selected; user receives a refusal.};
-\node[box,below=of a] (b) {\textbf{2. Inspect the recorded stages}\\Text route; retrieval: \texttt{good}; provider call completed.\\Verification: \texttt{unknown}; guardrail: \texttt{abstain}.};
-\node[box,below=of b] (c) {\textbf{3. Locate the missing support}\\Selected evidence: ``Data retention is specified in the separate Harbor data policy.''};
-\node[box,below=of c] (d) {\textbf{4. Intervene}\\Select the data policy; repeat the same question.\\Keep the route policy, provider and strict verification.};
-\node[box,below=of d] (e) {\textbf{5. Check the result}\\Answer: ``exactly 17 days'' with a citation.\\Retrieval: \texttt{good}; verification: \texttt{supported};\\guardrail: \texttt{return}. Text route remains selected.};
-\draw[arr] (a)--(b); \draw[arr] (b)--(c);
-\draw[arr] (c)--(d); \draw[arr] (d)--(e);
-\end{tikzpicture}
-\caption{A walkthrough derived from captured runtime records, not a new UI screenshot. Complete runtime responses and captured provider answer texts are supplied. The intervention changes source selection; it is not an automatic route switch.}
+\includegraphics[width=\columnwidth]{figures/arctic-page9.png}
+\caption{The actual visual input, rendered from page 9 of the NOAA/NASA report \citep{noaanasa2024analysis}. The pink line ends near $-40\%$. Auto/text and the image-removed generation control answer $-50\%$; the fixed visual route answers $-40\%$. Full requests and responses are supplied.}
 \label{fig:diagnosis}
 \end{figure}
 
-\paragraph{Action and observed outcome.}
-The user selects the data policy and repeats the question in a fresh conversation. The serialized requests differ only in selected source IDs; effective settings are equal. The second response states ``exactly 17 days'' with a citation, verification becomes \texttt{supported}, and the guardrail returns the answer. Both turns use text retrieval. An independent repetition instead rejects extra generated explanation even with the correct source; both runs are retained (Appendix~\ref{app:case}). Thus this observed source-scope correction is not a reliable-recovery claim. The generic refusal also conflates lack of answer support with retrieval failure; we retain that discrepancy.
-
-\paragraph{What the extension enables.}
-Kotaemon already supports selecting another file and inspecting evidence. LMDoc's added value in this task is to distinguish the selected route, retrieval success, generation, verification, and final guardrail, then export these observations together. Table~\ref{tab:boundary} compares the inspection operations against pinned upstream source. It is a source-based walkthrough, not a timed usability study or a performance comparison; we make no claim of fewer clicks or faster diagnosis.
-
-\paragraph{Auditable answers and configuration.}
-The case package preserves both raw provider outputs, the answers before verification and guardrails, the displayed answers, complete requests and effective settings, selected evidence, and controller traces. An observer records the actual text-provider calls without altering their inputs or output chunks. The displayed and scoring answers are identical under this case's declared scoring rule, and the supplied script recomputes its checks from those strings. This closes the raw-output audit path for the new case only. It cannot recover the historical SlideVQA answers or establish why their scores tie. Appendix~\ref{app:case} gives the exact build, providers, replay instructions, and limitations.
+\paragraph{Audit boundary.}
+The package preserves requests, effective settings, evidence, raw provider outputs, intermediate and displayed answers, and decision traces. Its offline checks recompute declared outcomes from saved strings; a separate live script calls actual providers. These records support diagnosis of the new cases only. Historical SlideVQA generation strings and executed paths remain unavailable, so neither this repair nor a new visual case establishes the cause of its equal scores. Appendix~\ref{app:followup} gives execution identities, controls, and retained failures.

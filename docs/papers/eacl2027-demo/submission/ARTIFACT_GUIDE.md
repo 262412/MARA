@@ -25,21 +25,21 @@ The replacement installer is 33,918,912 bytes and has SHA-256 `886b949135ce74f12
 
 Verified on Windows: isolated installation with Python/Git absent from the process PATH, CLI checks, HTTP/UI startup, repeat installation preserving config/data, and checksum-failure handling. The new Harbor case additionally validates real-model indexing/QA in this Windows package. A separate fresh-runtime repetition fails strict verification even after source correction; both runs are retained. Other operating systems have not been validated. In the package directory, use:
 
-~~~powershell
+```powershell
 .\MARA.cmd app doctor --json
 .\MARA.cmd docqa index .\samples\reviewer-note.txt
 .\MARA.cmd docqa files
 .\MARA.cmd docqa ask --help
-~~~
+```
 
 ## Historical tagged source
 
 The v0.0.40 tag still identifies `37487f35610076c1016e1b59d3bf982388d1a275`. To inspect that historical source in a standalone checkout:
 
-~~~shell
+```shell
 git clone --branch v0.0.40 https://github.com/262412/MARA.git
 cd MARA
-~~~
+```
 
 Replacing the release ZIP does not update the Git tag. A fresh Windows `uv sync --extra mara` check on 23 September 2026 failed building `llama-cpp-python==0.2.7`, brought in by `kotaemon[all]`, because `nmake` and C/C++ compilers were missing. This is not a portable reviewer quick-start command. The new ZIP avoids that optional backend. The historical README's `pip install mara-research-cli` route was also unavailable on PyPI and TestPyPI when checked on 22 September 2026.
 
@@ -59,7 +59,7 @@ The synthesis contains 41 run/shard artifact sets, represented by ledger/manifes
 
 The original synthesis ZIP is included unchanged in the supplementary submission package. REPRODUCTION.md explains the numerical checks. The source code is Apache 2.0 with Kotaemon attribution; dataset terms remain separate. The historical release NOTICE retains the earlier product name Slides.
 
-## New diagnostic walkthrough
+## Original Harbor walkthrough
 
 Open `case_study/walkthrough.html` in the supplementary ZIP. It presents a complete
 source-scope diagnosis and links directly to original inputs, provider outputs,
@@ -73,3 +73,14 @@ policy. An independent repetition still abstains because strict verification
 rejects extra generated explanation; its raw records are included, not discarded.
 This demonstrates inspectability, not reliable recovery. It does not fill the old
 SlideVQA provenance gaps. The original video and public links stay unchanged.
+
+## Follow-up: verifier repair and actual visual input
+
+Start with `review_followup/walkthrough.html` and `review_followup/README.md`.
+The added records compare the original raw answer with decision stages, isolate
+a supported-policy false rejection, include its source patch and five live
+pairs, and show a real NOAA/NASA chart intervention with an image-removed
+control. Run `python review_followup/verify_followup.py` for the offline audit.
+The patch is separate from the original installed release. All preliminary
+failures are retained. Neither user efficiency, automatic recovery nor restored
+historical SlideVQA output provenance is claimed. The video remains unchanged.

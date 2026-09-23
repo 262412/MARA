@@ -1,12 +1,13 @@
-# Claim and evidence map
+# Claim-to-evidence map
 
-| Claim | Evidence | Status | Boundary |
-| --- | --- | --- | --- |
-| Historical automatic routing does not consistently improve answer F1 | Unchanged synthesis ZIP and audit/revision-evidence.json | retained and recomputed | No new benchmark observations |
-| The case's initial refusal occurs after good retrieval and completed generation | case_study/records/before-response.json and before-provider-calls.json | observed | Constructed source-scope task |
-| Changing only the selected source yields a supported 17-day answer in the captured pair | Both request/response records and verify_case.py | observed and verified | Single pair, no general recovery claim |
-| A fresh repetition can still abstain with the correct source | case_study/repeat/after-response.json and provider-calls | observed and retained | Strict verifier rejects extra explanation |
-| The raw-to-displayed answer transition can be inspected for this case | records/answer-stages.json and complete provider outputs | observed and checked | Does not recover missing historical answers |
-| Upstream already supports source selection, evidence viewing and persistence | Pinned upstream source ZIP and COMPARISON.md | static inspection | No executed upstream comparison or timing claim |
-| LMDoc adds explicit stage decisions to this diagnosis | Public response fields, runtime source hashes and case records | observed | Provider-output observer is supplementary instrumentation |
-| Existing video covers a text user workflow | Unchanged video and manuscript disclosure | retained scope | No new video scenes, route-switch or VLM demonstration |
+| Claim                                                      | Evidence                                                                               | Boundary                                                                 |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Raw explanation identifies missing policy                  | case_study/records/before-provider-calls.json                                          | No added usefulness from merely changing sources                         |
+| Policy-supported extension is falsely rejected             | case_study/repeat/after-response.json plus inputs/harbor-data-policy.txt               | Recorded system flag is not ground truth                                 |
+| Regular-inflection mismatch causes this rejection          | review_followup/installed-verifier.json and identical-claim replays                    | Specific check, not general semantics                                    |
+| Source patch repairs identical claims                      | review_followup/verifier-repair.patch; unpatched/patched-claim-replay.json             | Separate candidate source, not published installer                       |
+| Five patched policy turns return; five guide turns abstain | review_followup/harbor/\* and audit/followup-verification.json                         | One repeated task; old verifier also accepts the five new policy strings |
+| Visual input changes this answer                           | review_followup/visual/ actual SDK request, image, response and image-removed control  | One adaptive case; manual route change; verification off                 |
+| Long chart question fails before generation                | review_followup/preliminary-slot-failure/                                              | Retained failure; route selection is not generation                      |
+| Stage records add inspection operations                    | Table 1, same raw/evidence/decision records and replay                                 | No measured user advantage or upstream runtime baseline                  |
+| Historical SlideVQA cause remains unknown                  | Original synthesis contains metrics without raw outputs/paths; author confirms no copy | New cases cannot reconstruct old outputs                                 |

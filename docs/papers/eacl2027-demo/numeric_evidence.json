@@ -4795,6 +4795,286 @@
       ],
       "tolerance": 0.005,
       "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 94,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/files_verified"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 5,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/policy_returns"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 5,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/guide_abstentions"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 5,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/old_verifier_accepts_new_policy_claims"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 8,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/lexical_check/matched"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 12,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/lexical_check/total"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 9,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/lexical_check/required"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 129,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/subsystem_tests_passed"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -50.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/automatic_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -40.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/fixed_visual_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -50.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/image_removed_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -42,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/reference_low"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -38,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/reference_high"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 1,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/image_parts"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -50.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/automatic_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -40.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/fixed_visual_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -50.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/image_removed_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -42,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/reference_low"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -38,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/reference_high"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 1,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/image_parts"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
     }
   ]
 }

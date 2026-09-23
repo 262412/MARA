@@ -1,13 +1,16 @@
-# Revision story
+# Claim and story boundary
 
-LMDoc makes document-QA stages inspectable together. The historical measurements
-remain negative or inconclusive about answer-quality gains. The new source-scope
-case shows the task a user can complete with the records: distinguish successful
-retrieval from verification-triggered refusal, inspect the actual source, correct
-selection, and check the returned answer. A separate repetition fails at
-verification despite correct-source retrieval; that result is retained.
+LMDoc is a workbench for inspecting document-QA execution. The historical bundle
+contains negative routing results, not evidence of improved answer accuracy.
+The raw Harbor answer already identifies the absent policy, so source correction
+does not establish additional user benefit over an answer/evidence view.
 
-The contribution is this diagnostic workflow and its auditable records. It is not
-a new model, a guaranteed repair strategy, an F1 improvement, or a measured
-usability advantage over upstream. The video stays unchanged; the figure and
-offline walkthrough supplement its coverage.
+The follow-up instead identifies a false lexical-verifier rejection, tests a
+small repair on identical saved claims, and retains five new live pairs with
+appropriate limits. A real public-chart intervention captures image input and
+an image-removed control. It is a manual route correction, with verification off
+and one preselected page; no automatic recovery is demonstrated.
+
+Claim inspection and controlled component behavior, not participant efficiency,
+general reliability, or restored historical provenance. Keep the original video
+and all failed attempts, and distinguish the separate source patch from release.
