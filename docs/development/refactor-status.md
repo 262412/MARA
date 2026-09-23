@@ -2,17 +2,72 @@
 
 ## Current recovery checkpoint: R6-A/U1 (2026-09-23)
 
-**R6-A/U1 remains BLOCKED.** Frozen original primary: **37/37 PASS**;
+**R6-A/U1 remains BLOCKED.** Current protection/selector source is
+`7f29ce87d2aa83080f9964b38cdb0eba6f878973`; its new full primary and confirmation
+are **NOT RUN** at this checkpoint. R5 remains ACCEPTED. The historical writer
+and original bytes of the three real configuration files remain unproved;
+there is no total protection PASS and no automatic acceptance.
+
+Frozen original primary: **37/37 PASS**;
 mandatory confirmation: **16 passed, 1 failed, 20 NOT RUN**. Both belong to
 `fd44f8776161c8aaf3048876134644d2723b3548`. The confirmation stopped at its first failure. No third
 complete matrix was run and no cross-batch result was combined. Current
-diagnostic source/tests/harness: **`40b187d9c08defd9a72d7278cb3fb0837b227cea`**; its complete primary and
+previous diagnostic source/tests/harness: **`40b187d9c08defd9a72d7278cb3fb0837b227cea`**; its complete primary and
 confirmation are **NOT RUN**. R5 remains ACCEPTED. S1/PCRE2 OPEN;
 merge/release NO-GO. Stop here; no R6-B/C/D or security upgrade.
 
 Evidence parent: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`.
 This checkpoint uses `r6a-u1-recovery/` and `r6a-u1-selection-ci/`. The frozen
 failed candidate's CI is separately retained in `r6a-u1-recovery-ci/`.
+
+### Current protection and selector checkpoint
+
+New evidence is under `r6a-u1-recovery/protection-selector/`. The three real
+configuration files were read only, with post-incident hashes kept locally in
+an access-restricted directory. Those hashes are not historical backups. The
+current bytes and metadata still match this round's first observation. No
+restore, timestamp adjustment or real cache cleanup was performed. The old
+mtime overlaps a diagnostic's lifetime, but precedes its recorded cleanup;
+neither fact identifies the writer.
+
+`dbaefa8f` preserves failing isolation counterexamples. `91a7f4aa` adds an
+opt-in boundary to the existing process test runtime and its App/Node/ZIP
+entrypoints: immutable owned roots, pre-import/child checks, Python I/O refusal
+after lost environment identity or teardown, owned CWD, and resolved path
+receipts. An initial new launch was refused before Chroma's attempt to read
+the repository `.env`; the CWD was corrected. Python auditing is not a native
+OS sandbox. Native browser profile/cache arguments were separately observed
+inside the owned root. All five exit probes subsequently passed on one input
+map, including assertion, Node/App watchdog and release failure. Earlier
+probes that failed at login were reclassified as not reaching the intended
+fault; their old exit-code-only success summary remains retained and invalid.
+
+`8ea619f6` records the selector red and exact queue/transport/component
+observations. In controlled session `6708az2vt55`, card event
+`7e3eb8269c5847d48ee94c4ad6a7972b` and initialization event
+`3d1629000b6f4f76a98663dbd872a209` reached the installed Gradio 4.39.0 pipeline.
+Flush 42 assigned the legitimate selected ID, then the old initialization's
+`[]`; the subsequent backend scope was empty. Dropdown was not the last
+writer. This is a deterministic production defect, not proof of the unique
+historical fd44 cause, whose assignment trace was not recorded.
+
+The separate `7f29ce87` fix scopes an unchanged selector read to the current
+card's index and authorized available IDs, omitting only its obsolete value
+assignment. Choices still apply, changed/deleted selections still prune, and
+explicit clears retain their existing behavior. No dependency, policy,
+schema, global version system or app-wide concurrency change was made.
+Both controlled real-App schedules pass; final value, four refresh outputs,
+DOM and the next exact request scope are verified. Seven evidence negatives
+reject the real red, a later clear, missing observer, completion without
+application, three outputs, wrong DOM ID and wrong session. Node: 146 passed;
+focused Python: 21 passed. Existing failure evidence, including login/frame
+diagnostic failures and the hidden-ancestor fixture error, remains retained.
+
+Full acceptance remains pending: freeze the complete inputs and run one
+original 37-record primary plus its predeclared full confirmation, stopping
+on any failure. Do not redispatch the unchanged 40b Quality run 35766364808.
+The historical protection incident remains independently OPEN even if these
+browser batches pass.
 
 ### Recovery, exact tail and fixture exit
 
