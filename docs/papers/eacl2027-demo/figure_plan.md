@@ -10,7 +10,7 @@ included. This is an experimental input, not a generated illustrative result.
 
 The original Harbor offline viewer remains unchanged. The new
 review_followup/walkthrough.html displays original raw-answer evidence, the
-false rejection, identical-claim repair, all five new pairs, and the real chart
+false rejection, repair tested on the same recorded claims, all five new pairs, and the real chart
 intervention with retained failures. It is explicitly an offline record viewer,
 not a native product screen. Browser rendering was blocked by local-URL policy;
 content and local links are checked separately. Final PDF pages are rendered.

@@ -41,7 +41,7 @@ The supplementary revision-evidence.json records the checked values and interpre
 
 `case_study/README.md` explains the executed source-selection task, offline checks,
 and optional new API execution. The complete first before/after pair and negative
-independent repetition are retained. `answer-stages.json` keeps provider output,
+second run in a fresh environment are retained. `answer-stages.json` keeps provider output,
 pre-verification, pre-guardrail, displayed and scoring answers distinct. Its
 scoring projection is explicitly identity, not the historical benchmark adapter.
 No historical aggregate, row, or input archive is replaced by these case records.

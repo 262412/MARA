@@ -75,3 +75,23 @@ and its 2,886,759 bytes are below the upload limit. Browser security policy
 blocked local HTML preview; content and local-link checks pass. Original case
 and historical benchmark bytes remain unchanged. See build_check.md for the
 bounded mypy and bibliography-spelling exceptions and artifact hashes.
+
+2026-09-23 prose revision: accepted the six reader-facing changes. Reorganize
+the Harbor comparison and two case studies, foreground the workbench's purpose,
+consolidate repeated general limitations and clarify replay/experimental scope.
+No new experiments or changes to captured results are part of this revision.
+
+Completed all six editorial changes. The abstract leads with workbench use;
+general caveats are consolidated, while result-specific controls remain.
+Section 4 separates verifier diagnosis/repair and visual-evidence inspection.
+Harbor context is on page 4 and the functional table follows on page 5, now
+Table 3. Replay wording consistently identifies recorded claims; the video,
+historical benchmark and documented source checkout are explicitly separated.
+The conclusion first summarizes the two demonstrated inspection capabilities.
+
+The final 14-page PDF keeps main content within six pages. All final pages were
+rendered and inspected, with no layout defects. The extracted Overleaf archive
+compiles to identical text; both supplementary verifiers pass after extraction.
+Benchmark tables, references, images, raw records, source patch and historical
+archive are unchanged. Formatting and the research quality gate pass. Current
+submission fields and revision notes are synchronized with the paper.

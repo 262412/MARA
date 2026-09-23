@@ -8,7 +8,7 @@
   "case_offline_verification": "passed after extraction",
   "followup_offline_verification": "passed after extraction",
   "historical_bundle_unchanged": true,
-  "supplement_bytes": 2886759,
+  "supplement_bytes": 2886773,
   "rendered_pages": 14,
   "html_check": "content and local links checked; browser rendering blocked by local URL security policy"
 }

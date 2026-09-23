@@ -7,7 +7,7 @@ policy. Source reselection and evidence inspection are inherited capabilities.
 Revise the claimed benefit to exposing an incorrect downstream verifier and
 preserving stage transformations. No participant data or matched upstream run
 exists; a raw-answer comparator does not establish faster or easier diagnosis.
-The author selected this narrower framing for the deadline. Table 1 now compares
+The author selected this narrower framing for the deadline. The Harbor inspection table now compares
 the raw-answer/evidence view with additional decision records and source replay
 using the same saved execution. Upstream source inspection remains in Appendix D.
 
@@ -21,7 +21,7 @@ The failing regression was committed before the production edit. Six focused
 tests and 129 verifier/controller tests pass. Five predeclared real-model
 pairs all withhold the duration from the operations-only source and all return
 the supported duration with the policy. This small test is not a general
-reliability estimate. Identical-claim replay changes the original false rejection
+reliability estimate. Replaying the same recorded claims changes the original false rejection
 to supported. Both verifier versions accept all five new policy claim strings,
 so the live counts are explicitly not a before/after improvement estimate.
 
@@ -54,3 +54,13 @@ benefit, limited case coverage, heuristic verification, no automatic-recovery
 demonstration, and irrecoverable historical generation provenance. Those limits
 remain in the paper and are not presented as fully resolved. The source patch
 has not been published in the installed release.
+
+## Reader-facing revision
+
+The next review identified dense defensive language, an experiment-heavy
+abstract, imprecise replay terminology, premature Harbor-table placement,
+ambiguous experiment references, and interleaved case narratives. The revision
+leads with functions and findings, moves the functional table into Section 4.1,
+separates the verifier and visual cases, and puts general inference limits in
+the conclusion. Necessary local controls and all negative results remain.
+Replaying claims is distinguished from a complete output-pipeline replay.

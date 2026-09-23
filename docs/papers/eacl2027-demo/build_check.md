@@ -12,7 +12,7 @@
   for actual release names, commands, paths, URLs, screenshots and raw evidence.
 - The Overleaf ZIP contains 11 entries and compiles after extraction. Extracted
   PDF text matches the primary build. Overleaf cloud execution is not claimed.
-- The supplementary ZIP contains 137 entries and is 2,886,759 bytes, below the
+- The supplementary ZIP contains 137 entries and is 2,886,773 bytes, below the
   100 MB limit. Both offline verifiers pass after extraction. The follow-up
   manifest validates 94 files; provider messages, answer stages, actual visual
   calls and image bytes are retained without credentials or runtime databases.
@@ -51,3 +51,11 @@ baseline establishes easier diagnosis; the visual intervention is manual; the
 targeted lexical fix does not establish general verifier reliability; historical
 SlideVQA answers and executed generation paths remain unavailable. The original
 video is unchanged. No external submission or release update was performed.
+
+The subsequent prose revision preserves the numeric tables, bibliography,
+figure pixels and all captured evidence. The abstract matches the submission
+field. Harbor context now appears on page 4 before its inspection table on
+page 5 (Table 3). Section 4 has separate verifier and visual subsections, and
+the conclusion leads with demonstrated contributions. All 14 final pages were
+visually checked again. Extracted-package compilation and both offline checks
+pass; see audit/prose-revision-verification.json.

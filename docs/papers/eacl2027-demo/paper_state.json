@@ -20,7 +20,8 @@
     "plan/task-packets/reviewer-followup.md",
     "reviewer_analysis.md",
     "review_followup/manifest.json",
-    "audit/followup-verification.json"
+    "audit/followup-verification.json",
+    "plan/task-packets/prose-clarity.md"
   ],
   "blockers": [],
   "build": {
@@ -28,13 +29,13 @@
     "command": "latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=../build-diagnostic main.tex",
     "pdf": "build-diagnostic/main.pdf",
     "external_inputs": [],
-    "input_sha256": "c427a6dc422d53071804488d1fd0853cd3ae3784101388c0245082d739640a1d",
-    "pdf_sha256": "90c513f800009fef4a8b84e47299c98492848f44d8709435304afa0833e5dcdb",
+    "input_sha256": "b4d7edcf91aebcc9cd6e51d95ad565e1d21ce3d6a3fb9837b0ca115c2e1b33f6",
+    "pdf_sha256": "8f131930616d465b831cb91a5e921cf265775bbeb0428cf55facc045b0f4bbe0",
     "log": "source\\build-attestation.log",
-    "log_sha256": "6073eabad5b0cb83cfbc1143f15ac6150acd520eea0b07c2c1b7873dd30a28cb",
+    "log_sha256": "7400ac0b55929d720b447611ccf89db29f20abf778cef0dd7099ef2e15ea5ff6",
     "exit_code": 0,
     "tool_version": "Initial Win CP for (console input, console output, system): (CP936, CP65001, CP936)",
     "attestation": "executed",
-    "ran_at": "2026-09-23T10:35:26.012208+00:00"
+    "ran_at": "2026-09-23T11:07:01.955218+00:00"
   }
 }

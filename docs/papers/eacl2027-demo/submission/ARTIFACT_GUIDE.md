@@ -69,7 +69,7 @@ intermediate/displayed answers, effective settings, and decisions. Run
 The constructed Harbor case uses the installed reviewer build, Deepseek generation
 and OpenAI embeddings. It is separate from the unchanged six-dataset benchmark.
 The captured first pair corrects an unresolved question by selecting the data
-policy. An independent repetition still abstains because strict verification
+policy. A second run in a fresh environment still abstains because strict verification
 rejects extra generated explanation; its raw records are included, not discarded.
 This demonstrates inspectability, not reliable recovery. It does not fill the old
 SlideVQA provenance gaps. The original video and public links stay unchanged.

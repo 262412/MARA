@@ -12,7 +12,7 @@ LMDoc: A Local-First Workbench for Observable Multimodal Document Question Answe
 
 ## Abstract
 
-Document question answering involves choices about evidence, retrieval, generation, and verification that are difficult to inspect together. We present LMDoc, a local-first workbench extending Kotaemon with observable route control and shared diagnostic records across Web, command-line, and benchmark workflows. We analyze a released bundle covering six datasets, 1,090 dataset–question pairs, and 3,540 route-level records. Automatic routing does not consistently improve answer F1 over fixed text retrieval; the records expose inactive routing, a weak graph route, multimodal latency, and a non-discriminating visual comparison. A separate executed case reveals a supported answer rejected by a lexical verifier. Identical-output replay tests a targeted repair, while repeated live runs retain both abstentions and answers. A public-chart case adds captured image input and an image-removed control. We supply raw outputs, displayed answers, evidence, settings, and offline checks. LMDoc's contribution is an inspectable workflow for locating such failures, with explicit limits on what the retained evidence can reproduce. We release the Apache-2.0 implementation and diagnostic materials, alongside a user-workflow demonstration.
+LMDoc is a local-first document-QA workbench that records which evidence was retrieved, which route was selected, and why an answer was returned or withheld. Built on Kotaemon, it helps researchers and technical users inspect answer stages, change sources or routes, and test suspected failure causes through Web, command-line, and diagnostic workflows. Two forms of evidence illustrate this use. A historical benchmark bundle spanning six datasets exposes routing failures and trade-offs, with no consistent F1 advantage over fixed text retrieval. Two case studies connect recorded decisions to interventions: replaying the same recorded claims tests a targeted verifier repair, and a public-chart comparison examines the effect of including image evidence. We release the Apache-2.0 implementation, captured case inputs and outputs, reproduction scripts, and a demonstration of the document-QA interface.
 
 ## Authors（按此顺序）
 
@@ -58,7 +58,7 @@ Document question answering; retrieval-augmented generation; system observabilit
 
 ## TL;DR
 
-LMDoc exposes document-QA decisions and answer stages to support inspectable, reproducible failure diagnosis.
+LMDoc records evidence, routes, and answer stages so users can inspect document-QA failures and test interventions.
 
 本轮需同步替换 PDF、补充包和摘要；视频及软件下载链接保持不变。尚未在 OpenReview 替作者提交。
 
