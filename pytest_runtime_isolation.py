@@ -47,6 +47,9 @@ ISOLATED_RUNTIME_ENV_KEYS = (
     "TMP",
     "TEMP",
     "TMPDIR",
+)
+
+_DIAGNOSTIC_ENV_KEYS = (
     "MARA_PYTEST_OWNER_TOKEN",
     "MARA_DIAGNOSTIC_CHILD",
     "MARA_DIAGNOSTIC_EVIDENCE_DIR",
@@ -204,7 +207,12 @@ def activate_test_runtime(
     }
     snapshot = {
         key: environment.get(key)
-        for key in (*ISOLATED_RUNTIME_ENV_KEYS, *cleared, "PYTHONDONTWRITEBYTECODE")
+        for key in (
+            *ISOLATED_RUNTIME_ENV_KEYS,
+            *_DIAGNOSTIC_ENV_KEYS,
+            *cleared,
+            "PYTHONDONTWRITEBYTECODE",
+        )
     }
     for key in cleared:
         environment.pop(key, None)
@@ -351,10 +359,11 @@ class ProcessRuntimeGuard:
                 if not value.startswith("sqlite:///"):
                     raise RuntimeError("Diagnostic database is not owned")
                 value = value.removeprefix("sqlite:///")
-            elif name not in ISOLATED_RUNTIME_ENV_KEYS and name not in {
-                "MARA_DESKTOP_DATA_DIR",
-                "MARA_PYTEST_RUNTIME_PARENT",
-            }:
+            elif (
+                name not in ISOLATED_RUNTIME_ENV_KEYS
+                and name not in _DIAGNOSTIC_ENV_KEYS
+                and name != "MARA_DESKTOP_DATA_DIR"
+            ):
                 if not (
                     name.startswith(("KH_", "THEFLOW_"))
                     and name.endswith(("_DIR", "_PATH"))

@@ -62,6 +62,8 @@ try:
         (runtime.paths.root / '.mara-pytest-owner').unlink()
     elif scenario == 'external-settings':
         os.environ['THEFLOW_SETTINGS_MODULE'] = str(fake_user / 'flowsettings.py')
+    elif scenario == 'external-home':
+        os.environ['HOME'] = str(fake_user)
     elif scenario in {'late-after-close', 'late-worker', 'cleanup-secondary'}:
         if scenario == 'cleanup-secondary':
             (runtime.paths.root / '.mara-pytest-owner').unlink()
@@ -87,9 +89,12 @@ try:
     elif scenario == 'normal-child':
         import subprocess
         child = subprocess.run([sys.executable, '-B', '-c',
+            'import sys; sys.path.insert(0, sys.argv[1]); '
             'from pytest_runtime_isolation import start_process_test_runtime; '
-            'r=start_process_test_runtime(); print(r.paths.root); r.close()'],
-            env=dict(os.environ), capture_output=True, text=True, check=True)
+            'r=start_process_test_runtime(); print(r.paths.root); r.close()',
+            str(repository)], env={k: v for k, v in os.environ.items() if k != 'PYTHONPATH'},
+            capture_output=True, text=True)
+        assert child.returncode == 0, child.stdout + child.stderr
         assert Path(child.stdout.strip()).is_relative_to(runtime.paths.root)
         assert not Path(child.stdout.strip()).exists()
     elif scenario == 'lost-child-environment':
@@ -152,6 +157,7 @@ class ProcessIsolationContract(unittest.TestCase):
             "wrong-root",
             "missing-owner",
             "external-settings",
+            "external-home",
             "early-ktem",
             "early-theflow",
             "late-after-close",
