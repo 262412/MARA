@@ -1,73 +1,280 @@
 # Safe-refactor status
 
-## Current recovery checkpoint: R6-A/U1 (2026-09-23)
+## Current protection and selector checkpoint: R6-A/U1 (2026-09-23)
 
-**R6-A/U1 remains BLOCKED.** Current protection/selector source is
-`7f29ce87d2aa83080f9964b38cdb0eba6f878973`; its new full primary and confirmation
-are **NOT RUN** at this checkpoint. R5 remains ACCEPTED. The historical writer
-and original bytes of the three real configuration files remain unproved;
-there is no total protection PASS and no automatic acceptance.
+**R6-A/U1 remains BLOCKED.** Committed source/tests/harness and CI input is
+`cc0bb3a3ec83bca6932a431dc766bb1713749050`; the production selector fix is
+`7f29ce87d2aa83080f9964b38cdb0eba6f878973`. New complete primary and confirmation
+are both **NOT RUN**. R5 remains ACCEPTED. S1/PCRE2 remains OPEN;
+merge/release remains NO-GO. No R6-B/C/D or security upgrade was started.
 
-Frozen original primary: **37/37 PASS**;
-mandatory confirmation: **16 passed, 1 failed, 20 NOT RUN**. Both belong to
-`fd44f8776161c8aaf3048876134644d2723b3548`. The confirmation stopped at its first failure. No third
-complete matrix was run and no cross-batch result was combined. Current
-previous diagnostic source/tests/harness: **`40b187d9c08defd9a72d7278cb3fb0837b227cea`**; its complete primary and
-confirmation are **NOT RUN**. R5 remains ACCEPTED. S1/PCRE2 OPEN;
-merge/release NO-GO. Stop here; no R6-B/C/D or security upgrade.
+The original `fd44f8776161c8aaf3048876134644d2723b3548` primary **37/37** and
+failed confirmation **16 passed / 1 failed / 20 NOT RUN** are retained.
+`40b187d9c08defd9a72d7278cb3fb0837b227cea` complete primary/confirmation remain
+NOT RUN. Controlled successes below do not replace or combine those batches.
 
 Evidence parent: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`.
-This checkpoint uses `r6a-u1-recovery/` and `r6a-u1-selection-ci/`. The frozen
-failed candidate's CI is separately retained in `r6a-u1-recovery-ci/`.
+This round uses `r6a-u1-recovery/protection-selector/` (denoted E below),
+`r6a-u1-protection-ci/` (retired candidate),
+`r6a-u1-protection-stable-ci/` (current Quality), and
+`r6a-u1-protection-native-ci/` (current Desktop Gate 2).
 
-### Current protection and selector checkpoint
+### Protection: separate historical uncertainty from forward isolation
 
-New evidence is under `r6a-u1-recovery/protection-selector/`. The three real
-configuration files were read only, with post-incident hashes kept locally in
-an access-restricted directory. Those hashes are not historical backups. The
-current bytes and metadata still match this round's first observation. No
-restore, timestamp adjustment or real cache cleanup was performed. The old
-mtime overlaps a diagnostic's lifetime, but precedes its recorded cleanup;
-neither fact identifies the writer.
+| Domain                                 | Evidence and result                                                                                                                                                                                                                                                                  | Status                                                |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| Historical configuration writer        | The old three-file mtime overlaps an independent diagnostic but precedes its recorded cleanup. No historical writer trace exists; overlap and source capability are not attribution.                                                                                                 | UNKNOWN                                               |
+| Original configuration content         | No pre-change content hash or backup was found. Restricted local post-incident hashes are observations, not prior backups. No configuration values or credentials were printed.                                                                                                      | UNVERIFIED                                            |
+| Configuration during this round        | `.env`, `.env.example`, `flowsettings.py` match this round's first post-incident byte hashes and metadata. No restore or timestamp adjustment.                                                                                                                                       | Current observation matches; historical incident OPEN |
+| Real databases                         | Both known `sql.db` size/mtime pairs match; database contents were not opened for this comparison.                                                                                                                                                                                   | Metadata unchanged; no new byte-integrity claim       |
+| Real theflow cache                     | Comparison with the preceding checkpoint reports 614 to 610 metadata entries and a different metadata digest. Previous per-entry inventory is absent. Current metadata was preserved privately without reading cache contents. Timing, writer and content integrity remain unproved. | OPEN; no cleanup/restore                              |
+| Canonical environment and office cache | Existing metadata inventories match (98,853 canonical entries; empty `C:/Users/22826/office-cache` inventory).                                                                                                                                                                       | Metadata unchanged                                    |
+| User changes and retained roots        | All 135 protected raw files, NUL and historical refused-cleanup directories are retained. Final receipt separately verifies owned processes, port 8768 and staging.                                                                                                                  | Per-domain receipt; no total protection PASS          |
 
-`dbaefa8f` preserves failing isolation counterexamples. `91a7f4aa` adds an
-opt-in boundary to the existing process test runtime and its App/Node/ZIP
-entrypoints: immutable owned roots, pre-import/child checks, Python I/O refusal
-after lost environment identity or teardown, owned CWD, and resolved path
-receipts. An initial new launch was refused before Chroma's attempt to read
-the repository `.env`; the CWD was corrected. Python auditing is not a native
-OS sandbox. Native browser profile/cache arguments were separately observed
-inside the owned root. All five exit probes subsequently passed on one input
-map, including assertion, Node/App watchdog and release failure. Earlier
-probes that failed at login were reclassified as not reaching the intended
-fault; their old exit-code-only success summary remains retained and invalid.
+`dbaefa8f` retains isolation red cases. `91a7f4aa` uses the existing process
+runtime to check immutable owned roots/markers before business imports and
+child execution, validate config/data/cache/settings/database/temp paths,
+pin owned CWD and native browser profile/cache paths, and refuse Python I/O
+after environment identity loss or teardown. Initial Chroma access to the
+repository `.env` was refused before reading; the owned CWD correction is
+recorded. This refusal is not evidence of the historical configuration writer.
+The Python audit boundary is not an OS sandbox for arbitrary native I/O.
 
-`8ea619f6` records the selector red and exact queue/transport/component
-observations. In controlled session `6708az2vt55`, card event
+The fresh-process counterexamples cover missing/changed markers, wrong roots,
+early imports, escaped settings/HOME, late workers, cleanup failures and lost
+child environments. Negative results establish refusal before fake-user
+access. Node independently rejects escaped roots/junctions before Playwright
+loads. Five real-App exit probes passed on the recorded `isolation-stable-exit`
+input map, including assertion, Node/App watchdog and release failure. Barrier,
+model wait, generator, request, worker/process and root-removal states are
+separate receipts. Earlier probes that only failed at login were reclassified;
+their exit-code-only success summary remains retained and invalid.
+
+The CI regressions were reproduced and repaired separately:
+`48affef7` keeps diagnostic restoration keys out of the legacy path-key contract
+and makes the normal child probe import its explicit repository path with no
+`PYTHONPATH` dependency. `5dbcbc3a` requires a concrete database path in the
+resolved-path receipt. `cc0bb3a3` subsequently fixes coverage atexit output in
+the isolated test probes: only the data-file destination moves to owned
+retained evidence; after process exit, the parent publishes byte-identical
+unique fragments back to the original collector. The original filters,
+aliases, subprocess patch and floors are unchanged. The controlled red/green
+verifies 15 child fragments including 109 measured runtime-bootstrap lines.
+The guard is not weakened to permit late runtime writes.
+
+The prior five-App-probe harness is not byte-identical
+to this final harness; those successes are not relabelled as new execution.
+
+### Selector: exact last writer, minimal fix and remaining browser prerequisite
+
+The installed and served Gradio 4.39.0 bundle hashes, dynamically resolved
+component/function identities, queue event/session/actor, transport, guard
+inputs/results, queued updates, assignments, Dropdown normalization and
+actual flush boundaries are retained. IDs observed in a trace are not test
+constants. A controlled scheduler gate holds only the actual Gradio component
+flush; it does not alter guard results, serialize the App or force mouse clicks.
+
+The real-App red at `8ea619f6` records session `6708az2vt55`, card event
 `7e3eb8269c5847d48ee94c4ad6a7972b` and initialization event
-`3d1629000b6f4f76a98663dbd872a209` reached the installed Gradio 4.39.0 pipeline.
-Flush 42 assigned the legitimate selected ID, then the old initialization's
-`[]`; the subsequent backend scope was empty. Dropdown was not the last
-writer. This is a deterministic production defect, not proof of the unique
-historical fd44 cause, whose assignment trace was not recorded.
+`3d1629000b6f4f76a98663dbd872a209`. In flush 42, sequence 409 assigns
+`["r3c-browser-owner-text"]`, then sequence 412 assigns the old initialization's
+`[]`; the next exact backend scope is empty. Both guards captured the pre-flush
+selection. Dropdown was not the final writer. This establishes a controlled
+production defect, not the unique historical fd44 cause: the original failed
+confirmation did not record that assignment trace.
 
-The separate `7f29ce87` fix scopes an unchanged selector read to the current
-card's index and authorized available IDs, omitting only its obsolete value
-assignment. Choices still apply, changed/deleted selections still prune, and
-explicit clears retain their existing behavior. No dependency, policy,
-schema, global version system or app-wide concurrency change was made.
-Both controlled real-App schedules pass; final value, four refresh outputs,
-DOM and the next exact request scope are verified. Seven evidence negatives
-reject the real red, a later clear, missing observer, completion without
-application, three outputs, wrong DOM ID and wrong session. Node: 146 passed;
-focused Python: 21 passed. Existing failure evidence, including login/frame
-diagnostic failures and the hidden-ancestor fixture error, remains retained.
+The separate `7f29ce87` production commit changes only
+`file_browser_refresh.js` and `file_browser_updates.py`. Existing card capture
+records its index. An unchanged selector read omits its stale value assignment
+only for the current card intent and an authorized available ID; choices still
+apply. Revocation/deletion pruning, explicit clear, other index, Group,
+multi-selection and mode transitions retain their existing contracts. It does
+not convert every empty array to skip, patch DOM classes, introduce a global
+version system or change dependencies, schemas or permissions.
 
-Full acceptance remains pending: freeze the complete inputs and run one
-original 37-record primary plus its predeclared full confirmation, stopping
-on any failure. Do not redispatch the unchanged 40b Quality run 35766364808.
-The historical protection incident remains independently OPEN even if these
-browser batches pass.
+Both controlled real-App schedules pass: one actual shared flush, and card
+value/mode before initial choices. Final selected IDs, four output slots,
+ordered DOM, Focus/summary and the next exact request scope are checked.
+Seven evidence negatives reject the archived red, later clearing, absent
+observer, completion without application, three slots, wrong DOM ID and wrong
+session. `verification-input-scope-final.json` proves selector production and browser
+observer bytes unchanged in the final source; it explicitly rejects equivalence
+of the complete harness after the three isolation-related input changes.
+
+Before any full matrix, `candidate-exit` on `79c99ae6` stopped at its second
+case: normal exit reached the held producer and passed; the assertion case
+failed while clicking Login, before the held boundary. Remaining Node/App
+watchdog and release-failure cases are NOT RUN on that candidate. Both launched
+Apps/Nodes exited, producers were quiescent and owned roots were removed.
+This is not an expected assertion-pass or a selector failure.
+
+`candidate-frame-blocker-analysis.json` records 100 identical button rectangles,
+visible/focused/enabled state, no button animations and 334 advancing timer
+ticks, while an explicit animation-frame callback did not complete in two
+seconds. Screenshot failure is secondary; the original stability-wait error
+is preserved. A separate plain-page frame probe passed and does not establish
+the real-App failure's cause. No forced click, Enter substitution, repeated
+click, enlarged timeout or full-batch retry was used to hide it.
+
+Next minimum browser proposition: at the first isolated App login stall,
+correlate native main/utility-world animation frames with page lifecycle/frame
+production to distinguish absent browser frames from a replaced/blocked page
+callback. Preserve that failed click; do not proceed to the 37-record matrix
+until the prerequisite is resolved. The separate protection differences need
+writer/old-content evidence or remain explicitly unresolved; later isolation
+cannot retroactively close them.
+
+### Current verification and delivery scope
+
+Focused Python: **22 passed**; Node guard/observer/frontend contracts:
+**146 passed**. A first focused run overlapped a line-ending formatter and is
+excluded from frozen verification; after formatting, the suite ran serially
+and its input hashes were checked. Linux-platform mypy passes **1,982 files**.
+Win32 mypy retains **15 identical error nodes/messages in 6 files**. The old
+Windows 99 failures and separate kotaemon 4 capability failures remain their
+original executions/comparisons; those large local suites were not rerun here.
+Hooks, full Ruff, hygiene, lock parity, supply-chain policy, exact G0 controls
+and secret scans use unchanged policies; final report delivery has its own
+secret scan and input-equivalence receipt.
+
+Current Quality [35816144107](https://github.com/262412/MARA/actions/runs/35816144107) at `cc0bb3a3ec83bca6932a431dc766bb1713749050`
+completed **failure** with **13 success /
+7 failure** (actual job results below). All non-security
+gates passed. Three Python audits and three container baselines fail; the
+required aggregate remains failed. No security gate was waived or widened.
+
+| Current job                                                | Result  | Job ID         |
+| ---------------------------------------------------------- | ------- | -------------- |
+| Frontend and browser security                              | success | `107037967962` |
+| ktem isolated runtime                                      | success | `107037968061` |
+| Static, hygiene, and baseline ratchet                      | success | `107037968097` |
+| Four clean wheel installations                             | success | `107037968103` |
+| Coverage floors and production diff                        | success | `107037968107` |
+| slide_cli                                                  | success | `107037968118` |
+| Container lite supply chain                                | failure | `107037968123` |
+| kotaemon Python 3.11                                       | success | `107037968124` |
+| Container ollama supply chain                              | failure | `107037968128` |
+| Repository and image secret scans / Repository and history | success | `107037968131` |
+| kotaemon Python 3.10                                       | success | `107037968149` |
+| Dependency audit root-py310                                | failure | `107037968159` |
+| Dependency audit root-py311                                | failure | `107037968173` |
+| Benchmark and root contracts                               | success | `107037968178` |
+| Dependency audit container-py310                           | failure | `107037968209` |
+| Container full supply chain                                | failure | `107037968216` |
+| Python distribution supply chain                           | success | `107037968261` |
+| Repository and image secret scans / Built image            | success | `107037968327` |
+| Unified pytest collection                                  | success | `107037969107` |
+| Required quality gates                                     | failure | `107048743912` |
+
+| Current Linux suite          | Result                                                   |
+| ---------------------------- | -------------------------------------------------------- |
+| ktem isolated runtime        | 3964 passed, 139 warnings in 638.33s (0:10:38)           |
+| slide_cli                    | 147 passed (pytest -qq progress; exit 0)                 |
+| kotaemon Python 3.11         | 422 passed, 10 skipped, 93 warnings in 179.77s (0:02:59) |
+| kotaemon Python 3.10         | 422 passed, 10 skipped, 93 warnings in 150.23s (0:02:30) |
+| Benchmark and root contracts | 1653 passed, 8 warnings in 560.97s (0:09:20)             |
+
+Frontend CI has 40 Node tests and 8 browser security/preview smoke passes.
+Those smoke scenarios do not replace the full 37-scenario App matrix.
+The local 146-test Node execution is separately recorded in E.
+
+Python audit blocking-key counts are root-py310: 14, root-py311: 14, container-py310: 14. Container keys outside
+the frozen baseline are lite: 4, full: 4, ollama: 4: AnyIO plus three PCRE2 findings in
+each target. Keys match the previous reviewed scan; this is not a claim of
+security acceptance. PCRE2 package/layer records also match. The container
+build/provenance/runtime-smoke stages pass; SPDX/CycloneDX image SBOM stages
+are skipped after baseline failure, so no new image SBOM success is claimed.
+Python distribution SBOMs are separate successful artifacts.
+
+Retired Quality [35814242137](https://github.com/262412/MARA/actions/runs/35814242137)
+at `79c99ae6` remains **10 success / 10 failure**: its root, static and
+coverage regressions are retained with the subsequent controlled fixes.
+Its incomplete coverage artifact has 74 members and no combined report;
+it is not substituted for current coverage. No repeated CI was dispatched
+for unchanged `40b187d9` or the retired SHA.
+
+All four packages were rebuilt at the current source as eight wheel/sdist
+archives and passed the existing clean-wheel gate outside the checkout,
+including installed callback resources and `MARA`/`MARA-cli` entrypoints
+without `PYTHONPATH`. Artifact `10732160259` has SHA-256
+`2a83b542e32e375deae5dd8e764ab6e3bd03f1076abd7cde59baeb75e5139b74`. Local inspection verifies source members,
+provenance and distribution SBOMs. CI artifacts represent the committed tree;
+the 135 local protected modifications were neither staged nor included in it.
+No new full installed CLI or source-Sidecar business-flow matrix is claimed
+here; their prior source-bound R6-A evidence remains retained. New native
+Sidecar smoke belongs to Desktop Gate 2 below.
+
+Current coverage artifact `10732956317` has SHA-256
+`ae06f718f4b27b94a1ff3de8f9f57db5755493951266913f204620fc2a973ea3`. The original collector, subprocess patch,
+aliases, production scope and floors are unchanged; there are no temporary
+runtime-file entries or raw package-relative aliases in the combined report.
+The CI-configured comparison against `origin/main` passed at 3178/3345
+statements (95.01%); the fixed original Dev comparison is independently
+recomputed from this same artifact below.
+
+| Package   | Covered/statements | Coverage | Original floor |
+| --------- | ------------------ | -------- | -------------- |
+| benchmark | 17146/19005        | 90.2184% | 90%            |
+| slide_cli | 2293/2853          | 80.3715% | 70%            |
+| kotaemon  | 7833/11012         | 71.1315% | 60%            |
+| ktem      | 43721/51906        | 84.2311% | 50%            |
+
+| Production diff                            | Covered/changed statements | Coverage                  | Original floor |
+| ------------------------------------------ | -------------------------- | ------------------------- | -------------- |
+| fixed_dev (`adab3f4d`)                     | 2420/2511                  | 96.3759%                  | 90%            |
+| r6a_increment (`3b210087`)                 | 269/276                    | 97.4638%                  | 90%            |
+| u1_increment (`32252dc0`)                  | 25/25                      | 100.0000%                 | 90%            |
+| protection_selector_increment (`4721872a`) | 0/0                        | N/A (empty measured diff) | 90%            |
+
+The protection/selector increment is **0/0, N/A**, not a claimed 100% result.
+The JavaScript guard and changed Python binding lines add no measured changed
+statements to the original Python diff collector. Their controlled browser
+and Node evidence remains separate; the collector scope was not expanded.
+
+R5-A/B/C and the retained U1 production modules are present in the inspected
+report. The original production collector does not include desktop Sidecar
+server modules; that scope was not broadened or represented as covered.
+Coverage success does not close the missing browser/protection contracts.
+
+Desktop Gate 2 [35815532063](https://github.com/262412/MARA/actions/runs/35815532063)
+completed **3/3 success** at `48affef7e0504f63286793c571f6167c3fa82d69`:
+Windows package/smoke/Defender, Ubuntu 22.04 package/smoke, and the same 22.04
+package on Ubuntu 24.04. Original `eb6e4d83` 3/3 evidence remains retained.
+`native-current-input-equivalence.json` proves that the final `cc0bb3a3`
+diff contains only `tests/test_runtime_process_guard.py`; all native source,
+package/build trees and locks are identical. This is scoped reuse of the new
+48aff native execution, not a second native run at cc0bb. Actual logs and
+small smoke/metrics/Defender artifacts are locally retained with digest checks.
+It does not certify all clean VMs or the unexecuted 37-scenario Web matrix.
+
+| Owner                | Contract                                                                         | Current evidence/status                                                                    |
+| -------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| R5-A                 | Existing file-deletion coordinator and ordered external-store cleanup            | ACCEPTED; historical fault matrix retained                                                 |
+| R5-B / L1-I1 / W1-W2 | Writer/ZIP, source mutation lifetime, event identity and stale-output boundaries | ACCEPTED within reviewed scope; retained code and counterexamples                          |
+| C1                   | Graph cache publication/lifetime and authorization                               | ACCEPTED; no graph/cache algorithm rework                                                  |
+| C2                   | Notebook/session short-transaction coordination and artifact registration        | ACCEPTED; no persistence policy change                                                     |
+| C3                   | DownloadWorkspace, FD/manifest, transfers and retention                          | ACCEPTED; download lifetime belongs here, not R5-A                                         |
+| R6-A / U1            | Inspection/identity/CLI/Sidecar plus direct browser tail/selection seams         | Implemented work retained; overall BLOCKED pending required browser and protection closure |
+
+Round baseline: `4721872a81cdf504f5c01de41ac134f76043dc8f`; accepted R5:
+`41274852f1fda541b3162d5ae39a43beb8e92605`; fixed original Dev:
+`adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+The commit ledger retains `dbaefa8f` (isolation red), `91a7f4aa` (test boundary),
+`8ea619f6` (selector red/observer), `7f29ce87` (production fix), `79c99ae6`
+(checkpoint), `5dbcbc3a` (typed receipt), `48affef7` (test portability), and
+`cc0bb3a3` (owned coverage publication).
+Final source/test/harness/package CI input is the full `cc0bb3a3` SHA above.
+Report/local/remote identities are recorded in E's `final-delivery.json` and
+ordinary-push receipt; report-only reuse verifies source/harness bytes and
+all eight distribution member lists, and does not claim a new CI execution.
+
+There is **no total protection PASS and no ACCEPTED R6-A result**. Stop at the
+R6-A/U1 independent review point. The historical evidence below remains intact.
+
+## Retained recovery checkpoint at 4721872a
+
+The following recovery results and their “current” labels refer to that earlier
+checkpoint and its stated SHAs, not new execution of the final source above.
 
 ### Recovery, exact tail and fixture exit
 
