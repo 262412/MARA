@@ -14,3 +14,10 @@ Figure 2 and Appendix D; kept the video and historical metrics unchanged.
 Compiled the paper within six content pages, built the offline walkthrough, and
 verified the extracted Overleaf and supplementary packages. Final deliverable
 hashes are in submission/diagnostic-artifact-manifest.json.
+
+2026-09-23 follow-up: Simplified Appendix C.1 to package download, installation,
+startup, model configuration, and document-QA usage instructions, as requested.
+Removed the installation-test narrative and historical installation failures.
+Recompiled and visually checked the changed appendix pages. The first six pages
+are unchanged; the refreshed Overleaf archive compiles to matching PDF text.
+The supplementary archive and case records are unchanged.

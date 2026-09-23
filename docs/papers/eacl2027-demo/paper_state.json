@@ -23,13 +23,13 @@
     "command": "latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=../build-diagnostic main.tex",
     "pdf": "build-diagnostic/main.pdf",
     "external_inputs": [],
-    "input_sha256": "add7aa6e5dd9bae86f1dadc6bcfeca521ecd0c03963776173307132a31f1068e",
-    "pdf_sha256": "9fa7ebf1be7fb7990fed720e4369a21593fc673c46a2cc66629dd0e1edeceeb5",
+    "input_sha256": "cc25a657f1c98fca90cb810ffdd1a92d0bdb996700136c0526f9a8d4b1ea54b5",
+    "pdf_sha256": "2265a86063a76ac6d66b43de67b0ed5221de6ab63a48bd46b139a10890798e49",
     "log": "source\\build-attestation.log",
-    "log_sha256": "dc6cf038d01d8a52d2da17c4ff5ec3aaa0e393f359e4c8b0c011903ccf7dd6e4",
+    "log_sha256": "0b2962f2a4723a5052342a05727534e9e7f5cf214c196fa62be3d14a8d7d720f",
     "exit_code": 0,
     "tool_version": "Initial Win CP for (console input, console output, system): (CP936, CP65001, CP936)",
     "attestation": "executed",
-    "ran_at": "2026-09-23T07:20:18.568224+00:00"
+    "ran_at": "2026-09-23T07:37:51.010064+00:00"
   }
 }

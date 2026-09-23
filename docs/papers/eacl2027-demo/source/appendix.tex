@@ -133,29 +133,10 @@ the video is
 \url{https://youtu.be/owRaHCzSVNg}.
 These are also the links to enter in the submission form.
 
-\subsection{Reviewer Installation and Source Identity}
-For Windows x64, download \path{slide-app.zip} from the release page, extract it to a writable directory, and run \path{Install.cmd} followed by \path{Start.cmd}. The installer provisions Python 3.10.19 and pinned dependencies in an independent environment; it requires internet access but no existing Python, Git, or compiler for the included UI/CLI runtime. Configure both a chat model and an embedding model in the Web UI's resources tab before indexing the included sample document. No model weights or credentials are supplied.
+\subsection{Reviewer Installation}
+For Windows x64, download \path{slide-app.zip} from the release page and extract it to a writable directory. Run \path{Install.cmd} to prepare the environment, then \path{Start.cmd} to launch the Web UI. The installer sets up Python and pinned dependencies in an independent environment. Initial setup requires internet access; an existing Python installation, Git, or compiler is not required.
 
-This replacement installer, published on 23 September 2026, is built from main plus installation fixes at commit \texttt{e6afa5dc}; its packages report 0.0.41 and its manifest records the full source commit and file hashes. It is not a rebuild of the historical benchmark executable. Isolated Windows installation, CLI checks, HTTP/UI startup, repeat installation preserving configuration, and checksum-failure handling were tested. The diagnostic case additionally validates real-model indexing and two document-QA turns with this installed package. This small Windows check does not establish a cross-platform installation matrix or validate every backend.
-
-The v0.0.40 tag remains the historical source anchor, at commit \texttt{37487f35}. For source inspection, it can still be retrieved with the following shell commands:
-\begin{verbatim}
-git clone --branch v0.0.40 \
-  https://github.com/262412/MARA.git
-cd MARA
-\end{verbatim}
-Replacing a release asset does not change this tag. A fresh Windows check of the historical \texttt{uv sync --extra mara} command failed while building \path{llama-cpp-python==0.2.7}, pulled in by \path{kotaemon[all]}, because \texttt{nmake} and C/C++ compilers were unavailable. It is therefore not the reviewer quick-start route. The ZIP runtime omits that optional in-process backend; other local or visual routes require their own documented backend configuration.
-
-The historical README's \texttt{pip install mara-research-cli} route was unavailable on PyPI and TestPyPI when checked on 22 September 2026. The reviewer ZIP installs its included application wheels directly. Apache-2.0 licensing and Kotaemon attribution are retained; the historical NOTICE still uses the earlier product name \emph{Slides}. Minimum model-serving RAM/VRAM requirements have not been measured.
-
-After ZIP installation and provider configuration, representative Windows commands are:
-\begin{verbatim}
-MARA.cmd app doctor --json
-MARA.cmd docqa index ./example.pdf
-MARA.cmd docqa files
-MARA.cmd docqa ask --help
-\end{verbatim}
-The package README supplies an example question and its source document. Provider health checks do not replace a successful end-to-end index/query check. Users should inspect citations and status, and use an appropriate source document with permission to process it. Local-only and external-API configurations have different hardware and data-flow requirements.
+In the Web UI's resources tab, configure a chat model and an embedding model using the user's own local services or API credentials. Import the included sample document, wait for indexing to finish, and ask a question. The interface displays the answer, citations, and reasoning status. The package README provides the sample question, model-configuration instructions, and CLI usage through \path{MARA.cmd}. Model weights and credentials are supplied by the user.
 
 \subsection{Video and Benchmark Identity}
 The unchanged video illustrates source selection, page preview, text questions, citations, and the reasoning-status card. Its user deployment uses Deepseek/Google APIs and a packaged UI label of 0.0.18. The benchmark identifies Qwen3-8B/bge-m3 and the repository release \path{v0.0.40}. These are deployment and distribution identifiers, not interchangeable claims about one executable. In the released code, the displayed app version may come from \path{KH_APP_VERSION} or installed package metadata; a UI version string alone is not a source-commit identifier. We do not infer binary equivalence between the recording and benchmark release.
