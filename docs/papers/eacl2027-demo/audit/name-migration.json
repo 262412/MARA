@@ -1,0 +1,107 @@
+{
+  "paper_name": "DocQA-Inspect",
+  "release_name": "MARA",
+  "raw_records_sources_tables_bibliography_unchanged": true,
+  "byte_identical_files_checked": 33,
+  "preserved_release_identifiers": [
+    "MARA",
+    "MARA-cli",
+    "MARA docqa",
+    "MARA.cmd",
+    "MARA_CASE_CHAT_API_KEY",
+    "MARA_CASE_EMBEDDING_API_KEY",
+    "https://github.com/262412/MARA",
+    "slide-app.zip"
+  ],
+  "remaining_tex_occurrences": [
+    {
+      "file": "appendix.tex",
+      "line": 8,
+      "text": "The scorer is implemented in \\path{libs/ktem/ktem/reasoning/mara_route_scorer.py}; cost adjustments and tie breaking are in \\path{mara_route_costing.py} in the same directory. For modality $m$, its probe confidence is zero if no evidence is present. Otherwise it is the clipped and four-decimal-rounded value"
+    },
+    {
+      "file": "appendix.tex",
+      "line": 57,
+      "text": "The relevant sources are \\path{libs/ktem/ktem/docqa/controller.py}, \\path{retrieval_adequacy.py}, \\path{verification.py}, and \\path{execution.py} in that DocQA directory, together with \\path{libs/ktem/ktem/reasoning/mara.py}."
+    },
+    {
+      "file": "appendix.tex",
+      "line": 66,
+      "text": "The source \\path{libs/ktem/ktem/reasoning/mara_visual_answering.py} can return an OCR-extracted short answer before calling a VLM. For benchmark-origin requests, it searches visual evidence text for short answer-bearing patterns. With no visual generator it can return an evidence-only message or let another generation path handle the request, depending on configuration. The synthesis column \\path{generator_backend} records configured identities such as \\path{Qwen/Qwen3-8B} and \\path{local_qwen3_vl}; the metric CSV does not contain the per-answer \\path{generation_backend} or \\path{visual_generation_gate} fields needed to identify these paths. A future generator comparison must export those fields and generated answers before attributing differences to a VLM."
+    },
+    {
+      "file": "appendix.tex",
+      "line": 127,
+      "text": "\\url{https://github.com/262412/MARA/releases/tag/v0.0.40}."
+    },
+    {
+      "file": "appendix.tex",
+      "line": 129,
+      "text": "\\path{mara-full-system-benchmark-synthesis-v0.0.40.zip},"
+    },
+    {
+      "file": "appendix.tex",
+      "line": 131,
+      "text": "\\url{https://github.com/262412/MARA};"
+    },
+    {
+      "file": "appendix.tex",
+      "line": 139,
+      "text": "In the Web UI's resources tab, configure a chat model and an embedding model using the user's own local services or API credentials. Import the included sample document, wait for indexing to finish, and ask a question. The interface displays the answer, citations, and reasoning status. The package README provides the sample question, model-configuration instructions, and CLI usage through \\path{MARA.cmd}. Model weights and credentials are supplied by the user."
+    },
+    {
+      "file": "appendix.tex",
+      "line": 142,
+      "text": "DocQA-Inspect is the system name used throughout this paper. The unchanged video and interface screenshot retain the release name MARA, as do the downloadable software, commands, and original diagnostic records. The video illustrates source selection, page preview, text questions, citations, and the reasoning-status card. Its user deployment uses Deepseek/Google APIs and a packaged UI label of 0.0.18. The benchmark identifies Qwen3-8B/bge-m3 and the repository release \\path{v0.0.40}. These are deployment and distribution identifiers, not interchangeable claims about one executable. In the released code, the displayed app version may come from \\path{KH_APP_VERSION} or installed package metadata; a UI version string alone is not a source-commit identifier. We do not infer binary equivalence between the recording and benchmark release."
+    },
+    {
+      "file": "diagnostic_case.tex",
+      "line": 6,
+      "text": "With only the operating guide selected, the user receives the generic message ``MARA could not retrieve enough evidence to answer reliably.'' Opening the structured response, however, shows \\texttt{route=doc\\_text} and retrieval \\texttt{status=good}. The captured provider call also completed. The blocking decision is instead verification \\texttt{status=unknown}, with guardrail \\texttt{action=abstain}. The evidence bundle names the operating guide and preserves its sentence directing the reader to the data policy (Figure~\\ref{fig:diagnosis}). Thus the message alone does not accurately localize the failed stage: retrieving a relevant document did not establish support for the requested duration."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 8,
+      "text": "DocQA-Inspect (released as MARA) addresses this inspection problem. It extends the open-source Kotaemon application \\citep{kotaemon} with an application-level controller, structured evidence and decision records, and a benchmark harness for examining the same runtime. The contribution is an integrated workbench for observing and diagnosing document QA. We do not introduce a trained routing model or claim that automatic routing improves QA accuracy."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 24,
+      "text": "\\includegraphics[width=0.96\\textwidth]{figures/mara-ui-qa.png}"
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 25,
+      "text": "\\caption{DocQA-Inspect's document workspace, shown under the release name MARA: source selection, page preview, question answering, citations, and a compact route/retrieval/verification card. The diagnostic walkthrough in Figure~\\ref{fig:diagnosis} complements this existing text-workflow screenshot with captured decisions and an intervention.}"
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 29,
+      "text": "The released implementation retains the public commands \\texttt{MARA} and \\texttt{MARA-cli}, which expose application startup and document-QA operations. The \\texttt{MARA docqa} group supports indexing, file inspection, questions, saved conversations, source selection, notes, and derived study artifacts. Optional agent-platform wrappers invoke these commands. The Web and CLI surfaces reuse DocQA settings, indices, and persisted state, while the benchmark drives that runtime through dataset and route adapters. Multiple entry points remain and require compatibility checks; shared records do not by themselves prove behavior is identical across every interface."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 138,
+      "text": "The existing screencast presents DocQA-Inspect under its release name MARA. The recording and Figure~\\ref{fig:ui} retain that interface label; commands and captured outputs also retain their release names. The screencast demonstrates the user workflow: selecting a document, previewing pages, asking document questions, following citation chips, and inspecting route/retrieval/verification status. It uses a seven-page word-processing document and text evidence. The unchanged recording does not demonstrate visual reasoning, graph retrieval, recovery, or abstention. The supplementary offline walkthrough now demonstrates the captured verification refusal, source correction, and evidence-supported return; it does not add those scenes to the video."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 146,
+      "text": "\\item Downloadable installer and artifacts: \\url{https://github.com/262412/MARA/releases/tag/v0.0.40}."
+    },
+    {
+      "file": "paper_body.tex",
+      "line": 147,
+      "text": "\\item Repository: \\url{https://github.com/262412/MARA}."
+    }
+  ],
+  "remaining_occurrences_reviewed": true,
+  "naming_explanation_locations": [
+    "Introduction",
+    "Figure 1 caption",
+    "Section 5",
+    "Appendix C.2",
+    "Supplementary guide and walkthrough"
+  ],
+  "title_abstract_tldr_and_pdf_metadata_match": true
+}

@@ -1,20 +1,20 @@
 {
   "pdf": {
-    "name": "MARA-EACL2027-diagnostic-revision.pdf",
-    "bytes": 642138,
-    "sha256": "2265a86063a76ac6d66b43de67b0ed5221de6ab63a48bd46b139a10890798e49",
-    "download_path": "C:\\Users\\22826\\Downloads\\MARA-EACL2027-diagnostic-revision.pdf"
+    "name": "DocQA-Inspect-EACL2027.pdf",
+    "bytes": 642644,
+    "sha256": "170fc4705f0aa17ed6f0caff0320970ccdd8b94c442118b0d1afa98c48a1768b",
+    "download_path": "C:\\Users\\22826\\Downloads\\DocQA-Inspect-EACL2027.pdf"
   },
   "overleaf": {
-    "name": "MARA-EACL2027-diagnostic-Overleaf.zip",
-    "bytes": 661969,
-    "sha256": "edf5ac431e866cae517b026411d9aa3150bc1e98ffc0f99c15254802b9cd8457",
-    "download_path": "C:\\Users\\22826\\Downloads\\MARA-EACL2027-diagnostic-Overleaf.zip"
+    "name": "DocQA-Inspect-EACL2027-Overleaf.zip",
+    "bytes": 662222,
+    "sha256": "469484c545b44e915d091de8d990494850ad6bda5c3bb4f8c978ea518f254b6e",
+    "download_path": "C:\\Users\\22826\\Downloads\\DocQA-Inspect-EACL2027-Overleaf.zip"
   },
   "supplement": {
-    "name": "MARA-EACL2027-diagnostic-supplement.zip",
-    "bytes": 1300768,
-    "sha256": "384d948ace9c9041208cb0a7d3ba3c174ab13715a00d3cf42ef7b748e6b58dca",
-    "download_path": "C:\\Users\\22826\\Downloads\\MARA-EACL2027-diagnostic-supplement.zip"
+    "name": "DocQA-Inspect-EACL2027-supplement.zip",
+    "bytes": 1301236,
+    "sha256": "aec92278d4ed417174dd8c5b1ed1cce4a0c6738719559a4dbb9985a55d2bff8b",
+    "download_path": "C:\\Users\\22826\\Downloads\\DocQA-Inspect-EACL2027-supplement.zip"
   }
 }

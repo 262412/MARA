@@ -8,12 +8,12 @@
 
 ## Title
 
-MARA: A Local-First Workbench for Multimodal Document Question Answering
+DocQA-Inspect: A Local-First Workbench for Observable Multimodal Document Question Answering
 
 ## Abstract
 
 
-Document question answering involves choices about evidence, retrieval, generation, and verification that are difficult to inspect together. We present MARA, a local-first workbench extending Kotaemon with observable route control and shared diagnostic records across Web, command-line, and benchmark workflows. We analyze a released bundle covering six datasets, 1,090 dataset–question pairs, and 3,540 route-level records. Automatic routing does not consistently improve answer F1 over fixed text retrieval; the records expose inactive routing, a weak graph route, multimodal latency, and a non-discriminating visual comparison. A separate, executed diagnostic case follows an unresolved question through successful retrieval, a verification-triggered refusal, source correction, and a supported answer. We provide the case's raw provider outputs, displayed and scoring answers, evidence, effective settings, and offline checks. MARA's contribution is an inspectable workflow for locating such failures, with explicit limits on what the retained evidence can reproduce. We release the Apache-2.0 implementation and diagnostic materials, alongside a user-workflow demonstration.
+Document question answering involves choices about evidence, retrieval, generation, and verification that are difficult to inspect together. We present DocQA-Inspect, a local-first workbench extending Kotaemon with observable route control and shared diagnostic records across Web, command-line, and benchmark workflows. We analyze a released bundle covering six datasets, 1,090 dataset–question pairs, and 3,540 route-level records. Automatic routing does not consistently improve answer F1 over fixed text retrieval; the records expose inactive routing, a weak graph route, multimodal latency, and a non-discriminating visual comparison. A separate, executed diagnostic case follows an unresolved question through successful retrieval, a verification-triggered refusal, source correction, and a supported answer. We provide the case's raw provider outputs, displayed and scoring answers, evidence, effective settings, and offline checks. DocQA-Inspect's contribution is an inspectable workflow for locating such failures, with explicit limits on what the retained evidence can reproduce. We release the Apache-2.0 implementation and diagnostic materials, alongside a user-workflow demonstration.
 
 ## Authors（按此顺序）
 
@@ -45,9 +45,9 @@ Document question answering; retrieval-augmented generation; system observabilit
 
 ## Attachments
 
-- Paper: MARA-EACL2027-diagnostic-revision.pdf
-- Supplementary artifacts: MARA-EACL2027-diagnostic-supplement.zip（若表单有相应附件入口）
-- Source backup: MARA-EACL2027-diagnostic-Overleaf.zip（供 Overleaf/归档；不是论文 PDF 的替代品）
+- Paper: DocQA-Inspect-EACL2027.pdf
+- Supplementary artifacts: DocQA-Inspect-EACL2027-supplement.zip（若表单有相应附件入口）
+- Source backup: DocQA-Inspect-EACL2027-Overleaf.zip（供 Overleaf/归档；不是论文 PDF 的替代品）
 
 ## Already confirmed
 
@@ -59,6 +59,10 @@ Document question answering; retrieval-augmented generation; system observabilit
 
 ## TL;DR
 
-MARA exposes document-QA decisions and answer stages to support inspectable, reproducible failure diagnosis.
+DocQA-Inspect exposes document-QA decisions and answer stages to support inspectable, reproducible failure diagnosis.
 
 本轮需同步替换 PDF、补充包和摘要；视频及软件下载链接保持不变。尚未在 OpenReview 替作者提交。
+
+## 演示名称说明
+
+论文统一使用 DocQA-Inspect。原视频、界面截图、已发布软件和历史记录继续显示 MARA；正文演示部分及附录 C.2 已解释二者的对应关系。实际命令和链接保持原值。重新上传时同步修改标题、摘要、TL;DR、PDF 和补充 ZIP。

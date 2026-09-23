@@ -1,6 +1,6 @@
 # Revision story
 
-MARA makes document-QA stages inspectable together. The historical measurements
+DocQA-Inspect makes document-QA stages inspectable together. The historical measurements
 remain negative or inconclusive about answer-quality gains. The new source-scope
 case shows the task a user can complete with the records: distinguish successful
 retrieval from verification-triggered refusal, inspect the actual source, correct

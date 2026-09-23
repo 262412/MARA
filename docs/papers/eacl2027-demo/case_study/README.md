@@ -1,8 +1,10 @@
-# A recorded diagnosis: successful retrieval, refused answer
+# DocQA-Inspect: a recorded diagnosis
+
+The paper uses DocQA-Inspect. Its released runtime, original video/screenshot, commands, and captured output strings retain the name MARA. Naming changes affect this explanatory material only; recorded evidence is unchanged.
 
 Open **walkthrough.html** for the complete sequence. No server, API key, or
 installation is required to view it. This is a presentation of captured runtime
-records, not a screenshot of an additional native MARA interface.
+records, not a screenshot of an additional native DocQA-Inspect interface.
 
 The fictional Harbor pilot has two documents. The operating guide points to the
 data policy, and the latter says to retain raw sensor logs for 17 days. A user
@@ -51,7 +53,7 @@ This indexes the two supplied files and calls the actual providers. It does not
 replay stored answers. It uses an isolated application home and refuses to
 overwrite nonempty output directories. Do not point it at your normal app data.
 The unused reranker entry only satisfies this build's configuration requirement;
-reranking is disabled. Credentials may be persisted by MARA in the private runtime
+reranking is disabled. Credentials may be persisted by the released runtime in the private runtime
 database, so share only redacted records, never that directory or database.
 
 The main frozen record is the first successfully completed pair of turns. We also
@@ -72,7 +74,7 @@ offline audit of recorded outputs is distinct from a live rerun.
 - `records/*-provider-calls.json`: observed text-provider inputs and output chunks.
 - `records/answer-stages.json`: raw, pre-verification, pre-guardrail, displayed and
   scoring answers kept separately. Historical benchmark adapters are not applied.
-- `records/*-cli-rendered.txt`: responses rendered using MARA's existing CLI
+- `records/*-cli-rendered.txt`: responses rendered using the released MARA CLI
   formatter; these are derived displays, not a second execution.
 - `records/effective-config.json`: redacted providers, package versions, observed
   generation method and explicit fields the runtime did not report.
@@ -86,11 +88,11 @@ In particular, the precise historical cause of SlideVQA's ties remains unresolve
 The original demonstration video is unchanged.
 
 Here, raw provider text means concatenated answer-content chunks exposed by the
-runtime adapter, before MARA's answer processing. It is not a full HTTP response,
+runtime adapter, before the runtime's answer processing. It is not a full HTTP response,
 hidden reasoning trace, or a record of the provider's internal model state.
 
 ## License
 
 The fictional source documents, case scripts and explanatory materials are
-released under Apache-2.0 with MARA. The upstream source snapshot retains
+released under Apache-2.0 with the workbench. The upstream source snapshot retains
 Kotaemon's Apache-2.0 license. No private documents or API keys are distributed.

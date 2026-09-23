@@ -1,8 +1,8 @@
 {
   "overleaf_file_count": 10,
-  "overleaf_sha256": "edf5ac431e866cae517b026411d9aa3150bc1e98ffc0f99c15254802b9cd8457",
+  "overleaf_sha256": "469484c545b44e915d091de8d990494850ad6bda5c3bb4f8c978ea518f254b6e",
   "supplement_file_count": 40,
-  "supplement_sha256": "384d948ace9c9041208cb0a7d3ba3c174ab13715a00d3cf42ef7b748e6b58dca",
+  "supplement_sha256": "aec92278d4ed417174dd8c5b1ed1cce4a0c6738719559a4dbb9985a55d2bff8b",
   "paper_pages": 13,
   "main_content_ends_on_page": 6,
   "paper_has_no_email": true,
@@ -14,5 +14,5 @@
   "body_page_limit": 6,
   "all_fonts_embedded": true,
   "overfull_or_undefined_references": false,
-  "pdf_sha256": "2265a86063a76ac6d66b43de67b0ed5221de6ab63a48bd46b139a10890798e49"
+  "pdf_sha256": "170fc4705f0aa17ed6f0caff0320970ccdd8b94c442118b0d1afa98c48a1768b"
 }

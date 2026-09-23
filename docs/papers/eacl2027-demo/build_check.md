@@ -5,6 +5,10 @@
 - PDF: 13 pages; substantive content ends on page 6. References and informative
   appendices follow. Original ACL styles, font sizes and margins are preserved.
 - Four authors and affiliation retained; the title page has no email.
+- The paper uses DocQA-Inspect consistently; title/abstract/TL;DR/PDF metadata
+  agree. Remaining MARA identifiers are explicit release names, executable
+  commands, URLs, source paths, or verbatim captured output. See
+  audit/name-migration.json for the occurrence audit and original-file checks.
 - Figure 2 is a vector diagram of the recorded case. PDF layout is rendered and
   inspected; no overfull boxes or unresolved references/citations are reported.
 - The Overleaf ZIP compiles after extraction; extracted PDF text matches the

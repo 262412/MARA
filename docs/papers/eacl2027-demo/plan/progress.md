@@ -21,3 +21,12 @@ Removed the installation-test narrative and historical installation failures.
 Recompiled and visually checked the changed appendix pages. The first six pages
 are unchanged; the refreshed Overleaf archive compiles to matching PDF text.
 The supplementary archive and case records are unchanged.
+
+2026-09-23 naming revision: The author chose DocQA-Inspect. Updating the entire manuscript, PDF metadata, submission fields and explanatory case materials, with an explicit bridge to the MARA release label. Preserve executable identifiers, links, raw outputs, original screenshot/video and historical archives.
+
+Completed the naming revision. The title, abstract, TL;DR and PDF metadata agree.
+Introduction, Figure 1, Section 5, Appendix C.2 and the offline walkthrough explain
+the retained MARA release name. The renamed Overleaf ZIP compiles and the
+supplement verifies after extraction. Visually checked the revised PDF and HTML.
+Byte comparisons confirm 33 original evidence/source/table/bibliography files
+are unchanged. New deliverables use the DocQA-Inspect-EACL2027 filename prefix.
