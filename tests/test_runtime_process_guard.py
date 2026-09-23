@@ -51,7 +51,7 @@ try:
         sys.modules['ktem'] = SimpleNamespace()
     elif scenario == 'early-theflow':
         sys.modules['theflow.settings'] = SimpleNamespace(settings=SimpleNamespace(_initialized=False))
-    runtime = start_process_test_runtime()
+    runtime = start_process_test_runtime(evidence_dir=owned / 'evidence')
     # The detector runs after the actual guard: a refusal must precede access.
     sys.addaudithook(observe)
     if scenario == 'missing-marker':
@@ -128,10 +128,24 @@ class ProcessIsolationContract(unittest.TestCase):
             self.fail("Set an explicit owned MARA_ISOLATION_PROBE_PARENT")
         Path(parent).mkdir(parents=True, exist_ok=True)
         root = Path(tempfile.mkdtemp(prefix="process-guard-", dir=parent))
+        evidence = root / "evidence"
+        evidence.mkdir()
+        environment = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+        coverage_target = None
+        if serialized := environment.get("COVERAGE_PROCESS_CONFIG"):
+            from coverage.config import CoverageConfig
+
+            config = CoverageConfig.deserialize(serialized)
+            coverage_target = Path(config.data_file)
+            # Keep the inherited collector, filters, aliases and subprocess patch.
+            # Its atexit write belongs to retained evidence, not the closed runtime.
+            config.data_file = str(evidence / coverage_target.name)
+            environment["COVERAGE_PROCESS_CONFIG"] = config.serialize()
+            environment["COVERAGE_FILE"] = config.data_file
         result = subprocess.run(
             [sys.executable, "-B", "-c", PROBE, str(REPOSITORY), str(root), scenario],
             cwd=root,
-            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            env=environment,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -139,6 +153,16 @@ class ProcessIsolationContract(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn("Exception ignored", result.stderr)
+        if coverage_target is not None:
+            fragments = list(evidence.glob(coverage_target.name + ".*"))
+            self.assertGreaterEqual(
+                len(fragments), 2 if scenario == "normal-child" else 1
+            )
+            # Only the parent publishes completed, uniquely named fragments to the
+            # original collector's output. Never overwrite another process's data.
+            for fragment in fragments:
+                with coverage_target.with_name(fragment.name).open("xb") as target:
+                    target.write(fragment.read_bytes())
         payload = json.loads(result.stdout.strip().splitlines()[-1])
         (root / "result.json").write_text(json.dumps(payload, indent=2))
         return payload
