@@ -170,9 +170,21 @@ def _fact_coverage_supports_claim(
 ) -> bool:
     if not evidence_tokens or not claim_tokens:
         return False
-    overlap = claim_tokens & evidence_tokens
+    overlap = {
+        token
+        for token in claim_tokens
+        if token in evidence_tokens
+        or any(_same_regular_past_form(token, source) for source in evidence_tokens)
+    }
     required = max(3, math.ceil(len(claim_tokens) * 0.75))
     return len(overlap) >= min(len(claim_tokens), required)
+
+
+def _same_regular_past_form(left: str, right: str) -> bool:
+    """Match regular -d/-ed variants without relaxing factual coverage."""
+    left_past = left + ("d" if left.endswith("e") else "ed")
+    right_past = right + ("d" if right.endswith("e") else "ed")
+    return left_past == right or right_past == left
 
 
 def _short_evidence_supports_claim(
