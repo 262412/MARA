@@ -22,10 +22,18 @@ async function evidence() {
 
 async function login(username = 'browser-owner', {initialize = true, traceRefresh = false, traceConversation = false, traceSelection = false, holdSelectorFlush = false} = {}) {
   const page = await browser.newPage({locale: 'en-US', viewport: {width: 1600, height: 1200}});
-  await page.addInitScript(require('./web_operation_observer.cjs').install);
+  const loginFrames = process.env.MARA_BROWSER_FRAME_DIAGNOSTIC === '1'
+    ? await require('./login_frame_observer.cjs').attach(page, output,
+      {ordinal: (results.loginAttempts = (results.loginAttempts || 0) + 1),
+        traceRefresh, traceConversation, traceSelection, holdSelectorFlush}) : null;
+  const webInstall = require('./web_operation_observer.cjs').install;
+  // One script establishes the saved native references before the existing observer.
+  if (loginFrames) await page.addInitScript({content:
+    `(${require('./login_frame_observer.cjs').install.toString()})('main');\n(${webInstall.toString()})();`});
+  else await page.addInitScript(webInstall);
   if (holdSelectorFlush) await page.addInitScript(require('./selector_flush_gate.cjs').install);
   if (process.env.MARA_BROWSER_LOGIN_DIAGNOSTIC === '1') await page.addInitScript(() => {
-    window.ownedLoginFrames = {frames: 0, ticks: 0, samples: []};
+    window.ownedLoginFrames = {frames: null, frameCounterInstalled: false, ticks: 0, samples: []};
     const observe = kind => {
       const state = window.ownedLoginFrames;
       state[kind] += 1;
@@ -42,7 +50,8 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
   if (traceConversation) await page.addInitScript(require('./conversation_observer.cjs').install);
   const originalClose = page.close.bind(page);
   page.close = async (...args) => {
-    await exit.cleanup(results, [['page observation', async () => { if (!page.isClosed()) {
+    await exit.cleanup(results, [['login frame observation', async () => { if (loginFrames) await loginFrames.stop(); }],
+      ['page observation', async () => { if (!page.isClosed()) {
       results.webOperations ||= [];
       results.webOperations.push({username, sessionHash: queue.sessionHash,
         records: await page.evaluate(() => window.ownedWebOperations || []),
@@ -123,9 +132,14 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
   }
   await page.locator('input[type=text]').fill(username);
   await page.locator('input[type=password]').fill('OwnedFixture7!');
+  if (loginFrames) await loginFrames.snapshot('before-login-click', true);
   try { await page.getByRole('button', {name: /Login|登录/}).click(); }
   catch (error) {
     exit.primary(results, output, error, 'login_failure');
+    if (loginFrames) {
+      await loginFrames.snapshot('natural-login-failure');
+      await exit.cleanup(results, [['login frame stop', () => loginFrames.stop()]]);
+    }
     if (refreshTrace) results.loginFramework = await refreshTrace.snapshot();
     results.loginAnimationFrame = await page.evaluate(() => Promise.race([
       new Promise(resolve => requestAnimationFrame(time => resolve({time}))),
@@ -141,6 +155,10 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
     exit.save(output, results);
     await exit.cleanup(results, [['login screenshot', () => page.screenshot({path: path.join(output, 'login-failure.png'), timeout: 3000})]]);
     throw error;
+  }
+  if (loginFrames) {
+    await loginFrames.snapshot('login-click-complete');
+    await exit.cleanup(results, [['login frame stop', () => loginFrames.stop()]]);
   }
   if (process.env.MARA_BROWSER_LOGIN_DIAGNOSTIC === '1') {
     results.loginDiagnostics ||= [];
