@@ -1,29 +1,176 @@
 # Safe-refactor status
 
-## Current bounded acceptance checkpoint: R6-A/U1 (2026-09-26)
+## Current actual utility-call diagnostic checkpoint: R6-A/U1 (2026-09-26)
 
-**R6-A/U1 remains BLOCKED: four exit cases passed, the fifth failed at Login
-before its held-producer boundary.** This round executed baseline
-`e8a147931181ef41965cf48207bbf3853c6888b0`, with source/test/harness bytes from
-`79a3f36ef65219c593c078a2f9f23a675fdb02cf`. No production, test or harness file
-was changed this round. The selector fix `7f29ce87d2aa83080f9964b38cdb0eba6f878973`
-and R5 ACCEPTED scope remain. R6-A is not ACCEPTED; S1/PCRE2 is OPEN and
-merge/release is NO-GO. No R6-B/C/D was started.
+**R6-A/U1 remains BLOCKED.** One preregistered diagnostic group completed:
+Edge 5/5 and matching Playwright Chromium 5/5 reached their intended exit
+boundaries, but the target Login stall was not reproduced under observation.
+There is no established product defect/fix or environment disposition from
+this group. No further App was launched after the group. Natural five-exit
+acceptance, selector/U1 browser regression, primary 37, confirmation 37 and
+new Quality CI are **NOT RUN** this round. Diagnostic success does not replace
+the retained natural **4 passed / 1 failed** exit batch.
 
-The user's revised order removed historical Login reproduction/unique
-attribution as a prerequisite. The five exit cases therefore ran in their
-preregistered order. The new fifth-case failure stopped acceptance as required;
-there was no retry, additional Login-only launch, replay or scheduling
-intervention after it. Selector/U1 regression, full primary 37, confirmation 37
-and new Quality CI are **NOT RUN** this round. In particular, no large CI was
-dispatched after the browser prerequisite failed.
+Baseline is `d84b3eabe9ceccd6bb96a0b58d2e5d967de8fca4`; its prior harness is
+`79a3f36ef65219c593c078a2f9f23a675fdb02cf`. Actual App diagnostics used the frozen
+`e15a500db38e779122d3ce27250fc33584907bd9` source/test/harness. The final observer
+error-label correction and unit test are
+`fa8d8a276230a3d3185014a6afd88e55603651eb`; **no App run is attributed to that
+later tree**. No production file changed. Selector fix `7f29ce87` and all
+accepted stages remain. R5 is ACCEPTED; R6-A is not ACCEPTED; S1/PCRE2 is OPEN,
+merge/release is NO-GO, and no R6-B/C/D was started.
 
 Evidence parent is `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`.
-This round is `r6a-u1-recovery/bounded-acceptance/` (B). The prior
-`login-frame/` (L), `protection-selector/` (E) and every earlier failure remain.
-The original `fd44f8776161c8aaf3048876134644d2723b3548` primary **37/37** and
-confirmation **16 passed / 1 failed / 20 NOT RUN** are unchanged. Later 40b/cc0
-and current full primary/confirmation remain NOT RUN; no results are combined.
+This round is `r6a-u1-recovery/actual-stability/` (A). Bounded-acceptance (B),
+login-frame (L), protection-selector (E) and earlier evidence remain intact.
+The B archive was verified before any App: SHA-256
+`43d5e729ef8d1dc79af7d87aa3debc322fa80b5a4bf2609c5e1e6a37d7a50d5e`, 133
+members, CRC check passed. Prior fd44 primary **37/37** and confirmation
+**16 passed / 1 failed / 20 NOT RUN** remain separate; no batches are combined.
+
+### Actual installed call and observer boundary
+
+Installed Playwright is **1.61.1**. Its physical `playwright-core/lib/coreBundle.js`
+has SHA-256 `6be5c2ea035554e9b184b1dbc7aa5e7f1fb428dd1b5c202022858dcfae9bee27`.
+The decoded generated `source4` injected program has SHA-256
+`9e3eee05873e664c48f2b7993edfb90cd505137486fba5eeea9cc5ec20468e2f`.
+The loaded Node script and actual utility injection wrapper/options were
+checked against these bytes before installing points. Nine Node and thirteen
+utility false-condition logpoints bind to the real loaded script IDs and
+resolved source lines. They observe:
+
+`_performPointerAction -> evaluateInUtility -> utilityContext -> actual Runtime.callFunctionOn(awaitPromise=true) -> checkElementStates -> _checkElementIsStable -> saved builtin rAF -> callback/check -> fulfill or reject -> stableResult -> native protocol response -> Node pointer result`.
+
+The opt-in `MARA_BROWSER_STABILITY_DIAGNOSTIC=1` is limited to this group;
+both FRAME_DIAGNOSTIC and legacy LOGIN_DIAGNOSTIC were **0**. Natural default
+remains off. The observer uses the existing Playwright utility context in the
+actual App, strict DOM-node identity, context unique ID, frame/loader, actual
+API action and native protocol request/session IDs. It creates no extra world,
+page timer or rAF request, replaces no builtins, resolves no production Promise,
+and uses no forced/Enter/API/DOM Login, universal access or parameter sweep.
+Owned bindings and bounded records are diagnostic state, not product APIs.
+
+Each trace retains lifecycle creation/destruction, point installation,
+streamed hits, snapshots, explicit gaps/caps and cleanup. There were no
+unexpected pauses, dropped records, observed condition/binding errors or
+outstanding protocol replies in the ten completed traces. `actual-call-analysis.json`
+also checks every raw error field independently of its phase label.
+
+### One bounded group, actual identities and evidence ceiling
+
+`diagnostic-plan.json` was written before execution and `frozen-inputs.json`
+pinned 133 source/test/harness entries, 135 protected raw files, dependency
+inputs, runner scripts and 12 runtime-file hashes, including browser DLLs.
+The group ran **13:11:57.743 to 13:21:25.878 UTC**, with no retries. Every App
+used a fresh owned runtime/profile/cache, serial startup and exclusive port
+8768, with the same Gradio **4.39.0** frontend bytes and original 30-second
+mouse-click budget. Argument equality was checked within each browser arm.
+
+| Diagnostic exit case | Edge 153.0.4234.48            | Chromium 149.0.7827.55        | Outer / Node / App exit in both arms |
+| -------------------- | ----------------------------- | ----------------------------- | ------------------------------------ |
+| Normal               | PASS, held reached            | PASS, held reached            | 0 / 0 / 0                            |
+| Assertion            | PASS, exact injected primary  | PASS, exact injected primary  | 1 / 1 / 0                            |
+| Node watchdog        | PASS, held then watchdog      | PASS, held then watchdog      | 1 / 1 / 0                            |
+| App watchdog         | PASS, held then watchdog      | PASS, held then watchdog      | 1 / 1 / 1                            |
+| Release failure      | PASS, held then release fault | PASS, held then release fault | 1 / 0 / 1                            |
+
+All ten actual stability calls entered the rAF callback twice, read two equal
+rectangles, fulfilled with `true`, continued through visible/enabled checks,
+and returned `undefined` successfully to the Node pointer caller. Each native
+protocol request matched its response. The observed first-callback delays
+were 3.4-4.1 ms and first-schedule-to-fulfill values 7.5-9.3 ms; these are
+instrumented trace timings, not performance measurements of natural runs.
+
+For the Edge fifth case, frame is `F4A624F869A42776453CD53957D74220`, loader
+`2FE716ED802B386CD4B3BBA6FB0A7F64`, utility unique ID
+`-4779775196422681100.-160177821994352209`, Login backend node **7**, Node PID
+**28648**, action `call@41`, and protocol ID **104** in session
+`1507F69A14A70F504C66053715B05E2A`. Its held business session is `1j1pcfbiy2s`.
+The Chromium fifth case uses frame `1A260DE316CC91825BAD57E573E5C87B`, loader
+`E61FF0E8C0EDF0CA4E88187E1005F202`, utility unique ID
+`-741335135701379014.5395829502328531562`, backend node **4**, Node PID **22324**,
+and protocol ID **104** in session `48C75372E4C851292D52A9492038E951`;
+its held business session is `48ei2mty0fn`. IDs are scoped to their case/process/
+CDP session, not correlated merely because `call@41` or 104 repeat.
+
+The saved rAF reports native function text and differs from the current global
+function. The pinned generated source explicitly uses `.bind(global)` when
+saving builtins, so that inequality does **not** establish function replacement.
+The `raf-first` hit is before the real native registration and `promise-return`
+after it; the production code discards the registration ID, so none is invented.
+Actual callback hits and downstream continuation prove return for these calls.
+The reject point was installed but not exercised; a missing reject hit is not
+failure-path validation. The generated rectangle itself maps top/left into
+its x/y fields; evidence retains that representation unchanged.
+
+System Edge was neither installed over nor updated. Chromium revision **1228**
+was installed once from the pinned Playwright registry into
+`D:/MARA-s1-01a086ff/actual-stability-browsers`, using channel `chromium`, full
+new-headless Chromium and no headless-shell fallback. Engine version, vendor
+defaults, fresh fixture IDs and logpoint/CDP/Node-inspector overhead are
+confounders. This single group cannot establish an Edge/platform cause or
+that observation cured anything. No unobserved historical callback, context
+or protocol return is inferred from these successful calls.
+
+**Evidence ceiling:** the actual healthy return chain is now captured and
+version-bound, but the original fifth failed call still has no such trace.
+The next minimum proposition, on a separately authorized recurrence, is to
+identify the first unreturned boundary among native scheduling/callback,
+check/Promise settlement, context destruction, protocol reply and Node
+continuation using this call-bound observer. There is no additional launch,
+environment workaround, product fix or natural acceptance inferred here.
+
+### Separate observer correction, local gates and retained domains
+
+After all owned processes exited, a new unit counterexample showed that the
+observer's error payload `{phase, error}` could overwrite `condition-error`
+with the attempted boundary name. The controlled test failed with actual
+`resolve` versus expected `condition-error`; a one-field change to `failedPhase`
+fixed it. This is an observer reporting defect, not evidence about historical
+Login. The exact red, the final **160/160 Node PASS**, changed-file hooks and
+separate commit are retained. The earlier e15 Node **159/159**, installed-source
+preflight and hygiene PASS remain separate executions. No broad gate was
+made green by changing a baseline, golden, xfail or skip.
+
+`current-inputs.json` proves the only post-group harness differences are that
+error-field name and its negative test, with committed bytes matching the
+green unit run. It explicitly records **whole-harness equivalence false** and
+**App rerun false**. All ten e15 raw traces were checked for error fields;
+none occurred. They remain e15 diagnostic evidence, not fa8 App validation.
+
+`domain-input-equivalence.json` checks all eight retained wheel/sdist archives
+and changed paths. Package, build, lock and Python production coverage inputs
+remain equal to **cc0bb3a3ec83bca6932a431dc766bb1713749050**; browser CJS is outside
+those archive inputs. Native scope remains **48affef7e0504f63286793c571f6167c3fa82d69**
+Gate 2 **3/3**, not a new Desktop or clean-VM execution. New Linux, build,
+clean-wheel, coverage, Desktop and Quality runs are NOT RUN at this diagnostic
+checkpoint. Prior Quality **35816144107** is still cc0's actual **13 success /
+7 failure**, not e15/fa8 execution. Windows 99 nodes, kotaemon 4 capability
+nodes and full Win32 mypy remain separately retained. Fixed original Dev is
+`adab3f4d8f221e3620494fab0a24ef8e5557d12a`; security policies and gates are unchanged.
+
+Entry and every before/after-App comparison preserved all 135 raw protected
+files, NUL, three post-incident configuration hashes, real database metadata,
+98,853 canonical-environment entries and current cache count 610. Launcher
+and App isolation were active before business imports; resolved config/data/
+cache/settings/database/temp and native browser paths were inside owned roots.
+All ten request/producer exits, idle worker project frames, process exits and
+root removals are recorded separately; no process was force-terminated. This
+Python audit boundary is not an OS sandbox. Historical writer **UNKNOWN**,
+original config bytes **UNVERIFIED**, and cache **614 to 610 OPEN** remain;
+there was no new clue, repeated historical scan, restore, mtime edit or real
+cache cleanup. No total protection PASS or author risk acceptance is claimed.
+
+The final report-only commit has its own input-equivalence, secret-scan,
+protection and ordinary-push receipts in A's `final-delivery.json`. The five
+historical refused-cleanup directories remain. Only explicitly named files
+are staged; no branch/worktree, force push, merge, deployment or release.
+
+## Retained bounded-acceptance failure at d84b3eab
+
+The following natural-profile batch belongs to e8a14793 / harness 79a3f36e,
+before the current diagnostic group. Its fifth failure and all unexecuted
+successors remain unchanged; it is not replaced by either diagnostic arm.
 
 ### Frozen natural profile and actual exit results
 
@@ -396,11 +543,11 @@ The commit ledger retains `dbaefa8f` (isolation red), `91a7f4aa` (test boundary)
 (checkpoint), `5dbcbc3a` (typed receipt), `48affef7` (test portability), and
 `cc0bb3a3` (owned coverage publication).
 Retained full Quality/package CI input is the full `cc0bb3a3` SHA above.
-Current executed baseline is e8a14793 with source/test/harness bytes from
-79a3f36e; no new full Quality result is claimed. Scoped package/coverage/native
-reuse is extended by B's domain-input-equivalence receipt.
-Current report/local/remote identities are recorded in B's `final-delivery.json`;
-L and E retain their own `final-delivery.json` identities and
+Current observer/test source is fa8d8a27; the real-App diagnostic source was
+e15a500d. Neither has new full Quality evidence. Scoped package/coverage/native
+reuse is extended by A's domain-input-equivalence receipt.
+Current report/local/remote identities are recorded in A's `final-delivery.json`;
+B, L and E retain their own `final-delivery.json` identities and
 ordinary-push receipt; report-only reuse verifies source/harness bytes and
 all eight distribution member lists, and does not claim a new CI execution.
 
