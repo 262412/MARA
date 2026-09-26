@@ -61,6 +61,16 @@ test('binding failure and truncation are explicit observation gaps', () => {
   assert.equal(f.sent.length, 1, 'lost delivery must not be treated as observed callbacks');
 });
 
+test('a condition error retains its error phase and cannot impersonate the observed boundary', () => {
+  const f = traceFixture();
+  f.trace.gap('resolve', 'owned missing local');
+  const row = f.sent.at(-1);
+  assert.equal(row.phase, 'condition-error');
+  assert.equal(row.failedPhase, 'resolve');
+  assert.equal(row.error, 'owned missing local');
+  assert.ok(!f.sent.some(item => item.phase === 'resolve'));
+});
+
 test('document replacement is preserved in records rather than assumed continuous', () => {
   const f = traceFixture();
   f.target.ownerDocument = {};

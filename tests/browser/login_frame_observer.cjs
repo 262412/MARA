@@ -223,7 +223,7 @@ function installStabilityTrace(action, binding) {
         records.push(row); globalThis[binding](payload);
       } catch (error) { errors++; }
     },
-    gap(phase, error) { trace.record('condition-error', target, {phase, error: error.slice(0,500)}); },
+    gap(phase, error) { trace.record('condition-error', target, {failedPhase: phase, error: error.slice(0,500)}); },
     snapshot: () => ({action, records, dropped, errors})};
   trace.record('installed', target, {timeOrigin: performance.timeOrigin, url: location.href});
 }
