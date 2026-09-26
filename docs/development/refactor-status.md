@@ -1,35 +1,143 @@
 # Safe-refactor status
 
-## Current protection and selector checkpoint: R6-A/U1 (2026-09-23)
+## Current Login/frame diagnostic checkpoint: R6-A/U1 (2026-09-26)
 
-**R6-A/U1 remains BLOCKED.** Committed source/tests/harness and CI input is
-`cc0bb3a3ec83bca6932a431dc766bb1713749050`; the production selector fix is
-`7f29ce87d2aa83080f9964b38cdb0eba6f878973`. New complete primary and confirmation
-are both **NOT RUN**. R5 remains ACCEPTED. S1/PCRE2 remains OPEN;
-merge/release remains NO-GO. No R6-B/C/D or security upgrade was started.
+**R6-A/U1 remains BLOCKED.** Round baseline is
+`c5ae33ab6ec8d3e390db7d2b6a82a51141670def`; diagnostic source/tests/harness is
+`79a3f36ef65219c593c078a2f9f23a675fdb02cf`. This is a test-only observation
+checkpoint, not an acceptance candidate or a production fix. The selector fix
+`7f29ce87d2aa83080f9964b38cdb0eba6f878973` and R5 ACCEPTED scope are retained.
+S1/PCRE2 remains OPEN; merge/release remains NO-GO. No R6-B/C/D was started.
 
 The original `fd44f8776161c8aaf3048876134644d2723b3548` primary **37/37** and
-failed confirmation **16 passed / 1 failed / 20 NOT RUN** are retained.
-`40b187d9c08defd9a72d7278cb3fb0837b227cea` complete primary/confirmation remain
-NOT RUN. Controlled successes below do not replace or combine those batches.
+failed confirmation **16 passed / 1 failed / 20 NOT RUN** remain unchanged.
+The later 40b/cc0 and current complete primary/confirmation remain **NOT RUN**.
+No cross-batch or cross-SHA results are combined.
 
-Evidence parent: `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`.
-This round uses `r6a-u1-recovery/protection-selector/` (denoted E below),
-`r6a-u1-protection-ci/` (retired candidate),
-`r6a-u1-protection-stable-ci/` (current Quality), and
-`r6a-u1-protection-native-ci/` (current Desktop Gate 2).
+Evidence parent is `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`.
+New evidence is `r6a-u1-recovery/login-frame/` (L); `protection-selector/`
+(E below) and the prior Quality/Desktop directories retain their original runs.
+
+### Login: first-stall evidence is still missing
+
+The original `candidate-exit-assertion` really failed during the normal mouse
+Login stability wait, before the held producer. Its default `login()` enabled
+neither the selector flush gate nor deep Gradio logpoints. The legacy `frames=0`
+was unwired; its current-main rAF race and screenshot were **post-failure** probes.
+They do not identify native first-stall or utility-world behavior. The user now
+reports the desktop was visible and unlocked; this is a user statement, not an
+OS trace. Locking or remote disconnection is not an established cause.
+
+The opt-in `MARA_BROWSER_FRAME_DIAGNOSTIC=1` observer records the real App's
+frame/loader, context IDs and unique IDs, world tokens/time origin, lifecycle,
+Debugger pause/resume events, saved/current rAF identity, finite callback/timer
+records and normal Locator action log. It uses the **existing actual Playwright
+utility world**, identified from the installed adapter; it creates no extra
+world and sets no additional universal-access option. One combined main-world
+init script captures references before the existing web observer, without
+assuming the order of separate init scripts. No global rAF, timer or Promise
+implementation is replaced. Node bounds each CDP observation, records gaps and
+truncation, and releases owned listeners/timers/callbacks. The legacy unwired
+counter now says `frames: null, frameCounterInstalled: false`.
+
+All new real-App runs use installed Gradio **4.39.0**, Playwright **1.61.1**, and
+headless Edge **153.0.4234.48**, protocol 1.3, revision
+`cf31d6623d8718e7a3c3e181e55e59c1aae57a73`. Actual launch arguments, owned
+profile/cache paths, runtime hashes and CDP identity are retained. The old
+failed run did not record its browser binary identity; a current version is
+not substituted for that missing historical fact.
+
+| Diagnostic run                              | Actual outcome                                                           | Scope                                          |
+| ------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------- |
+| `natural-frame-assertion`                   | Login completed; intended assertion reached                              | Initial observed control                       |
+| `sequence-normal` then `sequence-assertion` | Both Login actions completed; normal exit and intended assertion reached | One predeclared serial two-App sequence        |
+| `original-login-observer-off`               | Login completed; intended assertion reached                              | Single-variable observer-off control           |
+| `final-observer-integration`                | Login completed; held producer reached; normal exit                      | Final observer binding and resource validation |
+
+These are **five diagnostic App launches covering two probe kinds**, not five
+exit-acceptance passes. Four have same-frame main/actual-utility traces: saved
+native and current rAF callbacks arrived, function identity stayed equal,
+context/loader identity stayed stable through the click, and no Debugger pause
+was observed. The observer-off run has no equivalent frame evidence. No new
+natural Login failure was reproduced; no root cause or repair is claimed.
+No bringToFront, resize, screenshot, headful switch, synthetic frame, forced
+click, Enter/API login, timeout increase, browser replacement or full-matrix
+retry was used. In the final integration, both worlds have zero pending owned
+rAF/timers and zero dropped records at stop; App/Node exited, the producer was
+quiescent and owned roots were removed (`diagnostic-verification.json`).
+
+`login-frame-replay-bundle.zip` retains the original failed evidence and all
+**130 hash-verified historical input entries** (33 recovered CRLF representations),
+plus current controls and a single-run driver with source/runtime hash checks.
+SHA-256: `7bb6841d4603273d4b452e13872066f6148fbb679e1196d04dcfd57af313d07e`.
+It requires the existing owned workspace/runtime and is not a claim of a
+deterministic failure reproducer or a historical browser binary backup.
+
+The next minimum falsifiable proposition is at a **natural failed click**:
+do both saved-native and current rAF requests remain pending in the same main
+and actual utility contexts while finite timers advance? Context replacement,
+function replacement, a Debugger pause or missing/truncated observation instead
+selects a different diagnosis. Healthy controls cannot answer that failed-state
+proposition. Retain that first failure before choosing one scheduling intervention.
+
+### Exit, browser acceptance and current local gates
+
+Preliminary Login cause/repair remains unproved. Consequently the final-harness
+five-case exit acceptance, primary 37 and confirmation 37 are **NOT RUN**.
+Original success/failure/interruption evidence remains intact, including the
+earlier Login failures that never reached the intended exit fault point. The
+selector shared-flush/card-before-choices and all negative controls are retained;
+their production/observer inputs are unchanged. No old selector pass is relabelled
+as a new full-harness execution.
+
+At the committed diagnostic input, **152 Node tests** (including six new bounded
+observer tests) and **22 relevant Python tests** pass; changed-file hooks, full
+Ruff and hygiene pass. Counterexamples cover live timers with absent frames,
+simulated function replacement, new-document identity, explicit truncation and
+Node-side timeout independent of page timers. They are observer tests, not
+synthetic proof of the historical product failure. The final integration's
+complete recorded input map matches the committed diagnostic files.
+
+New full Quality CI is **NOT RUN** at this blocked diagnostic checkpoint; the
+unchanged cc0 run was read, not redispatched. Its actual completed/failure result
+and original Linux/coverage/build evidence are retained below, not relabelled as
+execution of 79a3f36e. `domain-input-equivalence.json` verifies all eight prior
+archives exclude changed CJS/report paths; setuptools source-list rules, package
+source/metadata/locks/build scripts and Desktop inputs are unchanged. Package,
+clean-wheel and Python coverage evidence therefore remains scoped to cc0; native
+Gate2 remains scoped to 48aff. No new build, native run or Linux run is claimed.
+The complete browser harness is expressly **not equivalent** to cc0.
+
+### Historical protection ceiling and this round's observation
+
+The bounded lookup used existing recovery backup/inventory names and prior
+metadata/receipt files. It found no earlier three-config content hash/backup,
+pre-614-to-610 per-entry cache inventory or historical writer trace. Investigation
+cannot establish original bytes, the four differing entries or their writer.
+The historical configuration writer remains **UNKNOWN**, original content
+**UNVERIFIED**, and the separate **614 to 610 cache event OPEN**.
+
+New round-entry and post-test observations match the preceding post-incident
+configuration hashes, both database metadata pairs, 98,853 canonical environment
+entries, 610 current cache entries and the empty office-cache inventory. These
+are forward comparisons, not retroactive backups. No real configuration values,
+credentials or database/cache contents were printed, restored or cleaned; no
+timestamps were adjusted. The existing early runtime isolation remains active;
+its Python audit guard is not an OS sandbox. Final receipts separately record
+135 protected raw files, NUL, retained directories, process/port/staging state
+and the final secret scan. There is no total protection PASS.
 
 ### Protection: separate historical uncertainty from forward isolation
 
-| Domain                                 | Evidence and result                                                                                                                                                                                                                                                                  | Status                                                |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| Historical configuration writer        | The old three-file mtime overlaps an independent diagnostic but precedes its recorded cleanup. No historical writer trace exists; overlap and source capability are not attribution.                                                                                                 | UNKNOWN                                               |
-| Original configuration content         | No pre-change content hash or backup was found. Restricted local post-incident hashes are observations, not prior backups. No configuration values or credentials were printed.                                                                                                      | UNVERIFIED                                            |
-| Configuration during this round        | `.env`, `.env.example`, `flowsettings.py` match this round's first post-incident byte hashes and metadata. No restore or timestamp adjustment.                                                                                                                                       | Current observation matches; historical incident OPEN |
-| Real databases                         | Both known `sql.db` size/mtime pairs match; database contents were not opened for this comparison.                                                                                                                                                                                   | Metadata unchanged; no new byte-integrity claim       |
-| Real theflow cache                     | Comparison with the preceding checkpoint reports 614 to 610 metadata entries and a different metadata digest. Previous per-entry inventory is absent. Current metadata was preserved privately without reading cache contents. Timing, writer and content integrity remain unproved. | OPEN; no cleanup/restore                              |
-| Canonical environment and office cache | Existing metadata inventories match (98,853 canonical entries; empty `C:/Users/22826/office-cache` inventory).                                                                                                                                                                       | Metadata unchanged                                    |
-| User changes and retained roots        | All 135 protected raw files, NUL and historical refused-cleanup directories are retained. Final receipt separately verifies owned processes, port 8768 and staging.                                                                                                                  | Per-domain receipt; no total protection PASS          |
+| Domain                                   | Evidence and result                                                                                                                                                                                                                                                         | Status                                                |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Historical configuration writer          | The old three-file mtime overlaps an independent diagnostic but precedes its recorded cleanup. No historical writer trace exists; overlap and source capability are not attribution.                                                                                        | UNKNOWN                                               |
+| Original configuration content           | No pre-change content hash or backup was found. Restricted local post-incident hashes are observations, not prior backups. No configuration values or credentials were printed.                                                                                             | UNVERIFIED                                            |
+| Configuration post-incident observations | `.env`, `.env.example`, `flowsettings.py` match this round's first post-incident byte hashes and metadata. No restore or timestamp adjustment.                                                                                                                              | Current observation matches; historical incident OPEN |
+| Real databases                           | Both known `sql.db` size/mtime pairs match; database contents were not opened for this comparison.                                                                                                                                                                          | Metadata unchanged; no new byte-integrity claim       |
+| Real theflow cache                       | The earlier recorded comparison reports 614 to 610 metadata entries and a different metadata digest. Previous per-entry inventory is absent. Current metadata was preserved privately without reading cache contents. Timing, writer and content integrity remain unproved. | OPEN; no cleanup/restore                              |
+| Canonical environment and office cache   | Existing metadata inventories match (98,853 canonical entries; empty `C:/Users/22826/office-cache` inventory).                                                                                                                                                              | Metadata unchanged                                    |
+| User changes and retained roots          | All 135 protected raw files, NUL and historical refused-cleanup directories are retained. Final receipt separately verifies owned processes, port 8768 and staging.                                                                                                         | Per-domain receipt; no total protection PASS          |
 
 `dbaefa8f` retains isolation red cases. `91a7f4aa` uses the existing process
 runtime to check immutable owned roots/markers before business imports and
@@ -116,17 +224,12 @@ is preserved. A separate plain-page frame probe passed and does not establish
 the real-App failure's cause. No forced click, Enter substitution, repeated
 click, enlarged timeout or full-batch retry was used to hide it.
 
-Next minimum browser proposition: at the first isolated App login stall,
-correlate native main/utility-world animation frames with page lifecycle/frame
-production to distinguish absent browser frames from a replaced/blocked page
-callback. Preserve that failed click; do not proceed to the 37-record matrix
-until the prerequisite is resolved. The separate protection differences need
-writer/old-content evidence or remain explicitly unresolved; later isolation
-cannot retroactively close them.
+The current follow-up observations and remaining failed-state proposition are
+recorded above; this historical candidate failure is not rewritten.
 
-### Current verification and delivery scope
+### Retained verification and delivery scope at cc0bb3a3
 
-Focused Python: **22 passed**; Node guard/observer/frontend contracts:
+At that prior checkpoint, focused Python: **22 passed**; Node guard/observer/frontend contracts:
 **146 passed**. A first focused run overlapped a line-ending formatter and is
 excluded from frozen verification; after formatting, the suite ran serially
 and its input hashes were checked. Linux-platform mypy passes **1,982 files**.
@@ -137,13 +240,13 @@ Hooks, full Ruff, hygiene, lock parity, supply-chain policy, exact G0 controls
 and secret scans use unchanged policies; final report delivery has its own
 secret scan and input-equivalence receipt.
 
-Current Quality [35816144107](https://github.com/262412/MARA/actions/runs/35816144107) at `cc0bb3a3ec83bca6932a431dc766bb1713749050`
+Retained Quality [35816144107](https://github.com/262412/MARA/actions/runs/35816144107) at `cc0bb3a3ec83bca6932a431dc766bb1713749050`
 completed **failure** with **13 success /
 7 failure** (actual job results below). All non-security
 gates passed. Three Python audits and three container baselines fail; the
 required aggregate remains failed. No security gate was waived or widened.
 
-| Current job                                                | Result  | Job ID         |
+| Retained job                                               | Result  | Job ID         |
 | ---------------------------------------------------------- | ------- | -------------- |
 | Frontend and browser security                              | success | `107037967962` |
 | ktem isolated runtime                                      | success | `107037968061` |
@@ -166,7 +269,7 @@ required aggregate remains failed. No security gate was waived or widened.
 | Unified pytest collection                                  | success | `107037969107` |
 | Required quality gates                                     | failure | `107048743912` |
 
-| Current Linux suite          | Result                                                   |
+| Retained Linux suite         | Result                                                   |
 | ---------------------------- | -------------------------------------------------------- |
 | ktem isolated runtime        | 3964 passed, 139 warnings in 638.33s (0:10:38)           |
 | slide_cli                    | 147 passed (pytest -qq progress; exit 0)                 |
@@ -193,7 +296,7 @@ Its incomplete coverage artifact has 74 members and no combined report;
 it is not substituted for current coverage. No repeated CI was dispatched
 for unchanged `40b187d9` or the retired SHA.
 
-All four packages were rebuilt at the current source as eight wheel/sdist
+All four packages were rebuilt at cc0bb3a3 as eight wheel/sdist
 archives and passed the existing clean-wheel gate outside the checkout,
 including installed callback resources and `MARA`/`MARA-cli` entrypoints
 without `PYTHONPATH`. Artifact `10732160259` has SHA-256
@@ -204,7 +307,7 @@ No new full installed CLI or source-Sidecar business-flow matrix is claimed
 here; their prior source-bound R6-A evidence remains retained. New native
 Sidecar smoke belongs to Desktop Gate 2 below.
 
-Current coverage artifact `10732956317` has SHA-256
+Retained cc0bb3a3 coverage artifact `10732956317` has SHA-256
 `ae06f718f4b27b94a1ff3de8f9f57db5755493951266913f204620fc2a973ea3`. The original collector, subprocess patch,
 aliases, production scope and floors are unchanged; there are no temporary
 runtime-file entries or raw package-relative aliases in the combined report.
@@ -256,15 +359,18 @@ It does not certify all clean VMs or the unexecuted 37-scenario Web matrix.
 | C3                   | DownloadWorkspace, FD/manifest, transfers and retention                          | ACCEPTED; download lifetime belongs here, not R5-A                                         |
 | R6-A / U1            | Inspection/identity/CLI/Sidecar plus direct browser tail/selection seams         | Implemented work retained; overall BLOCKED pending required browser and protection closure |
 
-Round baseline: `4721872a81cdf504f5c01de41ac134f76043dc8f`; accepted R5:
+Preceding checkpoint baseline: `4721872a81cdf504f5c01de41ac134f76043dc8f`; accepted R5:
 `41274852f1fda541b3162d5ae39a43beb8e92605`; fixed original Dev:
 `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
 The commit ledger retains `dbaefa8f` (isolation red), `91a7f4aa` (test boundary),
 `8ea619f6` (selector red/observer), `7f29ce87` (production fix), `79c99ae6`
 (checkpoint), `5dbcbc3a` (typed receipt), `48affef7` (test portability), and
 `cc0bb3a3` (owned coverage publication).
-Final source/test/harness/package CI input is the full `cc0bb3a3` SHA above.
-Report/local/remote identities are recorded in E's `final-delivery.json` and
+Retained full Quality/package CI input is the full `cc0bb3a3` SHA above.
+Current diagnostic source/test/harness is 79a3f36e; no new full Quality result
+is claimed for it. Package/coverage/native reuse is limited by L's domain receipt.
+Current report/local/remote identities are recorded in L's `final-delivery.json`;
+E's previous identities remain in its `final-delivery.json` and
 ordinary-push receipt; report-only reuse verifies source/harness bytes and
 all eight distribution member lists, and does not claim a new CI execution.
 
