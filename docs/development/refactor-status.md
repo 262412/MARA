@@ -1,131 +1,160 @@
 # Safe-refactor status
 
-## Current Login/frame diagnostic checkpoint: R6-A/U1 (2026-09-26)
+## Current bounded acceptance checkpoint: R6-A/U1 (2026-09-26)
 
-**R6-A/U1 remains BLOCKED.** Round baseline is
-`c5ae33ab6ec8d3e390db7d2b6a82a51141670def`; diagnostic source/tests/harness is
-`79a3f36ef65219c593c078a2f9f23a675fdb02cf`. This is a test-only observation
-checkpoint, not an acceptance candidate or a production fix. The selector fix
-`7f29ce87d2aa83080f9964b38cdb0eba6f878973` and R5 ACCEPTED scope are retained.
-S1/PCRE2 remains OPEN; merge/release remains NO-GO. No R6-B/C/D was started.
+**R6-A/U1 remains BLOCKED: four exit cases passed, the fifth failed at Login
+before its held-producer boundary.** This round executed baseline
+`e8a147931181ef41965cf48207bbf3853c6888b0`, with source/test/harness bytes from
+`79a3f36ef65219c593c078a2f9f23a675fdb02cf`. No production, test or harness file
+was changed this round. The selector fix `7f29ce87d2aa83080f9964b38cdb0eba6f878973`
+and R5 ACCEPTED scope remain. R6-A is not ACCEPTED; S1/PCRE2 is OPEN and
+merge/release is NO-GO. No R6-B/C/D was started.
 
-The original `fd44f8776161c8aaf3048876134644d2723b3548` primary **37/37** and
-failed confirmation **16 passed / 1 failed / 20 NOT RUN** remain unchanged.
-The later 40b/cc0 and current complete primary/confirmation remain **NOT RUN**.
-No cross-batch or cross-SHA results are combined.
+The user's revised order removed historical Login reproduction/unique
+attribution as a prerequisite. The five exit cases therefore ran in their
+preregistered order. The new fifth-case failure stopped acceptance as required;
+there was no retry, additional Login-only launch, replay or scheduling
+intervention after it. Selector/U1 regression, full primary 37, confirmation 37
+and new Quality CI are **NOT RUN** this round. In particular, no large CI was
+dispatched after the browser prerequisite failed.
 
 Evidence parent is `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`.
-New evidence is `r6a-u1-recovery/login-frame/` (L); `protection-selector/`
-(E below) and the prior Quality/Desktop directories retain their original runs.
+This round is `r6a-u1-recovery/bounded-acceptance/` (B). The prior
+`login-frame/` (L), `protection-selector/` (E) and every earlier failure remain.
+The original `fd44f8776161c8aaf3048876134644d2723b3548` primary **37/37** and
+confirmation **16 passed / 1 failed / 20 NOT RUN** are unchanged. Later 40b/cc0
+and current full primary/confirmation remain NOT RUN; no results are combined.
 
-### Login: first-stall evidence is still missing
+### Frozen natural profile and actual exit results
 
-The original `candidate-exit-assertion` really failed during the normal mouse
-Login stability wait, before the held producer. Its default `login()` enabled
-neither the selector flush gate nor deep Gradio logpoints. The legacy `frames=0`
-was unwired; its current-main rAF race and screenshot were **post-failure** probes.
-They do not identify native first-stall or utility-world behavior. The user now
-reports the desktop was visible and unlocked; this is a user statement, not an
-OS trace. Locking or remote disconnection is not an established cause.
+`acceptance-plan.json` and `frozen-inputs.json` were written before the first
+App. Both `MARA_BROWSER_FRAME_DIAGNOSTIC` and the legacy
+`MARA_BROWSER_LOGIN_DIAGNOSTIC` were fixed at **0**. The latter was absent in
+the original retained 37-scenario environment. Normal business observers and
+all required scenario counterexamples remain enabled; no active Login CDP/rAF
+observer, flush gate or deep Gradio logpoint was added to the exit probes.
+`DEBUG=pw:api,pw:browser` records action and launch logs. The same switches were
+used for all five cases, with the preregistered release-fault flag only on the
+last case.
 
-The opt-in `MARA_BROWSER_FRAME_DIAGNOSTIC=1` observer records the real App's
-frame/loader, context IDs and unique IDs, world tokens/time origin, lifecycle,
-Debugger pause/resume events, saved/current rAF identity, finite callback/timer
-records and normal Locator action log. It uses the **existing actual Playwright
-utility world**, identified from the installed adapter; it creates no extra
-world and sets no additional universal-access option. One combined main-world
-init script captures references before the existing web observer, without
-assuming the order of separate init scripts. No global rAF, timer or Promise
-implementation is replaced. Node bounds each CDP observation, records gaps and
-truncation, and releases owned listeners/timers/callbacks. The legacy unwired
-counter now says `frames: null, frameCounterInstalled: false`.
+The 132-entry source/test/harness hash map, protected working bytes, dependency
+inputs, runner scripts and runtime files were pinned. Every launch used the
+same installed Gradio **4.39.0**, Playwright **1.61.1**, headless Edge
+**153.0.4234.48** and normalized launch arguments. Browser executable and
+adapter hashes match before and after execution. Each serial App had a fresh
+owned runtime/profile/cache and exclusive port 8768. Launcher and App isolation
+receipts prove the boundary was active before business imports; actual
+config/data/cache/settings/database/temp and browser paths remain inside the
+owned roots. This Python audit boundary is not an OS sandbox.
 
-All new real-App runs use installed Gradio **4.39.0**, Playwright **1.61.1**, and
-headless Edge **153.0.4234.48**, protocol 1.3, revision
-`cf31d6623d8718e7a3c3e181e55e59c1aae57a73`. Actual launch arguments, owned
-profile/cache paths, runtime hashes and CDP identity are retained. The old
-failed run did not record its browser binary identity; a current version is
-not substituted for that missing historical fact.
+| Exit case       | Held/fault boundary                                                    | Outer / Node / App exit | Result                           |
+| --------------- | ---------------------------------------------------------------------- | ----------------------- | -------------------------------- |
+| Normal          | Actual Login, source and held generator reached                        | 0 / 0 / 0               | PASS                             |
+| Assertion       | Held generator, then exact `owned actual` / `owned expected` assertion | 1 / 1 / 0               | PASS                             |
+| Node watchdog   | Held generator and `watchdog-node`; `Node watchdog` primary            | 1 / 1 / 0               | PASS                             |
+| App watchdog    | Held generator and `watchdog-app`; `App watchdog` primary              | 1 / 1 / 1               | PASS                             |
+| Release failure | Login timed out; held generator never started                          | 1 / 1 / 1               | FAIL, not an expected-fault pass |
 
-| Diagnostic run                              | Actual outcome                                                           | Scope                                          |
-| ------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------- |
-| `natural-frame-assertion`                   | Login completed; intended assertion reached                              | Initial observed control                       |
-| `sequence-normal` then `sequence-assertion` | Both Login actions completed; normal exit and intended assertion reached | One predeclared serial two-App sequence        |
-| `original-login-observer-off`               | Login completed; intended assertion reached                              | Single-variable observer-off control           |
-| `final-observer-integration`                | Login completed; held producer reached; normal exit                      | Final observer binding and resource validation |
+`five-exit-contracts.json` verifies the four actual held/fault boundaries using
+their session/request/event identities. It separates UI/model/embedding
+release, generator completion, terminal requests, idle worker project frames,
+process exit and directory removal. All five Apps/Nodes and sampled browser
+processes exited without forced termination; both owned roots per case were
+removed. These cleanup facts do not turn the fifth functional failure into a
+pass. No 5/5 verified marker was produced.
 
-These are **five diagnostic App launches covering two probe kinds**, not five
-exit-acceptance passes. Four have same-frame main/actual-utility traces: saved
-native and current rAF callbacks arrived, function identity stayed equal,
-context/loader identity stayed stable through the click, and no Debugger pause
-was observed. The observer-off run has no equivalent frame evidence. No new
-natural Login failure was reproduced; no root cause or repair is claimed.
-No bringToFront, resize, screenshot, headful switch, synthetic frame, forced
-click, Enter/API login, timeout increase, browser replacement or full-matrix
-retry was used. In the final integration, both worlds have zero pending owned
-rAF/timers and zero dropped records at stop; App/Node exited, the producer was
-quiescent and owned roots were removed (`diagnostic-verification.json`).
+### New failure: exact timing, cleanup and evidence limit
 
-`login-frame-replay-bundle.zip` retains the original failed evidence and all
-**130 hash-verified historical input entries** (33 recovered CRLF representations),
-plus current controls and a single-run driver with source/runtime hash checks.
-SHA-256: `7bb6841d4603273d4b452e13872066f6148fbb679e1196d04dcfd57af313d07e`.
-It requires the existing owned workspace/runtime and is not a claim of a
-deterministic failure reproducer or a historical browser binary backup.
+`bounded-exit-release-failure.log` and `bounded-acceptance-blocker.json` retain
+the natural failed attempt. The normal mouse Login click began at
+**2026-09-26 12:20:49.295 UTC** (20:20:49.295 Beijing time); at
+**12:21:19.302 UTC** it failed at
+`tests/browser/chat_submission.cjs:136` after the original **30,000 ms** wait
+for the element to be visible, enabled and stable. The Locator resolved the
+Login button, but the click did not complete. No business queue request,
+backend operation, conversation or generator is recorded; corresponding
+fn/event/session/conversation identities are unavailable, not fabricated.
 
-The next minimum falsifiable proposition is at a **natural failed click**:
-do both saved-native and current rAF requests remain pending in the same main
-and actual utility contexts while finite timers advance? Context replacement,
-function replacement, a Debugger pause or missing/truncated observation instead
-selects a different diagnosis. Healthy controls cannot answer that failed-state
-proposition. Retain that first failure before choosing one scheduling intervention.
+The original failure was saved before the harness's existing post-failure
+observations. A current-main rAF request then lost its 2-second timer race.
+The subsequent DOM snapshot was complete/visible/focused, with button rectangle
+`(568, 315.375, 464, 40)`, opacity 1 and no reported animations. This is a
+single **post-failure** snapshot, not proof that geometry stayed stable during
+the click. Screenshot capture then timed out after 3 seconds, after fonts
+loaded; it remains a secondary error. Browser GPU messages at 12:21:24.508 UTC
+occurred during close, after both failures, and are not assigned as their cause.
+No first-stall saved-native/utility-world/context lifecycle trace was captured
+because the active observer was deliberately off.
 
-### Exit, browser acceptance and current local gates
+The release-failure hook was armed before Login and fired during shutdown,
+although its held-producer precondition had not been reached. Its UI release
+error is retained separately in `producer-teardown.json`; model, embedding and
+deletion-embedding release still ran. `model-gate-teardown.json` records
+waiting/finished/wait-exited/generator-finished all false, and producer
+before/after requests/generators/workers are empty. The Node Login primary
+survives in `results.json`; `runner-cleanup-error.json` records App cleanup
+failure without replacing that primary. An empty quiescent producer set is
+not evidence that this held-exit contract passed.
 
-Preliminary Login cause/repair remains unproved. Consequently the final-harness
-five-case exit acceptance, primary 37 and confirmation 37 are **NOT RUN**.
-Original success/failure/interruption evidence remains intact, including the
-earlier Login failures that never reached the intended exit fault point. The
-selector shared-flush/card-before-choices and all negative controls are retained;
-their production/observer inputs are unchanged. No old selector pass is relabelled
-as a new full-harness execution.
+Classification: a current natural Login actionability failure before the
+business event chain, with root cause **UNPROVED**. Similarity to the older
+Login stall does not prove a shared cause or a product/fixture classification.
+The next single minimum proposition is whether the actual Playwright
+utility-world stability check is waiting on an undelivered animation-frame
+callback in the same document, rather than repeated unstable geometry or
+context replacement. It requires correlated failed-state evidence; the
+post-failure main-world probe is insufficient. No further App was launched
+to pursue that proposition in this bounded acceptance round.
 
-At the committed diagnostic input, **152 Node tests** (including six new bounded
-observer tests) and **22 relevant Python tests** pass; changed-file hooks, full
-Ruff and hygiene pass. Counterexamples cover live timers with absent frames,
-simulated function replacement, new-document identity, explicit truncation and
-Node-side timeout independent of page timers. They are observer tests, not
-synthetic proof of the historical product failure. The final integration's
-complete recorded input map matches the committed diagnostic files.
+### Historical Login and verification scope remain separate
 
-New full Quality CI is **NOT RUN** at this blocked diagnostic checkpoint; the
-unchanged cc0 run was read, not redispatched. Its actual completed/failure result
-and original Linux/coverage/build evidence are retained below, not relabelled as
-execution of 79a3f36e. `domain-input-equivalence.json` verifies all eight prior
-archives exclude changed CJS/report paths; setuptools source-list rules, package
-source/metadata/locks/build scripts and Desktop inputs are unchanged. Package,
-clean-wheel and Python coverage evidence therefore remains scoped to cc0; native
-Gate2 remains scoped to 48aff. No new build, native run or Linux run is claimed.
-The complete browser harness is expressly **not equivalent** to cc0.
+L retains five prior diagnostic App launches, all with Login completed, covering
+only normal/intentional-assertion kinds. Four enabled the bounded frame observer;
+one was its off control. They were not five exit-acceptance passes and did not
+attribute or repair the historical fault. The user's statement that the old
+desktop was visible and unlocked remains a statement, not an OS trace.
+L's `login-frame-replay-bundle.zip` was rechecked read-only: **171 members**,
+SHA-256 `7bb6841d4603273d4b452e13872066f6148fbb679e1196d04dcfd57af313d07e`.
+It preserves 130 verified historical input entries; the old failing browser
+binary identity remains UNRECORDED. No current version fills that gap.
 
-### Historical protection ceiling and this round's observation
+The earlier **152 Node / 22 Python** passes, selector shared-flush and
+card-before-choices evidence and their negative controls remain at their actual
+recorded inputs. They were not rerun after this failed exit prerequisite and
+are not substituted for a current full matrix. B's domain-equivalence receipt
+proves e8a14793 differs from 79a3f36e only in this report and that all 132 raw
+browser input hashes match. No observer or production fix is claimed this round.
 
-The bounded lookup used existing recovery backup/inventory names and prior
-metadata/receipt files. It found no earlier three-config content hash/backup,
-pre-614-to-610 per-entry cache inventory or historical writer trace. Investigation
-cannot establish original bytes, the four differing entries or their writer.
-The historical configuration writer remains **UNKNOWN**, original content
-**UNVERIFIED**, and the separate **614 to 610 cache event OPEN**.
+Quality **35816144107** remains the prior **cc0bb3a3** execution with actual
+**13 success / 7 failure**. New Quality, Linux, build/clean-wheel, coverage and
+Desktop execution are NOT RUN here. B extends L's scoped input-equivalence
+receipt: all eight cc0 wheel/sdist archives exclude the changed browser CJS
+and report; package metadata/source/build/lock inputs remain equal. Native
+Gate 2 remains **48affef7** 3/3, not a new current-tree run or clean-VM matrix.
+No cc0 result is relabelled as 79a/e8 execution. The preregistered next Quality
+baseline remains fixed original Dev `adab3f4d8f221e3620494fab0a24ef8e5557d12a`;
+no dependency, baseline/alias, scan scope, required job or coverage floor changed.
 
-New round-entry and post-test observations match the preceding post-incident
-configuration hashes, both database metadata pairs, 98,853 canonical environment
-entries, 610 current cache entries and the empty office-cache inventory. These
-are forward comparisons, not retroactive backups. No real configuration values,
-credentials or database/cache contents were printed, restored or cleaned; no
-timestamps were adjusted. The existing early runtime isolation remains active;
-its Python audit guard is not an OS sandbox. Final receipts separately record
-135 protected raw files, NUL, retained directories, process/port/staging state
-and the final secret scan. There is no total protection PASS.
+### Forward protection and independent historical disposition
+
+Entry and every before/after-App checkpoint match all **135 protected raw
+files**, NUL, the preceding post-incident three-config hashes, both real
+database metadata pairs, **98,853** canonical environment entries, **610**
+current cache entries and the empty office-cache inventory. No new protection
+difference occurred. Only task resources were released; the five historical
+refused-cleanup directories remain. Config values/credentials and real
+database/cache contents were not printed, restored or cleaned; mtime was not
+changed. Final report delivery has its own protection and secret-scan receipts.
+
+The separate historical disposition remains: configuration writer **UNKNOWN**,
+original bytes **UNVERIFIED**, and **614 to 610 cache event OPEN**. The existing
+bounded lookup found no old hashes/backups, prior per-entry inventory or writer
+trace. There was no new clue and no repeated historical scan this round.
+Metadata counts do not identify four lost user contents or normal eviction.
+Forward isolation/comparison cannot establish historical integrity. The author
+still needs to decide disposition of that uncertainty; this task does not
+waive it or claim total protection PASS. Functional acceptance, historical
+incident disposition and release security remain independent conclusions.
 
 ### Protection: separate historical uncertainty from forward isolation
 
@@ -367,10 +396,11 @@ The commit ledger retains `dbaefa8f` (isolation red), `91a7f4aa` (test boundary)
 (checkpoint), `5dbcbc3a` (typed receipt), `48affef7` (test portability), and
 `cc0bb3a3` (owned coverage publication).
 Retained full Quality/package CI input is the full `cc0bb3a3` SHA above.
-Current diagnostic source/test/harness is 79a3f36e; no new full Quality result
-is claimed for it. Package/coverage/native reuse is limited by L's domain receipt.
-Current report/local/remote identities are recorded in L's `final-delivery.json`;
-E's previous identities remain in its `final-delivery.json` and
+Current executed baseline is e8a14793 with source/test/harness bytes from
+79a3f36e; no new full Quality result is claimed. Scoped package/coverage/native
+reuse is extended by B's domain-input-equivalence receipt.
+Current report/local/remote identities are recorded in B's `final-delivery.json`;
+L and E retain their own `final-delivery.json` identities and
 ordinary-push receipt; report-only reuse verifies source/harness bytes and
 all eight distribution member lists, and does not claim a new CI execution.
 
