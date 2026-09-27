@@ -1,6 +1,48 @@
 # Safe-refactor status
 
-## Current independent R6-B review (2026-09-27)
+## Current independent R6-C checkpoint (2026-09-27)
+
+Baseline: `c5d9bb7f20fa2db5b5a893cb2dcc96de0762e767`; branch:
+`codex/r0-r1-safe-refactor`; fixed original Dev:
+`adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+
+The user accepts **R6-B at `eb36a61ceb5e03d3a916d567d5e08037597950a9`**
+only for its implemented scope, actual artifacts and verified Windows Server 2022 /
+Ubuntu 22.04 / Ubuntu 24.04 platforms. The retained R6-B review below records its
+status before that acceptance; installer, clean-VM, macOS and missing Desktop
+feature limitations still apply. **R5 remains ACCEPTED. R6-A/U1 remains BLOCKED
+and deferred, independently of R6-C.** No U1 diagnostic, five Gradio exits or
+original double-37 batch is scheduled here. R6-D is outside this round.
+
+R6-C is **IN PROGRESS, not ACCEPTED**. C1 owns existing MCP connection/session
+lifecycle and exception/HTML boundaries; C2 owns deck conversion boundaries and
+existing artifact integration evidence; C3 verifies existing benchmark entrypoints
+without forcing another abstraction. Characterization and failing regressions
+precede extraction and separate minimal fixes. No new transport, schema,
+permission policy or global concurrency system is authorized.
+
+| Group | Owner and contract | Current evidence | State |
+| --- | --- | --- | --- |
+| C1 MCP / agent | Existing tool facade and BaseTool; stdio/SSE session ownership | Source/consumer inspection; new controlled tests not yet run | IN PROGRESS |
+| C2 deck / artifacts | Content edits vs external conversion; existing R5 services | Existing tests identified; real conversion and installed CLI not yet run | NOT RUN |
+| C3 benchmark | Existing CLI / runner / scoring / reports | Existing boundaries retained pending miniature manifest verification | NOT RUN |
+| Delivery | Relevant suites, four packages, clean-wheel, coverage, Quality, native impact | New candidate not frozen; no new CI dispatched | NOT RUN |
+
+Evidence root:
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r6c-independent-tools-artifacts/`.
+Initial forward protection matches the previous delivery: all 135 protected raw
+file hashes, NUL, canonical environment metadata (98,853 entries), current cache
+metadata (610 entries), office cache (0), protected config bytes and runtime DB
+metadata. This is a forward receipt, **not proof of historical integrity**.
+Historical config writer **UNKNOWN**, original content **UNVERIFIED**, cache
+incident **OPEN** remain separately unresolved. No historical cleanup or recovery
+was performed. Local protected edits remain outside explicitly staged task files.
+
+S1/PCRE2 remain **OPEN**; merge/release remain **NO-GO**. New functional results,
+security findings relative to the frozen baseline and changes since R6-B will be
+reported separately with their actual source/test/package/report/remote SHAs.
+
+## Retained independent R6-B review (2026-09-27)
 
 Baseline: `dfeda2335b7e8f37b8361ca5c5578561c57bb583`; branch:
 `codex/r0-r1-safe-refactor`; fixed original Dev:
