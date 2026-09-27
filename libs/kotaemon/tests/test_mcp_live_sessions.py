@@ -6,6 +6,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -169,6 +170,10 @@ def test_server_error_and_native_async(owned_server):
 def test_cancellation_after_server_held(owned_server):
     config, evidence = owned_server
     tool = create_tools_from_config(config)[0]
+    watchdog_events: list[dict[str, object]] = []
+    watchdog = threading.Timer(
+        10, stop_owned_held_server, args=(evidence, watchdog_events)
+    )
 
     async def cancel():
         task = asyncio.create_task(tool._arun_tool(value="hold"))
@@ -177,11 +182,21 @@ def test_cancellation_after_server_held(owned_server):
                 until, lambda: any(r["event"] == "held" for r in records(evidence))
             )
         finally:
+            watchdog.start()
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task
 
-    asyncio.run(cancel())
+    try:
+        asyncio.run(cancel())
+    finally:
+        watchdog.cancel()
+        if watchdog.ident is not None:
+            watchdog.join(timeout=10)
+    assert not watchdog.is_alive()
+    assert (
+        not watchdog_events
+    ), f"Cancellation required watchdog recovery: {watchdog_events}"
     if config["transport"] == "sse":
         port = int(config["url"].split(":")[2].split("/")[0])
         until(
@@ -196,6 +211,21 @@ def test_cancellation_after_server_held(owned_server):
     print(
         json.dumps({"after_client_cancellation_before_fixture_stop": records(evidence)})
     )
+
+
+def stop_owned_held_server(evidence, events):
+    """Bound a failed cancellation without counting fixture termination as success."""
+    held_pids = {
+        record["pid"] for record in records(evidence) if record["event"] == "held"
+    }
+    events.append({"phase": "cancellation-watchdog", "held_pids": sorted(held_pids)})
+    for pid in held_pids:
+        process = psutil.Process(pid)
+        command = process.cmdline()
+        assert str(Path(__file__).with_name("mcp_owned_server.py")) in command
+        assert str(evidence) in command
+        process.kill()
+        process.wait(timeout=5)
 
 
 def test_early_exit_or_missing_sse_endpoint(owned_server):
