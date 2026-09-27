@@ -141,6 +141,8 @@ def _run_async(coro: Any) -> Any:
     except RuntimeError:
         return asyncio.run(coro)
 
+    if loop.is_closed():
+        return asyncio.run(coro)
     if loop.is_running():
         import concurrent.futures
 
