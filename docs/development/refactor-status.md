@@ -1,6 +1,144 @@
 # Safe-refactor status
 
-## Current natural-validation preflight: R6-A/U1 (2026-09-27)
+## Current Edge154 natural acceptance: R6-A/U1 (2026-09-27)
+
+**R6-A/U1 remains BLOCKED: 3 exit cases PASS, the fourth FAILS at Login,
+and the fifth is NOT RUN.** This is the one natural plan authorized after
+`8f20f5ae9d1d667623ec051f89f7f6891e6a0b0a`. It stopped on the first unexpected
+failure. Selector/U1 browser contracts, original 37 primary, 37 confirmation,
+and new source gates/Quality CI are **NOT RUN**. No retry, third batch, extra
+Login/A-B diagnostic or product change was made. R5 stays ACCEPTED; R6-A is
+not ACCEPTED; S1/PCRE2 remains OPEN and merge/release NO-GO.
+
+The supplemental authorization replaced only the Edge153 pin with the existing
+**Edge 154.0.4258.37**. The original preflight difference and zero-launch
+checkpoint remain below as history; their pending-authorization state is now
+superseded. Actual execution HEAD is
+`8f20f5ae9d1d667623ec051f89f7f6891e6a0b0a`; all 133 source/test/harness hashes
+match `fa8d8a276230a3d3185014a6afd88e55603651eb`. Selector fix `7f29ce87`, U1 and
+R5 implementation are unchanged. This delivery changes only this report in Git.
+
+Evidence is `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`
+`r6a-u1-recovery/natural-validation/` (N). `approved-browser-input.json`,
+`acceptance-plan.json` and `frozen-inputs.json` preceded every formal App.
+The natural profile retains Playwright **1.61.1**, Gradio **4.39.0**, `msedge`,
+headless, 1600x1200, en-US, original business observers/counterexamples and
+all STABILITY/FRAME/LOGIN DIAGNOSTIC switches **0**. Normalized launch
+arguments in all four runs equal the original natural launch; only owned
+profile/cache roots differ. Each App used a fresh empty runtime/cache,
+serial startup, exclusive port 8768 and the original timeout budgets.
+
+### Approved files and actual loaded identity
+
+| Input                                                          | Approved version | SHA-256                                                            |
+| -------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------ |
+| `C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe` | 154.0.4258.37    | `f530bafcdb7e529bd21dd8be46e20c82b5c70fa0ffd770fe4c45a5c2c054c211` |
+| `154.0.4258.37/msedge.dll` under that Application directory    | 154.0.4258.37    | `e14b3d725fef3eb23ef28d01d6d5707bcb6ffc3ae59ce2e42997ac72bf0674f0` |
+
+First formal browser PID **53880** was observed at **04:24:29.605 UTC** with
+that executable and mapped 154 DLL, matching both hashes. All four formal
+browsers have loaded-module receipts. The failed case used Node **51968** and
+browser **52748**; its module receipt was saved at **04:27:19.585 UTC**, before
+Login. OS-only reads of owned process identities added no browser logpoints,
+parameters, page timers or synthetic frames. Races with already-exited child
+PIDs are retained as observation gaps; the main browser identity was captured.
+Before/after hashes and in-run metadata monitoring found no input change.
+The residual 153 DLL is not used as 154 running evidence. No browser install,
+downgrade, update-service change or security-policy change occurred.
+
+### One stopped natural attempt: original five exits
+
+The driver started at **04:23:48.878 UTC** on 2026-09-27 (Beijing 12:23);
+its execution ledger records **257.09 seconds**. `edge154-stopped-plan-analysis.json` checks saved results,
+held events, identities, isolation and cleanup without launching an App.
+The planned success-only five-case verifier was not executed.
+
+| Ordered case      | Intended held/fault point                           | Current result | Actual outer / Node / App exit |
+| ----------------- | --------------------------------------------------- | -------------- | ------------------------------ |
+| Normal completion | Held model reached before release                   | PASS           | 0 / 0 / 0                      |
+| Assertion         | Held reached, exact owned expected/actual assertion | PASS           | 1 / 1 / 0                      |
+| Node watchdog     | Held reached, Node watchdog marker and primary      | PASS           | 1 / 1 / 0                      |
+| App watchdog      | **Not reached; Login failed before injection**      | **FAIL**       | 1 / 1 / 0                      |
+| Release failure   | Not started after fourth-case failure               | NOT RUN        | NOT RUN                        |
+
+For the first three cases, real session/event IDs identify the held request.
+Model-wait exit, generator completion, worker project frames, requests,
+barriers, process exit and directory removal are separate evidence. The
+intermediate model-wait receipt is not treated as generator completion;
+final producer records show finished/non-executing generators and quiescence.
+The fourth has no held record, App watchdog marker, queue event, server
+operation, generator or model worker. Its outer exit 1 is a Login failure,
+not a successful watchdog injection. All four released their UI/model/
+embedding barriers, exited without forced termination, removed only their
+owned roots and left no owned process or listener. The failed screenshot
+remains a secondary error, separate from successful process/resource cleanup.
+
+### Fourth-case failure layer and evidence ceiling
+
+`edge154-exit-app-watchdog.log` records:
+
+- **04:27:20.549 UTC:** real `locator.click` begins on Login.
+- **04:27:20.553-20.554:** button resolves; visible/enabled/stable wait begins.
+- **04:27:50.550:** the unchanged 30,000 ms click budget expires. No
+  missing-stable, retry, scroll or performing-click record occurs in that call.
+- **After saving the primary:** the existing harness's bounded main-world
+  rAF check returns timeout at 04:27:52.564; the DOM snapshot reports a visible,
+  focused document and button at (568, 315.375, 464, 40), opacity 1, with no
+  reported animations. These are post-failure observations.
+- **04:27:55.572:** screenshot times out after 3,000 ms, after fonts loaded.
+  GPU command-buffer messages at 04:27:55.769/770 occur during browser close,
+  after Login failed; they do not establish its cause.
+
+The actual utility `evaluateInUtility -> checkElementStates -> stable/rAF -> resolve/reject` return chain was not observed in this natural profile. No
+utility frame/context/node/action identity or first callback record is claimed.
+The evidence locates a pre-Login mouse actionability stall; it does not
+distinguish a utility return-chain, scheduling, context or product cause.
+There is no evidence-based product fix in this round. **Edge154's current
+candidate failed; Edge153's historical Login problem remains UNATTRIBUTED.**
+Neither the first three passes nor similarity of the fourth failure proves
+that upgrading fixed the old problem or that both failures share a cause.
+The next minimum step is independent disposition of this saved failure and
+its missing utility-return evidence. No further run is automatically opened.
+
+### Forward protection and delivery boundaries
+
+Entry and every before/after-App checkpoint match all **135 protected raw
+files**, NUL, three restricted post-incident config hashes, real database
+metadata, **98,853** canonical-environment entries, **610** cache entries and
+office-cache metadata. Config contents/hashes stay private; metadata checks
+do not certify unread file contents. The original isolation guard ran before
+business imports in every launcher/App; resolved config/data/cache/settings/
+database/temp/profile paths stayed under the owned root. No new protection
+difference was found. Historical config writer **UNKNOWN**, original bytes
+**UNVERIFIED**, and cache **614 to 610 OPEN** remain independent. No new
+historical clue, repeated historical scan, restoration, mtime adjustment or
+real-cache cleanup occurred. Forward protection does not close that history.
+
+Prior results remain separate: fd44 primary **37/37**, confirmation **16 PASS /
+1 FAIL / 20 NOT RUN**; original R5 same-source double 37/37; earlier natural
+exits **4 PASS / 1 FAIL**; e15 instrumented Edge/Chromium **5/5 + 5/5**; fa8 Node
+**160/160**. None substitutes for the current unexecuted selector/U1 or
+double-37 acceptance. No cross-version/profile/source/batch results are joined.
+
+Report-only equality is checked against frozen source/test/harness, 17
+dependency inputs and protected bytes. Existing package/coverage evidence
+stays scoped to `cc0bb3a3ec83bca6932a431dc766bb1713749050`; native Desktop
+Gate 2 stays `48affef7e0504f63286793c571f6167c3fa82d69` (3/3, scoped).
+Quality **35816144107**, cc0's **13 success / 7 failure**, is historical only.
+No new Linux/Node, build, clean-wheel, coverage, Desktop or Quality execution
+is claimed after this failed prerequisite. Windows99, kotaemon4 and Win32
+mypy limitations retain their existing records. Browser154 does not certify
+Desktop or installation behavior.
+
+N's `edge154-report-commit.json`, `edge154-ordinary-push.json` and
+`edge154-delivery.json` record actual report/local/remote SHAs, report hooks,
+final secret scan, final protection, archive identity and unchanged-input
+proof. Only this report is staged/committed. No branch/worktree creation,
+force push, merge, deployment, publication, architecture split, dependency/
+safety/coverage-policy change or R6-B work occurred. Delivery remains
+**BLOCKED for independent R6-A review**, not functional acceptance.
+
+## Retained natural-validation preflight at 8f20f5ae (2026-09-27)
 
 **R6-A/U1 remains BLOCKED before the first App launch: the required Edge
 binary changed.** At baseline `988c698336b64782ea75f2acc258b56030544078`, the
