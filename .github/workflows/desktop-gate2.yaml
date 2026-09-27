@@ -100,7 +100,7 @@ jobs:
           query_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-request
           (
             cd apps/desktop
-            ../../.venv/bin/python -m sidecar.smoke_embedding_server \
+            exec ../../.venv/bin/python -m sidecar.smoke_embedding_server \
               --port-file "$embedding_port_file" \
               --port "$smoke_model_port" \
               --constant-embeddings \
@@ -374,7 +374,7 @@ jobs:
             --data-root "$settings_data_root" --seed
           (
             cd apps/desktop
-            ../../.venv/bin/python -m sidecar.smoke_embedding_server \
+            exec ../../.venv/bin/python -m sidecar.smoke_embedding_server \
               --port-file "$settings_port_file" \
               --port "$settings_model_port" \
               --token ollama \
@@ -533,7 +533,7 @@ jobs:
           query_request_file=/tmp/mara-desktop/data/MARA/tmp/gate3-query-request
           (
             cd apps/desktop
-            python3 -m sidecar.smoke_embedding_server \
+            exec python3 -m sidecar.smoke_embedding_server \
               --port-file "$embedding_port_file" \
               --port "$smoke_model_port" \
               --token ollama \
@@ -1359,6 +1359,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mara-desktop-windows-build
+          include-hidden-files: true
           path: |
             apps/desktop/release/MARA-win32-x64/
             apps/desktop/release/windows-metrics.txt
