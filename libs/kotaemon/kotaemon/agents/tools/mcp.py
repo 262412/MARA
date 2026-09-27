@@ -19,6 +19,7 @@ from typing import Any, Optional, Type
 from pydantic import BaseModel, Field, create_model
 
 from .base import BaseTool
+from .mcp_session import initialized_session
 
 logger = logging.getLogger(__name__)
 
@@ -121,34 +122,16 @@ def _make_tool(parsed: dict, tool_info: Any) -> "MCPTool":
 
 async def _async_discover_tools(parsed: dict) -> list["MCPTool"]:
     """Async: connect to an MCP server and return MCPTool wrappers."""
-    from mcp import ClientSession
-    from mcp.client.sse import sse_client
-    from mcp.client.stdio import StdioServerParameters, stdio_client
-
-    tools: list[MCPTool] = []
-    transport = parsed["transport"]
-
-    if transport == "stdio":
-        server_params = StdioServerParameters(
-            command=parsed["command"],
-            args=parsed.get("args", []),
-            env=parsed.get("env") or None,
-        )
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.list_tools()
-                for tool_info in result.tools:
-                    tools.append(_make_tool(parsed, tool_info))
-    elif transport == "sse":
-        async with sse_client(url=parsed["command"]) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.list_tools()
-                for tool_info in result.tools:
-                    tools.append(_make_tool(parsed, tool_info))
-
-    return tools
+    if parsed["transport"] not in {"stdio", "sse"}:
+        return []
+    async with initialized_session(
+        parsed["transport"],
+        parsed["command"],
+        parsed.get("args", []),
+        parsed.get("env", {}),
+    ) as session:
+        result = await session.list_tools()
+        return [_make_tool(parsed, tool_info) for tool_info in result.tools]
 
 
 def _run_async(coro: Any) -> Any:
@@ -190,50 +173,20 @@ def create_tools_from_config(
 
 
 async def async_discover_tools_info(config: dict) -> list[dict]:
-    """Connect to an MCP server and return raw tool info dicts.
-
-    Returns a list of dicts with keys: name, description.
-    Useful for UI display without instantiating full MCPTool objects.
-    """
-    from mcp import ClientSession
-    from mcp.client.sse import sse_client
-    from mcp.client.stdio import StdioServerParameters, stdio_client
-
+    """Connect to an MCP server and return raw name/description dictionaries."""
     parsed = parse_mcp_config(config)
-    transport = parsed["transport"]
-    tool_infos: list[dict] = []
-
-    if transport == "stdio":
-        server_params = StdioServerParameters(
-            command=parsed["command"],
-            args=parsed.get("args", []),
-            env=parsed.get("env") or None,
-        )
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.list_tools()
-                for t in result.tools:
-                    tool_infos.append(
-                        {
-                            "name": t.name,
-                            "description": t.description or "",
-                        }
-                    )
-    elif transport == "sse":
-        async with sse_client(url=parsed["command"]) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.list_tools()
-                for t in result.tools:
-                    tool_infos.append(
-                        {
-                            "name": t.name,
-                            "description": t.description or "",
-                        }
-                    )
-
-    return tool_infos
+    if parsed["transport"] not in {"stdio", "sse"}:
+        return []
+    async with initialized_session(
+        parsed["transport"],
+        parsed["command"],
+        parsed.get("args", []),
+        parsed.get("env", {}),
+    ) as session:
+        result = await session.list_tools()
+        return [
+            {"name": t.name, "description": t.description or ""} for t in result.tools
+        ]
 
 
 def discover_tools_info(config: dict) -> list[dict]:
@@ -320,10 +273,6 @@ class MCPTool(BaseTool):
     async def _arun_tool(self, *args: Any, **kwargs: Any) -> str:
         """Async implementation that connects to the MCP server and calls
         the tool."""
-        from mcp import ClientSession
-        from mcp.client.sse import sse_client
-        from mcp.client.stdio import StdioServerParameters, stdio_client
-
         # Build tool arguments
         if args and isinstance(args[0], str):
             try:
@@ -338,33 +287,17 @@ class MCPTool(BaseTool):
         else:
             tool_args = kwargs
 
-        if self.server_transport == "stdio":
-            cmd = self.server_command
-            cmd_args = self.server_args
-            # Auto-split if full command string with no separate args
-            if not cmd_args and " " in cmd:
-                parts = shlex.split(cmd)
-                cmd = parts[0]
-                cmd_args = parts[1:]
-
-            server_params = StdioServerParameters(
-                command=cmd,
-                args=cmd_args,
-                env=self.server_env if self.server_env else None,
-            )
-            async with stdio_client(server_params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.call_tool(self.mcp_tool_name, tool_args)
-                    return self._format_result(result)
-        elif self.server_transport == "sse":
-            async with sse_client(url=self.server_command) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.call_tool(self.mcp_tool_name, tool_args)
-                    return self._format_result(result)
-        else:
+        if self.server_transport not in {"stdio", "sse"}:
             return f"Unsupported transport: {self.server_transport}"
+        cmd, cmd_args = self.server_command, self.server_args
+        if self.server_transport == "stdio" and not cmd_args and " " in cmd:
+            parts = shlex.split(cmd)
+            cmd, cmd_args = parts[0], parts[1:]
+        async with initialized_session(
+            self.server_transport, cmd, cmd_args, self.server_env
+        ) as session:
+            result = await session.call_tool(self.mcp_tool_name, tool_args)
+            return self._format_result(result)
 
     def _format_result(self, result: Any) -> str:
         """Format MCP CallToolResult into a string."""
