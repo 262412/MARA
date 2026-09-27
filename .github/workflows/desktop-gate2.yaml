@@ -512,6 +512,13 @@ jobs:
           path: desktop-artifact
       - name: Extract package
         run: tar -xzf desktop-artifact/mara-linux-22.tar.gz -C desktop-artifact
+      - name: Verify relocated library links
+        run: |
+          broken_link=$(find desktop-artifact/MARA-linux-x64 -xtype l -print -quit)
+          if test -n "$broken_link"; then
+            printf 'Unresolved packaged link: %s\n' "$broken_link"
+            exit 1
+          fi
       - name: Configure Electron sandbox
         run: |
           sudo chown root:root desktop-artifact/MARA-linux-x64/chrome-sandbox
