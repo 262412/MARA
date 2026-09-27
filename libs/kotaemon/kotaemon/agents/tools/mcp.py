@@ -10,6 +10,7 @@ This module contains:
 """
 
 import asyncio
+import html
 import json
 import logging
 import shlex
@@ -252,12 +253,13 @@ def format_tool_list(
     """
     lines = [f"✅ Connected! Found <b>{len(tool_infos)}</b> tool(s):<br>"]
     for t in tool_infos:
-        desc = (t.get("description") or "No description")[:120]
+        name = html.escape(t["name"])
+        desc = html.escape((t.get("description") or "No description")[:120])
         if enabled_tools is not None:
             check = "✅" if t["name"] in enabled_tools else "⬜"
-            lines.append(f"&nbsp;&nbsp;{check} <b>{t['name']}</b> — {desc}<br>")
+            lines.append(f"&nbsp;&nbsp;{check} <b>{name}</b> — {desc}<br>")
         else:
-            lines.append(f"&nbsp;&nbsp;• <b>{t['name']}</b> — {desc}<br>")
+            lines.append(f"&nbsp;&nbsp;• <b>{name}</b> — {desc}<br>")
     if enabled_tools is not None:
         enabled_count = sum(1 for t in tool_infos if t["name"] in enabled_tools)
         lines.append(
