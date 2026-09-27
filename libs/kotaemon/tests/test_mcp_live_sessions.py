@@ -199,14 +199,15 @@ def test_cancellation_after_server_held(owned_server):
 
 
 def test_early_exit_or_missing_sse_endpoint(owned_server):
-    config, _evidence = owned_server
+    config, evidence = owned_server
     if config["transport"] == "stdio":
-        config["args"][3] = "exit"
+        config["args"][2] = "exit"
     else:
         config["url"] = config["url"].removesuffix("sse") + "missing"
     with pytest.raises(Exception) as caught:
         discover_tools_info(config)
     assert "MCP Tool Error" not in str(caught.value)
+    assert sum(r["event"] == "started" for r in records(evidence)) == 1
 
 
 def test_connection_failure_is_not_a_tool_error(tmp_path):
