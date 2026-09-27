@@ -1,6 +1,34 @@
 # Safe-refactor status
 
-## Current Edge154 natural acceptance: R6-A/U1 (2026-09-27)
+## Current independent R6-B checkpoint (2026-09-27)
+
+The user's explicit authorization at baseline
+`dfeda2335b7e8f37b8361ca5c5578561c57bb583` starts R6-B independently.
+**R6-A/U1 remains BLOCKED and its investigation is deferred; it is no longer
+an execution prerequisite for independent R6-B or the later R6-C scope.**
+All Edge153/154 failures, NOT RUN records and historical protection events
+remain unchanged. This scheduling change does not waive a required job,
+change a gate, accept R6-A, or authorize general project closeout.
+
+R6-B covers Sidecar launch configuration ownership (B1), actual process
+lifecycle contracts (B2), and new native package evidence (B3). B1 is in
+progress; B2/B3 verification has not run yet. The affected public surface is
+Electron's existing Sidecar launch, settings handshake and shutdown behavior;
+MARA/MARA-cli, Gradio event chains and persisted schemas are not changed by
+this extraction. Existing IPC/HTTP/SSE consumers and patch seams are retained.
+
+No Login-specific run, Edge/Chromium comparison, Gradio five-exit group or
+original double-37 batch is part of this R6-B plan. Shared behavior changes
+require their actual adjacent contracts; any U1-dependent subitem is held
+separately. The prior Desktop Gate 2 source `48affef7` and run `35815532063`
+remain historical 3/3 evidence, not a pass for new desktop launch inputs.
+
+R5 remains ACCEPTED. Historical config writer UNKNOWN, original bytes
+UNVERIFIED, cache 614 to 610 OPEN, and S1/PCRE2 OPEN remain independent.
+Merge/release is NO-GO. This round stops at the R6-B independent review point;
+R6-C is not executed in this round and does not require closing U1 first.
+
+## Retained Edge154 natural acceptance at dfeda233 (2026-09-27)
 
 **R6-A/U1 remains BLOCKED: 3 exit cases PASS, the fourth FAILS at Login,
 and the fifth is NOT RUN.** This is the one natural plan authorized after
