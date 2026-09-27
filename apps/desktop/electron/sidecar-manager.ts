@@ -1,7 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
-import path from "node:path";
 
 import type {
   DoctorPayload,
@@ -43,7 +42,12 @@ import type {
   SessionRenameRequest,
   SessionSummary,
 } from "../shared/session-contracts";
-import { mergeSidecarEnvironment } from "./smoke-environment";
+import {
+  resolveDevelopmentPython,
+  resolveSidecarCommand,
+  sidecarEnvironment,
+  sidecarWorkingDirectory,
+} from "./sidecar-launch";
 
 export type SidecarReadyMessage = {
   type: "ready";
@@ -629,35 +633,15 @@ export class SidecarManager {
 
     const token = randomBytes(32).toString("hex");
     const command = this.sidecarCommand();
-    const runtimeWorkingDirectory = path.join(this.options.dataRoot, "tmp");
+    const runtimeWorkingDirectory = sidecarWorkingDirectory(this.options.dataRoot);
     mkdirSync(runtimeWorkingDirectory, { recursive: true });
-    const repositoryRoot = path.resolve(this.options.appPath, "..", "..");
-    const developmentPythonPath = [
-      this.options.appPath,
-      path.join(repositoryRoot, "libs", "ktem"),
-      path.join(repositoryRoot, "libs", "kotaemon"),
-      path.join(repositoryRoot, "libs", "slide_cli"),
-      process.env.PYTHONPATH,
-    ]
-      .filter((entry): entry is string => Boolean(entry))
-      .join(path.delimiter);
     const child = spawn(command.executable, command.args, {
-      env: {
-        ...mergeSidecarEnvironment(process.env, environment),
-        KH_APP_DATA_DIR: path.join(
-          this.options.dataRoot,
-          "state",
-          "ktem_app_data",
-        ),
-        MARA_DESKTOP_DATA_DIR: this.options.dataRoot,
-        MARA_DESKTOP_TOKEN: token,
-        MARA_DESKTOP_SMOKE_FAULT: this.options.smokeFault ?? "",
-        THEFLOW_SETTINGS_MODULE: "ktem.default_flowsettings",
-        KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED: "1",
-        ...(!this.options.isPackaged
-          ? { PYTHONPATH: developmentPythonPath }
-          : {}),
-      },
+      env: sidecarEnvironment({
+        appPath: this.options.appPath,
+        dataRoot: this.options.dataRoot,
+        isPackaged: this.options.isPackaged,
+        smokeFault: this.options.smokeFault,
+      }, process.env, environment, token),
       cwd: runtimeWorkingDirectory,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
@@ -836,41 +820,17 @@ export class SidecarManager {
   }
 
   private sidecarCommand(): { executable: string; args: string[] } {
-    if (this.options.isPackaged) {
-      const executableName =
-        process.platform === "win32" ? "mara-desktop-sidecar.exe" : "mara-desktop-sidecar";
-      return {
-        executable: path.join(
-          this.options.resourcesPath,
-          "sidecar",
-          "mara-desktop-sidecar",
-          executableName,
-        ),
-        args: [],
-      };
-    }
-
-    return {
-      executable: this.developmentPython(),
-      args: ["-m", "sidecar.server"],
-    };
+    return resolveSidecarCommand({
+      isPackaged: this.options.isPackaged,
+      resourcesPath: this.options.resourcesPath,
+      platform: process.platform,
+    }, () => this.developmentPython());
   }
 
   private developmentPython(): string {
-    if (process.env.MARA_DESKTOP_PYTHON) {
-      return process.env.MARA_DESKTOP_PYTHON;
-    }
-    const workspacePython = path.resolve(
-      this.options.appPath,
-      "..",
-      "..",
-      ".venv",
-      process.platform === "win32" ? "Scripts/python.exe" : "bin/python",
+    return resolveDevelopmentPython(
+      this.options.appPath, process.env, process.platform, existsSync,
     );
-    if (existsSync(workspacePython)) {
-      return workspacePython;
-    }
-    return process.platform === "win32" ? "python" : "python3";
   }
 
   private waitForReady(
