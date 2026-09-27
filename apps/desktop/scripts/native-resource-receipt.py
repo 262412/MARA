@@ -93,7 +93,9 @@ def main() -> None:
     if remaining:
         raise SystemExit("Owned native smoke processes remain after cleanup")
     if invalid_links:
-        raise SystemExit("Package links are absolute, outside the package, or unresolved")
+        raise SystemExit(
+            "Package links are absolute, outside the package, or unresolved"
+        )
 
 
 if __name__ == "__main__":
