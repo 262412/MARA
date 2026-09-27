@@ -34,7 +34,19 @@ def main() -> None:
     package = args.package.resolve(strict=True)
     repository = Path(__file__).resolve().parents[3]
     files = []
+    invalid_links = []
     for filename in sorted(package.rglob("*")):
+        if filename.is_symlink():
+            target = os.readlink(filename)
+            try:
+                contained = filename.resolve(strict=True).is_relative_to(package)
+            except (OSError, RuntimeError):
+                contained = False
+            if Path(target).is_absolute() or not contained:
+                invalid_links.append(
+                    {"path": filename.relative_to(package).as_posix(), "target": target}
+                )
+                continue
         if not filename.is_file():
             continue
         relative = filename.relative_to(package)
@@ -72,6 +84,7 @@ def main() -> None:
     receipt = {
         "source_sha": os.environ.get("GITHUB_SHA"),
         "files": files,
+        "invalid_package_links": invalid_links,
         "remaining_owned_processes": remaining,
         "unclassified_access_denied": denied,
     }
@@ -79,6 +92,8 @@ def main() -> None:
     print(json.dumps({key: value for key, value in receipt.items() if key != "files"}))
     if remaining:
         raise SystemExit("Owned native smoke processes remain after cleanup")
+    if invalid_links:
+        raise SystemExit("Package links are absolute, outside the package, or unresolved")
 
 
 if __name__ == "__main__":
