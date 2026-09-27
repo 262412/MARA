@@ -1,6 +1,83 @@
 # Safe-refactor status
 
-## Current actual utility-call diagnostic checkpoint: R6-A/U1 (2026-09-26)
+## Current natural-validation preflight: R6-A/U1 (2026-09-27)
+
+**R6-A/U1 remains BLOCKED before the first App launch: the required Edge
+binary changed.** At baseline `988c698336b64782ea75f2acc258b56030544078`, the
+source/test/harness bytes still match `fa8d8a276230a3d3185014a6afd88e55603651eb`,
+but the installed `msedge.exe` now reports **154.0.4258.37**, versus the
+previously pinned **153.0.4234.48**. This is a new browser-input preflight
+difference, not a new Login test failure and not part of the old configuration
+or cache incident. There have been **zero App/browser launches** this round.
+
+The user now authorizes one natural plan without requiring another historical
+failure or unique attribution first: original five exits, direct selector/U1
+contracts, original 37 primary, then same-input 37 confirmation. Its proposed
+natural profile sets STABILITY_DIAGNOSTIC, FRAME_DIAGNOSTIC and
+LOGIN_DIAGNOSTIC to **0**, retaining original business observers and
+counterexamples, Edge channel, headless mode, 1600x1200 viewport, en-US locale,
+original launch arguments and timeout budgets. `preflight-plan.json` retains
+the original six fixture lists/order and budgets. It is explicitly marked
+**browser input not approved**, not an executed frozen acceptance candidate.
+All five exits, selector/U1 browser checks, both 37 batches and new Quality
+are **NOT RUN**. No Login/A-B diagnostic or retry was added.
+
+Evidence is `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/`
+`r6a-u1-recovery/natural-validation/` (N). `browser-input-difference.json`
+records the read-only comparison:
+
+| Browser input                                                  | Prior pin                                                          | Current observation                                                |
+| -------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe` | 153.0.4234.48                                                      | 154.0.4258.37                                                      |
+| EXE SHA-256                                                    | `9a84277c86316b975e5927a12f2355001b2e46f274c7a61b2fa0278aaf435996` | `f530bafcdb7e529bd21dd8be46e20c82b5c70fa0ffd770fe4c45a5c2c054c211` |
+| Versioned 153 DLL                                              | Pinned existing file                                               | Still present, hash equal                                          |
+| Versioned 154 candidate DLL                                    | Outside the prior pin                                              | `e14b3d725fef3eb23ef28d01d6d5707bcb6ffc3ae59ce2e42997ac72bf0674f0` |
+
+The 154 DLL value is a file observation, not evidence of a loaded browser.
+No browser was started merely to obtain a new identity. File timestamps do
+not establish the update writer or installation time; those are **UNKNOWN**.
+The other eleven previous runtime-file hashes, including Playwright **1.61.1**,
+Gradio **4.39.0** and the old 153 DLL, still match. Keeping an old DLL does not
+make the new launcher equivalent. No system browser was changed, downgraded,
+replaced or launched by this task.
+
+Changing the target to current Edge 154 requires an explicit browser-input
+decision because the user fixed the original actual binary and the supplied
+prompt's section 3 requires a preflight difference before changing it. That
+choice was requested with the concrete difference available; no approval has
+been inferred. If current Edge is authorized, it must be re-pinned before the
+first natural case, with every original first-failure/no-third-batch rule
+retained. Until then, the minimum blocked step is binary-input disposition,
+not another attempt to reproduce Login.
+
+The 133 source/test/harness hashes, dependency inputs and all 135 protected
+raw files match the preceding delivery. NUL and the three restricted
+post-incident config hashes match; real database metadata, 98,853 canonical
+environment entries, 610 cache entries and the office-cache metadata match.
+These metadata comparisons do not certify unread file contents. No owned
+task process or listener on 8768 was found. No true config/data/cache was
+restored or cleaned, and no timestamp was changed. Historical config writer
+**UNKNOWN**, original bytes **UNVERIFIED**, and cache **614 to 610 OPEN** remain
+independent; there was no new historical clue or repeat historical search.
+
+`retained-input-equivalence.json` verifies the prior A evidence archive's
+SHA-256 and all 318 members/CRC, and confirms source/dependency equality.
+It explicitly rejects browser-input equivalence. Prior e15 instrumented
+Edge/Chromium **5/5 + 5/5**, fa8 Node **160/160**, the earlier natural **4 PASS /
+1 FAIL**, and all prior 37 results remain their own executions. No new tests,
+Linux, build, clean-wheel, coverage, Desktop or CI execution is claimed here.
+Package/coverage evidence remains scoped to **cc0bb3a3**, Native Gate 2 to
+**48affef7**, and Quality **35816144107** to cc0's actual **13 success / 7
+failure**. A changed system browser is not proof of current Desktop behavior.
+
+This checkpoint changes only the current report. Report-only source/test/
+package input equality, report hooks, final secret scan, forward protection
+and ordinary-push identities are recorded separately in N's delivery receipt.
+R5 stays ACCEPTED; R6-A is not ACCEPTED. S1/PCRE2 stays OPEN and merge/release
+NO-GO. No R6-B/C/D, new branch/worktree, force push, merge, deployment,
+publication or policy/baseline/coverage change is authorized or performed.
+
+## Retained actual utility-call diagnostic checkpoint (2026-09-26)
 
 **R6-A/U1 remains BLOCKED.** One preregistered diagnostic group completed:
 Edge 5/5 and matching Playwright Chromium 5/5 reached their intended exit
