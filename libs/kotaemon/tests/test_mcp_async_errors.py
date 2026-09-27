@@ -8,7 +8,9 @@ import pytest
 from kotaemon.agents.tools.mcp import _run_async
 
 
-@pytest.mark.parametrize("context", ["no_loop", "idle_loop", "running_loop", "worker"])
+@pytest.mark.parametrize(
+    "context", ["no_loop", "idle_loop", "closed_loop", "running_loop", "worker"]
+)
 @pytest.mark.parametrize("fails", [False, True])
 def test_sync_bridge_invokes_once_and_preserves_business_error(context, fails):
     calls = []
@@ -32,9 +34,11 @@ def test_sync_bridge_invokes_once_and_preserves_business_error(context, fails):
         invoke()
 
     asyncio.set_event_loop(None)
-    if context == "idle_loop":
+    if context in {"idle_loop", "closed_loop"}:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        if context == "closed_loop":
+            loop.close()
         try:
             invoke()
         finally:
