@@ -7,40 +7,211 @@ Baseline: `c5d9bb7f20fa2db5b5a893cb2dcc96de0762e767`; branch:
 `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
 
 The user accepts **R6-B at `eb36a61ceb5e03d3a916d567d5e08037597950a9`**
-only for its implemented scope, actual artifacts and verified Windows Server 2022 /
-Ubuntu 22.04 / Ubuntu 24.04 platforms. The retained R6-B review below records its
-status before that acceptance; installer, clean-VM, macOS and missing Desktop
-feature limitations still apply. **R5 remains ACCEPTED. R6-A/U1 remains BLOCKED
-and deferred, independently of R6-C.** No U1 diagnostic, five Gradio exits or
-original double-37 batch is scheduled here. R6-D is outside this round.
+only for its implemented scope, actual artifacts and verified Windows Server 2022,
+Ubuntu 22.04 and Ubuntu 24.04 platforms. Its retained review below predates that
+acceptance. Installer, clean-VM, macOS and missing Desktop feature limits remain.
+**R5 stays ACCEPTED. R6-A/U1 stays BLOCKED and deferred, independently of R6-C.**
+No Login diagnostic, five Gradio exits or original double-37 batch runs here.
+R6-D is outside this round.
 
-R6-C is **IN PROGRESS, not ACCEPTED**. C1 owns existing MCP connection/session
-lifecycle and exception/HTML boundaries; C2 owns deck conversion boundaries and
-existing artifact integration evidence; C3 verifies existing benchmark entrypoints
-without forcing another abstraction. Characterization and failing regressions
-precede extraction and separate minimal fixes. No new transport, schema,
-permission policy or global concurrency system is authorized.
+**R6-C is BLOCKED, not ACCEPTED.** The newly demonstrated Windows MCP stdio
+cancellation failure remains open. Independent deck/artifact and miniature
+benchmark verification continues; it does not erase that failure. No dependency,
+permission, schema, global event-loop policy or transport replacement is added
+to bypass it. S1/PCRE2 and historical protection incidents stay separate;
+merge/release remain **NO-GO**.
 
-| Group | Owner and contract | Current evidence | State |
-| --- | --- | --- | --- |
-| C1 MCP / agent | Existing tool facade and BaseTool; stdio/SSE session ownership | Source/consumer inspection; new controlled tests not yet run | IN PROGRESS |
-| C2 deck / artifacts | Content edits vs external conversion; existing R5 services | Existing tests identified; real conversion and installed CLI not yet run | NOT RUN |
-| C3 benchmark | Existing CLI / runner / scoring / reports | Existing boundaries retained pending miniature manifest verification | NOT RUN |
-| Delivery | Relevant suites, four packages, clean-wheel, coverage, Quality, native impact | New candidate not frozen; no new CI dispatched | NOT RUN |
-
-Evidence root:
+Evidence root E:
 `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r6c-independent-tools-artifacts/`.
-Initial forward protection matches the previous delivery: all 135 protected raw
-file hashes, NUL, canonical environment metadata (98,853 entries), current cache
-metadata (610 entries), office cache (0), protected config bytes and runtime DB
-metadata. This is a forward receipt, **not proof of historical integrity**.
-Historical config writer **UNKNOWN**, original content **UNVERIFIED**, cache
-incident **OPEN** remain separately unresolved. No historical cleanup or recovery
-was performed. Local protected edits remain outside explicitly staged task files.
+`execution.jsonl` records commands, exits, source HEAD and protected local overlay
+hashes. Commit receipts stage named files only. CI packages use committed inputs,
+not the 135 protected local modifications.
 
-S1/PCRE2 remain **OPEN**; merge/release remain **NO-GO**. New functional results,
-security findings relative to the frozen baseline and changes since R6-B will be
-reported separately with their actual source/test/package/report/remote SHAs.
+| Scope    | Owner and contract                                                                    | Actual evidence / remaining limit                                                                                          | State                      |
+| -------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| R5       | Existing graph-cache, Notebook/artifact, download and writer services                 | Previously accepted scope and original failures/double-37 retained; no R5 redesign                                         | ACCEPTED                   |
+| R6-B     | Launch configuration, manager process ownership and native delivery                   | Reviewed `eb36a61c`; platform/installer/feature limits retained                                                            | ACCEPTED, limited          |
+| R6-A/U1  | Original browser interaction and exit contracts                                       | Historical failure remains; no U1 execution in R6-C                                                                        | BLOCKED / deferred         |
+| C1       | MCP facade / BaseTool / agent factories; SDK session ownership                        | Red/fix contracts and real stdio/SSE pass in supported runs; Windows Selector cancellation fails even directly through SDK | BLOCKED                    |
+| C2       | Deck content operations vs external PDF conversion; existing R5 artifact registration | Real conversion, installed commands and explicit-root service pass; Windows default CLI session-write path unverified      | Limited contracts verified |
+| C3       | Existing CLI, runner, cache, scoring and reporting                                    | Own seven-command manifest chain, 35 local model calls; deterministic contract checks pass                                 | Limited contracts verified |
+| Delivery | Related suites, static, wheels, coverage, Quality and native artifacts                | Native new inputs 3/3; initial Quality static failure being corrected; final gates pending                                 | IN PROGRESS                |
+
+### C1: unchanged facade, fixes and session extraction
+
+`agents/tools/mcp_session.py` owns the existing SDK stdio/SSE connection,
+`ClientSession.initialize()` and context exit. SDK imports stay lazy. The original
+MCPTool, discovery/call functions, configuration shape, schema, text assembly,
+unsupported-transport behavior and real patch seams stay at `mcp.py`. No server,
+pool or general plugin framework is introduced.
+
+Characterization first: 41 existing cases passed; the expanded old-tree run
+reported **23 PASS / 3 FAIL**. `_run_async` incorrectly caught a business
+`RuntimeError` and ran an external call again. Commit `416b1008` confines exception
+handling to loop selection and propagates the single business result/error.
+Commit `e75c9ccf` separately escapes remote tool names/descriptions in HTML while
+retaining the original description truncation. Their follow-ups passed 25 and
+52 cases. Extraction is separate at `84100457`.
+
+Real agent consumers exposed a second defect: `enabled_tools` was popped from a
+shared configuration dictionary. The six failing regressions (plus one passing
+control) precede `a3946a1d`, which copies the entry dictionary in ReAct and ReWOO
+before consuming it; all seven then passed. Manager/config ownership and the
+existing shallow-copy contract are retained.
+
+Own stdio and authenticated-free loopback SSE fixtures perform actual SDK
+discovery, BaseTool and agent calls, argument/schema checks, errors, cancellation,
+connection/early-exit failures and process/port cleanup. They never open user MCP
+configuration or contact user servers. The corrected extraction group passed
+**74/74** on the task Python's initial Proactor policy. The earlier nine-case run
+had a vacuous stdio early-exit fixture; corrected command indexing and a server
+started receipt precede the valid two endpoint tests. The vacuous run is retained
+and is not credited as early-exit evidence.
+
+The full Windows suite subsequently imported `duckduckgo_search`, whose locked
+installed initializer selects `WindowsSelectorEventLoopPolicy`. Under that policy,
+SDK 1.12.4 uses its subprocess fallback. `FallbackProcess.wait()` waits through a
+shielded AnyIO worker thread; cancellation cannot interrupt that wait while the
+server is held. The original full batch was **INTERRUPTED** (exit 15, 498.53 s),
+not passed. Its live stack, PID creation times/commands, held evidence and retained
+runtime are in `mcp-interrupted-*` and `mcp-held-live-stack.txt`.
+
+The test-only watchdog at `c2d9982a` starts after the held point, records recovery,
+verifies the owned fixture command, kills/waits only that server and explicitly
+**fails** the test if recovery was needed. It does not count kill or cleanup as
+successful cancellation. The controlled MARA Selector case failed. A direct SDK
+case bypassing the extracted module also failed; the separately labelled
+child-only Proactor control passed. The SDK code path plus live stack and these
+controls support a Windows SDK/event-loop limitation, not a new transport fix.
+An explicit supported cancellation solution without dependency/global-policy
+changes remains the next bounded design question. No such solution is claimed.
+
+SSE has a separate limit: cancelling the local call closes its client connection,
+but the held server producer can remain until fixture shutdown. The receipt
+distinguishes client cancellation from fixture/server completion and makes no
+remote rollback guarantee. All recovered owned processes are checked for OS exit.
+
+### C2: deck publication and existing artifact services
+
+`deck.py` retains deck DTOs, target IDs, snapshot/read/edit ordering and
+`before_text` matching. `deck_export.py` owns external conversion. Public export
+and existing `deck.os`, `deck.shutil`, `deck.subprocess` patch consumers still
+resolve to the actual objects used by conversion.
+
+Two old-tree red cases proved that a successful converter exit with no new PDF
+could return an old destination PDF. The separate fix `effccff1` allocates a
+unique owned conversion directory, requires the newly produced PDF, then replaces
+the destination. Extraction follows at `de83dadb`. Original source checks,
+converter selection, flags, timeout and return type remain. Only the owned
+workspace is removed; a cleanup failure does not replace a primary conversion
+error. Cleanup-only failure is reported even if publication already succeeded.
+Twelve contract cases, five resource cases and the 26-case extraction group pass;
+the final C2/C3 test correction group passes **16/16**. Resource tests include
+same-stem concurrent conversion, timeout, denied publication, primary/secondary
+cleanup failures and destination preservation.
+
+Actual LibreOffice **26.2.0.3 620(Build:3)** (`soffice.com` SHA-256
+`1051878423572139c1deb425bb4a6cae0ef89b6aa94924201c50a26adc3de82d`)
+uses an owned profile. Two Unicode two-slide decks produce reloadable two-page
+PDFs with the expected text. The stale-output negative uses the real executable's
+`--version` branch: exit zero without a PDF must reject the retained old output.
+Earlier fixtures wrongly assumed plain text/empty files would fail conversion;
+those failures and the earlier cleanup failure are preserved. This is not a claim
+that LibreOffice rejects every malformed input.
+
+The 18-case artifact group uses the production registry's 14 types, real SQLite
+Notebook storage and `save_answer_note`, export registration, reload and deletion.
+JSON/Markdown/HTML exports, data-table CSV, infographic SVG and deck/outline PPTX
+are exercised. MP3/MP4 without an adapter fail as designed. Public read is not
+Notebook write; schema failure leaves no registration. Removing a record retains
+its note/source/export data according to R5 policy. Local deterministic generators
+do not establish external LLM/media adapter or missing Desktop capabilities.
+
+The four current wheels were installed non-editably in the task environment.
+Outside-repository Unicode cwd runs actual `MARA`/`MARA-cli` help and read commands;
+module hashes resolve to these wheels with no source PYTHONPATH. The initial
+installed probe completed 12 console commands, then constructing the default
+Windows slide session store tried a Known Folder outside the test root. The
+existing guard denied `os.mkdir` **before access**. No CLI `apply` ran, no guard
+was relaxed, and the immediate forward protection receipt passed. The default
+Windows CLI session-write path is **NOT VERIFIED** in this environment.
+
+A separate explicit-owned-root installed service applies one valid edit and
+skips one stale `before_text`, reloads the completed session and preserves the
+input deck. Actual console inspection and real PDF export then pass; missing-input
+and no-new-PDF paths return exits 2 and 1. That service test is not represented as
+console `apply`. See `installed-deck-explicit/receipt.json` and its cleanup receipt.
+
+### C3: existing benchmark modules retained
+
+No production extraction was needed: existing CLI/runner/scoring responsibilities
+remain. A subprocess imports the existing runtime isolation entry before business
+code, uses an eight-example owned Unicode manifest and a deterministic local model
+only at `_resolve_llm`. Real CLI parsing, text reading, retrieval, cache, runner,
+prediction serialization, scoring and reports execute. No model training,
+prompt/route tuning, frozen data rewrite or remote model service is involved.
+
+The stable retained run at `726d7e6d` passes **7 commands / 35 model calls**:
+warm-first, warm-second, cold, bypass, alias/sample/shard/limit, rescore and budget.
+IDs/order, six successful answers, one refusal and one error, denominator eight,
+source identity, absent emitted citation/page annotations, route and generation
+budget are checked. Seed 7 / shard 1 of 2 / limit 2 yields `ex-7`, `ex-4` in order.
+Rescoring leaves original artifact bytes unchanged. Windows records a late model
+return as timeout; it does not provide POSIX signal interruption. Raw reports and
+hashes remain under `D:/MARA-s1-01a086ff/r6c-benchmark` and E's candidate receipt.
+
+All fixture failures remain: child-held cache handle cleanup before process exit,
+wrong refusal phrase, conflation of retrieval with emitted citation, and a deep
+Windows evidence path causing cold-cache MAX_PATH failures. The stable fixture
+uses a shorter owned path and removes only its child runtime after verified OS
+exit. Command output-name collision avoidance schedules each command once in the
+next timestamp slot; it never reruns a failed invocation.
+
+### Delivery checkpoint, input identity and protection
+
+Runtime source last changed at `de83dadbe54c786a4c0113f04c5573bc2a8d295e`.
+The first complete source/test/package input is
+`b01030c25b41bae509f5e267b2ffc8a62fc7022c`; subsequent changes through
+`726d7e6da2415acf65c2b6b3db33cf0a9c690a21` are tests only. Test corrections are
+separate from production fixes. The report/remote receipts will identify the
+final delivery commits; no report-only reuse is inferred without input comparison.
+
+Local four-wheel/four-sdist builds and twine checks pass from a committed Git
+archive, without the protected local overlay. Because the archive lacks `.git`,
+its version fallback is `0.0.1`; this is not the CI Git-versioned wheel identity.
+Installed probes use those four local wheels. The dependency environment is
+task-owned and reused; fresh clean-wheel installation is separately tested by CI.
+Local `npm run verify` passes; no canonical environment synchronization occurs.
+
+New native Gate2 [36304969812](https://github.com/262412/MARA/actions/runs/36304969812),
+attempt 1 at `b01030c2`, completes **3/3**. This is new native execution, not reuse
+of R6-B's historical 3/3. Artifacts and process/resource metrics are being compared
+by file hash. Windows Server 2022 / Ubuntu 22.04 / Ubuntu 24.04 results do not prove
+installer, clean-VM, macOS or unimplemented Desktop features.
+
+Initial Quality [36304965711](https://github.com/262412/MARA/actions/runs/36304965711),
+attempt 1 at `b01030c2`, has a real new static failure: test function length, a test
+type-narrowing omission and this report's table formatting. The first two fixes
+are `726d7e6d` and `e2c354ae`; report formatting is corrected independently. Its
+coverage job was still running at this checkpoint. It will not be cancelled or
+redispatched at the same SHA. Final Linux/Node/static/coverage/Quality evidence is
+pending; existing security failures are not relabelled as functional failures.
+
+Windows full suites retain their actual outcomes: ktem **3892 PASS / 97 FAIL**;
+benchmark/root **1607 PASS / 10 FAIL / 37 existing SKIP**; slide CLI has one
+protected-user-skill failure while the committed-archive CLI suite passes. The
+original 99 Windows nodes and four kotaemon capability failures will be compared
+by node and nature; the new MCP Selector failure stays distinct. The corrected,
+bounded kotaemon full suite is in progress. No skip/omit/allowlist is added.
+
+Forward receipts compare all **135 protected raw file hashes**, NUL, canonical
+environment metadata (**98,853 entries**), cache metadata (**610**), office cache
+(**0**), protected config bytes and runtime DB metadata. The last receipt after
+the denied default-path access passed. This does not establish old contents:
+historical writer **UNKNOWN**, original content **UNVERIFIED** and cache event
+**OPEN** remain unresolved. No history scan without a lead, restore, timestamp
+adjustment or real-cache cleanup is performed. Final protection, secret scan,
+input-equivalence and remote receipts are still required.
 
 ## Retained independent R6-B review (2026-09-27)
 
