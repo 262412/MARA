@@ -29,6 +29,7 @@ const server = http.createServer((request, response) => {
     payload = {request_id:requestId, doctor:{sidecar_pid:process.pid,
       settings_revision:mode === 'doctor-revision' ? 'wrong' : revision,
       route_fingerprint:mode === 'fingerprint' ? 'invalid' : 'a'.repeat(64)}};
+    if (mode === 'crash-after-ready') setTimeout(() => process.exit(9), 30);
   } else if (request.url === '/v1/files') {
     payload = {request_id:requestId, files:[]};
   } else if (request.url === '/shutdown') {
@@ -72,16 +73,23 @@ function alive(pid: number): boolean {
 function fixture(t: TestContext, mode: string) {
   const root = mkdtempSync(path.join(os.tmpdir(), "mara-sidecar 资料 "));
   const statuses: string[] = [];
+  const children: ChildProcessWithoutNullStreams[] = [];
+  const startsWithLiveChildren: number[][] = [];
   let revision = "owned-revision-1";
   const manager = new SidecarManager({ appPath: root, dataRoot: root, resourcesPath: root,
     isPackaged: true, environment: () => ({ OWNED_SIDECAR_MODE: mode,
       MARA_DESKTOP_SETTINGS_REVISION: revision, HOME: root, USERPROFILE: root,
       XDG_CONFIG_HOME: root, XDG_CACHE_HOME: root, XDG_DATA_HOME: root, TEMP: root, TMP: root }),
-    onStatus: (status) => statuses.push(status.state),
+    onStatus: (status) => {
+      statuses.push(status.state);
+      if (status.state === "starting") startsWithLiveChildren.push(children.filter((child) => alive(child.pid!)).map((child) => child.pid!));
+    },
   });
   const internal = manager as unknown as Internals;
-  const children: ChildProcessWithoutNullStreams[] = [];
-  internal.sidecarCommand = () => ({ executable: process.execPath, args: ["-e", CHILD] });
+  internal.sidecarCommand = () => {
+    queueMicrotask(() => { if (internal.child && !children.includes(internal.child)) children.push(internal.child); });
+    return { executable: process.execPath, args: ["-e", CHILD] };
+  };
   t.after(async () => {
     // Cancel automatic restart before disposing only the PIDs this fixture owns.
     const stopping = manager.stop();
@@ -108,7 +116,16 @@ function fixture(t: TestContext, mode: string) {
     }));
     return { startup, child, exit, listening, exited: () => exited };
   }
-  return { manager, internal, start, statuses, children, setRevision: (value: string) => { revision = value; } };
+  return { manager, internal, start, statuses, children, startsWithLiveChildren,
+    setRevision: (value: string) => { revision = value; } };
+}
+
+async function until(predicate: () => boolean) {
+  const deadline = Date.now() + 8000;
+  while (!predicate()) {
+    assert.ok(Date.now() < deadline, "owned lifecycle condition did not complete");
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
 }
 
 async function portReleased(port: number) {
@@ -147,4 +164,126 @@ test("failed real ready handshake retains ownership until the process exits", { 
   assert.equal((await run.startup).state, "failed");
   assert.equal(run.exited(), true, "startup failure must reap its child before dropping ownership");
   assert.equal(alive(run.child.pid!), false);
+});
+
+for (const mode of ["protocol", "pid", "health-revision", "doctor-revision", "fingerprint", "oversize"]) {
+  test(`real ${mode} failure exits before releasing process ownership`, { timeout: 10000 }, async (t) => {
+    const f = fixture(t, mode);
+    const run = f.start();
+    assert.equal((await run.startup).state, "failed");
+    assert.equal(run.exited(), true);
+    assert.equal(alive(run.child.pid!), false);
+    assert.equal(f.internal.child, undefined);
+    assert.equal(f.internal.port, undefined);
+    assert.ok(!f.statuses.includes("healthy"));
+  });
+}
+
+test("missing packaged executable reports spawn failure without a Python fallback", { timeout: 10000 }, async (t) => {
+  const f = fixture(t, "normal");
+  f.internal.sidecarCommand = () => ({ executable: path.join(os.tmpdir(), "owned-nonexistent-sidecar", "missing.exe"), args: [] });
+  const startup = f.manager.start("owned-revision-1");
+  const child = f.internal.child!;
+  assert.equal(child.pid, undefined);
+  assert.equal((await startup).state, "failed");
+  assert.equal(f.internal.child, undefined);
+});
+
+test("real exit before ready is recorded and pending automatic restart can be stopped", { timeout: 10000 }, async (t) => {
+  const f = fixture(t, "exit-before-ready");
+  const run = f.start();
+  assert.equal((await run.startup).state, "failed");
+  assert.equal(run.child.exitCode, 7);
+  await f.manager.stop();
+  assert.equal(f.manager.getStatus().state, "stopped");
+  assert.equal(f.children.length, 1);
+});
+
+test("original 20-second ready deadline terminates an owned pending process", { timeout: 10000 }, async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const f = fixture(t, "pending");
+  const run = f.start();
+  await run.listening;
+  t.mock.timers.tick(20000);
+  const status = await run.startup;
+  assert.equal(status.state, "failed");
+  assert.match(status.message!, /startup timed out/);
+  assert.equal(run.exited(), true);
+});
+
+test("concurrent stop and fresh start wait for the old PID; late generation callbacks cannot overwrite", { timeout: 10000 }, async (t) => {
+  const f = fixture(t, "pending");
+  const old = f.start();
+  await old.listening;
+  const lateExit = old.child.listeners("exit")[0]!;
+  const lateReady = old.child.stdout.listeners("data")[0]!;
+  const firstStop = f.manager.stop();
+  const secondStop = f.manager.stop();
+  f.setRevision("owned-revision-2");
+  const starting = f.manager.start("owned-revision-2");
+  await Promise.all([firstStop, secondStop]);
+  assert.equal(old.exited(), true);
+  await until(() => !!f.internal.child && f.internal.child !== old.child);
+  const current = f.internal.child!;
+  current.stdin.write("ready\n");
+  assert.equal((await starting).state, "healthy");
+  const port = f.internal.port;
+  lateExit(9, null);
+  lateReady(Buffer.from('{"type":"ready","protocol":1,"pid":1,"port":8768}\n'));
+  assert.equal(f.internal.child, current);
+  assert.equal(f.internal.port, port);
+  assert.equal(f.manager.getStatus().state, "healthy");
+  assert.deepEqual(await f.manager.listFiles(), { ok: true, data: [] });
+  assert.ok(f.startsWithLiveChildren.every((pids) => pids.length === 0));
+  await old.startup;
+});
+
+test("explicit restart queue closes each real PID before launching its successor", { timeout: 10000 }, async (t) => {
+  const f = fixture(t, "normal");
+  await f.start().startup;
+  f.setRevision("owned-revision-2");
+  const results = await Promise.all([f.manager.restart("owned-revision-2"), f.manager.restart("owned-revision-2")]);
+  assert.ok(results.every((status) => status.state === "healthy"));
+  assert.equal(f.children.length, 3);
+  assert.ok(f.startsWithLiveChildren.every((pids) => pids.length === 0));
+  assert.deepEqual(await f.manager.listFiles(), { ok: true, data: [] });
+});
+
+test("automatic restart budget applies to actual crashes without overlapping PIDs", { timeout: 10000 }, async (t) => {
+  const f = fixture(t, "crash-after-ready");
+  await f.start().startup;
+  await until(() => f.manager.getStatus().message?.includes("budget was exhausted") === true);
+  assert.equal(f.children.length, 4);
+  assert.ok(f.children.every((child) => child.exitCode === 9 && !alive(child.pid!)));
+  assert.ok(f.startsWithLiveChildren.every((pids) => pids.length === 0));
+});
+
+test("real parent EOF releases the child PID and port", { timeout: 10000 }, async (t) => {
+  const f = fixture(t, "normal");
+  const run = f.start();
+  await run.startup;
+  const port = f.internal.port!;
+  run.child.stdin.end();
+  await run.exit;
+  await f.manager.stop();
+  assert.equal(run.child.exitCode, 0);
+  assert.equal(alive(run.child.pid!), false);
+  await portReleased(port);
+});
+
+test("termination failure rejects stop and preserves ownership without reporting healthy or stopped", { timeout: 10000 }, async (t) => {
+  const f = fixture(t, "ignore-shutdown");
+  const run = f.start();
+  await run.startup;
+  const seam = f.manager as unknown as { terminateChild(child: ChildProcessWithoutNullStreams): Promise<void> };
+  const terminate = seam.terminateChild;
+  seam.terminateChild = async () => { throw new Error("owned termination failure"); };
+  try {
+    await assert.rejects(f.manager.stop(), /owned termination failure/);
+    assert.equal(f.internal.child, run.child);
+    assert.equal(alive(run.child.pid!), true);
+    assert.equal(f.manager.getStatus().state, "failed");
+  } finally {
+    seam.terminateChild = terminate;
+  }
 });
