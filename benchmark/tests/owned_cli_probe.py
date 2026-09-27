@@ -143,19 +143,27 @@ def run_commands(root):
         ],
     }.items():
         receipts[name] = entry(root, name, [*base, *options])
-    original = Path(receipts["warm-first"]["run_dir"])
+    receipts["rescore"] = rescore_without_mutating(
+        root, receipts["warm-first"]["run_dir"]
+    )
+    receipts["budget"] = budget_command(root, base, source)
+    (root / "receipt.json").write_text(json.dumps(receipts, indent=2), encoding="utf-8")
+
+
+def rescore_without_mutating(root, run_dir):
+    original = Path(run_dir)
     source_hashes = {
         p.name: hashlib.sha256(p.read_bytes()).hexdigest()
         for p in original.iterdir()
         if p.is_file()
     }
-    receipts["rescore"] = entry(
+    receipt = entry(
         root,
         "rescore",
         [
             "rescore-artifact",
             "--run-dir",
-            receipts["warm-first"]["run_dir"],
+            run_dir,
             "--output-dir",
             root / "rescored",
             "--suite-name",
@@ -167,6 +175,10 @@ def run_commands(root):
         for p in original.iterdir()
         if p.is_file()
     }
+    return receipt
+
+
+def budget_command(root, base, source):
     # A separate, warm-cache single example reaches the model before the budget
     # is exceeded. Windows records the late return; POSIX may interrupt the call.
     data = json.loads(source.read_text(encoding="utf-8"))
@@ -175,7 +187,7 @@ def run_commands(root):
     ]
     budget = root / "budget.json"
     budget.write_text(json.dumps(data), encoding="utf-8")
-    receipts["budget"] = entry(
+    return entry(
         root,
         "budget",
         [
@@ -186,7 +198,6 @@ def run_commands(root):
             "1",
         ],
     )
-    (root / "receipt.json").write_text(json.dumps(receipts, indent=2), encoding="utf-8")
 
 
 def main():
