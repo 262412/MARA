@@ -1,6 +1,6 @@
 # Safe-refactor status
 
-## Current independent R6-C checkpoint (2026-09-27)
+## Current independent R6-C review (2026-09-27)
 
 Baseline: `c5d9bb7f20fa2db5b5a893cb2dcc96de0762e767`; branch:
 `codex/r0-r1-safe-refactor`; fixed original Dev:
@@ -16,7 +16,7 @@ R6-D is outside this round.
 
 **R6-C is BLOCKED, not ACCEPTED.** The newly demonstrated Windows MCP stdio
 cancellation failure remains open. Independent deck/artifact and miniature
-benchmark verification continues; it does not erase that failure. No dependency,
+benchmark contracts are verified within the limits below; they do not erase that failure. No dependency,
 permission, schema, global event-loop policy or transport replacement is added
 to bypass it. S1/PCRE2 and historical protection incidents stay separate;
 merge/release remain **NO-GO**.
@@ -27,15 +27,15 @@ Evidence root E:
 hashes. Commit receipts stage named files only. CI packages use committed inputs,
 not the 135 protected local modifications.
 
-| Scope    | Owner and contract                                                                    | Actual evidence / remaining limit                                                                                          | State                      |
-| -------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| R5       | Existing graph-cache, Notebook/artifact, download and writer services                 | Previously accepted scope and original failures/double-37 retained; no R5 redesign                                         | ACCEPTED                   |
-| R6-B     | Launch configuration, manager process ownership and native delivery                   | Reviewed `eb36a61c`; platform/installer/feature limits retained                                                            | ACCEPTED, limited          |
-| R6-A/U1  | Original browser interaction and exit contracts                                       | Historical failure remains; no U1 execution in R6-C                                                                        | BLOCKED / deferred         |
-| C1       | MCP facade / BaseTool / agent factories; SDK session ownership                        | Red/fix contracts and real stdio/SSE pass in supported runs; Windows Selector cancellation fails even directly through SDK | BLOCKED                    |
-| C2       | Deck content operations vs external PDF conversion; existing R5 artifact registration | Real conversion, installed commands and explicit-root service pass; Windows default CLI session-write path unverified      | Limited contracts verified |
-| C3       | Existing CLI, runner, cache, scoring and reporting                                    | Own seven-command manifest chain, 35 local model calls; deterministic contract checks pass                                 | Limited contracts verified |
-| Delivery | Related suites, static, wheels, coverage, Quality and native artifacts                | Native new inputs 3/3; initial Quality static failure being corrected; final gates pending                                 | IN PROGRESS                |
+| Scope    | Owner and contract                                                                    | Actual evidence / remaining limit                                                                                          | State                               |
+| -------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| R5       | Existing graph-cache, Notebook/artifact, download and writer services                 | Previously accepted scope and original failures/double-37 retained; no R5 redesign                                         | ACCEPTED                            |
+| R6-B     | Launch configuration, manager process ownership and native delivery                   | Reviewed `eb36a61c`; platform/installer/feature limits retained                                                            | ACCEPTED, limited                   |
+| R6-A/U1  | Original browser interaction and exit contracts                                       | Historical failure remains; no U1 execution in R6-C                                                                        | BLOCKED / deferred                  |
+| C1       | MCP facade / BaseTool / agent factories; SDK session ownership                        | Red/fix contracts and real stdio/SSE pass in supported runs; Windows Selector cancellation fails even directly through SDK | BLOCKED                             |
+| C2       | Deck content operations vs external PDF conversion; existing R5 artifact registration | Real conversion, installed commands and explicit-root service pass; Windows default CLI session-write path unverified      | Limited contracts verified          |
+| C3       | Existing CLI, runner, cache, scoring and reporting                                    | Own seven-command manifest chain, 35 local model calls; deterministic contract checks pass                                 | Limited contracts verified          |
+| Delivery | Related suites, static, wheels, coverage, Quality and native artifacts                | Final native 3/3; functional Linux/static/build/coverage gates pass; Quality 13 success / 7 failure                        | Evidence complete; security BLOCKED |
 
 ### C1: unchanged facade, fixes and session extraction
 
@@ -47,11 +47,23 @@ pool or general plugin framework is introduced.
 
 Characterization first: 41 existing cases passed; the expanded old-tree run
 reported **23 PASS / 3 FAIL**. `_run_async` incorrectly caught a business
-`RuntimeError` and ran an external call again. Commit `416b1008` confines exception
+`RuntimeError` and tried to reschedule the already-consumed coroutine, masking the
+original error; the business call counter remained one. Commit `416b1008` confines exception
 handling to loop selection and propagates the single business result/error.
 Commit `e75c9ccf` separately escapes remote tool names/descriptions in HTML while
 retaining the original description truncation. Their follow-ups passed 25 and
 52 cases. Extraction is separate at `84100457`.
+
+Final compatibility review found that the first bridge fix omitted the original
+closed-current-loop fallback. The frozen original function passes the two new
+closed-loop cases; `865ca7c9` fails both before executing the operation. Red tests
+are committed at `212c62e0`; the two-line selection fix is separately committed
+at `b4990248`. It chooses a fresh loop only when the selected loop is closed,
+without changing global loop policy or catching business exceptions. The stable
+28-case bridge/session/HTML regression passes at `b4990248`. A preceding 28-pass
+run overlapped a newline-normalizing hook and is retained as preliminary, not a
+frozen-input proof. The hook-only failure and the subsequent clean static run are
+retained too.
 
 Real agent consumers exposed a second defect: `enabled_tools` was popped from a
 shared configuration dictionary. The six failing regressions (plus one passing
@@ -108,7 +120,9 @@ error. Cleanup-only failure is reported even if publication already succeeded.
 Twelve contract cases, five resource cases and the 26-case extraction group pass;
 the final C2/C3 test correction group passes **16/16**. Resource tests include
 same-stem concurrent conversion, timeout, denied publication, primary/secondary
-cleanup failures and destination preservation.
+cleanup failures and destination preservation. Those resource counterexamples
+inject converter/OS failures; the actual LibreOffice checks below are separate,
+not proof of concurrent LibreOffice profile behavior.
 
 Actual LibreOffice **26.2.0.3 620(Build:3)** (`soffice.com` SHA-256
 `1051878423572139c1deb425bb4a6cae0ef89b6aa94924201c50a26adc3de82d`)
@@ -127,7 +141,15 @@ Notebook write; schema failure leaves no registration. Removing a record retains
 its note/source/export data according to R5 policy. Local deterministic generators
 do not establish external LLM/media adapter or missing Desktop capabilities.
 
-The four current wheels were installed non-editably in the task environment.
+| Registry types                                                                                     | Actual record/generation boundary                                                   | Actual exports                                         | Not established                                       |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------- |
+| `study_guide`, `quiz`, `flashcards`, `mindmap`, `briefing_doc`, `faq`, `timeline`, `custom_report` | Production deterministic payload dispatcher, citations, SQL registration and reload | JSON, Markdown, HTML                                   | External model quality; U1-dependent UI               |
+| `data_table`                                                                                       | Same record contract                                                                | JSON, Markdown, HTML, CSV                              | Unimplemented Desktop integration                     |
+| `infographic`                                                                                      | Same record contract                                                                | JSON, Markdown, HTML, SVG                              | External image/media generation                       |
+| `slide_outline`, `slide_deck`                                                                      | Same record contract                                                                | JSON, Markdown, HTML, reloadable PPTX                  | General layout fidelity or all Office renderers       |
+| `audio_overview`, `video_overview`                                                                 | Script/record contract, media not ready                                             | JSON, Markdown, HTML; missing MP3/MP4 adapter rejected | Actual audio/video generation and binary media export |
+
+The initial and final four-wheel sets were installed non-editably in the task environment.
 Outside-repository Unicode cwd runs actual `MARA`/`MARA-cli` help and read commands;
 module hashes resolve to these wheels with no source PYTHONPATH. The initial
 installed probe completed 12 console commands, then constructing the default
@@ -141,6 +163,15 @@ skips one stale `before_text`, reloads the completed session and preserves the
 input deck. Actual console inspection and real PDF export then pass; missing-input
 and no-new-PDF paths return exits 2 and 1. That service test is not represented as
 console `apply`. See `installed-deck-explicit/receipt.json` and its cleanup receipt.
+
+After the final bridge fix, all four wheels and sdists were rebuilt from the
+`b4990248` archive into `r6c-final-dist`, checked and reinstalled with no active
+task-environment consumer. The final installed probe repeats explicit-root
+apply/reload, real console inspection/PDF export, old-PDF rejection and missing
+input exits, and also executes the closed-loop bridge from the installed module.
+It passes with no PYTHONPATH and two PDF pages. The default Known Folder path is
+not attempted again. See `final-local-build.json`, `final-installed-inputs.json`
+and `installed-deck-final/receipt.json`; the earlier wheel hashes remain history.
 
 ### C3: existing benchmark modules retained
 
@@ -169,12 +200,28 @@ next timestamp slot; it never reruns a failed invocation.
 
 ### Delivery checkpoint, input identity and protection
 
-Runtime source last changed at `de83dadbe54c786a4c0113f04c5573bc2a8d295e`.
+Runtime source last changed at `b4990248a8437ac85af7236e01a2e7c71675afac`.
 The first complete source/test/package input is
 `b01030c25b41bae509f5e267b2ffc8a62fc7022c`; subsequent changes through
-`726d7e6da2415acf65c2b6b3db33cf0a9c690a21` are tests only. Test corrections are
-separate from production fixes. The report/remote receipts will identify the
+`726d7e6da2415acf65c2b6b3db33cf0a9c690a21` are tests only. The later closed-loop
+fix changes runtime inputs, so `final-frozen-inputs.json` freezes the complete
+`b4990248` source/test/package candidate and records the new native rebuild.
+Test corrections are separate from production fixes. The report/remote receipts identify the
 final delivery commits; no report-only reuse is inferred without input comparison.
+
+| Boundary                  | Characterization / red                            | Minimal fix                               | Extraction / evidence                                                         |
+| ------------------------- | ------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- |
+| MCP loop and HTML         | `74829165`                                        | `416b1008`, `e75c9ccf`                    | `84100457`; real-service tests `1ce2705a`, corrected early-exit `4fb5ed59`    |
+| Agent config ownership    | `0484d783`                                        | `a3946a1d`                                | Existing managers and ReAct/ReWOO retained                                    |
+| MCP cancellation          | Interrupted complete batch and direct SDK failure | No production workaround; remains BLOCKED | Failing watchdog test `c2d9982a` preserves failure and permits owned recovery |
+| Closed-loop compatibility | `212c62e0`; frozen original passes both cases     | `b4990248`                                | Stable 28-case group and final installed-wheel probe                          |
+| Deck publication          | `1679759d`                                        | `effccff1`                                | `de83dadb`; test typing `e2c354ae`                                            |
+| Artifact registry         | `f69a78b5`                                        | No production change                      | Existing R5 services retained                                                 |
+| Benchmark CLI             | `b01030c2`                                        | No production change                      | Test helper split `726d7e6d`                                                  |
+
+All full SHAs, ordered commits and file lists are recorded in the commit receipts
+under E; these short labels are not substitute source identities. The final
+source/test/harness/package SHA is the full `b4990248...` value above.
 
 Local four-wheel/four-sdist builds and twine checks pass from a committed Git
 archive, without the protected local overlay. Because the archive lacks `.git`,
@@ -182,36 +229,157 @@ its version fallback is `0.0.1`; this is not the CI Git-versioned wheel identity
 Installed probes use those four local wheels. The dependency environment is
 task-owned and reused; fresh clean-wheel installation is separately tested by CI.
 Local `npm run verify` passes; no canonical environment synchronization occurs.
+Final native CI also reruns the complete verify command: Electron **110/110**,
+Renderer **41/41**, packaging **5/5**, Sidecar **150 PASS / 2 existing SKIP**,
+schema comparison, TypeScript and production builds. The existing Vite chunk-size
+warning remains; no budget or dependency changes hide it.
 
 New native Gate2 [36304969812](https://github.com/262412/MARA/actions/runs/36304969812),
-attempt 1 at `b01030c2`, completes **3/3**. This is new native execution, not reuse
-of R6-B's historical 3/3. Artifacts and process/resource metrics are being compared
-by file hash. Windows Server 2022 / Ubuntu 22.04 / Ubuntu 24.04 results do not prove
-installer, clean-VM, macOS or unimplemented Desktop features.
+attempt 1 at `b01030c2`, completes **3/3**. Its Windows 2663 / Linux 2096 file
+inventories exactly match downloaded names/sizes/hashes and identify no remaining
+owned processes. This first R6-C run remains historical after `b4990248`.
+Final Gate2 [36308169995](https://github.com/262412/MARA/actions/runs/36308169995),
+attempt 1 at `b4990248`, also completes **3/3**. It rebuilds the frozen Sidecar and
+Electron directory, then exercises actual authenticated IPC/HTTP, index/query,
+cancellation/recovery, persistence/restart, storage-fault and exit scenarios.
+Those are the existing native smoke contracts, not U1's deferred browser matrix.
+
+The final Windows 2663-file and Linux 2096-file/link inventories exactly match
+downloaded paths, sizes and hashes. Both ASARs contain 96 entries; manager, launch
+and main compiled modules match current compilation. No forbidden config/runtime
+test names or invalid package links were found. Identified owned processes
+remaining: **0**. Access-denied unrelated processes remain unclassified (Windows
+14, Linux 153); this is not a whole-host process-absence claim. Windows Defender
+reported no detections within its scanned artifact scope. Four benign hidden
+dependency files are retained and explicitly classified in native resources.
+See `package-inspection/36308169995`, `final-native-smoke-outcomes.json` and the
+native run's diagnostics. Windows Server 2022 / Ubuntu 22.04 / Ubuntu 24.04 results
+do not prove installer, clean-VM, macOS or unimplemented Desktop features.
+
+| Final native job | Platform / actual scope                                                                                               | Result |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- | ------ |
+| `108588784444`   | Windows Server 2022: verify, PyInstaller Sidecar + Electron directory build, native business/resource smoke, Defender | PASS   |
+| `108588784511`   | Ubuntu 22.04: verify, PyInstaller Sidecar + Electron directory build, native business/resource smoke                  | PASS   |
+| `108590100413`   | Ubuntu 24.04: reuse the same final Ubuntu 22.04 artifact and run portability smoke; not a third build                 | PASS   |
+
+| Final artifact, `b4990248`            | SHA-256                                                            |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| Windows downloaded artifact ZIP       | `5a587fa362c91cf1bd28b5af89d1817d723af8b54f3155938b3dadc6997130ae` |
+| Linux downloaded artifact ZIP         | `92b910a63aadf76f5741ac3ff903d830eb7c4916af4c23b9271315aa35bcc166` |
+| Windows frozen Sidecar executable     | `bb6aac1a177fadbf345cd4993c899c241036a109e9cdac7bbccf8d001d222da1` |
+| Linux frozen Sidecar executable       | `15928145fadaa19b099d47409c1a5780c70eaa095a0f0299091fc9e0c23772fc` |
+| CI four-wheel/four-sdist evidence ZIP | `44801c355687981a995098558cc7c8a4b0e3b0f813bb24b2374c89ba529575fc` |
+
+The CI distributions use actual version `0.0.40`. Eight hashes match their index
+and provenance subjects; all provenance declares `b4990248` and run 36308167603.
+The changed wheel modules and two protected local Python overlays match committed
+source bytes, confirming that the user overlays were not packaged. See
+`final-python-artifacts.json` for every distribution hash. This checks the
+downloaded evidence and declared provenance; it does not claim a new signature.
 
 Initial Quality [36304965711](https://github.com/262412/MARA/actions/runs/36304965711),
-attempt 1 at `b01030c2`, has a real new static failure: test function length, a test
+attempt 1 at `b01030c2`, completes FAILURE with **12 successful / 8 failed jobs**.
+It has a real new static failure: test function length, a test
 type-narrowing omission and this report's table formatting. The first two fixes
-are `726d7e6d` and `e2c354ae`; report formatting is corrected independently. Its
-coverage job was still running at this checkpoint. It will not be cancelled or
-redispatched at the same SHA. Final Linux/Node/static/coverage/Quality evidence is
-pending; existing security failures are not relabelled as functional failures.
+are `726d7e6d` and `e2c354ae`; report formatting is corrected independently.
+Coverage completed naturally before the registered 60-minute collection bound;
+no cancellation was sent. It reports benchmark **90.22%**, slide CLI **81.93%**,
+kotaemon **71.90%**, ktem **84.40%**, fixed-Dev diff **96.47% (2517/2609)**.
+These are `b01030c2` results, not measurements of the later two-line bridge fix.
+Final Quality [36308167603](https://github.com/262412/MARA/actions/runs/36308167603),
+attempt 1, runs on `b4990248` with the same fixed-Dev base. It rebuilds all four
+distributions: two sdists include modified tests, so those old sdists are not
+claimed equivalent. It completes **FAILURE: 13 successful / 7 failed jobs**.
+Static is now successful. The seven failures are three dependency audits, three
+container supply-chain jobs and the unchanged required aggregation, not seven
+new R6-C product defects. Final snapshots, all 20 job logs and per-job outcomes
+are in `final-quality-complete-36308167603.json` and `final-quality-evidence.json`.
+
+Final coverage job `108588779182` passes the original package floors:
+
+| Package   | Actual statement coverage | Original floor |
+| --------- | ------------------------- | -------------- |
+| benchmark | **90.22%** (17146/19005)  | 90%            |
+| slide CLI | **81.93%** (2358/2878)    | 70%            |
+| kotaemon  | **71.90%** (7899/10986)   | 60%            |
+| ktem      | **84.40%** (43808/51906)  | 50%            |
+
+Fixed original Dev diff coverage is **96.48% (2519/2611)**; R6-C increment from
+`c5d9bb7f` is **99.00% (99/100)**, both against the unchanged 90% rule. These use
+the final CI measurement, SHA-256
+`5a8a75deca49f60aabfd07d89e180fd4d2188cbedf2a50b5b04a67b83e87b17b`
+for `coverage.json`. The coverage artifact ZIP digest is
+`ca69c729d1c2ca95413e2d6fb768dd9a9bb71ffa2b4b302ad24c0893acdc6706`.
+See `final-coverage-verified.json`, including uncovered lines. The first local
+postprocessing child omitted its parent's UTF-8 flag and failed decoding a git
+diff with GBK; those logs and the failing analysis receipt remain. Explicit
+`-X utf8 -B` child invocations then verify the same measured numbers. No test
+suite or CI run was repeated for that analysis-command correction.
+
+Final Linux job evidence at `b4990248`: kotaemon Python 3.10 and 3.11 each report
+**459 PASS / 10 existing SKIP**; ktem **3989 PASS**; benchmark/root **1654 PASS**;
+slide CLI completes successfully. Static/hygiene/baseline ratchet, full configured
+Linux mypy, unified collection, fresh four-wheel installations, distribution
+checks and repository/image secret scans pass. Frontend security tests and its
+eight browser smoke cases pass; those eight are not the original U1 double-37.
+
+The six completed security scan jobs still fail. Each root-py310/root-py311/
+container-py310 dependency audit lists **14 findings relative to its frozen
+baseline**; each lite/full/ollama image lists **4**. Exact sets match the reviewed
+R6-B run **36299641983**: **0 added / 0 disappeared since R6-B** in each job.
+The container set is AnyIO CVE-2026-63374 and PCRE2 CVE-2026-86145, CVE-2026-89157,
+CVE-2026-89161. Per-job identifiers and all dependency findings are preserved in
+the evidence JSON and raw logs. This comparison does not waive those failures;
+S1/PCRE2 remain OPEN and required-job aggregation is unchanged.
 
 Windows full suites retain their actual outcomes: ktem **3892 PASS / 97 FAIL**;
 benchmark/root **1607 PASS / 10 FAIL / 37 existing SKIP**; slide CLI has one
 protected-user-skill failure while the committed-archive CLI suite passes. The
-original 99 Windows nodes and four kotaemon capability failures will be compared
-by node and nature; the new MCP Selector failure stays distinct. The corrected,
-bounded kotaemon full suite is in progress. No skip/omit/allowlist is added.
+original 99 Windows nodes remain with the same normalized primary errors; nine
+additional full-repository Windows failures are listed separately in
+`windows-node-comparison.json`. Five are missing symlink privilege, one assumes
+POSIX site-packages layout, and three concern POSIX launcher/shell execution;
+the raw empty-output bootstrap failure does not identify its precise failed shell
+operation. No extra failure is silently assigned to the old 99.
+Final bounded kotaemon at `b4990248` is **441 PASS / 5 FAIL / 23 existing SKIP**:
+the four old capability failures have the same nature, plus the held-stdio
+Selector cancellation failure. It is a complete failed batch, not a pass assembled
+from the Proactor control. No skip/omit/allowlist is added.
+The other complete Windows package batches above ran at `b01030c2` with the
+recorded protected local overlays; they are not relabelled as fresh `b4990248`
+executions. The changed bridge is covered by the final full Windows kotaemon
+batch and the final full Linux suites. Full Windows mypy's prior platform limits
+remain unverified here; current Linux mypy does not close them.
 
 Forward receipts compare all **135 protected raw file hashes**, NUL, canonical
 environment metadata (**98,853 entries**), cache metadata (**610**), office cache
-(**0**), protected config bytes and runtime DB metadata. The last receipt after
-the denied default-path access passed. This does not establish old contents:
+(**0**), protected config bytes and runtime DB metadata. Both the receipt after
+the denied default-path access and `pre-final-report-summary.json` pass. This does not establish old contents:
 historical writer **UNKNOWN**, original content **UNVERIFIED** and cache event
 **OPEN** remain unresolved. No history scan without a lead, restore, timestamp
-adjustment or real-cache cleanup is performed. Final protection, secret scan,
-input-equivalence and remote receipts are still required.
+adjustment or real-cache cleanup is performed.
+
+The report-only delivery uses a separate post-commit receipt rather than embedding
+its own commit hash in the file. `final-delivery.json` is the authoritative
+source/test/package/report/local/remote map. It checks that the entire committed
+tree except this report matches `b4990248`, all 35 frozen external helpers are
+unchanged, the remote equals local HEAD, the index is empty and only the original
+135 user modifications plus NUL remain. Its final scan references
+`final-secret-scan.log` / `final-secret-scan.json` at that exact report commit;
+`final-protection-summary.json` records the final per-domain comparison. Missing
+or failed receipts must not be interpreted as delivery completion. No report-only
+CI rerun or old binary is represented as a new source execution.
+
+Stop at the **R6-C independent review point**. C1 remains BLOCKED on supported
+Windows Selector cancellation/termination; the next minimal question is how to
+complete that held-stdio cancellation contract without changing global policy,
+SDK dependencies or the transport architecture. No solution is claimed from
+the passing child-only Proactor control. C2's default Windows console session
+write additionally needs a supported explicit root or an isolated OS profile to
+verify; the pre-access refusal is not product success. C3's local-model contracts
+do not establish external provider quality. R6-D and U1 investigation do not
+start automatically. R5 and limited R6-B acceptance, historical protection
+incidents, S1/PCRE2 OPEN and merge/release NO-GO remain separate.
 
 ## Retained independent R6-B review (2026-09-27)
 
