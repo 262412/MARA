@@ -56,6 +56,7 @@ def test_target_ids_order_before_text_and_reload(tmp_path):
     ]
     assert deck.load_deck_snapshot(source) == snapshot
     copied = result.as_dict()
+    assert isinstance(copied["applied_target_ids"], list)
     copied["applied_target_ids"].clear()
     assert result.applied_count == 2
 
