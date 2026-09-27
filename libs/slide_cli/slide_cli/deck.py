@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -245,37 +248,59 @@ def export_deck_pdf(
     )
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    completed = subprocess.run(
-        [
-            str(resolved_soffice),
-            "--headless",
-            "--convert-to",
-            "pdf",
-            "--outdir",
-            str(target_dir),
-            str(source),
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=timeout_sec,
-        check=False,
-    )
-    if completed.returncode != 0:
-        details = (
-            completed.stderr.strip() or completed.stdout.strip() or "unknown error"
+    with _export_workspace(target_dir) as workspace:
+        completed = subprocess.run(
+            [
+                str(resolved_soffice),
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                str(workspace),
+                str(source),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=timeout_sec,
+            check=False,
         )
-        raise RuntimeError(f"LibreOffice export failed: {details}")
+        if completed.returncode != 0:
+            details = (
+                completed.stderr.strip() or completed.stdout.strip() or "unknown error"
+            )
+            raise RuntimeError(f"LibreOffice export failed: {details}")
 
-    converted_path = target_dir / f"{source.stem}.pdf"
-    if not converted_path.exists():
-        raise RuntimeError("LibreOffice export did not create the expected PDF output.")
+        converted_path = workspace / f"{source.stem}.pdf"
+        if not converted_path.is_file():
+            raise RuntimeError(
+                "LibreOffice export did not create the expected PDF output."
+            )
 
-    if requested_output is not None and converted_path != requested_output:
-        requested_output.parent.mkdir(parents=True, exist_ok=True)
-        converted_path.replace(requested_output)
-        return requested_output
-    return converted_path
+        destination = requested_output or target_dir / f"{source.stem}.pdf"
+        converted_path.replace(destination)
+        return destination
+
+
+@contextmanager
+def _export_workspace(target_dir: Path):
+    """Clean only this conversion's directory without masking a primary error."""
+    workspace = Path(tempfile.mkdtemp(prefix=".mara-deck-", dir=target_dir))
+    failed = False
+    try:
+        yield workspace
+    except BaseException:
+        failed = True
+        raise
+    finally:
+        try:
+            shutil.rmtree(workspace)
+        except OSError:
+            if not failed:
+                raise
+            logging.getLogger(__name__).exception(
+                "Failed to remove owned deck conversion directory %s", workspace
+            )
 
 
 def _open_presentation(path: Path):
