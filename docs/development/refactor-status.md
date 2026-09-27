@@ -1,32 +1,286 @@
 # Safe-refactor status
 
-## Current independent R6-B checkpoint (2026-09-27)
+## Current independent R6-B review (2026-09-27)
 
-The user's explicit authorization at baseline
-`dfeda2335b7e8f37b8361ca5c5578561c57bb583` starts R6-B independently.
-**R6-A/U1 remains BLOCKED and its investigation is deferred; it is no longer
-an execution prerequisite for independent R6-B or the later R6-C scope.**
-All Edge153/154 failures, NOT RUN records and historical protection events
-remain unchanged. This scheduling change does not waive a required job,
-change a gate, accept R6-A, or authorize general project closeout.
+Baseline: `dfeda2335b7e8f37b8361ca5c5578561c57bb583`; branch:
+`codex/r0-r1-safe-refactor`; fixed original Dev:
+`adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
 
-R6-B covers Sidecar launch configuration ownership (B1), actual process
-lifecycle contracts (B2), and new native package evidence (B3). B1 is in
-progress; B2/B3 verification has not run yet. The affected public surface is
-Electron's existing Sidecar launch, settings handshake and shutdown behavior;
-MARA/MARA-cli, Gradio event chains and persisted schemas are not changed by
-this extraction. Existing IPC/HTTP/SSE consumers and patch seams are retained.
+The user explicitly deferred R6-A/U1 without making it a prerequisite for
+independent R6-B/C. **R6-A/U1 remains BLOCKED; R5 remains ACCEPTED.** This
+supersedes only the earlier scheduling restriction, not its failures or gates.
+This round runs no Login diagnostic, Edge/Chromium comparison, Gradio five-exit
+group or original double-37 browser batch. No R6-C/D or security upgrade starts.
 
-No Login-specific run, Edge/Chromium comparison, Gradio five-exit group or
-original double-37 batch is part of this R6-B plan. Shared behavior changes
-require their actual adjacent contracts; any U1-dependent subitem is held
-separately. The prior Desktop Gate 2 source `48affef7` and run `35815532063`
-remain historical 3/3 evidence, not a pass for new desktop launch inputs.
+**R6-B limited verification passed; awaiting independent review. R6-A/U1 stays
+BLOCKED and does not block independent subsequent tasks. R6-B is not ACCEPTED.**
+Overall CI remains FAILURE for the security gates described below. Runtime source last
+changed at `61e995f66ca2f0d35c6ed40a1779ceaf8a5cb89c`; current source/test/native
+package candidate is `eb36a61ceb5e03d3a916d567d5e08037597950a9`.
 
-R5 remains ACCEPTED. Historical config writer UNKNOWN, original bytes
-UNVERIFIED, cache 614 to 610 OPEN, and S1/PCRE2 OPEN remain independent.
-Merge/release is NO-GO. This round stops at the R6-B independent review point;
-R6-C is not executed in this round and does not require closing U1 first.
+Evidence root E is
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r6b-independent-desktop/`.
+`execution.jsonl` records command, exit, HEAD and local modified-file hashes;
+commit/push receipts retain the exact paths. Native CI uses clean committed
+inputs; the 135 protected local edits remain uncommitted and are not silently
+included in those packages. `portable-candidate-inputs.json` fixes all eight
+changed non-report files. R6-B changes no Python wheel-package inputs.
+
+### B1: launch configuration ownership and unchanged entrypoints
+
+`electron/sidecar-launch.ts` now owns development Python selection, packaged
+command paths, working-directory selection and environment assembly. It imports
+only `node:path` and the existing `mergeSidecarEnvironment`. It neither spawns nor
+imports the manager, Click, Gradio or a complete application/runtime. The manager
+keeps child/token/port/generation/startup/restart/stop, mkdir/spawn, settings
+snapshotting, authentication and ready/health/doctor validation. Original
+`sidecarCommand()` and `developmentPython()` patch seams remain real consumers.
+
+Characterization precedes extraction: 13 new launch cases plus the existing
+manager/smoke/data contracts pass **35/35 before and 35/35 after extraction**.
+They retain explicit Python strings verbatim, then workspace `.venv`, then the
+platform fallback; exact packaged executable/arguments; inherited versus trusted
+environment precedence; forced config/data/cache/settings/temp and parent-pipe
+values; development PYTHONPATH order; smoke fault behavior; missing settings and
+synchronous exception timing. No real token/key or complete environment is logged.
+`main`, `smoke-environment` and `desktop-data` retain their existing responsibilities.
+
+### B2: actual process ownership, red tests and minimal fix
+
+The old manager dropped ownership after calling kill, before OS exit. Real child
+tests exposed **1 PASS / 2 FAIL** for startup stop and failed-ready cleanup.
+An intermediate implementation still returned a stale `starting` result
+(**31 PASS / 1 FAIL**, despite its historical log label ending in `green`).
+The expanded termination-failure counterexample then exposed a false healthy
+state (**16 PASS / 1 FAIL**). All failures and working-input hashes are retained;
+they are not rewritten as clean-commit passes.
+
+The fix shares one shutdown operation, makes a concurrent start wait for it,
+keeps child ownership until exit acknowledgement, rejects a termination that did
+not finish, and preserves primary startup errors alongside secondary cleanup
+errors. Intentional failed-start cleanup cannot schedule an automatic restart.
+The existing HTTP shutdown/grace period remains; termination now waits up to two
+seconds after normal kill and two after forced kill for actual exit. The ready
+deadline, HTTP timeouts and 250/500/1000 ms restart budget are unchanged. No IPC,
+HTTP, SSE, task schema, settings policy or global concurrency protocol is rewritten.
+
+The resulting related local suite is **52/52**. Its 17 real-process cases cover
+segmented/invalid/oversized ready, cold startup, PID/protocol/revision/fingerprint,
+startup exit/stop, missing executable, original ready timeout, shared stop/start,
+queued restarts without PID overlap, late old-generation callbacks, automatic
+restart exhaustion, parent EOF, authenticated HTTP and closed listening ports.
+The forced-termination negative case keeps the live child owned and status failed;
+cleanup then proves its actual exit. A kill return or `stopped` label is never the
+sole exit proof.
+
+Two additional owned Windows tests, executed at `61e995f6`, exercise production
+`sidecar.server_runtime.wait_for_parent_pipe` with and without a heartbeat. Both
+pass; the launcher and actual interpreter PID are independently absent afterward.
+The first ad hoc observer failure assumed those PIDs were equal and is retained;
+it did not capture the values and is not claimed as a product failure or a pass
+of the separate historical pytest node. `runtime-input-equivalence.json` proves
+the runtime/dependency inputs are unchanged in `eb36a61c`; packaging evidence was
+rebuilt separately. No canonical environment was synchronized.
+
+### B3: native delivery defects and evidence boundaries
+
+The first new native run at `61e995f6` passed **3/3**, but review found two gaps:
+Ubuntu cleanup listed Python PIDs 6871/8976 without module identities, and the
+Windows download contained 2659 files versus 2663 in the native package. A separate
+read-only receipt records package file hashes and only scoped process identities,
+without full command lines or environments.
+
+The receipt run at `4c5a1f6e` is retained as **1 SUCCESS / 1 FAILURE / 1 SKIPPED**.
+Ubuntu identified two remaining `sidecar.smoke_embedding_server` fixtures, PIDs
+6741/8829 with parent 1; Windows had no identified owned process remaining. This
+proves the controlled fixture defect, not the identities of the earlier two PIDs.
+The shell background PID belonged to a subshell rather than the model process;
+three existing POSIX launchers now use `exec`, so their existing kill/wait owns
+the producer. The Windows artifact omitted four hidden resource files, totaling
+858 bytes, including python-docx's `.rels`. Existing package-path upload now
+includes hidden files; no safety baseline or source/config allowlist was widened.
+
+At `ebff72df`, the next native run passed **3/3** and both scoped process lists
+were empty. Windows archive count/size matched the 2663-file native inventory.
+However, strict archive inspection found **32 Linux symlinks pointing to absolute
+CI build paths**. That is a real relocation contract failure despite the old smoke
+success. `artifact-relocation-red.json` retains all targets. Installed
+`@electron/packager 20.0.4` copies `extraResource` with default `fs.cp` symlink
+rewriting. The minimal packaging fix copies the Sidecar in `afterComplete` with
+`verbatimSymlinks: true`, preserving PyInstaller's relative library links. Native
+inventory now rejects absolute/outside/unresolved links; Ubuntu 24 checks the
+extracted archive for broken links before running the existing business smoke.
+No Electron/Node/Python dependency is upgraded. An earlier local streaming-tar
+reader error is retained separately; fixing that observer did not rerun an App.
+
+| Native run / attempt                                                       | Input      | Actual result and meaning                                                            |
+| -------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------ |
+| [36297185458 / 1](https://github.com/262412/MARA/actions/runs/36297185458) | `61e995f6` | 3/3; historical initial build, ownership/archive gaps remain in its evidence         |
+| [36298203884 / 1](https://github.com/262412/MARA/actions/runs/36298203884) | `4c5a1f6e` | 1 success, 1 failure, 1 dependency skip; fixture ownership red                       |
+| [36298731989 / 1](https://github.com/262412/MARA/actions/runs/36298731989) | `ebff72df` | 3/3; process/archive fixes pass, later Linux relocation check FAILS                  |
+| [36299639434 / 1](https://github.com/262412/MARA/actions/runs/36299639434) | `eb36a61c` | 3/3; corrected package, relocation, existing business smoke and resource checks PASS |
+
+Final job IDs are Windows **108564797828**, Ubuntu 22 **108564797911**, and Ubuntu
+24 **108565602899**. Both build jobs ran the existing complete `npm run verify`:
+Electron **110/110**, renderer **41/41**, Sidecar **150 passed / 2 existing skipped**,
+packaging **5/5**, schema/type checks and production builds. Node was **24.21.0**,
+npm **11.19.0**. Windows Defender signature **1.459.424.0** reported no detections.
+
+Downloaded archives match their GitHub SHA-256 digests. Every file name, size
+and hash matches its same-run native manifest: Linux **2096** entries including
+32 relative links (1,281,503,109 bytes counting resolved link targets); Windows
+**2663** files (1,003,967,743 bytes), including the four hidden resources. Linux
+links resolve wholly inside the package after relocation. Both ASARs contain
+96 entries, no compiled tests/source directories or checked private-config/runtime
+names, and their manager/launch/main bytes match the current compilation.
+Bundled tiktoken and punkt resources are present. Receipts and full inventories
+are under `E/package-inspection/36299639434/`.
+
+| Artifact                           | Download SHA-256                                                   | Frozen Sidecar SHA-256                                             |
+| ---------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Linux archive, 421,182,462 bytes   | `ac53738a5c54055280fd0b21189ce98c7f39efccbda39b49d84d8ede1883dacc` | `6921822f85f421455bad2f2fecc01aa6264c35ff7447ff9be73b828478dd62fa` |
+| Windows archive, 403,860,293 bytes | `2b69b9ebb02ee98006961eff6eff8e6b4919e9045622d6059f8474ff942943aa` | `9b79244fa3dae48d7b95b87883ba4224a527dbf68486c845e6e2f0ffed8d2f9f` |
+
+Both scoped post-smoke process lists are empty. Access-denied observations remain
+**144 Linux / 14 Windows**, so this is scoped ownership evidence, supplemented by
+the manager's real exit/PID tests and native process exit statuses, not universal
+OS-process visibility. Gitleaks scanned the extracted ASARs and inventories
+(5.15 MB) with zero findings; this is not a full scan of every dependency binary.
+The actual evidence scope is Windows Server 2022, Ubuntu 22.04 and the same
+Linux package on Ubuntu 24.04; installed Electron 43.2.0 and frozen PyInstaller
+Sidecar, not source-only HTTP. Existing smoke uses outside/read-only cwd, real
+renderer IPC and authenticated loopback HTTP, ready/PID/settings handshake,
+Doctor/Files/Sessions, indexing/query/citations, cancel/retry/partial results,
+session CRUD, file deletion, model-route persistence/migration, single-instance,
+Sidecar crash recovery and disk-full/database-lock/large-file faults.
+
+No installer, Windows 10/11 clean VM, upgrade/uninstall, native file-picker/IME,
+macOS or complete Desktop product parity is claimed. Notes/Studio/Graph/export
+P0 and full Index/Reranking/MCP/user-resource/settings scope remain incomplete
+under the existing feature matrix. Scoped process observations explicitly retain
+access-denied counts; they do not prove visibility into every OS process.
+
+### Stable gates, coverage and CI provenance
+
+[Quality 36299641983 / attempt 1](https://github.com/262412/MARA/actions/runs/36299641983)
+completed **FAILURE: 13 success / 7 failure** on
+`eb36a61ceb5e03d3a916d567d5e08037597950a9`, with fixed Dev base `adab3f4d`.
+All functional/static/build/coverage jobs passed. The seven failures are the three
+dependency profiles, three container vulnerability baselines and their required
+aggregate. No required job is waived and overall merge/release remains NO-GO.
+The counts below are this run's results, not old cc0 evidence.
+
+| Job IDs                                        | Current executed evidence                                                                                    | Result                            |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| `108565074616`, `108565074735`                 | Full static/hooks/hygiene/lock/baseline and unified collection                                               | PASS                              |
+| `108565074727`                                 | ktem isolated runtime: 3964 passed, 140 warnings                                                             | PASS                              |
+| `108565074787`                                 | Benchmark/root: 1653 passed, 8 warnings                                                                      | PASS                              |
+| `108565074830`, `108565074781`                 | kotaemon Python 3.10/3.11: each 422 passed, 10 existing skips, 93 warnings                                   | PASS                              |
+| `108565074808`                                 | Complete slide_cli suite                                                                                     | PASS                              |
+| `108565074779`                                 | Existing Node frontend contracts and 8 browser security scenarios                                            | PASS; not the original Gradio 37  |
+| `108565074814`, `108565074908`                 | Four noneditable clean-wheel installations and all four wheel/sdist builds with distribution provenance/SBOM | PASS                              |
+| `108565074795`, `108565074706`                 | Repository/history and built-image secret gates                                                              | PASS                              |
+| `108565074831`                                 | Original package floors and fixed-Dev production diff                                                        | PASS                              |
+| `108565074757`, `108565074818`, `108565074894` | root-py310, root-py311, container-py310 dependency baseline                                                  | FAIL; 14 new findings per profile |
+| `108565074785`, `108565074798`, `108565074821` | lite/ollama/full: actual built-image runtime smoke passes; vulnerability baseline fails                      | FAIL; 4 new findings per profile  |
+| `108570144960`                                 | Required quality gates aggregate                                                                             | FAIL                              |
+
+Dependency findings are anyio 4.11.0 (GHSA-5p39-cfhj-2xmp,
+GHSA-82r6-8w77-94w6), chromadb 0.5.16 (PYSEC-2026-3813/3814/3815), nltk 3.10.3
+(GHSA-8mgp-746c-j5xp), pypdf 4.2.0 (PYSEC-2026-3910/3911/3912/3913), soupsieve
+2.8 (GHSA-gjv8-xp57-g29c, GHSA-j934-xhv5-fg8f), transformers 4.56.2
+(PYSEC-2026-3929) and unstructured 0.15.14 (PYSEC-2026-3930). Container findings
+are anyio 4.11.0 CVE-2026-63374 and libpcre2-8-0 10.42-1
+CVE-2026-86145/89157/89161. These are per-profile baseline findings, not a global
+deduplicated CVE count. Baseline/alias/G0 exceptions remain unchanged;
+S1/PCRE2 stays OPEN. Full job logs and identifiers are in `final-quality-evidence.json`.
+
+| Coverage scope               | Actual current result                 | Unchanged floor           |
+| ---------------------------- | ------------------------------------- | ------------------------- |
+| benchmark                    | 90.22%                                | 90%                       |
+| slide_cli                    | 80.37%                                | 70%                       |
+| kotaemon                     | 71.13%                                | 60%                       |
+| ktem / ktem_contracts        | 84.23%                                | 50%                       |
+| Fixed Dev production diff    | 96.38%, 2420/2511 statements          | 90%                       |
+| R6-B increment from dfeda233 | N/A, 0/0 Python production statements | Existing policy unchanged |
+
+Coverage was executed on current CI source. Downloaded `coverage-evidence`
+SHA-256 is `c902f325abc992bbb6345727b3acb743f53759d8904cc9e50500ac1cb3f34cf1`;
+the fixed-Dev and round-increment checks were also rerun locally against that
+exact JSON. The helper prints 100% for 0/0; the report correctly treats it as
+an empty denominator, not tested new Python code. No omit/skip/allowlist, lock,
+scan scope, required job or threshold was changed. Eight freshly built Python
+wheel/sdist hashes are in `current-python-artifacts.json`; no prior build is
+relabeled as a current execution.
+
+Superseded Quality runs remain separate: `36297188393` at `61e995f6` was
+cancelled with **12 success / 7 failure / 1 cancelled**; `36298898967` at
+`ebff72df` was cancelled with **12 success / 6 failure / 2 cancelled**. Their
+coverage jobs did not finish. Existing workflow concurrency cancelled them when
+new evidenced fixes required new inputs; no unchanged SHA was rerun to select
+green. All native failure and success batches likewise remain separate above.
+
+Local focused hooks and supply-chain policy pass; newline/Black/Prettier repair
+attempts remain in the ledger. Local Node 24.14.0 installation recorded the
+existing jsdom engine warning and one high advisory; final native CI used Node
+24.21.0/npm 11.19.0. The original Windows 99, kotaemon four capability failures
+and full Windows mypy platform limits remain historical and were not rerun as
+those same pytest/platform groups. Native Sidecar unittest does not close them.
+
+### Responsibilities and independent remaining work
+
+| Owner / scope                       | Contract and evidence                                                                                                               | Status                                                            |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| R5-A                                | Existing file-deletion coordinator and ordered external-store cleanup; historical failure matrix retained                           | ACCEPTED; download ownership belongs to C3                        |
+| R5-B / L1-I1 / W1-W2                | Writer/ZIP, Source lifetime and index identity, event/stale-output boundaries; original same-source double 36 retained              | ACCEPTED within reviewed scope                                    |
+| R5-C                                | C1 graph cache, C2 notebook/artifact transactions, C3 DownloadWorkspace/FD/transfer/retention; same-source double 37 retained       | ACCEPTED scope unchanged; no R5-D                                 |
+| R6-A / U1                           | Existing CLI inspection/identity/actor/parent-pipe and selector/focus/exit work retained; Edge154 fourth exit Login failure remains | BLOCKED, deferred; not a prerequisite for independent B/C         |
+| R6-B / launch module                | Pure command/cwd/environment responsibility; original manager patch seams and launch precedence                                     | Characterized 35/35 before/after                                  |
+| R6-B / manager                      | Own child until actual exit; stale-generation and restart boundaries                                                                | 52/52 related local contracts; current native suites pass         |
+| R6-B / native packaging             | Frozen Sidecar/Electron composition, resource relocation, auth/business smoke, exit and hashes                                      | Current 3/3 and exact archive checks pass; earlier red retained   |
+| MCP/agent, deck/artifact, benchmark | Existing adapters and command surfaces retained; live providers/datasets/converters remain conditional                              | No new features or benchmark claims; independent R6-C not started |
+| Full delivery/security              | Existing CI policy, platform/VM limitations and all unresolved project work                                                         | S1/PCRE2 OPEN; merge/release NO-GO                                |
+
+### Protection, source history and stopping point
+
+Entry and intermediate forward checks retain all **135 protected raw files**,
+NUL, three private post-incident config hashes, real DB metadata, 98,853 canonical
+environment entries, 610 cache entries and office-cache metadata. Contents and
+credentials are not printed. Historical writer UNKNOWN, original bytes UNVERIFIED
+and cache 614 to 610 OPEN remain independent; metadata equality does not certify
+unread bytes or close that history. No restoration, mtime adjustment, real-cache
+cleanup, canonical sync or repeated search of historical directories occurred.
+Only task roots and ephemeral native CI runners are used. The final pre-report
+forward receipt matches all 135 original raw files, NUL, private config hashes
+and the same domain/file metadata; the 136th modified path is this task report.
+No new protection difference was found; no total historical protection PASS is claimed.
+
+| Commit                                     | Role                                                |
+| ------------------------------------------ | --------------------------------------------------- |
+| `5efc9f6b008e9b8a3d553f9f7774eabde6e080ea` | Independent R6-B schedule checkpoint                |
+| `792dab8cc88cec361da29e1667329b367e4a9ea6` | Old launch characterization tests                   |
+| `7d0677c64761d3255615858e697de42ab25899ac` | Structural launch extraction                        |
+| `bb5ede7e1423982b032f99e22adf114957e03b7c` | Real-process red tests                              |
+| `f2f1106e218d126109b07d77ed8505102a3ab4da` | Expanded lifecycle tests                            |
+| `61e995f66ca2f0d35c6ed40a1779ceaf8a5cb89c` | Minimal production process-ownership fix            |
+| `4c5a1f6ee59d7e2f458fbbbe325aa1fb17ca9d33` | Native resource/process observation and tests       |
+| `ebff72dfc071c00efe1b2005d0a0bae95ccc35a0` | POSIX fixture exec and complete Windows archive     |
+| `127483c666b22e9f89460cfd1d6e1aef8aa78037` | Reject nonportable native links                     |
+| `b11665c6819f20527638295a6c14d15d58e5754c` | Extracted-archive relocation gate                   |
+| `eb36a61ceb5e03d3a916d567d5e08037597950a9` | Minimal Sidecar resource-copy fix; frozen candidate |
+
+The report-only commit, final local/remote SHA, exact input-equivalence check,
+and post-commit secret-scan result are recorded in `E/final-delivery.json` and the
+final protection receipts. Report-only delivery does not claim a new functional
+execution: source/test/native package evidence remains pinned to `eb36a61c`.
+The evidence bundle retains logs/receipts/helper code; private config hashes are
+excluded and large original artifacts remain at their recorded paths and hashes.
+All pre-existing report history below is preserved byte for byte.
+
+**R6-B 限定验证通过，等待独立审查；R6-A/U1 仍 BLOCKED，但不阻断独立后续任务。**
+R5 remains ACCEPTED; historical protection events and S1/PCRE2 remain unresolved;
+merge/release stays NO-GO. Stop at R6-B review. No automatic ACCEPTED, R6-C,
+new branch/worktree, force push, merge, deployment or release occurred.
 
 ## Retained Edge154 natural acceptance at dfeda233 (2026-09-27)
 
