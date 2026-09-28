@@ -7,6 +7,7 @@ import threading
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -105,7 +106,11 @@ def _hold_open_active(monkeypatch, workspace, opened, release, observations):
                 raise
         return fd
 
-    monkeypatch.setattr(os, "open", open_then_wait)
+    # Keep the real os.open identity in the secure filesystem capability gate.
+    # Only retention's operation is observed; the wrapper still calls real open.
+    monkeypatch.setattr(
+        retention, "os", SimpleNamespace(**{**vars(os), "open": open_then_wait})
+    )
 
 
 def test_publishing_between_active_open_and_fstat_keeps_ready_download(
@@ -117,26 +122,30 @@ def test_publishing_between_active_open_and_fstat_keeps_ready_download(
     opened, release = threading.Event(), threading.Event()
     observations: dict[str, Any] = {}
     other = None
-    with monkeypatch.context() as patch, ThreadPoolExecutor(1) as workers:
-        _hold_open_active(patch, workspace, opened, release, observations)
-        scan = workers.submit(DownloadWorkspace.create, tmp_path, "other", ".html")
-        try:
-            assert opened.wait(10), "scanner did not open the actual active inode"
-            path = workspace.publish(context=CONTEXT)
-            observations["published"] = {
-                "active_present": (workspace.directory / ".active").exists(),
-                "ready_nlink": (workspace.directory / ".ready").stat().st_nlink,
-                "payload": path.read_bytes().decode(),
-            }
-        finally:
-            release.set()
-        try:
-            other = scan.result(timeout=10)
-        finally:
-            print(json.dumps(observations, sort_keys=True))
-            workspace.cleanup()
-            if other is not None:
-                other.cleanup()
+    try:
+        with monkeypatch.context() as patch, ThreadPoolExecutor(1) as workers:
+            _hold_open_active(patch, workspace, opened, release, observations)
+            scan = workers.submit(DownloadWorkspace.create, tmp_path, "other", ".html")
+            try:
+                if not opened.wait(10):
+                    if scan.done():
+                        scan.result()
+                    pytest.fail("scanner did not open the actual active inode")
+                path = workspace.publish(context=CONTEXT)
+                observations["published"] = {
+                    "active_present": (workspace.directory / ".active").exists(),
+                    "ready_nlink": (workspace.directory / ".ready").stat().st_nlink,
+                    "payload": path.read_bytes().decode(),
+                }
+                release.set()
+                other = scan.result(timeout=10)
+            finally:
+                release.set()
+    finally:
+        print(json.dumps(observations, sort_keys=True))
+        workspace.cleanup()
+        if other is not None:
+            other.cleanup()
     before = observations["after_real_open"]
     after = observations["before_production_fstat"]
     assert before["inode"] == after["inode"]
