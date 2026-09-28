@@ -4,6 +4,7 @@ import asyncio
 import json
 import sys
 import threading
+import time
 from contextlib import asynccontextmanager
 
 import psutil
@@ -23,6 +24,23 @@ def execution_identity():
         asyncio.get_running_loop(),
         asyncio.current_task(),
     )
+
+
+def wait_for_owned_processes(evidence):
+    """Check OS completion separately from the operation's completed await."""
+    observed = []
+    for pid in {r["pid"] for r in records(evidence)}:
+        started = time.monotonic()
+        try:
+            process = psutil.Process(pid)
+            parent = process.ppid()
+            code = process.wait(timeout=5)
+            observed.append({"pid": pid, "parent": parent, "exit_code": code})
+        except psutil.NoSuchProcess:
+            observed.append({"pid": pid, "absent": True})
+        observed[-1]["wait_seconds"] = time.monotonic() - started
+        assert not psutil.pid_exists(pid)
+    print(json.dumps({"independent_os_exit": observed}))
 
 
 def test_explicit_selector_cancellation_finishes_owned_operation(
@@ -63,7 +81,7 @@ def test_explicit_selector_cancellation_finishes_owned_operation(
         with pytest.raises(asyncio.CancelledError):
             await task
         if config["transport"] == "stdio":
-            assert all(not psutil.pid_exists(r["pid"]) for r in records(evidence))
+            await asyncio.to_thread(wait_for_owned_processes, evidence)
         assert json.loads(await tool._arun_tool(value="after")) == {"value": "after"}
         assert asyncio.get_running_loop() is loop
 
@@ -94,3 +112,31 @@ def test_explicit_selector_cancellation_finishes_owned_operation(
             }
         )
     )
+
+
+def test_sync_and_native_discovery_on_selector(owned_server):
+    config, evidence = owned_server
+    policy = asyncio.get_event_loop_policy()
+    try:
+        previous = asyncio.get_event_loop()
+    except RuntimeError:
+        previous = None
+    loop = asyncio.SelectorEventLoop()
+    try:
+        asyncio.set_event_loop(loop)
+        expected = [{"name": "owned_echo", "description": "Owned Unicode 回声"}]
+        assert mcp.discover_tools_info(config) == expected
+        assert (
+            loop.run_until_complete(mcp.async_discover_tools_info(config)) == expected
+        )
+        tool = mcp.create_tools_from_config(config)[0]
+        assert json.loads(tool.run('{"value":"sync-selector"}')) == {
+            "value": "sync-selector"
+        }
+        if config["transport"] == "stdio":
+            wait_for_owned_processes(evidence)
+    finally:
+        loop.run_until_complete(loop.shutdown_default_executor())
+        loop.close()
+        asyncio.set_event_loop(previous)
+    assert asyncio.get_event_loop_policy() is policy
