@@ -61,7 +61,8 @@ MARA platform install \
 - Existing `CLAUDE.md` and `AGENTS.md` files are preserved; MARA content is written to
   `CLAUDE.slide.md` or `AGENTS.slide.md`.
 - `settings.json.template` is copied to `settings.slide.template.json`, then merged into
-  `settings.json` by adding missing keys only.
+  `settings.json`: missing dictionary keys and unique list entries are added;
+  existing scalar values are preserved.
 - `config.toml.template` is copied to `config.slide.template.toml`, then appended to
   `config.toml` unless the MARA marker block already exists.
 - Existing files are backed up under `.slide-platform-backups/<timestamp>/`.
