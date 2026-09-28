@@ -1,12 +1,17 @@
 """Native POSIX retention/transfer protocol; Windows retains its capability gate."""
 
+import json
 import os
+import stat
+import threading
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 import pytest
 
+from kotaemon import artifact_retention as retention
 from kotaemon import artifact_transfers as transfers
 from kotaemon.artifact_downloads import DownloadWorkspace
 from kotaemon.artifact_retention import READY_OUTPUT_TTL_SECONDS
@@ -62,6 +67,96 @@ def test_same_file_concurrent_generations_and_transfers_are_independent(tmp_path
     with ThreadPoolExecutor(4) as workers:
         paths = list(workers.map(generate, range(8)))
     assert len(set(paths)) == 8 and all(path.exists() for path in paths)
+
+
+def _hold_open_active(monkeypatch, workspace, opened, release, observations):
+    real_open, real_fstat = os.open, os.fstat
+    directory_inode = real_fstat(workspace._directory_fd).st_ino
+
+    def observe(fd, stage):
+        metadata = real_fstat(fd)
+        observations[stage] = {
+            "inode": metadata.st_ino,
+            "mode": metadata.st_mode,
+            "nlink": metadata.st_nlink,
+        }
+
+    def open_then_wait(name, flags, *args, **kwargs):
+        fd = real_open(name, flags, *args, **kwargs)
+        if (
+            name == ".active"
+            and not flags & os.O_CREAT
+            and real_fstat(kwargs["dir_fd"]).st_ino == directory_inode
+        ):
+            try:
+                observe(fd, "after_real_open")
+                with pytest.raises(BlockingIOError):
+                    retention.fcntl.flock(
+                        fd, retention.fcntl.LOCK_EX | retention.fcntl.LOCK_NB
+                    )
+                observations["producer_lock_held"] = True
+                opened.set()
+                assert release.wait(
+                    10
+                ), "publisher did not release the open/fstat barrier"
+                observe(fd, "before_production_fstat")
+            except BaseException:
+                os.close(fd)
+                raise
+        return fd
+
+    monkeypatch.setattr(os, "open", open_then_wait)
+
+
+def test_publishing_between_active_open_and_fstat_keeps_ready_download(
+    tmp_path, monkeypatch
+):
+    workspace = DownloadWorkspace.create(tmp_path, "file", ".html")
+    with workspace.open_temporary() as output:
+        output.write(b"owned-publication")
+    opened, release = threading.Event(), threading.Event()
+    observations: dict[str, Any] = {}
+    other = None
+    with monkeypatch.context() as patch, ThreadPoolExecutor(1) as workers:
+        _hold_open_active(patch, workspace, opened, release, observations)
+        scan = workers.submit(DownloadWorkspace.create, tmp_path, "other", ".html")
+        try:
+            assert opened.wait(10), "scanner did not open the actual active inode"
+            path = workspace.publish(context=CONTEXT)
+            observations["published"] = {
+                "active_present": (workspace.directory / ".active").exists(),
+                "ready_nlink": (workspace.directory / ".ready").stat().st_nlink,
+                "payload": path.read_bytes().decode(),
+            }
+        finally:
+            release.set()
+        try:
+            other = scan.result(timeout=10)
+        finally:
+            print(json.dumps(observations, sort_keys=True))
+            workspace.cleanup()
+            if other is not None:
+                other.cleanup()
+    before = observations["after_real_open"]
+    after = observations["before_production_fstat"]
+    assert before["inode"] == after["inode"]
+    assert stat.S_ISREG(before["mode"]) and before["mode"] == after["mode"]
+    assert (before["nlink"], after["nlink"]) == (1, 0)
+    assert observations["producer_lock_held"]
+    assert observations["published"] == {
+        "active_present": False,
+        "ready_nlink": 1,
+        "payload": "owned-publication",
+    }
+    with pytest.raises(ArtifactNamespaceError, match="receipt changed"):
+        claim_download(
+            tmp_path, "file", path.parent.name, ".html", {**CONTEXT, "owner": "bob"}
+        )
+    transfer = claim_download(tmp_path, "file", path.parent.name, ".html", CONTEXT)
+    try:
+        assert os.read(transfer.fd, 99) == b"owned-publication"
+    finally:
+        transfer.close()
 
 
 @pytest.mark.parametrize("failure", ["marker", "active", "sync"])
