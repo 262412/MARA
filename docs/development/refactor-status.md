@@ -1,6 +1,71 @@
 # Safe-refactor status
 
-## Current independent R6-C review (2026-09-27)
+## Current Windows closeout and R6-D preparation (2026-09-28)
+
+Starting report/remote: `e1c89ea8375ded1501346ed8d4fa8e521932d7c6`;
+previous source/test/package: `b4990248a8437ac85af7236e01a2e7c71675afac`.
+Branch remains `codex/r0-r1-safe-refactor`; fixed original Dev remains
+`adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+
+**R6-C remains BLOCKED, not ACCEPTED.** R5 and the limited R6-B scope remain
+accepted. R6-A/U1 is deferred and is not a prerequisite for the independent
+Windows closeout or R6-D preparation. No Login, five Gradio exits or double-37
+execution is scheduled in this round. S1/PCRE2 and the historical protection
+incidents remain open; merge/release remain **NO-GO**.
+
+The user now authorizes a local Windows Selector adaptation for a complete stdio
+operation in its own explicit Proactor loop. The scope does not permit a global
+policy change, SDK patch, dependency update, transport replacement or shared
+session pool. Native async entrypoints and sync wrappers share the same ownership
+contract. Cancellation must finish the SDK contexts, OS child and owner thread;
+cancelling a proxy Future is insufficient.
+
+Evidence root W:
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r6c-windows-closeout/`.
+The earlier evidence root E and every historical failure remain retained below.
+
+| Item | Current evidence | State |
+| --- | --- | --- |
+| C1-W red | Test-only `dc33330e`: explicit Selector caller, actual held stdio/SSE service, same context owner, OS process and thread checks | Frozen run: stdio FAIL (watchdog rescue), SSE PASS |
+| C1-W implementation | Separate fix `780a3a57`; local complete MCP group 85 PASS, then expanded worker failure group 10 PASS; actual Python 3.11 and stable complete gates remain pending | Local targeted contracts PASS; closeout pending |
+| C2-W | Owned hosted-account fixture `6ed1402d`; six local pre-access refusal controls PASS; optional CI job resolves the actual fresh Known Folder before default-path console apply | Actual console execution NOT RUN |
+| R6-D preparation | Existing R0/R6 responsibility and Desktop capability matrices are the inputs; no bulk moves, renaming or compatibility deletion | IN PROGRESS |
+| New gates / CI / native artifacts | Run only after the targeted candidate stabilizes; previous b499 runs below are historical inputs | NOT RUN |
+
+Initial forward protection matches the previous final receipt: 135 protected
+dirty paths, NUL, 98,853 canonical metadata entries, 610 cache entries and the
+private config-byte comparison. `W/initial-summary.json` and `W/initial.json`
+record this checkpoint. It does not establish the historical config writer or
+historical byte integrity, and it does not close the earlier cache incident.
+
+The source/test/CI checkpoint is `cc03192b0cfb11cad6291167a4b4d412e2c29417`.
+The new worker runs only Windows stdio on a Selector caller. It creates and
+initializes the session, executes the operation and exits both SDK contexts in
+one owner task. Cancellation is forwarded once; repeated caller cancellations
+do not interrupt cleanup. The caller waits for a real thread join before
+propagating cancellation. Linux, supported Proactor and SSE operations remain
+on their caller loop; the facade's `initialized_session` patch seam is retained.
+
+The first candidate exposed an overly strong observation: instantaneous PID
+absence at the cancelled await. Both that failure and the follow-up read-only
+SDK trace are retained. The trace records SDK process wait completion with exit
+code 1; the owned service PID differs from the Windows virtualenv launcher PID.
+Test-only `aefa7d62` separates context/thread completion from an independent,
+bounded OS wait and PID-absence assertion. It does not rescue the process or
+accept watchdog use. `c1w-independent-exit` passes with no watchdog, and the
+complete 85-case group retains actual held service receipts and later calls.
+The initial import collection error, formatting/type failures and Python 3.10
+cancel-message expectation failure are retained in `W/execution.jsonl`.
+
+The Windows CI fixture is test-only: an ephemeral `runneradmin` account must
+match hosted-runner identity, the actual Known Folder and a fresh exact MARA
+subtree before writing. A copy of the unchanged original isolation entrypoint
+is installed alongside the wheels; each real console child activates it before
+business imports. Both console aliases perform `apply`, using public store APIs
+only to prepare fake sessions. Existing required jobs and policies are unchanged.
+The local user's Known Folder remains outside the authorized test scope.
+
+### Retained independent R6-C review (2026-09-27)
 
 Baseline: `c5d9bb7f20fa2db5b5a893cb2dcc96de0762e767`; branch:
 `codex/r0-r1-safe-refactor`; fixed original Dev:
