@@ -19,6 +19,7 @@ from typing import Any, Optional, Type
 from pydantic import BaseModel, Field, create_model
 
 from .base import BaseTool
+from .mcp_operation import run_mcp_operation
 from .mcp_session import initialized_session
 
 logger = logging.getLogger(__name__)
@@ -124,14 +125,18 @@ async def _async_discover_tools(parsed: dict) -> list["MCPTool"]:
     """Async: connect to an MCP server and return MCPTool wrappers."""
     if parsed["transport"] not in {"stdio", "sse"}:
         return []
-    async with initialized_session(
-        parsed["transport"],
-        parsed["command"],
-        parsed.get("args", []),
-        parsed.get("env", {}),
-    ) as session:
-        result = await session.list_tools()
-        return [_make_tool(parsed, tool_info) for tool_info in result.tools]
+
+    async def operation():
+        async with initialized_session(
+            parsed["transport"],
+            parsed["command"],
+            parsed.get("args", []),
+            parsed.get("env", {}),
+        ) as session:
+            result = await session.list_tools()
+            return [_make_tool(parsed, tool_info) for tool_info in result.tools]
+
+    return await run_mcp_operation(parsed["transport"], operation)
 
 
 def _run_async(coro: Any) -> Any:
@@ -179,16 +184,21 @@ async def async_discover_tools_info(config: dict) -> list[dict]:
     parsed = parse_mcp_config(config)
     if parsed["transport"] not in {"stdio", "sse"}:
         return []
-    async with initialized_session(
-        parsed["transport"],
-        parsed["command"],
-        parsed.get("args", []),
-        parsed.get("env", {}),
-    ) as session:
-        result = await session.list_tools()
-        return [
-            {"name": t.name, "description": t.description or ""} for t in result.tools
-        ]
+
+    async def operation():
+        async with initialized_session(
+            parsed["transport"],
+            parsed["command"],
+            parsed.get("args", []),
+            parsed.get("env", {}),
+        ) as session:
+            result = await session.list_tools()
+            return [
+                {"name": t.name, "description": t.description or ""}
+                for t in result.tools
+            ]
+
+    return await run_mcp_operation(parsed["transport"], operation)
 
 
 def discover_tools_info(config: dict) -> list[dict]:
@@ -295,11 +305,15 @@ class MCPTool(BaseTool):
         if self.server_transport == "stdio" and not cmd_args and " " in cmd:
             parts = shlex.split(cmd)
             cmd, cmd_args = parts[0], parts[1:]
-        async with initialized_session(
-            self.server_transport, cmd, cmd_args, self.server_env
-        ) as session:
-            result = await session.call_tool(self.mcp_tool_name, tool_args)
-            return self._format_result(result)
+
+        async def operation():
+            async with initialized_session(
+                self.server_transport, cmd, cmd_args, self.server_env
+            ) as session:
+                result = await session.call_tool(self.mcp_tool_name, tool_args)
+                return self._format_result(result)
+
+        return await run_mcp_operation(self.server_transport, operation)
 
     def _format_result(self, result: Any) -> str:
         """Format MCP CallToolResult into a string."""
