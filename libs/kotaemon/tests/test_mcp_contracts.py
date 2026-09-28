@@ -211,3 +211,32 @@ def test_facade_session_patch_remains_the_call_consumer(monkeypatch):
     monkeypatch.setattr(mcp, "initialized_session", patched)
     assert mcp.MCPTool(server_command="owned").run({"value": 1}) == "patched"
     assert calls == [("stdio", "owned", [], {})]
+
+
+def test_public_mcp_import_keeps_sdk_lazy_in_a_fresh_process(tmp_path):
+    import subprocess
+    import sys
+
+    code = """
+import importlib.abc
+import sys
+class RejectSDK(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'mcp' or fullname.startswith('mcp.'):
+            raise AssertionError('Eager MCP SDK import: ' + fullname)
+sys.meta_path.insert(0, RejectSDK())
+from kotaemon.agents.tools import MCPTool, mcp_operation, mcp_session
+assert MCPTool.__module__ == 'kotaemon.agents.tools.mcp'
+assert callable(mcp_operation.run_mcp_operation)
+assert callable(mcp_session.initialized_session)
+assert not any(n == 'mcp' or n.startswith('mcp.') for n in sys.modules)
+"""
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", code],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

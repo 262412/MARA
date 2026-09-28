@@ -296,7 +296,38 @@ def _rendering_io(source):
             name = ast.unparse(node.func)
             first, dot, rest = name.partition(".")
             resolved = imports.aliases.get(first, first) + (dot + rest if dot else "")
-            if resolved in io_calls or resolved.startswith("pathlib."):
+            path_read = False
+            if isinstance(node.func, ast.Attribute) and isinstance(
+                node.func.value, ast.Call
+            ):
+                constructor = ast.unparse(node.func.value.func)
+                first, dot, rest = constructor.partition(".")
+                constructor = imports.aliases.get(first, first) + (
+                    dot + rest if dot else ""
+                )
+                path_read = constructor in {
+                    "pathlib.Path",
+                    "pathlib.PosixPath",
+                    "pathlib.WindowsPath",
+                } and node.func.attr in {
+                    "open",
+                    "read_text",
+                    "read_bytes",
+                    "write_text",
+                    "write_bytes",
+                    "exists",
+                    "is_file",
+                    "is_dir",
+                    "stat",
+                    "iterdir",
+                    "glob",
+                    "rglob",
+                    "unlink",
+                    "mkdir",
+                    "rename",
+                    "replace",
+                }
+            if resolved in io_calls or path_read:
                 found.append(resolved)
     return found
 
@@ -319,3 +350,4 @@ def test_file_rendering_does_not_acquire_filesystem_io():
 def test_rendering_guard_rejects_io_but_allows_path_label_operations(source):
     assert _rendering_io(source)
     assert _rendering_io("import os\nos.path.splitext('file.pdf')") == []
+    assert _rendering_io("from pathlib import Path\nPath('file.pdf').suffix") == []
