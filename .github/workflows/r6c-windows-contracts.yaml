@@ -2,6 +2,12 @@ name: R6-C Windows contracts
 
 "on":
   workflow_dispatch:
+  push:
+    branches: [codex/r0-r1-safe-refactor]
+    paths:
+      - ".github/workflows/r6c-windows-contracts.yaml"
+      - "scripts/windows_apply_fixture.py"
+      - "scripts/windows_default_apply_contract.py"
 
 permissions:
   contents: read
