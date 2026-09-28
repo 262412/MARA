@@ -175,3 +175,39 @@ def test_unknown_transport_and_formatting(sdk):
     assert tool._format_result(SimpleNamespace(isError=True, content="bad")) == (
         "MCP Tool Error: bad"
     )
+
+
+def test_public_and_dynamic_tool_paths_keep_the_same_type():
+    from importlib import import_module
+
+    from kotaemon import agents
+    from kotaemon.agents import tools
+    from kotaemon.agents.tools import mcp_session
+
+    assert agents.MCPTool is tools.MCPTool is mcp.MCPTool
+    assert import_module("kotaemon.agents.tools.mcp").MCPTool is mcp.MCPTool
+    assert mcp.initialized_session is mcp_session.initialized_session
+    for name in (
+        "build_args_model",
+        "create_tools_from_config",
+        "discover_tools_info",
+        "format_tool_list",
+        "parse_mcp_config",
+    ):
+        assert getattr(tools, name) is getattr(mcp, name)
+
+
+def test_facade_session_patch_remains_the_call_consumer(monkeypatch):
+    calls = []
+
+    @asynccontextmanager
+    async def patched(*arguments):
+        calls.append(arguments)
+        yield SimpleNamespace(call_tool=call)
+
+    async def call(name, arguments):
+        return SimpleNamespace(isError=False, content=[SimpleNamespace(text="patched")])
+
+    monkeypatch.setattr(mcp, "initialized_session", patched)
+    assert mcp.MCPTool(server_command="owned").run({"value": 1}) == "patched"
+    assert calls == [("stdio", "owned", [], {})]

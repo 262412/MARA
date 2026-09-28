@@ -137,3 +137,16 @@ def test_missing_source_precedes_converter_lookup(tmp_path, monkeypatch):
     monkeypatch.setattr(deck.shutil, "which", unexpected)
     with pytest.raises(FileNotFoundError):
         deck.export_deck_pdf(tmp_path / "absent.pptx")
+
+
+def test_old_export_and_patch_objects_are_the_actual_conversion_owner():
+    from importlib import import_module
+
+    from slide_cli import deck_export
+
+    assert deck.export_deck_pdf is deck_export.export_deck_pdf
+    for name in ("os", "shutil", "subprocess"):
+        assert getattr(deck, name) is getattr(deck_export, name)
+    # Persisted/agent paths keep resolving their original type owner.
+    assert import_module("slide_cli.deck").ShapeSnapshot is deck.ShapeSnapshot
+    assert deck.ShapeSnapshot.__module__ == "slide_cli.deck"
