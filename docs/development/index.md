@@ -14,6 +14,12 @@ For the single-repo Claude Code and Codex support workflow, see
 For proposal alignment, phase closure, thesis claim boundaries, evaluation
 protocol, and remaining work, see [Project Status](project-status/README.md).
 
+## Development and architecture
+
+Use [Contributing](contributing.md) for current environment/test commands and
+[Architecture contracts](architecture-contracts.md) for owners and compatibility
+guards. Current acceptance and unresolved gates live in [Refactor status](refactor-status.md).
+
 ## Codebase Hygiene
 
 For the default rules that keep future development from turning into a big ball

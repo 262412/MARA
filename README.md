@@ -209,49 +209,17 @@ MARA docqa --help
 
 #### Option 2: Source Install For Development
 
-Use this path when you want to modify the UI, DocQA runtime, knowledge graph, platform assets, or CLI.
+Use the [development setup guide](docs/development/contributing.md) and
+[storage contract](docs/development/storage-layout-contract.md) before changing
+the checkout. Only `install.sh` synchronizes the shared canonical environment;
+routine tests use `--no-sync` or the canonical wrapper. Do not create a new
+`.venv` over an existing one, install workspace packages editable, or overwrite
+real `.env`/settings files. Windows uses a separately prepared owned environment;
+the Bash installer is not a native Windows installation recipe.
 
-```shell
-python -m venv .venv
-```
-
-Windows PowerShell:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-macOS / Linux:
-
-```shell
-source .venv/bin/activate
-```
-
-Install local packages:
-
-```shell
-uv sync --extra mara
-```
-
-Prepare environment variables:
-
-```shell
-cp .env.example .env
-```
-
-Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Start the source-mode Web UI:
-
-```shell
-python app.py
-```
-
-In source mode, root [flowsettings.py](flowsettings.py) is the runtime settings entrypoint, and local app data is written to `./ktem_app_data`.
+Source-mode `app.py` uses root [flowsettings.py](flowsettings.py) and normally
+stores local data in `./ktem_app_data`; tests must activate the existing runtime
+isolation before importing or launching the application.
 
 #### Option 3: Docker
 
@@ -550,13 +518,13 @@ Outputs are written under `benchmark/artifacts/`. See [benchmark/README.md](benc
 
 ### Development And Verification
 
-Non-trivial repository changes must follow [docs/development/codebase-hygiene-contract.md](docs/development/codebase-hygiene-contract.md). Key points:
+See [current setup](docs/development/contributing.md) and [architecture contracts](docs/development/architecture-contracts.md). Non-trivial repository changes must follow [docs/development/codebase-hygiene-contract.md](docs/development/codebase-hygiene-contract.md). Key points:
 
 - Preserve the public `MARA` / `MARA-cli` command surface.
 - Do not refresh `scripts/codebase_hygiene_baseline.json` only to make the hygiene gate pass.
 - Python changes need the relevant hygiene gate and pre-commit run for affected files.
 - CLI, DocQA, Gradio event-chain, persisted-data, and config changes need matching tests.
-- Repository-root `pytest -q` is not the default readiness signal while root collection conflicts remain.
+- Quality enforces unified collection; collection alone does not prove execution or cross-platform readiness.
 
 README-only changes usually do not need the Python hygiene gate, but should still verify links, public command descriptions, and code accuracy.
 
@@ -771,49 +739,14 @@ MARA docqa --help
 
 #### 方式二：源码开发安装
 
-适合修改 UI、DocQA、知识图谱、平台资产或 CLI。
+修改前先读[开发环境指南](docs/development/contributing.md)和
+[存储合同](docs/development/storage-layout-contract.md)。共享 canonical 环境只由
+`install.sh` 同步，日常验证使用 `--no-sync` 或 canonical wrapper。不要覆盖已有
+`.venv`、以 editable 重装工作区包或覆盖真实 `.env`/配置。Windows 使用单独准备的
+任务自有环境；Bash 安装脚本不是原生 Windows 安装步骤。
 
-```shell
-python -m venv .venv
-```
-
-Windows PowerShell:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-macOS / Linux:
-
-```shell
-source .venv/bin/activate
-```
-
-安装本地包：
-
-```shell
-uv sync --extra mara
-```
-
-准备环境变量：
-
-```shell
-cp .env.example .env
-```
-
-Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-启动源码模式 Web UI：
-
-```shell
-python app.py
-```
-
-源码模式下，根目录 [flowsettings.py](flowsettings.py) 会作为运行时设置入口，本地应用数据默认写入 `./ktem_app_data`。
+源码 `app.py` 使用根目录 [flowsettings.py](flowsettings.py)，通常向
+`./ktem_app_data` 写数据；测试必须在业务 import/启动前启用已有隔离入口。
 
 #### 方式三：Docker
 
@@ -1109,7 +1042,7 @@ python -m benchmark run `
 - 不为了让卫生检查通过而刷新 `scripts/codebase_hygiene_baseline.json`。
 - Python 改动需要按受影响文件运行 hygiene gate 与 pre-commit。
 - CLI、DocQA、Gradio 事件链、持久化数据和配置改动需要运行对应测试。
-- 根目录 `pytest -q` 不是当前默认 readiness signal，除非已有 collection 冲突被解决。
+- Quality 已强制统一收集；收集成功不等于测试执行或跨平台验收通过。
 
 文档或 README 改动通常不需要运行 Python hygiene gate，但仍应至少确认关键链接、公开命令列表和真实代码保持一致。
 
