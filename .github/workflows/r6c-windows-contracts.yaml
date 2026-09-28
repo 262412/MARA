@@ -1,0 +1,115 @@
+name: R6-C Windows contracts
+
+"on":
+  workflow_dispatch:
+  push:
+    branches: [codex/r0-r1-safe-refactor]
+    paths:
+      - ".github/workflows/r6c-windows-contracts.yaml"
+      - "scripts/windows_apply_fixture.py"
+      - "scripts/windows_default_apply_contract.py"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-contracts:
+    name: Windows MCP and installed apply (Python ${{ matrix.python }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11"]
+    env:
+      PYTHONUTF8: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Set up uv
+        uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
+        with:
+          version: "0.11.19"
+          checksum: 1665fc8e37b5d70a134820d6d7891747471a2ac8bc940ee7af0b69fd03b28d61
+      - name: Sync owned locked environment
+        id: sync
+        run: uv sync --all-packages --frozen --python ${{ matrix.python }}
+      - name: Select owned test runtime parent
+        shell: pwsh
+        run: Add-Content -LiteralPath $env:GITHUB_ENV -Value "MARA_PYTEST_RUNTIME_PARENT=$env:RUNNER_TEMP/r6cw-pytest"
+      - name: Real stdio and SSE ownership contracts
+        run: >-
+          uv run --no-sync python -m pytest -q -s
+          libs/kotaemon/tests/test_mcp_tools.py
+          libs/kotaemon/tests/test_mcp_manager.py
+          libs/kotaemon/tests/test_mcp_contracts.py
+          libs/kotaemon/tests/test_mcp_async_errors.py
+          libs/kotaemon/tests/test_mcp_html_boundary.py
+          libs/kotaemon/tests/test_mcp_live_sessions.py
+          libs/kotaemon/tests/test_mcp_operation_lifecycle.py
+          libs/kotaemon/tests/test_mcp_worker_ownership.py
+          --junitxml=${{ runner.temp }}/mcp-results.xml
+      - name: Build four current packages
+        id: build
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv run --no-sync python scripts/publish_packages.py check --rebuild --outdir "${{ runner.temp }}/r6cw-dist"
+      - name: Install current wheels into separate environment
+        id: install
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          uv export --locked --all-packages --no-dev --no-emit-workspace --no-hashes --no-header --no-annotate --output-file "$env:RUNNER_TEMP/constraints.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv venv --python ${{ matrix.python }} "$env:RUNNER_TEMP/r6cw-installed"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheels = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/r6cw-dist" -Recurse -Filter '*.whl' | ForEach-Object { $_.FullName }
+          if ($wheels.Count -ne 4) { throw 'Expected four current wheels' }
+          uv pip install --python "$env:RUNNER_TEMP/r6cw-installed/Scripts/python.exe" --constraint "$env:RUNNER_TEMP/constraints.txt" $wheels
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv pip check --python "$env:RUNNER_TEMP/r6cw-installed/Scripts/python.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $site = "$env:RUNNER_TEMP/r6cw-installed/Lib/site-packages"
+          Copy-Item -LiteralPath pytest_runtime_isolation.py -Destination $site
+          Copy-Item -LiteralPath scripts/windows_apply_fixture.py -Destination $site
+          @'
+          import os
+          import sys
+          try:
+              from windows_apply_fixture import activate_console_guard
+              activate_console_guard()
+          except BaseException as exc:
+              sys.stderr.write('Console isolation failed: ' + type(exc).__name__ + ': ' + str(exc)[:300] + '\n')
+              os._exit(86)
+          '@ | Set-Content -LiteralPath "$site/sitecustomize.py" -Encoding utf8
+      - name: Actual default Known Folder console apply
+        id: apply
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = $null
+          $env:PYTHONHOME = $null
+          $env:VIRTUAL_ENV = $null
+          Set-Location -LiteralPath $env:RUNNER_TEMP
+          & "$env:RUNNER_TEMP/r6cw-installed/Scripts/python.exe" -X utf8 -B "$env:GITHUB_WORKSPACE/scripts/windows_default_apply_contract.py"
+          exit $LASTEXITCODE
+      - name: Collect owned scope after producer exit
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP/r6cw-installed/Scripts/python.exe" -X utf8 -B scripts/windows_default_apply_contract.py --collect "$env:RUNNER_TEMP/default-apply-evidence"
+          exit $LASTEXITCODE
+      - name: Upload exact platform evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: r6cw-python-${{ matrix.python }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/mcp-results.xml
+            ${{ runner.temp }}/default-apply-evidence
+            ${{ runner.temp }}/r6cw-dist
+          if-no-files-found: error
