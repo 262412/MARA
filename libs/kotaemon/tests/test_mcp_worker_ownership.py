@@ -146,3 +146,102 @@ def test_supported_loop_keeps_operation_in_caller(transport, monkeypatch):
         loop.run_until_complete(exercise())
     finally:
         loop.close()
+
+
+def test_worker_loop_creation_error_is_single_and_joined(worker_path, monkeypatch):
+    failure = RuntimeError("loop creation failed")
+    threads = []
+
+    def fail():
+        threads.append(threading.current_thread())
+        raise failure
+
+    monkeypatch.setattr(asyncio, "ProactorEventLoop", fail)
+
+    async def operation():
+        raise AssertionError("Operation must not start without its loop")
+
+    async def exercise():
+        with pytest.raises(RuntimeError) as caught:
+            await mcp_operation.run_mcp_operation("stdio", operation)
+        assert caught.value is failure
+
+    run_selector(exercise)
+    assert len(threads) == 1 and not threads[0].is_alive()
+
+
+@pytest.mark.parametrize("business_failure", [False, True])
+def test_loop_cleanup_error_preserves_primary(
+    worker_path, monkeypatch, business_failure
+):
+    primary = RuntimeError("business failure")
+    secondary = ValueError("shutdown failure")
+    factory = asyncio.ProactorEventLoop
+
+    def loop_factory():
+        loop = factory()
+
+        async def fail():
+            raise secondary
+
+        monkeypatch.setattr(loop, "shutdown_asyncgens", fail)
+        return loop
+
+    monkeypatch.setattr(asyncio, "ProactorEventLoop", loop_factory)
+
+    async def operation():
+        if business_failure:
+            raise primary
+        return "result"
+
+    async def exercise():
+        with pytest.raises((ValueError, RuntimeError)) as caught:
+            await mcp_operation.run_mcp_operation("stdio", operation)
+        assert caught.value is (primary if business_failure else secondary)
+
+    run_selector(exercise)
+
+
+def test_owned_background_task_finishes_before_result(worker_path):
+    cleaned = threading.Event()
+
+    async def background():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleaned.set()
+
+    async def operation():
+        asyncio.create_task(background())
+        await asyncio.sleep(0)
+        return "owned result"
+
+    async def exercise():
+        assert (
+            await mcp_operation.run_mcp_operation("stdio", operation) == "owned result"
+        )
+        assert cleaned.is_set()
+
+    run_selector(exercise)
+
+
+def test_cancellation_remains_primary_after_cleanup_error(worker_path, caplog):
+    entered = threading.Event()
+
+    async def operation():
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            raise ValueError("private payload must not be logged")
+
+    async def exercise():
+        task = asyncio.create_task(mcp_operation.run_mcp_operation("stdio", operation))
+        await reached(entered)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    run_selector(exercise)
+    assert "MCP cancellation cleanup failed: ValueError" in caplog.text
+    assert "private payload" not in caplog.text
