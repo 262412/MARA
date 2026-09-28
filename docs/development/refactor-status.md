@@ -3,67 +3,348 @@
 ## Current Windows closeout and R6-D preparation (2026-09-28)
 
 Starting report/remote: `e1c89ea8375ded1501346ed8d4fa8e521932d7c6`;
-previous source/test/package: `b4990248a8437ac85af7236e01a2e7c71675afac`.
-Branch remains `codex/r0-r1-safe-refactor`; fixed original Dev remains
+previous verified R6-C source/test/package:
+`b4990248a8437ac85af7236e01a2e7c71675afac`. Branch remains
+`codex/r0-r1-safe-refactor`; fixed original Dev remains
 `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
 
-**R6-C remains BLOCKED, not ACCEPTED.** R5 and the limited R6-B scope remain
-accepted. R6-A/U1 is deferred and is not a prerequisite for the independent
-Windows closeout or R6-D preparation. No Login, five Gradio exits or double-37
-execution is scheduled in this round. S1/PCRE2 and the historical protection
-incidents remain open; merge/release remain **NO-GO**.
+**C1-W and C2-W have passed their limited Windows contracts. R6-C remains
+BLOCKED / pending independent review, not ACCEPTED.** R5 and the limited R6-B
+scope remain accepted. R6-A/U1 remains BLOCKED and deferred, independently of
+this work. No Login diagnostic, five Gradio exits or double-37 batch ran here.
+R6-D preparation is complete within the owner-map scope below; implementation
+and whole-project closeout have not started. S1/PCRE2 and historical protection
+incidents stay open; merge/release remain **NO-GO**.
 
-The user now authorizes a local Windows Selector adaptation for a complete stdio
-operation in its own explicit Proactor loop. The scope does not permit a global
-policy change, SDK patch, dependency update, transport replacement or shared
-session pool. Native async entrypoints and sync wrappers share the same ownership
-contract. Cancellation must finish the SDK contexts, OS child and owner thread;
-cancelling a proxy Future is insufficient.
-
-Evidence root W:
+Evidence W:
 `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r6c-windows-closeout/`.
-The earlier evidence root E and every historical failure remain retained below.
+The retained previous-round evidence E is
+`D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r6c-independent-tools-artifacts/`.
+`W/execution.jsonl` preserves commands, exits, source HEAD and working-file hashes.
+The 135 protected local modifications are excluded from committed CI inputs.
 
-| Item                              | Current evidence                                                                                                                                                              | State                                              |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| C1-W red                          | Test-only `dc33330e`: explicit Selector caller, actual held stdio/SSE service, same context owner, OS process and thread checks                                               | Frozen run: stdio FAIL (watchdog rescue), SSE PASS |
-| C1-W implementation               | Separate fix `780a3a57`; local complete MCP group 85 PASS, then expanded worker failure group 10 PASS; actual Python 3.11 and stable complete gates remain pending            | Local targeted contracts PASS; closeout pending    |
-| C2-W                              | Owned hosted-account fixture `6ed1402d`; six local pre-access refusal controls PASS; optional CI job resolves the actual fresh Known Folder before default-path console apply | Actual console execution NOT RUN                   |
-| R6-D preparation                  | Existing R0/R6 responsibility and Desktop capability matrices are the inputs; no bulk moves, renaming or compatibility deletion                                               | IN PROGRESS                                        |
-| New gates / CI / native artifacts | Run only after the targeted candidate stabilizes; previous b499 runs below are historical inputs                                                                              | NOT RUN                                            |
+| Scope               | Owner / contract                                                                              | Actual evidence and status                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| R5                  | Accepted cache, Notebook/Session/artifact, download/FD, writer and ZIP services               | ACCEPTED scope and all historical failures/double-37 retained; no lifecycle redesign                                                |
+| R6-B                | Launch construction vs manager process lifecycle; native delivery                             | Limited ACCEPTED at `eb36a61c`; platform, installer and feature limits retained                                                     |
+| R6-A/U1             | Browser interaction / async tail ownership                                                    | BLOCKED and deferred; NOT RUN in this round                                                                                         |
+| C1-W                | Complete stdio operation on an explicit owned Proactor loop only for Windows Selector callers | Python 3.10.11 and 3.11.9 each 93/93 MCP contracts; no cancellation watchdog rescue; limited contract PASS                          |
+| C2-W                | Installed console apply on the disposable account's actual authorized Known Folder            | Both aliases, legal edit, stale skip, input preservation, output/session reload and missing-session exit; both Python versions PASS |
+| C2/C3 retained      | Existing deck/export, R5 artifact registry, benchmark CLI/runner/scoring                      | Previous b499 real conversion/artifact/miniature benchmark evidence retained; no claim of a new miniature experiment                |
+| R6-D preparation    | Existing R0/R6 plan, owner/import/facade map, package and Desktop capability matrices         | Targeted 15-module review and four-package map complete; no moves, renames or facade deletion                                       |
+| Delivery / security | Current complete gates, native artifacts and fixed policies                                   | Final results recorded below; functional evidence does not close security or historical incidents                                   |
 
-Initial forward protection matches the previous final receipt: 135 protected
-dirty paths, NUL, 98,853 canonical metadata entries, 610 cache entries and the
-private config-byte comparison. `W/initial-summary.json` and `W/initial.json`
-record this checkpoint. It does not establish the historical config writer or
-historical byte integrity, and it does not close the earlier cache incident.
+### C1-W: complete-operation ownership and cancellation
 
-The source/test/CI checkpoint is `cc03192b0cfb11cad6291167a4b4d412e2c29417`.
-The new worker runs only Windows stdio on a Selector caller. It creates and
-initializes the session, executes the operation and exits both SDK contexts in
-one owner task. Cancellation is forwarded once; repeated caller cancellations
-do not interrupt cleanup. The caller waits for a real thread join before
-propagating cancellation. Linux, supported Proactor and SSE operations remain
-on their caller loop; the facade's `initialized_session` patch seam is retained.
+The public surface affected is existing MCP discovery and `MCPTool` sync/native
+async execution. `mcp.py` retains public functions, schema, formatting, old
+`initialized_session` patch consumers and the already-corrected `_run_async`
+business-error/closed-loop behavior. `mcp_session.py` remains the SDK connection,
+initialize and context-exit owner. New `mcp_operation.py` contains only the
+Windows Selector/stdio bridge, with standard-library dependencies. It does not
+import an agent, configuration manager or SDK transport, and introduces no connection/worker pool framework.
 
-The first candidate exposed an overly strong observation: instantaneous PID
-absence at the cancelled await. Both that failure and the follow-up read-only
-SDK trace are retained. The trace records SDK process wait completion with exit
-code 1; the owned service PID differs from the Windows virtualenv launcher PID.
-Test-only `aefa7d62` separates context/thread completion from an independent,
-bounded OS wait and PID-absence assertion. It does not rescue the process or
-accept watchdog use. `c1w-independent-exit` passes with no watchdog, and the
-complete 85-case group retains actual held service receipts and later calls.
-The initial import collection error, formatting/type failures and Python 3.10
-cancel-message expectation failure are retained in `W/execution.jsonl`.
+The coroutine factory executes inside one owned thread, explicit Proactor loop
+and owner task. Connection, initialization, call and context exit stay there;
+no live session, stream, Future or AnyIO cancel scope crosses loops. The first
+caller cancellation is forwarded to the owner; later cancellations do not
+interrupt cleanup. The caller awaits a real thread join before propagating
+cancellation or the original business error. Linux, normal Proactor and SSE
+operations remain on the caller loop. Global loop policy and SDK source are
+unchanged; no external call is retried.
 
-The Windows CI fixture is test-only: an ephemeral `runneradmin` account must
-match hosted-runner identity, the actual Known Folder and a fresh exact MARA
-subtree before writing. A copy of the unchanged original isolation entrypoint
-is installed alongside the wheels; each real console child activates it before
-business imports. Both console aliases perform `apply`, using public store APIs
-only to prepare fake sessions. Existing required jobs and policies are unchanged.
-The local user's Known Folder remains outside the authorized test scope.
+Red characterization `dc33330e` retained the real held stdio failure requiring
+the ten-second rescue watchdog, while SSE passed. `aefa7d62` separately corrected
+the observation boundary before production fix `780a3a57`: an instantaneous
+PID-absence assertion had conflated context/thread completion with OS descendant
+exit. Both failures and `stdio-exit-trace.json` remain. The trace distinguishes
+the SDK launcher process from the owned service PID; a zero-time `psutil.wait`
+snapshot was not accepted as proof of a still-running child.
+
+The final tests independently wait at most five seconds for owned service
+processes and then require PID absence, before a subsequent real call. This
+does not kill, retry or rescue them. The live Windows 3.10/3.11 evidence records
+zero-second OS observations and empty watchdog event lists, same owner
+task/loop/thread at context entry and exit, dead worker threads, unchanged caller
+policy and a successful later call. The existing full-suite held-stdio test also
+passes locally after other imports select a Selector policy. Naked SDK Selector
+failure remains upstream historical evidence; the SDK was not altered.
+
+The 13 worker controls cover one business exception, cancellation before owner
+registration, repeated cancellation during cleanup, owned background-task exit,
+loop creation/shutdown/final-close failures and primary/secondary error priority.
+Final `loop.close()` failure was first red at `14d4f7d8` (one FAIL, one PASS), then
+fixed separately in `1ea396a3`; it no longer escapes an unobserved worker thread
+or turns into a successful result. Secondary diagnostics log exception types,
+not private payloads. Linux worker-mechanics controls that substitute a local
+loop factory are explicitly distinct from native Windows Proactor evidence.
+
+An additional shutdown boundary was red at `a294194c`: event-loop shutdown
+cancels every Task, including the private Task previously wrapping the thread
+join. Its already-cancelled shield then looped without completion. The bounded
+child recorded `held=true`, two pending tasks and owner cleanup, but still
+required watchdog termination; owner cleanup was not misreported as whole-thread
+exit. `89e1c388` independently changes that join to a shielded executor Future,
+which is not a child Task. The test now proves all-task cancellation, owner
+cleanup, real thread completion, executor/loop close and unchanged global policy.
+The watchdog is rescue-only and any timeout fails. All 13 worker controls pass;
+the same regression is included in the real Python 3.10/3.11 93-case runs and the
+complete local suite. No SDK, policy, pool or application protocol changed.
+
+`W/windows-delivery-shutdown-verified.json` verifies hosted run
+[36381339973](https://github.com/262412/MARA/actions/runs/36381339973), attempt 1,
+jobs `108797554450` (3.10) and `108797554255` (3.11), at
+`f659007ee9693fb9f8603850ccfbbd00f56ff5cc`. Each job is 93 PASS / 0 FAIL / 0 SKIP.
+Source, fixture, OS-wait and once-only/closed-loop patch contracts are retained.
+
+### C2-W: actual default-path installed consoles
+
+The disposable hosted Windows 2022 account is `runneradmin`. Before any business
+import/write, the fixture resolves its actual Known Folder
+`C:/Users/runneradmin/AppData/Local` and authorizes only the fresh exact subtree
+`C:/Users/runneradmin/AppData/Local/Cinnamon/MARA` (including `Cache`). It does not
+infer this from HOME, change a registry value or authorize the local user's path.
+`authorization.json` records the run/SHA and owner marker before fake data writes.
+
+Four newly built wheels are installed non-editably in an independent venv.
+The controller keeps the original account environment and imports no business
+code. Separate prepare, console and verify producers each enable the unchanged
+original isolation entrypoint before business imports. Public default
+`SlideSessionStore()` APIs prepare the fake sessions; actual `MARA.exe apply`
+and `MARA-cli.exe apply` execute from an outside-repository Unicode cwd without
+PYTHONPATH, editable imports or a global console command.
+
+Each alias applies exactly `slide-1/shape-2/text`, skips the stale
+`slide-1/shape-3/text` before-text mismatch, leaves the input hash unchanged and
+reloads the edited PPTX. Saved default-path sessions are completed with the
+expected output path and `final` then `apply` events. A missing session exits 1
+and creates no output. Guard receipts prove all three console producers close;
+verification checks their OS PIDs are absent. Collection runs only after prepare
+and verify processes exit, refuses live or unclosed producers/changed ownership,
+copies evidence first, then removes only the owned exact subtree.
+
+The ten local refusal/collection controls pass. Both hosted Python versions
+produce console exits `[0, 0, 1]`, valid reloads and successful exact-scope cleanup.
+Independent artifact reading checks PPTX XML, saved sessions/events, input hashes,
+four wheel hashes per platform and the affected shipped modules. Windows checkout
+CRLF differs from some Git LF blobs: the first raw-byte comparison failure is
+retained, and the corrected comparison records both hashes and permits only
+CRLF-to-LF normalization. It does not claim those raw bytes are identical.
+
+All unsuccessful CI setup attempts remain: `36376240257` rejected an invalid
+`runner.temp` job-env context before jobs started; `36376409981` and `36377074335`
+each had two failed jobs after 90 MCP passes. The latter recorded the exact
+pre-import Known Folder scope refusal. The fix gives each business producer its
+own guard and preserves the controller's original environment. It does not
+weaken the guard or claim the failed child recorded its exact rejected path.
+
+The successful one-off workflow also exposed the unchanged repository runner
+policy: its new workflow name was not an approved Windows runner entry. This
+caused three root-policy test failures and stopped coverage in first Quality
+`36376270969`. After retaining the successful hosted artifacts and workflow
+definition, `60b01340` removes only that completed task-owned workflow. No runner
+allowlist, scanner, baseline, required job or threshold changes. The retained
+contract scripts/tests remain; 50 workflow/supply-chain/fixture controls now pass.
+Reusing the hosted evidence is supported by an exact Git diff: removal of that
+workflow is the sole change from e8df to 60b. For the later shutdown fix, the
+identical retained task workflow was temporarily restored at `f659007e`, executed
+once, then retired at `5474ec2c`. That retirement is again the only hosted-to-gate
+difference; source/test/package inputs match. The final 50 policy/fixture controls
+pass, with no allowlist exception.
+
+### Current gates and platform limits
+
+Final gate input is `5474ec2c7f49f72cc5b66ae645522fb16e6ef554`.
+`W/shutdown-frozen-inputs.json` binds all seven changed source/test/harness files
+and the external execution harness; `W/shutdown-execution-bindings.json` binds
+the actual hosted/native and Quality revisions. Report-only delivery will retain
+the same non-report tree and record its own SHA in `W/final-delivery.json`.
+
+New [Quality 36382385122](https://github.com/262412/MARA/actions/runs/36382385122),
+attempt 1, executes that final input. The actual completed result is **13 success / 7 failure**: all functional, build, static, clean-wheel and coverage jobs pass; six security gates and the required aggregate fail.
+`W/shutdown-quality-evidence.json` records each actual job ID, conclusion,
+test summary and finding. No unchanged SHA was redispatched.
+
+| Current candidate verification                | Actual result                                                                                                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux kotaemon 3.10 / 3.11                    | Each 476 PASS / 10 existing SKIP; MCP old public/patch/error/HTML contracts included                                                                      |
+| Linux ktem                                    | 3,989 PASS                                                                                                                                                |
+| Benchmark and root contracts                  | 1,664 PASS                                                                                                                                                |
+| slide_cli                                     | 162 PASS (72 + 72 + 18 successful progress records); original aliases retained                                                                            |
+| Frontend / browser security                   | 40 Node tests and 8 security browser cases PASS; this is not U1 acceptance                                                                                |
+| Static/hygiene/baseline/collection            | PASS; existing hooks, ratchet and policy unchanged                                                                                                        |
+| Four distributions and clean-wheel installs   | Four wheels plus four sdists built; four clean installations PASS                                                                                         |
+| Current package provenance                    | All eight downloaded artifacts match declared digests/provenance; nine shipped module bytes match Git, including exclusion of the protected local overlay |
+| Original package/fixed-Dev/increment coverage | PASS: package floors 90/70/60/50 unchanged; all three diff measurements exceed the unchanged 90% gate                                                     |
+
+| Measurement             | Executed statements | Percent | Unchanged floor |
+| ----------------------- | ------------------- | ------- | --------------- |
+| benchmark               | 17,146/19,005       | 90.22%  | 90%             |
+| slide_cli               | 2,358/2,878         | 81.93%  | 70%             |
+| kotaemon                | 7,985/11,074        | 72.11%  | 60%             |
+| ktem                    | 43,808/51,906       | 84.40%  | 50%             |
+| fixed-dev               | 2,608/2,702         | 96.52%  | 90%             |
+| r6c-increment           | 188/191             | 98.43%  | 90%             |
+| windows-round-increment | 97/99               | 97.98%  | 90%             |
+
+Coverage job `108800646281` and `W/shutdown-coverage-summary.json` bind these
+measurements to 5474. Fixed Dev is adab3f4d; whole R6-C increment starts at c5d9bb7f;
+this Windows increment starts at e1c89ea8. No coverage omit/source/threshold
+changes. The current increment still has unmeasured lines 15/17 in
+`mcp_operation.py`; whole R6-C also includes `mcp_session.py:21`. These are
+retained gaps, not a claim of complete line coverage. Functional cancellation,
+ownership and installed-console outcomes above are independently asserted.
+
+`W/shutdown-python-artifacts.json` and
+`W/shutdown-report-and-workflow-package-exclusion.json` bind the current packages
+and show that report/one-off workflow files are excluded from all eight archives.
+
+Actual security output is **14 findings per dependency profile** (root 3.10,
+root 3.11, container 3.10), and **4 per container profile** (lite, full, ollama),
+relative to the unchanged frozen baselines. Comparison of finding identities
+against prior b499 Quality 36308167603 shows zero additions and zero removals.
+These remain failing security gates; “zero since previous round” is not “zero
+relative to baseline.” `W/shutdown-security-comparison.json` retains exact
+identities. S1/PCRE2 and the required aggregate remain open/NO-GO; no baseline,
+alias, lock, allowlist, scan range, required job or threshold was changed.
+
+The first Quality 36376270969 at 3fcf remains **10 success / 10 failure**,
+including six static mypy errors, the temporary-workflow runner-policy failures
+and coverage stopped by those policy failures. Typing repairs at 18ae796d /
+b228be50 and the separately recorded workflow retirement fixed those input
+issues. Preceding Quality 36378454108 at 60b completed **13 success / 7 failure**,
+including successful package/diff coverage; it is retained as a preceding
+candidate result and is not substituted for the shutdown-fix run above.
+
+The new Windows complete kotaemon execution at f659 is **459 PASS / 4 FAIL /
+23 existing SKIP**. `W/windows-node-ledger-shutdown.json` compares all four
+failure nodes and their nature against preceding evidence: one absent POSIX
+`os.mkfifo`, three `WinError 1314` symlink-privilege failures. No added failure
+node/nature is present, and held stdio plus loop-shutdown cancellation pass in
+that same complete run. Earlier Windows 456/4/23 and 458/4/23 remain historical.
+Other full Windows ktem/root/CLI suites and full Windows mypy were not repeated;
+`W/historical-windows-additional-nodes.json` retains the additional worktree,
+bootstrap, fresh-DocQA, QASPER and permissions failures by exact node/nature.
+They are not folded into a generic old 99+4 label or counted as current passes.
+Linux-target mypy on the five changed Python files passes; this is distinct
+from a complete native Windows mypy run.
+
+Fresh native [36381343652](https://github.com/262412/MARA/actions/runs/36381343652),
+attempt 1, is **3/3**, executed at f659: Windows 2022 job `108797569433`,
+Ubuntu 22.04 packaging/smoke `108797569703`, and the same Linux package on
+Ubuntu 24.04 `108799401008`. Both build platforms ran existing npm verification:
+110 Electron, 41 renderer and 5 packaging tests pass. Frozen Sidecar and
+Electron directory smoke cover authenticated IPC/HTTP, existing business
+operations, explicit fault/cancel/retry cases and actual exit. The recorded
+retry scenarios are intentional contract cases, not reruns of a failed matrix.
+Original native 36308169995 at b499, intermediate 36376274298 at 3fcf and
+36377872887 at e8df remain historical; none substitutes for this new build.
+
+All five new native artifact downloads match declared GitHub digests.
+Independent package inspection matches every shipped file name/size/hash
+against the CI inventory: Windows 2,663, Linux 2,096 including 32 resolved safe
+links. No prohibited runtime/config/test file names or escaping links are found;
+bundled Punkt/tiktoken resources are present. Identified owned processes
+remaining: zero. Unclassified access-denied host processes remain explicitly
+13 Windows / 151 Linux, not claimed as inspected or owned. Defender reports no
+detections for the actual Windows directory. The first read-only artifact/log
+downloads hit TLS timeouts; distinct download attempts and original hashes are
+retained, with no CI rerun.
+
+| Native delivered item                       | Actual SHA-256                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------ |
+| Windows GitHub artifact ZIP                 | `88625f1bc69fa9eb45781f85366715c6871317b1c419b230253d7392473c917c` |
+| Linux GitHub artifact ZIP (contains tar.gz) | `3c9471c49fe9906f8b57d27b359527be69276fb602b9d73ad6176959f68a46da` |
+| Windows frozen Sidecar executable           | `322a866ec62e134cf6d19b09f2ff4eb05cb5c49b20efbdb35fbb6bfa44709f47` |
+| Linux frozen Sidecar executable             | `1a007a862d04e4f305c0c2c06d6243c4a3299c71e150e7e9f9ce9506883864d4` |
+
+`W/shutdown-native-artifact-index.json`, `W/shutdown-native-smoke-outcomes.json`
+and `W/package-inspection/36381343652/` retain complete provenance and outcomes.
+These are source/frozen-Sidecar/Electron-directory and named OS results.
+Installers, clean VM, macOS and unfinished Desktop features remain NOT VERIFIED
+or unimplemented according to the retained capability matrix; no whole Desktop
+or U1 browser acceptance is inferred.
+
+### R6-D independent preparation
+
+Preparation reuses the original R0 tracked map, R1 location plan, R6 remaining
+matrix and `docs/desktop/feature-parity-matrix.md` /
+`docs/desktop/release-and-acceptance-plan.md`. `W/r6d-preparation-shutdown.json`
+records 15 committed candidate modules and their imports/definitions; it excludes
+the protected working overlay. `W/entry-and-package-map.json` records the four
+distribution declarations. The original 2,436-file inventory remains historical.
+
+| Original plan area              | Current owner and retained boundary                                                           | Preparation conclusion                                                                                                                                        |
+| ------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1 shared selection             | `ktem_contracts/file_selection.py`; original runtime/ChatPage adapters                        | Normalize and merge intentionally differ in coercion/order; retain contracts and compatibility callers                                                        |
+| R2 runtime/bootstrap            | Shared Runtime and bootstrap services; lazy CLI entry groups                                  | Accepted boundaries remain; no new bootstrap, repository or DI layer                                                                                          |
+| R3 Web event workflows          | Event modules and real Gradio input/output contracts                                          | U1 separately BLOCKED/deferred; keep DOM/component/patch identities                                                                                           |
+| R4 planning/execution/benchmark | Existing planning/evidence owners, benchmark CLI/runner/scoring                               | Cohesive modules remain; no mechanical extraction, prompt or frozen-data change                                                                               |
+| R5 lifecycle                    | Accepted cache, Notebook/Session/artifact, download/FD, writer and ZIP owners                 | Preserve authorization, transactions, generation and resource contracts                                                                                       |
+| R6-A inspection                 | `docqa_inspection`; Runtime facade keeps factory/profile/acceptance subprocess and re-exports | No reverse facade dependency found; import-capability owner stays separate                                                                                    |
+| R6-B Desktop                    | `sidecar-launch` constructs command/cwd/env; manager owns spawn/token/port/generation/stop    | Launch module has no manager/spawn dependency; reuse `mergeSidecarEnvironment`                                                                                |
+| R6-C tools/deck                 | MCP facade → complete operation → SDK session; deck → external export                         | One connection/initialize owner; no copied SDK transport, pool or new generic framework; original types/IDs/patch seams remain                                |
+| Public/package/resources        | `MARA` and `MARA-cli` → `slide_cli.cli:main`; four existing distributions/resources           | Retain internal `slide_cli`, public aliases and dynamic patch/classpath consumers                                                                             |
+| Desktop capability              | Original feature-parity/release matrices                                                      | Notes/Studio/Graph/export/full resource UI remain incomplete; installer/clean VM, native picker/drag, IME and secure storage remain distinct acceptance items |
+| Security/history                | Existing locks, baselines, aliases, required jobs and evidence                                | S1/PCRE2 and historical protection remain open; no whole-project closeout                                                                                     |
+
+No broad move, rename or compatibility deletion is proposed. Conditional
+external-provider, converter, GPU/Slurm and dataset capabilities are not relabelled
+as verified. R6-D can review these independent inputs without reopening U1.
+
+### Protection, provenance and review stop
+
+Only the seven named task source/test/harness paths and this report differ from
+the e1c89ea8 committed baseline. The temporary hosted workflow was retired
+without widening policy. `W/policy-and-change-scope-shutdown.json` verifies the
+explicit net diff, disjoint protected paths and unchanged locks, security
+baselines, Gitleaks configuration, hygiene baseline and workflow gates.
+
+Before this report write, `W/pre-report-protection-summary.json` confirms:
+
+| Domain                               | Current round observation                                                                              | Historical status / limit                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| 135 original protected modifications | Every recorded byte hash matches; the 136th currently modified tracked file is this task's report      | No user file staged or restored                                      |
+| `NUL`                                | Original hash matches                                                                                  | Retained untracked                                                   |
+| Canonical `.venv`                    | 98,853 recorded entries; metadata inventory matches the initial and previous delivery snapshots        | No synchronization; task-exclusive environment used                  |
+| Real three config files              | Current hashes and metadata match this round's initial snapshot and the earlier post-incident snapshot | Historical writer UNKNOWN; original pre-incident bytes UNVERIFIED    |
+| Real two DB files                    | Recorded size/mtime metadata matches                                                                   | No claim of a new full byte-level DB audit                           |
+| Real theflow cache                   | 610 entries; metadata inventory matches this round                                                     | Historical 614→610 incident remains OPEN; no restore or cleanup      |
+| User office cache                    | Zero entries, unchanged metadata inventory                                                             | Real office profile not used                                         |
+| Historical reports/evidence          | Earlier report tail retained byte-for-byte; task output confined to W and owned fixtures               | No repeat investigation, automatic restoration or historical cleanup |
+
+This is forward protection against the recorded post-incident baseline, never
+a total historical protection PASS. Private config bytes were used only for
+local protection hashes and were not printed or loaded by a task runtime.
+No credentials or full environment were printed; no real MCP configuration
+was connected. CI fixture cleanup
+was confined to authorized disposable-account resources after producers exited.
+
+| Identity                                                      | Actual revision                                       |
+| ------------------------------------------------------------- | ----------------------------------------------------- |
+| Round start                                                   | `e1c89ea8375ded1501346ed8d4fa8e521932d7c6`            |
+| Previous R6-C verified candidate                              | `b4990248a8437ac85af7236e01a2e7c71675afac`            |
+| Final production source change                                | `89e1c388443f34f64901e779608d01681e9d3427`            |
+| Last ownership test change / red                              | `a294194ca590b01c407259fcba2b939a3a4dd1d3`            |
+| Final default-apply fixture/harness change                    | `e8df3ec37b3f85949282171c3f625848d899359f`            |
+| Actual Windows/native execution tree and package builds       | `f659007ee9693fb9f8603850ccfbbd00f56ff5cc`            |
+| Final source/test/harness tree and Quality/four-package input | `5474ec2c7f49f72cc5b66ae645522fb16e6ef554`            |
+| Report-only, local and remote final SHA                       | Recorded after commit/push in `W/final-delivery.json` |
+
+`W/delivery-revisions-pre-report.json` preserves the complete small-commit
+chain and each changed file's last revision. `W/final-delivery.json` binds the
+report commit to an identical non-report Git tree, the frozen source/test/harness
+hashes, actual CI attempts and downloaded artifacts. Final secret scan and the
+post-report per-domain protection comparison are recorded in
+`W/final-secret-scan.json` and `W/final-protection-summary.json`; report-only
+reuse does not waive either check. No force push, branch/worktree creation,
+merge, deployment, release or safety/coverage policy change occurred.
+
+**C1-W and C2-W limited validation passed; R6-D independent preparation is
+complete. R6-C remains BLOCKED / pending independent review, not ACCEPTED.**
+U1 stays deferred. R5 and limited R6-B acceptance remain. Historical protection
+and S1/PCRE2 stay open; merge/release remain NO-GO. Work stops at this independent
+review point; no R6-D implementation or U1 investigation starts automatically.
 
 ### Retained independent R6-C review (2026-09-27)
 
