@@ -43,7 +43,7 @@ def hosted_scope():
 def activate_console_guard():
     if os.environ.get("MARA_CI_DEFAULT_APPLY_CHILD") != "1":
         return
-    root, _ = hosted_scope()
+    root, identity = hosted_scope()
     authorization = json.loads(
         (root / "authorization.json").read_text(encoding="utf-8")
     )
@@ -57,7 +57,13 @@ def activate_console_guard():
 
     runtime = start_process_test_runtime()
     receipt = root / f"console-guard-{os.getpid()}.json"
-    state = {"pid": os.getpid(), "guard_before_business_import": True, "closed": False}
+    state = {
+        "pid": os.getpid(),
+        "guard_before_business_import": True,
+        "actual_scope": str(root),
+        "paths_before_business_import": identity["paths"],
+        "closed": False,
+    }
     receipt.write_text(json.dumps(state))
 
     def close():
