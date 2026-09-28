@@ -7,6 +7,7 @@ import threading
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -244,3 +245,131 @@ def test_invalid_ready_receipt_releases_every_claim_descriptor(
             os.fstat(fd)
     assert path.read_bytes() == b"owned"
     assert (path.parent / ".ready").read_bytes() == receipt
+
+
+def _mutate_after_open(monkeypatch, marker, mutation, target):
+    real_open = os.open
+    opened = []
+
+    def mutate(name, flags, *args, **kwargs):
+        fd = real_open(name, flags, *args, **kwargs)
+        if name == marker and not flags & os.O_CREAT:
+            opened.append(fd)
+            directory_fd = kwargs["dir_fd"]
+            if mutation == "hardlink":
+                os.link(name, target, src_dir_fd=directory_fd)
+            else:
+                if mutation == "rename":
+                    os.rename(
+                        name, ".moved", src_dir_fd=directory_fd, dst_dir_fd=directory_fd
+                    )
+                else:
+                    os.unlink(name, dir_fd=directory_fd)
+                if mutation in {"replace", "rename"}:
+                    replacement = real_open(
+                        name,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                        0o600,
+                        dir_fd=directory_fd,
+                    )
+                    os.close(replacement)
+                elif mutation == "symlink":
+                    os.symlink(target, name, dir_fd=directory_fd)
+        return fd
+
+    monkeypatch.setattr(
+        retention, "os", SimpleNamespace(**{**vars(os), "open": mutate})
+    )
+    return opened
+
+
+@pytest.mark.parametrize("mutation", ["hardlink", "replace", "rename", "symlink"])
+def test_active_replacement_or_extra_link_is_not_a_completed_publication(
+    tmp_path, monkeypatch, mutation
+):
+    workspace = DownloadWorkspace.create(tmp_path, "file", ".html")
+    target = tmp_path / "owned-outside-marker"
+    if mutation != "hardlink":
+        target.write_bytes(b"must-not-change")
+    try:
+        with monkeypatch.context() as patch:
+            opened = _mutate_after_open(patch, ".active", mutation, target)
+            with pytest.raises(ArtifactNamespaceError, match="unsafe"):
+                retention._inspect_active(workspace._directory_fd, time.time())
+        assert len(opened) == 1
+        with pytest.raises(OSError):
+            os.fstat(opened[0])
+        assert not (workspace.directory / ".ready").exists()
+    finally:
+        workspace.cleanup()
+    if mutation != "hardlink":
+        assert target.read_bytes() == b"must-not-change"
+
+
+@pytest.mark.parametrize("mutation", ["unlink", "hardlink", "replace", "symlink"])
+def test_ready_marker_never_inherits_active_unlink_tolerance(
+    tmp_path, monkeypatch, mutation
+):
+    _workspace, path = _publish(tmp_path)
+    target = tmp_path / "owned-ready-target"
+    if mutation != "hardlink":
+        target.write_bytes(b"must-not-change")
+    with monkeypatch.context() as patch:
+        opened = _mutate_after_open(patch, ".ready", mutation, target)
+        with pytest.raises(ArtifactNamespaceError, match="unsafe"):
+            claim_download(tmp_path, "file", path.parent.name, ".html", CONTEXT)
+    assert len(opened) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened[0])
+    assert path.read_bytes() == b"owned"
+    if mutation != "hardlink":
+        assert target.read_bytes() == b"must-not-change"
+
+
+def test_publication_after_metadata_before_lease_check_is_not_pruned_as_stale(
+    tmp_path, monkeypatch
+):
+    workspace = DownloadWorkspace.create(tmp_path, "file", ".html")
+    with workspace.open_temporary() as output:
+        output.write(b"long-running-producer")
+    expired = time.time() - retention.ACTIVE_WORKSPACE_TTL_SECONDS - 1
+    os.utime(workspace.directory / ".active", (expired, expired))
+    inode = os.fstat(workspace._active_fd).st_ino
+    real_flock = retention.fcntl.flock
+    published: list[Path] = []
+
+    def publish_before_lock(fd, operation):
+        if (
+            not published
+            and operation == retention.fcntl.LOCK_EX | retention.fcntl.LOCK_NB
+            and os.fstat(fd).st_ino == inode
+        ):
+            published.append(workspace.publish(context=CONTEXT))
+        return real_flock(fd, operation)
+
+    other = None
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                retention,
+                "fcntl",
+                SimpleNamespace(
+                    **{
+                        **vars(retention.fcntl),
+                        "flock": publish_before_lock,
+                    }
+                ),
+            )
+            other = DownloadWorkspace.create(tmp_path, "other", ".html")
+        assert len(published) == 1 and published[0].is_file()
+        transfer = claim_download(
+            tmp_path, "file", workspace.directory.name, ".html", CONTEXT
+        )
+        try:
+            assert os.read(transfer.fd, 99) == b"long-running-producer"
+        finally:
+            transfer.close()
+    finally:
+        workspace.cleanup()
+        if other is not None:
+            other.cleanup()

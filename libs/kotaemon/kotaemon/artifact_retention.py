@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from .artifact_identifiers import namespace_token
 from .artifact_secure_fs import (
+    active_marker_metadata,
     create_exclusive_file_at,
     open_child_directory,
     open_directory_fd,
@@ -362,17 +363,30 @@ def _inspect_active(
     now: float,
 ) -> tuple[str, float, int] | None:
     lock_api = _require_lifecycle_lock()
-    active_fd = _open_regular_entry(request_fd, ".active")
-    if active_fd is None:
-        return None
-    metadata = os.fstat(active_fd)
+    flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     try:
-        lock_api.flock(active_fd, lock_api.LOCK_EX | lock_api.LOCK_NB)
-    except BlockingIOError:
-        return "live", metadata.st_mtime, active_fd
-    age = max(0.0, now - metadata.st_mtime)
-    state = "stale" if age > ACTIVE_WORKSPACE_TTL_SECONDS else "pending"
-    return state, metadata.st_mtime, active_fd
+        active_fd = os.open(".active", flags, dir_fd=request_fd)
+    except FileNotFoundError:
+        return None
+    try:
+        try:
+            lock_api.flock(active_fd, lock_api.LOCK_EX | lock_api.LOCK_NB)
+            state = "pending"
+        except BlockingIOError:
+            state = "live"
+        # Publication unlinks this lease before releasing it; inspect after flock.
+        metadata = active_marker_metadata(request_fd, active_fd)
+        if metadata is None:
+            finished_fd, active_fd = active_fd, -1
+            os.close(finished_fd)
+            return None
+        age = max(0.0, now - metadata.st_mtime)
+        if state == "pending" and age > ACTIVE_WORKSPACE_TTL_SECONDS:
+            state = "stale"
+        return state, metadata.st_mtime, active_fd
+    except BaseException:
+        _close_owned(active_fd)
+        raise
 
 
 def _prune_ready_limits(

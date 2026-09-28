@@ -150,3 +150,55 @@ def test_unlock_failure_discards_completed_allocation_and_preserves_primary(
         with pytest.raises(OSError):
             os.fstat(fd)
     assert unrelated.read_bytes() == b"preserve"
+
+
+@pytest.mark.parametrize("failure", ["metadata", "lock", "completed-close"])
+def test_active_inspection_closes_once_without_replacing_primary(
+    tmp_path, monkeypatch, failure
+):
+    fd = os.open(tmp_path / "owned-active", os.O_CREAT | os.O_RDWR, 0o600)
+    real_close = os.close
+    closed = []
+
+    def flock(*args):
+        if failure == "lock":
+            raise OSError("primary lock error")
+
+    def metadata(*args):
+        if failure == "metadata":
+            raise OSError("primary metadata error")
+        return None
+
+    def close(number):
+        closed.append(number)
+        real_close(number)
+        raise OSError("close error after descriptor release")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            retention,
+            "_require_lifecycle_lock",
+            lambda: SimpleNamespace(
+                flock=flock,
+                LOCK_EX=1,
+                LOCK_NB=2,
+            ),
+        )
+        patch.setattr(retention, "active_marker_metadata", metadata)
+        patch.setattr(
+            retention,
+            "os",
+            SimpleNamespace(
+                **{
+                    **vars(os),
+                    "open": lambda *args, **kwargs: fd,
+                    "close": close,
+                }
+            ),
+        )
+        expected = "close error" if failure == "completed-close" else "primary"
+        with pytest.raises(OSError, match=expected):
+            retention._inspect_active(73, 0)
+    assert closed == [fd]
+    with pytest.raises(OSError):
+        os.fstat(fd)
