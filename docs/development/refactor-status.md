@@ -1,28 +1,391 @@
-# Refactor status
+# Safe refactor status
 
-## Current R6-D implementation checkpoint (2026-09-28)
+## Current R6-D implementation and delivery review (2026-09-28)
 
-The user independently accepted **R6-C, including C1-W/C2-W, within the
-actually verified scope** at source/test/Quality input `5474ec2c` and Windows /
-native execution tree `f659007e`. R5 and limited R6-B remain ACCEPTED. Earlier
-BLOCKED, red, interrupted and unexecuted records below retain their original
-meaning; they are not rewritten as successful runs.
+The user independently accepted **R6-C, C1-W and C2-W within the reviewed
+implementation, artifacts and actual platform scope**. R5 and limited R6-B remain
+ACCEPTED. R6-A/U1 remains **BLOCKED / deferred** and did not gate this independent
+work. Historical red/BLOCKED/NOT RUN evidence below is unchanged.
 
-R6-D starts from `bef108c668fa84f44b02e5f10fc105462a205713`: implement executable
-dependency/compatibility guards, reconcile the current tracked tree with the
-original owner map, correct development/delivery documentation, and verify
-installed public entries and bundled resources. No production behavior change
-is planned without a characterized defect. Current R6-D gates are NOT RUN.
+R6-D now has executable structure/compatibility contracts, corrected developer
+documentation and current installed/native delivery evidence. **Independent
+structure and native subitems pass; local installed behavior is observed but its
+protection closeout is HOLD; full-repository closeout remains BLOCKED** by the new
+UV-cache boundary event, the newly observed POSIX download concurrency failure
+and the separate required security gates. This is an independent review handoff, not
+automatic ACCEPTED, all-feature acceptance or release approval.
 
-R6-A/U1 remains **BLOCKED / deferred**, independently of this work. Historical
-configuration writer UNKNOWN / original bytes UNVERIFIED, cache incident OPEN,
-and S1/PCRE2 OPEN remain separate. **Merge/release NO-GO.** No U1 browser batch,
-new architecture, policy change, release or automatic acceptance is authorized.
+Baseline: `bef108c668fa84f44b02e5f10fc105462a205713`; reviewed prior input:
+`5474ec2c7f49f72cc5b66ae645522fb16e6ef554`; prior Windows/native actual tree:
+`f659007ee9693fb9f8603850ccfbbd00f56ff5cc`; fixed original Dev:
+`adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+Current source/test/four-package/Quality input: `e7d4f8ad089ea39741c54afb0fb246bc2fd03179`.
+Current native execution input: `20c6d05c99c6d1da1b51274e6f2f20efc180d46c`.
 
-Round evidence: `D:\PythonProject\MARA-refactor-review-20260910-01a086ff\r6d-architecture-delivery`.
-The forward receipt matches all 135 protected file bytes, NUL, recorded runtime
-metadata and the prior post-incident configuration hashes. This says nothing
-about the unknown original configuration bytes or historical cache loss.
+Evidence root: `D:\PythonProject\MARA-refactor-review-20260910-01a086ff\r6d-architecture-delivery`.
+`verified-inputs.json`, `execution.jsonl`, `native-input-applicability.json`,
+artifact receipts and the final report-only `final-delivery.json` retain full
+hashes, commands, logs and local/remote provenance. Report-only reuse must match
+the entire tree excluding this report and include a final secret scan.
+
+| Actual commit                            | Purpose                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------ |
+| a23950af81d99febae04298f9c3604fe6c776bad | docs: start R6-D after limited R6-C acceptance                     |
+| ebde7a33c807bdefe6275b785a775f5ed8fcb6a3 | test: enforce accepted extraction and compatibility boundaries     |
+| 20c6d05c99c6d1da1b51274e6f2f20efc180d46c | docs: align setup and delivery boundaries with verified contracts  |
+| c20f5c5e6ef5b505efdc217a0e7a079926428348 | test: align source-install documentation contract with owned setup |
+| 2db6ea8e3212d52ab3fd134e05f8f55cbae6ea9e | docs: specify bundle list merge and scalar preservation            |
+| 2024bbaf59acf2281675baec1b920e3439bac55e | style: normalize current report section separator                  |
+| e7d4f8ad089ea39741c54afb0fb246bc2fd03179 | test: retain legal path operations and verify lazy MCP imports     |
+
+The following report-only commit's full report/local/remote SHA is recorded by
+`final-delivery.json` after normal push and in the handoff; it is not mislabelled
+as a new source, package, native or CI execution.
+
+### Original plan → owner → treatment → contract → evidence → state
+
+The R0 map, R1 location plan, R6 remaining matrix,
+`r6d-preparation-shutdown.json` and `entry-and-package-map.json` are the inputs.
+The earlier 15-module review is an owner-map input, not whole-repository proof.
+
+| Original plan domain          | Responsible owner                                                                        | Treatment                                                              | Contract / actual evidence                                                                                       | State and limit                                                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| R0/R1 shared rules            | `ktem_contracts/file_selection.py`; Runtime/ChatPage adapters                            | Already refactored; compatibility retained                             | Existing normalization/merge and cold-import tests; new reverse-import negative controls                         | Structural contracts verified; old normalize/merge semantics retained                                                                    |
+| R2 runtime/import composition | `ktem.docqa` runtime facade, `_runtime_*`, service factories; neutral contracts package  | Reasonable orchestration retained                                      | Existing package/cold-import suites and unchanged public surfaces; no new DI/repository layer                    | Verified within suite scope; eager `kotaemon.agents` facade intentionally retained                                                       |
+| R3 Web event/presentation     | `pages/chat` adapters, `file_browser_rendering`, JS/DOM consumers                        | Accepted extraction retained; rendering guard added                    | AST reverse-import and I/O counterexamples; existing event/security tests                                        | Structure verified; U1 BLOCKED/deferred, natural full browser NOT RUN here                                                               |
+| R4 planning/binding           | `finance_plan_policy`, `evidence_binding_policy`; original planner/binder                | Already refactored; legal helper/lazy seams retained                   | New dependency directions plus existing strategy, binding, copy/identity and patch contracts                     | Structural and existing behavior suites; no prompt/metric/schema change                                                                  |
+| R5 storage/index/cache        | Source locks, graph cache, session/Notebook services, artifact registry, writer/ZIP      | Accepted owners retained                                               | Existing Linux package contracts; previous R5 failures and paired 37 matrices retained                           | Prior acceptance unchanged; new adjacent download finding OPEN below                                                                     |
+| R6-A inspection/CLI           | `docqa_inspection`, runtime factory/profile, import capabilities, Click adapters         | Read-only owner and compatibility retained                             | Inert/forbidden-import guards, existing actor/identity/record/patch tests, installed aliases                     | Inspection structure verified; whole R6-A/U1 remains BLOCKED                                                                             |
+| R6-B launch/lifecycle         | `sidecar-launch.ts`, `smoke-environment`, manager/main, application/IPC/task/SSE owners  | Accepted split retained; launch guard added                            | Semantic TS negative controls; 118 Electron, 41 renderer, 152 Sidecar, 5 packaging tests on both native builders | R6-B ACCEPTED limited scope; new native input/result below                                                                               |
+| R6-C MCP/agent                | `mcp`, `mcp_operation`, `mcp_session`; BaseTool/agent config consumers                   | Accepted operation/session split; public identities retained           | SDK cold-process guard, actual facade patch consumer, original sync/async/stdio/SSE/cancellation tests           | R6-C/C1-W ACCEPTED limited reviewed scope; no live user server/provider used                                                             |
+| R6-C deck/artifacts           | `deck`, `deck_export`; artifact registry and R5 Notebook services                        | Accepted content/export split; old type and patch paths retained       | Added export/type identity consumer; existing real deck/stale conversion/resource tests                          | R6-C/C2-W ACCEPTED limited reviewed scope; Office/media capabilities remain conditional                                                  |
+| Benchmark/scoring             | Existing CLI, runner, scoring, dataset adapters and frozen fixtures                      | Reasonable modules retained                                            | Full benchmark/root suite; prior micro-manifest actual command/score/report chain retained                       | No training, new benchmark experiment or performance claim                                                                               |
+| App/model/platform support    | `kotaemon.cli`, model routing, platform registry/specs/assets                            | Existing names/aliases/config merge semantics retained; docs corrected | 49 installed console calls; owned Codex/Claude targets, dry run, backup, repeat, missing-resource counterexample | Functional calls verified; local installation protection HOLD for new default UV-cache writes; real `.codex`/`.claude` targets untouched |
+| Python delivery/resources     | Four pyprojects/manifests, CLI scripts, JS/CSS/PDF.js/platform resources                 | Package names and resources retained                                   | Four wheel+sdist builds, four clean installs; 985 Git-byte comparisons including 141 platform assets             | Current package input verified; not all provider/platform capabilities                                                                   |
+| Desktop product/native        | Electron/PyInstaller combined directories and existing feature matrix                    | Implementation retained; support limits clarified                      | Current Windows/Ubuntu builds and outside-repo authenticated smoke; exact native input equivalence               | Combined directories verified; installers/clean VM/macOS and unfinished Desktop features NOT VERIFIED/NOT IMPLEMENTED                    |
+| Developer docs/gates          | Contributing, hygiene, README, mkdocs, platform and Desktop guides; scripts/workflows    | This-round small corrections and executable contracts                  | 96 local Markdown targets; existing static/hygiene/collection/coverage/secret/Quality gates                      | No lock/baseline/alias/runner/required-job/threshold changes; security NO-GO                                                             |
+| Auxiliary/generated/vendor    | IDE files, prior artifacts, generated schema/locks, fixture data, vendor assets/licenses | Reasonable/history/compatibility retention                             | Incremental Git path/blob reconciliation and packaging checks only                                               | Retained by role, not certified as executed features or deleted as clutter                                                               |
+
+### Incremental tracked-tree coverage
+
+One reconciliation reused the original disjoint classifier and Git blob
+identities, without rescanning real runtime data or rebuilding a dependency
+inventory. Historical Dev had 2,436 tracked files; this candidate has **2,729**:
+2,292 unchanged, 144 modified and 293 added relative to fixed Dev; no deleted or
+renamed paths. The path set at `20c6d05c` and `e7d4f8ad` is identical.
+These are file-role denominators, not a feature, architecture or completion
+percentage. The 135 protected working overlays and NUL are outside package
+inputs and have separate receipts.
+
+| Current tracked area | Files | Treatment                              | Evidence / limit                                                                  |
+| -------------------- | ----- | -------------------------------------- | --------------------------------------------------------------------------------- |
+| .codex               | 49    | Compatibility retained                 | Shipped skill names and protected user overlays; test installed copies only       |
+| .githooks            | 1     | Reasonable retained                    | Canonical/worktree ownership hook; existing environment contracts                 |
+| .github              | 16    | Reasonable retained                    | Existing Quality/native workflows executed, policies unchanged                    |
+| .idea                | 10    | History retained                       | No runtime/functional validation claim                                            |
+| .playwright-cli      | 10    | History retained                       | No U1/Login/browser campaign                                                      |
+| .superpowers         | 21    | History retained                       | Existing plan/evidence; no deletion                                               |
+| .tmp_publish_check   | 6     | History retained                       | No new publication or deployment                                                  |
+| .vscode              | 1     | Reasonable retained                    | Developer configuration preserved                                                 |
+| apps/desktop         | 163   | Accepted + this-round guard            | Current native and source tests; incomplete product/installer boundaries retained |
+| benchmark            | 461   | Reasonable retained                    | Full contracts; external datasets/GPU/providers conditional                       |
+| docker               | 2     | Reasonable retained / security blocked | Actual three-target build/smoke/audit; S1/PCRE2 open                              |
+| docs                 | 108   | This-round small corrections           | Current guidance/report changed; history preserved                                |
+| libs/kotaemon        | 415   | Accepted + compatibility tests         | MCP/cold import/platform/resources; adjacent download finding open                |
+| libs/ktem            | 1141  | Accepted owners retained / U1 deferred | Current full Linux contracts; protected overlays excluded from packages           |
+| libs/slide_cli       | 59    | Accepted + compatibility/doc tests     | Current installed aliases, inspection and deck contracts                          |
+| local_backends       | 3     | Reasonable retained / optional         | No new backend deployment or full local-provider acceptance                       |
+| root                 | 38    | This-round docs / retained packaging   | README/contributing corrections; four distributions unchanged by name             |
+| scripts              | 123   | Reasonable retained                    | Isolation/install/coverage/delivery gates; no scheduler or policy changes         |
+| templates            | 10    | Compatibility retained                 | Existing templates/resources; no user configuration initialization                |
+| tests                | 92    | This-round semantic guards             | Existing root collection; not a new architecture framework                        |
+
+Disjoint current roles: asset 19, auxiliary-history 31, config-or-delivery 105, docs-or-platform 311, fixture-or-resource 91, generated-artifact 16, generated-lock 5, generated-source 1, source 1231, test 913, vendor 6.
+`tracked-tree-reconciliation.json` preserves every path, role, area and blob
+delta. The current matrix does not turn unchanged modules, optional adapters or
+historical generated artifacts into verified product capabilities.
+
+### Actual structural changes, compatibility and negative controls
+
+This round changes five test files and eleven documentation/navigation/report
+files. **No production module, package name, signature, CLI option, schema,
+persisted ID, Gradio component/DOM or skill name changed.** No blanket rename or
+compatibility deletion was justified by consumer evidence.
+
+- Root `tests/test_refactor_architecture_contracts.py` covers nine Python
+  owners: neutral file selection, finance planning, evidence binding, rendering,
+  inspection, MCP operation/session/facade and deck export. AST guards resolve
+  absolute, relative and literal dynamic imports and distinguish call-time
+  imports from eager defaults/decorators/classes. Each owner has rejecting
+  in-memory counterexamples; legal helpers/lazy integrations remain accepted.
+- Rendering checks reject explicit filesystem acquisition and permit pure
+  label operations such as `os.path.splitext` and `Path(...).suffix`. This is a
+  bounded semantic guard, not whole-program alias/data-flow or authorization
+  proof. Computed classpaths remain real consumer-test responsibilities.
+- `sidecar-launch-boundary.test.ts` uses the already locked Rolldown/Oxc parser,
+  not text grep. It rejects manager/Electron/process ownership through imports,
+  exports, require, import-equals and dynamic imports, and accepts environment
+  composition/comments/strings. Its eight tests run in existing Electron/native
+  collection; there is no new architecture framework, dependency or workflow.
+- MCP public type/dynamic facade identity, actual patched session consumption,
+  fresh-process SDK-lazy import, deck export/stdlib patch identity and original
+  `ShapeSnapshot` ownership remain executable package contracts. Behavioral
+  normalization, planning/binding, SQL/identity, cancellation and conversion
+  authorities stay in their existing tests rather than being copied here.
+
+Local evidence: initial direct contracts 139 PASS; final affected Python
+contracts 111 PASS; Electron 118/118; changed-file hooks PASS. These are distinct
+runs/inputs, not stitched into a fictional full batch. Full final Linux/Node and
+collection evidence is the current Quality table below.
+Unified collection includes all 91 root architecture cases, 20 MCP contract
+cases, nine deck/export contract cases and four installation-document cases in
+their existing owners; the full repository collection has 6,562 nodes. These
+file totals include existing tests, not 6,562 newly added tests.
+
+Retained corrections: the first TS fixture compile required the installed TS7
+type-only ESM resolution mode; the original source-install README assertion
+still required obsolete direct `uv sync` text and was aligned with the existing
+owned `install.sh` contract. The report separator's Prettier failure was fixed
+without changing its retained tail. All earlier logs remain; no skip, xfail,
+golden refresh or baseline update was used.
+
+### Documentation and installed entry/resource evidence
+
+`CONTRIBUTING.md`, development contributing and README now link to the actual
+MARA setup/storage contracts. They remove old editable/direct-sync/source-env
+recipes and obsolete cache-bump guidance. The hygiene contract names current
+owners and the real eager agents facade, and replaces the obsolete collection
+warning with current isolated collection guidance. The architecture guide is
+linked from README, development index and mkdocs. Platform docs describe
+dictionary/list merge and existing scalar preservation; Desktop docs distinguish
+combined directories from installers, clean VMs and unfinished features.
+All original gate thresholds and storage protections remain. The link audit
+checked 96 local Markdown targets, not every anchor or external URL.
+
+Final Quality built all four wheels and sdists and performed four clean wheel
+installations. Downloaded distribution hashes, declared provenance, SPDX and
+SBOMs match the final input. Independent payload comparison matched **985**
+committed files, including all **141 platform assets**, the neutral contracts
+package, JS/CSS resources and both exact console entrypoints. This excludes
+protected local overlays; provenance checks are not signature verification.
+
+The four current wheels were installed noneditable into the task-owned prepared
+dependency environment, with no dependency resolution. The installer omitted
+UV cache isolation: functional results below do not close that protection event.
+Outside-repository
+Unicode cwd and no PYTHONPATH/editable/global console fallback: **49 actual
+console calls passed**. Both MARA aliases expose actual app/model/platform help
+and subcommands; model providers used an empty fake config and no paid call.
+Codex and Claude Code full installs used only explicit owned targets. Dry-run
+purity, primary/sentinel preservation, config merge, original backup, repeated
+config stability, status/validation and missing-resource exit 1 were exercised.
+The resulting target counts were 102 and 190 files, including owned backups.
+Neither the real `.codex` nor `.claude` was an installation target. Console
+runtime paths were contained in the owned root; this does not cover the
+installer's default UV-cache use recorded below.
+
+The first installation helper found no pip in the owned environment and made no
+installation; existing uv installed the four wheels without sync. The first
+entry harness incorrectly expected doctor exit 1 when optional models were
+absent. Existing `test_docqa_runtime.py` explicitly expects ok=True, no issues
+and two warnings in that state. Corrected harness `installed_entries_v2.py`
+preserves both warnings and path containment; the original failure remains in
+`installed-final`. This is inspection before model setup, not model readiness.
+`installed-delivery-details.json` binds both harness hashes and all 49 commands.
+
+### New protection event: installer used the default UV cache
+
+The task's `install_owned_wheels_uv.py` correctly fixed the Python destination
+but **omitted `UV_CACHE_DIR`**. At 08:42:23 UTC uv prepared the four wheels using
+`C:\Users\22826\AppData\Local\uv\cache`, outside task-owned resources.
+This is a new event attributable to this task, not the old MARA cache 614→610
+event. The mistake was identified during final boundary review after all local
+install/console commands had exited; affected local execution was stopped and
+was not repeated to replace the evidence.
+
+The bounded read-only check found four `wheels-v6/url` index directories and
+their four `archive-v0` targets. Index pointer bytes identify those archives;
+all **1,010 wheel members** match the exact four final wheel payloads. Invocation,
+preparation log and these content/pointer links support attribution; overlapping
+timestamps merely narrowed the search. Exact paths/hashes are retained in
+`new-uv-cache-event.json`. There was no pre-run snapshot of this UV cache, so
+original absence/content integrity outside the observed entries is not proved.
+No entry was removed, restored or retimestamped, and there was no broad old-cache
+investigation. Local installed behavior remains measured, but installation and
+protection acceptance are **HOLD / OPEN**.
+
+`owned_installer_preflight.py` now provides an explicit owned cache in both the
+future command and environment, rejects wrong/empty cache and wrong prefix
+before access (three pure negative controls), and disables Python downloads.
+It was only preflight-tested: no new installation was executed after discovery.
+Independent CI ran on disposable runners and continues to stand on its own.
+Disposition of the eight identified cache directories remains with the owner;
+no automatic cleanup or retrospective protection PASS is claimed.
+
+### New adjacent failure: bounded impact and next proposition
+
+Quality `36396816657`, attempt 1, source `2024bbaf`, Linux Python 3.10.21 job
+`108846199368`, failed exactly
+`libs/kotaemon/tests/test_download_posix_transfers.py::test_same_file_concurrent_generations_and_transfers_are_independent`.
+The failure is `ArtifactNamespaceError: Download lifecycle marker is unsafe`
+during allocate → scan → inspect active → open `.active` → fstat safety check.
+This is a newly observed concrete node, not an old Windows capability failure.
+It is **OPEN** even if the later full candidate passes the same unchanged node.
+
+The bounded production scope is `artifact_retention.py`, `artifact_downloads.py`
+and `artifact_transfers.py`, with the single existing POSIX test file. These four
+files are byte-identical to the round baseline. The log does not record st_mode,
+st_nlink or the actual interleaving, so it does not prove a unique cause. The next
+minimal test is a deterministic barrier between opening `.active` and fstat
+while another owned producer publishes/unlinks it. Determine whether a legal
+unlinked inode is rejected, retaining nonregular/hardlink/substitution rejection
+controls before proposing any minimal fix. No production safety check was
+relaxed and no R5 lifecycle redesign or repeated selection of green runs occurs
+in this round. Independent structure/install/native work remains deliverable.
+
+### Current CI, coverage and retained failed runs
+
+[Quality 36398097945](https://github.com/262412/MARA/actions/runs/36398097945),
+attempt 1, exact input `e7d4f8ad089ea39741c54afb0fb246bc2fd03179`:
+**failure**, {'success': 13, 'failure': 7}. Actual jobs (not a preset count):
+
+| Job and ID                                                                  | Conclusion | Actual evidence                                                         |
+| --------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------- |
+| Unified pytest collection (`108850209562`)                                  | success    | 6562 tests collected in 46.08s                                          |
+| ktem isolated runtime (`108850209672`)                                      | success    | 3989 passed, 140 warnings in 818.98s (0:13:38)                          |
+| Static, hygiene, and baseline ratchet (`108850209675`)                      | success    | Actual job log retained                                                 |
+| Four clean wheel installations (`108850209689`)                             | success    | Actual job log retained                                                 |
+| kotaemon Python 3.10 (`108850209750`)                                       | success    | 479 passed, 10 skipped, 93 warnings in 231.69s (0:03:51)                |
+| slide_cli (`108850209771`)                                                  | success    | Quiet pytest progress: 163 passed, 0 skipped, 0 failed/error symbols    |
+| Container lite supply chain (`108850209785`)                                | failure    | 4 emitted findings relative to frozen baseline                          |
+| Dependency audit root-py311 (`108850209790`)                                | failure    | 14 emitted findings relative to frozen baseline                         |
+| Coverage floors and production diff (`108850209791`)                        | success    | TOTAL 2878 520 81.93%; TOTAL 11074 3087 72.12%; TOTAL 51906 8098 84.40% |
+| Container full supply chain (`108850209797`)                                | failure    | 4 emitted findings relative to frozen baseline                          |
+| kotaemon Python 3.11 (`108850209798`)                                       | success    | 479 passed, 10 skipped, 93 warnings in 234.71s (0:03:54)                |
+| Frontend and browser security (`108850209805`)                              | success    | # pass 40; # fail 0; 8 passed (34.1s)                                   |
+| Dependency audit root-py310 (`108850209857`)                                | failure    | 14 emitted findings relative to frozen baseline                         |
+| Benchmark and root contracts (`108850209884`)                               | success    | 1755 passed, 8 warnings in 586.86s (0:09:46)                            |
+| Dependency audit container-py310 (`108850209909`)                           | failure    | 14 emitted findings relative to frozen baseline                         |
+| Repository and image secret scans / Built image (`108850209911`)            | success    | Actual job log retained                                                 |
+| Container ollama supply chain (`108850209956`)                              | failure    | 4 emitted findings relative to frozen baseline                          |
+| Repository and image secret scans / Repository and history (`108850209997`) | success    | Actual job log retained                                                 |
+| Python distribution supply chain (`108850210032`)                           | success    | Actual job log retained                                                 |
+| Required quality gates (`108861092728`)                                     | failure    | Actual job log retained                                                 |
+
+| Coverage scope | Covered / executable | Percent   | Original floor / result |
+| -------------- | -------------------- | --------- | ----------------------- |
+| benchmark      | 17146/19005          | 90.21836% | 90% / PASS              |
+| slide_cli      | 2358/2878            | 81.93190% | 70% / PASS              |
+| kotaemon       | 7987/11074           | 72.12389% | 60% / PASS              |
+| ktem           | 43808/51906          | 84.39872% | 50% / PASS              |
+
+| Production diff base                 | Covered / changed executable | Percent                     | Gate exit |
+| ------------------------------------ | ---------------------------- | --------------------------- | --------- |
+| fixed-dev `adab3f4d`                 | 2610/2702                    | 96.59511%                   | 0         |
+| r6d-increment `bef108c6`             | 0/0                          | N/A (no production changes) | 0         |
+| accepted-source-increment `5474ec2c` | 0/0                          | N/A (no production changes) | 0         |
+
+No coverage omit, source scope or floor changed. The round's 0/0 production diff
+is N/A, not 100% architectural coverage. AST guard reach and functional evidence
+are separate from line coverage.
+
+| Security job                     | Relative to frozen baseline | New since reviewed 5474 input | No longer emitted since 5474 |
+| -------------------------------- | --------------------------- | ----------------------------- | ---------------------------- |
+| Container lite supply chain      | 4                           | 0                             | 0                            |
+| Dependency audit root-py311      | 14                          | 0                             | 0                            |
+| Container full supply chain      | 4                           | 0                             | 0                            |
+| Dependency audit root-py310      | 14                          | 0                             | 0                            |
+| Dependency audit container-py310 | 14                          | 0                             | 0                            |
+| Container ollama supply chain    | 4                           | 0                             | 0                            |
+
+The comparison uses actual emitted identities in `final-security-comparison.json`.
+Supply-chain findings are independently unresolved; no baseline/alias or lock
+change hides them. Required aggregate remains actual, not waived.
+
+Retired runs are not combined with this final run: `36396016249` at `20c6d05c`
+ended cancelled (6 failure, 6 cancelled, 8 success), including the obsolete
+README assertion and report formatting failures; `36396816657` at `2024bbaf`
+ended cancelled (5 failure, 6 cancelled, 9 success), including the download
+failure. Existing workflow concurrency cancelled unfinished work when corrected
+new inputs were dispatched. Each run/attempt/job log and transport-fetch error
+is retained. No unchanged-SHA CI was re-dispatched.
+
+### Current native execution and exact reuse limits
+
+[Desktop Gate 2 36396020904](https://github.com/262412/MARA/actions/runs/36396020904),
+attempt 1, actual tree `20c6d05c99c6d1da1b51274e6f2f20efc180d46c`: **3/3 success**.
+Windows 2022 and Ubuntu 22.04 each ran npm verify (118 Electron, 41 renderer,
+152 Sidecar unittest and 5 packaging cases), built the frozen Sidecar/Electron
+combination and ran existing authenticated outside-repository business/exit
+smoke. Ubuntu 24.04 ran the Ubuntu 22 package. Neither job count nor unit cases
+claim installer/clean-VM acceptance or substitute for U1/browser batches.
+
+All Desktop runtime/tests/build/workflow inputs and Python runtime payloads are
+identical between this native tree and the final candidate. The five subsequent
+changed paths are unrelated Python tests, platform prose and report formatting.
+`native-input-applicability.json` enumerates them and verifies the relevant full
+scopes; embedded revision and native execution remain **20c6d05c**, not e7d4f8ad.
+Prior f659 native 3/3 and Windows C1-W/C2-W receipts remain historical accepted
+evidence. Added Python guards do not pretend to be new Windows 93-case runs.
+
+Downloaded native package bytes match CI inventories: Windows 2,663 files;
+Linux 2,096 files/resolved links including 32 links. Exact binaries/app.asar and
+archives have SHA256 receipts; prohibited runtime/config/test names are absent,
+bundled tokenizer resources present, package links remain inside their roots.
+Defender reports no detections. Identified owned processes remaining: zero;
+inaccessible unclassified host processes remain an explicit limit (Windows 13,
+Linux 141). Two bounded Linux archive-transfer interruptions and their partial
+files were retained; a range transfer completed the bytes and whole-archive
+SHA256 verified. This was artifact transport, not a validation rerun.
+
+Windows 99 historical root failures, four kotaemon capability failures, the nine
+additional Windows nodes recorded last round, and full Windows mypy limitations
+remain separately recorded. They were not universally rerun or converted to PASS
+by Linux CI or native smoke. Installer/clean VM/macOS, full Desktop Notes/Studio/
+Graph/export/preview, native picker/IME/secure storage and conditional external
+model/media/backend capabilities remain bounded unverified/not-implemented work.
+
+### Protection, remaining owners and independent review stop
+
+Forward receipts after freeze and actual installed commands preserve all 135
+user files byte-for-byte, NUL, canonical environment metadata (98,853 entries),
+real cache metadata (610), office-cache baseline (0), real DB metadata and the
+three configs against this round's private byte hashes. No config contents or
+credentials are printed. Final delivery repeats the forward check and verifies
+only explicitly named task files were committed; no user overlay enters a wheel.
+These receipt domains did not include the default UV cache. Their unchanged
+comparisons do not override the new confirmed UV-cache writes described above.
+
+Historical config writer **UNKNOWN**, historical original bytes **UNVERIFIED**
+and cache event **OPEN** remain separate. Post-incident snapshots do not prove
+historical integrity. No restoration, mtime change, cache cleanup, canonical sync,
+new branch/worktree, force push, merge, deployment or publication occurred.
+Dependency locks, aliases, baselines, runner policies, required jobs, scanning
+scope and coverage thresholds are unchanged. No global all-protection PASS or
+automatic risk acceptance is claimed.
+
+Remaining work is finite by owner: the four-file POSIX download proposition
+above; the installer helper/default-UV-cache event and its eight recorded paths;
+U1's existing chat event/selector/browser fixture lane (deferred, no new
+Login/exit/double-37 campaign); the existing Desktop feature/install/platform
+matrix; and S1/PCRE2's existing dependency/container security owners. Missing
+external-provider/GPU/Office conditions stay optional/conditional rather than
+blocking unrelated structural review. Historical protection disposition requires
+independent evidence/owner decision and was not reopened without a new lead.
+
+The deferred U1 evidence scope is the existing `tests/browser/conversation_tails.cjs`,
+`tests/browser/fixture_exit_probes.cjs`, `tests/browser/browser_fixture_exit.py`
+and `libs/ktem/ktem_tests/file_browser_app_fixture.py`; these are bounded evidence
+owners, not a newly asserted Login root cause. Desktop remainder stays in the
+two existing Desktop feature/release matrices. Security work stays with the
+two lockfiles and existing dependency/container policy scripts; no gate or
+security remediation starts in this handoff.
+
+**Stop at R6-D independent review.** Structural/native subitems and measured
+installed behavior are ready for review; local installation protection is HOLD
+and overall delivery remains BLOCKED as stated
+above. R5/R6-B/R6-C accepted scope is retained, U1 remains deferred/BLOCKED,
+S1/PCRE2 OPEN and merge/release NO-GO. No automatic next stage or security upgrade.
 
 ## Retained Windows closeout and R6-D preparation (2026-09-28)
 
