@@ -1,8 +1,11 @@
 """Deterministic ownership tests; live Windows SDK coverage lives separately."""
 
 import asyncio
+import json
+import subprocess
 import sys
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -277,3 +280,70 @@ def test_final_loop_close_error_is_not_lost(worker_path, monkeypatch, business_f
         assert caught.value is (primary if business_failure else secondary)
 
     run_selector(exercise)
+
+
+def test_loop_shutdown_cancellation_finishes_the_owned_thread(tmp_path):
+    # A separate stdlib-only process bounds a deadlocked caller loop. Its timeout
+    # is rescue/failure, never evidence that the operation completed cleanup.
+    program = """
+import asyncio, importlib.util, json, sys, threading
+from types import SimpleNamespace
+spec = importlib.util.spec_from_file_location('owned_mcp_operation', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.sys = SimpleNamespace(platform='win32')
+if sys.platform != 'win32':
+    asyncio.ProactorEventLoop = asyncio.SelectorEventLoop
+policy = asyncio.get_event_loop_policy()
+entered, cleaned = threading.Event(), threading.Event()
+owners = []
+async def operation():
+    owners.append(threading.current_thread())
+    entered.set()
+    try:
+        await asyncio.Event().wait()
+    finally:
+        cleaned.set()
+        print(json.dumps({'owner_cleanup': True}), flush=True)
+async def start():
+    asyncio.create_task(module.run_mcp_operation('stdio', operation))
+    assert await asyncio.to_thread(entered.wait, 5)
+loop = asyncio.SelectorEventLoop()
+loop.run_until_complete(start())
+pending = asyncio.all_tasks(loop)
+print(json.dumps({'held': True, 'pending_tasks': len(pending)}), flush=True)
+for task in pending:
+    task.cancel()
+loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+loop.run_until_complete(loop.shutdown_default_executor())
+loop.close()
+assert cleaned.is_set() and len(owners) == 1 and not owners[0].is_alive()
+assert asyncio.get_event_loop_policy() is policy
+print(json.dumps({'cleanup': True, 'thread_joined': True, 'policy_unchanged': True}))
+"""
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-S",
+                "-B",
+                "-c",
+                program,
+                str(Path(mcp_operation.__file__)),
+            ],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired as exc:
+        print({"watchdog_timeout": True, "stdout": exc.stdout, "stderr": exc.stderr})
+        raise
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = [json.loads(line) for line in result.stdout.splitlines()]
+    assert rows[0]["held"]
+    assert rows[-1] == {
+        "cleanup": True,
+        "thread_joined": True,
+        "policy_unchanged": True,
+    }
