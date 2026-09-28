@@ -138,7 +138,7 @@ def test_supported_loop_keeps_operation_in_caller(transport, monkeypatch):
         )
 
     loop = (
-        asyncio.ProactorEventLoop()
+        getattr(asyncio, "ProactorEventLoop")()
         if sys.platform == "win32"
         else asyncio.SelectorEventLoop()
     )
@@ -176,7 +176,7 @@ def test_loop_cleanup_error_preserves_primary(
 ):
     primary = RuntimeError("business failure")
     secondary = ValueError("shutdown failure")
-    factory = asyncio.ProactorEventLoop
+    factory = getattr(asyncio, "ProactorEventLoop")
 
     def loop_factory():
         loop = factory()
