@@ -66,7 +66,13 @@ class _StdioOperation:
             else:
                 logger.error("MCP loop cleanup failed: %s", type(exc).__name__)
         finally:
-            loop.close()
+            try:
+                loop.close()
+            except BaseException as exc:
+                if self.error is None:
+                    self.error = exc
+                else:
+                    logger.error("MCP loop close failed: %s", type(exc).__name__)
 
 
 async def run_mcp_operation(transport, operation):
