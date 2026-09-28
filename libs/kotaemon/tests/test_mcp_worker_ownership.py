@@ -245,3 +245,35 @@ def test_cancellation_remains_primary_after_cleanup_error(worker_path, caplog):
     run_selector(exercise)
     assert "MCP cancellation cleanup failed: ValueError" in caplog.text
     assert "private payload" not in caplog.text
+
+
+@pytest.mark.parametrize("business_failure", [False, True])
+def test_final_loop_close_error_is_not_lost(worker_path, monkeypatch, business_failure):
+    primary = RuntimeError("business failure")
+    secondary = ValueError("loop close failure")
+    factory = getattr(asyncio, "ProactorEventLoop")
+
+    def loop_factory():
+        loop = factory()
+        original_close = loop.close
+
+        def fail():
+            original_close()
+            raise secondary
+
+        monkeypatch.setattr(loop, "close", fail)
+        return loop
+
+    monkeypatch.setattr(asyncio, "ProactorEventLoop", loop_factory)
+
+    async def operation():
+        if business_failure:
+            raise primary
+        return "must not mask close failure"
+
+    async def exercise():
+        with pytest.raises((ValueError, RuntimeError)) as caught:
+            await mcp_operation.run_mcp_operation("stdio", operation)
+        assert caught.value is (primary if business_failure else secondary)
+
+    run_selector(exercise)
