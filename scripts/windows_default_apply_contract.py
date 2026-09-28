@@ -100,6 +100,7 @@ def exercise(root):
         assert reloaded.slides[0].shapes[0].text == "Owned edited"
         assert reloaded.slides[0].shapes[1].text == "Owned body"
         saved = store.load_session(session.session_id)
+        assert saved is not None
         assert saved.status == "completed" and saved.output_path == str(output)
         assert [event["kind"] for event in saved.events] == ["final", "apply"]
         assert source.read_bytes() == original

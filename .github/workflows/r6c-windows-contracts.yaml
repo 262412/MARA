@@ -83,7 +83,7 @@ jobs:
               from windows_apply_fixture import activate_console_guard
               activate_console_guard()
           except BaseException as exc:
-              sys.stderr.write('Console isolation failed: ' + type(exc).__name__ + '\n')
+              sys.stderr.write('Console isolation failed: ' + type(exc).__name__ + ': ' + str(exc)[:300] + '\n')
               os._exit(86)
           '@ | Set-Content -LiteralPath "$site/sitecustomize.py" -Encoding utf8
       - name: Actual default Known Folder console apply
