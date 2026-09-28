@@ -23,7 +23,6 @@ jobs:
     env:
       PYTHONUTF8: "1"
       PYTHONDONTWRITEBYTECODE: "1"
-      MARA_PYTEST_RUNTIME_PARENT: ${{ runner.temp }}/r6cw-pytest
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -39,6 +38,9 @@ jobs:
       - name: Sync owned locked environment
         id: sync
         run: uv sync --all-packages --frozen --python ${{ matrix.python }}
+      - name: Select owned test runtime parent
+        shell: pwsh
+        run: Add-Content -LiteralPath $env:GITHUB_ENV -Value "MARA_PYTEST_RUNTIME_PARENT=$env:RUNNER_TEMP/r6cw-pytest"
       - name: Real stdio and SSE ownership contracts
         run: >-
           uv run --no-sync python -m pytest -q -s
