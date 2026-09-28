@@ -24,13 +24,13 @@ Evidence root W:
 `D:/PythonProject/MARA-refactor-review-20260910-01a086ff/r6c-windows-closeout/`.
 The earlier evidence root E and every historical failure remain retained below.
 
-| Item | Current evidence | State |
-| --- | --- | --- |
-| C1-W red | Test-only `dc33330e`: explicit Selector caller, actual held stdio/SSE service, same context owner, OS process and thread checks | Frozen run: stdio FAIL (watchdog rescue), SSE PASS |
-| C1-W implementation | Separate fix `780a3a57`; local complete MCP group 85 PASS, then expanded worker failure group 10 PASS; actual Python 3.11 and stable complete gates remain pending | Local targeted contracts PASS; closeout pending |
-| C2-W | Owned hosted-account fixture `6ed1402d`; six local pre-access refusal controls PASS; optional CI job resolves the actual fresh Known Folder before default-path console apply | Actual console execution NOT RUN |
-| R6-D preparation | Existing R0/R6 responsibility and Desktop capability matrices are the inputs; no bulk moves, renaming or compatibility deletion | IN PROGRESS |
-| New gates / CI / native artifacts | Run only after the targeted candidate stabilizes; previous b499 runs below are historical inputs | NOT RUN |
+| Item                              | Current evidence                                                                                                                                                              | State                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| C1-W red                          | Test-only `dc33330e`: explicit Selector caller, actual held stdio/SSE service, same context owner, OS process and thread checks                                               | Frozen run: stdio FAIL (watchdog rescue), SSE PASS |
+| C1-W implementation               | Separate fix `780a3a57`; local complete MCP group 85 PASS, then expanded worker failure group 10 PASS; actual Python 3.11 and stable complete gates remain pending            | Local targeted contracts PASS; closeout pending    |
+| C2-W                              | Owned hosted-account fixture `6ed1402d`; six local pre-access refusal controls PASS; optional CI job resolves the actual fresh Known Folder before default-path console apply | Actual console execution NOT RUN                   |
+| R6-D preparation                  | Existing R0/R6 responsibility and Desktop capability matrices are the inputs; no bulk moves, renaming or compatibility deletion                                               | IN PROGRESS                                        |
+| New gates / CI / native artifacts | Run only after the targeted candidate stabilizes; previous b499 runs below are historical inputs                                                                              | NOT RUN                                            |
 
 Initial forward protection matches the previous final receipt: 135 protected
 dirty paths, NUL, 98,853 canonical metadata entries, 610 cache entries and the
