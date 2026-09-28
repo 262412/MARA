@@ -1,6 +1,31 @@
-# Safe-refactor status
+# Refactor status
 
-## Current Windows closeout and R6-D preparation (2026-09-28)
+## Current R6-D implementation checkpoint (2026-09-28)
+
+The user independently accepted **R6-C, including C1-W/C2-W, within the
+actually verified scope** at source/test/Quality input `5474ec2c` and Windows /
+native execution tree `f659007e`. R5 and limited R6-B remain ACCEPTED. Earlier
+BLOCKED, red, interrupted and unexecuted records below retain their original
+meaning; they are not rewritten as successful runs.
+
+R6-D starts from `bef108c668fa84f44b02e5f10fc105462a205713`: implement executable
+dependency/compatibility guards, reconcile the current tracked tree with the
+original owner map, correct development/delivery documentation, and verify
+installed public entries and bundled resources. No production behavior change
+is planned without a characterized defect. Current R6-D gates are NOT RUN.
+
+R6-A/U1 remains **BLOCKED / deferred**, independently of this work. Historical
+configuration writer UNKNOWN / original bytes UNVERIFIED, cache incident OPEN,
+and S1/PCRE2 OPEN remain separate. **Merge/release NO-GO.** No U1 browser batch,
+new architecture, policy change, release or automatic acceptance is authorized.
+
+Round evidence: `D:\PythonProject\MARA-refactor-review-20260910-01a086ff\r6d-architecture-delivery`.
+The forward receipt matches all 135 protected file bytes, NUL, recorded runtime
+metadata and the prior post-incident configuration hashes. This says nothing
+about the unknown original configuration bytes or historical cache loss.
+
+
+## Retained Windows closeout and R6-D preparation (2026-09-28)
 
 Starting report/remote: `e1c89ea8375ded1501346ed8d4fa8e521932d7c6`;
 previous verified R6-C source/test/package:
