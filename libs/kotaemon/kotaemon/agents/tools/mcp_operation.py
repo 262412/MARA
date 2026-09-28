@@ -41,7 +41,7 @@ class _StdioOperation:
     def run(self):
         loop = None
         try:
-            loop = asyncio.ProactorEventLoop()
+            loop = getattr(asyncio, "ProactorEventLoop")()
             owner = loop.create_task(self.operation())
             with self.lock:
                 self.cancel_owner = lambda: loop.call_soon_threadsafe(owner.cancel)
