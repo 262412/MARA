@@ -90,7 +90,8 @@ async def run_mcp_operation(transport, operation):
 
     worker = _StdioOperation(operation)
     worker.thread.start()
-    joined = asyncio.create_task(asyncio.to_thread(worker.thread.join))
+    # Loop shutdown cancels all Tasks, so the join must not be a child Task.
+    joined = asyncio.get_running_loop().run_in_executor(None, worker.thread.join)
     cancellation = None
     while True:
         try:
