@@ -1,6 +1,290 @@
 # Safe refactor status
 
-## Current R6-D implementation and delivery review (2026-09-28)
+## Current R6-D limited P-UV / DL-POSIX closeout (2026-09-28)
+
+**P-UV forward installation and the controlled DL-POSIX contract pass within
+their measured scope. R6-D overall remains BLOCKED and is not ACCEPTED.** The
+original UV-cache event, older configuration/cache protection events and required
+security gates remain open. The current image secret scan also failed before
+completion. R5, limited R6-B and limited R6-C/C1-W/C2-W acceptance is unchanged;
+R6-A/U1 is BLOCKED / deferred. Stop at independent R6-D review, with
+S1/PCRE2 OPEN and merge/release NO-GO.
+
+This round implements only the two authorized remaining items. It preserves the
+structure contracts, developer documentation and prior scope reconciliation;
+it does not repeat the whole-repository inventory or start U1, a later phase,
+five Gradio exits or either 37-scenario browser batch. Existing required browser
+security checks still run and are not U1 evidence.
+
+Baseline: `f8a57979ff9d3f109b5aef5c622ef03b802b70a0`.
+Prior verified source/tests/packages: `e7d4f8ad089ea39741c54afb0fb246bc2fd03179`.
+Fixed Dev: `adab3f4d8f221e3620494fab0a24ef8e5557d12a`.
+Final source/test/package/Quality/native input: `f5d974ce4183eb9e618da49bab5499505029fcb0`.
+Evidence root: `D:\PythonProject\MARA-refactor-review-20260910-01a086ff\r6d-puv-dl-closeout`.
+Full report/local/remote SHA is bound after ordinary push in `final-delivery.json`;
+that report commit is not a new package or CI execution.
+
+| Commit                                     | Separate responsibility                                             |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| `46ad6d5fdb235cf4180857d4a12501114f433c3a` | Initial real-open barrier test; observer defect retained below      |
+| `0438a9b299212af18dc02e099c889c99d5f2db68` | P-UV spawn-boundary validation and its 51 contract cases            |
+| `4863925f8350f9edad24e9e0222feca5aae887d2` | Test-only observer repair; actual deterministic Linux red           |
+| `f5d974ce4183eb9e618da49bab5499505029fcb0` | Minimal `.active` lifecycle fix and strict-boundary counterexamples |
+
+### Responsibility and current state
+
+| Item                                 | Owner and treatment                                                                           | Contract / evidence                                                                                      | Current state                                                                           |
+| ------------------------------------ | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Structure/documentation/scope matrix | Prior R6-D owners and compatibility seams retained                                            | Original matrix below; 91 architecture cases in current root collection; full applicable suites          | Prior structural results retained; no new whole-tree completion claim                   |
+| P-UV                                 | `scripts/install_owned_wheels.py`; explicit task caller owns root/environment/wheel selection | Original helper characterization, 51 tests, exact current four-wheel install and 49 real console calls   | Forward installation PASS; historical event remains OPEN                                |
+| DL-POSIX                             | `artifact_retention._inspect_active`; fixed-name `artifact_secure_fs.active_marker_metadata`  | Actual open/fstat barrier red on Linux 3.10/3.11, final full package suites and safety counterexamples   | Controlled defect fixed; limited contract PASS; historical unique interleaving unproven |
+| Package/native delivery              | Existing four Python builds and Desktop Gate2                                                 | Current source rebuilt; four clean installs, Windows/Ubuntu combined directories and authenticated smoke | Measured scope PASS; installer/clean VM/macOS and unfinished features unchanged         |
+| Protection/security                  | Existing protection and supply-chain owners                                                   | Forward receipts distinct from historical incidents; actual Quality failures below                       | Overall BLOCKED; no automatic risk acceptance                                           |
+
+### P-UV: the checked configuration is the spawned configuration
+
+The original `install_owned_wheels_uv.py`, disconnected
+`owned_installer_preflight.py` and `new-uv-cache-event.json` were read. A controlled
+replay intercepted the original helper immediately before `subprocess.run` and
+recorded the omitted `UV_CACHE_DIR` / `UV_PROJECT_ENVIRONMENT` and cache argument.
+It did not launch uv or write another default-cache entry. This characterization
+is separate from the original actual write event (`puv-old-spawn-red.json`).
+
+The new focused helper copies the supplied environment and four wheel hashes
+once, constructs the final argv, validates that exact argv/environment/Python/
+cache/temp/cwd combination, then makes one subprocess call using those same
+objects. No later environment merge or inherited override is applied. It rejects
+empty, missing, relative, wrong-root or redirected required paths, ambiguous
+casing, inherited UV/PIP/Python overrides, a different interpreter/argument list,
+and missing or changed wheels before a child starts. The caller explicitly owns
+`D:\MARA-s1-01a086ff`; ownership is not inferred from HOME. This is the local
+delivery helper, not a replacement for the canonical `install.sh` contract.
+
+The actual call uses the selected uv binary, `--no-config --offline`, explicit
+owned `--cache-dir`, `pip install --python` for the physical owned interpreter,
+`--no-index --no-deps --reinstall`, and exactly the four pinned wheels. Cache and
+temp directories must already exist under the owned root. There is no
+`--no-cache` substitute, dependency sync, automatic retry or canonical change.
+The log contains argv, selected path settings and binary hashes, not complete
+environment variables, credentials or configuration contents. Actual uv:
+`0.11.19`, SHA256
+`cd628b46729d01ad110146a647a633a6e5de0e091d73db46afaeee6fcb4ba648`.
+
+Current execution: `puv-current-f5.json` records exit 0; its Python probe confirms
+the actual owned prefix and temp location. Four current noneditable wheels were
+installed into the prepared task dependency environment. The unchanged original
+entry harness then ran **49/49 actual console commands**, from an outside-repo
+Unicode cwd using absolute owned `MARA.exe` / `MARA-cli.exe`, with no PYTHONPATH,
+editable package or old global-command fallback. App/model/platform help,
+listing, validation and fake Codex/Claude install/merge/backup/repeat/error cases
+passed. Missing resources return exit 1; doctor exit 0 retains both explicit
+missing LLM/embedding warnings and does not claim configured models. No real
+tool directory or paid provider was used. Installed bytes matched **985** Git
+source/resource files; the owned cache matched **1,010** current wheel members.
+The earlier e7-wheel forward run also passed 49 calls and remains separately
+labelled; it is not substituted for this current f5 execution. Clean-environment
+installation is the separate current Quality job, not this prepared environment.
+
+| Current wheel                               | SHA256                                                             |
+| ------------------------------------------- | ------------------------------------------------------------------ |
+| `kotaemon-0.0.40-py3-none-any.whl`          | `5657c1aa869afccd5135db8ca1d3186fcbc7b554d4f8235c6ffef644d4b60bc6` |
+| `ktem-0.0.40-py3-none-any.whl`              | `0d2fe4f1c3e7669b452c979044495638b414c4d1a35fe63c58b23eecc9055ef0` |
+| `mara_app-0.0.40-py3-none-any.whl`          | `0b318fa718287fae4ca4e80def53dee317125e4a61238264431cff33f95ac725` |
+| `mara_research_cli-0.0.40-py3-none-any.whl` | `e957d29084e4bf43202f4ce4e6f58ad02704dc4fec1e4a911869a3ed52be3178` |
+
+### DL-POSIX: real publication between open and fstat
+
+The prior incident at run `36396816657`, job `108846199368`, failed in the
+original concurrent download case without inode/link/interleaving observations.
+It remains historical failure evidence, not a uniquely attributed race.
+
+The new test pauses after the actual native `open(".active")` and before its
+production metadata check, while the producer lease is observed held. The
+producer then publishes ready/payload and unlinks that same active inode;
+the scanner resumes after publication returns.
+The first observer accidentally replaced the `os.open` identity used by the
+native capability check. It never reached the intended barrier, so run
+`36425292325` at `46ad6d5f` is an observer failure, not the product red. The
+separate `4863925f` repair observes only retention's `os` reference and preserves
+the native capability identities.
+
+Actual red run `36426417557`, attempt 1, then failed the production check on both
+Linux Python versions: each job recorded **1 failed, 479 passed, 10 existing
+skips**. Python 3.10 job `108942068132` observed inode `10493632`; Python 3.11 job
+`108942068068` observed inode `6041414`. In each case mode was `33152`, nlink
+changed **1 → 0** on the same inode, the producer lock was held at the open
+observation, and after publication the active name was absent, ready nlink was 1
+and payload was `owned-publication`. The
+actual error was `ArtifactNamespaceError: Download lifecycle marker is unsafe`.
+`dl-posix-red.json` binds these observations to the raw CI logs. Both diagnostic
+runs retain their actual cancelled overall state (8 success / 6 failure /
+6 cancelled jobs), including the completed test failures; neither is relabelled
+as final acceptance or assembled with later passing jobs.
+
+The fix opens only `.active` with the existing no-follow flags, tries the
+nonblocking lease before final metadata, and inspects the fixed name. A regular
+open inode with **nlink 0 and absent `.active`** means its transient lease has
+finished; that descriptor is closed once and existing ready inspection proceeds.
+The second fstat only resolves unlink between the first fstat and name lookup.
+Otherwise regular mode, nlink 1 and matching named inode remain mandatory.
+Moving the metadata decision after lease acquisition also prevents a newly
+published output being classified stale using the old producer timestamp.
+
+Shared `_open_regular_entry` is unchanged. Ready authorization and its unlink/
+hardlink/symlink/replacement rejection remain strict; active hardlinks,
+replacement, rename and symlinks are rejected. Tests retain TTL/capacity/transfer
+leases, corrupt/oversized/foreign-context receipts, close failures and primary
+error precedence. The original same-file concurrent case is unchanged. No
+global tolerance, serialization, retry loop, new skip/xfail or scan-budget change
+was added. The final two Linux suites pass **492 cases each, with the same 10
+existing skips**; the real POSIX cases execute there. Windows retains its secure
+FD capability boundary; portable cleanup tests and native smoke are not a claim
+that POSIX FD operations ran on Windows.
+
+### Stable current gates, coverage and actual CI
+
+Local stable adjacent/architecture/installer contracts: **162 PASS** (51 P-UV,
+91 architecture, 20 portable download/retention). Changed-file hooks and full
+hygiene pass. A mistyped initial test path (exit 4, no tests), formatting/type
+corrections and the first oversized draft's hygiene failure remain in the ledger.
+The production fix was simplified within existing filesystem ownership; no
+baseline was changed to admit it. Local source tests include protected working
+overlays; the immutable CI and packages use committed Git inputs.
+While coverage was running, one log-API request returned 404 and a read-only
+GitHub browser lookup could not reach the browser provider. Those observation
+limits remain in `running-coverage-observation-limit.json`; they were not used
+to infer a test result or trigger another run. Final logs were collected after
+the same job completed.
+
+[Quality 36428131096](https://github.com/262412/MARA/actions/runs/36428131096),
+attempt 1, source `f5d974ce4183eb9e618da49bab5499505029fcb0`: **failure**,
+**12 success / 8 failure** across
+20 actual jobs. This is the sole final-candidate dispatch.
+
+| Actual job                                                 | Job ID                                                                                   | Result  |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------- |
+| kotaemon Python 3.11                                       | [108948912609](https://github.com/262412/MARA/actions/runs/36428131096/job/108948912609) | success |
+| Repository and image secret scans / Built image            | [108948912840](https://github.com/262412/MARA/actions/runs/36428131096/job/108948912840) | failure |
+| slide_cli                                                  | [108948912887](https://github.com/262412/MARA/actions/runs/36428131096/job/108948912887) | success |
+| ktem isolated runtime                                      | [108948912902](https://github.com/262412/MARA/actions/runs/36428131096/job/108948912902) | success |
+| Static, hygiene, and baseline ratchet                      | [108948912924](https://github.com/262412/MARA/actions/runs/36428131096/job/108948912924) | success |
+| Python distribution supply chain                           | [108948912958](https://github.com/262412/MARA/actions/runs/36428131096/job/108948912958) | success |
+| Container ollama supply chain                              | [108948913005](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913005) | failure |
+| Repository and image secret scans / Repository and history | [108948913045](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913045) | success |
+| Benchmark and root contracts                               | [108948913054](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913054) | success |
+| Coverage floors and production diff                        | [108948913057](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913057) | success |
+| Container lite supply chain                                | [108948913061](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913061) | failure |
+| kotaemon Python 3.10                                       | [108948913138](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913138) | success |
+| Four clean wheel installations                             | [108948913148](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913148) | success |
+| Container full supply chain                                | [108948913161](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913161) | failure |
+| Dependency audit root-py310                                | [108948913196](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913196) | failure |
+| Unified pytest collection                                  | [108948913198](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913198) | success |
+| Dependency audit root-py311                                | [108948913244](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913244) | failure |
+| Dependency audit container-py310                           | [108948913261](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913261) | failure |
+| Frontend and browser security                              | [108948913346](https://github.com/262412/MARA/actions/runs/36428131096/job/108948913346) | success |
+| Required quality gates                                     | [108971920599](https://github.com/262412/MARA/actions/runs/36428131096/job/108971920599) | failure |
+
+Current suites: kotaemon 3.10/3.11 **492 PASS + 10 existing skips each**;
+ktem **3,989 PASS**; benchmark/root **1,806 PASS**; slide CLI **163 PASS**;
+frontend **40 Node + 8 browser-security PASS**. Unified collection contains
+**6,626 nodes**, with the unchanged 1,260 floor. Four wheels and four sdists,
+provenance/SBOM payloads and four clean wheel installations pass. The eight
+downloaded distributions and all 141 platform assets match current committed
+inputs. These counts describe their actual suites, not all product capabilities.
+
+| Original package scope | Covered/statements | Coverage | Unchanged floor | Result |
+| ---------------------- | ------------------ | -------- | --------------- | ------ |
+| benchmark              | 17146/19005        | 90.218%  | 90%             | PASS   |
+| slide_cli              | 2358/2878          | 81.932%  | 70%             | PASS   |
+| kotaemon               | 8013/11098         | 72.202%  | 60%             | PASS   |
+| ktem                   | 43808/51906        | 84.399%  | 50%             | PASS   |
+
+| Production diff base                   | Covered/changed executable lines | Coverage | Result |
+| -------------------------------------- | -------------------------------- | -------- | ------ |
+| fixed-dev (`adab3f4d`)                 | 2642/2735                        | 96.600%  | PASS   |
+| limited-round-increment (`f8a57979`)   | 32/33                            | 96.970%  | PASS   |
+| r6d-increment (`bef108c6`)             | 32/33                            | 96.970%  | PASS   |
+| accepted-source-increment (`5474ec2c`) | 32/33                            | 96.970%  | PASS   |
+
+Diff threshold remains 90%. P-UV's `scripts` path stays outside the original
+production diff scope; its separate 51 cases and actual install evidence are
+required. Coverage does not establish architecture, authorization or historical
+protection integrity. `final-coverage-summary.json` retains denominators,
+missing lines, actual CI job and coverage artifact hash.
+
+The three dependency jobs each report **14 findings relative to the frozen
+baseline**; each container audit reports **4**. Their identities are unchanged
+relative to prior e7 run `36398097945`: **zero added and zero removed** in this
+round. Separately, image secret job `108948912840` failed with
+`semaphore acquire: context deadline exceeded` while analyzing an installed
+transformers `.pyc` in its image layer. Its scan is **incomplete**, not a new
+detected-secret finding or a PASS. Repository/history secret scan passed.
+The required aggregate remains failed. No same-SHA retry, timeout expansion,
+lock/baseline/alias/allowlist/required-job change or security upgrade was made.
+
+### Current native rebuild and platform limits
+
+Changing packaged kotaemon code required a new native build.
+[Desktop Gate2 36428120919](https://github.com/262412/MARA/actions/runs/36428120919),
+attempt 1, uses the same final f5 source and is **3/3 SUCCESS**: Ubuntu 22.04
+job `108947065218`, Windows 2022 job `108947065396`, and the same Linux package
+on Ubuntu 24.04 job `108950506129`. Both builders pass **118 Electron + 41
+renderer + 5 packaging + 152 Sidecar tests**, current frozen Sidecar/Electron
+combined-directory construction, outside-repo authenticated business smoke and
+owned-process shutdown. No old native SHA is reported as this execution.
+
+The downloaded Linux archive SHA256 is
+`1f730ef8e5bf7968a87bb2e6d30e07101e9f2922dd9ac36397693a394d618687`;
+Windows archive SHA256 is
+`4ee352fc152ae547b25fa7abacb63b556db6ff1c0a549cd4319abbac0307f2cb`.
+Sidecar binary hashes are respectively
+`c7833f3505899d54d6b77f83014b0edd3f7abf25d3d118f8105f157838e9f3c8` and
+`a4f0f3b5ade81a9223dee29cfc6f5e9b7e50a2acd81f0fec789b5752863deb6f`.
+All **2,096 Linux files/resolved links** (including 32 links) and **2,663 Windows
+files** match CI inventories; runtime/config/test exclusions, safe package links
+and tokenizer resources pass. Defender reports no detections. Identified owned
+processes remaining: zero. Unclassified access-denied host processes remain a
+limit: **151 Linux / 14 Windows**, not whole-host process-cleanliness proof.
+
+Installers, clean VM and macOS remain NOT VERIFIED. Unimplemented Desktop
+features and optional Office/media/model/backend conditions are unchanged.
+The historical Windows 99 root failures, four kotaemon capability failures,
+nine additional Windows nodes and full Windows mypy limitations remain recorded
+separately; current Linux/native success does not mark them all passed.
+
+### Forward protection, historical disposition and review boundary
+
+This round's explicit forward receipts retain **135 user changes**, NUL,
+canonical environment metadata (98,853 entries), actual MARA cache metadata
+(610), office cache (0), two DB metadata records and three private config hashes.
+No protected overlay enters a committed file or wheel. The eight already known
+UV incident directories, including their URL-parent lock/revision files, retain
+the same metadata and **1,022 file hashes** as this round's starting receipt.
+Only those known incident paths were checked; no new historical search was made.
+
+The **original UV incident remains OPEN**: the old task installer is the evidenced
+writer, but no pre-incident default-cache byte inventory exists. The new isolated
+install and current unchanged receipt do not prove original absence/integrity or
+authorize removal. The four index parents and four archive targets remain in
+place. Separately, older configuration writer UNKNOWN, original bytes UNVERIFIED
+and the MARA cache 614 → 610 event OPEN remain unresolved. No restore, mtime
+adjustment, cache clean/prune, canonical sync or cleanup of history was performed.
+There is no blanket historical protection PASS.
+
+`report-input-equivalence.json` checks the entire Git tree excluding this report
+and confirms the report is absent from all eight distribution payloads. Actual
+source/package/native provenance stays at f5. Final delivery additionally checks
+the final report commit's secret scan, exact protected hashes and local/remote
+HEAD; those post-commit receipts are in `final-delivery.json`. Ordinary named-path
+commits/push only; no new branch/worktree, force push, merge, deployment or release.
+
+Remaining actions are bounded: independent review of the two fixes; owner
+disposition of the eight UV paths and older protection events; existing S1/PCRE2
+dependency/container owners plus the incomplete image-scan job; and U1's existing
+deferred lane and recorded platform/product limits. No independent item is
+silently converted to acceptance, and no further phase or U1 campaign starts.
+
+## Retained R6-D implementation and delivery review at f8a57979 (2026-09-28)
 
 The user independently accepted **R6-C, C1-W and C2-W within the reviewed
 implementation, artifacts and actual platform scope**. R5 and limited R6-B remain
