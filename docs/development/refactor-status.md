@@ -1,11 +1,197 @@
 # Safe refactor status
 
-## Current S1 PCRE2 batch 2 verification (2026-10-04)
+## Current S1 Soup Sieve batch 3 verification (2026-10-05)
 
-**Batch 2 awaits independent review; it is not ACCEPTED.** The user's acceptance
+**Batch 3 is pending independent review, not ACCEPTED.** The user's October 4
+review separately accepts batch 2's measured PCRE2 scope and exact Gitleaks
+exception. Accepted AnyIO and earlier structure work remain unchanged. R6-D
+remains **BLOCKED / not ACCEPTED**, U1 is deferred, the historical mypy incident
+is **OPEN**, and merge/release remains **NO-GO**. There is no total protection PASS
+and no automatic next dependency migration.
+
+Work starts at `9fea61acdfebf9367971f1b6e0829f5e95b70775` on
+`codex/r0-r1-safe-refactor`. The bounded security/semantic tests are commit
+`5cb46dd21b399583ea988f39f047137ca692cc5c`; the five dependency files and exact
+constraint expectation are commit `8d6524cb97f2fcd7d95cc8339482d9077df99290`.
+All new CI and production artifacts below use **8d6524cb, attempt 1**. A final
+documentation-only commit follows that execution source.
+
+### Hook forward boundary and historical incident
+
+The original `gitleaks-hooks-02` invocation ran pre-commit from the primary
+checkout without `MYPY_CACHE_DIR`. The observed writes are its two primary
+`.mypy_cache/3.10/scripts/supply_chain_contracts` files; this is not evidence of
+HOME writes. Their initial preimage remains unavailable and historical cache
+integrity remains unknown. Neither file was restored, removed or given a new
+mtime.
+
+The task-owned launcher now validates the actual argv, executable, cwd and env
+snapshot immediately before spawn, including pre-commit's child hooks. Missing,
+empty, relative, conflicting, inherited and redirected paths are rejected;
+explicit mypy CLI/config cache destinations are checked as well. Tests include
+a real junction escaping to the primary checkout. Pinned mypy **1.7.1** was
+actually run with `--no-incremental`: its cache files appeared in the owned
+cache, and a real invalid-type fixture still failed with the expected diagnostic.
+The original complete hook manifest passes on the primary source. Both actual
+candidate commits automatically ran that manifest through the task-scoped Git
+hook, with explicit files and validated child environments. No hook skip,
+type/import-scope change or persistent primary Git/pre-commit configuration
+change was made. This demonstrates the tested forward invocation boundary;
+it does not establish universal filesystem containment or close the old incident.
+
+### Official candidate, bounded comparison and installation
+
+The official [PyPI 2.9 wheel](https://pypi.org/project/soupsieve/2.9/) has SHA-256
+`a2b2c76d67df2382d245409fd71e321a571717e58463efa32ace87dcadac2c12`.
+Its seven runtime Python files equal both the sdist and release tag
+`8763f914472fc83652babda708bed5c8ef287004`. The failing development HEAD
+`751c57b2c7e978e206b94b7dba17f8e2af392e19` in the
+[IDENTIFIER/VALUE advisory](https://github.com/facelessuser/soupsieve/security/advisories/GHSA-gjv8-xp57-g29c)
+and [whitespace/comment advisory](https://github.com/facelessuser/soupsieve/security/advisories/GHSA-j934-xhv5-fg8f)
+precedes the release. Source comparison confirms the later leading-identifier
+quantifier correction and anchored reverse trailing-trim implementation; the
+released parser is not that failing HEAD.
+
+The paired comparison uses the same Python **3.10.19**, Beautiful Soup **4.12.3**
+and `html.parser`, with one fresh process and one uncached call per case. Four
+input families at size parameters 1,000/2,000/4,000/8,000 run twice in reversed old/new
+order, alongside nine semantic controls: **82 processes, 41 per version**.
+Each process has a Windows Job limit of 8 seconds user CPU, 256 MiB committed
+memory and one active process, plus a 12-second outer wall limit. All 41 new
+cases complete with expected results/exceptions. The eight old unterminated
+attribute cases retain five wall timeouts and three nonzero/process-limit exits;
+other old identifier, whitespace and
+comment measurements show the retained input-size scaling. Normal result IDs,
+document order, duplicates, escapes and syntax exceptions are checked separately.
+The committed tests independently give **4 FAIL / 13 PASS on 2.8** and
+**17 PASS on 2.9**, with bounded CPU/memory/wall resources. This is the evidence
+for the two parsing fixes; audit absence alone is not used as proof.
+
+Pinned uv **0.11.19** generated the two locks under the original controlled
+build rules. Full comparisons of **404 root / 312 Docker package records**,
+including sources, markers and dependencies, change only **Soup Sieve 2.8 -> 2.9**.
+The two manifests pin `soupsieve==2.9`; the existing script regenerates constraints.
+AnyIO 4.14.2, Beautiful Soup 4.12.3, Gradio 4.39.0, MCP 1.12.4, CPU torch and base
+image digests remain unchanged. No canonical synchronization or full upgrade ran.
+Both owned Windows environments received complete frozen installations. Version,
+module path, seven official runtime-file hashes, non-editable installation and
+dependency checks pass on Python **3.10.19 / 3.11.15**.
+
+### Functional checks and actual products
+
+HTML/MHTML readers, selector order/attributes/Unicode/escapes/pseudos/comments,
+XML namespaces, malformed-selector exceptions, and the existing MCP HTML boundary
+pass. Each Windows environment again passes **20 related tests** after receiving
+the four verified CI wheels; `MARA` and `MARA-cli` help also pass. A separate
+installed arXiv HTML consumer probe uses mocked HTTP and checks title/Unicode,
+existing-file bytes and cleanup on both versions. Its initial repository fixture
+pulled in five existing Windows `os.pread`/`os.fchmod` mypy errors; that new fixture
+is retained in task evidence and the consumer probe runs outside the repository
+test module. Original mypy configuration and import-following options are unchanged.
+
+Complete Linux suites pass: root **1822**, ktem **3989**, kotaemon **512 PASS /
+10 skipped on each Python version**; unified collection finds **6662 tests**.
+Complete Windows kotaemon suites each retain **4 FAIL / 485 PASS / 33 skipped**:
+the same FIFO and three symlink-privilege failures recorded previously. These
+are not full Windows PASS results. Full Windows mypy's historical platform
+limitations remain separate. Static/hygiene, original lock/constraints/CPU checks,
+CLI, frontend/browser checks, four clean-wheel installations and Python
+distribution supply-chain checks pass.
+
+[Quality 37217372654](https://github.com/262412/MARA/actions/runs/37217372654)
+completes with **13 success / 7 failure**. The seven failures are the three
+Python audits, three container vulnerability gates and required aggregate.
+Both secret-scan jobs pass: repository history covers **1536 commits**, the
+full directory scan also passes, and the separately built image passes under
+the unchanged 20-minute scanner / 45-minute job limits. Its actual image ID is
+`sha256:512a762825396e100663d93fad7a57e45374e96636f5f5db7b10ab88627068d7`.
+
+**Fresh coverage: PASS.** Artifact **11310460069**, from this run, yields
+**90.22% / 81.93% / 72.20% / 84.40%** against unchanged benchmark / slide_cli /
+kotaemon / ktem floors **90/70/60/50**. The original 90% production diff gate
+passes at **96.60% (2642/2735 statements)** against fixed Dev `adab3f4d`.
+Independent checks use the downloaded complete JSON and reproduce that result.
+The batch-start diff against `9fea61ac` is **0/0, N/A**, since no production
+Python statements changed; it is not reported as 100% architectural coverage.
+No old coverage artifact substitutes for this run's results.
+
+Python artifact **11308618776** contains four wheels and four sdists. All eight
+payload hashes, SPDX/CycloneDX files and source/run-bound provenance were verified.
+[Native 37217376092](https://github.com/262412/MARA/actions/runs/37217376092)
+is a fresh **3/3 PASS** run, with Windows/Ubuntu 22.04 builds and Ubuntu 24.04
+execution. Windows artifact **11308179487** and Linux artifact **11308734388**
+match downloaded digests; all seven embedded Soup Sieve modules match code compiled
+from official 2.9 source, excluding source filenames, and the parser differs from 2.8. Executed sidecar hashes
+match those binaries. Defender reports no detections. Original resource probes
+report no identified owned processes left running and no invalid package links,
+while retaining **15 Windows / 152 Linux unclassified access-denied observations**.
+
+All three new containers pass their original runtime and PCRE2 probes. Complete
+OS/Python/Node/Go version inventories compared with batch 2's actual `6823a77a`
+images change **only soupsieve, 2.8 -> 2.9**. PCRE2 remains **10.42-1+deb12u2**,
+and its loaded-library hash still equals the signed Debian package. Trivy
+**0.70.0** JSON, runtime image IDs, build metadata and OCI provenance agree:
+
+| Target | Actual image ID                                                           | Artifact    | Trivy scan time, 2026-10-04 UTC |
+| ------ | ------------------------------------------------------------------------- | ----------- | ------------------------------- |
+| lite   | `sha256:1e9b848fbac2c2edacb1d4bfdccc519b63ee57a47f62a91d1a6dacd2146ba4ca` | 11309118216 | 16:48:57.617596284              |
+| full   | `sha256:3bd0ec70b68de51b5cea24371260fd24c0e19aa13281919cf09ace8057b5bc14` | 11308334293 | 16:49:16.195180338              |
+| ollama | `sha256:ef0d47eb3fc747815be8974135bea4aaa06c6e7727ad2f29ffb65dc37c714d65` | 11308894682 | 16:52:35.133372117              |
+
+The original CI container gates fail with the same **12 exact new keys per
+target**, covering Gradio, pypdf, sentence-transformers and urllib3. Two older
+Soup Sieve baseline CVEs, **49476/49477**, also disappear; these are distinct
+from this batch's independently reproduced **86000/85999**. The original
+HIGH/CRITICAL fixable-only scan does not establish the two moderate parsing fixes.
+Separate image SPDX/CycloneDX steps are not reached after enforcement fails.
+Baseline expiry remains **2026-10-04**. CI enforcement actually ran on October 4
+UTC; local unchanged-gate executions on October 5 CST each fail closed with
+**exit 2, baseline expired**. No date override or extension was used.
+
+All three fresh Python audit profiles retain complete raw uv JSON and actual
+argv/env/cwd. Raw records number **433 / 433 / 410**, active records
+**417 / 417 / 402**, and exact new baseline keys **47 / 47 / 39**. Relative to
+retained batch-1 raw JSON, eight Soup Sieve record keys disappear and none are
+added; those keys represent four CVE alias groups, not eight vulnerabilities.
+The two target advisories and PYSEC-2026-4170/4171 account for four removed new
+keys. The other four removed records are incidental older findings, not extra
+independently reproduced fixes. Baselines, alias handling, scope and gates remain
+unchanged. The historical missing audit/log evidence remains missing.
+
+### Retained attempts, protection and review boundary
+
+Failed attempts remain separate: initial hook bootstrap restrictions; empty
+metadata response; the first process launcher failing before parsing; an initial
+lock-comparison uniqueness assumption; a wrong test selection; supplemental
+arXiv fixture whitespace/type-platform failures; the Python 3.11 root test's
+existing unconditional `tomli` import; CRLF diff-check false positives; and an
+image comparison that incorrectly assumed resolved baseline keys were unchanged.
+Corrections preserve the original scanner, type-check and baseline contracts.
+The task-owned failure index also retains expected old-version/type-error reds,
+all Windows capability failures and security-gate failures.
+
+The **135 historical**, **136 preceding-round opening user changes**, and
+**136 current-round opening user changes** are checked by path and hash as
+separate sets, together with NUL. Newly appearing paths are compared separately.
+The two observed primary mypy files retain their post-incident hash and mtime;
+their unknown preimage is not reconstructed. Canonical installation, real data,
+configuration/cache and the eight historical UV directories were not synchronized,
+cleaned, restored or rescanned. U1 and dual-37 were not run as prerequisites.
+
+Raw evidence is under `D:/MARA-s1-01a086ff/s1-soupsieve-20261004/`.
+`evidence/batch-evidence.json` and `evidence/evidence-source-index.json` bind
+release/source hashes, actual invocations, independent attempts, protection sets,
+coverage, audits and downloaded products. Stop at the batch-3 independent review
+point; the unresolved gates above retain **NO-GO**.
+
+## Accepted S1 PCRE2 batch 2 measured scope (2026-10-04)
+
+**The user's October 4 independent review separately ACCEPTS batch 2's measured
+PCRE2 linux/amd64 scope and exact Gitleaks public-tag exception.** The large
+32-bit converter overflow was not exercised. The user's acceptance
 of AnyIO batch 1 is limited to its agreed implementation and measured scope.
 R6-D remains **BLOCKED / not ACCEPTED**, historical protection and U1 dispositions
-remain OPEN/deferred, and merge/release remains **NO-GO**. Soup Sieve is not started.
+remain OPEN/deferred, and merge/release remains **NO-GO**. Batch 3 is recorded above.
 
 The branch remains `codex/r0-r1-safe-refactor`, starting at
 `3ad48d9b2d43c94624e982ad132e0255410b56c9`. Separate ordinary commits are:
@@ -150,7 +336,7 @@ documentation-only commit follows the verified `6823a77a` execution source.
 **AnyIO batch 1 is ACCEPTED within its agreed implementation and measured
 scope following the user's independent review on 2026-10-04.** All recorded
 failures, evidence gaps and platform limits remain. R6-D overall remains
-**BLOCKED / not ACCEPTED**, S1/PCRE2 remains OPEN, and merge/release remains
+**BLOCKED / not ACCEPTED**, remaining S1 gates stay OPEN, and merge/release remains
 **NO-GO**.
 
 This batch starts at `9d597d772c2b90d4b2e9598312f536533585f7ee` on
