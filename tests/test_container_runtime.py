@@ -162,6 +162,7 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
 
     expected_constraints = {
         "aiohttp>=3.14.3",
+        "anyio==4.14.2",
         "cryptography>=50.0.0",
         "h2>=4.4.1",
         "mcp==1.12.4",
