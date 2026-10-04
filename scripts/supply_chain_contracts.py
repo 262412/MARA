@@ -212,7 +212,8 @@ def check_secret_scan(root: Path) -> list[ContractIssue]:
             ContractIssue(
                 Path(".gitleaks.toml"),
                 "gitleaks-frp-allowlist",
-                "only the exact public callback digest exception is allowed; "
+                "only the exact public callback digest and report image tag "
+                "exceptions are allowed; "
                 "FRP token detection must remain unchanged",
             )
         )
@@ -243,7 +244,17 @@ def _exact_gitleaks_digest_exception(config: dict) -> bool:
                         "paths": [
                             r"^(?:/repo/)?libs/ktem/ktem_tests/test_chat_javascript_resources\.py$"
                         ],
-                    }
+                    },
+                    {
+                        "description": "Public image tag in the fixed refactor report",
+                        "condition": "AND",
+                        "regexTarget": "match",
+                        "regexes": [
+                            r"^mara-secret-scan:"
+                            r"4203ca87cf7f62a84878d231014925e9e90502ce\x60$"
+                        ],
+                        "paths": [r"^(?:/repo/)?docs/development/refactor-status\.md$"],
+                    },
                 ],
             },
         ],

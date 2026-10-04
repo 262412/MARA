@@ -217,3 +217,52 @@ def test_gitleaks_digest_exception_matches_only_the_two_observed_paths():
     assert re.search(rule["regexes"][0], digest)
     assert not re.search(rule["regexes"][0], digest + "0")
     assert not re.search(rule["regexes"][0], "0" + digest)
+
+
+def test_gitleaks_image_tag_exception_requires_exact_match_and_report_path():
+    import re
+
+    import tomli
+
+    config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    allowlists = config["rules"][1]["allowlists"]
+    assert len(allowlists) == 2
+    rule = allowlists[1]
+    assert rule["condition"] == "AND"
+    assert rule["regexTarget"] == "match"
+    path = "docs/development/refactor-status.md"
+    for candidate in (path, "/repo/" + path):
+        assert re.search(rule["paths"][0], candidate)
+    for candidate in ("other/" + path, "/other/" + path, path + ".bak"):
+        assert not re.search(rule["paths"][0], candidate)
+    public_commit = "4203ca87cf7f62a84878d231014925e9e90502ce"
+    match = "mara-secret-scan:" + public_commit + "`"
+    assert re.search(rule["regexes"][0], match)
+    for candidate in (
+        match.replace(public_commit, "a" * 40),
+        "service_api_key=" + public_commit,
+        match + "suffix",
+        "prefix" + match,
+    ):
+        assert not re.search(rule["regexes"][0], candidate)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("condition", "OR"),
+        ("regexTarget", "line"),
+        ("paths", [".*"]),
+        ("regexes", [".*"]),
+        ("commits", ["anything"]),
+    ],
+)
+def test_gitleaks_rejects_broadening_public_image_tag_exception(field, value):
+    import tomli
+
+    from scripts.supply_chain_contracts import _exact_gitleaks_digest_exception
+
+    config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    assert len(config["rules"][1]["allowlists"]) == 2
+    config["rules"][1]["allowlists"][1][field] = value
+    assert not _exact_gitleaks_digest_exception(config)

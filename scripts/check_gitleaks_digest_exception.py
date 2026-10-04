@@ -58,15 +58,23 @@ def _fixture(root: Path, files: dict[str, str]) -> None:
         subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
 
 
-def _scan(scanner: Path, root: Path, config: Path, mode: str, target: str) -> dict:
-    output = root.parent / f"{root.name}-{mode}"
+def _scan(
+    scanner: Path,
+    root: Path,
+    config: Path,
+    mode: str,
+    target: str,
+    *,
+    label: str = "",
+    redact: bool = True,
+) -> dict:
+    output = root.parent / f"{root.name}-{label}{mode}"
     command = [
         str(scanner),
         mode,
         target,
         "--config",
         str(config),
-        "--redact",
         "--verbose",
         "--no-banner",
         "--no-color",
@@ -77,7 +85,11 @@ def _scan(scanner: Path, root: Path, config: Path, mode: str, target: str) -> di
         "--report-path",
         str(output.with_suffix(".json")),
     ]
-    result = subprocess.run(command, cwd=root, capture_output=True, text=True)
+    if redact:
+        command.append("--redact")
+    result = subprocess.run(
+        command, cwd=root, capture_output=True, text=True, timeout=60
+    )
     output.with_suffix(".log").write_text(
         result.stdout + result.stderr, encoding="utf-8"
     )
@@ -87,10 +99,66 @@ def _scan(scanner: Path, root: Path, config: Path, mode: str, target: str) -> di
         "command": command,
         "exit_code": result.returncode,
         "findings": [
-            {key: f[key] for key in ("RuleID", "File", "StartLine", "Commit")}
+            {
+                **{key: f[key] for key in ("RuleID", "File", "StartLine", "Commit")},
+                "secret_sha256": hashlib.sha256(f["Secret"].encode()).hexdigest(),
+            }
             for f in findings
         ],
     }
+
+
+def _image_tag_controls(scanner: Path, destination: Path, config: Path) -> list:
+    public = "4203ca87cf7f62a84878d231014925e9e90502ce"
+    changed = hashlib.sha256(b"S1 different public image control").hexdigest()[:40]
+    other = hashlib.sha256(b"S1 unrelated credential control").hexdigest()
+    path = "docs/development/refactor-status.md"
+    tag = f"`mara-secret-scan:{public}`"
+    credential = f'"service_api_key": "{other}"'
+    cases: dict[str, tuple[str, str, set[str], set[str]]] = {
+        "public": (path, tag, {public}, set()),
+        "changed_value": (path, tag.replace(public, changed), {changed}, {changed}),
+        "other_path": ("other.md", tag, {public}, {public}),
+        "other_credential": (path, credential, {other}, {other}),
+        "same_line": (path, tag + " " + credential, {public, other}, {other}),
+        "other_context": (path, f'"service_api_key": "{public}"', {public}, {public}),
+        "other_prefix": (path, tag.replace("mara-", "other-"), {public}, {public}),
+    }
+    original, marker, image_exception = config.read_text(encoding="utf-8").rpartition(
+        "\n[[rules.allowlists]]\n"
+    )
+    assert (
+        marker and '"Public image tag in the fixed refactor report"' in image_exception
+    )
+    baseline = destination / "without-image-exception.toml"
+    baseline.write_text(original + "\n", encoding="utf-8")
+    records = []
+    for name, (file, content, before, after) in cases.items():
+        root = destination / f"image-{name}"
+        _fixture(root, {file: content + "\n"})
+        for mode, target in (("git", "."), ("dir", file)):
+            for label, source, expected in (
+                ("before-", baseline, before),
+                ("after-", config, after),
+            ):
+                # These fixtures contain only the public tag and generated controls.
+                record = _scan(
+                    scanner, root, source, mode, target, label=label, redact=False
+                )
+                hashes = {f["secret_sha256"] for f in record["findings"]}
+                wanted = {
+                    hashlib.sha256(value.encode()).hexdigest() for value in expected
+                }
+                rules = {f["RuleID"] for f in record["findings"]}
+                record.update(case=name, stage=label.rstrip("-"))
+                record["passed"] = (
+                    hashes == wanted
+                    and len(record["findings"]) == len(expected)
+                    and rules == ({"generic-api-key"} if expected else set())
+                    and record["exit_code"] == int(bool(expected))
+                )
+                records.append(record)
+    return records
 
 
 def check(scanner: Path, destination: Path, config: Path) -> dict:
@@ -137,6 +205,7 @@ def check(scanner: Path, destination: Path, config: Path) -> dict:
                 and record["exit_code"] == int(bool(expected))
             )
             records.append(record)
+    records.extend(_image_tag_controls(scanner, destination, config))
     report = {
         "version": version,
         "binary_sha256": hashlib.sha256(scanner.read_bytes()).hexdigest(),
