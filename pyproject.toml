@@ -57,6 +57,7 @@ constraint-dependencies = [
     "pydantic-settings==2.13.1",
     "pywin32==311; sys_platform == 'win32'",
     "rich==14.1.0",
+    "soupsieve==2.9",
     "typer==0.19.2",
 ]
 

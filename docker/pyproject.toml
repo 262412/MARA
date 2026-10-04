@@ -26,6 +26,7 @@ constraint-dependencies = [
     "pyarrow==21.0.0",
     "pydantic-settings==2.13.1",
     "rich==14.1.0",
+    "soupsieve==2.9",
     "typer==0.19.2",
 ]
 

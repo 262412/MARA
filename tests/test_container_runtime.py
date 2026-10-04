@@ -287,6 +287,7 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         "pydantic-settings==2.13.1",
         "pywin32==311; sys_platform == 'win32'",
         "rich==14.1.0",
+        "soupsieve==2.9",
         "typer==0.19.2",
     }
     assert set(project["tool"]["uv"]["constraint-dependencies"]) == (
