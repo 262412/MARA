@@ -1,10 +1,157 @@
 # Safe refactor status
 
-## Current S1 AnyIO batch 1 implementation (2026-10-04)
+## Current S1 PCRE2 batch 2 verification (2026-10-04)
 
-**AnyIO batch 1 limited implementation and verification PASS; independent
-review is pending.** R6-D overall remains **BLOCKED / not ACCEPTED**, S1/PCRE2
-remains OPEN, and merge/release remains **NO-GO**.
+**Batch 2 awaits independent review; it is not ACCEPTED.** The user's acceptance
+of AnyIO batch 1 is limited to its agreed implementation and measured scope.
+R6-D remains **BLOCKED / not ACCEPTED**, historical protection and U1 dispositions
+remain OPEN/deferred, and merge/release remains **NO-GO**. Soup Sieve is not started.
+
+The branch remains `codex/r0-r1-safe-refactor`, starting at
+`3ad48d9b2d43c94624e982ad132e0255410b56c9`. Separate ordinary commits are:
+
+- Exact public-tag exception: `12740fef74c65796588723ca6a224b09b0d325fd`.
+- Runtime PCRE2 pin and bounded checks: `cf3e1c26697d19ae822bb84f97901be943048385`.
+- Slim-image documentation verification correction and final execution source:
+  `6823a77a9e01e3970cc7dccf36aec741856146d5`.
+
+### PCRE2 package, runtime and image evidence
+
+Only the existing `runtime-base` apt list gains
+`libpcre2-8-0=10.42-1+deb12u2`. Base-image digests, both Python locks, constraints,
+AnyIO 4.14.2, Soup Sieve 2.8 and other dependency declarations are unchanged.
+Preflight verified the pinned base's Bookworm apt sources and archive keyring,
+the signed security InRelease (valid October 4-11 UTC), its Packages checksum,
+the amd64 package and dependency/reverse-dependency constraints. This was a
+signed-metadata check, not a local apt simulation. The new CI builds then
+executed the actual apt installation through the original sources.
+
+The verified `.deb` SHA-256 is
+`d2f7edfcc7689b9e0761c2742cc824ac86a20768bc5e8057818dc6875291fe76`.
+All three final containers report binary/source version **10.42-1+deb12u2**,
+architecture **amd64**, correct dpkg ownership and the loaded library
+`/usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.11.2`. Its SHA-256 is
+`092bc945140e65c691c7c717d71083111f46813f31a76dd848bf82e91450778b`, identical
+to the signed package. `/proc/self/maps` and grep's dynamic linkage resolve to
+that library. Full OS/Python/Node/Go version inventories compared with accepted
+AnyIO candidate `8aa37359` change **only libpcre2-8-0, 10.42-1 -> 10.42-1+deb12u2**.
+
+| Target CVE      | Evidence on each new amd64 image                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| CVE-2026-86145  | Fixed package/library plus bounded DFA heap-limit regression, expected -63                                |
+| CVE-2026-89157  | Fixed package/library plus small converter smoke; the large 32-bit overflow is **not exercised** on amd64 |
+| CVE-2026-89161  | Fixed package/library plus copied-subject reuse/free regression                                           |
+| CVE-2026-103111 | Fixed package/library plus bounded JIT recursion regression, expected -46                                 |
+
+[Debian's DLA-4816-1 record](https://security-tracker.debian.org/tracker/DLA-4816-1)
+and the four CVE records identify the fixed Bookworm boundaries; u2 includes 103111. The original container smoke, grep check and three bounded regressions
+pass on every target. Each probe has a 30-second outer timeout and inner
+CPU/address-space limits. The package verification permits only the three exact
+documentation files excluded by the unchanged slim-image dpkg configuration;
+missing library/copyright or modified-file rows still fail. Raw verification
+output, full installed-package lists and failure-output tests are retained.
+
+All following artifacts belong to **Quality 37209618859, attempt 1, source
+6823a77a**. Full Trivy **0.70.0** JSON, probe stdout/stderr, build metadata and
+provenance are retained. Downloaded ZIP hashes match GitHub metadata; the runtime
+image IDs match Trivy, and provenance binds the source/run and OCI subjects.
+
+| Target | Actual image ID                                                           | Artifact    | Trivy scan time, 2026-10-04 UTC |
+| ------ | ------------------------------------------------------------------------- | ----------- | ------------------------------- |
+| lite   | `sha256:ddac91ee48896d7c185a299a5ea23b28133bb298da4bf2f40c59a3d242eb5118` | 11306360764 | 14:42:59.290276472              |
+| full   | `sha256:b4bedc474c1ad2778c3ec40668e706016dbdfdc8a3c74e9fbee15dfa4c66a9e6` | 11306356880 | 14:45:46.450908264              |
+| ollama | `sha256:9f6d40cbb93314593a6f226a48a40af627c9bab516b5c425e4272bd43fd16e04` | 11306491985 | 14:49:47.009058631              |
+
+No PCRE2 finding remains in these JSONs. Each original-parameter container gate
+still fails on **12 exact new keys**: Gradio (1), pypdf (8), sentence-transformers
+(1), urllib3 (2). These are not unique-vulnerability counts. The unchanged
+baseline expires on **2026-10-04**; actual scan/enforcement dates were October 4
+UTC, with no date override or extension. Separate image SPDX/CycloneDX steps
+were **not reached** after enforcement failed.
+
+### Exact public-tag exception and Quality
+
+The real Gitleaks 8.24.3 match includes the complete public tag followed by the
+Markdown closing backtick. A separate `generic-api-key` rule allowlist requires
+**AND** between the exact report path and the anchored complete match. The
+original G0 block remains byte-for-byte intact. No file/commit/general-SHA
+exception, disabled rule or vulnerability-baseline change is introduced.
+
+Fresh controls from the final Git archive pass **38/38** across history and
+directory modes: the exact public case, changed value/path/context/prefix,
+other and same-line dummy credentials, and original G0 positive/negative cases.
+The new CI repository/history job passes both **1,533-commit history** and full
+`/repo` directory scans. A local Windows directory attempt's six known QASPER
+fixture-hash hits remain recorded: its relative paths do not match the existing
+`/repo` ignore fingerprints; the ignore file was not changed. The independent
+built-image secret scan also passes its original 20-minute scanner/45-minute
+job budgets, using image ID
+`sha256:fb717b8278122d1e7ff73fb2249e372ae4caf6eb01be027eed4a1477d1371ead`.
+
+[Final Quality 37209618859](https://github.com/262412/MARA/actions/runs/37209618859)
+completed with **13 success / 7 failure**. Failures are the three Python audits,
+three container vulnerability gates and required aggregate. Functional results
+include root **1822 PASS**, ktem **3989 PASS**, kotaemon
+**495 PASS / 10 skipped on each Python version**, and collection of **6645 tests**.
+CLI, static/hygiene, frontend/browser checks, four clean-wheel installations
+and distribution supply-chain checks pass. Artifact **11306255788** contains
+eight verified distribution hashes with source/run-bound provenance.
+
+**Fresh coverage: PASS.** Artifact **11306787930** produces **90.22% / 81.93% /
+72.20% / 84.40%** against unchanged benchmark / slide_cli / kotaemon / ktem floors
+90/70/60/50. The original 90% production diff gate passes at **96.60%
+(2642/2735 statements)** against fixed Dev `adab3f4d`. These numbers use the
+new run's complete coverage JSON, not the first attempt or batch-1 coverage.
+Local final targeted checks pass **45 tests** with one existing POSIX-only case
+deselected on Windows; Linux root CI covers the full container-test module.
+
+The three fresh Python audit logs fail with **51 / 51 / 43 exact new keys**;
+CI does not upload complete uv audit JSON. Earlier batch-1 complete JSON remains
+historical evidence and is not relabeled as a new execution.
+
+Actual Desktop build-input Git blobs are unchanged from `8aa37359`, including
+the desktop build/bundle scripts, library trees, root manifest/lock and
+Native workflow. [Native 37194425712](https://github.com/262412/MARA/actions/runs/37194425712)
+**3/3 PASS** is therefore reused as historical evidence at that SHA, not a new
+Native execution. U1 and dual-37 were not started or used as prerequisites.
+
+### Retained failures and protection limits
+
+[Initial Quality 37206187450](https://github.com/262412/MARA/actions/runs/37206187450)
+at `cf3e1c26`, attempt 1, completed naturally with **13 success / 7 failure**.
+All three runtime probes reached an overly strict empty `dpkg --verify` output
+assertion; Trivy did not run and no Trivy JSON exists for those attempts. The
+first assertion did not emit its inner command output, which remains missing.
+The exact slim-documentation correction has positive/negative tests; the final
+run's three explicit missing-documentation rows do not reconstruct the first
+output. Both complete runs and all named local failed attempts are retained.
+The earlier AnyIO overwritten-log gap also remains explicitly missing.
+
+**A new protection incident remains OPEN.** Hook attempt `gitleaks-hooks-02` wrote
+the primary checkout's `.mypy_cache/3.10/scripts/supply_chain_contracts.data.json`
+and `.meta.json` at 13:22:02 UTC. There is no initial cache preimage and no claim
+that these are the only cache writes. Their originals were not restored,
+deleted or given changed mtimes. Subsequent hooks explicitly route mypy,
+Black, Ruff, pip and other caches into the task-owned directory; the two observed
+files have not changed since that correction. This verifies forward routing,
+not historical cache integrity. The 135 protected hashes, 136 opening user-change
+hashes and NUL remain separately guarded. Canonical installation and the eight
+historical UV directories were not synchronized, cleaned, restored or rescanned.
+
+Raw evidence is under `D:/MARA-s1-01a086ff/s1-pcre2-20261004/evidence/`.
+`final-container-comparison-01.json` binds complete old/new inventories, original
+target findings, current findings, runtime evidence and artifact identities.
+The final `batch-evidence.json` and `evidence-source-index.json` link the
+independently named attempts and selected raw file hashes. This report's final
+documentation-only commit follows the verified `6823a77a` execution source.
+
+## Accepted S1 AnyIO batch 1 measured scope (2026-10-04)
+
+**AnyIO batch 1 is ACCEPTED within its agreed implementation and measured
+scope following the user's independent review on 2026-10-04.** All recorded
+failures, evidence gaps and platform limits remain. R6-D overall remains
+**BLOCKED / not ACCEPTED**, S1/PCRE2 remains OPEN, and merge/release remains
+**NO-GO**.
 
 This batch starts at `9d597d772c2b90d4b2e9598312f536533585f7ee` on
 `codex/r0-r1-safe-refactor`. The frozen execution candidate is
