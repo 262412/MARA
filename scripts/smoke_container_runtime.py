@@ -25,6 +25,15 @@ def command(*args, input=None):
     return subprocess.run(args, input=input, text=True, capture_output=True,
                           check=True, timeout=5).stdout
 
+def validate_dpkg_verification(output, configuration):
+    if not output:
+        return
+    assert {"path-exclude /usr/share/doc/*", "path-include /usr/share/doc/*/copyright"} <= set(configuration.splitlines()), configuration
+    # Only these three files are excluded by the fixed Debian slim base.
+    permitted = {("missing", "/usr/share/doc/libpcre2-8-0/" + name)
+                 for name in ("README.Debian", "changelog.Debian.gz", "changelog.gz")}
+    assert all(tuple(line.split()) in permitted for line in output.splitlines()), output
+
 fields = command("dpkg-query", "-W", "-f=${Version}\n${Architecture}\n${Status}\n"
                  "${source:Package}\n${source:Version}\n", "libpcre2-8-0").splitlines()
 assert fields == ["10.42-1+deb12u2", "amd64", "install ok installed",
@@ -123,7 +132,9 @@ links = command("ldd", "/usr/bin/grep")
 grep_library = next(line.split("=>", 1)[1].split()[0] for line in links.splitlines()
                     if line.lstrip().startswith("libpcre2-8.so.0 "))
 assert Path(grep_library).resolve() == library, links
-assert command("dpkg", "--verify", "libpcre2-8-0") == ""
+verification = command("dpkg", "--verify", "libpcre2-8-0")
+validate_dpkg_verification(verification, Path("/etc/dpkg/dpkg.cfg.d/docker").read_text())
+checks["dpkg_verify"] = verification
 packages = command("dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${Architecture}\t${db:Status-Abbrev}\n")
 print(json.dumps({"package_fields": fields, "library": str(library), "library_owner": owner,
                   "library_sha256": digest, "loaded_library_paths": mapped,

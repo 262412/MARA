@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import subprocess
 import threading
 from contextlib import contextmanager
@@ -200,6 +201,53 @@ def test_pcre2_probe_preserves_failed_output(monkeypatch, tmp_path, timeout):
     assert (tmp_path / "lite.pcre2.stdout").read_text() == "partial identity\n"
     assert (tmp_path / "lite.pcre2.stderr").read_text() == "probe diagnostic\n"
     assert not (tmp_path / "lite.pcre2.json").exists()
+
+
+@pytest.mark.parametrize(
+    "verification,has_slim_config,accepted",
+    [
+        ("", False, True),
+        (
+            "missing     /usr/share/doc/libpcre2-8-0/README.Debian\n"
+            "missing     /usr/share/doc/libpcre2-8-0/changelog.Debian.gz\n"
+            "missing     /usr/share/doc/libpcre2-8-0/changelog.gz\n",
+            True,
+            True,
+        ),
+        ("missing /usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.11.2", True, False),
+        ("missing /usr/share/doc/libpcre2-8-0/copyright", True, False),
+        ("??5?????? /usr/share/doc/libpcre2-8-0/changelog.gz", True, False),
+        ("missing /usr/share/doc/libpcre2-8-0/changelog.gz", False, False),
+    ],
+)
+def test_pcre2_verification_allows_only_fixed_slim_doc_exclusions(
+    verification, has_slim_config, accepted
+):
+    from scripts.smoke_container_runtime import PCRE2_PROBE
+
+    # Execute the same validation function sent to the bounded Linux probe.
+    function = next(
+        node
+        for node in ast.parse(PCRE2_PROBE).body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "validate_dpkg_verification"
+    )
+    namespace: dict = {}
+    exec(
+        compile(ast.Module(body=[function], type_ignores=[]), "probe", "exec"),
+        namespace,
+    )
+    validate = namespace["validate_dpkg_verification"]
+    config = (
+        "path-exclude /usr/share/doc/*\npath-include /usr/share/doc/*/copyright\n"
+        if has_slim_config
+        else ""
+    )
+    if accepted:
+        validate(verification, config)
+    else:
+        with pytest.raises(AssertionError):
+            validate(verification, config)
 
 
 def test_prepare_nltk_cache_uses_wheel_bundled_data_without_downloading(tmp_path):
