@@ -1,9 +1,11 @@
 # Safe refactor status
 
-## Current R6-D image secret-scan evidence (2026-10-04)
+## Current R6-D review and S1/PCRE2 remediation plan (2026-10-04)
 
-**The single independent image scan passes for the newly built image below.
-R6-D overall remains BLOCKED / not ACCEPTED; merge/release remains NO-GO.**
+**The user accepts the new-image secret-scan evidence below within its limited
+review scope. R6-D overall remains BLOCKED / not ACCEPTED; merge/release remains
+NO-GO.** This planning round starts at
+`257a3dc92bd7b3d57916cf5cbd98cd8520539d97` and changes documentation only.
 The user-provided review outcome separately accepts **P-UV forward installation**
 and the **DL-POSIX controlled lifecycle contract** within their limited scope.
 Their execution evidence remains dated 2026-09-28 at source
@@ -12,7 +14,7 @@ rerun here. This acceptance does not close historical protection incidents or
 establish the unique interleaving of the original POSIX failure. Prior structure
 contracts/documentation and R5/R6-B/R6-C acceptance remain unchanged.
 
-Starting HEAD was `64036ff380af170e20a5f9e996b36c79acd6e9f1`. The ordinary pushed
+The earlier scan change started at `64036ff380af170e20a5f9e996b36c79acd6e9f1`. Its pushed
 commit `4203ca87cf7f62a84878d231014925e9e90502ce` changes exactly two workflow
 fields: Trivy image `timeout: "20m"` and image job `timeout-minutes: 45`.
 Semantic comparison confirms every other field is identical. The pinned action
@@ -21,7 +23,7 @@ Trivy v0.70.0, `scanners: secret`, `exit-code: "1"`, the lite target, existing
 rules, cache policy, permissions and failure propagation. No skip/ignore,
 dependency-directory exclusion or continue-on-error was added.
 
-Current local checks: the existing release-containment, workflow and
+Earlier 2026-10-04 image-scan workflow checks: the release-containment, workflow and
 supply-chain suites passed **56 tests before and 56 after** the two-line change;
 the supply-chain policy, YAML validation and formatting checks passed. Checks
 used the existing task-owned environment and hook binaries without installing
@@ -92,11 +94,286 @@ installed into, cleaned, restored or timestamp-adjusted. Their full metadata
 and 1,022-file hash evidence below belongs to **2026-09-28** and was not repeated
 here. Historical UV/configuration/cache integrity and disposition remain OPEN.
 
-The remaining scope is finite: R6-D independent review of this evidence;
-S1/PCRE2 dependency/container owner disposition; historical protection owner
-disposition; U1 in its existing deferred lane; and the already recorded
-platform/product limits, including installers, clean VM and macOS. No new
-refactor phase, dependency upgrade, U1 campaign, merge or release starts.
+The scan's limited review is now accepted. Remaining work is S1/PCRE2
+remediation, historical protection owner disposition, U1 in its deferred lane,
+and the already recorded platform/product limits. No new structure phase,
+Login/dual-37 campaign, dependency implementation, merge or release starts here.
+
+### Planning evidence and original finding identities
+
+This is a plan against the **2026-09-28** Quality findings, using current official
+advisory/package metadata queried on **2026-10-04**. No fresh whole-profile audit,
+Quality/Native dispatch, three-image build or business acceptance was performed.
+The original 14 emitted Python findings in each of `root-py310`, `root-py311`,
+`container-py310`, and four in each of `lite`, `full`, `ollama`, remain separate
+rows: **42 Python profile rows + 12 container target rows**. These are deltas
+against frozen legacy baselines, not total vulnerabilities or a current rescan.
+
+Both gates compare exact `package==version|ID` identities; neither imports an
+alias normalizer. The following official alias relationships are analysis only.
+Each Python row occurs in all three original profiles; the machine ledger keeps
+all rows, job IDs, log hashes, versions, provenance and full source responses.
+
+| Original ID                                                             | Original package/version | Confirmed CVE / GHSA relationship                               | Official repair threshold                                      |
+| ----------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------- |
+| [GHSA-5p39-cfhj-2xmp](https://api.osv.dev/v1/vulns/GHSA-5p39-cfhj-2xmp) | anyio 4.11.0             | CVE-2026-64847                                                  | 4.14.2                                                         |
+| [GHSA-82r6-8w77-94w6](https://api.osv.dev/v1/vulns/GHSA-82r6-8w77-94w6) | anyio 4.11.0             | CVE-2026-63374; same advisory as the three container AnyIO rows | 4.14.2                                                         |
+| [PYSEC-2026-3813](https://api.osv.dev/v1/vulns/PYSEC-2026-3813)         | chromadb 0.5.16          | CVE-2026-45830 / GHSA-2wm9-hf6c-p5cr                            | No patched release; last affected 1.5.9                        |
+| [PYSEC-2026-3814](https://api.osv.dev/v1/vulns/PYSEC-2026-3814)         | chromadb 0.5.16          | CVE-2026-45833 / GHSA-36p7-vc44-83pf                            | No patched release; last affected 1.5.9                        |
+| [PYSEC-2026-3815](https://api.osv.dev/v1/vulns/PYSEC-2026-3815)         | chromadb 0.5.16          | CVE-2026-45831 / GHSA-xph7-9rjv-w5fr                            | No patched release; last affected 1.5.9                        |
+| [GHSA-8mgp-746c-j5xp](https://api.osv.dev/v1/vulns/GHSA-8mgp-746c-j5xp) | nltk 3.10.3              | CVE-2026-81726                                                  | No patched release; last affected 3.10.3                       |
+| [PYSEC-2026-3910](https://api.osv.dev/v1/vulns/PYSEC-2026-3910)         | pypdf 4.2.0              | CVE-2026-84310 / GHSA-23w6-3w8w-8484                            | 6.16.1                                                         |
+| [PYSEC-2026-3911](https://api.osv.dev/v1/vulns/PYSEC-2026-3911)         | pypdf 4.2.0              | CVE-2026-84311 / GHSA-763m-79hh-57f2                            | 6.16.1                                                         |
+| [PYSEC-2026-3912](https://api.osv.dev/v1/vulns/PYSEC-2026-3912)         | pypdf 4.2.0              | CVE-2026-82398 / GHSA-fc8x-2rww-xw9m                            | 6.15.0                                                         |
+| [PYSEC-2026-3913](https://api.osv.dev/v1/vulns/PYSEC-2026-3913)         | pypdf 4.2.0              | CVE-2026-84309 / GHSA-jp53-mhqp-8xcg                            | 6.16.0                                                         |
+| [GHSA-gjv8-xp57-g29c](https://api.osv.dev/v1/vulns/GHSA-gjv8-xp57-g29c) | soupsieve 2.8            | CVE-2026-86000                                                  | 2.9.0, published as 2.9                                        |
+| [GHSA-j934-xhv5-fg8f](https://api.osv.dev/v1/vulns/GHSA-j934-xhv5-fg8f) | soupsieve 2.8            | CVE-2026-85999                                                  | 2.9.0, published as 2.9                                        |
+| [PYSEC-2026-3929](https://api.osv.dev/v1/vulns/PYSEC-2026-3929)         | transformers 4.56.2      | CVE-2026-9856 / GHSA-xrqw-3rrv-vx5w                             | 5.10.0; that release is yanked, select 5.10.1 as repair target |
+| [PYSEC-2026-3930](https://api.osv.dev/v1/vulns/PYSEC-2026-3930)         | unstructured 0.15.14     | CVE-2026-71428 / GHSA-4mvj-m6j5-pmf7                            | 0.24.0                                                         |
+
+The Python comparison logs did not retain the complete `uv audit` JSON or an
+advisory database revision; current OSV responses do not reconstruct those
+missing historical fields. Container artifacts do retain complete Trivy JSON
+(version 0.70.0), package inventories and provenance, but no database digest.
+The separate SPDX/CycloneDX steps after failed enforcement did not produce
+saved artifacts. Build-time SBOM configuration is not evidence of those files.
+
+### Active Python chains, candidates and compatibility limits
+
+The three audit profiles use Linux x86_64, `--frozen --no-dev`, Python 3.10/3.11
+as named, and the application's `kotaemon[mara-runtime]` dependency. The
+container project additionally includes `mara-research-cli` and CPU torch 2.8.0.
+The existing `uv tree` output also displays workspace extras; analysis follows
+only root dependencies, selected extras and true markers. `active-graphs.json`
+contains every selected edge and the complete path through every direct parent
+of each affected package. All seven affected versions are active in all three
+profiles. No inference of Windows/macOS execution is made from a universal wheel.
+
+In the chains below, `K` means `mara-app -> kotaemon[mara-runtime]`; the container
+adds `mara-container-runtime -> mara-app`. Every Python implementation batch
+must synchronize **`uv.lock`, `docker/uv.lock`, `constraints.txt`** together.
+`constraints.txt` is generated by `scripts/sync_locked_constraints.py`, never
+hand-edited. Regression paths below are existing tests to run after an authorized
+upgrade; none was rerun for this plan.
+
+- **AnyIO, batch 1: 4.11.0 -> 4.14.2.** Active paths after `K` are
+  `gradio -> anyio`, `mcp -> anyio`, `mcp -> sse-starlette -> anyio`,
+  `openai -> anyio`, `langchain-anthropic -> anthropic -> anyio`,
+  `fastapi -> starlette -> anyio`, `chromadb -> httpx -> anyio`, and
+  `chromadb -> uvicorn -> watchfiles -> anyio`; `ktem` supplies additional
+  Gradio/MCP edges. Parent bounds are respectively `>=3,<5`, `>=4.5`, `>=4.7`,
+  `>=3.5,<5`, `>=3.5,<5`, `>=3.4,<5`, unbounded and `>=3`.
+  [4.14.2 metadata](https://pypi.org/pypi/anyio/4.14.2/json) satisfies all eight;
+  its non-yanked `py3-none-any` wheel requires Python >=3.10. Existing idna 3.10,
+  exceptiongroup 1.3.0 and typing-extensions 4.15.0 satisfy its requirements.
+  No SDK, Gradio or MCP version change is planned. Add the exact AnyIO constraint
+  to root and docker `pyproject.toml`; first-batch files/checks are detailed below.
+- **Soup Sieve, batch 3: 2.8 -> 2.9.** `K -> beautifulsoup4 4.12.3 -> soupsieve`;
+  its `soupsieve>1.2` requirement admits [2.9](https://pypi.org/pypi/soupsieve/2.9/json).
+  This non-yanked universal wheel requires Python >=3.10 and has no dependencies.
+  Add `soupsieve==2.9` to root/docker constraint-dependencies, keeping
+  `beautifulsoup4>=4.12.3,<4.13`. Run
+  `libs/kotaemon/tests/test_reader.py::{test_html_reader,test_mhtml_reader}`
+  (the two node IDs separately) and `test_mcp_html_boundary.py`; add bounded CSS
+  selector regression cases for both advisories. HTML input alone does not
+  establish attacker control of CSS selectors. No solve or installation done.
+- **pypdf, batch 4: repair target 6.16.1; blocked by the reader stack.** Direct
+  `K -> pypdf` requires `>=4.2.0,<4.3`; `K -> llama-index 0.10.68 -> llama-index-readers-file 0.1.33 -> pypdf` requires `>=4.0.1,<5`.
+  `K -> unstructured -> unstructured-client 0.25.9 -> pypdf` only requires >=4.0.
+  [6.16.1](https://pypi.org/pypi/pypdf/6.16.1/json) covers all four rows and offers
+  a non-yanked universal wheel for Python >=3.9. It has no solution inside the
+  current first two caps. `libs/kotaemon/pyproject.toml` must coordinate pypdf
+  with the llama-index family: readers-file 0.7.0 admits pypdf 6 but requires
+  core >=0.13,<0.15, whereas the current umbrella requires core <0.11 and
+  readers-file <0.2. That is a migration option, not a solved minimum set.
+  Regress PDF loading, `libs/kotaemon/tests/test_loader_multimodal_figures.py`,
+  `libs/ktem/ktem_tests/test_preview_pdf_core.py`, `test_preview_pdf_compatibility.py`
+  and `test_docqa_element_sidecar_contract.py`; add bounded outline, XForm,
+  whitespace and tree-object malformed-PDF cases. Preserve page/citation/error APIs.
+- **Transformers, batch 5: repair target 5.10.1; blocked by model/UI coupling.**
+  `K -> sentence-transformers 5.1.1 -> transformers` requires `>=4.41,<5`.
+  The same cap remains in 5.1.2; checked 5.2.0 permits <6.
+  [5.10.0 is yanked; 5.10.1 is non-yanked](https://pypi.org/pypi/transformers/5.10.1/json),
+  with a universal Python >=3.10 wheel. It requires hub >=1.5,<2 and
+  regex >=2025.10.22; tokenizers 0.22.1 already meets >=0.22,<=0.23.
+  The original Gradio 4.39.0 wheel's `gradio/oauth.py:12` imports `HfFolder`,
+  [removed from the Hub 1.x API](https://huggingface.co/docs/huggingface_hub/concepts/migration).
+  Thus merely loosening sentence-transformers is insufficient. Coordinate its
+  entries in `libs/kotaemon/pyproject.toml`, both lock inputs and an explicitly
+  chosen Gradio-compatible route or official backport. No automatic UI upgrade
+  or site-packages patch is proposed. Regress `test_embedding_models.py`,
+  `test_retrieval_quality.py`, QASPER tokenizer/budget contracts and an offline
+  real-model fixture; mocks alone cannot establish embedding/reranker parity.
+  Add a local `save_pretrained` path-containment case. No full solve done.
+- **Unstructured, batch 6: 0.24.0 is a Python 3.11 repair target, not a common
+  3.10/3.11 candidate.** `K -> unstructured` declares `>=0.15.8,<0.16`.
+  [0.24.0](https://pypi.org/pypi/unstructured/0.24.0/json) requires >=3.11,<3.14
+  and beautifulsoup4 >=4.14.3, conflicting with docker's >=3.10,<3.11 and K's
+  beautifulsoup4 <4.13. Its lxml >=5,<7 and parser dependencies also need
+  reconciliation. Change `libs/kotaemon/pyproject.toml` only after selecting an
+  official 3.10 backport or separately authorizing a Python support migration;
+  the latter additionally affects root/docker manifests, Dockerfile and Native
+  interpreter inputs. Do not silently add unstructured PDF/all-docs extras.
+  Regress the unstructured PDF reader, NLTK compatibility and runtime bootstrap;
+  add bounded URL/private-network/redirect SSRF cases. No solution installed.
+- **NLTK: no released fix candidate.** `K -> nltk` requires >=3.10.3,<4;
+  llama-index core/legacy and unstructured also introduce it. Core excludes 3.9
+  but otherwise accepts >=3.8.1; legacy requires >=3.8.1; current unstructured
+  adds no NLTK cap. Official advisory and [current release metadata](https://pypi.org/pypi/nltk/json)
+  still end at affected 3.10.3. A future official fix must cover model-artifact
+  read/write APIs; existing tokenizer/resource tests do not cover that fix.
+  Then update the K manifest and common generated files, run
+  `test_nltk_compatibility.py`, `test_runtime_bootstrap_nltk.py` and offline
+  container tokenization, plus local path/symlink negative controls. Removing
+  NLTK also requires replacing its llama-index/unstructured consumers.
+- **Chroma: no released fix candidate for the three rows.** `K -> chromadb`
+  is capped <=0.5.16, and `K -> llama-index-vector-stores-chroma 0.1.10 -> chromadb`
+  requires >=0.4,<0.6. [Latest 1.5.9](https://pypi.org/pypi/chromadb/json) remains
+  affected in all three official records. MARA's local `PersistentClient` use
+  differs from the advisories' server/auth/configuration preconditions; it does
+  not waive the gate. Require an official release covering all three or a
+  separately scoped replacement. A later major update must coordinate the K
+  manifest, integration/core and common generated files, then run Chroma
+  lifecycle/vectorstore/indexing tests and disposable persisted-collection
+  migration tests. Never test migration on real collections.
+
+Published alternatives checked on the same date are AnyIO 4.15.1, Soup Sieve
+2.10, pypdf 6.19.0, Transformers 5.18.0 and Unstructured 0.27.10. They are not
+selected for a blanket upgrade, solved together, or asserted to have an LTS
+support guarantee. Chroma 1.5.9 and NLTK 3.10.3 provide no fixed alternative.
+
+### PCRE2: exact target, file and distribution repair
+
+The three original reports identify **Debian 12.14 / amd64**, source package
+`pcre2`, binary package **`libpcre2-8-0 10.42-1`**, analyzed by `dpkg`.
+Their package inventories identify the exact installed library
+**`/usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.11.2`**. The vulnerability entries'
+`PkgPath` is absent; the file association comes from `Packages[].InstalledFiles`,
+not an invented scanner path or a Python wheel. All three findings use base
+DiffID `sha256:b05a96227958df6091396f6fbd5aa4616df631a65626ac8688c91cfa70d1a7e6`.
+Provenance ties that Debian layer to the pinned Python Bookworm image above.
+
+| Original target / job | Original scanned image ID                                                 | Retrieved artifact |
+| --------------------- | ------------------------------------------------------------------------- | ------------------ |
+| lite / 108948913061   | `sha256:db45e325a50dcfcab3398c0db58d4655beb683bf2b46c660acd00e8911b175f5` | 10973057791        |
+| full / 108948913161   | `sha256:0e157b5df749271cade0ab3db539b0870fb4c753a9b0759dc8bb698962439ebf` | 10973575063        |
+| ollama / 108948913005 | `sha256:fdcb4a37a68c3d20484237f554f8b6735fb1703a5cc23fb98674df04ebb7b6ea` | 10972914994        |
+
+Each target retains these three rows individually:
+
+| Original CVE                                                                 | Confirmed upstream relationship / condition                              | Original fixed field and Bookworm minimum |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------- |
+| [CVE-2026-86145](https://security-tracker.debian.org/tracker/CVE-2026-86145) | GHSA-3r4p-g7gg-ppmf; DFA workspace bounds                                | 10.42-1+deb12u1                           |
+| [CVE-2026-89157](https://security-tracker.debian.org/tracker/CVE-2026-89157) | GHSA-q8g2-wprr-34m9; large pattern on 32-bit platforms                   | 10.42-1+deb12u1                           |
+| [CVE-2026-89161](https://security-tracker.debian.org/tracker/CVE-2026-89161) | Upstream PR 937; copied-subject/JIT free; no GHSA alias established here | 10.42-1+deb12u1                           |
+
+Upstream fixes are in 10.48; Debian backports them without renumbering to 10.48.
+The 32-bit condition in 89157 is distinct from these amd64 images; preserve the
+raw finding and unchanged gate without adding an exception. Other vulnerable
+API preconditions were not exercised in the application.
+
+**Batch 2 candidate: `libpcre2-8-0=10.42-1+deb12u2`.** The official
+[Bookworm security amd64 package index](https://security.debian.org/debian-security/dists/bookworm-security/main/binary-amd64/Packages.xz)
+currently offers that version; its libc6 >=2.34 requirement is met by the
+original image's 2.36-9+deb12u14. Package SHA256 is
+`d2f7edfcc7689b9e0761c2742cc824ac86a20768bc5e8057818dc6875291fe76`.
+The minimum change is **Dockerfile's existing `runtime-base` apt install list**:
+add that exact package. Lite/full/ollama inherit the repaired runtime base.
+Keep the base digest and Python locks; no broad apt upgrade, regex/wheel update,
+manual shared-library replacement or builder-only change is needed to address
+this observed final-image file. A newer base digest is an alternative only after
+its actual dpkg contents are verified, not a presently identified candidate.
+No apt simulation, package installation or new build was performed here.
+
+After that separate batch, verify actual image package version, `dpkg-query -S`
+ownership, symlink target and bounded `grep -P` behavior, then the existing
+`scripts/smoke_container_runtime.py` and unchanged Trivy/baseline checks for each
+new target. Preserve newly produced image IDs and reports; old image/secret
+results cannot certify changed bytes. This system-package-only batch does not
+change Desktop's Python freeze inputs.
+
+### First implementation batch and stopping boundaries
+
+Order executable batches as **1 AnyIO -> 2 PCRE2 -> 3 Soup Sieve**, keeping their
+commits and results separate: AnyIO addresses the container CRITICAL TLS row
+with compatible parent bounds; PCRE2 has a distribution ABI-preserving backport;
+Soup Sieve has a small compatible parsing update. Then assess the coupled pypdf
+reader batch, Transformers/model/UI batch and Unstructured/Python-support batch.
+NLTK/Chroma remain explicit upstream-fix blockers, not permission to suppress
+findings. No later batch is automatically authorized by this plan.
+
+For **batch 1 only**, the exact proposed files and versions are:
+
+1. Add `anyio==4.14.2` to `[tool.uv].constraint-dependencies` in `pyproject.toml`
+   and `docker/pyproject.toml`. Retain current public Python/platform scope,
+   SDK/Gradio/MCP versions, CPU torch and build constraints.
+2. In a complete task-owned input copy with the validated storage environment,
+   use pinned uv 0.11.19 and targeted `lock --upgrade-package anyio==4.14.2` for
+   root and docker. Review the resolution before bringing back `uv.lock` and
+   `docker/uv.lock`; stop for unrelated version drift or unsatisfied markers.
+   Regenerate `constraints.txt` with the existing sync script. These five files
+   are the planned dependency change. Do not hand-edit locks or install into
+   canonical during candidate evaluation; the existing install contract governs
+   any later canonical installation.
+3. Run `python scripts/sync_locked_constraints.py --check`,
+   `python scripts/check_container_lock_parity.py`, and
+   `python scripts/check_supply_chain_policy.py`. Under each controlled Python
+   3.10/3.11 candidate environment run `pytest -q` with
+   `libs/kotaemon/tests/test_mcp_live_sessions.py`, `test_mcp_async_errors.py`,
+   `test_mcp_operation_lifecycle.py`, `test_mcp_worker_ownership.py`,
+   `test_mcp_tools.py` (all in that directory), and
+   `libs/slide_cli/tests/test_cli_contract.py`; verify both `MARA --help` and
+   `MARA-cli --help`. The live-session cases cover owned loopback services,
+   cancellation, error propagation and cleanup. Add bounded local TLS-IDNA and
+   worker-stderr regressions where those advisory behaviors lack coverage.
+4. Run the unchanged `scripts/check_dependency_audit.py` once per profile with
+   `(profile, project, python-version)` equal to `(root-py310, ., 3.10)`,
+   `(root-py311, ., 3.11)`, `(container-py310, docker, 3.10)` and platform
+   `x86_64-unknown-linux-gnu`. Capture complete outputs even when other original
+   findings still cause exit 1. Changed package builds, affected Native runtime
+   inputs and actual container images then require candidate evidence under the
+   existing gates; none of those executions is claimed in this planning round.
+
+Batch 1 succeeds only when the selected AnyIO version is active in all profiles,
+both locks and generated constraints agree, relevant regressions pass, the two
+original AnyIO Python advisories and corresponding container TLS row disappear
+under unchanged rules, and no unexplained new finding or unrelated dependency
+change is introduced. Remaining S1 rows/legacy debt still block overall delivery.
+Rollback means reverting only that batch's five named dependency files before
+publication; it does not restore/migrate user DBs or dispose of historical caches.
+
+The bounded preview here used the verified uv 0.11.19 binary (SHA256
+`cd628b46729d01ad110146a647a633a6e5de0e091d73db46afaeee6fcb4ba648`), explicit
+cache/temp/project-environment/Python paths, disabled interpreter downloads and
+`--no-build`. Read-only frozen trees completed for all three profiles. An initial
+interpreter auto-selection was replaced by the explicit task interpreter; all
+three tree outputs were byte-identical. Root/docker `lock --dry-run` each exited
+**1** because workspace dynamic metadata for `kotaemon`/`mara-app` requires a
+build that `--no-build` forbids. The guard was not relaxed. Thus parent-bound and
+wheel-metadata checks passed; **full resolution and installation are unverified**.
+A future implementation must authorize and isolate that necessary first-party
+metadata build, not silently execute package setup code in a planning preview.
+
+The unchanged container baseline has `expires_on: 2026-10-04`; its existing code
+rejects dates **after** that date. Even removing these specific findings will
+not authorize extending the baseline or claiming a later green gate. Legacy
+security disposition remains separate. The current accepted structure/P-UV/
+DL-POSIX evidence remains historical; dependency changes invalidate applicability
+of old package/Native/image results to the candidate. Input-identical unaffected
+component evidence may be cited with its original SHA/date, without repeating
+whole-product acceptance or starting U1.
+
+Planning evidence is in
+`D:/MARA-s1-01a086ff/s1-plan-20261004/`: `remediation-plan.json` contains all 54
+original rows, advisory mappings, complete incoming paths, metadata and proposed
+regressions; `source-index.json` indexes official responses, old artifact ZIPs,
+frozen trees and both failed previews. Index SHA256:
+`79fe75049de200c88d22f400716b65583a299bd36c1c797f728e0f3873bc8715`.
+The report is the only repository change. The 135 protected hashes and NUL
+remain unchanged; real runtime resources and the eight historical UV incident
+directories were not rescanned or modified. Stop after this plan: S1/PCRE2 OPEN,
+U1 deferred, historical incidents OPEN, R6-D BLOCKED / not ACCEPTED and
+merge/release NO-GO. R5/R6-B/R6-C acceptance remains unchanged.
 
 ## Retained limited P-UV / DL-POSIX execution (2026-09-28)
 
