@@ -1,6 +1,104 @@
 # Safe refactor status
 
-## Current R6-D limited P-UV / DL-POSIX closeout (2026-09-28)
+## Current R6-D image secret-scan evidence (2026-10-04)
+
+**The single independent image scan passes for the newly built image below.
+R6-D overall remains BLOCKED / not ACCEPTED; merge/release remains NO-GO.**
+The user-provided review outcome separately accepts **P-UV forward installation**
+and the **DL-POSIX controlled lifecycle contract** within their limited scope.
+Their execution evidence remains dated 2026-09-28 at source
+`f5d974ce4183eb9e618da49bab5499505029fcb0`; neither repair was reimplemented or
+rerun here. This acceptance does not close historical protection incidents or
+establish the unique interleaving of the original POSIX failure. Prior structure
+contracts/documentation and R5/R6-B/R6-C acceptance remain unchanged.
+
+Starting HEAD was `64036ff380af170e20a5f9e996b36c79acd6e9f1`. The ordinary pushed
+commit `4203ca87cf7f62a84878d231014925e9e90502ce` changes exactly two workflow
+fields: Trivy image `timeout: "20m"` and image job `timeout-minutes: 45`.
+Semantic comparison confirms every other field is identical. The pinned action
+`aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25` retains
+Trivy v0.70.0, `scanners: secret`, `exit-code: "1"`, the lite target, existing
+rules, cache policy, permissions and failure propagation. No skip/ignore,
+dependency-directory exclusion or continue-on-error was added.
+
+Current local checks: the existing release-containment, workflow and
+supply-chain suites passed **56 tests before and 56 after** the two-line change;
+the supply-chain policy, YAML validation and formatting checks passed. Checks
+used the existing task-owned environment and hook binaries without installing
+anything. No full Quality, Native, package installation or business suite was
+redispatched. No automatically triggered gate was cancelled.
+
+[Secret Scanning 37177161966](https://github.com/262412/MARA/actions/runs/37177161966),
+**attempt 1**, was dispatched once at workflow/source SHA
+`4203ca87cf7f62a84878d231014925e9e90502ce`; both jobs succeeded:
+
+- [Built image, job 111362084132](https://github.com/262412/MARA/actions/runs/37177161966/job/111362084132):
+  normal completion, scanner exit **0**, no secret finding records. The Trivy
+  substep ran from 04:33:03 to 04:35:49 UTC on 2026-10-04, reporting 166,447 ms.
+  The complete table and successful action termination are in this job log;
+  its 392,340 raw bytes have SHA256
+  `0e76bc9e71f9dee575d230f9d89fd66b5f796abde76c1d96dc8088b02fef179c`.
+- [Repository and history, job 111362084262](https://github.com/262412/MARA/actions/runs/37177161966/job/111362084262):
+  Gitleaks completed 1,524 commits and the current worktree with no leaks found.
+  Raw job-log SHA256:
+  `6cee4977d819eb9ae3a58399db24fb991a72d2281cc8a4c9d54692d7194d1a85`.
+
+The image build ran from 04:29:56 to 04:33:02 UTC on the Ubuntu 24.04 Linux X64
+runner. Its actual local image ID is
+`sha256:13c772bbad9a4e8f59559dabe208058c1e55a17c0050e877617d2ae8e3cc89a7`.
+The build log assigns that ID to
+`mara-secret-scan:4203ca87cf7f62a84878d231014925e9e90502ce`, and the immediately
+following command scans that same tag. No registry publication or RepoDigest
+was produced. The original image was not among the available saved artifacts;
+this is a new build, not a byte-equivalent re-scan of the old image
+`sha256:5a6170f7e8de7152431aa051d0188eda1cba00007ebd8bbd587ea519a5b6db1b`.
+
+The recorded invocation is `trivy image mara-secret-scan:<4203ca87 full SHA>`.
+The [fixed action](https://github.com/aquasecurity/trivy-action/blob/ed142fd0673e97e23eac54620cfb913e5ce36c25/action.yaml)
+maps the logged `INPUT_TIMEOUT=20m`, `INPUT_SCANNERS=secret`
+and `INPUT_EXIT_CODE=1` into the scanner environment. Setup selected v0.70.0 and
+restored `trivy-binary-v0.70.0-Linux-X64`; the existing workflow does not emit a
+separate binary hash. The complete summary contains 409 package rows marked
+`-`, meaning not applicable to the secret result class, not 409 zero findings.
+The [v0.70.0 summary semantics](https://github.com/aquasecurity/trivy/blob/v0.70.0/pkg/report/table/summary.go)
+emit secret result rows only for findings; the completed command returned no
+such rows. This is an execution result under the unchanged rules,
+not proof of per-file coverage or the unique cause of the old timeout.
+
+Business/package/test inputs are unchanged from f5: only this report and the
+workflow differ. The original Dockerfile and locked build inputs are retained.
+Their SHA256 values at the executed SHA are:
+
+- `Dockerfile`: `96627818b7c9ead5d6490ecfa5a8167170b2ae67c1307f3ca547b831133f982e`
+- `.dockerignore`: `45615ef7f30f35f2373d8c246b198f6be7ca717a0f1e1069be6a1105e35fa583`
+- `uv.lock`: `245678ee0ec3d7ddf2ad32817f806baa19d61ed1fadf41a646730bb902c5679b`
+- `docker/uv.lock`: `0291c503644c7980395d7f3e5e409f7d4b96d603aa8be458b6ac3852c4789817`
+
+The Python base remains `python:3.10.20-slim-bookworm` at
+`sha256:ff7161e2b8e2a56fc6a62a6099ff8feb72f1a6dbae9860cdcb9a6c65cf4c6be9`.
+Base/tool image and build-layer identities remain visible in the complete build
+log. The new image ID, rather than Git equivalence alone, identifies this scan.
+
+Original Quality **36428131096, attempt 1, remains 12 success / 8 failure**.
+Its image job **108948912840** timed out before completion; it remains
+INCOMPLETE, neither a detected-secret finding nor a zero-findings PASS. The new
+independent result does not rewrite that job or its failed required aggregate.
+The existing six dependency/container failures and S1/PCRE2 remain OPEN.
+
+Current read-only checks confirmed the same 135 protected file hashes and NUL;
+no additional user content changes were found. The canonical environment,
+private configuration/DB/cache and eight UV incident directories were not
+installed into, cleaned, restored or timestamp-adjusted. Their full metadata
+and 1,022-file hash evidence below belongs to **2026-09-28** and was not repeated
+here. Historical UV/configuration/cache integrity and disposition remain OPEN.
+
+The remaining scope is finite: R6-D independent review of this evidence;
+S1/PCRE2 dependency/container owner disposition; historical protection owner
+disposition; U1 in its existing deferred lane; and the already recorded
+platform/product limits, including installers, clean VM and macOS. No new
+refactor phase, dependency upgrade, U1 campaign, merge or release starts.
+
+## Retained limited P-UV / DL-POSIX execution (2026-09-28)
 
 **P-UV forward installation and the controlled DL-POSIX contract pass within
 their measured scope. R6-D overall remains BLOCKED and is not ACCEPTED.** The
