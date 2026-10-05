@@ -1,8 +1,133 @@
 # Safe refactor status
 
-## Current S1 Soup Sieve batch 3 verification (2026-10-05)
+## Current S1-4A PDF compatibility review (2026-10-05)
 
-**Batch 3 is pending independent review, not ACCEPTED.** The user's October 4
+**The retained-capability PDF upgrade is UNSAT; no complete MARA candidate was
+installed or accepted.** Work starts at
+`ff52bda593848cf6471de751033995314533ee10` on `codex/r0-r1-safe-refactor`;
+the preceding batch's actual CI source remains
+`8d6524cb97f2fcd7d95cc8339482d9077df99290`. This round delivers reproducible
+dependency conflicts and baseline contracts for review, not a formal batch-4
+security upgrade. R6-D remains **BLOCKED / not ACCEPTED**, the historical mypy
+incident stays **OPEN**, U1 is deferred, and merge/release remains **NO-GO**.
+
+### Official candidate and actual resolution
+
+The three original batch-3 Python audits each contain **97 pypdf records,
+representing 49 advisory alias groups**; the three image audits each contribute
+eight matching pypdf records. All pypdf records, original source paths and hashes
+are retained in `evidence/pypdf-targets.json`; other dependencies were not
+reinvestigated. The official [pypdf 6.19.0 wheel](https://pypi.org/project/pypdf/6.19.0/)
+has SHA-256
+`7e5d6e730e7dae87d560a2cee218b852f6498c8be61966f3cd02ead971e48d14`.
+Its **60 runtime files** match the sdist and official
+[release](https://github.com/py-pdf/pypdf/releases/tag/6.19.0) commit
+`d62cb58d3988b291b0435eddfd118c4f8f6b6a46`. All 49 upstream advisory ranges place
+6.19.0 outside the affected range and at or above the patched version; 48 have
+fix references in the changelog, and the remaining LZW follow-up references
+release 6.4.0. This verifies provenance and published fix coverage, not 49
+independent exploit reproductions. The older 6.16.1 candidate is insufficient.
+
+Two complete task-owned source copies were actually resolved with pinned uv
+**0.11.19**: retaining the meta-package, and replacing it with explicit
+core/integrations. Both retain all twelve original meta-package dependencies,
+the existing vector stores and optional integrations. Both root and Docker
+resolutions fail. The root universal solver first reports a Python >=3.13 split;
+the Docker Python 3.10 resolution and separate Windows 3.10/3.11 and Linux 3.10
+minimal resolutions independently reproduce the conflict. The Python support
+ranges and platform markers were preserved, including Windows' milvus-lite
+exclusion. The seven packages with multiple marker-selected versions were not
+incorrectly flattened into single-version constraints.
+
+The inclusion-minimal retained-integration constraint set is:
+
+```text
+pypdf==6.19.0
+llama-index-readers-file>=0.1.33
+llama-index-agent-openai>=0.2.9
+```
+
+Deleting each requirement separately resolves successfully. A fixed-version
+two-package reproduction is `llama-index-readers-file==0.5.2` (core
+`>=0.13,<0.14`) plus `llama-index-agent-openai==0.4.12` (core
+`>=0.12.41,<0.13`); each package alone resolves. Reader 0.5.2 is the first
+available version found to allow pypdf 6.x. Keeping the existing OpenAI agent
+integration blocks both routes; substituting readers-file 0.7.0 does not remove
+that conflict. The input files, complete resolver errors, positive controls and
+exact argv/env/cwd are retained under the task's `evidence/` directory.
+
+An independent conflict remains when retaining `chromadb<=0.5.16`: the compatible
+reader/core closure requires a newer Chroma integration, whose dependency floor
+is `chromadb>=0.5.17`. This proves a package constraint conflict; it does not
+prove that a database format migration is required. Agent/classpath continuity
+and Chroma compatibility need a separately reviewed migration scope. No
+capability was dropped on the basis of grep results. No forced installation,
+`--no-deps`, dependency override or METADATA patch was used. Candidate TOML
+patches stay in task evidence; no candidate lock was produced. Main dependency
+declarations, locks, AnyIO 4.14.2, Soup Sieve 2.9 and the PCRE2 u2 pin are unchanged.
+
+### Executed contracts and bounded parser controls
+
+Against a complete **ff52bda5 source copy plus the two contract-test changes**,
+the existing prepared Python 3.10.19 environment gives **25 PDF contract tests
+and 3 preview tests PASS**. These use real PDF/PyMuPDF parsing, colored page
+thumbnails, page order/text/metadata, decimal/Roman/alphabetical labels,
+encrypted and malformed files, document/evidence IDs, task-owned parse caches,
+index reloads, and real SimpleFile, Chroma and LanceDB persistence. Nine dynamic
+class paths remain importable. Only the external embedding API uses a controlled
+substitute. The original runtime plugin isolates all test outputs; no real data
+was reindexed and no golden baseline was refreshed.
+
+These are baseline results, not candidate integration results. The existing
+thumbnail reader omits nonnumeric page labels. Baseline parser-cache defaults
+identify the loader class without dependency versions; passing same-version
+reloads does not establish cross-version cache validity. Separate fully legal
+parser-only installations of 4.2.0, 6.18.1 and 6.19.0 pass dependency checks and
+official runtime-file comparisons. They are not complete MARA installations.
+The same four PDF byte streams were read in twelve fresh processes, each with
+8 seconds user CPU, 256 MiB process/job memory and a 12-second wall limit.
+Oversized Roman labels exhaust the old 4.2.0 memory budget; oversized alphabetical
+labels exhaust 6.18.1's budget. Both return bounded physical-page fallbacks in
+6.19.0. Ordinary Roman labels agree, while labels beyond Z change from baseline
+`AA, AB, AC` to `AA, BB, CC`. These two security cases and the label difference
+are retained explicitly; full candidate first-party, persistence and migration
+contracts remain **NOT RUN** because the complete dependency set is unsatisfiable.
+
+### Delivery blocker and protection
+
+The complete original hook manifest passes all applicable checks except mypy.
+It reports five existing Windows attribute errors: `os.pread` in
+`artifact_types.py:133,138` and `artifact_manifest.py:203`, and `os.fchmod` in
+`preview/cache_attestation.py:94,176`. These production files were not modified.
+Both complete test changes remain **uncommitted in the primary working tree**:
+`libs/kotaemon/tests/test_pdf_reading_contracts.py` and
+`libs/ktem/ktem_tests/test_preview_pdf_compatibility.py`. Their final tested
+hashes and original failed hook logs are preserved. No hook bypass, weakened
+type/import checking, hidden imports or deletion of failing-scope tests is used.
+The ordinary report-only commit therefore does not complete the requested test
+commit; that part remains **BLOCKED** at this review point.
+
+The historical 135 paths, the two preceding 136-path user sets, this round's
+136-path opening set, NUL and the two new test-file contents are checked
+separately. The two observed historical mypy files retain their post-incident
+hash and mtime; their missing preimages remain unknown. There is no aggregate
+protection PASS. Controlled subprocess and hook entries isolate actual caches
+and temporary paths; canonical installation, real databases/caches and historical
+incident directories are untouched. Initial preparation/launcher/test failures
+and later corrected attempts have separate logs. Complete Native, three-image,
+Quality and U1/dual-37 reruns were not started.
+
+Evidence is under `D:/MARA-s1-01a086ff/s1-pdf4a-20261005/`.
+`evidence/delivery-evidence.json` binds the source, candidate patches, replay
+inputs, attempts and pending test hashes. Stop at **S1-4A compatibility review**;
+neither a security-upgrade completion nor permission for broader migration is
+inferred from these experiments.
+
+## Accepted S1 Soup Sieve batch 3 measured scope (2026-10-05)
+
+**The user's October 5 review separately ACCEPTS batch 3's agreed Soup Sieve
+scope and the tested hook forward invocation boundary.** It does not close the
+historical mypy incident or establish aggregate protection. The user's October 4
 review separately accepts batch 2's measured PCRE2 scope and exact Gitleaks
 exception. Accepted AnyIO and earlier structure work remain unchanged. R6-D
 remains **BLOCKED / not ACCEPTED**, U1 is deferred, the historical mypy incident
@@ -181,8 +306,8 @@ cleaned, restored or rescanned. U1 and dual-37 were not run as prerequisites.
 Raw evidence is under `D:/MARA-s1-01a086ff/s1-soupsieve-20261004/`.
 `evidence/batch-evidence.json` and `evidence/evidence-source-index.json` bind
 release/source hashes, actual invocations, independent attempts, protection sets,
-coverage, audits and downloaded products. Stop at the batch-3 independent review
-point; the unresolved gates above retain **NO-GO**.
+coverage, audits and downloaded products. The October 5 acceptance is limited
+to the separate scopes above; unresolved gates retain **NO-GO**.
 
 ## Accepted S1 PCRE2 batch 2 measured scope (2026-10-04)
 
