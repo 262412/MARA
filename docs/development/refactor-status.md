@@ -1,6 +1,148 @@
 # Safe refactor status
 
-## Current S1-4B PDF compatibility review (2026-10-05)
+## Current S1-4C schema bridge and PDF candidate review (2026-10-05)
+
+**The schema/file bridge passes and the complete dependency candidate installs
+legally on Windows Python 3.10/3.11. Actual MARA model imports are BLOCKED by a
+new Pydantic v1/v2 multiple-inheritance conflict.** This round starts at
+`fcb931fcdaba10d2aafc2184863367c3319e353e`; it preserves platform commit
+`bc2b16e7` and complete PDF-test commit `656c3e56`. The earlier **35 PASS / 6
+SKIP** remains historical baseline evidence, with the six Linux/POSIX cases
+still **NOT RUN**. It is separate from the schema checks below.
+
+### Schema bridge, source identity and file behavior
+
+Three fresh, legally resolved environments use official Gradio **4.39.0**:
+
+| Windows Python 3.10 control | Pydantic / core  | Client            | Same 35 checks                         | Real HTTP/file chain               |
+| --------------------------- | ---------------- | ----------------- | -------------------------------------- | ---------------------------------- |
+| A: previous combination     | 2.10.6 / 2.27.2  | official 1.1.1    | 18 pass; 17 extended schema cases fail | PASS                               |
+| B: unpatched candidate      | 2.11.10 / 2.33.2 | official 1.1.1    | 9 pass; 26 fail                        | FAIL at API-info schema conversion |
+| C: downstream candidate     | 2.11.10 / 2.33.2 | 1.1.1+mara.s14c.1 | 35 pass                                | PASS                               |
+
+The older 2.11.5 failure is retained as 4B evidence, not relabelled. The new
+cases include absent/true/false/typed additional properties, boolean schema
+nodes versus boolean values, nested arrays and references, nullable/required/
+default/literal fields, malformed-node rejection, repeated concurrent
+conversion, and unchanged input schemas. Forbidden extra fields are rejected
+by actual Pydantic validation and by the queued server function. Type
+descriptions do not replace validation.
+
+The real loopback Blocks test covers authenticated config/API-info,
+`Client.view_api`, single/multiple uploads, queued calls, client downloads,
+FileData output URLs/metadata and server shutdown. Unauthenticated requests,
+wrong synthetic credentials and unexposed/blocked files are rejected. This
+uses synthetic files and credentials; it is not U1 browser Login acceptance.
+
+The minimal client-only patch derives from official PR
+[#10798](https://github.com/gradio-app/gradio/pull/10798), merged at
+`5e14c4333865545ac20fb0f76f4ffc624c0cd408`, and adds the target-version boolean
+edge cases. It preserves the old Gradio `FileData.meta: dict` model and its
+extra metadata instead of importing the newer TypedDict restriction. All
+official Gradio server/frontend bytes remain unchanged. Only the client
+schema/type-description and matching FileData recognition code changes.
+
+The official client sdist is rebuilt with its source version set to
+`1.1.1+mara.s14c.1`; Apache licensing and a downstream NOTICE accompany it.
+uv **0.11.19** accepts this identity against Gradio's unmodified
+`gradio-client==1.1.1` requirement, and all three dependency checks pass.
+Wheel SHA256:
+`ac23976cefde5117a1350a589954e39927e85efd9edda4fd6acea1ae26d39303`.
+Patch SHA256:
+`2f4f320d0d304e06b28def44b54d533773e287e9b5f7fafaa691f575ee773624`.
+The first build reused the sdist's generated PKG-INFO version and was rejected
+before installation. Its artifact is retained. The valid build excludes that
+generated file from a fresh build-source copy; the normal backend regenerates
+METADATA/RECORD. No installed package or wheel metadata is edited.
+
+Known security findings continue to map to public Gradio 4.39.0/client 1.1.1.
+This compatibility patch does not retire any advisory or establish security
+acceptance. Its source, source hashes, patch, build constraints, NOTICE,
+rebuild invocation and wheel inventory are preserved in the task directory.
+A controlled rebuild reproduces the exact wheel hash and every member hash.
+`rebuild_client_replay.py` rechecks source hashes and uses that recorded build
+command through the same owned boundary with a fresh output directory.
+The NOTICE limits support to the recorded trial and requires the same
+contracts before a reviewed official replacement can retire the patch.
+
+### Complete candidate resolution and actual Windows results
+
+The candidate source archive is based on **fcb931fc**, including both retained
+commits. Candidate-only Pydantic edits are explicit in root and Docker
+constraints and `libs/kotaemon/pyproject.toml`; root/Docker source declarations
+select the identified client wheel. Main manifests/locks are unchanged.
+
+Both full resolutions succeed: **408** root package records and **316** Docker
+package records. These are valid candidate locks, superseding the unusable
+4B copies. They retain Python ranges/markers, the CPU torch strategy, AnyIO
+4.14.2, SoupSieve 2.9, PCRE2 u2, Gradio and the OpenAI/LangChain/model-stack
+versions. Differences are confined to the approved PDF/LlamaIndex/Chroma/
+Pydantic/client closure. Newly required workflows/instrumentation, banks,
+griffe and cloud/parser dependencies are recorded with exact resolved
+versions and installed Requires-Dist; the twelve capability mappings remain
+obligations, not runtime equivalence claims.
+
+Fresh non-editable Windows installations and dependency checks pass:
+**375 distributions on Python 3.10**, **374 on Python 3.11**. Each verifies
+**802 first-party Python files** against candidate source and **1,114
+Gradio/client package files** against the official/identified wheels.
+This is installation/provenance evidence, not application acceptance.
+
+| Actual runtime check                                                                                             | Previous installed baseline | Full candidate 3.10 and 3.11, each                                           |
+| ---------------------------------------------------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------- |
+| Eight model checks, including dependency-metaclass observation                                                   | 8 pass                      | 5 pass / 3 fail                                                              |
+| DocQA request/response conversion, defaults and JSON; plan serialization; Sidecar current/legacy/invalid records | PASS                        | PASS in the recorded narrow cases; these are dataclass/dictionary interfaces |
+| Document aliases/validation/history, message dual inheritance/history, MCP argument model                        | PASS                        | FAIL during import of `kotaemon.base.schema`                                 |
+| Original 25 PDF cases, unchanged                                                                                 | Historical PASS             | Collection error; zero cases execute                                         |
+| Original 3 preview cases, unchanged                                                                              | Historical PASS             | 3 fail at the same model import, before their behavior assertions            |
+
+The precise new boundary is `SystemMessage(BaseMessage, LCSystemMessage)` in
+`kotaemon/base/schema.py:106`. Core 0.13.6 supplies a Pydantic **v2** Document
+metaclass; retained langchain-core 0.2.43 supplies Pydantic **v1** message
+metaclasses. Their multiple inheritance raises `TypeError: metaclass conflict`
+on both Python versions. This also prevents the first-party Agent/MCP import
+chain. It is distinct from the now-resolved Gradio schema failure.
+
+The existing baseline `test_schema_imports.py` now also protects all three
+message roles' Document/LangChain identities and JSON round trips, an actual
+synthetic legacy Document payload, document aliases/invalid channel rejection,
+and independent retrieval-metadata defaults. Its **7 tests pass on the
+baseline Python 3.10 runtime**; the candidate fails collection. No skip/xfail,
+schema restriction removal, fake namespace or golden refresh is added.
+
+### Stop boundary and retained limitations
+
+Stop at **S1-4C independent compatibility review**. Resolving this new model
+boundary requires a separately scoped Document/message interoperability
+decision and its persistence/caller contracts; removing LangChain inheritance
+or silently changing its version would not preserve the tested public types.
+No such model/Agent migration patch is applied in this round.
+
+Agent loop/history/stream/cancel/callback equivalence, the old raw
+`llama_index.agent.openai.OpenAIAgent` entry, PDF label/citation migration,
+old Chroma copy/update/reopen/rollback, and cross-version cache behavior are
+**NOT VALIDATED**. The later migration contracts remain **NOT RUN** behind
+the model/import failure. No real database/cache is opened or reindexed.
+Root/Docker resolution is not Linux/container execution. Linux, Native,
+three-image/full Quality runs, U1, rAF, natural Login, the five Gradio exit
+cases and dual 37 remain unexecuted/deferred. No new CI/security acceptance
+is inferred from older runs.
+
+Task evidence and candidate-only artifacts are under
+`D:/MARA-s1-01a086ff/s1-pdf4c-20261005/`; `evidence/delivery-evidence.json`
+binds the source, wheel, legal locks, runtime/model failures and replay inputs.
+Only the baseline regression test and this existing report are committed.
+The original automatic hook/cache boundary remains required for that commit.
+Protected user groups, the two full PDF tests, NUL and the two observed mypy
+file hashes/mtimes are checked separately; historical UV/cache/mypy incidents
+remain **OPEN/UNKNOWN/UNVERIFIED**, not an aggregate protection PASS.
+The optional old Python 3.11 regression launch stopped before a test child
+started because its controller lacks `tomli`; it is not counted as a pass.
+
+**S1 batch 4 is not complete; R6-D remains BLOCKED / not ACCEPTED;
+merge/release remains NO-GO.**
+
+## Historical S1-4B PDF compatibility review (2026-10-05)
 
 **The platform fixes and both original complete tests are committed and pushed.
 The revised PDF dependency candidate is BLOCKED by a new Pydantic constraint
