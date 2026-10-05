@@ -1,6 +1,150 @@
 # Safe refactor status
 
-## Current S1-4C schema bridge and PDF candidate review (2026-10-05)
+## Current S1-4D Document/message interoperability review (2026-10-06)
+
+**The candidate restores all eleven first-party schema models and executes real
+LangChain boundaries on Windows Python 3.10/3.11. The complete candidate remains
+BLOCKED.** Baseline: `daa95dad437b359f692b8001a85300b8c52f51eb`, on
+`codex/r0-r1-safe-refactor`. The five effective 4C manifest/lock inputs are reused
+byte-for-byte; no dependency resolution is repeated. Main runtime classes,
+dependencies, locks and the original identity/PDF/preview tests are unchanged.
+
+### Model and public data contracts
+
+The installed-runtime inventory covers every schema class and its downstream
+`AgentOutput`, including bases, Field types, aliases, required fields,
+construction and serialization. The candidate uses the LlamaIndex bridge's
+Pydantic v2 Field; retained native LangChain messages still validate with v1.
+Existing arbitrary Document content and structured `parsed` data remain their
+existing contracts; no mixed model object is hidden behind a new `Any` field.
+
+| Models                                             | Candidate treatment and observed data contract                                                                                                                                                                                                                             |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Document`, `DocumentWithEmbedding`, `BaseMessage` | Preserve the internal Document chain. Translate the new text resource into the old text/ID/metadata wire keys, including `doc_id`, `extra_info`, `metadata_seperator`, relationships and character offsets. Embedding-only reload keeps its old text-rendering difference. |
+| `SystemMessage`, `HumanMessage`, `AIMessage`       | Replace direct native-message multiple inheritance with internal role models. Keep content blocks, tools, invalid tool calls, usage, additional kwargs, response metadata, name and message ID as validated data.                                                          |
+| `RetrievedDocument`, `ExtractorOutput`             | Preserve retrieval defaults, independent mutable metadata and required matches.                                                                                                                                                                                            |
+| `LLMInterface`, `StructuredOutputLLMInterface`     | Retain typed internal nested messages, token/cost/logit fields and the old `parsed=None` default. Raw legacy nested JSON now round-trips after stripping its `class_name` marker during validation.                                                                        |
+| `AgentOutput`                                      | Use the inherited text property and preserve the old agent discriminator, status, extra data and serialized `model_config` default. Its existing `AgentType` enum still makes raw `json.dumps(to_dict())` fail; this is not presented as repaired persistence.             |
+
+The new baseline supplements cover real synthetic legacy payloads, aliases,
+IDs, defaults, mutable fields, nested messages, structured output, invalid input
+and common field selectors. They record the existing nested `class_name`
+collision instead of refreshing expected payloads. Main's **26 supplements plus
+the original 7 checks pass: 33 PASS** in the owned baseline runtime, outside the
+repository, with installed-module provenance checks.
+
+Candidate comparison on each Python version is **42 PASS / 6 FAIL**: four old
+LangChain identity tests fail as the explicitly authorized candidate difference;
+two retained baseline-defect assertions fail because nested JSON serialization
+now succeeds. All fifteen candidate-only adapter tests pass, including the two
+positive nested-JSON checks. No original assertion is deleted or skipped.
+
+### Actual consumers and explicit migration boundary
+
+`LCChatMixin.prepare_message`, `invoke/ainvoke`, `stream/astream` and
+`prepare_response` use `to_langchain_message` / `from_langchain_message`.
+Conversions reconstruct real native messages, revalidate malformed live objects
+and copy mutable data. Document metadata, source/channel and local paths do not
+automatically enter provider payloads. `doc_id` remains distinct from native
+message `id`; reverse conversion allocates a new internal document identity.
+
+The consumer audit includes direct OpenAI, completion wrappers, prompts,
+conversation history, LangChain/React/Rewoo agents, MCP/tool argument models and
+Document stores/caches. The direct OpenAI implementation is unchanged. Actual
+native ChatOpenAI and the OpenAI SDK run through synthetic HTTP transports;
+conversion, parsing, tools, callbacks, persistence and stream lifetime remain
+real. Coverage includes sync/async tool binding, role/order, content blocks,
+tools, usage, callbacks, stream close, async cancellation and provider errors.
+
+External `isinstance`/`issubclass` checks and consumers passing internal objects
+straight to native LangChain must migrate to the explicit adapters. Native
+objects nested directly in `LLMInterface.messages` likewise require conversion.
+Only the existing system/human/AI exchange roles are supported; a ToolMessage or
+an agent discriminator is not silently reclassified. Unknown extra fields are
+retained in saved data but rejected at the boundary until mapped explicitly
+(provider extensions may use `additional_kwargs`). These remain public migration
+requirements, not transparent compatibility.
+
+Retained `langchain-openai==0.1.25` discards the raw HTTP completion ID and creates
+a native `run-...` ID. The adapter preserves the ID actually observed by native
+callbacks, and preserves supplied native message IDs in direct conversion tests;
+it does not recover the discarded HTTP ID. This provider limitation remains
+separate from internal document identity.
+
+### Executed Windows results and remaining blockers
+
+Both complete environments are reused legally: **375 / 374 distributions** on
+Python 3.10 / 3.11, with all package versions and Requires-Dist unchanged and no
+editable packages. Normal first-party wheel replacement and dependency checks
+pass. Verification checks all **1,114 Gradio/client files**, the original **802
+first-party files** (exactly three authorized existing modules change), and all
+new wheel code/assets. No third-party metaclass or installed source is patched.
+
+| Actual check                                                                 | Python 3.10                          | Python 3.11                          |
+| ---------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------ |
+| Model/data/identity comparison                                               | 42 pass / 6 explicit differences     | 42 pass / 6 explicit differences     |
+| Actual chat wrappers, original direct OpenAI/completion and prompt contracts | 21 pass / 3 existing skips           | 21 pass / 3 existing skips           |
+| Original PDF cases, all 25 executed                                          | 23 pass / 2 fail                     | 23 pass / 2 fail                     |
+| Original preview cases, all 3 executed                                       | 3 pass                               | 3 pass                               |
+| Agent/history/tool/stream and original Agent/MCP contracts                   | 48 pass / 2 existing skips           | 48 pass / 2 existing skips           |
+| Independent Chroma lifecycle and parse/path/vision/disk cache regressions    | 22 pass                              | 22 pass                              |
+| Old JSON/store/Chroma/cache copy checks                                      | 4 pass / 1 fail                      | 4 pass / 1 fail                      |
+| Old runtime reads/writes candidate-generated synthetic store copies          | 2 pass                               | 2 pass                               |
+| Unchanged 4C schema/file assertions in the complete installed environments   | 35 pass, real HTTP/file chain passes | 35 pass, real HTTP/file chain passes |
+
+The five existing skips per platform are two optional LlamaCpp cases, one old
+Azure completion wrapper case and two old Agent wrapper cases. They are not
+new skips. The new native Agent loop and chat wrapper tests execute separately.
+The schema/file worker is byte-identical to 4C; its unchanged third-party inputs
+are reverified independently of the new model wheel.
+
+The PDF failures remain explicit: pypdf 6.19.0 yields **AA, BB, CC** where the
+old label contract expects **AA, AB, AC**; the raw legacy
+`llama_index.agent.openai.OpenAIAgent` entry remains missing. Independent PDF
+text/metadata/citation, document/vector/LanceDB/Chroma and preview checks execute
+despite that local Agent entry failure.
+
+The cross-version cache failure is substantive: the unversioned AutoReader
+cache key stays identical across parser upgrades, so a hit returns old labels
+while a fresh parse returns the new labels. The existing explicit
+`reader_policy` control produces MISS/HIT/policy-change-MISS, but no automatic
+policy migration is implemented. Old embedding caches give three hits without
+an endpoint call under the same contract, and three misses/one synthetic call
+after changing the embedding contract. Old Chroma 0.5.16 copies support
+read/update/delete/add/reopen under 0.5.17 and subsequent old-runtime copy
+read/write. These are bounded synthetic-copy results, not a general rollback
+guarantee; no real database or cache is migrated or reindexed.
+
+### Reviewable delivery and stop point
+
+Candidate evidence is under `D:/MARA-s1-01a086ff/s1-pdf4d-20261006/`.
+`evidence/delivery-evidence.json` maps attempts, final source/wheel hashes,
+installed imports, test inputs, platform results and preserved failures.
+`replay-inputs-02/manifest.json` and `candidate.patch` bind fourteen explicit
+inputs to the original Git archive. `replay_candidate.py` reconstructs and
+normally builds a fresh owned copy: every wheel member hash matches; ZIP archive
+bytes differ. The tested wheel is `wheels/07/kotaemon-0.0.1-py3-none-any.whl`,
+SHA256 `06bf271450600a6406d083dcbaf26f31c75d27611ed5a13046c67bb32609fcd5`.
+
+Main delivery contains only the baseline supplemental test, its synthetic
+payloads and this existing report. Main's original hooks run on those exact
+paths, including during commit. Candidate hygiene, formatting and mypy checks
+pass; its aggregate pre-commit attempt retains the large-file hook's Git error
+for paths outside the repository. It is not labelled a full candidate hook
+PASS, and no extra worktree is created to disguise that result.
+
+Protected user groups, NUL, original committed inputs and observed mypy hashes
+and mtimes are checked individually. Historical incidents remain
+**OPEN/UNKNOWN/UNVERIFIED**; there is no aggregate protection PASS. Earlier
+collection/harness, build-verifier and replay-input failures remain preserved
+with separate attempt labels and do not count as executed passing contracts.
+
+Stop at **S1-4D independent review**. Linux/POSIX, Native, three-image/full
+Quality, U1, rAF, natural Login, the five Gradio exit cases and dual 37 remain
+**NOT RUN/deferred**. No new CI or security acceptance is inferred. **S1 batch 4
+is not ACCEPTED; R6-D remains BLOCKED; merge/release remains NO-GO.**
+
+## Historical S1-4C schema bridge and PDF candidate review (2026-10-05)
 
 **The schema/file bridge passes and the complete dependency candidate installs
 legally on Windows Python 3.10/3.11. Actual MARA model imports are BLOCKED by a
