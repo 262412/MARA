@@ -1,9 +1,148 @@
 # Safe refactor status
 
-## Current S1-4A PDF compatibility review (2026-10-05)
+## Current S1-4B PDF compatibility review (2026-10-05)
 
-**The retained-capability PDF upgrade is UNSAT; no complete MARA candidate was
-installed or accepted.** Work starts at
+**The platform fixes and both original complete tests are committed and pushed.
+The revised PDF dependency candidate is BLOCKED by a new Pydantic constraint
+and a reproduced Gradio-client schema failure; no complete candidate was
+installed.** This round starts at
+`6bbd36a94b6c1c05b4e01a1c5735dae0c01b8a33` on `codex/r0-r1-safe-refactor`.
+The user explicitly skipped Linux execution during this round. Batch 4 is not
+complete; R6-D remains **BLOCKED / not ACCEPTED**, U1 is deferred, the historical
+mypy incident is **OPEN**, and merge/release remains **NO-GO**.
+
+### Completed platform and baseline-test delivery
+
+- `bc2b16e7c5b97f3263f80f8cfea44c2e336e0edb` fixes the three first-party
+  capability/type seams and adds their adjacent tests. Narrow `Callable`
+  bindings resolve native `pread`/`fchmod` after the existing guards. They retain
+  positioned reads, file-identity checks, fd permission operations, error order
+  and cleanup. No seek/read or path-chmod replacement, ignored type error,
+  fabricated stub or weakened checking is introduced.
+- `656c3e56a6304e50be4d82f10a4831965e8bec4e` commits both complete original
+  PDF/preview tests. Their bytes match the preserved S1-4A hashes; neither test
+  was reduced or replaced to pass the hook.
+
+The original hook manifest, including mypy **1.7.1** and hygiene, passes on the
+seven affected files. Both commits also automatically run that original manifest
+through the reviewed cache/env/cwd boundary. The actual baseline runtime gives
+**35 PASS / 6 SKIP**: the original 25 PDF and 3 preview cases plus 7 portable
+platform cases pass. The six native POSIX cases are skipped on Windows and
+**NOT RUN on Linux**, per the user's instruction. They are not POSIX runtime
+proof. The original five-error hook output remains preserved.
+
+### Changed candidate conditions and capability mapping
+
+The candidate uses a full source archive of **656c3e56**, including the tested
+platform changes. Its manifest removes the meta-package and the hard identities
+of agent-openai, program-openai and question-gen-openai. Its inventory covers all
+twelve original supplied capabilities and the nine original dynamic classpaths;
+SimpleFile/Chroma/LanceDB/Milvus/Qdrant requirements remain in scope.
+The actual first-party ReAct/ReWOO policies and LangChain agent wrapper are
+unchanged. Absence of a direct import is not treated as permission to remove a
+capability.
+
+The exact official core **0.13.6** wheel provides workflow `FunctionAgent`, not
+the old `from_tools`/`chat`/`achat`/stream-chat interface. Core
+`FunctionCallingProgram` can be investigated for structured output and
+subquestion adapters, but a completion-based question generator is not assumed
+equivalent. These are **mapped candidates, not proven replacements**. No alias,
+fake third-party namespace, site-packages patch or Agent migration is delivered.
+The old raw `llama_index.agent.openai.OpenAIAgent` classpath remains a required
+explicit migration decision and compatibility contract.
+
+The selected combination is pypdf **6.19.0**, core **0.13.6**, readers-file
+**0.5.2**, chroma integration **0.5.0**, and chromadb **0.5.17**. Exact companion
+versions, official metadata hashes, consumers and pending contracts are in
+`evidence/candidate-selected-metadata-01.json` and
+`evidence/capability-mapping-01.json`. Both root and Docker retain their Python
+ranges, marker branches, CPU torch strategy and unrelated pins. The first new
+resolver conflict requires managed-cloud's exact `llama-cloud==0.1.35` instead
+of frozen 0.1.42; readers-llama-parse also requires `llama-parse>=0.5`. Only those
+necessary integration dependencies are unfrozen for the second attempt.
+Checking managed-cloud 0.9.4 metadata confirms the same 0.1.35 requirement; no
+cloud SDK is installed or changed in the primary environment.
+
+Pinned uv **0.11.19** then reports the following independent conflict in both
+the full root universal and Docker resolutions:
+
+```text
+llama-index-core==0.13.6
+  -> llama-index-workflows>=1.0.1,<2
+  -> pydantic>=2.11.5
+MARA retains pydantic<=2.10.6 (locked at 2.10.6)
+```
+
+All four eligible workflows releases have that Pydantic floor in their official
+metadata. Core 0.13.0 already requires the same workflows range, so its metadata
+does not offer a lower-floor escape. A separate Windows Python 3.10 two-input
+resolution reproduces the conflict; changing only its Pydantic requirement to
+2.11.5 resolves. This is a new constraint set, not a rerun of S1-4A's fixed Agent
+distribution identities. The positive control is not a complete MARA solution.
+No valid candidate lock is produced: the two lock files in the candidate copy
+still contain the baseline locks and are explicitly marked unusable for this
+candidate.
+
+### Concrete stop boundary and unexecuted contracts
+
+A separate, legally resolved and hash-checked minimal environment passes its
+dependency check. It exercises the real Pydantic dictionary schema and the
+unchanged **gradio-client 1.1.1** conversion function. With Python **3.10.19** and
+identical client source hashes, Pydantic **2.10.6 passes**, while **2.11.5 emits
+`additionalProperties: true` and fails with
+`TypeError: argument of type 'bool' is not iterable`**. The paired processes have
+15-second user CPU, 768 MiB process/job memory and 30-second wall limits. This is
+a schema-boundary counterexample, not a complete MARA installation or U1 run.
+It agrees with the upstream [Gradio schema issue](https://github.com/gradio-app/gradio/issues/10792).
+Continuing this route needs a separately reviewed Gradio/client compatibility
+change or maintained backport, beyond this round's authorization.
+
+| S1-4B item                                                                      | Actual result                                               |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Platform fixes, original full tests, automatic commit hooks                     | PASS; two commits pushed                                    |
+| Baseline PDF/preview and portable platform contracts                            | 35 PASS; six native POSIX cases skipped                     |
+| Twelve-capability and nine-classpath mapping                                    | Static inventory complete; replacement equivalence unproven |
+| Revised root and Docker candidate resolutions                                   | FAIL: Pydantic/workflows conflict                           |
+| Complete candidate install and module/dependency checks                         | NOT RUN: no legal full candidate                            |
+| Actual Agent sync/async/tools/errors/history/stream/cancel/callback equivalence | NOT RUN                                                     |
+| Candidate page labels, saved citations and original PDF/preview suite           | NOT RUN                                                     |
+| Old Chroma collection opened by 0.5.17, writes and rollback boundary            | NOT RUN                                                     |
+| Cross-version parser cache invalidation, recovery and old evidence reads        | NOT RUN                                                     |
+
+The refreshed official pypdf 6.19.0 metadata retains the same wheel hash verified
+in S1-4A and currently lists no advisories for that release. The prior 49-group
+range verification and bounded parser controls remain historical evidence, not
+new candidate execution. The known alphabetic-label difference, bounded large
+label fallbacks, nonnumeric thumbnail filtering and versionless parser-cache
+stamp still require the full candidate contracts listed above. No golden refresh,
+reindex or real cache/database migration is performed. Chroma 0.5.16 and 0.5.17
+currently share the same three advisory alias groups; this small version change
+is not claimed to fix those advisories.
+
+Candidate manifest patches, failed attempts, exact provenance, minimal replay
+inputs and schema results remain under
+`D:/MARA-s1-01a086ff/s1-pdf4b-20261005/`. Main runtime manifests, locks, AnyIO
+4.14.2, Soup Sieve 2.9, PCRE2 u2, OpenAI SDK, Gradio, model stack and Python
+policy are unchanged. The historical 135 paths, both preceding 136-path sets,
+the 4A/4B opening sets, original PDF tests, seven tested files, NUL and the two
+observed historical mypy hashes/mtimes are checked separately. Historical
+preimages remain unknown; there is no aggregate protection PASS. Canonical
+environment, real data and the eight historical UV incident directories are
+not changed. Preparation and launcher failures retain their own logs.
+
+The existing report is the only final documentation change. No full Native,
+three-image, Quality, U1 or dual-37 rerun is initiated, and required checks are
+not disabled. Stop at **S1-4B compatibility review** with the new constraint and
+schema evidence. Formal dependency migration and the remaining actual
+Agent/PDF/Chroma/cache contracts require a new reviewed scope.
+
+## Historical S1-4A PDF compatibility review (2026-10-05)
+
+**The tested PDF candidates retaining the original integration distribution
+identities are UNSAT; this does not prove that preserving all MARA capabilities
+is impossible.** No complete MARA candidate was installed or accepted in S1-4A.
+The test-commit blocker described below was subsequently resolved in S1-4B.
+S1-4A starts at
 `ff52bda593848cf6471de751033995314533ee10` on `codex/r0-r1-safe-refactor`;
 the preceding batch's actual CI source remains
 `8d6524cb97f2fcd7d95cc8339482d9077df99290`. This round delivers reproducible
@@ -93,19 +232,19 @@ labels exhaust 6.18.1's budget. Both return bounded physical-page fallbacks in
 are retained explicitly; full candidate first-party, persistence and migration
 contracts remain **NOT RUN** because the complete dependency set is unsatisfiable.
 
-### Delivery blocker and protection
+### Historical delivery blocker and protection
 
 The complete original hook manifest passes all applicable checks except mypy.
 It reports five existing Windows attribute errors: `os.pread` in
 `artifact_types.py:133,138` and `artifact_manifest.py:203`, and `os.fchmod` in
 `preview/cache_attestation.py:94,176`. These production files were not modified.
-Both complete test changes remain **uncommitted in the primary working tree**:
+At the S1-4A stop point, both complete test changes were **uncommitted**:
 `libs/kotaemon/tests/test_pdf_reading_contracts.py` and
 `libs/ktem/ktem_tests/test_preview_pdf_compatibility.py`. Their final tested
 hashes and original failed hook logs are preserved. No hook bypass, weakened
 type/import checking, hidden imports or deletion of failing-scope tests is used.
-The ordinary report-only commit therefore does not complete the requested test
-commit; that part remains **BLOCKED** at this review point.
+The S1-4A report-only commit therefore did not complete the requested test
+commit; that part was **BLOCKED** until the separately authorized S1-4B fixes.
 
 The historical 135 paths, the two preceding 136-path user sets, this round's
 136-path opening set, NUL and the two new test-file contents are checked
