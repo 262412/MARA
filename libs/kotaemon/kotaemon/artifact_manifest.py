@@ -200,7 +200,8 @@ def _read_manifest(manifest_root: str | Path, file_id: str) -> dict[str, Any]:
         identity = FileIdentity.from_stat(metadata)
         payload = _read_bounded(fd)
         identity.validate_fd(fd, message="Artifact manifest changed while reading")
-        if os.pread(fd, len(payload) + 1, 0) != payload:
+        pread: Callable[[int, int, int], bytes] = getattr(os, "pread")
+        if pread(fd, len(payload) + 1, 0) != payload:
             raise ArtifactNamespaceError("Artifact manifest changed while reading")
         record = json.loads(payload.decode("utf-8"), object_pairs_hook=_unique_object)
     except _DuplicateJsonKey as exc:

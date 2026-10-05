@@ -5,7 +5,7 @@ import os
 import stat
 from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import IO, BinaryIO
+from typing import IO, BinaryIO, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -127,15 +127,16 @@ class ManifestArtifact:
 
 
 def digest_fd(fd: int, size: int) -> str:
+    pread: Callable[[int, int, int], bytes] = getattr(os, "pread")
     digest = sha256()
     offset = 0
     while offset < size:
-        chunk = os.pread(fd, min(1024 * 1024, size - offset), offset)
+        chunk = pread(fd, min(1024 * 1024, size - offset), offset)
         if not chunk:
             raise ArtifactNamespaceError("Artifact changed while reading")
         digest.update(chunk)
         offset += len(chunk)
-    if os.pread(fd, 1, size):
+    if pread(fd, 1, size):
         raise ArtifactNamespaceError("Artifact changed while reading")
     return digest.hexdigest()
 
