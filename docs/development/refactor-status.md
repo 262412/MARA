@@ -1,103 +1,135 @@
 # Safe refactor status
 
-## Current S1-4E candidate closeout review (2026-10-06)
+## Current S1-4E targeted closeout and migration decision (2026-10-06)
 
-**Candidate cache invalidation, first-party OpenAIAgent migration and explicit
-candidate contracts are implemented and verified on Windows 3.10/3.11. Stop at
-independent review; the complete candidate remains BLOCKED.** Delivery baseline:
-`3786ec939adc563ee7a76b973e132d8265e1031f`. The 4D input archive, fourteen frozen
-files and 879 retained evidence artifacts were verified before changes. The five
-4C dependency inputs remain byte-identical; no solve or dependency upgrade ran.
+**The tested candidate has reached the migration decision point. Actual PDF
+physical-page production, bounded Windows refusal contracts and the public
+compatibility decision table are complete for review. Batch 4, R6-D and S1 remain
+BLOCKED; merge/release NO-GO.** Delivery base:
+`31c6368a316b78e2d6353071638c298a5e502247`, on `codex/r0-r1-safe-refactor`.
+Main runtime dependencies have not migrated. This closeout does not authorize
+S1-4F/4G, another compatibility experiment, or an unexecuted platform run.
 
-The four native LangChain identity differences remain public migration
-requirements through the 4D explicit adapters. Two former nested-JSON collision
-assertions now have positive candidate contracts; only the valid `Document`
-discriminator is accepted, with malformed markers rejected and metadata/extras
-retained. Main's original seven identity and twenty-six persistence assertions
-remain unchanged. Candidate PageLabels follow pypdf 6.19.0's **AA/BB/CC** semantics;
-tests use actual `/PageLabels`, `/S`, `/St` and `/P` dictionaries, including
-boundaries, lower case, prefixes, restarts and malformed/large values. Historical
-exit results remain intact. Exact old/new node mappings and executed results are
-in `evidence/results-matrix.json` under the candidate evidence directory below.
+The [readable candidate review Page](https://chatgpt.com/space/page_716504448bcc8191a8d960d87fa307e8)
+contains the complete sanitized ZIP plus separately readable source patch,
+manifest, actual results, all 48 failure classifications, compatibility decisions
+and reproduction instructions. The six text attachments were read back and
+verified byte-for-byte. The ZIP contains 39 frozen candidate files, the full
+patch, 21 downstream-client text sources with license/notice, selected raw error
+evidence and synthetic PDF/cache/store observations. Its SHA256 is
+`f4142cc7775f9a763f682f1ae3e0bea4a70724cbd7647a340c3edbf42fbb0a30`.
 
-Automatic PDF cache identity is computed before lookup from the wrapper and
-actual PDF reader, relevant implementation hashes, distribution versions,
-full-document/thumbnail parameters and semantic policy. Caller policy cannot
-replace it. Missing identity evidence bypasses caching with a diagnostic.
-Direct PDFReader, AutoReader and thumbnails each execute real old-cache writes,
-new-parser MISS/HIT and renamed-path HIT, both with and without caller policy.
-Source/owner metadata is rebound; old cache bytes and historical IDs remain.
-Separate old-runtime copies still hit the old namespace. Changed reader options,
-missing identity, parse failures and concurrent distinct payloads have regressions.
-Embedding-cache identity is independent: the same contract gives three hits and
-no endpoint call; a changed contract gives three misses and one synthetic call.
+### Actual PDF production chain
 
-The new `kotaemon.agents.openai.OpenAIAgent` delegates planning/tool dispatch to
-the official FunctionAgent and supports `from_tools`, chat/achat,
-stream_chat/astream_chat, reset and history. Seventeen old-runtime contracts
-exercise real SDK parsing over synthetic transports, tool IDs/raw arguments,
-custom parsers, callbacks, inclusive legacy limits and sync/async tool-error
-behavior. Sync calls use the sync client/tool; stream close and async cancellation
-release owned workflows. Additional candidate tests exercise configuration,
-memory rollback and reuse after failure. This is a narrow chat-method adapter;
-the removed AgentRunner step/task API still requires migration. Use async methods
-inside a running event loop; nested synchronous workflow execution is not covered.
+The initial 17 failing contracts established that the prior candidate did not
+carry reliable physical positions through its real readers and consumers. The
+minimal candidate repair assigns one-based `page_number` at the native reader's
+proven one-physical-page/one-record boundary, before any filtering. AutoReader
+adapts only the exact native PDFReader; custom filtered readers are not blindly
+renumbered. Thumbnail reading retains alphabetic and other display labels,
+including blank pages, and uses the same physical positions as text. Full-document
+mode has no invented single-page target. Ordinary metadata cannot replace
+parser-owned page fields; caller policy cannot replace automatic reader identity.
 
-| Agent consumer                   | Candidate outcome                                                                                                                                                                 |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A: first-party Python calls      | Import `OpenAIAgent` from `kotaemon.agents.openai`, then use `from_tools(...)`. Dedicated old-entry contracts pass.                                                               |
-| B: saved model/vendor classpaths | Exact old classpath migration at ModelPool/LLMManager/UI loading boundaries, with a visible diagnostic and without rewriting stored configuration. Similar strings are untouched. |
-| C: external Python direct import | `llama_index.agent.openai.OpenAIAgent` remains **BREAKING**. Its unchanged raw-import test actually fails; no third-party namespace is fabricated.                                |
+The chain executes real PDF reading, parse-cache MISS/HIT, index materialization,
+owned document/vector persistence and reload, citation targets, the existing
+PDF navigation URL builder, physical thumbnails and the real SQLite-backed
+thumbnail lookup. Cases cover duplicate 7/8/7, AA/BB/CC, Roman/custom prefixes,
+restarted numbering and a blank middle page. Tests never add `page_number` after
+parsing. Synthetic SDK transports and embeddings replace external model calls;
+PDF/cache/index/navigation production code is real. This is not U1 browser
+acceptance. Eight identical 3.10 cases were replayed solely to retain inspectable
+artifacts after pytest cleaned its temporary directory; they do not add to totals.
 
-Labels are display data, not unique page identities. Supplemental contracts check
-duplicate labels, physical thumbnail order and historical references with known
-one-based position/source/element IDs. Label-only ambiguous old records remain
-unresolved. AutoReader itself does not supply physical page metadata. The old
-nonnumeric thumbnail filtering behavior and upstream lost HTTP completion ID
-remain explicit limitations; no historical ID or golden set was refreshed.
+The explicit physical-page policy and payload validation reject old positionless
+cache data and malformed physical metadata. Nine real prior-policy caches per
+runtime now MISS then HIT under the new policy, preserving old namespace bytes,
+IDs and source/owner isolation. Embedding-cache contracts remain independent.
+Old stored references with known physical positions retain their identities;
+label-only or raw-alias records without a trustworthy position show an unresolved
+target rather than guessing a page. No real dataset or cache was reindexed.
 
-| Frozen execution, on each Windows Python version                 | Actual result                                                               |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Models, serialization and explicit adapters                      | 53 PASS                                                                     |
-| Calls, completions and prompts                                   | 21 PASS / 3 existing skips                                                  |
-| PDF, labels, physical/reference and preview                      | 42 PASS / 1 external raw-import FAIL                                        |
-| Agents, old entry, configuration and MCP                         | 95 PASS / 2 existing skips                                                  |
-| Chroma lifecycle, cache and automatic identity                   | 32 PASS                                                                     |
-| Expanded file/sidecar/security/coordination contracts            | 72 PASS / 48 FAIL, identical nodes and outcomes in the old Windows baseline |
-| Old store/cache/embedding copy checks; old-runtime rollback      | 5 PASS; 2 PASS                                                              |
-| Three PDF routes, two caller-policy variants; old-cache rollback | 6 PASS; 6 PASS                                                              |
-| Unchanged 4C schema/file worker and real local HTTP/file chain   | 35 PASS                                                                     |
+### Current frozen executions
 
-The 48 file-guard failures retain the Windows secure-directory-handle and symlink
-permission boundaries and their downstream effects. They are not skips or a
-security PASS; no Windows sidecar publication or POSIX support is inferred.
-The five existing optional skips are unchanged. The baseline delivery contracts
-pass **81/81**, including twenty new old-Agent/page-identity supplements.
+| Affected contract group                              | Windows 3.10               | Windows 3.11               |
+| ---------------------------------------------------- | -------------------------- | -------------------------- |
+| PDF production and page/cache boundaries             | 75 PASS                    | 75 PASS                    |
+| Cache and persistence                                | 22 PASS                    | 22 PASS                    |
+| Agent entry and capability boundaries                | 42 PASS                    | 42 PASS                    |
+| Index materialization and navigation                 | 44 PASS                    | 44 PASS                    |
+| Total                                                | 183 PASS / 0 FAIL / 0 SKIP | 183 PASS / 0 FAIL / 0 SKIP |
+| Prior-policy cache invalidation, separately counted  | 9 PASS                     | 9 PASS                     |
+| Native Windows refusal contracts, separately counted | 7 PASS                     | 7 PASS                     |
 
-Evidence root: `D:/MARA-s1-01a086ff/s1-pdf4e-20261006/`.
-`replay-inputs-01/manifest.json` and `candidate.patch` freeze all thirty candidate
-files over the original `daa95dad` archive. Both normally installed first-party
-wheels and imports match frozen source; all 375/374 distribution versions and
-Requires-Dist, 1,114 Gradio/client files and unaffected members of the original
-802 first-party files are verified. `replay_both.py 01` demonstrates reconstruction
-and fresh wheel builds: all member hashes match; ZIP hashes differ.
+The original 48 file-protection failures were classified from retained logs and
+source paths, without rerunning the group or changing assertions/guards: **9
+capability refusals, 12 fixtures not established, 27 upstream cascades**. Every
+node records purpose, old/new first exception, layer, reached operation and attack,
+first-party guard, affected entry and missing evidence. One consumed exception's
+cause is explicitly source-based inference. A classified failure is still FAIL;
+unreached attacks and unexecuted security functionality remain UNVERIFIED.
 
-Original hooks pass against exact frozen bytes from both controllers in a
-task-owned Git snapshot with no remote. Their original manifest determines actual
-hook interpreters, including fixed Python 3.10 tools. Bad-type and 751 KB negatives
-are rejected with the original 750 KB threshold. Early formatting/harness failures,
-including the 3.11 hook-controller TOML/version-probe issues, retain separate logs.
-The task boundary now uses standard-library TOML on 3.11 and admits only the exact
-read-only health probe of the already-used 3.10 base interpreter. Arbitrary code,
-canonical-environment execution and unowned cache destinations remain rejected.
+Seven actual Windows entries refuse before publication/writes when native dir_fd
+or fcntl support is unavailable. Existing bytes, identity, ACL, mtime and held-file
+offset remain unchanged; no new ready/sidecar path or process-handle leak appears.
+This is **refusal-contract PASS**, not safe-file-functionality PASS. The Windows
+support promise still needs author disposition; no guard was weakened, platform
+capability fabricated, privilege changed or Windows backend added.
 
-Main delivery contains only two baseline-safe tests and this existing report;
-candidate production code and locks stay in replay evidence. Original hooks also
+### Public compatibility decisions
+
+| Public boundary                               | Evidence and remaining decision                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Four LangChain nominal identity checks        | Explicit native-message conversion is available; original isinstance/issubclass changes remain MIGRATION_REQUIRED. Internal doc_id stays separate from provider message id. Author approval is outstanding.                                                                                                      |
+| First-party Agent and saved classpaths        | `kotaemon.agents.openai.OpenAIAgent` supports the tested chat methods. Exact old classpaths migrate with a diagnostic at ModelPool/LLMManager/vendor/reference boundaries without rewriting stored configuration. UI loading code is connected; natural browser flow remains deferred.                           |
+| External old Python import                    | `llama_index.agent.openai.OpenAIAgent` remains BREAKING. The original raw-import FAIL is preserved at its old manifest; a first-party PASS does not replace it.                                                                                                                                                  |
+| AgentRunner task/step API                     | Twelve original implemented methods are not carried forward; undo_step had a public signature but already raised NotImplementedError. All 13 missing names raise AttributeError with zero SDK/tool/callback/memory effects. This does not implement the old capabilities or establish absence of external users. |
+| Synchronous calls inside a running event loop | The original chat/stream_chat actually pass two baseline contracts. Prior candidate implicit failures remain RED; the new explicit pre-coroutine guard requires await achat/astream_chat with zero side effects. This is a real breaking change awaiting approval.                                               |
+
+The exact method signatures, bounded first-party consumer inventory and migration
+examples are attached. No third-party namespace was fabricated, FunctionAgent
+rewritten, or lost upstream HTTP completion ID recovered. The author must decide
+these compatibility changes and the platform support/evidence boundary before
+any primary dependency migration.
+
+### Frozen provenance and preserved history
+
+Evidence root: `D:/MARA-s1-01a086ff/s1-pdf4e-closeout-20261006/`.
+The final `replay-inputs-01/manifest.json` freezes 39 files over original
+`daa95dad437b359f692b8001a85300b8c52f51eb`, with the original 30-file list and 14
+amended/added paths retained. Manifest SHA256:
+`9db01fe6f58ac04594547dc2c4d0969f7cad5e63bc9f65fe91ce477b17fd7f53`;
+complete patch SHA256:
+`859d12cbd4d6fa555321faa7ae3adfcae4f62e69c17ccbd3c01c092aa2639d04`.
+The five 4C dependency inputs remain byte-identical; no solve or SDK upgrade ran.
+Both noneditable installed first-party wheels match the frozen source. The
+375/374 distributions and Requires-Dist, 1,114 Gradio/client files and unaffected
+first-party members were verified. Normal wheel replay produces equal member
+hashes and different ZIP hashes. The downstream client keeps its explicit
+`1.1.1+mara.s14c.1` identity and Apache license; its compatibility patch does not
+retire the known Gradio/client security findings.
+
+Original hooks pass against the final candidate from both controllers in an
+owned Git snapshot without a remote; tool interpreters still follow the original
+hook pins. Formatting/harness failures, the rejected newline-converting first
+patch attempt, PDF/loop RED runs and the artifact-retention retry remain retained.
+The final patch is checked with explicit LF/no-autocrlf settings before freezing.
+
+The prior candidate at manifest
+`b980a2f9df60a237821502779f207ca43fbc40563cdc0fa446045f55366418f6`
+retains **each Windows core 243 PASS / 1 FAIL / 5 existing SKIP**, schema/file
+**35 PASS**, expanded file protection **72 PASS / 48 FAIL**, and primary baseline
+**81 PASS**. These are historical evidence, not this closeout's executions.
+All 980 previously sealed artifacts and the original identity assertions remain.
+
+Primary delivery changes only this existing report. Candidate production code,
+new specifications and locks stay in review artifacts. Original automatic hooks
 run at ordinary explicit-path commit. Protected groups, NUL and observed mypy
-files are checked individually; historical incidents stay OPEN/UNKNOWN/UNVERIFIED.
-There is no aggregate historical protection PASS. Linux/POSIX, Native, three
-images, full Quality and U1 remain NOT RUN/deferred. **Batch 4 is not ACCEPTED;
-R6-D remains BLOCKED; merge/release NO-GO.**
+hashes/mtimes are checked individually; historical incidents remain
+OPEN/UNKNOWN/UNVERIFIED, without an aggregate historical protection PASS.
+Linux/POSIX, Native, three images, full Quality, U1, rAF, natural Login, Gradio
+five exits and double 37 remain NOT RUN/deferred. **Stop at migration review;
+Batch 4/R6-D/S1 BLOCKED, merge/release NO-GO.**
 
 ## Prior S1-4D Document/message interoperability review (2026-10-06)
 
