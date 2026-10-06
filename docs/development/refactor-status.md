@@ -1,6 +1,105 @@
 # Safe refactor status
 
-## Current S1-4D Document/message interoperability review (2026-10-06)
+## Current S1-4E candidate closeout review (2026-10-06)
+
+**Candidate cache invalidation, first-party OpenAIAgent migration and explicit
+candidate contracts are implemented and verified on Windows 3.10/3.11. Stop at
+independent review; the complete candidate remains BLOCKED.** Delivery baseline:
+`3786ec939adc563ee7a76b973e132d8265e1031f`. The 4D input archive, fourteen frozen
+files and 879 retained evidence artifacts were verified before changes. The five
+4C dependency inputs remain byte-identical; no solve or dependency upgrade ran.
+
+The four native LangChain identity differences remain public migration
+requirements through the 4D explicit adapters. Two former nested-JSON collision
+assertions now have positive candidate contracts; only the valid `Document`
+discriminator is accepted, with malformed markers rejected and metadata/extras
+retained. Main's original seven identity and twenty-six persistence assertions
+remain unchanged. Candidate PageLabels follow pypdf 6.19.0's **AA/BB/CC** semantics;
+tests use actual `/PageLabels`, `/S`, `/St` and `/P` dictionaries, including
+boundaries, lower case, prefixes, restarts and malformed/large values. Historical
+exit results remain intact. Exact old/new node mappings and executed results are
+in `evidence/results-matrix.json` under the candidate evidence directory below.
+
+Automatic PDF cache identity is computed before lookup from the wrapper and
+actual PDF reader, relevant implementation hashes, distribution versions,
+full-document/thumbnail parameters and semantic policy. Caller policy cannot
+replace it. Missing identity evidence bypasses caching with a diagnostic.
+Direct PDFReader, AutoReader and thumbnails each execute real old-cache writes,
+new-parser MISS/HIT and renamed-path HIT, both with and without caller policy.
+Source/owner metadata is rebound; old cache bytes and historical IDs remain.
+Separate old-runtime copies still hit the old namespace. Changed reader options,
+missing identity, parse failures and concurrent distinct payloads have regressions.
+Embedding-cache identity is independent: the same contract gives three hits and
+no endpoint call; a changed contract gives three misses and one synthetic call.
+
+The new `kotaemon.agents.openai.OpenAIAgent` delegates planning/tool dispatch to
+the official FunctionAgent and supports `from_tools`, chat/achat,
+stream_chat/astream_chat, reset and history. Seventeen old-runtime contracts
+exercise real SDK parsing over synthetic transports, tool IDs/raw arguments,
+custom parsers, callbacks, inclusive legacy limits and sync/async tool-error
+behavior. Sync calls use the sync client/tool; stream close and async cancellation
+release owned workflows. Additional candidate tests exercise configuration,
+memory rollback and reuse after failure. This is a narrow chat-method adapter;
+the removed AgentRunner step/task API still requires migration. Use async methods
+inside a running event loop; nested synchronous workflow execution is not covered.
+
+| Agent consumer                   | Candidate outcome                                                                                                                                                                 |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A: first-party Python calls      | Import `OpenAIAgent` from `kotaemon.agents.openai`, then use `from_tools(...)`. Dedicated old-entry contracts pass.                                                               |
+| B: saved model/vendor classpaths | Exact old classpath migration at ModelPool/LLMManager/UI loading boundaries, with a visible diagnostic and without rewriting stored configuration. Similar strings are untouched. |
+| C: external Python direct import | `llama_index.agent.openai.OpenAIAgent` remains **BREAKING**. Its unchanged raw-import test actually fails; no third-party namespace is fabricated.                                |
+
+Labels are display data, not unique page identities. Supplemental contracts check
+duplicate labels, physical thumbnail order and historical references with known
+one-based position/source/element IDs. Label-only ambiguous old records remain
+unresolved. AutoReader itself does not supply physical page metadata. The old
+nonnumeric thumbnail filtering behavior and upstream lost HTTP completion ID
+remain explicit limitations; no historical ID or golden set was refreshed.
+
+| Frozen execution, on each Windows Python version                 | Actual result                                                               |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Models, serialization and explicit adapters                      | 53 PASS                                                                     |
+| Calls, completions and prompts                                   | 21 PASS / 3 existing skips                                                  |
+| PDF, labels, physical/reference and preview                      | 42 PASS / 1 external raw-import FAIL                                        |
+| Agents, old entry, configuration and MCP                         | 95 PASS / 2 existing skips                                                  |
+| Chroma lifecycle, cache and automatic identity                   | 32 PASS                                                                     |
+| Expanded file/sidecar/security/coordination contracts            | 72 PASS / 48 FAIL, identical nodes and outcomes in the old Windows baseline |
+| Old store/cache/embedding copy checks; old-runtime rollback      | 5 PASS; 2 PASS                                                              |
+| Three PDF routes, two caller-policy variants; old-cache rollback | 6 PASS; 6 PASS                                                              |
+| Unchanged 4C schema/file worker and real local HTTP/file chain   | 35 PASS                                                                     |
+
+The 48 file-guard failures retain the Windows secure-directory-handle and symlink
+permission boundaries and their downstream effects. They are not skips or a
+security PASS; no Windows sidecar publication or POSIX support is inferred.
+The five existing optional skips are unchanged. The baseline delivery contracts
+pass **81/81**, including twenty new old-Agent/page-identity supplements.
+
+Evidence root: `D:/MARA-s1-01a086ff/s1-pdf4e-20261006/`.
+`replay-inputs-01/manifest.json` and `candidate.patch` freeze all thirty candidate
+files over the original `daa95dad` archive. Both normally installed first-party
+wheels and imports match frozen source; all 375/374 distribution versions and
+Requires-Dist, 1,114 Gradio/client files and unaffected members of the original
+802 first-party files are verified. `replay_both.py 01` demonstrates reconstruction
+and fresh wheel builds: all member hashes match; ZIP hashes differ.
+
+Original hooks pass against exact frozen bytes from both controllers in a
+task-owned Git snapshot with no remote. Their original manifest determines actual
+hook interpreters, including fixed Python 3.10 tools. Bad-type and 751 KB negatives
+are rejected with the original 750 KB threshold. Early formatting/harness failures,
+including the 3.11 hook-controller TOML/version-probe issues, retain separate logs.
+The task boundary now uses standard-library TOML on 3.11 and admits only the exact
+read-only health probe of the already-used 3.10 base interpreter. Arbitrary code,
+canonical-environment execution and unowned cache destinations remain rejected.
+
+Main delivery contains only two baseline-safe tests and this existing report;
+candidate production code and locks stay in replay evidence. Original hooks also
+run at ordinary explicit-path commit. Protected groups, NUL and observed mypy
+files are checked individually; historical incidents stay OPEN/UNKNOWN/UNVERIFIED.
+There is no aggregate historical protection PASS. Linux/POSIX, Native, three
+images, full Quality and U1 remain NOT RUN/deferred. **Batch 4 is not ACCEPTED;
+R6-D remains BLOCKED; merge/release NO-GO.**
+
+## Prior S1-4D Document/message interoperability review (2026-10-06)
 
 **The candidate restores all eleven first-party schema models and executes real
 LangChain boundaries on Windows Python 3.10/3.11. The complete candidate remains
