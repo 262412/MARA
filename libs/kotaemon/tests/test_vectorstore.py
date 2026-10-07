@@ -1,6 +1,9 @@
 import importlib.util
 import json
 import os
+import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -190,6 +193,41 @@ def test_milvus_local_backend_dependency_error_is_clear(monkeypatch, tmp_path):
     reason="Milvus local backend requires llama-index Milvus support and milvus_lite.",
 )
 class TestMilvusVectorStore:
+    @pytest.fixture(autouse=True)
+    def release_local_server(self, tmp_path):
+        from milvus_lite.server_manager import server_manager_instance
+
+        yield
+        server_manager_instance.release_server(str(tmp_path / "milvus.db"))
+
+    def test_persists_across_processes_and_releases_storage(self, tmp_path):
+        script = """
+import sys
+from kotaemon.storages import MilvusVectorStore
+
+db = MilvusVectorStore(path=sys.argv[1], overwrite=False)
+if sys.argv[2] == 'write':
+    db.add(embeddings=[[0.1, 0.2, 0.3]], metadatas=[{'source': 'persisted'}], ids=['saved'])
+_, _, ids = db.query(embedding=[0.1, 0.2, 0.3], top_k=1)
+assert ids == ['saved'], ids
+assert db.count() == 1
+db._client.client.close()
+"""
+        for operation in ("write", "read"):
+            result = subprocess.run(
+                [sys.executable, "-c", script, str(tmp_path), operation],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
+
+        database = tmp_path / "milvus.db"
+        assert database.is_dir()
+        shutil.rmtree(database)
+        assert not database.exists()
+
     def test_add(self, tmp_path):
         """Test that the DB add correctly"""
         db = MilvusVectorStore(

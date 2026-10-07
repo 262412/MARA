@@ -84,6 +84,8 @@ class MilvusVectorStore(LlamaIndexVectorStore):
             )
 
             self._client = cast(LIMilvusVectorStore, self._client)
+            if uri.endswith(".db"):
+                self._client.client.load_collection(self._collection_name)
         self._inited = True
 
     def add(

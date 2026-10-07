@@ -179,6 +179,11 @@ The current runtime covers OpenAI, Azure OpenAI, Google Gemini, Anthropic Claude
 
 This source tree requires Python 3.11 or 3.12; the installers default to 3.11.
 
+PyTorch 2.13 uses CUDA 13.0 for the default Linux GPU runtime; the container
+runtime uses CPU wheels. Milvus Lite 3.2 uses a new storage format. Existing
+Milvus Lite 2.x `.db` files must be exported with 2.x and imported into a new
+database before upgrading; MARA does not migrate these files automatically.
+
 The runtime migration uses Gradio 6, LangChain 1 and LlamaIndex 0.14. Existing
 MARA commands and saved conversation turn pairs remain the same. Extension authors
 must pass `app.gradio_launch_kwargs` when launching or mounting `app.make()`;
@@ -308,7 +313,7 @@ configure the SSO environment, and omit the password mount.
 Supply-chain scope:
 
 - All Python dependencies come from `uv.lock`; Linux containers select the
-  hash-locked PyTorch 2.8.0 CPU artifact.
+  hash-locked PyTorch 2.13.0 CPU artifact.
 - Legacy Microsoft GraphRAG is not preinstalled because its Tenacity requirement
   conflicts with the locked MARA runtime. The local lightweight graph route is
   unchanged.
@@ -744,6 +749,10 @@ Route-aware MARA 运行可以暴露以下 controller 元数据：
 
 当前源码要求 Python 3.11 或 3.12；安装脚本默认使用 3.11。
 
+PyTorch 2.13 的默认 Linux GPU 运行时使用 CUDA 13.0；容器使用 CPU 制品。
+Milvus Lite 3.2 改用了新的存储格式。已有 Milvus Lite 2.x `.db` 文件需先用
+2.x 导出，再导入新数据库后升级；MARA 不会自动迁移这些文件。
+
 运行时已迁移到 Gradio 6、LangChain 1 和 LlamaIndex 0.14。MARA 命令和已保存的
 会话轮次结构保持不变。扩展代码启动或挂载 `app.make()` 时，需要传入
 `app.gradio_launch_kwargs`；PromptUI 返回的 `demo` 也提供该参数字典。Gradio 原生
@@ -858,7 +867,7 @@ volume 会继承镜像目录的 ownership，因此首次初始化可写，同时
 
 供应链范围：
 
-- 所有 Python 依赖来自 `uv.lock`；Linux 容器使用带哈希的 PyTorch 2.8.0 CPU 制品。
+- 所有 Python 依赖来自 `uv.lock`；Linux 容器使用带哈希的 PyTorch 2.13.0 CPU 制品。
 - 旧 Microsoft GraphRAG 的 Tenacity 要求与当前锁冲突，因此容器不再预装；
   MARA 的本地轻量图路由不受影响。
 - Adobe PDF Services SDK 2.3.1 的 urllib3 约束与 Gradio 冲突，因此容器不再预装；

@@ -15,7 +15,12 @@ FIRST_PARTY = {
     "mara-research-cli",
 }
 CONTAINER_VARIANTS = {"torch"}
-FORBIDDEN_CONTAINER_PACKAGES = {"llama-cpp-python", "triton"}
+FORBIDDEN_CONTAINER_PACKAGES = {
+    "cuda-bindings",
+    "cuda-toolkit",
+    "llama-cpp-python",
+    "triton",
+}
 
 
 def _versions(lock_path: Path) -> dict[str, set[str]]:
@@ -46,7 +51,7 @@ def check_lock_parity(root_lock: Path, container_lock: Path) -> list[str]:
             "container lock includes GPU/source-build packages: "
             + ", ".join(sorted(forbidden))
         )
-    if container.get("torch") != {"2.8.0", "2.8.0+cpu"}:
+    if container.get("torch") != {"2.13.0", "2.13.0+cpu"}:
         errors.append(f"unexpected container torch versions: {container.get('torch')}")
     return errors
 

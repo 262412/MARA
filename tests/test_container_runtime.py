@@ -277,16 +277,10 @@ def _export_locked_runtime(repo_root: Path, *arguments: str) -> str:
     return completed.stdout
 
 
-def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
+@pytest.mark.parametrize("project_path", ("pyproject.toml", "docker/pyproject.toml"))
+def test_runtime_dependency_constraints(project_path):
     repo_root = Path(__file__).resolve().parents[1]
-    project = tomli.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
-    lock = tomli.loads((repo_root / "uv.lock").read_text(encoding="utf-8"))
-    container_project = tomli.loads(
-        (repo_root / "docker/pyproject.toml").read_text(encoding="utf-8")
-    )
-    container_lock = tomli.loads(
-        (repo_root / "docker/uv.lock").read_text(encoding="utf-8")
-    )
+    project = tomli.loads((repo_root / project_path).read_text(encoding="utf-8"))
 
     expected_constraints = {
         "aiohttp>=3.14.3",
@@ -304,22 +298,35 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         "pywin32==311; sys_platform == 'win32'",
         "rich==14.1.0",
         "sentence-transformers==6.0.0",
-        "setuptools==81.0.0",
+        "setuptools==83.0.0",
         "soupsieve==2.9",
+        "torch==2.13.0",
         "transformers==5.18.0",
         "typer==0.19.2",
         "urllib3==2.8.0",
         "virtualenv==21.7.13",
     }
-    assert set(project["tool"]["uv"]["constraint-dependencies"]) == (
-        expected_constraints
-    )
+    if project_path.startswith("docker/"):
+        expected_constraints.remove("pywin32==311; sys_platform == 'win32'")
+    assert set(project["tool"]["uv"]["constraint-dependencies"]) == expected_constraints
     assert set(project["tool"]["uv"]["build-constraint-dependencies"]) == {
         "setuptools==83.0.0",
         "setuptools-git-versioning==2.1.0",
         "wheel==0.46.2",
     }
     assert project["tool"]["uv"]["required-version"] == "==0.11.19"
+
+
+def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
+    repo_root = Path(__file__).resolve().parents[1]
+    project = tomli.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    lock = tomli.loads((repo_root / "uv.lock").read_text(encoding="utf-8"))
+    container_project = tomli.loads(
+        (repo_root / "docker/pyproject.toml").read_text(encoding="utf-8")
+    )
+    container_lock = tomli.loads(
+        (repo_root / "docker/uv.lock").read_text(encoding="utf-8")
+    )
     packages = lock["package"]
     assert "torch" not in project["tool"]["uv"]["sources"]
     assert container_project["tool"]["uv"]["sources"]["torch"] == {
@@ -330,14 +337,14 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
     assert any(name.startswith("nvidia-") for name in names)
     assert any(
         package.get("name") == "torch"
-        and package.get("version") == "2.8.0+cpu"
+        and package.get("version") == "2.13.0+cpu"
         and package.get("source", {}).get("registry")
         == "https://download.pytorch.org/whl/cpu"
         for package in container_lock["package"]
     )
     assert any(
         package.get("name") == "torch"
-        and package.get("version") == "2.8.0"
+        and package.get("version") == "2.13.0"
         and package.get("source", {}).get("registry") == "https://pypi.org/simple"
         for package in packages
     )
@@ -346,15 +353,17 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         _export_locked_runtime(repo_root),
         _export_locked_runtime(repo_root, "--extra", "mara"),
     ):
-        assert "torch==2.8.0\n" in gpu_export
-        assert "torch==2.8.0+cpu" not in gpu_export
-        assert "nvidia-cuda-runtime-cu12" in gpu_export
-        assert "triton==3.4.0" in gpu_export
+        assert "torch==2.13.0\n" in gpu_export
+        assert "torch==2.13.0+cpu" not in gpu_export
+        assert "cuda-toolkit==13.0.3" in gpu_export
+        assert "nvidia-cudnn-cu13" in gpu_export
+        assert "triton==3.7.1" in gpu_export
 
     cpu_export = _export_locked_runtime(repo_root, "--project", "docker")
-    assert "torch==2.8.0+cpu" in cpu_export
-    assert "nvidia-cuda-runtime-cu12" not in cpu_export
-    assert "triton==3.4.0" not in cpu_export
+    assert "torch==2.13.0+cpu" in cpu_export
+    assert "cuda-toolkit" not in cpu_export
+    assert "nvidia-cudnn-cu13" not in cpu_export
+    assert "triton==3.7.1" not in cpu_export
 
 
 def test_llama_cpp_is_optional_and_not_built_for_container_runtime():

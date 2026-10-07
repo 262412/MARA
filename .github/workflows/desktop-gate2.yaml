@@ -590,6 +590,16 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
+      - name: Isolate native Python from MSYS and Cygwin libraries
+        shell: pwsh
+        run: |
+          # python-magic can hang when native Python loads an MSYS libmagic DLL.
+          $nativePath = $env:PATH -split ';' | Where-Object {
+            $_ -and
+            -not (Test-Path -LiteralPath (Join-Path $_ 'msys-2.0.dll')) -and
+            -not (Test-Path -LiteralPath (Join-Path $_ 'cygwin1.dll'))
+          }
+          "PATH=$($nativePath -join ';')" | Add-Content $env:GITHUB_ENV
       - name: Sync locked Python workspace
         run: uv sync --all-packages --frozen --python 3.11
       - name: Install Sidecar build dependency

@@ -62,9 +62,9 @@ constraint-dependencies = [
     "pywin32==311; sys_platform == 'win32'",
     "rich==14.1.0",
     "sentence-transformers==6.0.0",
-    # Milvus Lite 2.x needs pkg_resources; isolated builds use 83.0.0 above.
-    "setuptools==81.0.0",
+    "setuptools==83.0.0",
     "soupsieve==2.9",
+    "torch==2.13.0",
     "transformers==5.18.0",
     "typer==0.19.2",
     "urllib3==2.8.0",
