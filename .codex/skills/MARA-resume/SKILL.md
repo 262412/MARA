@@ -1,6 +1,6 @@
 ---
 name: MARA-resume
-description: Use this skill to reopen a saved top-level slide session with `MARA resume`.
+description: "Reopen a saved MARA slide-agent session."
 version: 1.0.0
 ---
 

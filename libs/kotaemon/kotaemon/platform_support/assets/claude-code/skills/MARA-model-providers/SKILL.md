@@ -1,6 +1,6 @@
 ---
 name: MARA-model-providers
-description: Use when the user wants to inspect model routing provider availability through `MARA model providers`.
+description: "Inspect provider availability for MARA model routing."
 version: 1.0.0
 ---
 

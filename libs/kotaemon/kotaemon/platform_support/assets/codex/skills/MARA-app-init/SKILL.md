@@ -1,6 +1,6 @@
 ---
 name: MARA-app-init
-description: Use when the user wants to initialize packaged app user config through `MARA app init`.
+description: "Initialize MARA packaged app configuration with MARA app init."
 version: 1.0.0
 ---
 

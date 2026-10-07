@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-sessions
-description: Use when the user wants to list saved MARA DocQA conversations through `MARA docqa sessions`.
+description: "List saved MARA DocQA conversations."
 version: 1.0.0
 ---
 

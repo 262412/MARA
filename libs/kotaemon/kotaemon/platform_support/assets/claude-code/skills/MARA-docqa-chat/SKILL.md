@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-chat
-description: Use when the user wants multi-turn MARA DocQA chat through `MARA docqa chat`.
+description: "Start a multi-turn MARA DocQA conversation."
 version: 1.0.0
 ---
 

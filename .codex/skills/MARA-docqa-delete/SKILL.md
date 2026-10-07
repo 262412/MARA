@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-delete
-description: Use when the user wants to remove indexed MARA files through `MARA docqa delete`.
+description: "Remove indexed files from the MARA DocQA collection."
 version: 1.0.0
 ---
 
@@ -17,3 +17,5 @@ Helpful follow-up commands:
 
 - `MARA docqa files`
 - `MARA docqa sessions`
+
+This removes indexed files; it does not delete saved conversations. Verify the requested file IDs and list indexed files afterward.

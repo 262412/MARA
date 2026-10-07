@@ -1,6 +1,6 @@
 ---
 name: MARA-platform
-description: Use when the user wants to install, inspect, or validate Codex and Claude Code platform support assets through `MARA platform ...`.
+description: "Manage MARA support assets for Codex or Claude Code."
 version: 1.0.0
 ---
 

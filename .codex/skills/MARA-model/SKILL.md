@@ -1,6 +1,6 @@
 ---
 name: MARA-model
-description: Use when the user wants shared model routing workflows through `MARA model ...`.
+description: "Configure or use shared MARA model routing."
 version: 1.0.0
 ---
 

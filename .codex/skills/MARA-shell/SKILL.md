@@ -1,6 +1,6 @@
 ---
 name: MARA-shell
-description: Use this skill for running shell commands through `MARA shell`.
+description: "Execute a shell command through MARA shell."
 version: 1.0.0
 ---
 

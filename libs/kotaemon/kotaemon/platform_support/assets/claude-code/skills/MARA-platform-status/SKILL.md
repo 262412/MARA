@@ -1,6 +1,6 @@
 ---
 name: MARA-platform-status
-description: Use when the user wants to inspect installed Codex or Claude Code platform support assets through `MARA platform status`.
+description: "Inspect installed MARA coding-platform support assets."
 version: 1.0.0
 ---
 

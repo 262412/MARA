@@ -1,6 +1,6 @@
 ---
 name: MARA-export-pdf
-description: Use this skill to export slide decks to PDF with `MARA export-pdf`.
+description: "Export a slide deck to PDF through MARA."
 version: 1.0.0
 ---
 

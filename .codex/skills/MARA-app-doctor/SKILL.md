@@ -1,6 +1,6 @@
 ---
 name: MARA-app-doctor
-description: Use when the user wants to inspect packaged app runtime health through `MARA app doctor`.
+description: "Diagnose the MARA packaged app runtime with MARA app doctor."
 version: 1.0.0
 ---
 

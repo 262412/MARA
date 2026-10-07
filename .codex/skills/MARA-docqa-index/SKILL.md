@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-index
-description: Use when the user wants to ingest MARA files through `MARA docqa index`.
+description: "Ingest files into the MARA DocQA index."
 version: 1.0.0
 ---
 

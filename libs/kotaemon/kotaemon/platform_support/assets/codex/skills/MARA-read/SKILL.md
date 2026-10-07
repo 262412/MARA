@@ -1,6 +1,6 @@
 ---
 name: MARA-read
-description: Use this skill for reading file contents with `MARA read`.
+description: "Read workspace file contents through MARA read."
 version: 1.0.0
 ---
 
