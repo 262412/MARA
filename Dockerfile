@@ -43,7 +43,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         "import nltk; nltk.download = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('network download forbidden')); from llama_index.core.readers.base import BaseReader; from llama_index.core.utils import get_tokenizer; assert get_tokenizer()('MARA works offline.')"
 
 FROM python:3.11.17-slim-bookworm@sha256:0a310eeecf4e1f5a0743f9a6520c90c88d089c903ca5fd283f501e3a805f5f89 AS runtime-base
-RUN apt-get update -qqy \
+RUN python -m pip uninstall --yes setuptools wheel pip \
+    && apt-get update -qqy \
     && apt-get install -y --no-install-recommends \
         libmagic1 \
         libpcre2-8-0=10.42-1+deb12u2 \

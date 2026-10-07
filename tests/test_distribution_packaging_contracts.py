@@ -77,8 +77,8 @@ def test_all_distributions_use_modern_apache_metadata_and_ship_legal_files():
             for item in project.get("classifiers", [])
         ), package_name
         assert build_requirements == [
-            "setuptools==80.9.0",
-            "wheel==0.45.1",
+            "setuptools==83.0.0",
+            "wheel==0.46.2",
             "setuptools-git-versioning==2.1.0",
         ], package_name
         assert (package_root / "LICENSE.txt").is_file(), package_name

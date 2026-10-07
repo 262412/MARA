@@ -1,6 +1,6 @@
 # build backand and build dependencies
 [build-system]
-requires = ["setuptools==80.9.0", "wheel==0.45.1", "setuptools-git-versioning==2.1.0"]
+requires = ["setuptools==83.0.0", "wheel==0.46.2", "setuptools-git-versioning==2.1.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -66,7 +66,7 @@ dependencies = [
     "pylance",
     "python-decouple", # for theflow
     "python-docx>=1.1.0,<1.2",
-    "python-dotenv>=1.0.1,<1.1",
+    "python-dotenv>=1.2.2,<2",
     "tenacity>=8.2.3,<8.3",
     "theflow>=0.8.6,<0.9.0",
     "trogon>=0.5.0,<0.6",

@@ -84,8 +84,8 @@ def check_build_requirements(root: Path) -> list[ContractIssue]:
         Path("libs/slide_cli/pyproject.toml"),
     )
     expected = [
-        "setuptools==80.9.0",
-        "wheel==0.45.1",
+        "setuptools==83.0.0",
+        "wheel==0.46.2",
         "setuptools-git-versioning==2.1.0",
     ]
     issues: list[ContractIssue] = []

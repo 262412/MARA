@@ -296,11 +296,11 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         "fsspec==2026.6.0",
         "h2>=4.4.1",
         "httpx2>=2.12.0",
-        "mcp==1.12.4",
+        "mcp==1.28.1",
         "oauthlib==4.0.0",
         "onnx>=1.22.0,<1.23; python_version < '3.13'",
-        "pyarrow==21.0.0",
-        "pydantic-settings==2.13.1",
+        "pyarrow==23.0.1",
+        "pydantic-settings==2.14.2",
         "pywin32==311; sys_platform == 'win32'",
         "rich==14.1.0",
         "sentence-transformers==6.0.0",
@@ -314,9 +314,9 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         expected_constraints
     )
     assert set(project["tool"]["uv"]["build-constraint-dependencies"]) == {
-        "setuptools==80.9.0",
+        "setuptools==83.0.0",
         "setuptools-git-versioning==2.1.0",
-        "wheel==0.45.1",
+        "wheel==0.46.2",
     }
     assert project["tool"]["uv"]["required-version"] == "==0.11.19"
     packages = lock["package"]
