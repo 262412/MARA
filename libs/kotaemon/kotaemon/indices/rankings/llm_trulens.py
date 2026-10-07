@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
 
 import tiktoken
 
@@ -50,6 +49,12 @@ PATTERN_INTEGER: re.Pattern = re.compile(r"([+-]?[1-9][0-9]*|0)")
 """Regex that matches integers."""
 
 MAX_CONTEXT_LEN = 7500
+
+
+def _tokenize(text: str) -> list[int]:
+    return tiktoken.encoding_for_model("gpt-3.5-turbo").encode(
+        text, allowed_special=set(), disallowed_special="all"
+    )
 
 
 def validate_rating(rating) -> int:
@@ -106,11 +111,7 @@ class LLMTrulensScoring(LLMReranking):
         chunk_size=MAX_CONTEXT_LEN,
         chunk_overlap=0,
         separator=" ",
-        tokenizer=partial(
-            tiktoken.encoding_for_model("gpt-3.5-turbo").encode,
-            allowed_special=set(),
-            disallowed_special="all",
-        ),
+        tokenizer=_tokenize,
     )
 
     def run(

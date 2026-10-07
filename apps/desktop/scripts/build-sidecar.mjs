@@ -81,6 +81,7 @@ try {
         TIKTOKEN_CACHE_DIR: tiktokenCacheRoot,
       },
       stdio: "inherit",
+      timeout: 120_000,
     },
   );
   if (cacheResult.error) {

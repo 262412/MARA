@@ -99,9 +99,6 @@ def dev_settings():
     return file_extractors, chunk_size, chunk_overlap
 
 
-_default_token_func = tiktoken.encoding_for_model("gpt-3.5-turbo").encode
-
-
 class DocumentRetrievalPipeline(BaseFileIndexRetriever):
     """Retrieve relevant document
 
@@ -626,7 +623,7 @@ class IndexPipeline(BaseComponent):
 
     def get_token_func(self):
         """Get the token function for calculating the number of tokens"""
-        return _default_token_func
+        return tiktoken.encoding_for_model("gpt-3.5-turbo").encode
 
     def delete_file(self, file_id: str):
         """Delete a file from the db, including its chunks in docstore and vectorstore

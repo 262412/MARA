@@ -6,7 +6,7 @@ import pytest
 from openai.types.chat.chat_completion import ChatCompletion
 
 from kotaemon.base import Document
-from kotaemon.indices.rankings import LLMReranking
+from kotaemon.indices.rankings import LLMReranking, LLMTrulensScoring
 from kotaemon.indices.rankings.cohere import CohereReranking
 from kotaemon.llms import AzureChatOpenAI
 
@@ -50,6 +50,15 @@ def llm():
         azure_deployment="gpt-4o",
         azure_endpoint="https://test.openai.azure.com/",
     )
+
+
+def test_trulens_trim_preserves_text_and_rejects_special_tokens(llm):
+    scorer = LLMTrulensScoring(llm=llm)
+
+    chunks = scorer.trim_func([Document(text="Ordinary document text.")])
+    assert [chunk.text for chunk in chunks] == ["Ordinary document text."]
+    with pytest.raises(ValueError, match="disallowed special token"):
+        scorer.trim_func([Document(text="before <|endoftext|> after")])
 
 
 @patch(
