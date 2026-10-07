@@ -265,6 +265,18 @@ def test_prepare_nltk_cache_uses_wheel_bundled_data_without_downloading(tmp_path
     assert (cache / "tokenizers/punkt").is_dir()
 
 
+def _export_locked_runtime(repo_root: Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        ["uv", "export", "--frozen", "--no-dev", "--no-hashes", *arguments],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return completed.stdout
+
+
 def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
     repo_root = Path(__file__).resolve().parents[1]
     project = tomli.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
@@ -280,8 +292,11 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         "aiohttp>=3.14.3",
         "anyio==4.14.2",
         "cryptography>=50.0.0",
+        "filelock==3.32.7",
+        "fsspec==2026.6.0",
         "h2>=4.4.1",
         "mcp==1.12.4",
+        "oauthlib==4.0.0",
         "onnx>=1.22.0,<1.23; python_version < '3.13'",
         "pyarrow==21.0.0",
         "pydantic-settings==2.13.1",
@@ -289,6 +304,8 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         "rich==14.1.0",
         "soupsieve==2.9",
         "typer==0.19.2",
+        "urllib3==2.8.0",
+        "virtualenv==21.7.13",
     }
     assert set(project["tool"]["uv"]["constraint-dependencies"]) == (
         expected_constraints
@@ -321,24 +338,16 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         for package in packages
     )
 
-    def exported(*arguments: str) -> str:
-        completed = subprocess.run(
-            ["uv", "export", "--frozen", "--no-dev", "--no-hashes", *arguments],
-            cwd=repo_root,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        assert completed.returncode == 0, completed.stderr
-        return completed.stdout
-
-    for gpu_export in (exported(), exported("--extra", "mara")):
+    for gpu_export in (
+        _export_locked_runtime(repo_root),
+        _export_locked_runtime(repo_root, "--extra", "mara"),
+    ):
         assert "torch==2.8.0\n" in gpu_export
         assert "torch==2.8.0+cpu" not in gpu_export
         assert "nvidia-cuda-runtime-cu12" in gpu_export
         assert "triton==3.4.0" in gpu_export
 
-    cpu_export = exported("--project", "docker")
+    cpu_export = _export_locked_runtime(repo_root, "--project", "docker")
     assert "torch==2.8.0+cpu" in cpu_export
     assert "nvidia-cuda-runtime-cu12" not in cpu_export
     assert "triton==3.4.0" not in cpu_export
