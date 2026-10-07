@@ -1,6 +1,6 @@
 ---
 name: MARA-inspect
-description: Use this skill to inspect slide decks and their structure with `MARA inspect`.
+description: "Inspect slide structure and metadata through MARA."
 version: 1.0.0
 ---
 

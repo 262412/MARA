@@ -1,6 +1,6 @@
 ---
 name: MARA-platform-list
-description: Use when the user wants to list supported AI coding platform bundles through `MARA platform list`.
+description: "List MARA coding-platform support bundles."
 version: 1.0.0
 ---
 

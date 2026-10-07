@@ -1,6 +1,6 @@
 ---
 name: MARA-platform-install
-description: Use when the user wants to install Codex or Claude Code platform support assets through `MARA platform install`.
+description: "Install MARA support assets for Codex or Claude Code."
 version: 1.0.0
 ---
 

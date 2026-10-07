@@ -1,6 +1,6 @@
 ---
 name: MARA-search
-description: Use this skill to search slide decks and slide content with `MARA search`.
+description: "Search decks and slide content through MARA."
 version: 1.0.0
 ---
 

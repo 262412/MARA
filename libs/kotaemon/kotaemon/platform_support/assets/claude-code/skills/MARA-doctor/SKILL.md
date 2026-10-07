@@ -1,6 +1,6 @@
 ---
 name: MARA-doctor
-description: Use this skill to validate the top-level slide runtime with `MARA doctor`.
+description: "Check the MARA slide runtime with MARA doctor."
 version: 1.0.0
 ---
 

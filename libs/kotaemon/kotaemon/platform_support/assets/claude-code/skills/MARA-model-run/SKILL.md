@@ -1,6 +1,6 @@
 ---
 name: MARA-model-run
-description: Use when the user wants one routed model completion through `MARA model run`.
+description: "Run one completion through MARA model routing."
 version: 1.0.0
 ---
 

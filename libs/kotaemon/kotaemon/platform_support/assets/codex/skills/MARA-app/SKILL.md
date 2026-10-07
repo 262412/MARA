@@ -1,6 +1,6 @@
 ---
 name: MARA-app
-description: Use when the user wants packaged app setup, runtime inspection, or Web UI launch through `MARA app ...`.
+description: "Set up, inspect, or launch the MARA packaged Web UI."
 version: 1.0.0
 ---
 

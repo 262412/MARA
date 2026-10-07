@@ -1,6 +1,6 @@
 ---
 name: MARA-run
-description: Use this skill to run the top-level slide agent with `MARA run`.
+description: "Rewrite a slide deck through the MARA slide agent."
 version: 1.0.0
 ---
 

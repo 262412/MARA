@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-files
-description: Use when the user wants to inspect indexed MARA DocQA files through `MARA docqa files`.
+description: "List or inspect indexed MARA DocQA files."
 version: 1.0.0
 ---
 

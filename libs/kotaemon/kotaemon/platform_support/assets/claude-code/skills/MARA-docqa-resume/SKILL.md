@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-resume
-description: Use when the user wants to reopen a saved MARA DocQA conversation through `MARA docqa resume`.
+description: "Reopen a saved MARA DocQA conversation."
 version: 1.0.0
 ---
 

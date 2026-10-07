@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa
-description: Use when the user wants MARA-focused document QA through `MARA docqa ...`.
+description: "Coordinate MARA indexed-document QA workflows."
 version: 1.0.0
 ---
 

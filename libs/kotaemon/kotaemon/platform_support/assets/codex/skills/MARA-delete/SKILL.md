@@ -1,6 +1,6 @@
 ---
 name: MARA-delete
-description: Use this skill for removing workspace files with `MARA delete`.
+description: "Delete workspace files through MARA delete."
 version: 1.0.0
 ---
 
@@ -16,4 +16,4 @@ Use this skill when the user wants to remove files from the workspace through `M
 
 ## Focus
 
-Use this for file removal only after confirming the exact target and intended scope of deletion.
+Verify the exact target and deletion scope. An explicit user request naming that target authorizes the deletion; ask only when the target or scope remains ambiguous.

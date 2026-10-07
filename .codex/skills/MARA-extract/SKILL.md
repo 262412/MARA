@@ -1,6 +1,6 @@
 ---
 name: MARA-extract
-description: Use this skill to extract slide content or assets with `MARA extract`.
+description: "Extract slide content or assets through MARA."
 version: 1.0.0
 ---
 

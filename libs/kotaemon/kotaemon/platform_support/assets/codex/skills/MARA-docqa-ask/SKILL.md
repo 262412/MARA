@@ -1,6 +1,6 @@
 ---
 name: MARA-docqa-ask
-description: Use when the user wants one MARA-focused DocQA answer through `MARA docqa ask`.
+description: "Answer one question through MARA DocQA."
 version: 1.0.0
 ---
 
