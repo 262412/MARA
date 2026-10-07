@@ -62,12 +62,12 @@ fastavro==1.12.0
 fastembed==0.4.2
 fasttext-predict==0.9.2.4
 ffmpy==0.6.1
-filelock==3.19.1
+filelock==3.32.7
 filetype==1.2.0
 flatbuffers==25.9.23
 fonttools==4.60.1
 frozenlist==1.7.0
-fsspec==2025.9.0
+fsspec==2026.6.0
 google-ai-generativelanguage==0.6.6
 google-api-core==2.25.1
 google-api-python-client==2.184.0
@@ -110,7 +110,7 @@ jsonpointer==3.0.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 kiwisolver==1.4.9
-kubernetes==34.1.0
+kubernetes==36.0.3
 lance-namespace==0.0.6
 lance-namespace-urllib3-client==0.0.17
 lancedb==0.25.1
@@ -187,7 +187,7 @@ nvidia-cusparselt-cu12==0.7.1 ; platform_machine == 'x86_64' and sys_platform ==
 nvidia-nccl-cu12==2.27.3 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 nvidia-nvjitlink-cu12==12.8.93 ; platform_machine == 'x86_64' and sys_platform == 'linux'
 nvidia-nvtx-cu12==12.8.90 ; platform_machine == 'x86_64' and sys_platform == 'linux'
-oauthlib==3.3.1
+oauthlib==4.0.0
 olefile==0.47
 ollama==0.6.0
 onnx==1.19.0 ; python_full_version >= '3.13'
@@ -314,7 +314,7 @@ umap-learn==0.5.5
 unstructured==0.15.14
 unstructured-client==0.25.9
 uritemplate==4.2.0
-urllib3==2.3.0
+urllib3==2.8.0
 uvicorn==0.37.0
 uvloop==0.21.0 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'
 voyageai==0.3.2

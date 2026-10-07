@@ -48,6 +48,7 @@ RUN apt-get update -qqy \
         libmagic1 \
         libpcre2-8-0=10.42-1+deb12u2 \
         libpoppler-cpp0v5 \
+        perl-base=5.36.0-7+deb12u4 \
         poppler-utils \
         tini \
     && rm -rf /var/lib/apt/lists/* \

@@ -20,14 +20,19 @@ constraint-dependencies = [
     "anyio==4.14.2",
     "aiohttp>=3.14.3",
     "cryptography>=50.0.0",
+    "filelock==3.32.7",
+    "fsspec==2026.6.0",
     "h2>=4.4.1",
     "mcp==1.12.4",
+    "oauthlib==4.0.0",
     "onnx>=1.22.0,<1.23; python_version < '3.13'",
     "pyarrow==21.0.0",
     "pydantic-settings==2.13.1",
     "rich==14.1.0",
     "soupsieve==2.9",
     "typer==0.19.2",
+    "urllib3==2.8.0",
+    "virtualenv==21.7.13",
 ]
 
 [tool.uv.sources]
