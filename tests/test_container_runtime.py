@@ -304,6 +304,7 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         "pywin32==311; sys_platform == 'win32'",
         "rich==14.1.0",
         "sentence-transformers==6.0.0",
+        "setuptools==81.0.0",
         "soupsieve==2.9",
         "transformers==5.18.0",
         "typer==0.19.2",
