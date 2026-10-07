@@ -21,7 +21,10 @@ async function selectFixture(page, name) {
   const selector = page.locator("#preview-source-selector input");
   await expect(selector).toBeEnabled();
   await selector.click();
-  await page.getByRole("option").click();
+  const option = page.getByRole("option");
+  const uploadedName = await option.innerText();
+  await option.click();
+  return uploadedName;
 }
 
 function installSideEffectAudit(page) {
@@ -137,10 +140,12 @@ for (const extension of ["docx", "pptx"]) {
       .readdirSync(fixtureDir)
       .find((candidate) => candidate.startsWith("corrupt-") && candidate.endsWith(extension));
     expect(name).toBeTruthy();
-    await selectFixture(page, name);
+    const uploadedName = await selectFixture(page, name);
     const notice = page.locator("#pdf-preview-notice");
     await expect(notice).toContainText("PREVIEW_SOURCE_ERROR", { timeout: 15_000 });
-    await expect(notice).toContainText("corrupt-img srcx onerror");
+    expect(uploadedName).toContain("corrupt-");
+    expect(uploadedName).toContain("__maraNoticeXss");
+    await expect(notice).toContainText(uploadedName);
     await expect(notice.locator("img, script, form")).toHaveCount(0);
     expect(await page.evaluate(() => window.__maraNoticeXss)).toBe(0);
   });

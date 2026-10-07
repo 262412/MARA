@@ -36,7 +36,10 @@ def _legacy_file_link(request):
     """Saved preview links retain the current Gradio file authorization checks."""
     root = request.scope.get("root_path", "")
     path = quote(request.path_params["path"], safe="/:")
-    return RedirectResponse(f"{root}/gradio_api/file={path}")
+    target = f"{root}/gradio_api/file={path}"
+    if request.url.query:
+        target += "?" + request.url.query
+    return RedirectResponse(target)
 
 
 def download_button(path, index_id, file_id, request):

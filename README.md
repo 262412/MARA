@@ -201,6 +201,8 @@ hashes can therefore differ; existing stored records are not rewritten.
 Local Unstructured parsing now requires an installed spaCy `en_core_web_sm` model
 (upstream pins 3.8.0). MARA reports a missing model before parsing instead of
 running the upstream automatic downloader. API-based parsing is unchanged.
+Desktop builds install the pinned, checksum-verified model and bundle it for
+offline parsing.
 
 External imports of `llama_index.agent.openai.OpenAIAgent` move to
 `kotaemon.agents.openai.OpenAIAgent`. MARA model configuration resolves the old
@@ -759,6 +761,7 @@ PDF 解析保留显示页标签，并新增从 1 开始的物理页码 `page_num
 
 Unstructured 本地解析现在需要预装 spaCy `en_core_web_sm` 模型（上游固定为 3.8.0）。
 模型缺失时 MARA 会在解析前报错，不触发上游自动下载；API 解析入口不变。
+桌面构建会安装经过固定版本和校验和验证的模型，并将其打包供离线解析使用。
 
 外部 Python 导入 `llama_index.agent.openai.OpenAIAgent` 需要改为
 `kotaemon.agents.openai.OpenAIAgent`。MARA 模型配置会解析旧路径，不改写保存的记录。

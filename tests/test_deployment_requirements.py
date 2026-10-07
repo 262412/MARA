@@ -37,45 +37,25 @@ def test_root_requirements_file_keeps_azure_app_service_build_installable():
         "./libs/slide_cli",
     }
     expected_pins = {
-        "huggingface-hub<1.0",
-        "langchain<0.3",
-        "langchain-community<0.3",
-        "langchain-core<0.3",
+        "fastapi==0.142.2",
+        "gradio==6.29.1",
+        "huggingface-hub==1.33.0",
+        "langchain==1.4.3",
+        "langchain-community==0.4.2",
+        "langchain-core==1.6.7",
         "numpy==1.26.4",
-        "ollama==0.6.0",
+        "ollama==0.6.3",
         "onnxruntime==1.19.2",
-        "opentelemetry-instrumentation-fastapi==0.48b0",
+        "opentelemetry-instrumentation-fastapi==0.66b1",
     }
     assert "-c constraints.txt" in requirement_lines
     assert "-r requirements.azure.in" in requirement_lines
-    assert expected_local_packages.issubset(source_lines)
-    assert "huggingface-hub<1.0" in source_lines
-    assert "langchain<0.3" in source_lines
-    assert "langchain-community<0.3" in source_lines
-    assert "langchain-core<0.3" in source_lines
+    assert source_lines == expected_local_packages
     assert not any(line.startswith("-e ") for line in requirement_lines)
     assert not any(line.startswith("-e ") for line in source_lines)
     assert "-e ./libs/kotaemon[all]" not in requirement_lines
     assert "-e ./libs/kotaemon[all]" not in source_lines
-    source_only_pins = {
-        "huggingface-hub<1.0",
-        "langchain<0.3",
-        "langchain-community<0.3",
-        "langchain-core<0.3",
-    }
-    assert expected_pins - source_only_pins <= constraint_lines
-    assert any(line.startswith("huggingface-hub==0.") for line in constraint_lines)
-    assert not any(line.startswith("huggingface-hub==1.") for line in constraint_lines)
-    assert any(line.startswith("langchain==0.2.") for line in constraint_lines)
-    assert not any(line.startswith("langchain==1.") for line in constraint_lines)
-    assert any(
-        line.startswith("langchain-community==0.2.") for line in constraint_lines
-    )
-    assert not any(
-        line.startswith("langchain-community==0.4.") for line in constraint_lines
-    )
-    assert any(line.startswith("langchain-core==0.2.") for line in constraint_lines)
-    assert not any(line.startswith("langchain-core==1.") for line in constraint_lines)
+    assert expected_pins <= constraint_lines
     assert not any(line.startswith("-e ") for line in constraint_lines)
 
     for package_path in expected_local_packages:

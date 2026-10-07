@@ -85,7 +85,7 @@ def launch_fixture(monkeypatch, sut, output):
         worker_snapshot=lambda: {},
     )
     stubs = {
-        "gradio": SimpleNamespace(__version__="4.39.0"),
+        "gradio": SimpleNamespace(__version__="6.29.1"),
         "ktem.assets": SimpleNamespace(get_pdfjs_runtime_dir=lambda root: root),
         "ktem.auth.service": SimpleNamespace(authenticate_password=object()),
         "ktem.preview.allowed_paths": SimpleNamespace(
@@ -140,7 +140,7 @@ def launch_fixture(monkeypatch, sut, output):
         launch=lambda **kw: None,
     )
     blocks.queue = lambda: blocks
-    return SimpleNamespace(chat_page=page), blocks, model
+    return SimpleNamespace(chat_page=page, gradio_launch_kwargs={}), blocks, model
 
 
 def test_ui_release_failure_cannot_prevent_model_release(
@@ -300,7 +300,7 @@ def test_real_gradio_disconnect_records_unstarted_request_removal(modules):
     from gradio.queueing import Event as QueueEvent
     from gradio.queueing import EventQueue, Queue
 
-    assert gradio.__version__ == "4.39.0"
+    assert gradio.__version__ == "6.29.1"
     exit_module = importlib.import_module("browser_fixture_exit")
 
     async def disconnect():

@@ -101,6 +101,7 @@ test("includes the storage, embedding, and modern Office modules used by Gate 3"
     "chromadb.telemetry.product.posthog",
     "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
     "docx",
+    "en_core_web_sm",
     "ktem.docqa",
     "ktem.desktop_model_routes",
     "ktem.index.file.pipelines",
@@ -144,7 +145,10 @@ test("includes the storage, embedding, and modern Office modules used by Gate 3"
   ]) {
     assert.ok(!excludedSidecarModules.includes(moduleName), moduleName);
   }
-  assert.deepEqual(requiredSidecarDataPackages, ["chromadb", "llama_index.core"]);
+  assert.deepEqual(requiredSidecarDataPackages, [
+    "chromadb", "en_core_web_sm", "llama_index.core",
+  ]);
+  assert.match(buildScript, /"--copy-metadata",\s*"en-core-web-sm"/);
   assert.deepEqual(requiredTiktokenEncodings, ["cl100k_base"]);
   assert.equal(tiktokenCacheDestination, "tiktoken_cache");
   assert.deepEqual(requiredSidecarDataDirectories, [

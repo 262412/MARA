@@ -46,6 +46,7 @@ export const requiredSidecarModules = [
   "chromadb.telemetry.product.posthog",
   "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
   "docx",
+  "en_core_web_sm",
   "ktem.default_flowsettings",
   "ktem.desktop_model_routes",
   "ktem.docqa",
@@ -99,7 +100,9 @@ export const supportedDesktopChatProviders = [
   },
 ];
 
-export const requiredSidecarDataPackages = ["chromadb", "llama_index.core"];
+export const requiredSidecarDataPackages = [
+  "chromadb", "en_core_web_sm", "llama_index.core",
+];
 
 export const requiredTiktokenEncodings = ["cl100k_base"];
 export const tiktokenCacheDestination = "tiktoken_cache";

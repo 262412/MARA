@@ -119,6 +119,8 @@ try {
         "--collect-data",
         packageName,
       ]),
+      "--copy-metadata",
+      "en-core-web-sm",
       ...requiredSidecarDataDirectories.flatMap(({ source, destination }) => [
         "--add-data",
         `${path.join(desktopRoot, source)}:${destination}`,

@@ -4,6 +4,21 @@ import os
 import socket
 import sys
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+
+
+@asynccontextmanager
+async def task_manager_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    try:
+        yield
+    finally:
+        app.state.index_task_manager.close()
+        app.state.query_task_manager.close()
 
 
 def wait_for_parent_pipe(stdin_fd: int) -> None:

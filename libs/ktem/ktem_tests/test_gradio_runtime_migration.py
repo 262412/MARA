@@ -166,7 +166,13 @@ def test_current_feedback_preserves_owner_and_saved_record(monkeypatch):
     ]
 
 
-def test_legacy_file_links_use_the_authenticated_gradio_route(tmp_path):
+@pytest.mark.parametrize(
+    "query",
+    ["", "?embed=1&ktempage=2&file=%2Fmara%2Ffile%3D%2Ftmp%2Fpaper%2520name.pdf"],
+)
+def test_legacy_file_links_use_the_authenticated_gradio_route(tmp_path, query):
+    from urllib.parse import urlsplit
+
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from ktem.index.file.download_http import download_app_kwargs
@@ -188,10 +194,11 @@ def test_legacy_file_links_use_the_authenticated_gradio_route(tmp_path):
         ),
     )
     with TestClient(app) as client:
-        path = "/mara/file=" + allowed.as_posix()
+        path = "/mara/file=" + allowed.as_posix() + query
         redirect = client.get(path, follow_redirects=False)
         assert redirect.status_code == 307
         assert redirect.headers["location"].startswith("/mara/gradio_api/file=")
+        assert urlsplit(redirect.headers["location"]).query == query.lstrip("?")
         assert client.get(path).status_code == 401
         assert (
             client.post(
