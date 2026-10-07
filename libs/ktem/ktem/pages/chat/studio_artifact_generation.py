@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ktem.docqa.artifact_models import ARTIFACT_LABELS
+from ktem.index.file._selection import normalize_selected_values
 
 from .chat_docqa_runtime import build_web_docqa_request
 from .studio_artifact_parameters import build_parameterized_artifact_prompt
@@ -210,17 +211,16 @@ def _selected_source_values(value: Any) -> list[str]:
                 return _selected_source_values(value.get(key))
         return []
     text = str(value or "").strip()
-    if (
-        not text
-        or _selector_mode(text)
-        or (text.startswith("[") and text.endswith("]"))
-    ):
+    if not text or _selector_mode(text):
         return []
+    if text.startswith("[") and text.endswith("]"):
+        values = normalize_selected_values(text)
+        return values if values != [text] else []
     return [text]
 
 
 def _selector_mode(value: Any) -> bool:
-    return str(value or "").strip().lower() in {"select", "upload", "all"}
+    return str(value or "").strip().lower() in {"select", "upload", "all", "disabled"}
 
 
 def _split_note_ids(value: Any) -> list[str]:

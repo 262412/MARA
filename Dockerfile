@@ -46,6 +46,7 @@ FROM python:3.10.20-slim-bookworm@sha256:ff7161e2b8e2a56fc6a62a6099ff8feb72f1a6d
 RUN apt-get update -qqy \
     && apt-get install -y --no-install-recommends \
         libmagic1 \
+        libpcre2-8-0=10.42-1+deb12u2 \
         libpoppler-cpp0v5 \
         poppler-utils \
         tini \

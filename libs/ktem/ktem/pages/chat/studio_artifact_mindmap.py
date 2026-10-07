@@ -4,7 +4,10 @@ from typing import Any, Callable
 
 import gradio as gr
 
-from .studio_artifact_generation import build_studio_artifact_prompt
+from .studio_artifact_generation import (
+    build_studio_artifact_prompt,
+    selected_source_ids_for_studio_artifact,
+)
 from .studio_artifacts import (
     render_conversation_notebook_panel_html,
     render_studio_artifact_viewer_html,
@@ -21,10 +24,15 @@ def generate_studio_mindmap_outputs(
     if not getattr(page, "knowledge_graph", None):
         raise ValueError("Knowledge graph service is unavailable.")
 
+    selecteds = values.get("selecteds", ())
+    if "selected_inputs" in values:
+        selecteds = (
+            selected_source_ids_for_studio_artifact("", values["selected_inputs"]),
+        )
     source_ids = _source_ids_for_scope(
         values["qa_scope"],
         active_file_id=values["active_file_id"],
-        selecteds=values.get("selecteds", ()),
+        selecteds=selecteds,
     )
     if not source_ids:
         raise ValueError("Select at least one source before generating a mind map.")
@@ -41,9 +49,8 @@ def generate_studio_mindmap_outputs(
         values=values,
     )
     answer = "Interactive mind map generated."
-    messages = [*list(values["chat_history"] or []), (prompt, answer)]
     answer_html = page._generate_answer_panel_html(
-        messages[:-1],
+        list(values["chat_history"] or []),
         prompt,
         answer,
         is_thinking=False,
@@ -59,9 +66,11 @@ def generate_studio_mindmap_outputs(
     viewer_html = render_studio_artifact_viewer_html(artifact)
     return (
         conversation_id,
-        messages,
-        [],
-        [],
+        # A notebook artifact is not a persisted question/answer turn. Keep
+        # conversation messages and their retrieval/plot slots aligned.
+        gr.skip(),
+        gr.skip(),
+        gr.skip(),
         values["chat_state"],
         answer_html,
         page._render_citations_card_html(""),

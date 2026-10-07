@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import Mock
 
 import ktem.index.file.ui as file_ui_module
 import pandas as pd
@@ -18,6 +19,9 @@ from ktem.index.file._listing import (
 )
 from ktem.index.file.pipelines import IndexDocumentPipeline
 from ktem.index.file.ui import FileIndexPage
+
+from .event_chain_spy import EventGraphSpy
+from .file_index_event_spy import build_upload_page
 
 
 class _FakeChain:
@@ -51,6 +55,10 @@ class _FakeComponent:
 
     def upload(self, **kwargs):
         self.calls.append(("upload", kwargs))
+        return _FakeChain(self.calls)
+
+    def change(self, **kwargs):
+        self.calls.append(("change", kwargs))
         return _FakeChain(self.calls)
 
     def input(self, *args, **kwargs):
@@ -119,8 +127,12 @@ def _build_page(index_id=7, with_chat_refresh=False):
     page.list_group = object()
     page.save_group = object()
     page.delete_group = object()
-    page.index_fn_file_with_default_loaders = object()
-    page.index_fn_url_with_default_loaders = object()
+    page.index_fn_file_with_default_loaders = Mock(
+        __name__="index_fn_file_with_default_loaders", return_value=["file"]
+    )
+    page.index_fn_url_with_default_loaders = Mock(
+        __name__="index_fn_url_with_default_loaders", return_value=["url"]
+    )
 
     page.selected_file_id = object()
     page.selected_panel = object()
@@ -154,28 +166,15 @@ def _build_page(index_id=7, with_chat_refresh=False):
     )
 
     if with_chat_refresh:
-        page._app.chat_page = SimpleNamespace(
-            quick_file_upload=_FakeComponent(),
-            quick_file_upload_status=object(),
-            quick_urls=_FakeComponent(),
-            _indices_input=[object(), object()],
-            _graph_source_ids=object(),
-            first_selector_choices=object(),
-            chat_file_filter=object(),
-            chat_file_rows=object(),
-            chat_file_list=object(),
-            chat_selected_file=object(),
-            workbench_file_summary=object(),
-            plot_panel=object(),
-            state_plot_panel=object(),
-            knowledge_graph=object(),
-            _active_file_id=object(),
-            chat_control=SimpleNamespace(conversation_id=object()),
-            merge_graph_source_ids=object(),
-            refresh_chat_file_list=object(),
-            show_knowledge_graph_loading=object(),
-            refresh_knowledge_graph=object(),
-            persist_conversation_source_scope=object(),
+        chat = build_upload_page(EventGraphSpy())._app.chat_page
+        page._app.chat_page = chat
+        chat._app = page._app
+        chat.quick_file_upload = _FakeComponent()
+        chat.quick_urls = _FakeComponent()
+        chat.refresh_knowledge_graph = object()
+        chat.refresh_chat_file_list = Mock(
+            __name__="refresh_chat_file_list",
+            return_value=([], "html", "focus", "size"),
         )
 
     return page
@@ -369,10 +368,9 @@ def test_register_file_index_events_keeps_graph_scope_tail_wired():
     )
 
     upload_chain = page.upload_button.calls
-    assert [entry[1]["fn"] for entry in upload_chain[7:10]] == [
+    assert [entry[1]["fn"] for entry in upload_chain[7:9]] == [
         page._app.chat_page.merge_graph_source_ids,
         page._app.chat_page.persist_conversation_source_scope,
-        page._app.chat_page.refresh_chat_file_list,
     ]
     assert upload_chain[7][1]["inputs"] == [
         page._app.chat_page._graph_source_ids,
@@ -383,18 +381,27 @@ def test_register_file_index_events_keeps_graph_scope_tail_wired():
         page._app.user_id,
         page._app.chat_page._graph_source_ids,
     ]
-    assert upload_chain[9][1]["outputs"] == [
-        page._app.chat_page.chat_file_rows,
-        page._app.chat_page.chat_file_list,
-        page._app.chat_page.chat_selected_file,
-        page._app.chat_page.workbench_file_summary,
-    ]
+    chat = page._app.chat_page
+    refresh = upload_chain[9][1]
+    assert refresh["outputs"] == [chat._file_browser_result]
+    assert refresh["inputs"][-1] is chat._file_browser_stamp
+    assert "captureFiles(1)" in refresh["js"]
+    request = object()
+    result = refresh["fn"]("conv", "user", [], [], [], "filter", "stamp", request)
+    chat.refresh_chat_file_list.assert_called_once_with(
+        "conv", "user", [], [], [], "filter", request=request
+    )
+    assert result["outputs"] == ([], "html", "focus", "size")
+    assert result["stamp"] == "stamp"
     assert page._app.chat_page.refresh_knowledge_graph not in [
         entry[1]["fn"] for entry in upload_chain[10:]
     ]
 
 
-def test_register_quick_upload_events_wires_file_and_url_uploads():
+def test_register_quick_upload_events_wires_file_and_url_uploads(monkeypatch):
+    from ktem.index.file import _chat_upload_events
+
+    monkeypatch.setattr(_chat_upload_events.gr, "JSON", lambda **_: _FakeComponent())
     page = _build_page(index_id=1, with_chat_refresh=True)
 
     register_quick_upload_events(
@@ -405,17 +412,30 @@ def test_register_quick_upload_events_wires_file_and_url_uploads():
 
     file_upload_chain = page._app.chat_page.quick_file_upload.calls
     assert file_upload_chain[0][0] == "upload"
-    assert file_upload_chain[1][1]["fn"] == page.index_fn_file_with_default_loaders
     assert file_upload_chain[3] == ("then", {"fn": "public-event"})
     assert page._app.chat_page.refresh_knowledge_graph not in [
         entry[1]["fn"]
         for entry in file_upload_chain
         if isinstance(entry[1], dict) and "fn" in entry[1]
     ]
-    assert (
-        page._app.chat_page.quick_urls.calls[1][1]["fn"]
-        == page.index_fn_url_with_default_loaders
-    )
+    for chain, callback in (
+        (file_upload_chain, page.index_fn_file_with_default_loaders),
+        (page._app.chat_page.quick_urls.calls, page.index_fn_url_with_default_loaders),
+    ):
+        request = object()
+        index = chain[1][1]
+        result = index["fn"]("source", False, {}, "user", "stamp", "conv", request)
+        callback.assert_called_once_with("source", False, {}, "user", request=request)
+        assert result == (
+            callback.return_value,
+            {
+                "ids": callback.return_value,
+                "stamp": "stamp",
+                "conversation": "conv",
+            },
+        )
+        assert index["outputs"] == [page.quick_upload_state, page._quick_upload_result]
+        assert index["inputs"][-1] is page._app.chat_page.chat_control.conversation
 
 
 def test_file_index_page_listing_wrappers_delegate_to_active_helpers(monkeypatch):

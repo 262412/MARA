@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 from ktem.db.models import Conversation, engine
+from ktem.docqa._runtime_session_service import RuntimeSessionService
 from ktem.docqa.runtime import DocQARuntime
 from sqlmodel import Session, select
 
@@ -350,3 +353,119 @@ def test_runtime_owner_can_update_public_graph_and_like_metadata():
         assert updated.data_source["likes"] == [[[0, 1], "answer", True]]
     finally:
         _delete_conversations(row.id)
+
+
+@pytest.mark.parametrize("conversation_id", ["", "missing-r2b-session"])
+def test_empty_and_missing_session_reads_use_the_isolated_database(
+    conversation_id, mara_test_runtime_paths
+):
+    assert engine.url.database is not None
+    assert (
+        Path(engine.url.database).resolve().is_relative_to(mara_test_runtime_paths.root)
+    )
+    runtime = _runtime("missing-session-viewer")
+    assert runtime.load_session(conversation_id) is None
+    assert runtime.load_graph_source_ids(conversation_id) == []
+
+
+def test_session_list_order_and_public_filters():
+    rows = [
+        _conversation(user="sort-viewer", name="Newest owned"),
+        _conversation(user="sort-viewer", name="Older owned"),
+        _conversation(user="sort-owner", name="Oldest public", is_public=True),
+        _conversation(user="sort-owner", name="Newest private"),
+    ]
+    row_ids = [row.id for row in rows]
+    ids = set(row_ids)
+    try:
+        with Session(engine) as session:
+            for row, day in zip(rows, (3, 2, 1, 4)):
+                row.date_created = datetime(2026, 9, day)
+                session.add(row)
+            session.commit()
+        service = _runtime("sort-viewer")._get_session_service()
+        cases: list[tuple[dict[str, bool], list[str]]] = [
+            ({}, [row_ids[0], row_ids[1], row_ids[2]]),
+            ({"public_first": True}, [row_ids[2], row_ids[0], row_ids[1]]),
+            ({"include_public": False}, [row_ids[0], row_ids[1]]),
+            ({"include_public": False, "public_first": True}, [row_ids[0], row_ids[1]]),
+        ]
+        for options, expected in cases:
+            actual = [item.conversation_id for item in service.list_sessions(**options)]
+            assert [value for value in actual if value in ids] == expected
+        assert service.load_graph_source_ids(row_ids[3]) == []
+    finally:
+        _delete_conversations(*ids)
+
+
+def test_real_service_callers_keep_legacy_static_patch_points(monkeypatch):
+    row = _conversation(user="patch-owner", name="Patch consumer")
+    runtime = _runtime("patch-owner")
+    seen = []
+    sentinel = object()
+
+    def patched(record):
+        seen.append(record.id)
+        return sentinel
+
+    try:
+        monkeypatch.setattr(
+            RuntimeSessionService, "_session_summary", staticmethod(patched)
+        )
+        service = runtime._get_session_service()
+        assert service.list_sessions(include_public=False) == [sentinel]
+        assert seen == [row.id]
+        monkeypatch.setattr(
+            RuntimeSessionService, "_loaded_session", staticmethod(patched)
+        )
+        assert runtime.load_session(row.id) is sentinel
+        assert seen == [row.id, row.id]
+    finally:
+        _delete_conversations(row.id)
+
+
+def test_session_create_and_persist_keep_transaction_order(monkeypatch):
+    calls = []
+
+    def track(name):
+        original = getattr(Session, name)
+
+        def invoke(session, *args, **kwargs):
+            calls.append(name)
+            return original(session, *args, **kwargs)
+
+        monkeypatch.setattr(Session, name, invoke)
+
+    for name in ("add", "commit", "refresh", "exec"):
+        track(name)
+    runtime = _runtime("transaction-owner")
+    loaded = runtime.create_session("Created session")
+    try:
+        assert calls == ["add", "commit", "refresh", "exec"]
+        assert loaded.name == "Created session"
+        assert loaded.user_id == "transaction-owner"
+        assert loaded.data_source == {"origin": "cli"}
+        assert loaded.messages == []
+        calls.clear()
+        assert runtime.persist_conversation_state(
+            conversation_id=loaded.conversation_id,
+            user_id="transaction-owner",
+            retrieval_message="refs",
+            plot_data=None,
+            retrieval_history=[],
+            plot_history=[],
+            messages=[("question", "answer")],
+            state={"app": {"regen": False}},
+            graph_source_ids=["graph-1"],
+            selected_file_ids=[],
+            origin="web",
+        ) == (["refs"], [None])
+        assert calls == ["exec", "add", "commit"]
+        persisted = runtime.load_session(loaded.conversation_id)
+        assert persisted is not None
+        assert persisted.messages == [("question", "answer")]
+        assert persisted.retrieval_messages == ["refs"]
+        assert persisted.graph_source_ids == ["graph-1"]
+        assert persisted.origin == "web"
+    finally:
+        _delete_conversations(loaded.conversation_id)

@@ -1,0 +1,3976 @@
+{
+ "source": "7ed1b371cd942012b24e9654c191fcb843e7a9e4",
+ "pythonhashseed": "0",
+ "observation": {
+  "calls": [
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "",
+    "query": "What dataset do the authors evaluate their method on?",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 8,
+     "max_pages": 3
+    }
+   },
+   {
+    "stage": "generate",
+    "route": "text_rag"
+   }
+  ],
+  "planned": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:2daa14ed9c70cbe2fcff",
+   "answer_type": "extractive",
+   "question_type": "simple_fact",
+   "subqueries": [
+    "What dataset do the authors evaluate their method on?"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:answer_relation",
+     "role": "support",
+     "entity": "",
+     "metric": "What dataset do the authors evaluate their method on?",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "answer_relation",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": false,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "What dataset do the authors evaluate their method on?",
+     "locator": null
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "qasper",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": false,
+    "question": "What dataset do the authors evaluate their method on?",
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "final_plan": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:2daa14ed9c70cbe2fcff",
+   "answer_type": "extractive",
+   "question_type": "simple_fact",
+   "subqueries": [
+    "What dataset do the authors evaluate their method on?"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:answer_relation",
+     "role": "support",
+     "entity": "",
+     "metric": "What dataset do the authors evaluate their method on?",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "answer_relation",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": false,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_support",
+     "evidence_ids": [
+      "evidence:paper:method"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "What dataset do the authors evaluate their method on?",
+     "locator": null
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "qasper",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": false,
+    "question": "What dataset do the authors evaluate their method on?",
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "plan_id": "plan:2daa14ed9c70cbe2fcff",
+  "state_version": 2,
+  "bound": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:2daa14ed9c70cbe2fcff",
+   "answer_type": "extractive",
+   "question_type": "simple_fact",
+   "subqueries": [
+    "What dataset do the authors evaluate their method on?"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "support:answer_relation",
+     "role": "support",
+     "entity": "",
+     "metric": "What dataset do the authors evaluate their method on?",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "answer_relation",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": false,
+     "required_for_execution": false,
+     "required_for_verification": true,
+     "status": "verified_support",
+     "evidence_ids": [
+      "evidence:paper:method"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "What dataset do the authors evaluate their method on?",
+     "locator": null
+    }
+   ],
+   "constraints": {
+    "periods": [],
+    "verification_domain": "qasper",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": false,
+    "question": "What dataset do the authors evaluate their method on?",
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2,
+   "stage": "verified",
+   "state_version": 2,
+   "state_authority": "verified_claim_support.v1",
+   "authority_projection_contract": "typed_proposition_authority.v1"
+  },
+  "controller": {
+   "route": "text_rag",
+   "legacy_route": "doc_text",
+   "policy": "doc",
+   "controller_mode": "off",
+   "requires_retrieval": true,
+   "reason": "Requested document text route."
+  },
+  "retrieval": {
+   "status": "good",
+   "reason": "Retrieved evidence is sufficient for generation.",
+   "retry": false
+  },
+  "verification": {
+   "mode": "strict",
+   "status": "supported",
+   "reason": "Typed QASPER answer authority supports the answer.",
+   "action": "generate",
+   "claims": [
+    "WikiQA"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [
+    "evidence:paper:method"
+   ],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "WikiQA",
+     "status": "supported",
+     "supporting_evidence_ids": [
+      "evidence:paper:method"
+     ],
+     "contradicting_evidence_ids": [],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "authority_status": "exact",
+     "authoritative_evidence_id": "evidence:paper:method",
+     "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+     "authoritative_span_id": "evidence:paper:method#quote:0:45",
+     "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+     "authoritative_span_start": 0,
+     "authoritative_span_end": 45,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "current_paper",
+     "section_scope": "experiments",
+     "relation": "evaluate",
+     "object": "WikiQA",
+     "predicate_arguments": [
+      "WikiQA"
+     ],
+     "qualifier": "none",
+     "quantifier": "none",
+     "supporting_evidence_spans": [
+      {
+       "evidence_id": "evidence:paper:method",
+       "evidence_ref": "evidence:paper:method#quote:0:45",
+       "span_id": "evidence:paper:method#quote:0:45",
+       "quote": "We evaluate our method on the WikiQA dataset.",
+       "span_start": 0,
+       "span_end": 45,
+       "canonical_start": null,
+       "canonical_end": null,
+       "source_id": "paper",
+       "page_label": "1",
+       "actor": "current_paper",
+       "relation": "evaluate",
+       "predicate": "evaluate",
+       "object": "WikiQA",
+       "arguments": [
+        "WikiQA"
+       ],
+       "object_role": "object",
+       "object_type": "dataset",
+       "qualifier": "none",
+       "quantifier": "none",
+       "scope": "experiments",
+       "section_scope": "experiments",
+       "question_scope": "document",
+       "polarity": "",
+       "reason": "exact_question_answer_relation"
+      }
+     ],
+     "contradicting_evidence_spans": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "verified_slot_state": "verified_support",
+     "predicate": "evaluate",
+     "arguments": [
+      "WikiQA"
+     ],
+     "scope": "experiments",
+     "verified_support_slot_ids": [
+      "support:answer_relation"
+     ],
+     "typed_authority_contract": "typed_proposition_authority.v1"
+    }
+   ],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "evidence:paper:method",
+   "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+   "authoritative_span_id": "evidence:paper:method#quote:0:45",
+   "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+   "authoritative_span_start": 0,
+   "authoritative_span_end": 45,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "current_paper",
+   "section_scope": "experiments",
+   "relation": "evaluate",
+   "object": "WikiQA",
+   "predicate_arguments": {
+    "__tuple__": [
+     "WikiQA"
+    ]
+   },
+   "qualifier": "none",
+   "quantifier": "none",
+   "verified_support_slot_ids": [
+    "support:answer_relation"
+   ],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {
+    "contract_id": "typed_proposition_authority.v1",
+    "state": "verified_support",
+    "reason": "layered_answer_authority",
+    "answer_type": "free_text",
+    "question": "What dataset do the authors evaluate their method on?",
+    "candidate_answer": "WikiQA",
+    "claim_ids": [
+     "claim:1"
+    ],
+    "required_slot_ids": [
+     "support:answer_relation"
+    ],
+    "verified_slot_ids": [
+     "support:answer_relation"
+    ],
+    "slot_bindings": {
+     "support:answer_relation": [
+      "evidence:paper:method"
+     ]
+    },
+    "authority_atoms": [
+     {
+      "evidence_id": "evidence:paper:method",
+      "evidence_ref": "evidence:paper:method#quote:0:45",
+      "span_id": "evidence:paper:method#quote:0:45",
+      "quote": "We evaluate our method on the WikiQA dataset.",
+      "span_start": 0,
+      "span_end": 45,
+      "canonical_start": null,
+      "canonical_end": null,
+      "source_id": "paper",
+      "page_label": "1",
+      "actor": "current_paper",
+      "relation": "evaluate",
+      "predicate": "evaluate",
+      "object": "WikiQA",
+      "arguments": [
+       "WikiQA"
+      ],
+      "object_role": "object",
+      "object_type": "dataset",
+      "qualifier": "none",
+      "quantifier": "none",
+      "scope": "experiments",
+      "section_scope": "experiments",
+      "question_scope": "document",
+      "polarity": "",
+      "reason": "exact_question_answer_relation"
+     }
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "canonical_answer_polarity": "",
+    "query_plan_state_version": 2
+   },
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "evaluate",
+   "arguments": [
+    "WikiQA"
+   ],
+   "scope": "experiments"
+  },
+  "guardrail": {
+   "status": "ok",
+   "action": "return",
+   "reason": "Typed QASPER answer authority supports the answer."
+  },
+  "answer": "WikiQA",
+  "terminal_answer": "WikiQA",
+  "terminal_state": {
+   "contract_id": "engine_terminal_state.v1",
+   "answer": "WikiQA",
+   "raw_generated_answer": "WikiQA",
+   "raw_candidate_label": "",
+   "normalized_candidate_label": "",
+   "verified_canonical_answer": "",
+   "semantic_correction_applied": false,
+   "correction_reason": "",
+   "authoritative_evidence_id": "evidence:paper:method",
+   "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+   "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+   "authoritative_conflict": {},
+   "typed_authority": {
+    "contract_id": "typed_proposition_authority.v1",
+    "state": "verified_support",
+    "reason": "layered_answer_authority",
+    "answer_type": "free_text",
+    "question": "What dataset do the authors evaluate their method on?",
+    "candidate_answer": "WikiQA",
+    "claim_ids": [
+     "claim:1"
+    ],
+    "required_slot_ids": [
+     "support:answer_relation"
+    ],
+    "verified_slot_ids": [
+     "support:answer_relation"
+    ],
+    "slot_bindings": {
+     "support:answer_relation": [
+      "evidence:paper:method"
+     ]
+    },
+    "authority_atoms": [
+     {
+      "evidence_id": "evidence:paper:method",
+      "evidence_ref": "evidence:paper:method#quote:0:45",
+      "span_id": "evidence:paper:method#quote:0:45",
+      "quote": "We evaluate our method on the WikiQA dataset.",
+      "span_start": 0,
+      "span_end": 45,
+      "canonical_start": null,
+      "canonical_end": null,
+      "source_id": "paper",
+      "page_label": "1",
+      "actor": "current_paper",
+      "relation": "evaluate",
+      "predicate": "evaluate",
+      "object": "WikiQA",
+      "arguments": [
+       "WikiQA"
+      ],
+      "object_role": "object",
+      "object_type": "dataset",
+      "qualifier": "none",
+      "quantifier": "none",
+      "scope": "experiments",
+      "section_scope": "experiments",
+      "question_scope": "document",
+      "polarity": "",
+      "reason": "exact_question_answer_relation"
+     }
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "canonical_answer_polarity": "",
+    "query_plan_state_version": 2
+   },
+   "terminal_reason": "",
+   "guardrail_result": {
+    "status": "ok",
+    "action": "return",
+    "reason": "Typed QASPER answer authority supports the answer."
+   },
+   "verify_decision": {
+    "mode": "strict",
+    "status": "supported",
+    "reason": "Typed QASPER answer authority supports the answer.",
+    "action": "generate",
+    "claims": [
+     "WikiQA"
+    ],
+    "unsupported_claims": [],
+    "unknown_claims": [],
+    "verified_citations": [
+     "evidence:paper:method"
+    ],
+    "claim_results": [
+     {
+      "claim_id": "claim:1",
+      "claim": "WikiQA",
+      "status": "supported",
+      "supporting_evidence_ids": [
+       "evidence:paper:method"
+      ],
+      "contradicting_evidence_ids": [],
+      "input_answer_polarity": "",
+      "canonical_answer_polarity": "",
+      "semantic_correction_applied": false,
+      "authority_status": "exact",
+      "authoritative_evidence_id": "evidence:paper:method",
+      "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+      "authoritative_span_id": "evidence:paper:method#quote:0:45",
+      "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+      "authoritative_span_start": 0,
+      "authoritative_span_end": 45,
+      "authoritative_canonical_start": null,
+      "authoritative_canonical_end": null,
+      "actor": "current_paper",
+      "section_scope": "experiments",
+      "relation": "evaluate",
+      "object": "WikiQA",
+      "predicate_arguments": [
+       "WikiQA"
+      ],
+      "qualifier": "none",
+      "quantifier": "none",
+      "supporting_evidence_spans": [
+       {
+        "evidence_id": "evidence:paper:method",
+        "evidence_ref": "evidence:paper:method#quote:0:45",
+        "span_id": "evidence:paper:method#quote:0:45",
+        "quote": "We evaluate our method on the WikiQA dataset.",
+        "span_start": 0,
+        "span_end": 45,
+        "canonical_start": null,
+        "canonical_end": null,
+        "source_id": "paper",
+        "page_label": "1",
+        "actor": "current_paper",
+        "relation": "evaluate",
+        "predicate": "evaluate",
+        "object": "WikiQA",
+        "arguments": [
+         "WikiQA"
+        ],
+        "object_role": "object",
+        "object_type": "dataset",
+        "qualifier": "none",
+        "quantifier": "none",
+        "scope": "experiments",
+        "section_scope": "experiments",
+        "question_scope": "document",
+        "polarity": "",
+        "reason": "exact_question_answer_relation"
+       }
+      ],
+      "contradicting_evidence_spans": [],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "authoritative_conflict": {},
+      "verified_slot_state": "verified_support",
+      "predicate": "evaluate",
+      "arguments": [
+       "WikiQA"
+      ],
+      "scope": "experiments",
+      "verified_support_slot_ids": [
+       "support:answer_relation"
+      ],
+      "typed_authority_contract": "typed_proposition_authority.v1"
+     }
+    ],
+    "input_answer_polarity": "",
+    "canonical_answer_polarity": "",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "",
+    "authoritative_evidence_id": "evidence:paper:method",
+    "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+    "authoritative_span_id": "evidence:paper:method#quote:0:45",
+    "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+    "authoritative_span_start": 0,
+    "authoritative_span_end": 45,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "current_paper",
+    "section_scope": "experiments",
+    "relation": "evaluate",
+    "object": "WikiQA",
+    "predicate_arguments": {
+     "__tuple__": [
+      "WikiQA"
+     ]
+    },
+    "qualifier": "none",
+    "quantifier": "none",
+    "verified_support_slot_ids": [
+     "support:answer_relation"
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {},
+    "typed_authority": {
+     "contract_id": "typed_proposition_authority.v1",
+     "state": "verified_support",
+     "reason": "layered_answer_authority",
+     "answer_type": "free_text",
+     "question": "What dataset do the authors evaluate their method on?",
+     "candidate_answer": "WikiQA",
+     "claim_ids": [
+      "claim:1"
+     ],
+     "required_slot_ids": [
+      "support:answer_relation"
+     ],
+     "verified_slot_ids": [
+      "support:answer_relation"
+     ],
+     "slot_bindings": {
+      "support:answer_relation": [
+       "evidence:paper:method"
+      ]
+     },
+     "authority_atoms": [
+      {
+       "evidence_id": "evidence:paper:method",
+       "evidence_ref": "evidence:paper:method#quote:0:45",
+       "span_id": "evidence:paper:method#quote:0:45",
+       "quote": "We evaluate our method on the WikiQA dataset.",
+       "span_start": 0,
+       "span_end": 45,
+       "canonical_start": null,
+       "canonical_end": null,
+       "source_id": "paper",
+       "page_label": "1",
+       "actor": "current_paper",
+       "relation": "evaluate",
+       "predicate": "evaluate",
+       "object": "WikiQA",
+       "arguments": [
+        "WikiQA"
+       ],
+       "object_role": "object",
+       "object_type": "dataset",
+       "qualifier": "none",
+       "quantifier": "none",
+       "scope": "experiments",
+       "section_scope": "experiments",
+       "question_scope": "document",
+       "polarity": "",
+       "reason": "exact_question_answer_relation"
+      }
+     ],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "canonical_answer_polarity": "",
+     "query_plan_state_version": 2
+    },
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "evaluate",
+    "arguments": [
+     "WikiQA"
+    ],
+    "scope": "experiments"
+   },
+   "guardrail_decision": {
+    "status": "ok",
+    "action": "return",
+    "reason": "Typed QASPER answer authority supports the answer."
+   },
+   "evidence_bundle": {
+    "route": "doc_text",
+    "items": [
+     {
+      "evidence_id": "method",
+      "source_id": "paper",
+      "source_name": "",
+      "source_aliases": [
+       "paper"
+      ],
+      "page_label": "1",
+      "modality": "text",
+      "element_id": "",
+      "canonical_id": "evidence:paper:method",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "experiments",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:primary",
+        "slot_id": "",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "We evaluate our method on the WikiQA dataset.",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "paper#page:1"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "We evaluate our method on the WikiQA dataset."
+       }
+      ],
+      "identity": {
+       "source_id": "paper",
+       "kind": "evidence",
+       "local_id": "method"
+      }
+     },
+     {
+      "evidence_id": "noise",
+      "source_id": "paper",
+      "source_name": "",
+      "source_aliases": [
+       "paper"
+      ],
+      "page_label": "1",
+      "modality": "text",
+      "element_id": "",
+      "canonical_id": "evidence:paper:noise",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "methods",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "48efecb3248547d7cd148f6f65235ea1a0fcdd2edc446c38e5f7242da74d30d2",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:primary",
+        "slot_id": "",
+        "retriever_name": "text",
+        "raw_rank": 3,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "The optimizer uses a small learning rate.",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "paper#page:1"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "The optimizer uses a small learning rate."
+       }
+      ],
+      "identity": {
+       "source_id": "paper",
+       "kind": "evidence",
+       "local_id": "noise"
+      }
+     },
+     {
+      "evidence_id": "related",
+      "source_id": "paper",
+      "source_name": "",
+      "source_aliases": [
+       "paper"
+      ],
+      "page_label": "1",
+      "modality": "text",
+      "element_id": "",
+      "canonical_id": "evidence:paper:related",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "related_work",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "13a5bead83553f86f19fb9be63a0650cd0329a2b12c495fdd5f1f971e74486da",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:primary",
+        "slot_id": "",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "Previous work evaluates a model on SQuAD.",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "paper#page:1"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "Previous work evaluates a model on SQuAD."
+       }
+      ],
+      "identity": {
+       "source_id": "paper",
+       "kind": "evidence",
+       "local_id": "related"
+      }
+     }
+    ],
+    "metadata": {
+     "evidence": [
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      },
+      {
+       "evidence_id": "noise",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:noise",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "methods",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "48efecb3248547d7cd148f6f65235ea1a0fcdd2edc446c38e5f7242da74d30d2",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 3,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The optimizer uses a small learning rate.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The optimizer uses a small learning rate."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "noise"
+       }
+      },
+      {
+       "evidence_id": "related",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:related",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "related_work",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "13a5bead83553f86f19fb9be63a0650cd0329a2b12c495fdd5f1f971e74486da",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Previous work evaluates a model on SQuAD.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "Previous work evaluates a model on SQuAD."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "related"
+       }
+      }
+     ],
+     "retrieval_query_contracts": [
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:primary",
+       "slot_id": "",
+       "query": "What dataset do the authors evaluate their method on?"
+      }
+     ],
+     "schema_version": "evidence_bundle.v2",
+     "dedupe_trace": {
+      "schema_version": "evidence_bundle.v2",
+      "input_count": 3,
+      "output_count": 3,
+      "structure_duplicate_count": 0,
+      "exact_text_duplicate_count": 0,
+      "overlap_duplicate_count": 0,
+      "minhash_duplicate_count": 0,
+      "semantic_duplicate_count": 0,
+      "conflict_guard_count": 0,
+      "duplicate_ratio": 0.0
+     },
+     "canonical_candidate_count": 3,
+     "canonical_candidate_evidence": [
+      {
+       "evidence_id": "related",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:related",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "related_work",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "13a5bead83553f86f19fb9be63a0650cd0329a2b12c495fdd5f1f971e74486da",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Previous work evaluates a model on SQuAD.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "Previous work evaluates a model on SQuAD."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "related"
+       }
+      },
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      },
+      {
+       "evidence_id": "noise",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:noise",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "methods",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "48efecb3248547d7cd148f6f65235ea1a0fcdd2edc446c38e5f7242da74d30d2",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 3,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The optimizer uses a small learning rate.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The optimizer uses a small learning rate."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "noise"
+       }
+      }
+     ],
+     "candidate_evidence": [
+      {
+       "evidence_id": "related",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:related",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "related_work",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "13a5bead83553f86f19fb9be63a0650cd0329a2b12c495fdd5f1f971e74486da",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Previous work evaluates a model on SQuAD.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "Previous work evaluates a model on SQuAD."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "related"
+       }
+      },
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      },
+      {
+       "evidence_id": "noise",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:noise",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "methods",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "48efecb3248547d7cd148f6f65235ea1a0fcdd2edc446c38e5f7242da74d30d2",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 3,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The optimizer uses a small learning rate.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The optimizer uses a small learning rate."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "noise"
+       }
+      }
+     ],
+     "candidate_ranked_evidence": [
+      {
+       "evidence_id": "related",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:related",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "related_work",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "13a5bead83553f86f19fb9be63a0650cd0329a2b12c495fdd5f1f971e74486da",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Previous work evaluates a model on SQuAD.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "Previous work evaluates a model on SQuAD."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "related"
+       }
+      },
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      },
+      {
+       "evidence_id": "noise",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:noise",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "methods",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "48efecb3248547d7cd148f6f65235ea1a0fcdd2edc446c38e5f7242da74d30d2",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 3,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The optimizer uses a small learning rate.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The optimizer uses a small learning rate."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "noise"
+       }
+      }
+     ],
+     "candidate_ranking_contract": "global_ranked_v1",
+     "pre_rerank_required_slot_candidates_restored": 0,
+     "reranker_input_evidence": [],
+     "reranker_input_contract": "required_slot_restored.v1",
+     "fused_evidence": [
+      {
+       "evidence_id": "related",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:related",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "related_work",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "13a5bead83553f86f19fb9be63a0650cd0329a2b12c495fdd5f1f971e74486da",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Previous work evaluates a model on SQuAD.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "Previous work evaluates a model on SQuAD."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "related"
+       }
+      },
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      },
+      {
+       "evidence_id": "noise",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:noise",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "methods",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "48efecb3248547d7cd148f6f65235ea1a0fcdd2edc446c38e5f7242da74d30d2",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 3,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The optimizer uses a small learning rate.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The optimizer uses a small learning rate."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "noise"
+       }
+      }
+     ],
+     "fusion_stage_snapshot": {
+      "contract_id": "fusion_stage_snapshot.v1",
+      "route": "doc_text",
+      "state": "passthrough",
+      "candidate_stage": "fusion_passthrough",
+      "reason": "route_does_not_use_cross_modal_fusion",
+      "input_count": 3,
+      "output_count": 3,
+      "input_identities": [
+       "evidence:paper:related",
+       "evidence:paper:method",
+       "evidence:paper:noise"
+      ],
+      "output_identities": [
+       "evidence:paper:related",
+       "evidence:paper:method",
+       "evidence:paper:noise"
+      ],
+      "identity_preserved": true,
+      "fusion_trace_present": false
+     },
+     "ranking_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 3,
+      "candidate_input_count": 3,
+      "input_count": 3,
+      "reranker_input_count": 3,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 3,
+       "output_count": 3,
+       "input_identities": [
+        "evidence:paper:related",
+        "evidence:paper:method",
+        "evidence:paper:noise"
+       ],
+       "output_identities": [
+        "evidence:paper:related",
+        "evidence:paper:method",
+        "evidence:paper:noise"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "reranker_aggregate_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 3,
+      "candidate_input_count": 3,
+      "input_count": 3,
+      "reranker_input_count": 3,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 3,
+       "output_count": 3,
+       "input_identities": [
+        "evidence:paper:related",
+        "evidence:paper:method",
+        "evidence:paper:noise"
+       ],
+       "output_identities": [
+        "evidence:paper:related",
+        "evidence:paper:method",
+        "evidence:paper:noise"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "page_coverage": [
+      "1"
+     ],
+     "source_ids": [
+      "paper"
+     ],
+     "evidence_ids": [
+      "method",
+      "noise",
+      "related"
+     ],
+     "source_page_locators": [
+      {
+       "source_id": "paper",
+       "page_label": "1"
+      }
+     ],
+     "source_page_alias_locators": [
+      {
+       "source_id": "paper",
+       "page_label": "1"
+      }
+     ],
+     "modality_counts": {
+      "text": 3
+     },
+     "selected_evidence": [
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      },
+      {
+       "evidence_id": "noise",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:noise",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "methods",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "48efecb3248547d7cd148f6f65235ea1a0fcdd2edc446c38e5f7242da74d30d2",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 3,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The optimizer uses a small learning rate.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The optimizer uses a small learning rate."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "noise"
+       }
+      },
+      {
+       "evidence_id": "related",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:related",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "related_work",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "13a5bead83553f86f19fb9be63a0650cd0329a2b12c495fdd5f1f971e74486da",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Previous work evaluates a model on SQuAD.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "Previous work evaluates a model on SQuAD."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "related"
+       }
+      }
+     ],
+     "generation_context_evidence": [
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      },
+      {
+       "evidence_id": "noise",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:noise",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "methods",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "48efecb3248547d7cd148f6f65235ea1a0fcdd2edc446c38e5f7242da74d30d2",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 3,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The optimizer uses a small learning rate.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The optimizer uses a small learning rate."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "noise"
+       }
+      },
+      {
+       "evidence_id": "related",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:related",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "related_work",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "13a5bead83553f86f19fb9be63a0650cd0329a2b12c495fdd5f1f971e74486da",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Previous work evaluates a model on SQuAD.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "Previous work evaluates a model on SQuAD."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "related"
+       }
+      }
+     ],
+     "used_evidence": [
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      },
+      {
+       "evidence_id": "noise",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:noise",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "methods",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "48efecb3248547d7cd148f6f65235ea1a0fcdd2edc446c38e5f7242da74d30d2",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 3,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "The optimizer uses a small learning rate.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "The optimizer uses a small learning rate."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "noise"
+       }
+      },
+      {
+       "evidence_id": "related",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:related",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "related_work",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "13a5bead83553f86f19fb9be63a0650cd0329a2b12c495fdd5f1f971e74486da",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Previous work evaluates a model on SQuAD.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "Previous work evaluates a model on SQuAD."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "related"
+       }
+      }
+     ],
+     "stage_aliases": {
+      "used_evidence": "generation_context_evidence"
+     },
+     "query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:2daa14ed9c70cbe2fcff",
+      "answer_type": "extractive",
+      "question_type": "simple_fact",
+      "subqueries": [
+       "What dataset do the authors evaluate their method on?"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:answer_relation",
+        "role": "support",
+        "entity": "",
+        "metric": "What dataset do the authors evaluate their method on?",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "answer_relation",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": false,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_support",
+        "evidence_ids": [
+         "evidence:paper:method"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "What dataset do the authors evaluate their method on?",
+        "locator": null
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "qasper",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": false,
+       "question": "What dataset do the authors evaluate their method on?",
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "verified",
+      "state_version": 2,
+      "state_authority": "verified_claim_support.v1",
+      "authority_projection_contract": "typed_proposition_authority.v1"
+     },
+     "query_plan_id": "plan:2daa14ed9c70cbe2fcff",
+     "planned_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:2daa14ed9c70cbe2fcff",
+      "answer_type": "extractive",
+      "question_type": "simple_fact",
+      "subqueries": [
+       "What dataset do the authors evaluate their method on?"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:answer_relation",
+        "role": "support",
+        "entity": "",
+        "metric": "What dataset do the authors evaluate their method on?",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "answer_relation",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": false,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "What dataset do the authors evaluate their method on?",
+        "locator": null
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "qasper",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": false,
+       "question": "What dataset do the authors evaluate their method on?",
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "planned",
+      "state_version": 0
+     },
+     "bound_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:2daa14ed9c70cbe2fcff",
+      "answer_type": "extractive",
+      "question_type": "simple_fact",
+      "subqueries": [
+       "What dataset do the authors evaluate their method on?"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "support:answer_relation",
+        "role": "support",
+        "entity": "",
+        "metric": "What dataset do the authors evaluate their method on?",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "answer_relation",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": false,
+        "required_for_execution": false,
+        "required_for_verification": true,
+        "status": "verified_support",
+        "evidence_ids": [
+         "evidence:paper:method"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "What dataset do the authors evaluate their method on?",
+        "locator": null
+       }
+      ],
+      "constraints": {
+       "periods": [],
+       "verification_domain": "qasper",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": false,
+       "question": "What dataset do the authors evaluate their method on?",
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "verified",
+      "state_version": 2,
+      "state_authority": "verified_claim_support.v1",
+      "authority_projection_contract": "typed_proposition_authority.v1"
+     },
+     "evidence_selection_trace": {
+      "strategy": "marginal_evidence_set_selection_v3",
+      "candidate_count": 3,
+      "selected_count": 3,
+      "max_items": 8,
+      "max_pages": 3,
+      "unique_pages": 1,
+      "selected_pages": [
+       {
+        "source_id": "paper",
+        "page_label": "1"
+       }
+      ],
+      "slot_coverage": null,
+      "missing_required_slot_count": 0,
+      "continuation_expansion_count": 0,
+      "page_modality_expansion_count": 0,
+      "structure_expansion_enabled": false,
+      "mmr_lambda": 0.7,
+      "structure_metadata_coverage": 1.0,
+      "mixed_candidate_structure_metadata_coverage": 1.0,
+      "structure_coverage_scope": "legacy_mixed",
+      "required_slot_candidates_restored": 0,
+      "candidate_budget_partitions": {
+       "factual_narrative": 0,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "selected_budget_usage": {
+       "factual_narrative": 3,
+       "execution_operands": 0,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "evidence_stage_trace": [
+       {
+        "evidence_id": "evidence:paper:related",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "support:answer_relation"
+        ],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       },
+       {
+        "evidence_id": "evidence:paper:method",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "support:answer_relation"
+        ],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       },
+       {
+        "evidence_id": "evidence:paper:noise",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "support:answer_relation"
+        ],
+        "executable_operand": false,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       }
+      ],
+      "trace_validation_errors": [],
+      "required_slot_bindings": [],
+      "execution_slot_lineage": [],
+      "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+      "boolean_assessment_cache": {
+       "unique_semantic_candidates": 0,
+       "slots": 0,
+       "cache_entries": 0,
+       "cache_builds": 1,
+       "cache_hits": 0,
+       "cache_misses": 0,
+       "classification_calls": 0,
+       "mmr_hot_loop_misses": 0,
+       "time_spent_ms": "elapsed milliseconds"
+      }
+     },
+     "structure_metadata_coverage": 1.0,
+     "slot_coverage": null,
+     "missing_required_slot_count": 0,
+     "second_round_queries": [],
+     "second_round_requests": [],
+     "typed_adequacy_status": "not_applicable",
+     "heuristic_adequacy_status": "good",
+     "final_adequacy_status": "good",
+     "adequacy_decision_authority": "general_heuristic",
+     "heuristic_overridden": false,
+     "heuristic_override_reason": "",
+     "typed_adequacy_reason": "non_finance_domain",
+     "retrieval_rounds": 1,
+     "pre_verification_answer": "WikiQA",
+     "qasper_answer_revision_attempted_evidence_signatures": [],
+     "pre_guardrail_answer": "WikiQA",
+     "verified_evidence": [
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      }
+     ],
+     "verified_claim_support_evidence": [
+      {
+       "evidence_id": "method",
+       "source_id": "paper",
+       "source_name": "",
+       "source_aliases": [
+        "paper"
+       ],
+       "page_label": "1",
+       "modality": "text",
+       "element_id": "",
+       "canonical_id": "evidence:paper:method",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "experiments",
+       "table_id": "",
+       "row_index": null,
+       "column_index": null,
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:primary",
+         "slot_id": "",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "We evaluate our method on the WikiQA dataset.",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [
+        "paper#page:1"
+       ],
+       "evidence_level": "page",
+       "metadata": {},
+       "cell_id": "",
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "row_label": null,
+       "column_label": null,
+       "period": null,
+       "period_kind": null,
+       "value": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "statement_kind": null,
+       "financial_scope": null,
+       "representations": [
+        {
+         "modality": "text",
+         "field": "text",
+         "text": "We evaluate our method on the WikiQA dataset."
+        }
+       ],
+       "identity": {
+        "source_id": "paper",
+        "kind": "evidence",
+        "local_id": "method"
+       }
+      }
+     ],
+     "verified_claim_support_by_claim": {
+      "claim:1": [
+       "evidence:paper:method"
+      ]
+     },
+     "verified_claim_support_spans": [
+      {
+       "evidence_id": "evidence:paper:method",
+       "evidence_ref": "evidence:paper:method#quote:0:45",
+       "span_id": "evidence:paper:method#quote:0:45",
+       "quote": "We evaluate our method on the WikiQA dataset.",
+       "span_start": 0,
+       "span_end": 45,
+       "canonical_start": null,
+       "canonical_end": null,
+       "source_id": "paper",
+       "page_label": "1",
+       "actor": "current_paper",
+       "relation": "evaluate",
+       "predicate": "evaluate",
+       "object": "WikiQA",
+       "arguments": [
+        "WikiQA"
+       ],
+       "object_role": "object",
+       "object_type": "dataset",
+       "qualifier": "none",
+       "quantifier": "none",
+       "scope": "experiments",
+       "section_scope": "experiments",
+       "question_scope": "document",
+       "polarity": "",
+       "reason": "exact_question_answer_relation"
+      }
+     ],
+     "typed_authority": {
+      "contract_id": "typed_proposition_authority.v1",
+      "state": "verified_support",
+      "reason": "layered_answer_authority",
+      "answer_type": "free_text",
+      "question": "What dataset do the authors evaluate their method on?",
+      "candidate_answer": "WikiQA",
+      "claim_ids": [
+       "claim:1"
+      ],
+      "required_slot_ids": [
+       "support:answer_relation"
+      ],
+      "verified_slot_ids": [
+       "support:answer_relation"
+      ],
+      "slot_bindings": {
+       "support:answer_relation": [
+        "evidence:paper:method"
+       ]
+      },
+      "authority_atoms": [
+       {
+        "evidence_id": "evidence:paper:method",
+        "evidence_ref": "evidence:paper:method#quote:0:45",
+        "span_id": "evidence:paper:method#quote:0:45",
+        "quote": "We evaluate our method on the WikiQA dataset.",
+        "span_start": 0,
+        "span_end": 45,
+        "canonical_start": null,
+        "canonical_end": null,
+        "source_id": "paper",
+        "page_label": "1",
+        "actor": "current_paper",
+        "relation": "evaluate",
+        "predicate": "evaluate",
+        "object": "WikiQA",
+        "arguments": [
+         "WikiQA"
+        ],
+        "object_role": "object",
+        "object_type": "dataset",
+        "qualifier": "none",
+        "quantifier": "none",
+        "scope": "experiments",
+        "section_scope": "experiments",
+        "question_scope": "document",
+        "polarity": "",
+        "reason": "exact_question_answer_relation"
+       }
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "canonical_answer_polarity": "",
+      "query_plan_state_version": 2
+     },
+     "verification_slot_states": [
+      {
+       "slot_id": "support:answer_relation",
+       "status": "verified_support",
+       "evidence_ids": [
+        "evidence:paper:method"
+       ]
+      }
+     ],
+     "verify_decision": {
+      "mode": "strict",
+      "status": "supported",
+      "reason": "Typed QASPER answer authority supports the answer.",
+      "action": "generate",
+      "claims": [
+       "WikiQA"
+      ],
+      "unsupported_claims": [],
+      "unknown_claims": [],
+      "verified_citations": [
+       "evidence:paper:method"
+      ],
+      "claim_results": [
+       {
+        "claim_id": "claim:1",
+        "claim": "WikiQA",
+        "status": "supported",
+        "supporting_evidence_ids": [
+         "evidence:paper:method"
+        ],
+        "contradicting_evidence_ids": [],
+        "input_answer_polarity": "",
+        "canonical_answer_polarity": "",
+        "semantic_correction_applied": false,
+        "authority_status": "exact",
+        "authoritative_evidence_id": "evidence:paper:method",
+        "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+        "authoritative_span_id": "evidence:paper:method#quote:0:45",
+        "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+        "authoritative_span_start": 0,
+        "authoritative_span_end": 45,
+        "authoritative_canonical_start": null,
+        "authoritative_canonical_end": null,
+        "actor": "current_paper",
+        "section_scope": "experiments",
+        "relation": "evaluate",
+        "object": "WikiQA",
+        "predicate_arguments": [
+         "WikiQA"
+        ],
+        "qualifier": "none",
+        "quantifier": "none",
+        "supporting_evidence_spans": [
+         {
+          "evidence_id": "evidence:paper:method",
+          "evidence_ref": "evidence:paper:method#quote:0:45",
+          "span_id": "evidence:paper:method#quote:0:45",
+          "quote": "We evaluate our method on the WikiQA dataset.",
+          "span_start": 0,
+          "span_end": 45,
+          "canonical_start": null,
+          "canonical_end": null,
+          "source_id": "paper",
+          "page_label": "1",
+          "actor": "current_paper",
+          "relation": "evaluate",
+          "predicate": "evaluate",
+          "object": "WikiQA",
+          "arguments": [
+           "WikiQA"
+          ],
+          "object_role": "object",
+          "object_type": "dataset",
+          "qualifier": "none",
+          "quantifier": "none",
+          "scope": "experiments",
+          "section_scope": "experiments",
+          "question_scope": "document",
+          "polarity": "",
+          "reason": "exact_question_answer_relation"
+         }
+        ],
+        "contradicting_evidence_spans": [],
+        "authority_derivations": [],
+        "selected_derivation_id": "",
+        "authoritative_conflict": {},
+        "verified_slot_state": "verified_support",
+        "predicate": "evaluate",
+        "arguments": [
+         "WikiQA"
+        ],
+        "scope": "experiments",
+        "verified_support_slot_ids": [
+         "support:answer_relation"
+        ],
+        "typed_authority_contract": "typed_proposition_authority.v1"
+       }
+      ],
+      "input_answer_polarity": "",
+      "canonical_answer_polarity": "",
+      "semantic_correction_applied": false,
+      "boolean_authority_status": "",
+      "authoritative_evidence_id": "evidence:paper:method",
+      "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+      "authoritative_span_id": "evidence:paper:method#quote:0:45",
+      "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+      "authoritative_span_start": 0,
+      "authoritative_span_end": 45,
+      "authoritative_canonical_start": null,
+      "authoritative_canonical_end": null,
+      "actor": "current_paper",
+      "section_scope": "experiments",
+      "relation": "evaluate",
+      "object": "WikiQA",
+      "predicate_arguments": {
+       "__tuple__": [
+        "WikiQA"
+       ]
+      },
+      "qualifier": "none",
+      "quantifier": "none",
+      "verified_support_slot_ids": [
+       "support:answer_relation"
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "authoritative_conflict": {},
+      "typed_authority": {
+       "contract_id": "typed_proposition_authority.v1",
+       "state": "verified_support",
+       "reason": "layered_answer_authority",
+       "answer_type": "free_text",
+       "question": "What dataset do the authors evaluate their method on?",
+       "candidate_answer": "WikiQA",
+       "claim_ids": [
+        "claim:1"
+       ],
+       "required_slot_ids": [
+        "support:answer_relation"
+       ],
+       "verified_slot_ids": [
+        "support:answer_relation"
+       ],
+       "slot_bindings": {
+        "support:answer_relation": [
+         "evidence:paper:method"
+        ]
+       },
+       "authority_atoms": [
+        {
+         "evidence_id": "evidence:paper:method",
+         "evidence_ref": "evidence:paper:method#quote:0:45",
+         "span_id": "evidence:paper:method#quote:0:45",
+         "quote": "We evaluate our method on the WikiQA dataset.",
+         "span_start": 0,
+         "span_end": 45,
+         "canonical_start": null,
+         "canonical_end": null,
+         "source_id": "paper",
+         "page_label": "1",
+         "actor": "current_paper",
+         "relation": "evaluate",
+         "predicate": "evaluate",
+         "object": "WikiQA",
+         "arguments": [
+          "WikiQA"
+         ],
+         "object_role": "object",
+         "object_type": "dataset",
+         "qualifier": "none",
+         "quantifier": "none",
+         "scope": "experiments",
+         "section_scope": "experiments",
+         "question_scope": "document",
+         "polarity": "",
+         "reason": "exact_question_answer_relation"
+        }
+       ],
+       "authority_derivations": [],
+       "selected_derivation_id": "",
+       "canonical_answer_polarity": "",
+       "query_plan_state_version": 2
+      },
+      "candidate_contract_id": "",
+      "candidate_label": "",
+      "verifier_input_candidate": "",
+      "verifier_candidate_status": "",
+      "replacement_candidate_allowed": false,
+      "predicate": "evaluate",
+      "arguments": [
+       "WikiQA"
+      ],
+      "scope": "experiments"
+     },
+     "pipeline_stage_timings": {
+      "planning_seconds": "elapsed seconds",
+      "retrieval_seconds": "elapsed seconds",
+      "generation_seconds": "elapsed seconds",
+      "retry_seconds": "elapsed seconds",
+      "verification_seconds": "elapsed seconds",
+      "finalization_seconds": "elapsed seconds"
+     }
+    }
+   },
+   "terminal_outcome": "answered",
+   "presentation_answer": "WikiQA",
+   "terminal_semantic_commit": {
+    "contract_id": "terminal_semantic_commit.v3",
+    "semantic_answer": "WikiQA",
+    "presentation_answer": "WikiQA",
+    "outcome": "answered",
+    "outcome_reason": "",
+    "answer_status": "answered",
+    "verify_decision": {
+     "mode": "strict",
+     "status": "supported",
+     "reason": "Typed QASPER answer authority supports the answer.",
+     "action": "generate",
+     "claims": [
+      "WikiQA"
+     ],
+     "unsupported_claims": [],
+     "unknown_claims": [],
+     "verified_citations": [
+      "evidence:paper:method"
+     ],
+     "claim_results": [
+      {
+       "claim_id": "claim:1",
+       "claim": "WikiQA",
+       "status": "supported",
+       "supporting_evidence_ids": [
+        "evidence:paper:method"
+       ],
+       "contradicting_evidence_ids": [],
+       "input_answer_polarity": "",
+       "canonical_answer_polarity": "",
+       "semantic_correction_applied": false,
+       "authority_status": "exact",
+       "authoritative_evidence_id": "evidence:paper:method",
+       "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+       "authoritative_span_id": "evidence:paper:method#quote:0:45",
+       "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+       "authoritative_span_start": 0,
+       "authoritative_span_end": 45,
+       "authoritative_canonical_start": null,
+       "authoritative_canonical_end": null,
+       "actor": "current_paper",
+       "section_scope": "experiments",
+       "relation": "evaluate",
+       "object": "WikiQA",
+       "predicate_arguments": [
+        "WikiQA"
+       ],
+       "qualifier": "none",
+       "quantifier": "none",
+       "supporting_evidence_spans": [
+        {
+         "evidence_id": "evidence:paper:method",
+         "evidence_ref": "evidence:paper:method#quote:0:45",
+         "span_id": "evidence:paper:method#quote:0:45",
+         "quote": "We evaluate our method on the WikiQA dataset.",
+         "span_start": 0,
+         "span_end": 45,
+         "canonical_start": null,
+         "canonical_end": null,
+         "source_id": "paper",
+         "page_label": "1",
+         "actor": "current_paper",
+         "relation": "evaluate",
+         "predicate": "evaluate",
+         "object": "WikiQA",
+         "arguments": [
+          "WikiQA"
+         ],
+         "object_role": "object",
+         "object_type": "dataset",
+         "qualifier": "none",
+         "quantifier": "none",
+         "scope": "experiments",
+         "section_scope": "experiments",
+         "question_scope": "document",
+         "polarity": "",
+         "reason": "exact_question_answer_relation"
+        }
+       ],
+       "contradicting_evidence_spans": [],
+       "authority_derivations": [],
+       "selected_derivation_id": "",
+       "authoritative_conflict": {},
+       "verified_slot_state": "verified_support",
+       "predicate": "evaluate",
+       "arguments": [
+        "WikiQA"
+       ],
+       "scope": "experiments",
+       "verified_support_slot_ids": [
+        "support:answer_relation"
+       ],
+       "typed_authority_contract": "typed_proposition_authority.v1"
+      }
+     ],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "boolean_authority_status": "",
+     "authoritative_evidence_id": "evidence:paper:method",
+     "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+     "authoritative_span_id": "evidence:paper:method#quote:0:45",
+     "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+     "authoritative_span_start": 0,
+     "authoritative_span_end": 45,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "current_paper",
+     "section_scope": "experiments",
+     "relation": "evaluate",
+     "object": "WikiQA",
+     "predicate_arguments": {
+      "__tuple__": [
+       "WikiQA"
+      ]
+     },
+     "qualifier": "none",
+     "quantifier": "none",
+     "verified_support_slot_ids": [
+      "support:answer_relation"
+     ],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "typed_authority": {
+      "contract_id": "typed_proposition_authority.v1",
+      "state": "verified_support",
+      "reason": "layered_answer_authority",
+      "answer_type": "free_text",
+      "question": "What dataset do the authors evaluate their method on?",
+      "candidate_answer": "WikiQA",
+      "claim_ids": [
+       "claim:1"
+      ],
+      "required_slot_ids": [
+       "support:answer_relation"
+      ],
+      "verified_slot_ids": [
+       "support:answer_relation"
+      ],
+      "slot_bindings": {
+       "support:answer_relation": [
+        "evidence:paper:method"
+       ]
+      },
+      "authority_atoms": [
+       {
+        "evidence_id": "evidence:paper:method",
+        "evidence_ref": "evidence:paper:method#quote:0:45",
+        "span_id": "evidence:paper:method#quote:0:45",
+        "quote": "We evaluate our method on the WikiQA dataset.",
+        "span_start": 0,
+        "span_end": 45,
+        "canonical_start": null,
+        "canonical_end": null,
+        "source_id": "paper",
+        "page_label": "1",
+        "actor": "current_paper",
+        "relation": "evaluate",
+        "predicate": "evaluate",
+        "object": "WikiQA",
+        "arguments": [
+         "WikiQA"
+        ],
+        "object_role": "object",
+        "object_type": "dataset",
+        "qualifier": "none",
+        "quantifier": "none",
+        "scope": "experiments",
+        "section_scope": "experiments",
+        "question_scope": "document",
+        "polarity": "",
+        "reason": "exact_question_answer_relation"
+       }
+      ],
+      "authority_derivations": [],
+      "selected_derivation_id": "",
+      "canonical_answer_polarity": "",
+      "query_plan_state_version": 2
+     },
+     "candidate_contract_id": "",
+     "candidate_label": "",
+     "verifier_input_candidate": "",
+     "verifier_candidate_status": "",
+     "replacement_candidate_allowed": false,
+     "predicate": "evaluate",
+     "arguments": [
+      "WikiQA"
+     ],
+     "scope": "experiments"
+    },
+    "guardrail_decision": {
+     "status": "ok",
+     "action": "return",
+     "reason": "Typed QASPER answer authority supports the answer."
+    },
+    "authoritative_evidence": [
+     {
+      "evidence_id": "method",
+      "source_id": "paper",
+      "source_name": "",
+      "source_aliases": [
+       "paper"
+      ],
+      "page_label": "1",
+      "modality": "text",
+      "element_id": "",
+      "canonical_id": "evidence:paper:method",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "experiments",
+      "table_id": "",
+      "row_index": null,
+      "column_index": null,
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "ef55571e4d125cd67dea188d5e0b19b5b94aaed9387c2231ff11d65798d51455",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:primary",
+        "slot_id": "",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "We evaluate our method on the WikiQA dataset.",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [
+       "paper#page:1"
+      ],
+      "evidence_level": "page",
+      "metadata": {},
+      "cell_id": "",
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "row_label": null,
+      "column_label": null,
+      "period": null,
+      "period_kind": null,
+      "value": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "statement_kind": null,
+      "financial_scope": null,
+      "representations": [
+       {
+        "modality": "text",
+        "field": "text",
+        "text": "We evaluate our method on the WikiQA dataset."
+       }
+      ],
+      "identity": {
+       "source_id": "paper",
+       "kind": "evidence",
+       "local_id": "method"
+      }
+     }
+    ],
+    "citations": [
+     "evidence:paper:method"
+    ],
+    "projection_hash": "17e8e3367c54d485a6d20b6bf42a6a4ce69c644afffb73515af533c95167fc27",
+    "state_version": 3
+   }
+  },
+  "terminal_verification": {
+   "mode": "strict",
+   "status": "supported",
+   "reason": "Typed QASPER answer authority supports the answer.",
+   "action": "generate",
+   "claims": [
+    "WikiQA"
+   ],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [
+    "evidence:paper:method"
+   ],
+   "claim_results": [
+    {
+     "claim_id": "claim:1",
+     "claim": "WikiQA",
+     "status": "supported",
+     "supporting_evidence_ids": [
+      "evidence:paper:method"
+     ],
+     "contradicting_evidence_ids": [],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "authority_status": "exact",
+     "authoritative_evidence_id": "evidence:paper:method",
+     "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+     "authoritative_span_id": "evidence:paper:method#quote:0:45",
+     "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+     "authoritative_span_start": 0,
+     "authoritative_span_end": 45,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "current_paper",
+     "section_scope": "experiments",
+     "relation": "evaluate",
+     "object": "WikiQA",
+     "predicate_arguments": [
+      "WikiQA"
+     ],
+     "qualifier": "none",
+     "quantifier": "none",
+     "supporting_evidence_spans": [
+      {
+       "evidence_id": "evidence:paper:method",
+       "evidence_ref": "evidence:paper:method#quote:0:45",
+       "span_id": "evidence:paper:method#quote:0:45",
+       "quote": "We evaluate our method on the WikiQA dataset.",
+       "span_start": 0,
+       "span_end": 45,
+       "canonical_start": null,
+       "canonical_end": null,
+       "source_id": "paper",
+       "page_label": "1",
+       "actor": "current_paper",
+       "relation": "evaluate",
+       "predicate": "evaluate",
+       "object": "WikiQA",
+       "arguments": [
+        "WikiQA"
+       ],
+       "object_role": "object",
+       "object_type": "dataset",
+       "qualifier": "none",
+       "quantifier": "none",
+       "scope": "experiments",
+       "section_scope": "experiments",
+       "question_scope": "document",
+       "polarity": "",
+       "reason": "exact_question_answer_relation"
+      }
+     ],
+     "contradicting_evidence_spans": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "verified_slot_state": "verified_support",
+     "predicate": "evaluate",
+     "arguments": [
+      "WikiQA"
+     ],
+     "scope": "experiments",
+     "verified_support_slot_ids": [
+      "support:answer_relation"
+     ],
+     "typed_authority_contract": "typed_proposition_authority.v1"
+    }
+   ],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "evidence:paper:method",
+   "authoritative_evidence_ref": "evidence:paper:method#quote:0:45",
+   "authoritative_span_id": "evidence:paper:method#quote:0:45",
+   "authoritative_quote": "We evaluate our method on the WikiQA dataset.",
+   "authoritative_span_start": 0,
+   "authoritative_span_end": 45,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "current_paper",
+   "section_scope": "experiments",
+   "relation": "evaluate",
+   "object": "WikiQA",
+   "predicate_arguments": {
+    "__tuple__": [
+     "WikiQA"
+    ]
+   },
+   "qualifier": "none",
+   "quantifier": "none",
+   "verified_support_slot_ids": [
+    "support:answer_relation"
+   ],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {
+    "contract_id": "typed_proposition_authority.v1",
+    "state": "verified_support",
+    "reason": "layered_answer_authority",
+    "answer_type": "free_text",
+    "question": "What dataset do the authors evaluate their method on?",
+    "candidate_answer": "WikiQA",
+    "claim_ids": [
+     "claim:1"
+    ],
+    "required_slot_ids": [
+     "support:answer_relation"
+    ],
+    "verified_slot_ids": [
+     "support:answer_relation"
+    ],
+    "slot_bindings": {
+     "support:answer_relation": [
+      "evidence:paper:method"
+     ]
+    },
+    "authority_atoms": [
+     {
+      "evidence_id": "evidence:paper:method",
+      "evidence_ref": "evidence:paper:method#quote:0:45",
+      "span_id": "evidence:paper:method#quote:0:45",
+      "quote": "We evaluate our method on the WikiQA dataset.",
+      "span_start": 0,
+      "span_end": 45,
+      "canonical_start": null,
+      "canonical_end": null,
+      "source_id": "paper",
+      "page_label": "1",
+      "actor": "current_paper",
+      "relation": "evaluate",
+      "predicate": "evaluate",
+      "object": "WikiQA",
+      "arguments": [
+       "WikiQA"
+      ],
+      "object_role": "object",
+      "object_type": "dataset",
+      "qualifier": "none",
+      "quantifier": "none",
+      "scope": "experiments",
+      "section_scope": "experiments",
+      "question_scope": "document",
+      "polarity": "",
+      "reason": "exact_question_answer_relation"
+     }
+    ],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "canonical_answer_polarity": "",
+    "query_plan_state_version": 2
+   },
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "evaluate",
+   "arguments": [
+    "WikiQA"
+   ],
+   "scope": "experiments"
+  },
+  "terminal_guardrail": {
+   "status": "ok",
+   "action": "return",
+   "reason": "Typed QASPER answer authority supports the answer."
+  },
+  "rounds": 1,
+  "recovery": null,
+  "numeric": {
+   "attempt_status": null,
+   "answer": null,
+   "formula": null,
+   "inputs": null,
+   "calculation_execution": null,
+   "calculation_verification": null,
+   "authoritative_query_plan": null
+  }
+ }
+}

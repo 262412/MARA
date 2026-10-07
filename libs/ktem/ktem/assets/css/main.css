@@ -4908,6 +4908,16 @@ body.ktem-dark-mode .gradio-container {
   overflow-x: hidden !important;
 }
 
+#conversation-dock[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+#conversation-dock[aria-busy="true"]::after {
+  content: "Loading conversation…";
+  display: block;
+  padding: 0.5rem;
+}
+
 #answer-expand,
 #info-expand,
 #conversation-dock {

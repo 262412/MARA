@@ -17,6 +17,7 @@ build-constraint-dependencies = [
     "wheel==0.45.1",
 ]
 constraint-dependencies = [
+    "anyio==4.14.2",
     "aiohttp>=3.14.3",
     "cryptography>=50.0.0",
     "h2>=4.4.1",
@@ -25,6 +26,7 @@ constraint-dependencies = [
     "pyarrow==21.0.0",
     "pydantic-settings==2.13.1",
     "rich==14.1.0",
+    "soupsieve==2.9",
     "typer==0.19.2",
 ]
 

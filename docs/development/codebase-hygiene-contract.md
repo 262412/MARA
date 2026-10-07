@@ -8,28 +8,31 @@ new "big ball of mud" growth.
 
 The risk has decreased, but it is not low.
 
-What improved:
+Current responsibility boundaries:
 
-- `MARA` now has explicit public CLI contract tests.
-- `KnowledgeGraphBuilder._build_canonical_graph` is no longer a single
-  several-hundred-line implementation body.
-- File index event registration has less repeated event-chain code.
-- The GitHub Actions unit-test path for `libs/kotaemon` is green.
+- `ktem_contracts.file_selection` owns shared normalization/merge rules;
+  their intentionally different coercion semantics remain separate.
+- Chat construction, binding, runtime, rendering and persistence have workflow
+  owners under `pages/chat`; `ChatPage` preserves existing attributes and patch
+  entries. `file_browser_rendering` does presentation, not authorization or I/O.
+- `finance_plan_policy` and `evidence_binding_policy` own extracted strategies;
+  planning/binding facades retain orchestration and old diagnostic entries.
+- Graph cache, index deletion, session/Notebook commits and artifact/download
+  lifetimes have explicit owners. See the accepted scope and limits in
+  [refactor status](refactor-status.md), rather than treating extraction as a
+  concurrency or authorization proof.
+- CLI inspection, Desktop launch configuration, MCP operation/session ownership
+  and deck conversion have separate responsibilities and compatibility tests.
 
-Remaining high-risk areas:
+Remaining risks include Gradio event order and async UI application, large
+DocQA orchestration modules, dynamic classpaths/patch consumers, cross-store
+partial failures and optional provider/platform capabilities. U1 browser
+verification and historical protection incidents remain independently open.
+Broad exception handling is acceptable only with the established error and
+diagnostic contract. A successful package job alone does not close those risks.
 
-- `libs/ktem/ktem/pages/chat/__init__.py` still owns UI construction, event
-  binding, chat runtime, file preview, DocQA state, knowledge graph refresh, and
-  session behavior.
-- `libs/ktem/ktem/index/file/_events.py` still has large event registration
-  bodies where behavior depends on Gradio chain order.
-- `libs/ktem/ktem/pages/chat/knowledge_graph_builder.py` is improved but still
-  has several 130+ line helpers that should not grow further.
-- DocQA entrypoints are split across `ktem`, `kotaemon`, and the MARA CLI
-  implementation package (`slide_cli`), so behavior drift is still possible.
-- Broad `except Exception` hotspots remain in preview, DocQA, office conversion,
-  and CLI code. These are acceptable only when they preserve user-facing
-  workflows and emit actionable diagnostics.
+The [architecture contract guide](architecture-contracts.md) maps these owners
+to runnable dependency, cold-import, behavior and compatibility checks.
 
 The current risk inventory is now tracked as a ratchet baseline in
 `scripts/codebase_hygiene_baseline.json`. That baseline is not approval for the
@@ -230,8 +233,10 @@ follow-up. P2 issues should be tracked, but do not block unrelated product work.
 - Core library code should not eagerly depend on `ktem` UI/runtime modules.
 - Allow `ktem` imports only inside runtime bootstrap, CLI compatibility paths,
   or explicit app integration seams.
-- Preserve `kotaemon.agents` lazy-load behavior because MCP and agent tests rely
-  on it.
+- Preserve the lazy `kotaemon.agents` attribute on the top-level package.
+  Importing `kotaemon.agents` itself eagerly exports its existing agent/tool
+  types; do not describe that parent import as a pure or fully lazy boundary.
+  MCP SDK connections remain local to `mcp_session.initialized_session`.
 
 ### `ktem`
 
@@ -256,7 +261,7 @@ Run the gates that match the changed files.
 Always before large installs, model downloads, app initialization, DocQA
 indexing, dataset syncs, Slurm jobs, or long development sessions:
 
-```powershell
+```bash
 cd ~/scratch/projects/MARA
 source ~/.bashrc
 readlink -f .venv
@@ -336,12 +341,20 @@ uv run --no-sync --python 3.10 python scripts/run_qasper_local_gate.py
 From a linked worktree, run the same gate through the canonical-environment
 wrapper instead:
 
-```powershell
+```bash
 scripts/run_with_canonical_env.sh scripts/run_qasper_local_gate.py
 ```
 
-Do not use repository-root `pytest -q` as the default readiness signal until
-the existing root collection conflicts are fixed.
+Quality enforces `scripts/check_pytest_collection.py --minimum 1260`; the
+historical root collection conflicts are not a current blanket blocker.
+Collection does not prove execution or platform support. Use the affected
+package suites and retain individual Windows failures separately.
+
+The host-specific Bash preflight above applies to the configured Linux storage
+layout. For source tests use the canonical wrapper described in
+[Contributing](contributing.md); it overlays source without resynchronizing the
+installed packages. Windows uses an explicitly owned prepared environment and
+the same runtime isolation, not the Linux path/quota commands.
 
 ## Review Checklist
 

@@ -17,6 +17,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from pytest_runtime_isolation import TestRuntimePaths  # noqa: E402
+from scripts import clean_wheel_binding_smoke as binding_smoke  # noqa: E402
+from scripts import clean_wheel_deletion_smoke as deletion_smoke  # noqa: E402
+from scripts import clean_wheel_indexing_smoke as indexing_smoke  # noqa: E402
+from scripts import clean_wheel_route_smoke as route_smoke  # noqa: E402
+from scripts import clean_wheel_web_smoke as web_smoke  # noqa: E402
 
 EXPECTED_WHEELS = {
     "ktem": "ktem/",
@@ -28,7 +33,7 @@ EXPECTED_WHEELS = {
 PACKAGE_ORDER = ("kotaemon", "ktem", "mara-research-cli", "mara-app")
 LAYER_IMPORTS = {
     "kotaemon": ("kotaemon",),
-    "ktem": ("ktem.index.file.pipelines",),
+    "ktem": ("ktem_contracts.file_selection", "ktem.index.file.pipelines"),
     "mara-research-cli": ("slide_cli.cli",),
 }
 KTEM_ASSETS = {
@@ -39,6 +44,7 @@ KTEM_ASSETS = {
     "ktem/assets/vendor/pdfjs/LICENSE.pdfjs",
     "ktem/assets/vendor/pdfjs/manifest.json",
     "ktem/assets/vendor/pdfjs/pdfjs-6.1.200-dist.zip",
+    *web_smoke.CHAT_CALLBACK_ASSETS,
 }
 
 
@@ -276,6 +282,8 @@ import importlib.metadata
 import pathlib
 import sys
 
+from packaging.version import Version
+
 prefix = pathlib.Path(sys.prefix).resolve()
 for module_name in {LAYER_IMPORTS.get(distribution, ())!r}:
     module = importlib.import_module(module_name)
@@ -290,6 +298,10 @@ if not location.is_relative_to(prefix):
     raise RuntimeError(
         f"{distribution} metadata loaded outside clean venv: {{location}}"
     )
+nltk_version = importlib.metadata.version("nltk")
+if Version(nltk_version) < Version("3.10.3"):
+    raise RuntimeError(f"{distribution} resolved NLTK {{nltk_version}} below 3.10.3")
+print(f"[wheel-smoke] {distribution} resolved nltk=={{nltk_version}}")
 """
     _run(
         [_venv_python(venv), "-c", validation],
@@ -381,6 +393,13 @@ def _run_offline_runtime_smoke(
     offline_env: dict[str, str],
 ) -> None:
     _assert_installed_distribution_paths(venv, offline_env)
+    _run_docqa_export_smoke(venv, offline_env)
+    _run_docqa_preparation_smoke(venv, offline_env)
+    binding_smoke.run_binding_smoke(_venv_python(venv), venv.parent, offline_env)
+    route_smoke.run_route_smoke(_venv_python(venv), venv.parent, offline_env)
+    deletion_smoke.run_deletion_smoke(_venv_python(venv), venv.parent, offline_env)
+    indexing_smoke.run_indexing_smoke(_venv_python(venv), venv.parent, offline_env)
+    web_smoke.run_chat_callback_smoke(_venv_python(venv), venv.parent, offline_env)
     for executable in ("MARA", "MARA-cli"):
         _run(
             [_venv_command(venv, executable), "--help"],
@@ -400,6 +419,76 @@ def _run_offline_runtime_smoke(
     )
     if not viewer.is_file():
         raise RuntimeError(f"Offline app init did not materialize {viewer}.")
+
+
+def _run_docqa_export_smoke(venv: Path, env: dict[str, str]) -> None:
+    validation = """
+import importlib
+import pathlib
+import sys
+from types import SimpleNamespace
+
+import ktem
+parent_modules = set(sys.modules)
+from ktem.docqa import DocQARequest, DocQAResponse, DocQASession, DocQASessionSummary
+from ktem.docqa import chat_submission, session_projection
+
+submission = chat_submission.prepare_submission_content(
+    chat_input={'text': 'Installed @"one.pdf"'}, chat_history=[],
+    user_id='owner', settings={}, first_selector_choices=[('one.pdf', 'file-1')],
+    graph_source_ids=[], selected_page_text=' page text ', default_question='Default',
+    merge_graph_source_ids=lambda old, new: old + new,
+    first_indexing_file_fn=None, first_indexing_url_fn=None,
+)
+assert submission.chat_input_text == 'Installed\\n\\n[Selected text from current page]\\npage text'
+assert submission.file_ids == ['file-1']
+assert submission.merged_graph_source_ids == ['file-1']
+assert chat_submission.complete_chat_history(submission.chat_input_text, []) == [(submission.chat_input_text, None)]
+
+row = SimpleNamespace(id='installed-session', name='Installed record', user='owner',
+    is_public=False, date_created=None, date_updated=None,
+    data_source={'messages': [['q', 'a']],
+                 'selected': {'9': ['select', ['file-1'], 'owner']}})
+loaded = session_projection.loaded_session(row, default_state={'app': {'regen': False}})
+summary = session_projection.session_summary(row)
+assert type(loaded) is DocQASession and type(summary) is DocQASessionSummary
+assert loaded.messages == [('q', 'a')] and loaded.retrieval_messages == ['']
+assert loaded.graph_source_ids == ['file-1'] and summary.graph_source_count == 0
+added_modules = set(sys.modules) - parent_modules
+blocked = ('ktem.docqa.runtime', 'ktem.docqa.execution', 'ktem.db',
+           'ktem.docqa._runtime_session_service', 'ktem.docqa._runtime_sessions',
+           'ktem.docqa._runtime_notebook', 'ktem.llms', 'ktem.embeddings',
+           'ktem.rerankings', 'ktem.pages', 'gradio', 'sqlmodel', 'sqlalchemy')
+assert not any(name == prefix or name.startswith(prefix + '.')
+               for name in added_modules for prefix in blocked), added_modules
+prefix = pathlib.Path(sys.prefix).resolve()
+for name in ('ktem', 'ktem.docqa', 'ktem.docqa._runtime_models',
+             'ktem.docqa.session_projection', 'ktem.docqa.chat_submission'):
+    assert pathlib.Path(sys.modules[name].__file__).resolve().is_relative_to(prefix)
+assert DocQARequest('Question').prompt == 'Question'
+assert DocQARequest.__module__ == 'ktem.docqa._runtime_models'
+from ktem.docqa import DocQARuntime, execute_controller_turn
+runtime = importlib.import_module('ktem.docqa.runtime')
+execution = importlib.import_module('ktem.docqa.execution')
+assert DocQARuntime is runtime.DocQARuntime
+assert DocQARequest is runtime.DocQARequest
+assert DocQAResponse is runtime.DocQAResponse
+assert execute_controller_turn is execution.execute_controller_turn
+assert DocQASession is runtime.DocQASession
+assert DocQASessionSummary is runtime.DocQASessionSummary
+print('[wheel-smoke] installed session projection calls and DTO identity passed')
+print('[wheel-smoke] installed independent chat submission passed')
+print('[wheel-smoke] installed DocQA lightweight exports and runtime identity passed')
+"""
+    _run(
+        [_venv_python(venv), "-B", "-c", validation],
+        env=env,
+        cwd=venv.parent,
+    )
+
+
+def _run_docqa_preparation_smoke(venv: Path, env: dict[str, str]) -> None:
+    route_smoke.run_preparation_smoke(_venv_python(venv), venv.parent, env)
 
 
 def run_smoke(dist_root: Path) -> None:

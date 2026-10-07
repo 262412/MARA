@@ -20,7 +20,9 @@ def register_artifact_commands(docqa: click.Group) -> None:
     def artifacts_list(conversation_id, json_output):
         runtime = notebook_cli._create_runtime()
         notebook_cli._require_session(runtime, conversation_id)
-        notebook = notebook_cli._notebook_service().get_notebook(conversation_id)
+        notebook = notebook_cli._notebook_service().get_notebook(
+            conversation_id, user_id=runtime.user_id
+        )
         artifacts = _notebook_artifacts(notebook)
         if json_output:
             notebook_cli._echo_json(artifacts)
@@ -70,7 +72,9 @@ def _register_artifact_show_command(artifacts_group: click.Group) -> None:
     def artifacts_show(conversation_id, artifact_id, json_output):
         runtime = notebook_cli._create_runtime()
         notebook_cli._require_session(runtime, conversation_id)
-        notebook = notebook_cli._notebook_service().get_notebook(conversation_id)
+        notebook = notebook_cli._notebook_service().get_notebook(
+            conversation_id, user_id=runtime.user_id
+        )
         artifact = _notebook_artifact(notebook, artifact_id)
         if artifact is None:
             raise click.ClickException(f"Artifact '{artifact_id}' does not exist.")
@@ -139,7 +143,7 @@ def _run_artifact_generate(
     runtime = notebook_cli._create_runtime()
     notebook_cli._require_session(runtime, conversation_id)
     service = notebook_cli._notebook_service()
-    notebook = service.get_notebook(conversation_id)
+    notebook = service.get_notebook(conversation_id, user_id=runtime.user_id)
     source_ids = _source_ids_for_generate(runtime, notebook, source_refs, file_refs)
     if not source_ids:
         raise click.ClickException("Select sources or pass --file before generating.")
@@ -186,6 +190,7 @@ def _run_artifact_generate(
         before_count,
         prompt=artifact_prompt,
         source_scope=source_scope,
+        user_id=runtime.user_id,
     )
     if json_output:
         notebook_cli._echo_json(artifact)
@@ -285,7 +290,9 @@ def _register_artifact_export_command(artifacts_group: click.Group) -> None:
         runtime = notebook_cli._create_runtime()
         notebook_cli._require_session(runtime, conversation_id)
         service = notebook_cli._notebook_service()
-        artifact = _required_artifact(service, conversation_id, artifact_id)
+        artifact = _required_artifact(
+            service, conversation_id, artifact_id, user_id=runtime.user_id
+        )
         output_path = output_path or f"{artifact_id}.{export_format}"
         try:
             exported_path = _export_artifact_to_path(
@@ -300,6 +307,7 @@ def _register_artifact_export_command(artifacts_group: click.Group) -> None:
             artifact_id,
             export_format=export_format,
             path=str(exported_path),
+            user_id=runtime.user_id,
         )
         payload = {
             "conversation_id": conversation_id,
@@ -325,8 +333,7 @@ def _register_artifact_delete_command(artifacts_group: click.Group) -> None:
         try:
             deleted = (
                 notebook_cli._notebook_service().delete_artifact_from_conversation(
-                    conversation_id,
-                    artifact_id,
+                    conversation_id, artifact_id, user_id=runtime.user_id
                 )
             )
         except ValueError as exc:
@@ -351,13 +358,16 @@ def _register_artifact_save_note_command(artifacts_group: click.Group) -> None:
         runtime = notebook_cli._create_runtime()
         notebook_cli._require_session(runtime, conversation_id)
         service = notebook_cli._notebook_service()
-        artifact = _required_artifact(service, conversation_id, artifact_id)
+        artifact = _required_artifact(
+            service, conversation_id, artifact_id, user_id=runtime.user_id
+        )
         fields = _build_artifact_note_fields(artifact)
         note = service.save_answer_note_to_conversation(
             conversation_id,
             title=fields["title"],
             answer=fields["text"],
             citation_refs=fields["citation_refs"],
+            user_id=runtime.user_id,
         )
         payload = {
             "conversation_id": conversation_id,
@@ -379,8 +389,10 @@ def _register_artifact_regenerate_command(artifacts_group: click.Group) -> None:
         runtime = notebook_cli._create_runtime()
         notebook_cli._require_session(runtime, conversation_id)
         service = notebook_cli._notebook_service()
-        notebook = service.get_notebook(conversation_id)
-        artifact = _required_artifact(service, conversation_id, artifact_id)
+        notebook = service.get_notebook(conversation_id, user_id=runtime.user_id)
+        artifact = _required_artifact(
+            service, conversation_id, artifact_id, user_id=runtime.user_id
+        )
         artifact_type = str(artifact.get("type") or "").strip()
         source_scope = _normalize_source_scope(artifact.get("source_scope") or {})
         source_ids = list(source_scope.get("source_ids") or [])
@@ -414,6 +426,7 @@ def _register_artifact_regenerate_command(artifacts_group: click.Group) -> None:
             before_count,
             prompt=prompt,
             source_scope=source_scope,
+            user_id=runtime.user_id,
         )
         payload = {
             "conversation_id": conversation_id,
@@ -454,9 +467,13 @@ def _new_or_captured_artifact(
     artifact_type: str,
     response: Any,
     before_count: int,
+    *,
+    user_id: Any,
     **metadata: Any,
 ) -> dict[str, Any]:
-    artifacts = _notebook_artifacts(service.get_notebook(conversation_id))
+    artifacts = _notebook_artifacts(
+        service.get_notebook(conversation_id, user_id=user_id)
+    )
     if len(artifacts) > before_count:
         return artifacts[-1]
     payload = getattr(response, "artifact", None)
@@ -466,6 +483,7 @@ def _new_or_captured_artifact(
         conversation_id,
         artifact_type=artifact_type,
         payload=payload,
+        user_id=user_id,
         **metadata,
     )
 
@@ -477,9 +495,9 @@ def _normalize_source_scope(value: Any) -> dict[str, Any]:
 
 
 def _required_artifact(
-    service, conversation_id: str, artifact_id: str
+    service, conversation_id: str, artifact_id: str, *, user_id: Any
 ) -> dict[str, Any]:
-    notebook = service.get_notebook(conversation_id)
+    notebook = service.get_notebook(conversation_id, user_id=user_id)
     artifact = _notebook_artifact(notebook, artifact_id)
     if artifact is None:
         raise click.ClickException(f"Artifact '{artifact_id}' does not exist.")

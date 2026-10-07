@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import IO, BinaryIO
+from typing import IO, BinaryIO, Callable
+
+logger = logging.getLogger(__name__)
 
 
 class ArtifactNamespaceError(ValueError):
@@ -64,12 +67,28 @@ class ManifestArtifact:
     size: int
     identity: FileIdentity
     digest: str
+    _closed: bool = field(default=False, init=False, compare=False, repr=False)
 
     def open(self) -> BinaryIO:
-        return os.fdopen(os.dup(self.fd), "rb")
+        self._require_open()
+        duplicate = os.dup(self.fd)
+        try:
+            return os.fdopen(duplicate, "rb")
+        except BaseException:
+            try:
+                os.close(duplicate)
+            except OSError:
+                logger.exception("Failed to close artifact stream duplicate")
+            raise
 
     def close(self) -> None:
-        os.close(self.fd)
+        if not self._closed:
+            object.__setattr__(self, "_closed", True)
+            os.close(self.fd)
+
+    def _require_open(self) -> None:
+        if self._closed:
+            raise ArtifactNamespaceError("Artifact handle is closed")
 
     def copy_to(self, target: IO[bytes]) -> None:
         self._validate_current()
@@ -100,6 +119,7 @@ class ManifestArtifact:
             )
 
     def _validate_current(self) -> None:
+        self._require_open()
         self.identity.validate_fd(
             self.fd,
             message="Artifact changed while constructing the download",
@@ -107,15 +127,16 @@ class ManifestArtifact:
 
 
 def digest_fd(fd: int, size: int) -> str:
+    pread: Callable[[int, int, int], bytes] = getattr(os, "pread")
     digest = sha256()
     offset = 0
     while offset < size:
-        chunk = os.pread(fd, min(1024 * 1024, size - offset), offset)
+        chunk = pread(fd, min(1024 * 1024, size - offset), offset)
         if not chunk:
             raise ArtifactNamespaceError("Artifact changed while reading")
         digest.update(chunk)
         offset += len(chunk)
-    if os.pread(fd, 1, size):
+    if pread(fd, 1, size):
         raise ArtifactNamespaceError("Artifact changed while reading")
     return digest.hexdigest()
 

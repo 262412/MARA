@@ -34,7 +34,8 @@ def is_production_path(path: str) -> bool:
         return False
     return any(
         normalized == root or normalized.startswith(f"{root}/")
-        for root in PRODUCTION_PATHS.values()
+        for roots in PRODUCTION_PATHS.values()
+        for root in roots
     )
 
 

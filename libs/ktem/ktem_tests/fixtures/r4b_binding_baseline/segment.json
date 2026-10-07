@@ -1,0 +1,1872 @@
+{
+  "source": "7ed1b371cd942012b24e9654c191fcb843e7a9e4",
+  "production_sha256": {
+    "query_evidence_binding": "8efc6ad940c4fb6e4ffc5bd41319a5dac901ddbbefc7f52bb6923dc0e7324211",
+    "query_evidence_binding_support": "8fdc3cb68b0d4f4c6fbe6632f5bb0fa52b092bb9392af302a2bfdccc0184e6eb",
+    "query_evidence_assessment": "d7bfe2e5972badfa1025b4dc0b2c0717bf0e1217190b6417c2f180d0db187a1b",
+    "evidence_identity": "9e3bc94f77e551a2b86b752a5b38c903a2d906d274811a9e684c4568365b261e",
+    "query_plan_schema": "7b719a95eaa7621116dd26aa51389ac5ec20f37d9d4fa864ea4a44bb1a0c94fe",
+    "deterministic_ranking": "600a418a6654d608f3f6aea4e04f61c55a1069616604091bc019d34012e6ee78",
+    "selection_assessment_snapshot": "af0a29cafd5a61f84705098c5ec70a673dadce748e6b3122e4d34bfe6fac6088"
+  },
+  "observations": {
+    "segment/ordinary/False": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:993314d20b921cc86f5c",
+            "answer_type": "extractive",
+            "question_type": "comparison_argmax",
+            "subqueries": [
+              "reporting segment net revenue 2021",
+              "reporting segment net revenue 2022"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "operand:net_sales:2021",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2021",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2021",
+                "locator": {}
+              },
+              {
+                "slot_id": "operand:net_sales:2022",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2022",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2022",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [
+                "2021",
+                "2022"
+              ],
+              "verification_domain": "finance",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": {
+                "__tuple__": []
+              },
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": true,
+              "comparison_operator": "proportional_increase",
+              "excluded_entities": [
+                "embedded"
+              ],
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "segment-page",
+              "source_id": "AMD_2022_10K",
+              "page_label": "48",
+              "table_group_id": "segment-revenue",
+              "modality": "table",
+              "text": "Revenue by reporting segment (in millions)\n2022 2021\nData Center 6,043 3,694\nClient 6,201 6,887\nGaming 6,805 5,607\nEmbedded 4,552 246"
+            }
+          ],
+          "audit": null,
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:993314d20b921cc86f5c",
+          "answer_type": "extractive",
+          "question_type": "comparison_argmax",
+          "subqueries": [
+            "reporting segment net revenue 2021",
+            "reporting segment net revenue 2022"
+          ],
+          "evidence_slots": [
+            {
+              "slot_id": "operand:net_sales:2021",
+              "role": "support",
+              "entity": "",
+              "metric": "net sales",
+              "period": "2021",
+              "period_kind": "fiscal_year",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "segment_table",
+              "financial_scope": "segment",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "reporting segment net revenue 2021",
+              "locator": {}
+            },
+            {
+              "slot_id": "operand:net_sales:2022",
+              "role": "support",
+              "entity": "",
+              "metric": "net sales",
+              "period": "2022",
+              "period_kind": "fiscal_year",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "segment_table",
+              "financial_scope": "segment",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "reporting segment net revenue 2022",
+              "locator": {}
+            }
+          ],
+          "constraints": {
+            "periods": [
+              "2021",
+              "2022"
+            ],
+            "verification_domain": "finance",
+            "requires_visual": false,
+            "requires_multiple_evidence": false,
+            "requires_distinct_source_pages": false,
+            "requires_structured_elements": false,
+            "explicit_page_labels": {
+              "__tuple__": []
+            },
+            "figure_label": "",
+            "table_label": "",
+            "requires_distinct_evidence": false,
+            "requires_structure": true,
+            "comparison_operator": "proportional_increase",
+            "excluded_entities": [
+              "embedded"
+            ],
+            "finance_formula_status": "not_applicable"
+          },
+          "max_retrieval_rounds": 2
+        },
+        "trace": [],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "operand:net_sales:2021",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "operand:net_sales:2021",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "operand:net_sales:2021",
+            "result": "filled"
+          },
+          {
+            "stage": "_existing_binding_state",
+            "slot": "operand:net_sales:2022",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "operand:net_sales:2022",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "operand:net_sales:2022",
+            "result": "filled"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "operand:net_sales:2021",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2021",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2021",
+                "locator": {}
+              },
+              {
+                "slot_id": "operand:net_sales:2022",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2022",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2022",
+                "locator": {}
+              }
+            ],
+            "identities": [
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "segment-page",
+            "source_id": "AMD_2022_10K",
+            "page_label": "48",
+            "table_group_id": "segment-revenue",
+            "modality": "table",
+            "text": "Revenue by reporting segment (in millions)\n2022 2021\nData Center 6,043 3,694\nClient 6,201 6,887\nGaming 6,805 5,607\nEmbedded 4,552 246"
+          }
+        ],
+        "audit": null,
+        "classifications": {},
+        "same_slot_objects": [
+          false,
+          false
+        ],
+        "same_constraints": true
+      }
+    ],
+    "segment/ordinary/True": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:993314d20b921cc86f5c",
+            "answer_type": "extractive",
+            "question_type": "comparison_argmax",
+            "subqueries": [
+              "reporting segment net revenue 2021",
+              "reporting segment net revenue 2022"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "operand:net_sales:2021",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2021",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2021",
+                "locator": {}
+              },
+              {
+                "slot_id": "operand:net_sales:2022",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2022",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2022",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [
+                "2021",
+                "2022"
+              ],
+              "verification_domain": "finance",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": {
+                "__tuple__": []
+              },
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": true,
+              "comparison_operator": "proportional_increase",
+              "excluded_entities": [
+                "embedded"
+              ],
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "segment-page",
+              "source_id": "AMD_2022_10K",
+              "page_label": "48",
+              "table_group_id": "segment-revenue",
+              "modality": "table",
+              "text": "Revenue by reporting segment (in millions)\n2022 2021\nData Center 6,043 3,694\nClient 6,201 6,887\nGaming 6,805 5,607\nEmbedded 4,552 246"
+            }
+          ],
+          "audit": {
+            "unique_semantic_candidates": 0,
+            "slots": 0,
+            "cache_entries": 0,
+            "cache_builds": 1,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "classification_calls": 0,
+            "mmr_hot_loop_misses": 0,
+            "time_spent_ms": "elapsed milliseconds"
+          },
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:993314d20b921cc86f5c",
+          "answer_type": "extractive",
+          "question_type": "comparison_argmax",
+          "subqueries": [
+            "reporting segment net revenue 2021",
+            "reporting segment net revenue 2022"
+          ],
+          "evidence_slots": [
+            {
+              "slot_id": "operand:net_sales:2021",
+              "role": "support",
+              "entity": "",
+              "metric": "net sales",
+              "period": "2021",
+              "period_kind": "fiscal_year",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "segment_table",
+              "financial_scope": "segment",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "reporting segment net revenue 2021",
+              "locator": {}
+            },
+            {
+              "slot_id": "operand:net_sales:2022",
+              "role": "support",
+              "entity": "",
+              "metric": "net sales",
+              "period": "2022",
+              "period_kind": "fiscal_year",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "segment_table",
+              "financial_scope": "segment",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "reporting segment net revenue 2022",
+              "locator": {}
+            }
+          ],
+          "constraints": {
+            "periods": [
+              "2021",
+              "2022"
+            ],
+            "verification_domain": "finance",
+            "requires_visual": false,
+            "requires_multiple_evidence": false,
+            "requires_distinct_source_pages": false,
+            "requires_structured_elements": false,
+            "explicit_page_labels": {
+              "__tuple__": []
+            },
+            "figure_label": "",
+            "table_label": "",
+            "requires_distinct_evidence": false,
+            "requires_structure": true,
+            "comparison_operator": "proportional_increase",
+            "excluded_entities": [
+              "embedded"
+            ],
+            "finance_formula_status": "not_applicable"
+          },
+          "max_retrieval_rounds": 2
+        },
+        "trace": [],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "operand:net_sales:2021",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "operand:net_sales:2021",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "operand:net_sales:2021",
+            "result": "filled"
+          },
+          {
+            "stage": "_existing_binding_state",
+            "slot": "operand:net_sales:2022",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "operand:net_sales:2022",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "operand:net_sales:2022",
+            "result": "filled"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "operand:net_sales:2021",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2021",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2021",
+                "locator": {}
+              },
+              {
+                "slot_id": "operand:net_sales:2022",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2022",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2022",
+                "locator": {}
+              }
+            ],
+            "identities": [
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "segment-page",
+            "source_id": "AMD_2022_10K",
+            "page_label": "48",
+            "table_group_id": "segment-revenue",
+            "modality": "table",
+            "text": "Revenue by reporting segment (in millions)\n2022 2021\nData Center 6,043 3,694\nClient 6,201 6,887\nGaming 6,805 5,607\nEmbedded 4,552 246"
+          }
+        ],
+        "audit": {
+          "unique_semantic_candidates": 0,
+          "slots": 0,
+          "cache_entries": 0,
+          "cache_builds": 1,
+          "cache_hits": 0,
+          "cache_misses": 0,
+          "classification_calls": 0,
+          "mmr_hot_loop_misses": 0,
+          "time_spent_ms": "elapsed milliseconds"
+        },
+        "classifications": {},
+        "same_slot_objects": [
+          false,
+          false
+        ],
+        "same_constraints": true
+      }
+    ],
+    "segment/monotonic/False": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:993314d20b921cc86f5c",
+            "answer_type": "extractive",
+            "question_type": "comparison_argmax",
+            "subqueries": [
+              "reporting segment net revenue 2021",
+              "reporting segment net revenue 2022"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "operand:net_sales:2021",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2021",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2021",
+                "locator": {}
+              },
+              {
+                "slot_id": "operand:net_sales:2022",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2022",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2022",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [
+                "2021",
+                "2022"
+              ],
+              "verification_domain": "finance",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": {
+                "__tuple__": []
+              },
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": true,
+              "comparison_operator": "proportional_increase",
+              "excluded_entities": [
+                "embedded"
+              ],
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "segment-page",
+              "source_id": "AMD_2022_10K",
+              "page_label": "48",
+              "table_group_id": "segment-revenue",
+              "modality": "table",
+              "text": "Revenue by reporting segment (in millions)\n2022 2021\nData Center 6,043 3,694\nClient 6,201 6,887\nGaming 6,805 5,607\nEmbedded 4,552 246"
+            }
+          ],
+          "audit": null,
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:993314d20b921cc86f5c",
+          "answer_type": "extractive",
+          "question_type": "comparison_argmax",
+          "subqueries": [
+            "reporting segment net revenue 2021",
+            "reporting segment net revenue 2022"
+          ],
+          "evidence_slots": [
+            {
+              "slot_id": "operand:net_sales:2021",
+              "role": "support",
+              "entity": "",
+              "metric": "net sales",
+              "period": "2021",
+              "period_kind": "fiscal_year",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "segment_table",
+              "financial_scope": "segment",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "reporting segment net revenue 2021",
+              "locator": {}
+            },
+            {
+              "slot_id": "operand:net_sales:2022",
+              "role": "support",
+              "entity": "",
+              "metric": "net sales",
+              "period": "2022",
+              "period_kind": "fiscal_year",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "segment_table",
+              "financial_scope": "segment",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "reporting segment net revenue 2022",
+              "locator": {}
+            }
+          ],
+          "constraints": {
+            "periods": [
+              "2021",
+              "2022"
+            ],
+            "verification_domain": "finance",
+            "requires_visual": false,
+            "requires_multiple_evidence": false,
+            "requires_distinct_source_pages": false,
+            "requires_structured_elements": false,
+            "explicit_page_labels": {
+              "__tuple__": []
+            },
+            "figure_label": "",
+            "table_label": "",
+            "requires_distinct_evidence": false,
+            "requires_structure": true,
+            "comparison_operator": "proportional_increase",
+            "excluded_entities": [
+              "embedded"
+            ],
+            "finance_formula_status": "not_applicable"
+          },
+          "max_retrieval_rounds": 2
+        },
+        "trace": [
+          {
+            "slot_id": "operand:net_sales:2021",
+            "preserved_existing_binding": false,
+            "replacement_reason": "missing_existing_binding",
+            "before_identity": "",
+            "after_identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2"
+          },
+          {
+            "slot_id": "operand:net_sales:2022",
+            "preserved_existing_binding": false,
+            "replacement_reason": "missing_existing_binding",
+            "before_identity": "",
+            "after_identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1"
+          }
+        ],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "operand:net_sales:2021",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "operand:net_sales:2021",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "operand:net_sales:2021",
+            "result": "filled"
+          },
+          {
+            "stage": "_existing_binding_state",
+            "slot": "operand:net_sales:2022",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "operand:net_sales:2022",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "operand:net_sales:2022",
+            "result": "filled"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "operand:net_sales:2021",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2021",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2021",
+                "locator": {}
+              },
+              {
+                "slot_id": "operand:net_sales:2022",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2022",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2022",
+                "locator": {}
+              }
+            ],
+            "identities": [
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "segment-page",
+            "source_id": "AMD_2022_10K",
+            "page_label": "48",
+            "table_group_id": "segment-revenue",
+            "modality": "table",
+            "text": "Revenue by reporting segment (in millions)\n2022 2021\nData Center 6,043 3,694\nClient 6,201 6,887\nGaming 6,805 5,607\nEmbedded 4,552 246"
+          }
+        ],
+        "audit": null,
+        "classifications": {},
+        "same_slot_objects": [
+          false,
+          false
+        ],
+        "same_constraints": true
+      }
+    ],
+    "segment/monotonic/True": [
+      {
+        "before": {
+          "plan": {
+            "contract_id": "query_plan.v1",
+            "plan_id": "plan:993314d20b921cc86f5c",
+            "answer_type": "extractive",
+            "question_type": "comparison_argmax",
+            "subqueries": [
+              "reporting segment net revenue 2021",
+              "reporting segment net revenue 2022"
+            ],
+            "evidence_slots": [
+              {
+                "slot_id": "operand:net_sales:2021",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2021",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2021",
+                "locator": {}
+              },
+              {
+                "slot_id": "operand:net_sales:2022",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2022",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "missing",
+                "evidence_ids": [],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2022",
+                "locator": {}
+              }
+            ],
+            "constraints": {
+              "periods": [
+                "2021",
+                "2022"
+              ],
+              "verification_domain": "finance",
+              "requires_visual": false,
+              "requires_multiple_evidence": false,
+              "requires_distinct_source_pages": false,
+              "requires_structured_elements": false,
+              "explicit_page_labels": {
+                "__tuple__": []
+              },
+              "figure_label": "",
+              "table_label": "",
+              "requires_distinct_evidence": false,
+              "requires_structure": true,
+              "comparison_operator": "proportional_increase",
+              "excluded_entities": [
+                "embedded"
+              ],
+              "finance_formula_status": "not_applicable"
+            },
+            "max_retrieval_rounds": 2
+          },
+          "items": [
+            {
+              "evidence_id": "segment-page",
+              "source_id": "AMD_2022_10K",
+              "page_label": "48",
+              "table_group_id": "segment-revenue",
+              "modality": "table",
+              "text": "Revenue by reporting segment (in millions)\n2022 2021\nData Center 6,043 3,694\nClient 6,201 6,887\nGaming 6,805 5,607\nEmbedded 4,552 246"
+            }
+          ],
+          "audit": {
+            "unique_semantic_candidates": 0,
+            "slots": 0,
+            "cache_entries": 0,
+            "cache_builds": 1,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "classification_calls": 0,
+            "mmr_hot_loop_misses": 0,
+            "time_spent_ms": "elapsed milliseconds"
+          },
+          "classifications": {}
+        },
+        "after": {
+          "contract_id": "query_plan.v1",
+          "plan_id": "plan:993314d20b921cc86f5c",
+          "answer_type": "extractive",
+          "question_type": "comparison_argmax",
+          "subqueries": [
+            "reporting segment net revenue 2021",
+            "reporting segment net revenue 2022"
+          ],
+          "evidence_slots": [
+            {
+              "slot_id": "operand:net_sales:2021",
+              "role": "support",
+              "entity": "",
+              "metric": "net sales",
+              "period": "2021",
+              "period_kind": "fiscal_year",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "segment_table",
+              "financial_scope": "segment",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "reporting segment net revenue 2021",
+              "locator": {}
+            },
+            {
+              "slot_id": "operand:net_sales:2022",
+              "role": "support",
+              "entity": "",
+              "metric": "net sales",
+              "period": "2022",
+              "period_kind": "fiscal_year",
+              "unit": "",
+              "scale": "",
+              "statement_kind": "segment_table",
+              "financial_scope": "segment",
+              "modality": "auto",
+              "required": true,
+              "required_for_retrieval": true,
+              "required_for_execution": false,
+              "required_for_verification": true,
+              "status": "filled",
+              "evidence_ids": [
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+                "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1"
+              ],
+              "cardinality": 1,
+              "operator_role": "",
+              "query": "reporting segment net revenue 2022",
+              "locator": {}
+            }
+          ],
+          "constraints": {
+            "periods": [
+              "2021",
+              "2022"
+            ],
+            "verification_domain": "finance",
+            "requires_visual": false,
+            "requires_multiple_evidence": false,
+            "requires_distinct_source_pages": false,
+            "requires_structured_elements": false,
+            "explicit_page_labels": {
+              "__tuple__": []
+            },
+            "figure_label": "",
+            "table_label": "",
+            "requires_distinct_evidence": false,
+            "requires_structure": true,
+            "comparison_operator": "proportional_increase",
+            "excluded_entities": [
+              "embedded"
+            ],
+            "finance_formula_status": "not_applicable"
+          },
+          "max_retrieval_rounds": 2
+        },
+        "trace": [
+          {
+            "slot_id": "operand:net_sales:2021",
+            "preserved_existing_binding": false,
+            "replacement_reason": "missing_existing_binding",
+            "before_identity": "",
+            "after_identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2"
+          },
+          {
+            "slot_id": "operand:net_sales:2022",
+            "preserved_existing_binding": false,
+            "replacement_reason": "missing_existing_binding",
+            "before_identity": "",
+            "after_identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1"
+          }
+        ],
+        "calls": [
+          {
+            "stage": "_existing_binding_state",
+            "slot": "operand:net_sales:2021",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2021",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2021",
+            "result": 1.25
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "operand:net_sales:2021",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "operand:net_sales:2021",
+            "result": "filled"
+          },
+          {
+            "stage": "_existing_binding_state",
+            "slot": "operand:net_sales:2022",
+            "result": [
+              false,
+              "missing_existing_binding"
+            ]
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+            "result": 0.0
+          },
+          {
+            "stage": "_candidate_score",
+            "slot": "operand:net_sales:2022",
+            "identity": "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2",
+            "result": 0.0
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_slot_binding_quality",
+            "slot": "operand:net_sales:2022",
+            "result": 1.25
+          },
+          {
+            "stage": "_update_bound_operand_state",
+            "slot": "operand:net_sales:2022",
+            "operand_items": [],
+            "used_generic_ids": {}
+          },
+          {
+            "stage": "_bound_slot_status",
+            "slot": "operand:net_sales:2022",
+            "result": "filled"
+          },
+          {
+            "stage": "reconcile_boolean_binding_slots",
+            "slots": [
+              {
+                "slot_id": "operand:net_sales:2021",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2021",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2021",
+                "locator": {}
+              },
+              {
+                "slot_id": "operand:net_sales:2022",
+                "role": "support",
+                "entity": "",
+                "metric": "net sales",
+                "period": "2022",
+                "period_kind": "fiscal_year",
+                "unit": "",
+                "scale": "",
+                "statement_kind": "segment_table",
+                "financial_scope": "segment",
+                "modality": "auto",
+                "required": true,
+                "required_for_retrieval": true,
+                "required_for_execution": false,
+                "required_for_verification": true,
+                "status": "filled",
+                "evidence_ids": [
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+                  "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1"
+                ],
+                "cardinality": 1,
+                "operator_role": "",
+                "query": "reporting segment net revenue 2022",
+                "locator": {}
+              }
+            ],
+            "identities": [
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A1#column%3A2",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A2#column%3A2",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A1",
+              "cell:AMD_2022_10K:source%3AAMD_2022_10K#page%3A48#table-instance%3Asegment-page#block%3Asegment-page#row%3A3#column%3A2"
+            ]
+          }
+        ],
+        "items_after": [
+          {
+            "evidence_id": "segment-page",
+            "source_id": "AMD_2022_10K",
+            "page_label": "48",
+            "table_group_id": "segment-revenue",
+            "modality": "table",
+            "text": "Revenue by reporting segment (in millions)\n2022 2021\nData Center 6,043 3,694\nClient 6,201 6,887\nGaming 6,805 5,607\nEmbedded 4,552 246"
+          }
+        ],
+        "audit": {
+          "unique_semantic_candidates": 0,
+          "slots": 0,
+          "cache_entries": 0,
+          "cache_builds": 1,
+          "cache_hits": 0,
+          "cache_misses": 0,
+          "classification_calls": 0,
+          "mmr_hot_loop_misses": 0,
+          "time_spent_ms": "elapsed milliseconds"
+        },
+        "classifications": {},
+        "same_slot_objects": [
+          false,
+          false
+        ],
+        "same_constraints": true
+      }
+    ]
+  }
+}

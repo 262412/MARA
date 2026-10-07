@@ -1,0 +1,697 @@
+{
+  "all": [
+    "DocQADoctorResult",
+    "DocQAFileRecord",
+    "DocQAIndexResult",
+    "DocQARequest",
+    "DocQAResponse",
+    "DocQARuntime",
+    "DocQASession",
+    "DocQASessionSummary",
+    "DocQATurnUpdate",
+    "DocQARequestPolicy",
+    "DOCQA_REQUEST_POLICIES",
+    "WEB_REQUEST_POLICY",
+    "MARA_CLI_REQUEST_POLICY",
+    "LEGACY_CLI_REQUEST_POLICY",
+    "BENCHMARK_REQUEST_POLICY",
+    "RouteDecision",
+    "RetrieveDecision",
+    "EvidenceBundle",
+    "EvidenceElement",
+    "VerifyDecision",
+    "ControllerTrace",
+    "ControllerDecision",
+    "GuardrailDecision",
+    "RouteExecutionResult",
+    "WorkflowPlan",
+    "WorkflowStep",
+    "route_registry",
+    "executor_registry",
+    "parse_planner_decision",
+    "evaluate_retrieval_quality",
+    "build_workflow_plan",
+    "build_evidence_bundle",
+    "execute_controller_turn",
+    "ARTIFACT_LABELS",
+    "ARTIFACT_STATUSES",
+    "SUPPORTED_ARTIFACT_TYPES",
+    "normalize_artifact",
+    "page_image_records_from_documents",
+    "element_records_from_documents",
+    "_runtime_selection",
+    "_runtime_indexing",
+    "_runtime_doctor",
+    "_runtime_pipeline",
+    "_runtime_sessions",
+    "_runtime_turn"
+  ],
+  "sources": {
+    "_runtime_doctor": [
+      "ktem.docqa._runtime_doctor",
+      null
+    ],
+    "_runtime_indexing": [
+      "ktem.docqa._runtime_indexing",
+      null
+    ],
+    "_runtime_pipeline": [
+      "ktem.docqa._runtime_pipeline",
+      null
+    ],
+    "_runtime_selection": [
+      "ktem.docqa._runtime_selection",
+      null
+    ],
+    "_runtime_sessions": [
+      "ktem.docqa._runtime_sessions",
+      null
+    ],
+    "_runtime_turn": [
+      "ktem.docqa._runtime_turn",
+      null
+    ],
+    "ARTIFACT_LABELS": [
+      "ktem.docqa.artifact_models",
+      "ARTIFACT_LABELS"
+    ],
+    "ARTIFACT_STATUSES": [
+      "ktem.docqa.artifact_models",
+      "ARTIFACT_STATUSES"
+    ],
+    "SUPPORTED_ARTIFACT_TYPES": [
+      "ktem.docqa.artifact_models",
+      "SUPPORTED_ARTIFACT_TYPES"
+    ],
+    "normalize_artifact": [
+      "ktem.docqa.artifact_models",
+      "normalize_artifact"
+    ],
+    "ControllerTrace": [
+      "ktem.docqa.controller",
+      "ControllerTrace"
+    ],
+    "RetrieveDecision": [
+      "ktem.docqa.controller",
+      "RetrieveDecision"
+    ],
+    "RouteDecision": [
+      "ktem.docqa.controller",
+      "RouteDecision"
+    ],
+    "VerifyDecision": [
+      "ktem.docqa.controller",
+      "VerifyDecision"
+    ],
+    "evaluate_retrieval_quality": [
+      "ktem.docqa.controller",
+      "evaluate_retrieval_quality"
+    ],
+    "executor_registry": [
+      "ktem.docqa.controller",
+      "executor_registry"
+    ],
+    "parse_planner_decision": [
+      "ktem.docqa.controller",
+      "parse_planner_decision"
+    ],
+    "route_registry": [
+      "ktem.docqa.controller",
+      "route_registry"
+    ],
+    "EvidenceBundle": [
+      "ktem.docqa.evidence",
+      "EvidenceBundle"
+    ],
+    "EvidenceElement": [
+      "ktem.docqa.evidence",
+      "EvidenceElement"
+    ],
+    "build_evidence_bundle": [
+      "ktem.docqa.evidence",
+      "build_evidence_bundle"
+    ],
+    "ControllerDecision": [
+      "ktem.docqa.execution",
+      "ControllerDecision"
+    ],
+    "GuardrailDecision": [
+      "ktem.docqa.execution",
+      "GuardrailDecision"
+    ],
+    "RouteExecutionResult": [
+      "ktem.docqa.execution",
+      "RouteExecutionResult"
+    ],
+    "execute_controller_turn": [
+      "ktem.docqa.execution",
+      "execute_controller_turn"
+    ],
+    "element_records_from_documents": [
+      "ktem.docqa.multimodal_index",
+      "element_records_from_documents"
+    ],
+    "page_image_records_from_documents": [
+      "ktem.docqa.multimodal_index",
+      "page_image_records_from_documents"
+    ],
+    "BENCHMARK_REQUEST_POLICY": [
+      "ktem.docqa.request_policies",
+      "BENCHMARK_REQUEST_POLICY"
+    ],
+    "DOCQA_REQUEST_POLICIES": [
+      "ktem.docqa.request_policies",
+      "DOCQA_REQUEST_POLICIES"
+    ],
+    "LEGACY_CLI_REQUEST_POLICY": [
+      "ktem.docqa.request_policies",
+      "LEGACY_CLI_REQUEST_POLICY"
+    ],
+    "MARA_CLI_REQUEST_POLICY": [
+      "ktem.docqa.request_policies",
+      "MARA_CLI_REQUEST_POLICY"
+    ],
+    "WEB_REQUEST_POLICY": [
+      "ktem.docqa.request_policies",
+      "WEB_REQUEST_POLICY"
+    ],
+    "DocQARequestPolicy": [
+      "ktem.docqa.request_policies",
+      "DocQARequestPolicy"
+    ],
+    "DocQADoctorResult": [
+      "ktem.docqa.runtime",
+      "DocQADoctorResult"
+    ],
+    "DocQAFileRecord": [
+      "ktem.docqa.runtime",
+      "DocQAFileRecord"
+    ],
+    "DocQAIndexResult": [
+      "ktem.docqa.runtime",
+      "DocQAIndexResult"
+    ],
+    "DocQARequest": [
+      "ktem.docqa.runtime",
+      "DocQARequest"
+    ],
+    "DocQAResponse": [
+      "ktem.docqa.runtime",
+      "DocQAResponse"
+    ],
+    "DocQARuntime": [
+      "ktem.docqa.runtime",
+      "DocQARuntime"
+    ],
+    "DocQASession": [
+      "ktem.docqa.runtime",
+      "DocQASession"
+    ],
+    "DocQASessionSummary": [
+      "ktem.docqa.runtime",
+      "DocQASessionSummary"
+    ],
+    "DocQATurnUpdate": [
+      "ktem.docqa.runtime",
+      "DocQATurnUpdate"
+    ],
+    "WorkflowPlan": [
+      "ktem.docqa.workflow",
+      "WorkflowPlan"
+    ],
+    "WorkflowStep": [
+      "ktem.docqa.workflow",
+      "WorkflowStep"
+    ],
+    "build_workflow_plan": [
+      "ktem.docqa.workflow",
+      "build_workflow_plan"
+    ]
+  },
+  "exports": {
+    "DocQADoctorResult": {
+      "module": "ktem.docqa._runtime_models",
+      "signature": "(ok: 'bool', app_name: 'str', default_user_id: 'Any', index_name: 'str', index_id: 'int | None', llm_default: 'str', embedding_default: 'str', file_count: 'int', session_count: 'int', graph_cache_dir: 'str', issues: 'list[str]', warnings: 'list[str]' = <factory>) -> None",
+      "factories": {
+        "warnings": "builtins.list"
+      }
+    },
+    "DocQAFileRecord": {
+      "module": "ktem.docqa._runtime_models",
+      "signature": "(file_id: 'str', name: 'str', size: 'int', tokens: 'int', loader: 'str', path: 'str', date_created: 'Any') -> None",
+      "factories": {}
+    },
+    "DocQAIndexResult": {
+      "module": "ktem.docqa._runtime_models",
+      "signature": "(successes: 'list[dict[str, Any]]', failures: 'list[dict[str, Any]]', debug_messages: 'list[str]') -> None",
+      "factories": {}
+    },
+    "DocQARequest": {
+      "module": "ktem.docqa._runtime_models",
+      "signature": "(prompt: 'str', controller_question: 'str' = '', retrieval_query: 'str' = '', retrieval_slot_id: 'str' = '', retrieval_round_id: 'int' = 0, dataset_family: 'str' = '', conversation_id: 'str' = '', selected_file_ids: 'Optional[list[str]]' = None, source_identity_crosswalk: 'Optional[list[dict[str, Any]]]' = None, selected_inputs: 'Optional[dict[int, Any]]' = None, qa_scope: 'str' = 'auto', active_file_id: 'str' = '', active_file_name: 'str' = '', page_number: 'Optional[int]' = None, selected_text: 'str' = '', selected_source_title: 'str' = '', graph_context: 'dict[str, Any]' = <factory>, graph_source_ids: 'Optional[list[str]]' = None, settings: 'Optional[dict[str, Any]]' = None, state: 'Optional[dict[str, Any]]' = None, history: 'Optional[list[tuple[str, str]]]' = None, max_context_length: 'Optional[int]' = None, reasoning_type: 'Optional[str]' = None, task_type: 'Optional[str]' = None, answer_type: 'Optional[str]' = None, modality: 'Optional[str]' = None, agent_mode: 'Optional[str]' = None, artifact_type: 'Optional[str]' = None, note_ids: 'Optional[list[str]]' = None, controller_mode: 'Optional[str]' = None, route_policy: 'Optional[str]' = None, planner_backend: 'Optional[str]' = None, planner_model: 'Optional[str]' = None, planned_query_plan: 'Any' = None, query_plan: 'Any' = None, query_plan_id: 'str' = '', query_plan_state_version: 'int' = 0, allowed_routes: 'Optional[list[str]]' = None, verification_mode: 'Optional[str]' = None, verification_domain: 'Optional[str]' = None, graph_mode: 'Optional[str]' = None, visual_retriever_backend: 'Optional[str]' = None, visual_generator_backend: 'Optional[str]' = None, reranker_name: 'Optional[str]' = None, page_image_records: 'Optional[list[dict[str, Any]]]' = None, element_index_records: 'Optional[list[dict[str, Any]]]' = None, llm: 'Optional[str]' = None, use_mindmap: 'bool | str | None' = None, use_citation: 'Optional[str]' = None, language: 'Optional[str]' = None, command_state: 'Optional[str]' = None, route_timeout_seconds: 'Optional[float]' = None, route_deadline_monotonic: 'Optional[float]' = None, route_terminal_reserve_seconds: 'Optional[float]' = None, generation_temperature: 'Optional[float]' = None, generation_top_p: 'Optional[float]' = None, generation_seed: 'Optional[int]' = None, trace_context: 'dict[str, Any]' = <factory>, user_id: 'Any' = None, origin: 'str' = 'cli') -> None",
+      "factories": {
+        "graph_context": "builtins.dict",
+        "trace_context": "builtins.dict"
+      }
+    },
+    "DocQAResponse": {
+      "module": "ktem.docqa._runtime_models",
+      "signature": "(conversation_id: 'str', answer: 'str', references_html: 'str', references_text: 'str', mindmap_html: 'str', plot: 'Any', messages: 'list[tuple[str, str]]', retrieval_messages: 'list[str]', plot_history: 'list[Any]', state: 'dict[str, Any]', selected_file_ids: 'list[str]', selected_mapping: 'dict[str, Any]', graph_source_ids: 'list[str]', active_file_id: 'str', active_file_name: 'str', qa_scope: 'str', page_number: 'Optional[int]', selected_text: 'str', graph_context: 'dict[str, Any]', reasoning_id: 'str', settings: 'dict[str, Any]', stream_events: 'list[dict[str, Any]]', graph_cache: 'Optional[dict[str, Any]]' = None, agent_trace: 'list[dict[str, Any]]' = <factory>, evidence_metadata: 'dict[str, Any]' = <factory>, controller_decision: 'dict[str, Any]' = <factory>, route_decision: 'dict[str, Any]' = <factory>, retrieve_decision: 'dict[str, Any]' = <factory>, verify_decision: 'dict[str, Any]' = <factory>, guardrail_decision: 'dict[str, Any]' = <factory>, controller_trace: 'list[dict[str, Any]]' = <factory>, evidence_bundle: 'dict[str, Any]' = <factory>, workflow_plan: 'dict[str, Any]' = <factory>, backend_metadata: 'dict[str, Any]' = <factory>, artifact: 'Any' = None, engine_terminal_answer: 'str' = '', engine_terminal_state: 'dict[str, Any]' = <factory>, engine_verify_decision: 'dict[str, Any]' = <factory>, engine_terminal_guardrail_decision: 'dict[str, Any]' = <factory>, engine_terminal_evidence_bundle: 'dict[str, Any]' = <factory>, engine_terminal_projection_hash: 'str' = '', engine_terminal_commit: 'dict[str, Any]' = <factory>, terminal_semantic_commit: 'dict[str, Any]' = <factory>) -> None",
+      "factories": {
+        "agent_trace": "builtins.list",
+        "evidence_metadata": "builtins.dict",
+        "controller_decision": "builtins.dict",
+        "route_decision": "builtins.dict",
+        "retrieve_decision": "builtins.dict",
+        "verify_decision": "builtins.dict",
+        "guardrail_decision": "builtins.dict",
+        "controller_trace": "builtins.list",
+        "evidence_bundle": "builtins.dict",
+        "workflow_plan": "builtins.dict",
+        "backend_metadata": "builtins.dict",
+        "engine_terminal_state": "builtins.dict",
+        "engine_verify_decision": "builtins.dict",
+        "engine_terminal_guardrail_decision": "builtins.dict",
+        "engine_terminal_evidence_bundle": "builtins.dict",
+        "engine_terminal_commit": "builtins.dict",
+        "terminal_semantic_commit": "builtins.dict"
+      }
+    },
+    "DocQARuntime": {
+      "module": "ktem.docqa.runtime",
+      "signature": "(app=None, user_id: 'Any' = None)"
+    },
+    "DocQASession": {
+      "module": "ktem.docqa._runtime_models",
+      "signature": "(conversation_id: 'str', name: 'str', user_id: 'Any', is_public: 'bool', data_source: 'dict[str, Any]', messages: 'list[tuple[str, str]]', retrieval_messages: 'list[str]', plot_history: 'list[Any]', state: 'dict[str, Any]', selected_mapping: 'dict[str, Any]', graph_source_ids: 'list[str]', origin: 'str', date_created: 'Any', date_updated: 'Any') -> None",
+      "factories": {}
+    },
+    "DocQASessionSummary": {
+      "module": "ktem.docqa._runtime_models",
+      "signature": "(conversation_id: 'str', name: 'str', message_count: 'int', graph_source_count: 'int', origin: 'str', is_public: 'bool', date_created: 'Any', date_updated: 'Any') -> None",
+      "factories": {}
+    },
+    "DocQATurnUpdate": {
+      "module": "ktem.docqa._runtime_models",
+      "signature": "(event: 'dict[str, Any]' = <factory>, answer: 'str' = '', references_html: 'str' = '', mindmap_html: 'str' = '', plot: 'Any' = None, state: 'dict[str, Any]' = <factory>, stream_events: 'list[dict[str, Any]]' = <factory>, response: 'Optional[DocQAResponse]' = None) -> None",
+      "factories": {
+        "event": "builtins.dict",
+        "state": "builtins.dict",
+        "stream_events": "builtins.list"
+      }
+    },
+    "DocQARequestPolicy": {
+      "module": "kotaemon.docqa_request_policies",
+      "signature": "(name: 'str', qa_scope_default: 'str', page_number_default: 'int | None', page_rule: 'str', controller_mode_default: 'str | None', route_policy_default: 'str | None', verification_mode_default: 'str | None', verification_domain_rule: 'str', origin: 'str', allowed_routes_default: 'tuple[str, ...] | None', max_context_length_default: 'int | None', always_list_fields: 'tuple[str, ...]', selected_file_ids_rule: 'str') -> None",
+      "factories": {}
+    },
+    "DOCQA_REQUEST_POLICIES": {
+      "module": null,
+      "value": {
+        "web": {
+          "name": "web",
+          "qa_scope_default": "page",
+          "page_number_default": 1,
+          "page_rule": "minimum_one",
+          "controller_mode_default": "llm",
+          "route_policy_default": "auto",
+          "verification_mode_default": "light",
+          "verification_domain_rule": "explicit",
+          "origin": "web",
+          "allowed_routes_default": [],
+          "max_context_length_default": null,
+          "always_list_fields": [
+            "history",
+            "note_ids",
+            "allowed_routes",
+            "page_image_records"
+          ],
+          "selected_file_ids_rule": "none_inherits_empty_clears"
+        },
+        "mara_cli": {
+          "name": "mara_cli",
+          "qa_scope_default": "auto",
+          "page_number_default": null,
+          "page_rule": "optional",
+          "controller_mode_default": "off",
+          "route_policy_default": "auto",
+          "verification_mode_default": "off",
+          "verification_domain_rule": "explicit",
+          "origin": "cli",
+          "allowed_routes_default": [],
+          "max_context_length_default": null,
+          "always_list_fields": [
+            "allowed_routes"
+          ],
+          "selected_file_ids_rule": "none_inherits_empty_clears"
+        },
+        "legacy_cli": {
+          "name": "legacy_cli",
+          "qa_scope_default": "auto",
+          "page_number_default": null,
+          "page_rule": "optional",
+          "controller_mode_default": null,
+          "route_policy_default": null,
+          "verification_mode_default": null,
+          "verification_domain_rule": "unset",
+          "origin": "cli",
+          "allowed_routes_default": null,
+          "max_context_length_default": null,
+          "always_list_fields": [],
+          "selected_file_ids_rule": "none_inherits_empty_clears"
+        },
+        "benchmark": {
+          "name": "benchmark",
+          "qa_scope_default": "document",
+          "page_number_default": null,
+          "page_rule": "unscoped",
+          "controller_mode_default": null,
+          "route_policy_default": null,
+          "verification_mode_default": null,
+          "verification_domain_rule": "dataset_family_if_unset",
+          "origin": "benchmark",
+          "allowed_routes_default": null,
+          "max_context_length_default": 16000,
+          "always_list_fields": [
+            "page_image_records",
+            "element_index_records"
+          ],
+          "selected_file_ids_rule": "always_list"
+        }
+      }
+    },
+    "WEB_REQUEST_POLICY": {
+      "module": "kotaemon.docqa_request_policies",
+      "value": {
+        "name": "web",
+        "qa_scope_default": "page",
+        "page_number_default": 1,
+        "page_rule": "minimum_one",
+        "controller_mode_default": "llm",
+        "route_policy_default": "auto",
+        "verification_mode_default": "light",
+        "verification_domain_rule": "explicit",
+        "origin": "web",
+        "allowed_routes_default": [],
+        "max_context_length_default": null,
+        "always_list_fields": [
+          "history",
+          "note_ids",
+          "allowed_routes",
+          "page_image_records"
+        ],
+        "selected_file_ids_rule": "none_inherits_empty_clears"
+      },
+      "factories": {}
+    },
+    "MARA_CLI_REQUEST_POLICY": {
+      "module": "kotaemon.docqa_request_policies",
+      "value": {
+        "name": "mara_cli",
+        "qa_scope_default": "auto",
+        "page_number_default": null,
+        "page_rule": "optional",
+        "controller_mode_default": "off",
+        "route_policy_default": "auto",
+        "verification_mode_default": "off",
+        "verification_domain_rule": "explicit",
+        "origin": "cli",
+        "allowed_routes_default": [],
+        "max_context_length_default": null,
+        "always_list_fields": [
+          "allowed_routes"
+        ],
+        "selected_file_ids_rule": "none_inherits_empty_clears"
+      },
+      "factories": {}
+    },
+    "LEGACY_CLI_REQUEST_POLICY": {
+      "module": "kotaemon.docqa_request_policies",
+      "value": {
+        "name": "legacy_cli",
+        "qa_scope_default": "auto",
+        "page_number_default": null,
+        "page_rule": "optional",
+        "controller_mode_default": null,
+        "route_policy_default": null,
+        "verification_mode_default": null,
+        "verification_domain_rule": "unset",
+        "origin": "cli",
+        "allowed_routes_default": null,
+        "max_context_length_default": null,
+        "always_list_fields": [],
+        "selected_file_ids_rule": "none_inherits_empty_clears"
+      },
+      "factories": {}
+    },
+    "BENCHMARK_REQUEST_POLICY": {
+      "module": "kotaemon.docqa_request_policies",
+      "value": {
+        "name": "benchmark",
+        "qa_scope_default": "document",
+        "page_number_default": null,
+        "page_rule": "unscoped",
+        "controller_mode_default": null,
+        "route_policy_default": null,
+        "verification_mode_default": null,
+        "verification_domain_rule": "dataset_family_if_unset",
+        "origin": "benchmark",
+        "allowed_routes_default": null,
+        "max_context_length_default": 16000,
+        "always_list_fields": [
+          "page_image_records",
+          "element_index_records"
+        ],
+        "selected_file_ids_rule": "always_list"
+      },
+      "factories": {}
+    },
+    "RouteDecision": {
+      "module": "ktem.docqa.controller",
+      "signature": "(route: 'str', policy: 'str', controller_mode: 'str', requires_retrieval: 'bool', reason: 'str') -> None",
+      "factories": {}
+    },
+    "RetrieveDecision": {
+      "module": "ktem.docqa.controller",
+      "signature": "(status: 'str', reason: 'str', retry: 'bool' = False) -> None",
+      "factories": {}
+    },
+    "EvidenceBundle": {
+      "module": "ktem.docqa.evidence_schema",
+      "signature": "(route: 'str', items: 'list[dict[str, Any]]' = <factory>, metadata: 'dict[str, Any]' = <factory>) -> None",
+      "factories": {
+        "items": "builtins.list",
+        "metadata": "builtins.dict"
+      }
+    },
+    "EvidenceElement": {
+      "module": "ktem.docqa.evidence_schema",
+      "signature": "(evidence_id: 'str', source_id: 'str' = '', runtime_source_id: 'str' = '', evaluation_source_id: 'str' = '', runtime_identity: 'str' = '', evaluation_identity: 'str' = '', source_name: 'str' = '', source_aliases: 'list[str]' = <factory>, page_label: 'str' = '', dataset_page: 'str' = '', parser_page_index: 'int | None' = None, page_aliases: 'list[str]' = <factory>, modality: 'str' = 'text', element_id: 'str' = '', figure_label: 'str' = '', table_label: 'str' = '', cell_id: 'str' = '', span_id: 'str' = '', canonical_id: 'str' = '', parent_element_id: 'str' = '', neighbor_element_ids: 'list[str]' = <factory>, section_id: 'str' = '', table_id: 'str' = '', table_instance_id: 'str' = '', table_group_id: 'str' = '', block_id: 'str' = '', cell_role: 'str' = '', materialization_source_id: 'str' = '', row_index: 'int | None' = None, column_index: 'int | None' = None, row_label: 'str' = '', column_label: 'str' = '', raw_row_label: 'str' = '', raw_column_label: 'str' = '', normalized_row_label: 'str' = '', normalized_column_label: 'str' = '', period: 'str' = '', period_kind: 'str' = '', value: 'str' = '', unit: 'str' = '', scale: 'str' = '', currency: 'str' = '', statement_kind: 'str' = '', financial_scope: 'str' = '', continuation_id: 'str' = '', chunk_start: 'int | None' = None, chunk_end: 'int | None' = None, normalized_text_hash: 'str' = '', duplicate_evidence_ids: 'list[str]' = <factory>, retrieval_lineage: 'list[dict[str, Any]]' = <factory>, bbox: 'Any' = None, caption: 'str' = '', text: 'str' = '', ocr_text: 'str' = '', vlm_text: 'str' = '', representations: 'list[dict[str, Any]]' = <factory>, source_backrefs: 'list[str]' = <factory>, runtime_source_backrefs: 'list[str]' = <factory>, evaluation_source_backrefs: 'list[str]' = <factory>, evidence_level: 'str' = 'page', metadata: 'dict[str, Any]' = <factory>) -> None",
+      "factories": {
+        "source_aliases": "builtins.list",
+        "page_aliases": "builtins.list",
+        "neighbor_element_ids": "builtins.list",
+        "duplicate_evidence_ids": "builtins.list",
+        "retrieval_lineage": "builtins.list",
+        "representations": "builtins.list",
+        "source_backrefs": "builtins.list",
+        "runtime_source_backrefs": "builtins.list",
+        "evaluation_source_backrefs": "builtins.list",
+        "metadata": "builtins.dict"
+      }
+    },
+    "VerifyDecision": {
+      "module": "ktem.docqa.verification_schema",
+      "signature": "(mode: 'str', status: 'str', reason: 'str', action: 'str' = 'generate', claims: 'list[str]' = <factory>, unsupported_claims: 'list[str]' = <factory>, unknown_claims: 'list[str]' = <factory>, verified_citations: 'list[str]' = <factory>, claim_results: 'list[dict[str, Any]]' = <factory>, input_answer_polarity: 'str' = '', canonical_answer_polarity: 'str' = '', semantic_correction_applied: 'bool' = False, boolean_authority_status: 'str' = '', authoritative_evidence_id: 'str' = '', authoritative_evidence_ref: 'str' = '', authoritative_span_id: 'str' = '', authoritative_quote: 'str' = '', authoritative_span_start: 'int | None' = None, authoritative_span_end: 'int | None' = None, authoritative_canonical_start: 'int | None' = None, authoritative_canonical_end: 'int | None' = None, actor: 'str' = '', section_scope: 'str' = '', relation: 'str' = '', object: 'str' = '', predicate_arguments: 'tuple[str, ...]' = (), qualifier: 'str' = '', quantifier: 'str' = '', verified_support_slot_ids: 'list[str]' = <factory>, authority_derivations: 'tuple[dict[str, Any], ...]' = (), selected_derivation_id: 'str' = '', authoritative_conflict: 'dict[str, Any]' = <factory>, typed_authority: 'dict[str, Any]' = <factory>, candidate_contract_id: 'str' = '', candidate_label: 'str' = '', verifier_input_candidate: 'str' = '', verifier_candidate_status: 'str' = '', replacement_candidate_allowed: 'bool' = False) -> None",
+      "factories": {
+        "claims": "builtins.list",
+        "unsupported_claims": "builtins.list",
+        "unknown_claims": "builtins.list",
+        "verified_citations": "builtins.list",
+        "claim_results": "builtins.list",
+        "verified_support_slot_ids": "builtins.list",
+        "authoritative_conflict": "builtins.dict",
+        "typed_authority": "builtins.dict"
+      }
+    },
+    "ControllerTrace": {
+      "module": "ktem.docqa.controller",
+      "signature": "(events: 'list[dict[str, Any]]' = <factory>) -> None",
+      "factories": {
+        "events": "builtins.list"
+      }
+    },
+    "ControllerDecision": {
+      "module": "ktem.docqa.route_selection",
+      "signature": "(route: 'str', legacy_route: 'str', policy: 'str', controller_mode: 'str', requires_retrieval: 'bool', reason: 'str', initial_route: 'str' = '', final_route: 'str' = '', planner_route: 'str' = '', scored_route: 'str' = '', route_selection_policy: 'str' = '', route_switch_used: 'bool' = False, routing_features: 'dict[str, Any]' = <factory>, route_scores: 'dict[str, Any]' = <factory>, route_confidences: 'dict[str, Any]' = <factory>, route_confidence_by_modality: 'dict[str, Any]' = <factory>, expected_route_quality: 'dict[str, Any]' = <factory>, expected_route_cost: 'dict[str, Any]' = <factory>, skipped_expensive_routes: 'list[str]' = <factory>, cost_gate_decision: 'str' = '', required_evidence_route_available: 'bool | None' = None, route_probe: 'dict[str, Any]' = <factory>, route_switch_candidates: 'list[str]' = <factory>, override_reason: 'str' = '') -> None",
+      "factories": {
+        "routing_features": "builtins.dict",
+        "route_scores": "builtins.dict",
+        "route_confidences": "builtins.dict",
+        "route_confidence_by_modality": "builtins.dict",
+        "expected_route_quality": "builtins.dict",
+        "expected_route_cost": "builtins.dict",
+        "skipped_expensive_routes": "builtins.list",
+        "route_probe": "builtins.dict",
+        "route_switch_candidates": "builtins.list"
+      }
+    },
+    "GuardrailDecision": {
+      "module": "ktem.docqa.execution_models",
+      "signature": "(status: 'str', action: 'str', reason: 'str') -> None",
+      "factories": {}
+    },
+    "RouteExecutionResult": {
+      "module": "ktem.docqa.execution_models",
+      "signature": "(controller_decision: 'ControllerDecision', retrieve_decision: 'RetrieveDecision', verify_decision: 'VerifyDecision', guardrail_decision: 'GuardrailDecision', evidence_bundle: 'EvidenceBundle', workflow_plan: 'dict[str, Any]' = <factory>, answer: 'str' = '', controller_trace: 'list[dict[str, Any]]' = <factory>, engine_terminal_answer: 'str' = '', engine_terminal_state: 'dict[str, Any]' = <factory>, engine_verify_decision: 'dict[str, Any]' = <factory>, engine_terminal_guardrail_decision: 'dict[str, Any]' = <factory>, engine_terminal_evidence_bundle: 'dict[str, Any]' = <factory>, engine_terminal_projection_hash: 'str' = '', engine_terminal_commit: 'dict[str, Any]' = <factory>) -> None",
+      "factories": {
+        "workflow_plan": "builtins.dict",
+        "controller_trace": "builtins.list",
+        "engine_terminal_state": "builtins.dict",
+        "engine_verify_decision": "builtins.dict",
+        "engine_terminal_guardrail_decision": "builtins.dict",
+        "engine_terminal_evidence_bundle": "builtins.dict",
+        "engine_terminal_commit": "builtins.dict"
+      }
+    },
+    "WorkflowPlan": {
+      "module": "ktem.docqa.workflow",
+      "signature": "(route: 'str', policy: 'str', controller_mode: 'str', strategy: 'str', agent_mode: 'str' = 'auto', verification_mode: 'str' = 'off', execution_control: 'str' = 'fixed_state_machine', steps: 'list[WorkflowStep]' = <factory>) -> None",
+      "factories": {
+        "steps": "builtins.list"
+      }
+    },
+    "WorkflowStep": {
+      "module": "ktem.docqa.workflow",
+      "signature": "(index: 'int', executor: 'str', route: 'str', role: 'str', status: 'str' = 'planned', cost_units: 'int' = 0, reason: 'str' = '') -> None",
+      "factories": {}
+    },
+    "route_registry": {
+      "module": "ktem.docqa.controller",
+      "signature": "() -> 'dict[str, dict[str, Any]]'"
+    },
+    "executor_registry": {
+      "module": "ktem.docqa.controller",
+      "signature": "() -> 'dict[str, dict[str, Any]]'"
+    },
+    "parse_planner_decision": {
+      "module": "ktem.docqa.controller",
+      "signature": "(raw_output: 'Any', allowed_routes: 'Any' = None) -> 'RouteDecision'"
+    },
+    "evaluate_retrieval_quality": {
+      "module": "ktem.docqa.controller",
+      "signature": "(route: 'str', evidence_metadata: 'dict[str, Any]', attempted_retry: 'bool' = False, *, prompt: 'str' = '', verification_domain: 'str | None' = None, origin: 'str | None' = None) -> 'RetrieveDecision'"
+    },
+    "build_workflow_plan": {
+      "module": "ktem.docqa.workflow",
+      "signature": "(*, route: 'str', request: 'Any', planner_payload: 'Any' = None, policy: 'str' = 'auto', controller_mode: 'str' = 'off') -> 'WorkflowPlan'"
+    },
+    "build_evidence_bundle": {
+      "module": "ktem.docqa.evidence",
+      "signature": "(route: 'str', request: 'Any', evidence_metadata: 'dict[str, Any]') -> 'EvidenceBundle'"
+    },
+    "execute_controller_turn": {
+      "module": "ktem.docqa.execution",
+      "signature": "(request: 'Any', *, retrieve: 'RetrieveFn', generate: 'GenerateFn', rewrite: 'RewriteFn | None' = None, verify: 'VerifyFn | None' = None, proposition_verifier: 'PropositionVerifier | None' = None, agent_trace: 'list[dict[str, Any]] | None' = None) -> 'RouteExecutionResult'"
+    },
+    "ARTIFACT_LABELS": {
+      "module": null,
+      "value": {
+        "study_guide": "Study Guide",
+        "quiz": "Quiz",
+        "flashcards": "Flashcards",
+        "mindmap": "Mind Map",
+        "slide_outline": "Slide Outline",
+        "briefing_doc": "Briefing Doc",
+        "faq": "FAQ",
+        "timeline": "Timeline",
+        "custom_report": "Custom Report",
+        "data_table": "Data Table",
+        "infographic": "Infographic",
+        "slide_deck": "Slide Deck",
+        "audio_overview": "Audio Overview",
+        "video_overview": "Video Overview"
+      }
+    },
+    "ARTIFACT_STATUSES": {
+      "module": null,
+      "value": [
+        "queued",
+        "running",
+        "ready",
+        "failed"
+      ]
+    },
+    "SUPPORTED_ARTIFACT_TYPES": {
+      "module": null,
+      "value": [
+        "study_guide",
+        "quiz",
+        "flashcards",
+        "mindmap",
+        "slide_outline",
+        "briefing_doc",
+        "faq",
+        "timeline",
+        "custom_report",
+        "data_table",
+        "infographic",
+        "slide_deck",
+        "audio_overview",
+        "video_overview"
+      ]
+    },
+    "normalize_artifact": {
+      "module": "ktem.docqa.artifact_models",
+      "signature": "(value: 'Any') -> 'dict[str, Any] | None'"
+    },
+    "page_image_records_from_documents": {
+      "module": "ktem.docqa.multimodal_index",
+      "signature": "(documents: 'Iterable[Any]') -> 'list[dict[str, Any]]'"
+    },
+    "element_records_from_documents": {
+      "module": "ktem.docqa.multimodal_index",
+      "signature": "(documents: 'Iterable[Any]') -> 'list[dict[str, Any]]'"
+    },
+    "_runtime_selection": {
+      "module": "ktem.docqa._runtime_selection"
+    },
+    "_runtime_indexing": {
+      "module": "ktem.docqa._runtime_indexing"
+    },
+    "_runtime_doctor": {
+      "module": "ktem.docqa._runtime_doctor"
+    },
+    "_runtime_pipeline": {
+      "module": "ktem.docqa._runtime_pipeline"
+    },
+    "_runtime_sessions": {
+      "module": "ktem.docqa._runtime_sessions"
+    },
+    "_runtime_turn": {
+      "module": "ktem.docqa._runtime_turn"
+    }
+  },
+  "legacy_submodules": [
+    "runtime",
+    "controller",
+    "evidence",
+    "execution",
+    "artifact_models",
+    "multimodal_index",
+    "request_policies",
+    "workflow",
+    "_runtime_app",
+    "_runtime_elements",
+    "_runtime_graph",
+    "_runtime_mara",
+    "_runtime_models",
+    "_runtime_notebook",
+    "_runtime_utils",
+    "boolean_evidence_scope",
+    "route_budget",
+    "visual_backends",
+    "_runtime_file_service",
+    "_runtime_session_service"
+  ]
+}

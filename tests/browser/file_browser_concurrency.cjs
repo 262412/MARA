@@ -1,0 +1,531 @@
+// Delays real refresh results while users continue to interact with the full App.
+module.exports = ({expect, login, evidence, settled, send, tailFinished, results, base, ready, output}) => {
+  async function control(path, spec) {
+    const response = await fetch(base + '/owned-file-browser-gate' + path,
+      spec === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(spec)});
+    expect(response.ok).toBeTruthy();
+    return response.json();
+  }
+
+  async function expectedFiles(username, suffix) {
+    const data = await evidence();
+    return data.files.filter(file => file.user === data.users[username] && file.name.toLowerCase().endsWith(suffix)).map(file => file.id).sort();
+  }
+
+  async function initializationFilterOverlap() {
+    const key = 'initial-empty-refresh';
+    const expected = await expectedFiles('browser-owner', '.txt');
+    const writesBefore = (await evidence()).writes;
+    await control('/arm', {key, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', filter_text: ''});
+    const {page, queue} = await login('browser-owner', {initialize: false});
+    try {
+      await expect.poll(async () => (await control(''))[key]?.entered).toBe(true);
+      const filter = page.locator('#chat-file-filter textarea, #chat-file-filter input');
+      await expect(filter).toBeEnabled();
+      await filter.fill('.txt');
+      await expect(page.locator('#chat-file-list [data-chat-file-id]')).toHaveCount(expected.length);
+      await expect(page.locator('#chat-file-list')).toContainText('.txt');
+      await control('/release/' + key, {});
+      await expect.poll(async () => (await control(''))[key]?.completed).toBe(true);
+      await settled(queue);
+      const snapshot = {
+        name: 'initialization-filter-overlap', gate: (await control(''))[key],
+        filter: await filter.inputValue(),
+        ids: await page.locator('#chat-file-list [data-chat-file-id]').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId)),
+        summary: await page.locator('#workbench-file-summary').innerText(),
+        focus: await page.locator('#chat-selected-file').innerText(),
+        writes: (await evidence()).writes,
+      };
+      results.fileBrowserRaces ||= [];
+      results.fileBrowserRaces.push(snapshot);
+      expect(snapshot.filter).toBe('.txt');
+      expect(snapshot.ids.sort()).toEqual(expected);
+      expect(snapshot.summary).toContain(expected.length + ' file');
+      expect(snapshot.writes).toEqual(writesBefore);
+      results.scenarios.push(snapshot);
+    } finally {
+      await control('/release/' + key, {});
+      await page.close();
+    }
+  }
+
+  async function filterWhileRefreshIsHeld() {
+    const {page, queue} = await login();
+    const key = 'filter-A-before-B';
+    try {
+      await control('/arm', {key, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
+      const filter = page.locator('#chat-file-filter textarea, #chat-file-filter input');
+      await filter.fill('.txt');
+      await expect.poll(async () => (await control(''))[key]?.entered).toBe(true);
+      await page.evaluate(() => {
+        window.r3dListObservations = [];
+        new MutationObserver(() => {
+          window.r3dListObservations.push({
+            filter: document.querySelector('#chat-file-filter textarea, #chat-file-filter input').value,
+            ids: [...document.querySelectorAll('#chat-file-list [data-chat-file-id]')].map(node => node.dataset.chatFileId),
+          });
+        }).observe(document.querySelector('#chat-file-list'), {childList: true, subtree: true});
+      });
+      await filter.fill('.png');
+      await control('/release/' + key, {});
+      await expect.poll(() => page.locator('#chat-file-list [data-chat-file-id]').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId).sort())).toEqual(await expectedFiles('browser-owner', '.png'));
+      await settled(queue);
+      const observations = await page.evaluate(() => window.r3dListObservations);
+      results.fileBrowserRaces ||= [];
+      results.fileBrowserRaces.push({name: 'busy-filter-intent-before-old-return', observations});
+      expect(observations.filter(item => item.filter === '.png' && item.ids.includes('r3c-browser-owner-text')), 'an old filter result must never be applied after the next input').toEqual([]);
+      results.scenarios.push({name: 'busy-filter-intent-before-old-return', observations});
+    } finally {
+      await control('/release/' + key, {});
+      await page.close();
+    }
+  }
+
+  async function concurrentBrowserContexts() {
+    const contexts = [await login(), await login(), await login('browser-other')];
+    const key = 'same-owner-context-A';
+    try {
+      const [a, b, other] = contexts;
+      await control('/arm', {key, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: a.queue.sessionHash, filter_text: '.txt'});
+      await a.page.locator('#chat-file-filter textarea, #chat-file-filter input').fill('.txt');
+      await expect.poll(async () => (await control(''))[key]?.entered).toBe(true);
+      await b.page.locator('#chat-file-filter textarea, #chat-file-filter input').fill('.png');
+      await other.page.locator('#chat-file-filter textarea, #chat-file-filter input').fill('.txt');
+      await control('/release/' + key, {});
+      const expected = [await expectedFiles('browser-owner', '.txt'), await expectedFiles('browser-owner', '.png'), await expectedFiles('browser-other', '.txt')];
+      for (let i = 0; i < contexts.length; i++) {
+        await expect.poll(() => contexts[i].page.locator('#chat-file-list [data-chat-file-id]').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId).sort())).toEqual(expected[i]);
+        await settled(contexts[i].queue);
+      }
+      expect(new Set(contexts.map(item => item.queue.sessionHash)).size).toBe(3);
+      results.scenarios.push({name: 'same-owner-two-browsers-and-other-user-refresh-isolation', sessionHashes: contexts.map(item => item.queue.sessionHash), expected});
+    } finally {
+      await control('/release/' + key, {});
+      for (const {page} of contexts) await page.close();
+    }
+  }
+
+  async function repeatedFilterIntent() {
+    const {assertRefreshDelivery} = require('./refresh_delivery_contract.cjs');
+    const {page, queue, refreshTrace} = await login('browser-owner', {traceRefresh: true});
+    const old = 'filter-ABA-old', latest = 'filter-ABA-latest';
+    try {
+      const filter = page.locator('#chat-file-filter textarea, #chat-file-filter input');
+      const ids = () => page.locator('#chat-file-list [data-chat-file-id]').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId));
+      const initial = await ids();
+      await control('/arm', {key: old, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
+      await page.evaluate(() => { window.ownedWebAction = 'ABA-first-A'; });
+      await filter.fill('.txt');
+      await expect.poll(async () => (await control(''))[old]?.entered).toBe(true);
+      const first = (await control(''))[old].operation;
+      await control('/arm', {key: latest, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt', function_id: first.fn, filter_version: first.inputs.stamp.filterVersion + 2});
+      await page.evaluate(() => { window.ownedWebAction = 'ABA-B'; });
+      await filter.fill('.png');
+      await page.evaluate(() => { window.ownedWebAction = 'ABA-last-A'; });
+      await filter.fill('.txt');
+      await control('/release/' + old, {});
+      await expect.poll(async () => (await control(''))[latest]?.entered).toBe(true);
+      const last = (await control(''))[latest].operation;
+      expect(last.event_id).not.toBe(first.event_id);
+      const observations = () => page.evaluate(() => window.ownedWebOperations);
+      const beforeLatest = await ids();
+      results.fileBrowserRaces ||= [];
+      results.fileBrowserRaces.push({name: 'A-B-A-before-latest-return', initial, beforeLatest});
+      await control('/release/' + latest, {});
+      await expect.poll(async () => (await observations()).some(item => item.phase === 'applyFiles' && item.stamp.fileRequest === last.inputs.stamp.fileRequest && item.applied)).toBe(true);
+      await expect.poll(async () => (await ids()).sort()).toEqual(await expectedFiles('browser-owner', '.txt'));
+      const applied = (await observations()).find(item => item.phase === 'applyFiles' && item.stamp.fileRequest === last.inputs.stamp.fileRequest && item.applied);
+      expect(applied.ids.sort()).toEqual(await expectedFiles('browser-owner', '.txt'));
+      await expect.poll(async () => (await page.locator('#chat-selected-file').textContent()).trim()).toBe(applied.display[0]);
+      await expect.poll(async () => (await page.locator('#workbench-file-summary').textContent()).trim()).toBe(applied.display[1]);
+      const proof = assertRefreshDelivery({framework: await refreshTrace.snapshot(),
+        backend: await (await fetch(base + '/owned-web-operations')).json(),
+        records: await observations(), observerErrors: await page.evaluate(() => window.ownedWebObserverErrors),
+        first, latest: last, expectedIds: await expectedFiles('browser-owner', '.txt'),
+        dom: {ids: await ids(), focus: await page.locator('#chat-selected-file').textContent(),
+          summary: await page.locator('#workbench-file-summary').textContent()}});
+      results.scenarios.push({name: 'A-B-A-retains-issuance-order', initial, beforeLatest, first, last, ...proof});
+    } finally {
+      await control('/release/' + old, {});
+      await control('/release/' + latest, {});
+      await page.close();
+    }
+  }
+
+  async function selectorInitializationSelectionOverlap() {
+    const key = 'initial-selector-before-file-choice';
+    await control('/arm', {key, callback: 'FileSelector.load_files', username: 'browser-owner'});
+    const {page, queue} = await login('browser-owner', {initialize: false, traceSelection: true});
+    try {
+      await expect.poll(async () => (await control(''))[key]?.entered).toBe(true);
+      await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
+      await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-text"]')).toHaveClass(/is-selected/);
+      await control('/release/' + key, {});
+      await expect.poll(async () => (await control(''))[key]?.completed).toBe(true);
+      await settled(queue);
+      const selected = await page.locator('#chat-file-list .is-selected').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId));
+      const focus = await page.locator('#chat-selected-file').innerText();
+      results.fileBrowserRaces ||= [];
+      results.fileBrowserRaces.push({name: 'selector-init-versus-new-choice', selected, focus});
+      expect(selected).toEqual(['r3c-browser-owner-text']);
+      expect(focus).toContain('.txt');
+      results.scenarios.push({name: 'selector-initialization-preserves-new-choice', selected, focus});
+    } finally {
+      await control('/release/' + key, {});
+      await page.close();
+    }
+  }
+
+  async function selectorChoicesAfterCard() {
+    const selectors = ready.initial_selection_events.filter(id =>
+      ready.functions[id].js?.includes('captureSelector'));
+    expect(selectors).toHaveLength(2);
+    const keys = selectors.map(id => 'choices-after-card-' + id);
+    for (const [index, id] of selectors.entries()) {
+      await control('/arm', {key: keys[index], callback: 'WebOperation', event: 'return',
+        function_id: id, username: 'browser-owner'});
+    }
+    const {page, queue} = await login('browser-owner', {initialize: false, traceSelection: true});
+    try {
+      await expect.poll(async () => {
+        const gates = await control('');
+        return keys.every(key => gates[key]?.entered);
+      }).toBe(true);
+      await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
+      await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
+      await expect.poll(() => page.evaluate(() => window.ownedWebOperations.some(row =>
+        row.phase === 'applyFileSelection' && row.args[0]?.file_id === 'r3c-browser-owner-text' &&
+        row.returned[1]?.value?.[0] === 'r3c-browser-owner-text'))).toBe(true);
+      results.selectorChoiceDiagnostic = {sessionHash: queue.sessionHash,
+        gatesBeforeRelease: await control(''),
+        beforeRelease: await page.evaluate(() => window.ownedWebOperations)};
+      for (const key of keys) await control('/release/' + key, {});
+      await expect.poll(() => page.evaluate(() => window.ownedWebOperations.filter(row =>
+        row.phase === 'applySelector').length)).toBeGreaterThan(0);
+      await settled(queue);
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-text"]')).toHaveClass(/is-selected/);
+      await expect(page.locator('#chat-selected-file')).toContainText('.txt');
+      results.scenarios.push({name: 'selector-choices-arrive-after-real-card-selection'});
+    } finally {
+      for (const key of keys) await control('/release/' + key, {});
+      await page.close();
+    }
+  }
+
+  async function selectorChoicesAlongsideCard() {
+    const keys = ['alongside-choice', 'alongside-initial', 'alongside-signin'];
+    await control('/arm', {key: keys[0], callback: 'select_chat_file', event: 'delivery',
+      file_id: 'r3c-browser-owner-text', username: 'browser-owner'});
+    for (const key of keys.slice(1)) {
+      await control('/arm', {key, callback: 'load_files', event: 'delivery', username: 'browser-owner'});
+    }
+    const {page, queue} = await login('browser-owner', {initialize: false, traceSelection: true});
+    try {
+      await expect.poll(async () => {
+        const gates = await control('');
+        return keys.slice(1).every(key => gates[key]?.entered);
+      }).toBe(true);
+      await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
+      await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
+      await expect.poll(async () => (await control(''))[keys[0]]?.entered).toBe(true);
+      results.selectorAlongsideDiagnostic = {sessionHash: queue.sessionHash,
+        gatesBeforeRelease: await control(''),
+        beforeRelease: await page.evaluate(() => window.ownedWebOperations)};
+      await control('/release-all', {});
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-text"]')).toHaveClass(/is-selected/);
+      await settled(queue);
+      await expect(page.locator('#chat-selected-file')).toContainText('.txt');
+      results.scenarios.push({name: 'selector-and-card-results-delivered-together'});
+    } catch (error) {
+      require('./browser_exit.cjs').primary(results, output, error);
+      throw error;
+    } finally {
+      await require('./browser_exit.cjs').cleanup(results, [
+        ['aligned selector release', () => control('/release-all', {})],
+        ['aligned selector page close', () => page.close()],
+      ]);
+    }
+  }
+
+  async function selectorSameFlush() {
+    const keys = ['same-flush-card', 'same-flush-initial', 'same-flush-signin'];
+    await control('/arm', {key: keys[0], callback: 'select_chat_file', event: 'delivery',
+      file_id: 'r3c-browser-owner-text', username: 'browser-owner'});
+    for (const key of keys.slice(1)) await control('/arm', {
+      key, callback: 'load_files', event: 'delivery', username: 'browser-owner'});
+    const {page, queue, refreshTrace} = await login('browser-owner', {
+      initialize: false, traceSelection: true, holdSelectorFlush: true});
+    try {
+      await expect.poll(async () => {
+        const gates = await control(''); return keys.slice(1).every(key => gates[key]?.entered);
+      }).toBe(true);
+      await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
+      await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
+      await expect.poll(async () => (await control(''))[keys[0]]?.entered).toBe(true);
+      const gates = await control('');
+      const payloadIds = [...new Set(keys.map(key => gates[key].operation.outputs[0]))];
+      expect(payloadIds).toHaveLength(2);
+      await page.evaluate(() => { window.ownedSelectorFlush.armed = true; window.ownedWebAction = 'same-flush-release'; });
+      await control('/release-all', {});
+      await expect.poll(() => page.evaluate(ids => ids.every(id => window.ownedFrameworkTrace.records.some(
+        row => row.action === 'same-flush-release' && row.phase === 'queued' &&
+          row.updates.some(update => update.id === id && update.value?.stamp))), payloadIds)).toBe(true);
+      await expect.poll(() => page.evaluate(() => window.ownedSelectorFlush.held)).toBe(1);
+      await page.evaluate(() => window.ownedSelectorFlush.release());
+      for (let step = 0; step < 8; step++) {
+        const completed = await page.evaluate(() => ['applySelector', 'applyFileSelection'].every(
+          phase => window.ownedWebOperations.some(row => row.action === 'same-flush-release' && row.phase === phase)));
+        if (completed) break;
+        await expect.poll(() => page.evaluate(() => window.ownedSelectorFlush.held > window.ownedSelectorFlush.released)).toBe(true);
+        await page.evaluate(() => window.ownedSelectorFlush.release());
+      }
+      const proof = await refreshTrace.snapshot();
+      const assignments = proof.state.records.filter(row => row.phase === 'assignment' && row.action === 'same-flush-release');
+      expect(assignments.some(row => payloadIds.every(id => assignments.some(other =>
+        other.flush === row.flush && other.updates.some(update => update.id === id && update.value?.stamp))))).toBe(true);
+      results.selectorSameFlush = {gates, payloadIds, framework: proof};
+      await page.evaluate(() => window.ownedSelectorFlush.close());
+      await settled(queue);
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-text"]')).toHaveClass(/is-selected/);
+      await expect(page.locator('#chat-selected-file')).toContainText('.txt');
+      results.scenarios.push({name: 'selector-and-card-payloads-committed-in-one-proven-flush'});
+    } catch (error) {
+      require('./browser_exit.cjs').primary(results, output, error); throw error;
+    } finally {
+      await require('./browser_exit.cjs').cleanup(results, [
+        ['component flush release', () => page.evaluate(() => window.ownedSelectorFlush.close())],
+        ['backend release', () => control('/release-all', {})], ['page close', () => page.close()],
+      ]);
+    }
+  }
+
+  async function selectorCardBeforeChoices() {
+    const selectors = ready.initial_selection_events.filter(id => ready.functions[id].js?.includes('captureSelector'));
+    expect(selectors).toHaveLength(2);
+    const keys = selectors.map(id => 'card-before-choices-' + id);
+    for (const [i, id] of selectors.entries()) await control('/arm', {key: keys[i], callback: 'WebOperation',
+      event: 'return', function_id: id, username: 'browser-owner'});
+    const {page, queue, refreshTrace} = await login('browser-owner', {initialize: false, traceSelection: true});
+    try {
+      await expect.poll(async () => { const gates = await control(''); return keys.every(key => gates[key]?.entered); }).toBe(true);
+      await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
+      await page.locator('[data-chat-file-id="r3c-browser-owner-text"]').click();
+      // The advanced selector's ancestor is intentionally hidden in this App.
+      // Observe its actual component assignment, not impossible DOM visibility.
+      const apply = Object.values(ready.functions).find(fn => fn.js?.includes('applyFileSelection'));
+      const selectorId = apply.outputs[1];
+      await expect.poll(() => page.evaluate(id => window.ownedFrameworkTrace.records.some(row =>
+        row.phase === 'assignment' && row.updates.some(update => update.id === id &&
+          update.prop === 'visible' && update.value === true)), selectorId)).toBe(true);
+      results.selectorCardBeforeChoices = {gates: await control(''), session: queue.sessionHash,
+        beforeRelease: await refreshTrace.snapshot(), operations: await page.evaluate(() => window.ownedWebOperations)};
+      for (const key of keys) await control('/release/' + key, {});
+      await settled(queue);
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-text"]')).toHaveClass(/is-selected/);
+      await expect(page.locator('#chat-selected-file')).toContainText('.txt');
+      results.scenarios.push({name: 'card-selection-survives-dropdown-mode-before-initial-choices'});
+    } catch (error) {
+      require('./browser_exit.cjs').primary(results, output, error); throw error;
+    } finally {
+      await require('./browser_exit.cjs').cleanup(results, [
+        ['backend release', () => control('/release-all', {})], ['page close', () => page.close()],
+      ]);
+    }
+  }
+
+  async function conversationDuringFileRefresh() {
+    const {page, queue, refreshTrace} = await login('browser-owner', {traceConversation: true});
+    const key = 'old-conversation-refresh';
+    const setup = require('./conversation_setup.cjs')({expect, page, queue, evidence, send, tailFinished, ready, refreshTrace});
+    const {assertSelection, assertOldRefreshRejected} = require('./conversation_contract.cjs');
+    let beforeRelease, afterRelease;
+    try {
+      await page.getByText('Conversation', {exact: true}).click();
+      const a = await setup.create('R3D context A', 'owned-observatory');
+      const b = await setup.create('R3D context B', 'r3c-browser-owner-text');
+      await setup.choose(a);
+      await expect(page.locator('[data-chat-file-id="owned-observatory"]')).toHaveClass(/is-selected/);
+      await control('/arm', {key, callback: 'ChatPage.refresh_chat_file_list', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
+      await page.locator('#chat-file-filter textarea, #chat-file-filter input').fill('.txt');
+      await expect.poll(async () => (await control(''))[key]?.entered).toBe(true);
+      const start = await setup.choose(b);
+      await expect.poll(() => page.evaluate(id => window.ownedWebOperations.findLast(row => row.phase === 'applyFiles' && row.applied)?.args[2] === id, b.id), {timeout: 20000}).toBe(true);
+      beforeRelease = await setup.proof(b, start);
+      const selected = assertSelection(beforeRelease);
+      const held = (await control(''))[key];
+      expect(held.completed).toBe(false);
+      expect(held.operation.inputs.conversation).toBe(a.id);
+      await control('/release/' + key, {});
+      await expect.poll(async () => (await control(''))[key]?.completed).toBe(true);
+      await expect.poll(() => page.evaluate(stamp => window.ownedWebOperations.some(row => row.phase === 'applyFiles' && row.stamp?.epoch === stamp.epoch && row.stamp?.fileRequest === stamp.fileRequest), held.operation.inputs.stamp), {timeout: 20000}).toBe(true);
+      await settled(queue);
+      afterRelease = await setup.proof(b, start);
+      assertOldRefreshRejected(afterRelease, held.operation.inputs.stamp);
+      results.fileBrowserRaces ||= [];
+      results.fileBrowserRaces.push({name: 'conversation-switch-during-file-refresh', a, b, selected, held});
+      results.scenarios.push({name: 'conversation-switch-during-file-refresh', ...selected, heldUntilBApplied: true});
+    } finally {
+      if ((await control(''))[key]) await control('/release/' + key, {});
+      require('node:fs').writeFileSync(require('node:path').join(output, 'conversation-selection-proof.json'),
+        JSON.stringify({beforeRelease, afterRelease}, null, 2));
+      await page.close();
+    }
+  }
+
+  async function quickUploadThenChooseSource() {
+    const {page, queue} = await login();
+    const key = 'upload-return-before-new-source-choice';
+    const filename = 'r3d-quick-upload.txt';
+    await control('/arm', {key, callback: 'FileIndexPage.index_fn_file_with_default_loaders', username: 'browser-owner', session_hash: queue.sessionHash});
+    try {
+      const response = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload');
+      await page.locator('#quick-file input[type=file]').setInputFiles({
+        name: filename, mimeType: 'text/plain', buffer: Buffer.from('D1 owned upload: seven telescopes.'),
+      });
+      expect((await response).ok()).toBeTruthy();
+      await expect.poll(async () => (await control(''))[key]?.entered, {timeout: 20000}).toBe(true);
+      await page.locator('[data-chat-file-id="r3c-browser-owner-image"]').click();
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-image"]')).toHaveClass(/is-selected/);
+      await control('/release/' + key, {});
+      await expect(page.locator('#quick-file-upload-status')).toContainText('Indexing completed.', {timeout: 20000});
+      await settled(queue);
+      const data = await evidence();
+      const uploaded = data.files.find(file => file.name === filename && file.user === data.users['browser-owner']);
+      const selected = await page.locator('#chat-file-list .is-selected').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId));
+      results.fileBrowserRaces ||= [];
+      results.fileBrowserRaces.push({name: 'quick-upload-followed-by-active-choice', uploaded, selected});
+      expect(uploaded).toBeDefined();
+      await expect(page.locator(`[data-chat-file-id="${uploaded.id}"]`)).toHaveCount(1);
+      expect(selected).toEqual(['r3c-browser-owner-image']);
+      results.scenarios.push({name: 'index-side-effect-retained-new-source-intent-preserved', uploaded, selected});
+    } finally {
+      await control('/release/' + key, {});
+      await page.close();
+    }
+  }
+
+  async function reverseFilterDelivery() {
+    const {page, queue} = await login();
+    const key = 'reverse-filter-delivery';
+    await control('/arm', {key, callback: 'refresh_chat_file_list', event: 'delivery', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
+    try {
+      const filter = page.locator('#chat-file-filter textarea, #chat-file-filter input');
+      await filter.fill('.txt');
+      await expect.poll(async () => (await control(''))[key]?.entered).toBe(true);
+      await filter.fill('.png');
+      const ids = () => page.locator('#chat-file-list [data-chat-file-id]').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId).sort());
+      const expected = await expectedFiles('browser-owner', '.png');
+      await expect.poll(ids).toEqual(expected);
+      expect((await control(''))[key].completed).toBe(false);
+      await control('/release/' + key, {});
+      await expect.poll(async () => (await control(''))[key]?.completed).toBe(true);
+      await settled(queue);
+      expect(await ids()).toEqual(expected);
+      results.scenarios.push({name: 'two-filter-completions-delivered-in-reverse-order', expected, gate: (await control(''))[key]});
+    } finally {
+      await control('/release/' + key, {});
+      await page.close();
+    }
+  }
+
+  async function quickUrlThenChooseSource() {
+    const {page, queue} = await login();
+    const key = 'url-return-before-source-choice';
+    const url = 'https://example.org/owned-web-document';
+    await control('/arm', {key, callback: 'FileIndexPage.index_fn_url_with_default_loaders', username: 'browser-owner', session_hash: queue.sessionHash});
+    try {
+      await page.locator('#quick-url textarea').fill(url);
+      await page.locator('#quick-url textarea').press('Enter');
+      await expect.poll(async () => (await control(''))[key]?.entered, {timeout: 20000}).toBe(true);
+      await page.locator('[data-chat-file-id="r3c-browser-owner-image"]').click();
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-image"]')).toHaveClass(/is-selected/);
+      await control('/release/' + key, {});
+      await expect(page.locator('#quick-file-upload-status')).toContainText('Indexing completed.', {timeout: 20000});
+      await settled(queue);
+      const data = await evidence();
+      expect(data.files.some(file => file.name === url && file.user === data.users['browser-owner'])).toBe(true);
+      const selected = await page.locator('#chat-file-list .is-selected').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId));
+      expect(selected).toEqual(['r3c-browser-owner-image']);
+      results.scenarios.push({name: 'URL-index-side-effect-retained-new-source-intent-preserved', selected});
+    } finally {
+      await control('/release/' + key, {});
+      await page.close();
+    }
+  }
+
+  async function deletionNotificationDuringRefresh() {
+    const {page, queue} = await login();
+    const filename = 'r3d-delete-notification.txt';
+    const key = 'file-list-before-authorized-deletion';
+    await control('/arm', {key, callback: 'refresh_chat_file_list', event: 'delivery', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
+    try {
+      const upload = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload');
+      await page.locator('#quick-file input[type=file]').setInputFiles({name: filename, mimeType: 'text/plain', buffer: Buffer.from('Owned deletion notification document.')});
+      expect((await upload).ok()).toBe(true);
+      await expect(page.locator('#quick-file-upload-status')).toContainText('Indexing completed.', {timeout: 20000});
+      await settled(queue);
+      const data = await evidence();
+      const uploaded = data.files.find(file => file.name === filename && file.user === data.users['browser-owner']);
+      expect(uploaded).toBeDefined();
+      await page.locator('[data-chat-file-id="r3c-browser-owner-image"]').click();
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-image"]')).toHaveClass(/is-selected/);
+      await page.locator('#chat-file-filter textarea, #chat-file-filter input').fill('.txt');
+      await expect.poll(async () => (await control(''))[key]?.entered).toBe(true);
+      await page.getByRole('tab', {name: 'files', exact: true}).click();
+      const managerFilter = page.locator('#indices-tab').getByLabel('Filter by name:');
+      await managerFilter.fill(filename);
+      await managerFilter.press('Enter');
+      await page.locator('#file_list_view svelte-virtual-table-viewport').getByText(filename, {exact: true}).click();
+      await expect(page.locator('#indices-tab')).toContainText('Selected file: ' + filename);
+      await page.locator('#indices-tab').getByRole('button', {name: 'Delete', exact: true}).click();
+      await expect.poll(async () => (await evidence()).files.some(file => file.id === uploaded.id)).toBe(false);
+      await page.getByRole('tab', {name: 'chat', exact: true}).click();
+      const ids = () => page.locator('#chat-file-list [data-chat-file-id]').evaluateAll(nodes => nodes.map(node => node.dataset.chatFileId).sort());
+      const expected = await expectedFiles('browser-owner', '.txt');
+      await expect.poll(ids).toEqual(expected);
+      await control('/release/' + key, {});
+      await settled(queue);
+      expect(await ids()).toEqual(expected);
+      await expect(page.locator('#chat-selected-file')).toContainText('.png');
+      results.scenarios.push({name: 'authorized-delete-notification-rejects-prior-catalog', deleted: uploaded.id, expected});
+    } finally {
+      await control('/release/' + key, {});
+      await page.close();
+    }
+  }
+
+  async function successiveFileChoices() {
+    const {page, queue} = await login();
+    const old = 'source-choice-A', latest = 'source-choice-B';
+    for (const [key, file_id] of [[old, 'owned-observatory'], [latest, 'r3c-browser-owner-image']]) {
+      await control('/arm', {key, callback: 'select_chat_file', event: 'delivery', username: 'browser-owner', session_hash: queue.sessionHash, file_id});
+    }
+    try {
+      await expect(page.locator('#index-0 .token')).toHaveCount(0);
+      await page.locator('[data-chat-file-id="owned-observatory"]').click();
+      await expect.poll(async () => (await control(''))[old]?.entered).toBe(true);
+      await page.locator('[data-chat-file-id="r3c-browser-owner-image"]').click();
+      await control('/release/' + old, {});
+      await expect.poll(async () => (await control(''))[latest]?.entered).toBe(true);
+      await settled(queue);
+      const scope = (await page.locator('#index-0 .token').allTextContents()).join('\n');
+      results.fileBrowserRaces ||= [];
+      results.fileBrowserRaces.push({name: 'older-source-selection-before-latest-delivery', scope});
+      expect(scope).not.toContain('owned-observatory.pdf');
+      await control('/release/' + latest, {});
+      await expect(page.locator('[data-chat-file-id="r3c-browser-owner-image"]')).toHaveClass(/is-selected/);
+      results.scenarios.push({name: 'successive-card-choices-keep-latest-user-intent', scope});
+    } finally {
+      await control('/release/' + old, {});
+      await control('/release/' + latest, {});
+      await page.close();
+    }
+  }
+
+  return [initializationFilterOverlap, filterWhileRefreshIsHeld, concurrentBrowserContexts,
+    repeatedFilterIntent, selectorInitializationSelectionOverlap, conversationDuringFileRefresh,
+    quickUploadThenChooseSource, reverseFilterDelivery, quickUrlThenChooseSource,
+    deletionNotificationDuringRefresh, successiveFileChoices, selectorChoicesAfterCard, selectorChoicesAlongsideCard,
+    selectorSameFlush, selectorCardBeforeChoices];
+};

@@ -72,6 +72,7 @@ def test_preview_bindings_keep_root_order_and_distinct_context_tail_parents():
 
     assert [root.trigger for root in graph.roots()] == [
         "indices[1]",
+        "indices[1]",
         "chat_panel.preview_refresh_timer",
         "chat_panel.prev_page_btn",
         "chat_panel.next_page_btn",
@@ -84,7 +85,12 @@ def test_preview_bindings_keep_root_order_and_distinct_context_tail_parents():
         "chat_panel.page_number": "page_preview.on_page_set",
     }
     for trigger, handler in expected_handlers.items():
-        chain = linear_chain(graph, graph.roots(trigger)[0])
+        root = (
+            next(call for call in graph.roots(trigger) if call.verb == "input")
+            if trigger == "indices[1]"
+            else graph.roots(trigger)[0]
+        )
+        chain = linear_chain(graph, root)
         assert [_fn_name(call) for call in chain] == [
             handler,
             "<lambda>",

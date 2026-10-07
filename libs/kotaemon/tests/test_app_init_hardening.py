@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import sqlite3
 import subprocess
@@ -11,10 +12,12 @@ from ktem.auth.passwords import verify_password
 
 from kotaemon import app_init as app_init_module
 from kotaemon import cli as cli_module
+from pytest_runtime_isolation import activate_test_runtime
 
 
 def _package_mode_env(tmp_path, *, overrides=None):
     env = os.environ.copy()
+    activate_test_runtime(env, tmp_path)
     env.pop("THEFLOW_SETTINGS_MODULE", None)
     env.pop("KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED", None)
     env.pop("MARA_ADMIN_PASSWORD_FILE", None)
@@ -49,7 +52,7 @@ def _run_package_mode_cli(tmp_path, *args, env_overrides=None):
 
 
 def _config_file_paths(tmp_path):
-    config_dir = tmp_path / "config" / "Kotaemon"
+    config_dir = tmp_path / "config"
     return (
         config_dir / "flowsettings.py",
         config_dir / ".env",
@@ -73,6 +76,29 @@ def _assert_config_snapshot(snapshots):
             assert not path.exists()
         else:
             assert path.read_bytes() == contents
+
+
+def test_package_mode_fixture_targets_the_seeded_config_directory(tmp_path):
+    snapshots = _seed_config_files(tmp_path)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json; from ktem.runtime_bootstrap import get_runtime_paths; "
+            "print(json.dumps(str(get_runtime_paths().config_dir)))",
+        ],
+        cwd=tmp_path,
+        env=_package_mode_env(tmp_path),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout.strip().splitlines()[-1]) == str(
+        next(iter(snapshots)).parent
+    )
+    _assert_config_snapshot(snapshots)
 
 
 def _create_user_database(database_path, *, username, password_hash, admin):
@@ -216,7 +242,7 @@ def test_app_init_existing_user_without_force_preflights_before_config_write(tmp
 
 
 def test_app_init_force_ignores_existing_flowsettings_database_override(tmp_path):
-    config_dir = tmp_path / "config" / "Kotaemon"
+    config_dir = _config_file_paths(tmp_path)[0].parent
     config_dir.mkdir(parents=True)
     trap_database = tmp_path / "trap-runtime" / "sql.db"
     trap_hash = "trap-password-hash-must-remain-unchanged"

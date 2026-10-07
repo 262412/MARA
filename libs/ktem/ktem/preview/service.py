@@ -434,7 +434,7 @@ def _regular_source_path(source_path: str | Path) -> Path:
 
 
 def _trusted_target(root: Path, entry: Path, source: Path) -> Path:
-    if entry.is_absolute() or not entry.parts or ".." in entry.parts:
+    if entry.anchor or not entry.parts or ".." in entry.parts:
         raise _artifact_error(
             source, "The artifact entry must stay in the trusted cache root."
         )

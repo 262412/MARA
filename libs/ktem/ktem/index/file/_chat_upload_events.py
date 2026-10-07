@@ -86,8 +86,8 @@ def _quick_upload_ports(page: Any, source_component: Any) -> QuickUploadPorts:
         ),
         chat_list=_chat_list_ports(page),
         selector_copy=UploadEventPorts(
-            inputs=page.quick_upload_state,
-            outputs=chat_page._indices_input[1],
+            inputs=page._quick_upload_result,
+            outputs=page._quick_selection_result,
         ),
         persist=_persist_ports(page),
         complete=UploadEventPorts(outputs=chat_page.quick_file_upload_status),
@@ -160,13 +160,9 @@ def _chat_list_ports(page: Any) -> UploadEventPorts:
             chat_page._indices_input[1],
             chat_page._graph_source_ids,
             chat_page.chat_file_filter,
+            chat_page._file_browser_stamp,
         ),
-        outputs=(
-            chat_page.chat_file_rows,
-            chat_page.chat_file_list,
-            chat_page.chat_selected_file,
-            chat_page.workbench_file_summary,
-        ),
+        outputs=(chat_page._file_browser_result,),
     )
 
 
@@ -193,6 +189,7 @@ def register_quick_upload_events(
         if page._index.id != 1:
             return
         page.quick_upload_state = gr.State(value=[])
+        _bind_quick_upload_results(page)
         _set_chat_page_indexing_functions(page)
         if not demo_mode:
             stage = "quick-file-upload"
@@ -224,6 +221,59 @@ def _quick_upload_waiting_update():
     return gr.update(value=message)
 
 
+def _bind_quick_upload_results(page):
+    from ktem.pages.chat.file_browser_updates import APPLY_UPLOAD_SELECTION_JS
+
+    page._quick_upload_stamp = gr.JSON(value=None, visible=False)
+    page._quick_upload_result = gr.JSON(value=None, visible=False)
+    page._quick_selection_result = gr.JSON(value=None, visible=False)
+    chat = page._app.chat_page
+    page._quick_selection_result.change(
+        fn=None,
+        inputs=[page._quick_selection_result, chat.chat_control.conversation],
+        outputs=[chat._indices_input[1]],
+        js=APPLY_UPLOAD_SELECTION_JS,
+        show_progress="hidden",
+    )
+
+
+def _quick_index_event(page, ports, callback, control):
+    from ktem.pages.chat.file_browser_updates import (
+        CAPTURE_UPLOAD_JS,
+        quick_upload_result,
+    )
+
+    return {
+        "fn": quick_upload_result(callback),
+        "inputs": [
+            *ports.index.gradio_inputs,
+            page._quick_upload_stamp,
+            page._app.chat_page.chat_control.conversation,
+        ],
+        "outputs": [ports.index.gradio_outputs, page._quick_upload_result],
+        "js": CAPTURE_UPLOAD_JS.replace("CONTROL", control),
+        "concurrency_limit": 10,
+    }
+
+
+def _quick_reset_event(page, ports):
+    from ktem.pages.chat.file_browser_updates import APPLY_UPLOAD_RESET_JS
+
+    result = gr.JSON(value=None, visible=False)
+    result.change(
+        fn=None,
+        inputs=[result],
+        outputs=ports.reset.gradio_outputs,
+        js=APPLY_UPLOAD_RESET_JS,
+        show_progress="hidden",
+    )
+    return {
+        "fn": lambda x: x,
+        "inputs": [page._quick_upload_result],
+        "outputs": [result],
+    }
+
+
 def _register_quick_file_upload_event(page: Any, chat_input_focus_js: str) -> None:
     ports = quick_file_upload_ports(page)
     event_chain = (
@@ -232,15 +282,11 @@ def _register_quick_file_upload_event(page: Any, chat_input_focus_js: str) -> No
             outputs=ports.waiting.gradio_outputs,
         )
         .then(
-            fn=page.index_fn_file_with_default_loaders,
-            inputs=ports.index.gradio_inputs,
-            outputs=ports.index.gradio_outputs,
-            concurrency_limit=10,
+            **_quick_index_event(
+                page, ports, page.index_fn_file_with_default_loaders, "file"
+            )
         )
-        .success(
-            fn=lambda: [gr.update(value=None), gr.update(value="select")],
-            outputs=ports.reset.gradio_outputs,
-        )
+        .success(**_quick_reset_event(page, ports))
     )
     _append_quick_upload_tail(page, ports, event_chain, chat_input_focus_js)
 
@@ -258,15 +304,11 @@ def _register_quick_url_upload_event(
             outputs=ports.waiting.gradio_outputs,
         )
         .then(
-            fn=page.index_fn_url_with_default_loaders,
-            inputs=ports.index.gradio_inputs,
-            outputs=ports.index.gradio_outputs,
-            concurrency_limit=10,
+            **_quick_index_event(
+                page, ports, page.index_fn_url_with_default_loaders, "url"
+            )
         )
-        .success(
-            fn=lambda: [gr.update(value=None), gr.update(value="select")],
-            outputs=ports.reset.gradio_outputs,
-        )
+        .success(**_quick_reset_event(page, ports))
     )
     _append_quick_upload_tail(
         page,
@@ -305,6 +347,8 @@ def _append_quick_upload_tail(
 def _append_quick_upload_chat_refresh(
     event_chain: Any, page: Any, ports: QuickUploadPorts
 ):
+    from ktem.pages.chat.file_browser_updates import chat_file_refresh_event
+
     chat_page = page._app.chat_page
     return (
         event_chain.success(
@@ -313,12 +357,7 @@ def _append_quick_upload_chat_refresh(
             outputs=ports.graph_merge.gradio_outputs,
             show_progress="hidden",
         )
-        .then(
-            fn=chat_page.refresh_chat_file_list,
-            inputs=ports.chat_list.gradio_inputs,
-            outputs=ports.chat_list.gradio_outputs,
-            show_progress="hidden",
-        )
+        .then(**chat_file_refresh_event(chat_page))
         .success(
             fn=lambda x: x,
             inputs=ports.selector_copy.gradio_inputs,
@@ -395,6 +434,8 @@ def _should_refresh_uploaded_chat_graph(page: Any) -> bool:
 def _append_uploaded_chat_graph_refresh(
     event_chain: Any, page: Any, ports: FullUploadPorts
 ):
+    from ktem.pages.chat.file_browser_updates import chat_file_refresh_event
+
     chat_page = page._app.chat_page
     return (
         event_chain.then(
@@ -409,10 +450,5 @@ def _append_uploaded_chat_graph_refresh(
             outputs=ports.persist.gradio_outputs,
             show_progress="hidden",
         )
-        .then(
-            fn=chat_page.refresh_chat_file_list,
-            inputs=ports.chat_list.gradio_inputs,
-            outputs=ports.chat_list.gradio_outputs,
-            show_progress="hidden",
-        )
+        .then(**chat_file_refresh_event(chat_page))
     )

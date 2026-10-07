@@ -1,0 +1,505 @@
+{
+  "Document": {
+    "id_": "legacy-doc",
+    "embedding": [
+      1.0,
+      2.0
+    ],
+    "metadata": {
+      "page_label": "iv"
+    },
+    "excluded_embed_metadata_keys": [
+      "secret"
+    ],
+    "excluded_llm_metadata_keys": [
+      "private"
+    ],
+    "relationships": {
+      "1": {
+        "node_id": "source-node",
+        "node_type": "4",
+        "metadata": {
+          "origin": "synthetic"
+        },
+        "hash": "hash",
+        "class_name": "RelatedNodeInfo"
+      }
+    },
+    "text": "old text",
+    "mimetype": "text/plain",
+    "start_char_idx": 1,
+    "end_char_idx": 9,
+    "text_template": "{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": " | ",
+    "content": "old text",
+    "source": "src",
+    "channel": "info",
+    "class_name": "Document"
+  },
+  "DocumentWithEmbedding": {
+    "id_": "embedding-doc",
+    "embedding": [
+      1.0,
+      2.0
+    ],
+    "metadata": {},
+    "excluded_embed_metadata_keys": [],
+    "excluded_llm_metadata_keys": [],
+    "relationships": {},
+    "text": "<EMBEDDING>",
+    "mimetype": "text/plain",
+    "start_char_idx": null,
+    "end_char_idx": null,
+    "text_template": "{metadata_str}\n\n{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": "\n",
+    "content": [
+      1.0,
+      2.0
+    ],
+    "source": null,
+    "channel": null,
+    "class_name": "Document"
+  },
+  "BaseMessage": {
+    "id_": "base-doc",
+    "embedding": null,
+    "metadata": {},
+    "excluded_embed_metadata_keys": [],
+    "excluded_llm_metadata_keys": [],
+    "relationships": {},
+    "text": "base",
+    "mimetype": "text/plain",
+    "start_char_idx": null,
+    "end_char_idx": null,
+    "text_template": "{metadata_str}\n\n{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": "\n",
+    "content": "base",
+    "source": null,
+    "channel": null,
+    "class_name": "Document"
+  },
+  "SystemMessage": {
+    "content": "system",
+    "additional_kwargs": {
+      "provider_extension": {
+        "value": 1
+      }
+    },
+    "response_metadata": {
+      "model_name": "synthetic",
+      "headers": {
+        "x-test": "yes"
+      }
+    },
+    "type": "system",
+    "name": "example",
+    "id": "provider-message-id",
+    "id_": "legacy-document-id",
+    "embedding": null,
+    "metadata": {
+      "filename": "private.pdf",
+      "page_label": "iv"
+    },
+    "excluded_embed_metadata_keys": [],
+    "excluded_llm_metadata_keys": [],
+    "relationships": {},
+    "text": "system",
+    "mimetype": "text/plain",
+    "start_char_idx": null,
+    "end_char_idx": null,
+    "text_template": "{metadata_str}\n\n{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": "\n",
+    "source": "source-id",
+    "channel": "chat",
+    "class_name": "Document"
+  },
+  "HumanMessage": {
+    "content": "human",
+    "additional_kwargs": {
+      "provider_extension": {
+        "value": 1
+      }
+    },
+    "response_metadata": {
+      "model_name": "synthetic",
+      "headers": {
+        "x-test": "yes"
+      }
+    },
+    "type": "human",
+    "name": "example",
+    "id": "provider-message-id",
+    "example": true,
+    "id_": "legacy-document-id",
+    "embedding": null,
+    "metadata": {
+      "filename": "private.pdf",
+      "page_label": "iv"
+    },
+    "excluded_embed_metadata_keys": [],
+    "excluded_llm_metadata_keys": [],
+    "relationships": {},
+    "text": "human",
+    "mimetype": "text/plain",
+    "start_char_idx": null,
+    "end_char_idx": null,
+    "text_template": "{metadata_str}\n\n{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": "\n",
+    "source": "source-id",
+    "channel": "chat",
+    "class_name": "Document"
+  },
+  "AIMessage": {
+    "content": [
+      {
+        "type": "text",
+        "text": "answer"
+      },
+      {
+        "type": "image_url",
+        "image_url": {
+          "url": "https://example.invalid/synthetic.png"
+        }
+      }
+    ],
+    "additional_kwargs": {
+      "provider_extension": {
+        "value": 1
+      }
+    },
+    "response_metadata": {
+      "model_name": "synthetic",
+      "headers": {
+        "x-test": "yes"
+      }
+    },
+    "type": "ai",
+    "name": "example",
+    "id": "provider-message-id",
+    "example": true,
+    "tool_calls": [
+      {
+        "name": "lookup",
+        "args": {
+          "query": "value"
+        },
+        "id": "call-1",
+        "type": "tool_call"
+      }
+    ],
+    "invalid_tool_calls": [
+      {
+        "name": "bad",
+        "args": "{",
+        "id": "call-2",
+        "error": "invalid json",
+        "type": "invalid_tool_call"
+      }
+    ],
+    "usage_metadata": {
+      "input_tokens": 3,
+      "output_tokens": 4,
+      "total_tokens": 7
+    },
+    "id_": "legacy-document-id",
+    "embedding": null,
+    "metadata": {
+      "filename": "private.pdf",
+      "page_label": "iv"
+    },
+    "excluded_embed_metadata_keys": [],
+    "excluded_llm_metadata_keys": [],
+    "relationships": {},
+    "text": "[{'type': 'text', 'text': 'answer'}, {'type': 'image_url', 'image_url': {'url': 'https://example.invalid/synthetic.png'}}]",
+    "mimetype": "text/plain",
+    "start_char_idx": null,
+    "end_char_idx": null,
+    "text_template": "{metadata_str}\n\n{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": "\n",
+    "source": "source-id",
+    "channel": "chat",
+    "class_name": "Document"
+  },
+  "RetrievedDocument": {
+    "id_": "retrieved-doc",
+    "embedding": null,
+    "metadata": {},
+    "excluded_embed_metadata_keys": [],
+    "excluded_llm_metadata_keys": [],
+    "relationships": {},
+    "text": "retrieved",
+    "mimetype": "text/plain",
+    "start_char_idx": null,
+    "end_char_idx": null,
+    "text_template": "{metadata_str}\n\n{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": "\n",
+    "content": "retrieved",
+    "source": null,
+    "channel": null,
+    "score": 0.25,
+    "retrieval_metadata": {
+      "rank": 1
+    },
+    "class_name": "Document"
+  },
+  "LLMInterface": {
+    "content": "answer",
+    "additional_kwargs": {},
+    "response_metadata": {},
+    "type": "ai",
+    "name": null,
+    "id": null,
+    "example": false,
+    "tool_calls": [],
+    "invalid_tool_calls": [],
+    "usage_metadata": null,
+    "id_": "llm-doc",
+    "embedding": null,
+    "metadata": {},
+    "excluded_embed_metadata_keys": [],
+    "excluded_llm_metadata_keys": [],
+    "relationships": {},
+    "text": "answer",
+    "mimetype": "text/plain",
+    "start_char_idx": null,
+    "end_char_idx": null,
+    "text_template": "{metadata_str}\n\n{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": "\n",
+    "source": null,
+    "channel": null,
+    "candidates": [
+      "answer",
+      "other"
+    ],
+    "completion_tokens": 4,
+    "total_tokens": 7,
+    "prompt_tokens": 3,
+    "total_cost": 0.1,
+    "logits": [
+      [
+        0.2
+      ]
+    ],
+    "messages": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "text": "answer"
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "https://example.invalid/synthetic.png"
+            }
+          }
+        ],
+        "additional_kwargs": {
+          "provider_extension": {
+            "value": 1
+          }
+        },
+        "response_metadata": {
+          "model_name": "synthetic",
+          "headers": {
+            "x-test": "yes"
+          }
+        },
+        "type": "ai",
+        "name": "example",
+        "id": "provider-message-id",
+        "example": true,
+        "tool_calls": [
+          {
+            "name": "lookup",
+            "args": {
+              "query": "value"
+            },
+            "id": "call-1",
+            "type": "tool_call"
+          }
+        ],
+        "invalid_tool_calls": [
+          {
+            "name": "bad",
+            "args": "{",
+            "id": "call-2",
+            "error": "invalid json",
+            "type": "invalid_tool_call"
+          }
+        ],
+        "usage_metadata": {
+          "input_tokens": 3,
+          "output_tokens": 4,
+          "total_tokens": 7
+        },
+        "id_": "legacy-document-id",
+        "embedding": null,
+        "metadata": {
+          "filename": "private.pdf",
+          "page_label": "iv"
+        },
+        "excluded_embed_metadata_keys": [],
+        "excluded_llm_metadata_keys": [],
+        "relationships": {},
+        "text": "[{'type': 'text', 'text': 'answer'}, {'type': 'image_url', 'image_url': {'url': 'https://example.invalid/synthetic.png'}}]",
+        "mimetype": "text/plain",
+        "start_char_idx": null,
+        "end_char_idx": null,
+        "text_template": "{metadata_str}\n\n{content}",
+        "metadata_template": "{key}: {value}",
+        "metadata_seperator": "\n",
+        "source": "source-id",
+        "channel": "chat",
+        "class_name": "Document"
+      }
+    ],
+    "logprobs": [
+      -0.1
+    ],
+    "class_name": "Document"
+  },
+  "StructuredOutputLLMInterface": {
+    "content": "answer",
+    "additional_kwargs": {},
+    "response_metadata": {},
+    "type": "ai",
+    "name": null,
+    "id": null,
+    "example": false,
+    "tool_calls": [],
+    "invalid_tool_calls": [],
+    "usage_metadata": null,
+    "id_": "structured-doc",
+    "embedding": null,
+    "metadata": {},
+    "excluded_embed_metadata_keys": [],
+    "excluded_llm_metadata_keys": [],
+    "relationships": {},
+    "text": "answer",
+    "mimetype": "text/plain",
+    "start_char_idx": null,
+    "end_char_idx": null,
+    "text_template": "{metadata_str}\n\n{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": "\n",
+    "source": null,
+    "channel": null,
+    "candidates": [],
+    "completion_tokens": -1,
+    "total_tokens": -1,
+    "prompt_tokens": -1,
+    "total_cost": 0,
+    "logits": [],
+    "messages": [
+      {
+        "content": [
+          {
+            "type": "text",
+            "text": "answer"
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "https://example.invalid/synthetic.png"
+            }
+          }
+        ],
+        "additional_kwargs": {
+          "provider_extension": {
+            "value": 1
+          }
+        },
+        "response_metadata": {
+          "model_name": "synthetic",
+          "headers": {
+            "x-test": "yes"
+          }
+        },
+        "type": "ai",
+        "name": "example",
+        "id": "provider-message-id",
+        "example": true,
+        "tool_calls": [
+          {
+            "name": "lookup",
+            "args": {
+              "query": "value"
+            },
+            "id": "call-1",
+            "type": "tool_call"
+          }
+        ],
+        "invalid_tool_calls": [
+          {
+            "name": "bad",
+            "args": "{",
+            "id": "call-2",
+            "error": "invalid json",
+            "type": "invalid_tool_call"
+          }
+        ],
+        "usage_metadata": {
+          "input_tokens": 3,
+          "output_tokens": 4,
+          "total_tokens": 7
+        },
+        "id_": "legacy-document-id",
+        "embedding": null,
+        "metadata": {
+          "filename": "private.pdf",
+          "page_label": "iv"
+        },
+        "excluded_embed_metadata_keys": [],
+        "excluded_llm_metadata_keys": [],
+        "relationships": {},
+        "text": "[{'type': 'text', 'text': 'answer'}, {'type': 'image_url', 'image_url': {'url': 'https://example.invalid/synthetic.png'}}]",
+        "mimetype": "text/plain",
+        "start_char_idx": null,
+        "end_char_idx": null,
+        "text_template": "{metadata_str}\n\n{content}",
+        "metadata_template": "{key}: {value}",
+        "metadata_seperator": "\n",
+        "source": "source-id",
+        "channel": "chat",
+        "class_name": "Document"
+      }
+    ],
+    "logprobs": [],
+    "parsed": {
+      "answer": 42
+    },
+    "refusal": "",
+    "class_name": "Document"
+  },
+  "ExtractorOutput": {
+    "id_": "extract-doc",
+    "embedding": null,
+    "metadata": {},
+    "excluded_embed_metadata_keys": [],
+    "excluded_llm_metadata_keys": [],
+    "relationships": {},
+    "text": "extract",
+    "mimetype": "text/plain",
+    "start_char_idx": null,
+    "end_char_idx": null,
+    "text_template": "{metadata_str}\n\n{content}",
+    "metadata_template": "{key}: {value}",
+    "metadata_seperator": "\n",
+    "content": "extract",
+    "source": null,
+    "channel": null,
+    "matches": [
+      "hit"
+    ],
+    "class_name": "Document"
+  }
+}

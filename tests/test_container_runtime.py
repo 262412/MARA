@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import subprocess
 import threading
 from contextlib import contextmanager
@@ -134,6 +135,121 @@ def test_container_does_not_force_incompatible_legacy_provider_dependencies():
     assert "WORKDIR /var/lib/mara" in dockerfile
 
 
+def test_final_runtime_base_requires_the_bookworm_pcre2_security_package():
+    dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(
+        encoding="utf-8"
+    )
+    runtime = dockerfile.split(" AS runtime-base\n", 1)[1].split(
+        "\nFROM runtime-base AS runtime-full", 1
+    )[0]
+
+    assert "libpcre2-8-0=10.42-1+deb12u2" in runtime
+    assert "apt-get upgrade" not in runtime
+    assert "dist-upgrade" not in runtime
+
+
+def test_pcre2_probe_records_the_actual_image_and_rejects_evidence_reuse(
+    monkeypatch, tmp_path
+):
+    import hashlib
+    import json
+
+    from scripts import smoke_container_runtime as smoke
+
+    calls = []
+
+    def run(*command, check=True, timeout=None):
+        calls.append((command, timeout))
+        output = '{"checks": {"grep_P": "passed"}}\n'
+        if command[1] == "image":
+            output = "sha256:owned-image\n"
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(smoke, "_run", run)
+    compile(smoke.PCRE2_PROBE, "pcre2-probe", "exec")
+    smoke._check_pcre2("owned-container", "owned-tag", "lite", tmp_path)
+    record = json.loads((tmp_path / "lite.pcre2.json").read_text())
+
+    assert record["image_id"] == "sha256:owned-image"
+    assert (
+        record["probe_sha256"] == hashlib.sha256(smoke.PCRE2_PROBE.encode()).hexdigest()
+    )
+    assert calls[0][0][:3] == ("docker", "exec", "owned-container")
+    assert calls[0][1] == 30
+    with pytest.raises(FileExistsError, match="new evidence directory"):
+        smoke._check_pcre2("owned-container", "owned-tag", "lite", tmp_path)
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("timeout", [False, True])
+def test_pcre2_probe_preserves_failed_output(monkeypatch, tmp_path, timeout):
+    from scripts import smoke_container_runtime as smoke
+
+    def run(*command, **_kwargs):
+        if timeout:
+            raise subprocess.TimeoutExpired(
+                command, 30, output=b"partial identity\n", stderr=b"probe diagnostic\n"
+            )
+        return subprocess.CompletedProcess(
+            command, 1, "partial identity\n", "probe diagnostic\n"
+        )
+
+    monkeypatch.setattr(smoke, "_run", run)
+    error = subprocess.TimeoutExpired if timeout else RuntimeError
+    with pytest.raises(error):
+        smoke._check_pcre2("owned-container", "owned-tag", "lite", tmp_path)
+    assert (tmp_path / "lite.pcre2.stdout").read_text() == "partial identity\n"
+    assert (tmp_path / "lite.pcre2.stderr").read_text() == "probe diagnostic\n"
+    assert not (tmp_path / "lite.pcre2.json").exists()
+
+
+@pytest.mark.parametrize(
+    "verification,has_slim_config,accepted",
+    [
+        ("", False, True),
+        (
+            "missing     /usr/share/doc/libpcre2-8-0/README.Debian\n"
+            "missing     /usr/share/doc/libpcre2-8-0/changelog.Debian.gz\n"
+            "missing     /usr/share/doc/libpcre2-8-0/changelog.gz\n",
+            True,
+            True,
+        ),
+        ("missing /usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.11.2", True, False),
+        ("missing /usr/share/doc/libpcre2-8-0/copyright", True, False),
+        ("??5?????? /usr/share/doc/libpcre2-8-0/changelog.gz", True, False),
+        ("missing /usr/share/doc/libpcre2-8-0/changelog.gz", False, False),
+    ],
+)
+def test_pcre2_verification_allows_only_fixed_slim_doc_exclusions(
+    verification, has_slim_config, accepted
+):
+    from scripts.smoke_container_runtime import PCRE2_PROBE
+
+    # Execute the same validation function sent to the bounded Linux probe.
+    function = next(
+        node
+        for node in ast.parse(PCRE2_PROBE).body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "validate_dpkg_verification"
+    )
+    namespace: dict = {}
+    exec(
+        compile(ast.Module(body=[function], type_ignores=[]), "probe", "exec"),
+        namespace,
+    )
+    validate = namespace["validate_dpkg_verification"]
+    config = (
+        "path-exclude /usr/share/doc/*\npath-include /usr/share/doc/*/copyright\n"
+        if has_slim_config
+        else ""
+    )
+    if accepted:
+        validate(verification, config)
+    else:
+        with pytest.raises(AssertionError):
+            validate(verification, config)
+
+
 def test_prepare_nltk_cache_uses_wheel_bundled_data_without_downloading(tmp_path):
     from scripts.prepare_container_nltk import prepare_nltk_cache
 
@@ -162,6 +278,7 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
 
     expected_constraints = {
         "aiohttp>=3.14.3",
+        "anyio==4.14.2",
         "cryptography>=50.0.0",
         "h2>=4.4.1",
         "mcp==1.12.4",
@@ -170,6 +287,7 @@ def test_container_lock_scopes_cpu_torch_without_changing_linux_gpu_runtime():
         "pydantic-settings==2.13.1",
         "pywin32==311; sys_platform == 'win32'",
         "rich==14.1.0",
+        "soupsieve==2.9",
         "typer==0.19.2",
     }
     assert set(project["tool"]["uv"]["constraint-dependencies"]) == (

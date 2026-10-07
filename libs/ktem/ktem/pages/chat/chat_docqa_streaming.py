@@ -14,6 +14,7 @@ from .chat_docqa_runtime import build_web_docqa_request, runtime_trace_reference
 from .chat_submission import SELECTION_MARKER
 from .generation_store import (
     get_current_view,
+    get_snapshot_by_page,
     init_cache_entry,
     make_page_key,
     make_request_key,
@@ -40,7 +41,12 @@ class ChatRuntimeTurn:
 
     def is_active_view(self) -> bool:
         current_view = get_current_view(self.session_key) if self.session_key else None
-        return (current_view is None) or (current_view == self.page_key)
+        snapshot = get_snapshot_by_page(self.session_key, self.page_key)
+        return bool(
+            snapshot
+            and snapshot["request_key"] == self.request_key
+            and ((current_view is None) or (current_view == self.page_key))
+        )
 
 
 def prepare_chat_runtime_turn(
@@ -485,7 +491,6 @@ def _with_displayed_final_answer(
         return response
 
     response.answer = displayed_answer
-    response.messages = list(preserved_history) + [(chat_input, displayed_answer)]
     return response
 
 
@@ -514,6 +519,7 @@ def final_docqa_response_output(
     chat_history_full = response.messages or preserved_history + [
         (chat_input, text or msg_placeholder)
     ]
+    page_history = preserved_history + [(chat_input, text or msg_placeholder)]
     reasoning_html = render_answer_reasoning_block(
         route_decision=response.route_decision,
         retrieve_decision=response.retrieve_decision,
@@ -532,7 +538,7 @@ def final_docqa_response_output(
         request_key,
         answer_text=text,
         answer_html=answer_html,
-        chat_history=chat_history_full,
+        chat_history=page_history,
     )
     update_mindmap(request_key, mindmap_html)
     update_plot(request_key, plot)
@@ -545,7 +551,7 @@ def final_docqa_response_output(
         artifact_payload,
     )
     return (
-        chat_history_full if active_view else gr.skip(),
+        page_history if active_view else gr.skip(),
         mindmap_html if active_view else gr.skip(),
         plot_gr if active_view else gr.skip(),
         plot,

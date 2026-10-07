@@ -6,6 +6,7 @@ def test_office_cache_root_expands_user_and_becomes_absolute(monkeypatch, tmp_pa
     home.mkdir()
     working.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.chdir(working)
 
     service = OfficeConversionService("~/cache/../office-cache")

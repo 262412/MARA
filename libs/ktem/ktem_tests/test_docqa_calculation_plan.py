@@ -154,20 +154,24 @@ def test_verifier_rejects_period_and_unit_mismatch():
 
 
 def test_required_slots_bind_semantically_to_final_selected_evidence():
-    selected_evidence = {
-        "evidence_id": "selected-page-2",
-        "source_id": "PEPSICO_2023_10K",
-        "page_label": "2",
-        "text": (
-            "In 2023, two revolving credit agreements each enable PepsiCo "
-            "to borrow up to USD $4.2 billion."
-        ),
-    }
+    selected_evidence = [
+        {
+            "evidence_id": f"selected-agreement-{index}",
+            "source_id": "PEPSICO_2023_10K",
+            "page_label": "2",
+            "evidence_level": "span",
+            "text": (
+                f"In 2023, revolving credit agreement {index} enables PepsiCo "
+                "to borrow up to USD $4.2 billion."
+            ),
+        }
+        for index in (1, 2)
+    ]
     plan = CalculationPlan(
         operands=(
             CalculationOperand(
                 operand_id="agreement_1",
-                evidence_id="selected-page-2",
+                evidence_id="selected-agreement-1",
                 value=Decimal("4.2"),
                 period="2023",
                 unit="USD",
@@ -176,7 +180,7 @@ def test_required_slots_bind_semantically_to_final_selected_evidence():
             ),
             CalculationOperand(
                 operand_id="agreement_2",
-                evidence_id="selected-page-2",
+                evidence_id="selected-agreement-2",
                 value=Decimal("4.2"),
                 period="2023",
                 unit="USD",
@@ -210,7 +214,7 @@ def test_required_slots_bind_semantically_to_final_selected_evidence():
 
     verification = verify_calculation_plan(
         plan,
-        [selected_evidence],
+        selected_evidence,
         question="What was the total revolving credit capacity in 2023?",
         required_slots=slots,
     )

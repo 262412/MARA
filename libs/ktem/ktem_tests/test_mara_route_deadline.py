@@ -1,26 +1,31 @@
 import time
-from time import monotonic
 from types import SimpleNamespace
 
 import ktem.reasoning.mara_route_preparation as route_preparation
+import pytest
 from ktem.docqa._runtime_models import DocQARequest
 from ktem.reasoning.mara import MaraAgentPipeline
+from ktem_tests.route_deadline_test_helpers import install_pending_route_worker
 
 
 def test_mara_route_probe_deadline_commits_typed_abstention(monkeypatch):
+    clock = install_pending_route_worker(monkeypatch)
+
     def slow_probe(*_args, **_kwargs):
         time.sleep(0.3)
         return {}
 
     monkeypatch.setattr(route_preparation, "controller_route_probe", slow_probe)
     pipeline = MaraAgentPipeline(retrievers=[])
-    pipeline.route_deadline_monotonic = monotonic() + 0.1
+    pipeline.route_deadline_monotonic = clock() + 0.1
     pipeline.route_terminal_reserve_seconds = 0.02
-    started = monotonic()
+    started = clock()
 
     events = list(pipeline.stream("What does the paper report?", "conv-1", []))
 
-    assert monotonic() - started < 0.2
+    assert clock() - started < 0.2
+    assert clock.workers_started == 1
+    assert clock.waits == pytest.approx([0.08, 0.1])
     [execution] = [
         event.content["payload"]
         for event in events

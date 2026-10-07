@@ -14,6 +14,29 @@ def test_legacy_pdf_page_helpers_keep_clamp_and_failure_fallback(tmp_path):
     assert safe_pdf_page_count(str(corrupt), fallback=7) == 7
 
 
+def test_preview_counts_real_pages_and_rejects_encrypted_pdf(tmp_path):
+    from ktem.pages.chat.page_preview_runtime import (
+        clamp_page,
+        is_valid_pdf,
+        safe_pdf_page_count,
+    )
+    from pypdf import PdfWriter
+
+    source, encrypted = tmp_path / "plain.pdf", tmp_path / "encrypted.pdf"
+    writer = PdfWriter()
+    for _ in range(3):
+        writer.add_blank_page(width=216, height=144)
+    writer.write(source)
+    writer.encrypt("fixture-reader", algorithm="AES-256")
+    writer.write(encrypted)
+
+    assert is_valid_pdf(str(source))
+    assert safe_pdf_page_count(str(source), fallback=7) == 3
+    assert clamp_page(9, safe_pdf_page_count(str(source))) == 3
+    assert not is_valid_pdf(str(encrypted))
+    assert safe_pdf_page_count(str(encrypted), fallback=7) == 7
+
+
 def test_pdfjs_viewer_query_hash_and_ktemfit_contract(monkeypatch, tmp_path):
     from ktem.pages.chat import page_preview_runtime
 

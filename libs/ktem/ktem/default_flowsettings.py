@@ -4,15 +4,23 @@ import importlib.util
 import os
 from pathlib import Path
 
-from decouple import AutoConfig
-from ktem.runtime_bootstrap import get_runtime_paths, load_packaged_runtime_env
+from decouple import AutoConfig, Config, RepositoryEmpty
+from decouple import config as env_config
+from ktem.runtime_bootstrap import (
+    get_runtime_paths,
+    load_packaged_runtime_env,
+    validate_test_runtime_paths,
+)
 from ktem.runtime_defaults import build_kotaemon_settings
 from theflow.settings.default import *  # noqa
 
 
 def _load_user_overrides(path: Path) -> dict[str, object]:
+    validate_test_runtime_paths({"THEFLOW_SETTINGS_MODULE": path})
     if not path.exists():
         return {}
+    if os.environ.get("MARA_PYTEST_RUNTIME_ROOT"):
+        path = path.resolve()
 
     spec = importlib.util.spec_from_file_location("kotaemon_user_flowsettings", path)
     if spec is None or spec.loader is None:
@@ -20,7 +28,9 @@ def _load_user_overrides(path: Path) -> dict[str, object]:
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return {name: getattr(module, name) for name in dir(module) if name.isupper()}
+    overrides = {name: getattr(module, name) for name in dir(module) if name.isupper()}
+    validate_test_runtime_paths(overrides)
+    return overrides
 
 
 runtime_paths = get_runtime_paths()
@@ -77,21 +87,18 @@ def _desktop_embedding_settings(configs: object) -> dict[str, object]:
     return supported
 
 
-if os.environ.get("MARA_DESKTOP_DATA_DIR"):
-    runtime_settings = build_kotaemon_settings(
-        base_dir=runtime_paths.config_dir,
-        app_data_dir=app_data_dir,
-        docs_dir=runtime_paths.config_dir / "docs",
-        mode="package",
-        config_reader=AutoConfig(search_path=str(runtime_paths.config_dir)),
-    )
-else:
-    runtime_settings = build_kotaemon_settings(
-        base_dir=runtime_paths.config_dir,
-        app_data_dir=app_data_dir,
-        docs_dir=runtime_paths.config_dir / "docs",
-        mode="package",
-    )
+runtime_config = env_config
+if os.environ.get("MARA_PYTEST_RUNTIME_ROOT"):
+    runtime_config = Config(RepositoryEmpty())
+elif os.environ.get("MARA_DESKTOP_DATA_DIR"):
+    runtime_config = AutoConfig(search_path=str(runtime_paths.config_dir))
+runtime_settings = build_kotaemon_settings(
+    base_dir=runtime_paths.config_dir,
+    app_data_dir=app_data_dir,
+    docs_dir=runtime_paths.config_dir / "docs",
+    mode="package",
+    config_reader=runtime_config,
+)
 user_overrides = _load_user_overrides(runtime_paths.flowsettings_path)
 if os.environ.get("MARA_DESKTOP_MODEL_SETTINGS") == "1":
     user_overrides.pop("KH_LLMS", None)
@@ -101,6 +108,7 @@ runtime_settings["STORAGE"] = {
     "__type__": "theflow.storage.LocalStorage",
     "prefix": str(theflow_storage_dir),
 }
+validate_test_runtime_paths(runtime_settings)
 if os.environ.get("MARA_DESKTOP_DATA_DIR"):
     # User overrides may configure models but Desktop selects only providers
     # whose dependencies are part of the native Sidecar bundle.

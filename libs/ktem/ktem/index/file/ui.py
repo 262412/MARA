@@ -8,6 +8,7 @@ import gradio as gr
 from gradio.data_classes import FileData
 from gradio.utils import NamedString
 from ktem.app import BasePage
+from ktem.assets import ASSETS_DIR
 from ktem.db.engine import engine
 from theflow.settings import settings as flowsettings
 
@@ -27,6 +28,7 @@ from ._scoped_page import ScopedFileIndexPageMixin
 from ._selection_service import FileSelectionService
 from ._selector_ui import FileSelector
 from .archive import extract_supported_zip_files
+from .download_http import DownloadButton
 from .utils import download_arxiv_pdf, is_arxiv_url
 
 __all__ = ["DirectoryUpload", "File", "FileIndexPage", "FileSelector"]
@@ -48,19 +50,11 @@ def _page_label_sort_key(doc):
         return (1, float("inf"), page_label_text)
 
 
-chat_input_focus_js = """
-function() {
-    let chatInput = document.querySelector("#chat-input textarea");
-    chatInput.focus();
-}
-"""
+chat_input_focus_js = (ASSETS_DIR / "js" / "chat_input_focus.js").read_text(
+    encoding="utf-8"
+)
 
-chat_input_focus_js_with_submit = """
-function() {
-    let chatInput = document.querySelector("#chat-input textarea");
-    chatInput.focus();
-}
-"""
+chat_input_focus_js_with_submit = chat_input_focus_js
 
 
 class File(gr.File):
@@ -192,7 +186,7 @@ class FileIndexPage(ScopedFileIndexPageMixin, BasePage):
                 visible=False,
             )
             self.is_zipped_state = gr.State(value=False)
-            self.download_single_button = gr.DownloadButton(
+            self.download_single_button = DownloadButton(
                 "Download",
                 visible=False,
             )

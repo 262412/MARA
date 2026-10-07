@@ -15,6 +15,13 @@ def is_docstore_relation_type(relation_type: str) -> bool:
     return relation_type in DOCSTORE_RELATION_TYPES
 
 
+def set_index_row_owner(rows: list[Any], user_id: Any) -> None:
+    """Match the existing deletion scope when the supplied row schema has owners."""
+    for row in rows:
+        if hasattr(row, "user"):
+            row.user = user_id
+
+
 def docstore_batches_and_index_rows(
     index_row_cls: Any,
     file_id: str,

@@ -161,6 +161,26 @@ def create_exclusive_file_at(directory_fd: int, name: str) -> int:
         raise ArtifactNamespaceError("Artifact temporary file unavailable") from exc
 
 
+def active_marker_metadata(directory_fd: int, fd: int) -> os.stat_result | None:
+    """Inspect only the transient .active name; ready receipts stay strict."""
+    metadata = os.fstat(fd)
+    try:
+        entry = os.stat(".active", dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        # Publication may unlink between the first fstat and the name lookup.
+        metadata = os.fstat(fd)
+        if stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 0:
+            return None
+        raise ArtifactNamespaceError("Download active marker is unsafe") from None
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or not os.path.samestat(metadata, entry)
+    ):
+        raise ArtifactNamespaceError("Download active marker is unsafe")
+    return metadata
+
+
 def replace_at(directory_fd: int, source: str, destination: str) -> None:
     _validate_component(source)
     _validate_component(destination)

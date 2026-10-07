@@ -9,7 +9,9 @@ from typing import Any, Callable, Generator
 
 from sqlalchemy.orm import Session
 
-from .archive import ArchiveExtractionError, extract_supported_zip_files
+from kotaemon.artifact_pipeline import file_failure, owned_iterator
+
+from .archive import ArchiveExtractionError, OwnedZipInputs, extract_supported_zip_files
 from .utils import download_arxiv_pdf, is_arxiv_url
 
 logger = logging.getLogger(__name__)
@@ -69,24 +71,25 @@ class FileIndexingService:
         settings: dict[str, Any],
         user_id: Any,
     ) -> IndexUpdates:
-        prepared_files, errors = self._prepare_inputs(files, urls)
-        if prepared_files is None:
-            self._notify("info", "No uploaded file")
-            yield "", ""
-            return None
-        if errors:
-            self._notify("warning", ", ".join(errors))
-            yield "", ""
-            return None
-        self._notify("info", f"Start indexing {len(prepared_files)} files...")
-        return (
-            yield from self._stream_index(
-                prepared_files,
-                reindex=reindex,
-                settings=settings,
-                user_id=user_id,
+        with OwnedZipInputs() as inputs:
+            prepared_files, errors = inputs.prepare(self._prepare_inputs, files, urls)
+            if prepared_files is None:
+                self._notify("info", "No uploaded file")
+                yield "", ""
+                return None
+            if errors:
+                self._notify("warning", ", ".join(errors))
+                yield "", ""
+                return None
+            self._notify("info", f"Start indexing {len(prepared_files)} files...")
+            return (
+                yield from self._stream_index(
+                    prepared_files,
+                    reindex=reindex,
+                    settings=settings,
+                    user_id=user_id,
+                )
             )
-        )
 
     def _prepare_inputs(
         self,
@@ -114,12 +117,13 @@ class FileIndexingService:
         debugs: list[str] = []
         output_stream = pipeline.stream(files, reindex=reindex)
         try:
-            while True:
-                response = next(output_stream)
-                if response is None:
-                    continue
-                _capture_progress(response, outputs, debugs)
-                yield "\n".join(outputs), "\n".join(debugs)
+            with owned_iterator(output_stream):
+                while True:
+                    response = next(output_stream)
+                    if response is None:
+                        continue
+                    _capture_progress(response, outputs, debugs)
+                    yield "\n".join(outputs), "\n".join(debugs)
         except StopIteration as exc:
             results, _index_errors, _docs = exc.value or ([], [], [])
         except Exception as exc:
@@ -127,6 +131,7 @@ class FileIndexingService:
                 "File indexing failed: index_id=%s user_id=%s stage=stream",
                 getattr(self._index, "id", None),
                 user_id,
+                exc_info=file_failure(exc),
             )
             debugs.append(f"Error: {exc}")
             yield "\n".join(outputs), "\n".join(debugs)
@@ -310,11 +315,12 @@ def _partition_existing(
 
 
 def _drain_updates(updates: IndexUpdates) -> list[str]:
-    while True:
-        try:
-            next(updates)
-        except StopIteration as exc:
-            return list(exc.value or [])
+    with owned_iterator(updates):
+        while True:
+            try:
+                next(updates)
+            except StopIteration as exc:
+                return list(exc.value or [])
 
 
 def _directory_files(folder_path: str) -> list[str]:

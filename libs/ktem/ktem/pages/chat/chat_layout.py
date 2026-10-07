@@ -111,7 +111,12 @@ def render_chat_file_browser(page: Any) -> None:
             show_label=False,
             visible=True,
         )
-        page.chat_file_rows = gr.State([])
+        # The rows commit with the visible cards at the browser intent boundary.
+        page.chat_file_rows = gr.JSON(value=[], visible=False)
+        page._file_browser_result = gr.JSON(value=None, visible=False)
+        page._file_browser_stamp = gr.JSON(value=None, visible=False)
+        page._file_browser_selection_result = gr.JSON(value=None, visible=False)
+        page._file_browser_selection_applied = gr.JSON(value=None, visible=False)
         page.chat_selected_file = gr.Markdown(
             "Focus: all files",
             elem_id="chat-selected-file",

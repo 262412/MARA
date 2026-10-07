@@ -9,9 +9,11 @@ from typing import Any, cast
 
 import gradio as gr
 from ktem.app import BasePage
+from ktem.assets import ASSETS_DIR
 from ktem.auth.service import resolve_request_user_id
 from ktem.db.models import Conversation, engine
 from ktem.docqa import DocQARuntime
+from ktem.index.file._selection import normalize_selected_values
 from ktem.preview.context import preview_access_for_user
 from ktem.reasoning.prompt_optimization.suggest_conversation_name import (
     SuggestConvNamePipeline,
@@ -29,6 +31,7 @@ from kotaemon.indices.qa.utils import strip_think_tag
 from ...utils import SUPPORTED_LANGUAGE_MAP
 from ...utils.hf_papers import get_recommended_papers
 from ...utils.rate_limit import check_rate_limit
+from . import file_browser_rendering
 from .answer_rendering import format_chat_message_html
 
 # final_docqa_response_output consumes response.artifact for Studio panel updates.
@@ -36,7 +39,10 @@ from .chat_auxiliary_events import (
     bind_chat_post_studio_events,
     bind_chat_pre_studio_events,
 )
-from .chat_conversation_events import bind_chat_conversation_events
+from .chat_conversation_events import (
+    bind_chat_conversation_events,
+    conversation_busy_js,
+)
 from .chat_docqa_runtime import build_web_docqa_request
 from .chat_gradio_adapters import chat_app_load_ports, chat_conversation_ports
 from .chat_knowledge_graph_bindings import subscribe_public_knowledge_graph_events
@@ -45,8 +51,9 @@ from .chat_layout import render_chat_workbench_layout
 from .chat_message_events import bind_chat_submit_events
 from .chat_preview_events import bind_chat_preview_events
 from .chat_runtime_runner import ChatCallbackInputs, run_chat_callback_outputs
-from .chat_submission import prepare_chat_submission
+from .chat_submission import bind_chat_indexing_request, prepare_chat_submission
 from .chat_suggestion import ChatSuggestion
+from .conversation_restore import clear_conversation
 from .knowledge_graph_service import GlobalKnowledgeGraphService
 from .page_preview import ChatPagePreviewController
 from .source_scope import (
@@ -90,381 +97,38 @@ DEFAULT_QUESTION = (
 )
 
 # JavaScript to focus chat input after actions
-chat_input_focus_js = """
-function() {
-    let chatInput = document.querySelector("#chat-input textarea");
-    chatInput.focus();
-}
-"""
+chat_input_focus_js = (ASSETS_DIR / "js" / "chat_input_focus.js").read_text(
+    encoding="utf-8"
+)
 
 # JavaScript to submit URL input by simulating Enter key press
-quick_urls_submit_js = """
-function() {
-    let urlInput = document.querySelector("#quick-url-demo textarea");
-    urlInput.dispatchEvent(new KeyboardEvent('keypress', {'key': 'Enter'}));
-}
-"""
+quick_urls_submit_js = (ASSETS_DIR / "js" / "quick_urls_submit.js").read_text(
+    encoding="utf-8"
+)
 
 # JavaScript to handle recommended paper clicks and auto-submit URLs
-recommended_papers_js = """
-function() {
-    // Get all links and attach click event
-    var links = document.querySelectorAll("#related-papers a");
-
-    function submitPaper(event) {
-        event.preventDefault();
-        var target = event.currentTarget;
-        var url = target.getAttribute("href");
-
-        let newChatButton = document.querySelector("#new-conv-button");
-        newChatButton.click();
-
-        setTimeout(() => {
-            let urlInput = document.querySelector("#quick-url-demo textarea");
-            // Fill the URL input
-            urlInput.value = url;
-            urlInput.dispatchEvent(new Event("input", { bubbles: true }));
-            urlInput.dispatchEvent(new KeyboardEvent('keypress', {'key': 'Enter'}));
-            }, 500
-        );
-    }
-
-    for (var i = 0; i < links.length; i++) {
-        links[i].onclick = submitPaper;
-    }
-}
-"""
+recommended_papers_js = (ASSETS_DIR / "js" / "recommended_papers.js").read_text(
+    encoding="utf-8"
+)
 
 # JavaScript to clear text selection highlighting from bot messages
-clear_bot_message_selection_js = """
-function() {
-    var bot_messages = document.querySelectorAll(
-        "div#main-chat-bot div.message-row.bot-row"
-    );
-    bot_messages.forEach(message => {
-        message.classList.remove("text_selection");
-    });
-}
-"""
+clear_bot_message_selection_js = (
+    ASSETS_DIR / "js" / "clear_bot_message_selection.js"
+).read_text(encoding="utf-8")
 
-pdfview_js = """
-function() {
-    setTimeout(fullTextSearch(), 100);
+pdfview_js = (ASSETS_DIR / "js" / "pdfview.js").read_text(encoding="utf-8")
 
-    // Get all links and attach click event
-    var links = document.getElementsByClassName("pdf-link");
-    for (var i = 0; i < links.length; i++) {
-        links[i].onclick = openModal;
-    }
-
-    // Get all citation links and attach click event
-    var links = document.querySelectorAll("a.citation");
-    for (var i = 0; i < links.length; i++) {
-        links[i].onclick = scrollToCitation;
-    }
-
-    var mindmap_el_script = document.querySelector('div.markmap script');
-
-    // render the mindmap if the script tag is present
-    if (mindmap_el_script) {
-        markmap.autoLoader.renderAll();
-    }
-
-    setTimeout(() => {
-        var mindmap_el = document.querySelector('svg.markmap');
-
-        var text_nodes = document.querySelectorAll("svg.markmap div");
-        for (var i = 0; i < text_nodes.length; i++) {
-            text_nodes[i].onclick = fillChatInput;
-        }
-
-        if (mindmap_el) {
-            function on_svg_export(event) {
-                event.preventDefault();
-                spawnDocument(mindmap_el, {window: "width=1000,height=1000"});
-            }
-
-            var link = document.getElementById("mindmap-toggle");
-            if (link) {
-                link.onclick = function(event) {
-                    event.preventDefault(); // Prevent the default link behavior
-                    var div = document.querySelector("div.markmap");
-                    if (div) {
-                        var currentHeight = div.style.height;
-                        if (currentHeight === '400px' || (currentHeight === '')) {
-                            div.style.height = '650px';
-                        } else {
-                            div.style.height = '400px'
-                        }
-                    }
-                };
-            }
-
-            var export_link = document.getElementById("mindmap-export");
-            if (export_link) {
-                export_link.addEventListener('click', on_svg_export);
-            }
-        }
-    }, 250);
-
-    // Auto-scroll answer panel to bottom when content updates
-    setTimeout(() => {
-        // Find the correct scrollable element - answer-panel is the scroll container
-        var answer_panel = document.querySelector("#answer-panel");
-        if (answer_panel) {
-            // Check if this element itself scrolls
-            if (answer_panel.scrollHeight > answer_panel.clientHeight) {
-                answer_panel.scrollTo({
-                    top: answer_panel.scrollHeight,
-                    behavior: 'smooth'
-                });
-            } else {
-                // Otherwise try direct children
-                var children = answer_panel.children;
-                for (var i = 0; i < children.length; i++) {
-                    var child = children[i];
-                    if (child && child.scrollHeight > child.clientHeight) {
-                        child.scrollTo({
-                            top: child.scrollHeight,
-                            behavior: 'smooth'
-                        });
-                        break;
-                    }
-                }
-            }
-        }
-    }, 30);
-
-    // Setup MutationObserver to auto-scroll on content changes (real-time streaming)
-    setTimeout(() => {
-        var answer_expand = document.querySelector("#answer-expand");
-        if (answer_expand) {
-            var observer = new MutationObserver(function(mutations) {
-                var answer_panel = document.querySelector("#answer-panel");
-                if (answer_panel) {
-                    // Scroll immediately without smooth animation
-                    // for real-time following
-                    if (answer_panel.scrollHeight > answer_panel.clientHeight) {
-                        answer_panel.scrollTop = answer_panel.scrollHeight;
-                    } else {
-                        var children = answer_panel.children;
-                        for (var i = 0; i < children.length; i++) {
-                            var child = children[i];
-                            if (child && child.scrollHeight > child.clientHeight) {
-                                child.scrollTop = child.scrollHeight;
-                                break;
-                            }
-                        }
-                    }
-                }
-            });
-
-            observer.observe(answer_expand, {
-                childList: true,
-                subtree: true,
-                characterData: true
-            });
-        }
-    }, 100);
-
-    // Initialize drag-to-pan for all file previews
-    setTimeout(() => {
-        function initDragPan(container) {
-            if (!container || container.dataset.dragInitialized === 'true') return;
-
-            let isDragging = false;
-            let startX = 0, startY = 0;
-            let scrollLeft = 0, scrollTop = 0;
-
-            const onMouseDown = (e) => {
-                isDragging = true;
-                startX = e.pageX - container.offsetLeft;
-                startY = e.pageY - container.offsetTop;
-                scrollLeft = container.scrollLeft;
-                scrollTop = container.scrollTop;
-                container.style.cursor = 'grabbing';
-                container.style.userSelect = 'none';
-                e.preventDefault();
-            };
-
-            const onMouseLeave = () => {
-                isDragging = false;
-                container.style.cursor = 'grab';
-                container.style.userSelect = '';
-            };
-
-            const onMouseUp = () => {
-                isDragging = false;
-                container.style.cursor = 'grab';
-                container.style.userSelect = '';
-            };
-
-            const onMouseMove = (e) => {
-                if (!isDragging) return;
-                e.preventDefault();
-                const x = e.pageX - container.offsetLeft;
-                const y = e.pageY - container.offsetTop;
-                const walkX = (x - startX) * 1.5;
-                const walkY = (y - startY) * 1.5;
-                container.scrollLeft = scrollLeft - walkX;
-                container.scrollTop = scrollTop - walkY;
-            };
-
-            container.addEventListener('mousedown', onMouseDown);
-            container.addEventListener('mouseleave', onMouseLeave);
-            container.addEventListener('mouseup', onMouseUp);
-            container.addEventListener('mousemove', onMouseMove);
-
-            container.dataset.dragInitialized = 'true';
-        }
-
-        [
-            '.pdf-preview-shell',
-            '.docx-preview',
-            '.pptx-preview-shell',
-            '.xlsx-preview-shell'
-        ].forEach(selector => {
-            document.querySelectorAll(selector).forEach(el => initDragPan(el));
-        });
-    }, 150);
-
-    return [links.length]
-}
-"""
-
-fetch_api_key_js = """
-function(_, __) {
-    api_key = getStorage('google_api_key', '');
-    return [api_key, _];
-}
-"""
+fetch_api_key_js = (ASSETS_DIR / "js" / "fetch_api_key.js").read_text(encoding="utf-8")
 
 # Auto-scroll answer panel to bottom
-scroll_answer_panel_js = """
-function() {
-    setTimeout(() => {
-        // Find the correct scrollable element - answer-panel is the scroll container
-        var answer_panel = document.querySelector("#answer-panel");
-        if (answer_panel) {
-            if (answer_panel.scrollHeight > answer_panel.clientHeight) {
-                answer_panel.scrollTop = answer_panel.scrollHeight;
-            } else {
-                var children = answer_panel.children;
-                for (var i = 0; i < children.length; i++) {
-                    var child = children[i];
-                    if (child && child.scrollHeight > child.clientHeight) {
-                        child.scrollTop = child.scrollHeight;
-                        break;
-                    }
-                }
-            }
-        }
-    }, 30);
-}
-"""
+scroll_answer_panel_js = (ASSETS_DIR / "js" / "scroll_answer_panel.js").read_text(
+    encoding="utf-8"
+)
 
 # Enable drag-to-pan for all file previews
-preview_drag_pan_js = """
-function() {
-    function initDragPan(container) {
-        if (!container || container.dataset.dragInitialized === 'true') return;
-
-        let isDragging = false;
-        let startX = 0, startY = 0;
-        let scrollLeft = 0, scrollTop = 0;
-
-        const onMouseDown = (e) => {
-            isDragging = true;
-            startX = e.pageX - container.offsetLeft;
-            startY = e.pageY - container.offsetTop;
-            scrollLeft = container.scrollLeft;
-            scrollTop = container.scrollTop;
-            container.style.cursor = 'grabbing';
-            container.style.userSelect = 'none';
-            e.preventDefault();
-        };
-
-        const onMouseLeave = () => {
-            isDragging = false;
-            container.style.cursor = 'grab';
-            container.style.userSelect = '';
-        };
-
-        const onMouseUp = () => {
-            isDragging = false;
-            container.style.cursor = 'grab';
-            container.style.userSelect = '';
-        };
-
-        const onMouseMove = (e) => {
-            if (!isDragging) return;
-            e.preventDefault();
-            const x = e.pageX - container.offsetLeft;
-            const y = e.pageY - container.offsetTop;
-            const walkX = (x - startX) * 1.5; // Scroll speed multiplier
-            const walkY = (y - startY) * 1.5;
-            container.scrollLeft = scrollLeft - walkX;
-            container.scrollTop = scrollTop - walkY;
-        };
-
-        // Touch support
-        const onTouchStart = (e) => {
-            if (e.touches.length !== 1) return;
-            isDragging = true;
-            const touch = e.touches[0];
-            startX = touch.pageX - container.offsetLeft;
-            startY = touch.pageY - container.offsetTop;
-            scrollLeft = container.scrollLeft;
-            scrollTop = container.scrollTop;
-            e.preventDefault();
-        };
-
-        const onTouchEnd = () => {
-            isDragging = false;
-        };
-
-        const onTouchMove = (e) => {
-            if (!isDragging || e.touches.length !== 1) return;
-            e.preventDefault();
-            const touch = e.touches[0];
-            const x = touch.pageX - container.offsetLeft;
-            const y = touch.pageY - container.offsetTop;
-            const walkX = (x - startX) * 1.5;
-            const walkY = (y - startY) * 1.5;
-            container.scrollLeft = scrollLeft - walkX;
-            container.scrollTop = scrollTop - walkY;
-        };
-
-        // Mouse events
-        container.addEventListener('mousedown', onMouseDown);
-        container.addEventListener('mouseleave', onMouseLeave);
-        container.addEventListener('mouseup', onMouseUp);
-        container.addEventListener('mousemove', onMouseMove);
-
-        // Touch events
-        container.addEventListener('touchstart', onTouchStart, { passive: false });
-        container.addEventListener('touchend', onTouchEnd);
-        container.addEventListener('touchmove', onTouchMove, { passive: false });
-
-        container.dataset.dragInitialized = 'true';
-    }
-
-    // Initialize on all preview containers
-    setTimeout(() => {
-        const selectors = [
-            '.pdf-preview-shell',
-            '.docx-preview',
-            '.pptx-preview-shell',
-            '.xlsx-preview-shell'
-        ];
-
-        selectors.forEach(selector => {
-            const elements = document.querySelectorAll(selector);
-            elements.forEach(el => initDragPan(el));
-        });
-    }, 100);
-}
-"""
+preview_drag_pan_js = (ASSETS_DIR / "js" / "preview_drag_pan.js").read_text(
+    encoding="utf-8"
+)
 
 
 class ChatPage(BasePage):
@@ -533,6 +197,7 @@ class ChatPage(BasePage):
         self._request_info_html = gr.State(value="")
         self._request_answer_html = gr.State(value="")
         self._request_chat_history = gr.State(value=[])
+        self._request_completion = gr.State(value=None)
 
     def on_building_ui(self):
         render_chat_workbench_layout(
@@ -702,37 +367,14 @@ class ChatPage(BasePage):
 
     @staticmethod
     def _format_corpus_file_type(file_name: str) -> str:
-        suffix = os.path.splitext(str(file_name or "").lower())[1]
-        if suffix == ".pdf":
-            return "PDF"
-        if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}:
-            return "Images"
-        if suffix in {".ppt", ".pptx"}:
-            return "Slides"
-        if suffix in {".doc", ".docx", ".txt", ".md", ".rtf"}:
-            return "Documents"
-        return "Documents"
+        return file_browser_rendering.format_corpus_file_type(file_name)
 
     @staticmethod
     def _format_bytes(size_bytes: int | float | None) -> str:
-        size = float(size_bytes or 0)
-        units = ["B", "KB", "MB", "GB", "TB"]
-        for unit in units:
-            if size < 1024 or unit == units[-1]:
-                if unit == "B":
-                    return f"{int(size)} {unit}"
-                return f"{size:.1f} {unit}"
-            size /= 1024
-        return "0 B"
+        return file_browser_rendering.format_bytes(size_bytes)
 
     def _format_corpus_file_meta(self, file_name: str, page_count=None) -> str:
-        if page_count:
-            pages = max(1, int(page_count))
-            return f"{pages} page" if pages == 1 else f"{pages} pages"
-        suffix = os.path.splitext(str(file_name or "").lower())[1]
-        if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}:
-            return "1 page"
-        return "page count unavailable"
+        return file_browser_rendering.format_corpus_file_meta(file_name, page_count)
 
     def _resolve_source_file_path(self, file_id: str, user_id=None) -> str:
         if not file_id:
@@ -813,132 +455,28 @@ class ChatPage(BasePage):
             except Exception:
                 width = 100
 
-        file_label = "file" if file_count == 1 else "files"
-        page_label = "page" if page_count == 1 else "pages"
-        return (
-            "<div class='workbench-file-summary'>"
-            "<div>"
-            f"<strong>{file_count} {file_label}</strong>"
-            f"<span>{page_count} {page_label}</span>"
-            "</div>"
-            "<div>"
-            f"<strong>{html.escape(storage_label)}</strong>"
-            "<span>stored</span>"
-            "</div>"
-            "<div class='workbench-file-summary__bar'>"
-            f"<span style='width: {width}%'></span>"
-            "</div>"
-            "</div>"
+        return file_browser_rendering.render_corpus_summary(
+            file_count, page_count, storage_label, width
         )
 
     def _render_chat_file_list_html(
         self, rows: list[dict], selected_ids: set[str]
     ) -> str:
-        if not rows:
-            return "<div class='chat-file-empty'>No files uploaded</div>"
-
-        grouped_rows: dict[str, list[dict]] = {
-            "PDF": [],
-            "Images": [],
-            "Slides": [],
-            "Documents": [],
-        }
-        for row in rows:
-            file_name = str(row.get("name", "") or row.get("id", ""))
-            grouped_rows[self._format_corpus_file_type(file_name)].append(row)
-
-        sections = []
-        for file_type, type_rows in grouped_rows.items():
-            if not type_rows:
-                continue
-
-            items = []
-            for row in type_rows:
-                file_id = str(row.get("id", "") or "")
-                file_name = str(row.get("name", "") or file_id)
-                is_selected = file_id in selected_ids
-                item_class = (
-                    "corpus-file-entry is-selected"
-                    if is_selected
-                    else "corpus-file-entry"
-                )
-                page_meta = self._format_corpus_file_meta(
-                    file_name, row.get("page_count")
-                )
-                size_meta = self._format_bytes(int(row.get("size", 0) or 0))
-                items.append(
-                    "<button type='button' "
-                    f"class='{item_class}' "
-                    f"data-chat-file-id='{html.escape(file_id, quote=True)}'>"
-                    "<span class='corpus-file-entry__icon'>"
-                    f"{html.escape(file_type[:3].upper())}"
-                    "</span>"
-                    "<span class='corpus-file-entry__body'>"
-                    "<span class='corpus-file-entry__name'>"
-                    f"{html.escape(file_name)}"
-                    "</span>"
-                    "<span class='corpus-file-entry__meta'>"
-                    f"{html.escape(page_meta)} - {html.escape(size_meta)}"
-                    "</span>"
-                    "</span>"
-                    "<span class='corpus-file-entry__status'>Indexed</span>"
-                    "</button>"
-                )
-
-            sections.append(
-                "<section class='corpus-file-section'>"
-                "<div class='corpus-file-section__header'>"
-                f"<strong>{html.escape(file_type)}</strong>"
-                f"<span>{len(type_rows)}</span>"
-                "</div>"
-                "<div class='corpus-file-section__items'>" + "".join(items) + "</div>"
-                "</section>"
-            )
-
-        if sections:
-            return "<div class='corpus-file-library'>" + "".join(sections) + "</div>"
-
-        items = []
-        for row in rows:
-            file_id = str(row.get("id", "") or "")
-            file_name = str(row.get("name", "") or file_id)
-            is_selected = file_id in selected_ids
-            item_class = (
-                "chat-file-entry is-selected" if is_selected else "chat-file-entry"
-            )
-            items.append(
-                "<button type='button' "
-                f"class='{item_class}' "
-                f"data-chat-file-id='{html.escape(file_id, quote=True)}'>"
-                "<span class='chat-file-entry__name'>"
-                f"{html.escape(file_name)}"
-                "</span>"
-                "</button>"
-            )
-
-        return "<div class='chat-file-list-shell'>" + "".join(items) + "</div>"
+        return file_browser_rendering.render_chat_file_list(rows, selected_ids)
 
     def _render_page_strip_header(
         self, file_id: str, file_name: str, file_path: str, total_pages
     ) -> str:
         del file_id
         if not file_name:
-            return "<div class='page-strip-empty'>Select a file to preview pages.</div>"
+            return file_browser_rendering.render_page_strip_header("", "", 1, 0)
         file_type = self._format_corpus_file_type(file_name)
         size = (
             os.path.getsize(file_path) if file_path and os.path.isfile(file_path) else 0
         )
         pages = max(1, int(total_pages or 1))
-        page_label = "page" if pages == 1 else "pages"
-        return (
-            "<div class='page-strip-header'>"
-            f"<div class='page-strip-file-icon'>{html.escape(file_type[:3].upper())}</div>"
-            "<div>"
-            f"<strong>{html.escape(file_name)}</strong>"
-            f"<span>{pages} {page_label} - {html.escape(self._format_bytes(size))}</span>"
-            "</div>"
-            "<span class='page-strip-indexed'>Indexed</span>"
-            "</div>"
+        return file_browser_rendering.render_page_strip_header(
+            file_name, file_type, pages, size
         )
 
     @staticmethod
@@ -974,17 +512,7 @@ class ChatPage(BasePage):
         query: str,
     ) -> str:
         excerpt = self._get_text_thumbnail_excerpt(file_id, file_name, file_path, page)
-        if not excerpt:
-            excerpt = "No text preview available."
-        if query:
-            pattern = re.compile(re.escape(query), flags=re.IGNORECASE)
-            excerpt = pattern.sub(
-                lambda match: f"<mark>{html.escape(match.group(0))}</mark>",
-                html.escape(excerpt),
-            )
-        else:
-            excerpt = html.escape(excerpt)
-        return f"<span class='page-thumbnail-card__text'>{excerpt}</span>"
+        return file_browser_rendering.render_text_thumbnail_preview(excerpt, query)
 
     def _render_page_thumbnail_strip(
         self,
@@ -996,7 +524,7 @@ class ChatPage(BasePage):
         filter_text: str = "",
     ) -> str:
         if not file_id or not file_name:
-            return "<div class='page-thumbnail-empty'>No file selected.</div>"
+            return file_browser_rendering.render_empty_thumbnail_strip()
 
         current_page = max(1, int(page_number or 1))
         total = max(1, int(total_pages or 1))
@@ -1013,18 +541,11 @@ class ChatPage(BasePage):
                 ).lower()
             ]
             if not matched_pages:
-                return (
-                    "<div class='page-thumbnail-empty'>"
-                    f"No pages match '{html.escape(query)}'."
-                    "</div>"
-                )
+                return file_browser_rendering.render_empty_thumbnail_strip(query)
             page_numbers = matched_pages
 
         cards = []
         for page in page_numbers:
-            classes = ["page-thumbnail-card"]
-            if page == current_page:
-                classes.append("is-active")
             if self._is_text_thumbnail_source(file_name, file_path):
                 preview = self._render_text_thumbnail_preview(
                     file_id, file_name, file_path, page, query
@@ -1042,26 +563,16 @@ class ChatPage(BasePage):
                     preview_src = self.page_preview._get_page_preview_image(
                         file_id, file_path, page
                     )
-                if preview_src:
-                    preview = (
-                        "<img class='page-thumbnail-card__image' "
-                        "loading='lazy' "
-                        f"src='{html.escape(preview_src, quote=True)}' "
-                        f"alt='Page {page} preview' />"
-                    )
-                else:
-                    preview = "<span class='page-thumbnail-card__page'></span>"
+                preview = file_browser_rendering.render_image_thumbnail_preview(
+                    preview_src, page
+                )
             cards.append(
-                "<button type='button' "
-                f"class='{' '.join(classes)}' "
-                f"data-page-number='{page}'>"
-                f"<span class='page-thumbnail-card__num'>{page}</span>"
-                f"{preview}"
-                f"<strong>Page {page}</strong>"
-                "</button>"
+                file_browser_rendering.render_page_thumbnail_card(
+                    page, current_page, preview
+                )
             )
 
-        return "<div class='page-thumbnail-list'>" + "".join(cards) + "</div>"
+        return file_browser_rendering.render_page_thumbnail_list(cards)
 
     def _render_page_metadata_strip(
         self,
@@ -1086,18 +597,8 @@ class ChatPage(BasePage):
         )
         language_setting = self._app.default_settings.reasoning.settings.get("lang")
         language = getattr(language_setting, "value", "") or "default"
-        summary = (
-            f"Previewing {html.escape(file_name)}" if file_name else "No page selected"
-        )
-        return (
-            "<div class='page-metadata-strip'>"
-            f"<div><span>Modality</span><strong>{html.escape(file_type)}</strong></div>"
-            f"<div><span>Page</span><strong>{current_page} / {total}</strong></div>"
-            f"<div><span>Page Summary</span><strong>{summary}</strong></div>"
-            f"<div><span>Extracted Text</span><strong>{html.escape(extracted)}</strong></div>"
-            f"<div><span>OCR</span><strong>{html.escape(ocr_state)}</strong></div>"
-            f"<div><span>Language</span><strong>{html.escape(str(language))}</strong></div>"
-            "</div>"
+        return file_browser_rendering.render_page_metadata_strip(
+            file_name, file_type, current_page, total, extracted, ocr_state, language
         )
 
     @staticmethod
@@ -1256,7 +757,15 @@ class ChatPage(BasePage):
         request: gr.Request = _DIRECT_CALL_REQUEST,
     ):
         user_id = self._resolve_persist_user_id(user_id, request)
-        selected_ids = self._normalize_selected_file_ids(selected_file_ids)
+        selected_ids = [
+            file_id
+            for value in self._normalize_selected_file_ids(selected_file_ids)
+            for file_id in (
+                normalize_selected_values(value)
+                if self._is_group_selector_value(value)
+                else [value]
+            )
+        ]
         selected_set = set(selected_ids)
         keyword = str(filter_text or "").strip().lower()
 
@@ -1285,7 +794,7 @@ class ChatPage(BasePage):
         return (
             rows,
             list_html,
-            f"Focus: {selected_name}",
+            f"Focus: {html.escape(str(selected_name))}",
             self._render_corpus_summary_html(rows),
         )
 
@@ -1597,8 +1106,12 @@ class ChatPage(BasePage):
             selected_graph_context=selected_graph_context,
             default_question=DEFAULT_QUESTION,
             merge_graph_source_ids=self.merge_graph_source_ids,
-            first_indexing_file_fn=getattr(self, "first_indexing_file_fn", None),
-            first_indexing_url_fn=getattr(self, "first_indexing_url_fn", None),
+            first_indexing_file_fn=bind_chat_indexing_request(
+                getattr(self, "first_indexing_file_fn", None), request
+            ),
+            first_indexing_url_fn=bind_chat_indexing_request(
+                getattr(self, "first_indexing_url_fn", None), request
+            ),
         )
 
         if not conv_id:
@@ -1686,10 +1199,19 @@ class ChatPage(BasePage):
                 },
             )
 
+            # A backend completion keeps later sign-in subscribers running in 4.39.
+            self._app.subscribe_event(
+                name="onSignIn",
+                definition={
+                    "fn": lambda: None,
+                    "js": conversation_busy_js("signin", False),
+                },
+            )
+
             self._app.subscribe_event(
                 name="onSignOut",
                 definition={
-                    "fn": self.chat_control.clear_conv,
+                    "fn": clear_conversation(self.chat_control.clear_conv),
                     "outputs": chat_conversation_ports(
                         self, demo_mode=KH_DEMO_MODE
                     ).selection.gradio_outputs,

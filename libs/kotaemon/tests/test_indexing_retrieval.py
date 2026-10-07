@@ -19,8 +19,8 @@ with open(Path(__file__).parent / "resources" / "embedding_openai.json") as f:
     "openai.resources.embeddings.Embeddings.create",
     side_effect=lambda *args, **kwargs: openai_embedding,
 )
-def test_indexing(_mock_create, tmp_path):
-    db = ChromaVectorStore(path=str(tmp_path))
+def test_indexing(_mock_create, tmp_path, chroma_store_factory):
+    db = chroma_store_factory(path=tmp_path)
     doc_store = InMemoryDocumentStore()
     embedding = AzureOpenAIEmbeddings(
         azure_deployment="text-embedding-ada-002",
@@ -46,8 +46,10 @@ def test_indexing(_mock_create, tmp_path):
     "openai.resources.embeddings.Embeddings.create",
     side_effect=lambda *args, **kwargs: openai_embedding,
 )
-def test_indexing_normalizes_formula_element_metadata(_mock_create, tmp_path):
-    db = ChromaVectorStore(path=str(tmp_path))
+def test_indexing_normalizes_formula_element_metadata(
+    _mock_create, tmp_path, chroma_store_factory
+):
+    db = chroma_store_factory(path=tmp_path)
     doc_store = InMemoryDocumentStore()
     embedding = AzureOpenAIEmbeddings(
         azure_deployment="text-embedding-ada-002",
@@ -81,8 +83,8 @@ def test_indexing_normalizes_formula_element_metadata(_mock_create, tmp_path):
     "openai.resources.embeddings.Embeddings.create",
     side_effect=lambda *args, **kwargs: openai_embedding,
 )
-def test_retrieving(_mock_create, tmp_path):
-    db = ChromaVectorStore(path=str(tmp_path))
+def test_retrieving(_mock_create, tmp_path, chroma_store_factory):
+    db = chroma_store_factory(path=tmp_path)
     doc_store = InMemoryDocumentStore()
     embedding = AzureOpenAIEmbeddings(
         azure_deployment="text-embedding-ada-002",

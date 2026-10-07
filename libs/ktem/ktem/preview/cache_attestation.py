@@ -9,6 +9,7 @@ import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from .errors import PreviewConversionError, PreviewErrorCode
 
@@ -91,7 +92,8 @@ class CacheAttestationStore:
         )
         temporary = Path(name)
         try:
-            os.fchmod(descriptor, 0o600)
+            fchmod: Callable[[int, int], None] = getattr(os, "fchmod")
+            fchmod(descriptor, 0o600)
             with os.fdopen(descriptor, "wb") as file_obj:
                 descriptor = -1
                 file_obj.write(prepared.manifest)
@@ -173,7 +175,8 @@ def _create_key_atomically(key_path: Path, source_path: Path) -> None:
     descriptor, name = tempfile.mkstemp(prefix=".preview-key-", dir=key_path.parent)
     temporary = Path(name)
     try:
-        os.fchmod(descriptor, 0o600)
+        fchmod: Callable[[int, int], None] = getattr(os, "fchmod")
+        fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "wb") as file_obj:
             descriptor = -1
             file_obj.write(secrets.token_bytes(_KEY_BYTES))

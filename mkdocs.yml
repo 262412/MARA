@@ -12,6 +12,7 @@ nav:
   # - Functional description: pages/app/functional-description.md
   - Development:
       - development/index.md
+      - Architecture Contracts: development/architecture-contracts.md
       - Codebase Hygiene Contract: development/codebase-hygiene-contract.md
       - MARA Desktop:
           - Development Launch Pack: desktop/README.md

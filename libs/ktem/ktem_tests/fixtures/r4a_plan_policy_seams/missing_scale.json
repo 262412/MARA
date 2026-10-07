@@ -1,0 +1,3975 @@
+{
+ "source": "e40dc0a18ef57d251a2931ce85553e22ee145798",
+ "pythonhashseed": "0",
+ "observation": {
+  "calls": [
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "operand:operating_cash_flow",
+    "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   },
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "operand:capital_expenditure",
+    "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   },
+   {
+    "stage": "retrieve",
+    "round": 1,
+    "slot": "dimension:scale",
+    "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   },
+   {
+    "stage": "retrieve",
+    "round": 2,
+    "slot": "dimension:scale",
+    "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment operating cash flow 2018 cash_flow_statement operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure 2018 cash_flow_statement capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 What was free cash flow in millions for 2018? parent table dollars scale unit convention statement locator",
+    "route": "text_rag",
+    "budget": {
+     "max_items": 16,
+     "max_pages": 6
+    }
+   }
+  ],
+  "planned": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:29168cb668b745779b1e",
+   "answer_type": "numeric",
+   "question_type": "numeric",
+   "subqueries": [
+    "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+    "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+    "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "operand:operating_cash_flow",
+     "role": "operand",
+     "entity": "",
+     "metric": "operating cash flow",
+     "period": "2018",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "cash_flow_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+     "locator": {}
+    },
+    {
+     "slot_id": "operand:capital_expenditure",
+     "role": "operand",
+     "entity": "",
+     "metric": "capital expenditure",
+     "period": "2018",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "cash_flow_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+     "locator": {}
+    },
+    {
+     "slot_id": "dimension:scale",
+     "role": "dimension",
+     "entity": "",
+     "metric": "",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+     "locator": null
+    }
+   ],
+   "constraints": {
+    "periods": [
+     "2018"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": true,
+    "finance_formula_status": "not_applicable"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "final_plan": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:29168cb668b745779b1e",
+   "answer_type": "numeric",
+   "question_type": "numeric",
+   "subqueries": [
+    "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+    "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+    "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "operand:operating_cash_flow",
+     "role": "operand",
+     "entity": "",
+     "metric": "operating cash flow",
+     "period": "2018",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "cash_flow_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "filled",
+     "evidence_ids": [
+      "cell::cash"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+     "locator": {}
+    },
+    {
+     "slot_id": "operand:capital_expenditure",
+     "role": "operand",
+     "entity": "",
+     "metric": "capital expenditure",
+     "period": "2018",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "cash_flow_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "filled",
+     "evidence_ids": [
+      "cell::capex"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+     "locator": {}
+    },
+    {
+     "slot_id": "dimension:scale",
+     "role": "dimension",
+     "entity": "",
+     "metric": "",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+     "locator": null
+    }
+   ],
+   "constraints": {
+    "periods": [
+     "2018"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": true,
+    "finance_formula_status": "not_applicable",
+    "question": "What was free cash flow in millions for 2018?"
+   },
+   "max_retrieval_rounds": 2
+  },
+  "plan_id": "plan:29168cb668b745779b1e",
+  "state_version": 4,
+  "bound": {
+   "contract_id": "query_plan.v1",
+   "plan_id": "plan:29168cb668b745779b1e",
+   "answer_type": "numeric",
+   "question_type": "numeric",
+   "subqueries": [
+    "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+    "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+    "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+   ],
+   "evidence_slots": [
+    {
+     "slot_id": "operand:operating_cash_flow",
+     "role": "operand",
+     "entity": "",
+     "metric": "operating cash flow",
+     "period": "2018",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "cash_flow_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "filled",
+     "evidence_ids": [
+      "cell::cash"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+     "locator": {},
+     "table_instance_id": "cell::cash",
+     "table_group_id": "cell::cash"
+    },
+    {
+     "slot_id": "operand:capital_expenditure",
+     "role": "operand",
+     "entity": "",
+     "metric": "capital expenditure",
+     "period": "2018",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "cash_flow_statement",
+     "financial_scope": "consolidated",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "filled",
+     "evidence_ids": [
+      "cell::capex"
+     ],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+     "locator": {},
+     "table_instance_id": "cell::capex",
+     "table_group_id": "cell::capex"
+    },
+    {
+     "slot_id": "dimension:scale",
+     "role": "dimension",
+     "entity": "",
+     "metric": "",
+     "period": "",
+     "period_kind": "",
+     "unit": "",
+     "scale": "",
+     "statement_kind": "",
+     "financial_scope": "",
+     "modality": "auto",
+     "required": true,
+     "required_for_retrieval": true,
+     "required_for_execution": true,
+     "required_for_verification": true,
+     "status": "missing",
+     "evidence_ids": [],
+     "cardinality": 1,
+     "operator_role": "",
+     "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+     "locator": null,
+     "applied_query_slot_ids": []
+    }
+   ],
+   "constraints": {
+    "periods": [
+     "2018"
+    ],
+    "verification_domain": "finance",
+    "requires_visual": false,
+    "requires_multiple_evidence": false,
+    "requires_distinct_source_pages": false,
+    "requires_structured_elements": false,
+    "explicit_page_labels": {
+     "__tuple__": []
+    },
+    "figure_label": "",
+    "table_label": "",
+    "requires_distinct_evidence": false,
+    "requires_structure": true,
+    "finance_formula_status": "not_applicable",
+    "question": "What was free cash flow in millions for 2018?"
+   },
+   "max_retrieval_rounds": 2,
+   "binding_trace": [
+    {
+     "slot_id": "operand:operating_cash_flow",
+     "preserved_existing_binding": true,
+     "replacement_reason": "",
+     "before_identity": "cell::cash",
+     "after_identity": "cell::cash"
+    },
+    {
+     "slot_id": "operand:capital_expenditure",
+     "preserved_existing_binding": true,
+     "replacement_reason": "",
+     "before_identity": "cell::capex",
+     "after_identity": "cell::capex"
+    },
+    {
+     "slot_id": "dimension:scale",
+     "preserved_existing_binding": false,
+     "replacement_reason": "missing_existing_binding",
+     "before_identity": "",
+     "after_identity": ""
+    }
+   ],
+   "state_authority": "provisional_calculation_plan",
+   "state_version": 4
+  },
+  "controller": {
+   "route": "text_rag",
+   "legacy_route": "doc_text",
+   "policy": "doc",
+   "controller_mode": "off",
+   "requires_retrieval": true,
+   "reason": "Requested document text route."
+  },
+  "retrieval": {
+   "status": "poor",
+   "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted.",
+   "retry": false
+  },
+  "verification": {
+   "mode": "light",
+   "status": "not_enough_evidence",
+   "reason": "Verification-required evidence slots are missing: dimension:scale",
+   "action": "abstain",
+   "claims": [],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [],
+   "claim_results": [],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "guardrail": {
+   "status": "not_enough_evidence",
+   "action": "abstain",
+   "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+  },
+  "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+  "terminal_answer": "unanswerable",
+  "terminal_state": {
+   "contract_id": "engine_terminal_state.v1",
+   "answer": "unanswerable",
+   "raw_generated_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+   "raw_candidate_label": "unanswerable",
+   "normalized_candidate_label": "unanswerable",
+   "verified_canonical_answer": "",
+   "semantic_correction_applied": false,
+   "correction_reason": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_quote": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "terminal_reason": "",
+   "guardrail_result": {
+    "status": "not_enough_evidence",
+    "action": "abstain",
+    "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+   },
+   "verify_decision": {
+    "mode": "light",
+    "status": "not_enough_evidence",
+    "reason": "Verification-required evidence slots are missing: dimension:scale",
+    "action": "abstain",
+    "claims": [],
+    "unsupported_claims": [],
+    "unknown_claims": [],
+    "verified_citations": [],
+    "claim_results": [],
+    "input_answer_polarity": "",
+    "canonical_answer_polarity": "",
+    "semantic_correction_applied": false,
+    "boolean_authority_status": "",
+    "authoritative_evidence_id": "",
+    "authoritative_evidence_ref": "",
+    "authoritative_span_id": "",
+    "authoritative_quote": "",
+    "authoritative_span_start": null,
+    "authoritative_span_end": null,
+    "authoritative_canonical_start": null,
+    "authoritative_canonical_end": null,
+    "actor": "",
+    "section_scope": "",
+    "relation": "",
+    "object": "",
+    "predicate_arguments": {
+     "__tuple__": []
+    },
+    "qualifier": "",
+    "quantifier": "",
+    "verified_support_slot_ids": [],
+    "authority_derivations": [],
+    "selected_derivation_id": "",
+    "authoritative_conflict": {},
+    "typed_authority": {},
+    "candidate_contract_id": "",
+    "candidate_label": "",
+    "verifier_input_candidate": "",
+    "verifier_candidate_status": "",
+    "replacement_candidate_allowed": false,
+    "predicate": "",
+    "arguments": [],
+    "scope": ""
+   },
+   "guardrail_decision": {
+    "status": "not_enough_evidence",
+    "action": "abstain",
+    "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+   },
+   "evidence_bundle": {
+    "route": "doc_text",
+    "items": [
+     {
+      "evidence_id": "capex",
+      "source_id": "",
+      "source_name": "",
+      "page_label": "",
+      "modality": "table",
+      "element_id": "",
+      "cell_id": "capex",
+      "canonical_id": "cell::capex",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "cell_role": "data",
+      "row_index": null,
+      "column_index": null,
+      "row_label": "Capital expenditure",
+      "column_label": "2018",
+      "raw_row_label": "Capital expenditure",
+      "raw_column_label": "2018",
+      "normalized_row_label": "Capital expenditure",
+      "normalized_column_label": "2018",
+      "period": "2018",
+      "value": "20",
+      "statement_kind": "cash_flow_statement",
+      "financial_scope": "consolidated",
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:operating_cash_flow",
+        "slot_id": "operand:operating_cash_flow",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:capital_expenditure",
+        "slot_id": "operand:capital_expenditure",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:dimension:scale",
+        "slot_id": "dimension:scale",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 2,
+        "query_id": "round2:calculation_recovery:dimension:scale",
+        "slot_id": "dimension:scale",
+        "retriever_name": "text",
+        "raw_rank": 2,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "Capital expenditure 2018 20",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [],
+      "evidence_level": "cell",
+      "metadata": {},
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "period_kind": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "representations": [
+       {
+        "modality": "table",
+        "field": "text",
+        "text": "Capital expenditure 2018 20"
+       }
+      ],
+      "identity": {
+       "source_id": "",
+       "kind": "cell",
+       "local_id": "capex"
+      }
+     },
+     {
+      "evidence_id": "cash",
+      "source_id": "",
+      "source_name": "",
+      "page_label": "",
+      "modality": "table",
+      "element_id": "",
+      "cell_id": "cash",
+      "canonical_id": "cell::cash",
+      "parent_element_id": "",
+      "neighbor_element_ids": [],
+      "section_id": "",
+      "table_id": "",
+      "cell_role": "data",
+      "row_index": null,
+      "column_index": null,
+      "row_label": "Operating cash flow",
+      "column_label": "2018",
+      "raw_row_label": "Operating cash flow",
+      "raw_column_label": "2018",
+      "normalized_row_label": "Operating cash flow",
+      "normalized_column_label": "2018",
+      "period": "2018",
+      "value": "100",
+      "statement_kind": "cash_flow_statement",
+      "financial_scope": "consolidated",
+      "continuation_id": "",
+      "chunk_start": null,
+      "chunk_end": null,
+      "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+      "duplicate_evidence_ids": [],
+      "retrieval_lineage": [
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:operating_cash_flow",
+        "slot_id": "operand:operating_cash_flow",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:operand:capital_expenditure",
+        "slot_id": "operand:capital_expenditure",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 1,
+        "query_id": "round1:dimension:scale",
+        "slot_id": "dimension:scale",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       },
+       {
+        "round_id": 2,
+        "query_id": "round2:calculation_recovery:dimension:scale",
+        "slot_id": "dimension:scale",
+        "retriever_name": "text",
+        "raw_rank": 1,
+        "raw_score": null,
+        "score_type": "not_recorded"
+       }
+      ],
+      "bbox": null,
+      "caption": "",
+      "text": "Operating cash flow 2018 100",
+      "ocr_text": "",
+      "vlm_text": "",
+      "source_backrefs": [],
+      "evidence_level": "cell",
+      "metadata": {},
+      "span_id": "",
+      "table_instance_id": null,
+      "table_group_id": null,
+      "block_id": null,
+      "period_kind": null,
+      "unit": null,
+      "scale": null,
+      "currency": null,
+      "representations": [
+       {
+        "modality": "table",
+        "field": "text",
+        "text": "Operating cash flow 2018 100"
+       }
+      ],
+      "identity": {
+       "source_id": "",
+       "kind": "cell",
+       "local_id": "cash"
+      }
+     }
+    ],
+    "metadata": {
+     "evidence": [
+      {
+       "evidence_id": "capex",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "capex",
+       "canonical_id": "cell::capex",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Capital expenditure",
+       "column_label": "2018",
+       "raw_row_label": "Capital expenditure",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Capital expenditure",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "20",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Capital expenditure 2018 20",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Capital expenditure 2018 20"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "capex"
+       }
+      },
+      {
+       "evidence_id": "cash",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "cash",
+       "canonical_id": "cell::cash",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Operating cash flow",
+       "column_label": "2018",
+       "raw_row_label": "Operating cash flow",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Operating cash flow",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "100",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Operating cash flow 2018 100",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Operating cash flow 2018 100"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "cash"
+       }
+      }
+     ],
+     "retrieval_query_contracts": [
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:operand:operating_cash_flow",
+       "slot_id": "operand:operating_cash_flow",
+       "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018"
+      },
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:operand:capital_expenditure",
+       "slot_id": "operand:capital_expenditure",
+       "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018"
+      },
+      {
+       "contract_id": "initial_retrieval_query.v1",
+       "query_kind": "initial",
+       "round_id": 1,
+       "query_id": "round1:dimension:scale",
+       "slot_id": "dimension:scale",
+       "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+      },
+      {
+       "contract_id": "recovery_query.v1",
+       "query_kind": "recovery",
+       "round_id": 2,
+       "query_id": "round2:calculation_recovery:dimension:scale",
+       "slot_id": "dimension:scale",
+       "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment operating cash flow 2018 cash_flow_statement operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure 2018 cash_flow_statement capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 What was free cash flow in millions for 2018? parent table dollars scale unit convention statement locator"
+      }
+     ],
+     "materialization_trace": {
+      "parent_table_candidate_count": 0,
+      "materialized_table_count": 0,
+      "materialized_cell_count": 0,
+      "materialization_cache_hit_rate": 0.0,
+      "materialized_cells_per_required_slot": 0.0,
+      "materialized_cells_by_required_slot": {
+       "operand:operating_cash_flow": 0,
+       "operand:capital_expenditure": 0
+      },
+      "candidate_count_before_materialization": 2,
+      "candidate_count_after_materialization": 2,
+      "materialization_seconds": "elapsed seconds"
+     },
+     "calculation_recovery_trace": {
+      "contract_id": "calculation_recovery.v1",
+      "action": "targeted_retrieval_materialization_rebind",
+      "initial_missing_slot_ids": [
+       "dimension:scale"
+      ],
+      "attempt_count": 1,
+      "status": "failed",
+      "targeted_requests": [
+       {
+        "query_id": "round2:calculation_recovery:dimension:scale",
+        "slot_id": "dimension:scale",
+        "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment operating cash flow 2018 cash_flow_statement operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure 2018 cash_flow_statement capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 What was free cash flow in millions for 2018? parent table dollars scale unit convention statement locator",
+        "modality": "auto"
+       }
+      ],
+      "final_missing_slot_ids": [
+       "dimension:scale"
+      ],
+      "authoritative_query_plan_state_authority": "provisional_calculation_plan",
+      "authoritative_slot_evidence_ids": {
+       "operand:operating_cash_flow": [
+        "cell::cash"
+       ],
+       "operand:capital_expenditure": [
+        "cell::capex"
+       ],
+       "dimension:scale": []
+      }
+     },
+     "schema_version": "evidence_bundle.v2",
+     "dedupe_trace": {
+      "schema_version": "evidence_bundle.v2",
+      "input_count": 2,
+      "output_count": 2,
+      "structure_duplicate_count": 0,
+      "exact_text_duplicate_count": 0,
+      "overlap_duplicate_count": 0,
+      "minhash_duplicate_count": 0,
+      "semantic_duplicate_count": 0,
+      "conflict_guard_count": 0,
+      "duplicate_ratio": 0.0
+     },
+     "canonical_candidate_count": 2,
+     "canonical_candidate_evidence": [
+      {
+       "evidence_id": "cash",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "cash",
+       "canonical_id": "cell::cash",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Operating cash flow",
+       "column_label": "2018",
+       "raw_row_label": "Operating cash flow",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Operating cash flow",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "100",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Operating cash flow 2018 100",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Operating cash flow 2018 100"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "cash"
+       }
+      },
+      {
+       "evidence_id": "capex",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "capex",
+       "canonical_id": "cell::capex",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Capital expenditure",
+       "column_label": "2018",
+       "raw_row_label": "Capital expenditure",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Capital expenditure",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "20",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Capital expenditure 2018 20",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Capital expenditure 2018 20"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "capex"
+       }
+      }
+     ],
+     "candidate_evidence": [
+      {
+       "evidence_id": "cash",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "cash",
+       "canonical_id": "cell::cash",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Operating cash flow",
+       "column_label": "2018",
+       "raw_row_label": "Operating cash flow",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Operating cash flow",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "100",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Operating cash flow 2018 100",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Operating cash flow 2018 100"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "cash"
+       }
+      },
+      {
+       "evidence_id": "capex",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "capex",
+       "canonical_id": "cell::capex",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Capital expenditure",
+       "column_label": "2018",
+       "raw_row_label": "Capital expenditure",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Capital expenditure",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "20",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Capital expenditure 2018 20",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Capital expenditure 2018 20"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "capex"
+       }
+      }
+     ],
+     "candidate_ranked_evidence": [
+      {
+       "evidence_id": "cash",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "cash",
+       "canonical_id": "cell::cash",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Operating cash flow",
+       "column_label": "2018",
+       "raw_row_label": "Operating cash flow",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Operating cash flow",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "100",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Operating cash flow 2018 100",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Operating cash flow 2018 100"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "cash"
+       }
+      },
+      {
+       "evidence_id": "capex",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "capex",
+       "canonical_id": "cell::capex",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Capital expenditure",
+       "column_label": "2018",
+       "raw_row_label": "Capital expenditure",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Capital expenditure",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "20",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Capital expenditure 2018 20",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Capital expenditure 2018 20"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "capex"
+       }
+      }
+     ],
+     "candidate_ranking_contract": "global_ranked_v1",
+     "pre_rerank_required_slot_candidates_restored": 0,
+     "reranker_input_evidence": [],
+     "reranker_input_contract": "required_slot_restored.v1",
+     "fused_evidence": [
+      {
+       "evidence_id": "cash",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "cash",
+       "canonical_id": "cell::cash",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Operating cash flow",
+       "column_label": "2018",
+       "raw_row_label": "Operating cash flow",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Operating cash flow",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "100",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Operating cash flow 2018 100",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Operating cash flow 2018 100"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "cash"
+       }
+      },
+      {
+       "evidence_id": "capex",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "capex",
+       "canonical_id": "cell::capex",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Capital expenditure",
+       "column_label": "2018",
+       "raw_row_label": "Capital expenditure",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Capital expenditure",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "20",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Capital expenditure 2018 20",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Capital expenditure 2018 20"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "capex"
+       }
+      }
+     ],
+     "fusion_stage_snapshot": {
+      "contract_id": "fusion_stage_snapshot.v1",
+      "route": "doc_text",
+      "state": "passthrough",
+      "candidate_stage": "fusion_passthrough",
+      "reason": "route_does_not_use_cross_modal_fusion",
+      "input_count": 2,
+      "output_count": 2,
+      "input_identities": [
+       "cell::cash",
+       "cell::capex"
+      ],
+      "output_identities": [
+       "cell::cash",
+       "cell::capex"
+      ],
+      "identity_preserved": true,
+      "fusion_trace_present": false
+     },
+     "ranking_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 2,
+      "candidate_input_count": 2,
+      "input_count": 2,
+      "reranker_input_count": 2,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 2,
+       "output_count": 2,
+       "input_identities": [
+        "cell::cash",
+        "cell::capex"
+       ],
+       "output_identities": [
+        "cell::cash",
+        "cell::capex"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "reranker_aggregate_trace": {
+      "candidate_stage": "fusion_passthrough",
+      "candidate_limit": 2,
+      "candidate_input_count": 2,
+      "input_count": 2,
+      "reranker_input_count": 2,
+      "reranker_scored_count": 0,
+      "output_limit": 30,
+      "output_count": 0,
+      "backend_output_count": 0,
+      "reranker_output_count": 0,
+      "reranker_artifact_record_count": 0,
+      "selection_retained_reranked_count": null,
+      "backend_execution": false,
+      "configured": false,
+      "loaded": false,
+      "executed": false,
+      "backend": "",
+      "model": "",
+      "score_field": "",
+      "input_identities": [],
+      "output_identities": [],
+      "backend_output_identities": [],
+      "failure_reason": "missing_complete_execution_trace",
+      "score_tie_precision_decimals": 6,
+      "tie_breaker": "canonical_evidence_identity",
+      "fusion_stage_contract_id": "fusion_stage_snapshot.v1",
+      "fusion_stage_snapshot": {
+       "contract_id": "fusion_stage_snapshot.v1",
+       "route": "doc_text",
+       "state": "passthrough",
+       "candidate_stage": "fusion_passthrough",
+       "reason": "route_does_not_use_cross_modal_fusion",
+       "input_count": 2,
+       "output_count": 2,
+       "input_identities": [
+        "cell::cash",
+        "cell::capex"
+       ],
+       "output_identities": [
+        "cell::cash",
+        "cell::capex"
+       ],
+       "identity_preserved": true,
+       "fusion_trace_present": false
+      }
+     },
+     "page_coverage": [],
+     "source_ids": [],
+     "evidence_ids": [
+      "capex",
+      "cash"
+     ],
+     "source_page_locators": [],
+     "source_page_alias_locators": [],
+     "modality_counts": {
+      "table": 2
+     },
+     "selected_evidence": [
+      {
+       "evidence_id": "capex",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "capex",
+       "canonical_id": "cell::capex",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Capital expenditure",
+       "column_label": "2018",
+       "raw_row_label": "Capital expenditure",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Capital expenditure",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "20",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Capital expenditure 2018 20",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Capital expenditure 2018 20"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "capex"
+       }
+      },
+      {
+       "evidence_id": "cash",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "cash",
+       "canonical_id": "cell::cash",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Operating cash flow",
+       "column_label": "2018",
+       "raw_row_label": "Operating cash flow",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Operating cash flow",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "100",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Operating cash flow 2018 100",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Operating cash flow 2018 100"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "cash"
+       }
+      }
+     ],
+     "generation_context_evidence": [
+      {
+       "evidence_id": "capex",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "capex",
+       "canonical_id": "cell::capex",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Capital expenditure",
+       "column_label": "2018",
+       "raw_row_label": "Capital expenditure",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Capital expenditure",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "20",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Capital expenditure 2018 20",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Capital expenditure 2018 20"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "capex"
+       }
+      },
+      {
+       "evidence_id": "cash",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "cash",
+       "canonical_id": "cell::cash",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Operating cash flow",
+       "column_label": "2018",
+       "raw_row_label": "Operating cash flow",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Operating cash flow",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "100",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Operating cash flow 2018 100",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Operating cash flow 2018 100"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "cash"
+       }
+      }
+     ],
+     "used_evidence": [
+      {
+       "evidence_id": "capex",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "capex",
+       "canonical_id": "cell::capex",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Capital expenditure",
+       "column_label": "2018",
+       "raw_row_label": "Capital expenditure",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Capital expenditure",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "20",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 2,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Capital expenditure 2018 20",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Capital expenditure 2018 20"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "capex"
+       }
+      },
+      {
+       "evidence_id": "cash",
+       "source_id": "",
+       "source_name": "",
+       "page_label": "",
+       "modality": "table",
+       "element_id": "",
+       "cell_id": "cash",
+       "canonical_id": "cell::cash",
+       "parent_element_id": "",
+       "neighbor_element_ids": [],
+       "section_id": "",
+       "table_id": "",
+       "cell_role": "data",
+       "row_index": null,
+       "column_index": null,
+       "row_label": "Operating cash flow",
+       "column_label": "2018",
+       "raw_row_label": "Operating cash flow",
+       "raw_column_label": "2018",
+       "normalized_row_label": "Operating cash flow",
+       "normalized_column_label": "2018",
+       "period": "2018",
+       "value": "100",
+       "statement_kind": "cash_flow_statement",
+       "financial_scope": "consolidated",
+       "continuation_id": "",
+       "chunk_start": null,
+       "chunk_end": null,
+       "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+       "duplicate_evidence_ids": [],
+       "retrieval_lineage": [
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:operating_cash_flow",
+         "slot_id": "operand:operating_cash_flow",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:operand:capital_expenditure",
+         "slot_id": "operand:capital_expenditure",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 1,
+         "query_id": "round1:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        },
+        {
+         "round_id": 2,
+         "query_id": "round2:calculation_recovery:dimension:scale",
+         "slot_id": "dimension:scale",
+         "retriever_name": "text",
+         "raw_rank": 1,
+         "raw_score": null,
+         "score_type": "not_recorded"
+        }
+       ],
+       "bbox": null,
+       "caption": "",
+       "text": "Operating cash flow 2018 100",
+       "ocr_text": "",
+       "vlm_text": "",
+       "source_backrefs": [],
+       "evidence_level": "cell",
+       "metadata": {},
+       "span_id": "",
+       "table_instance_id": null,
+       "table_group_id": null,
+       "block_id": null,
+       "period_kind": null,
+       "unit": null,
+       "scale": null,
+       "currency": null,
+       "representations": [
+        {
+         "modality": "table",
+         "field": "text",
+         "text": "Operating cash flow 2018 100"
+        }
+       ],
+       "identity": {
+        "source_id": "",
+        "kind": "cell",
+        "local_id": "cash"
+       }
+      }
+     ],
+     "stage_aliases": {
+      "used_evidence": "generation_context_evidence"
+     },
+     "query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:29168cb668b745779b1e",
+      "answer_type": "numeric",
+      "question_type": "numeric",
+      "subqueries": [
+       "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+       "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+       "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "operand:operating_cash_flow",
+        "role": "operand",
+        "entity": "",
+        "metric": "operating cash flow",
+        "period": "2018",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "cash_flow_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "filled",
+        "evidence_ids": [
+         "cell::cash"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+        "locator": {},
+        "table_instance_id": "cell::cash",
+        "table_group_id": "cell::cash"
+       },
+       {
+        "slot_id": "operand:capital_expenditure",
+        "role": "operand",
+        "entity": "",
+        "metric": "capital expenditure",
+        "period": "2018",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "cash_flow_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "filled",
+        "evidence_ids": [
+         "cell::capex"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+        "locator": {},
+        "table_instance_id": "cell::capex",
+        "table_group_id": "cell::capex"
+       },
+       {
+        "slot_id": "dimension:scale",
+        "role": "dimension",
+        "entity": "",
+        "metric": "",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+        "locator": null,
+        "applied_query_slot_ids": []
+       }
+      ],
+      "constraints": {
+       "periods": [
+        "2018"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": true,
+       "finance_formula_status": "not_applicable",
+       "question": "What was free cash flow in millions for 2018?"
+      },
+      "max_retrieval_rounds": 2,
+      "binding_trace": [
+       {
+        "slot_id": "operand:operating_cash_flow",
+        "preserved_existing_binding": true,
+        "replacement_reason": "",
+        "before_identity": "cell::cash",
+        "after_identity": "cell::cash"
+       },
+       {
+        "slot_id": "operand:capital_expenditure",
+        "preserved_existing_binding": true,
+        "replacement_reason": "",
+        "before_identity": "cell::capex",
+        "after_identity": "cell::capex"
+       },
+       {
+        "slot_id": "dimension:scale",
+        "preserved_existing_binding": false,
+        "replacement_reason": "missing_existing_binding",
+        "before_identity": "",
+        "after_identity": ""
+       }
+      ],
+      "state_authority": "provisional_calculation_plan",
+      "state_version": 4
+     },
+     "query_plan_id": "plan:29168cb668b745779b1e",
+     "planned_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:29168cb668b745779b1e",
+      "answer_type": "numeric",
+      "question_type": "numeric",
+      "subqueries": [
+       "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+       "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+       "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "operand:operating_cash_flow",
+        "role": "operand",
+        "entity": "",
+        "metric": "operating cash flow",
+        "period": "2018",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "cash_flow_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+        "locator": {}
+       },
+       {
+        "slot_id": "operand:capital_expenditure",
+        "role": "operand",
+        "entity": "",
+        "metric": "capital expenditure",
+        "period": "2018",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "cash_flow_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+        "locator": {}
+       },
+       {
+        "slot_id": "dimension:scale",
+        "role": "dimension",
+        "entity": "",
+        "metric": "",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+        "locator": null
+       }
+      ],
+      "constraints": {
+       "periods": [
+        "2018"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": true,
+       "finance_formula_status": "not_applicable"
+      },
+      "max_retrieval_rounds": 2,
+      "stage": "planned",
+      "state_version": 0
+     },
+     "bound_query_plan": {
+      "contract_id": "query_plan.v1",
+      "plan_id": "plan:29168cb668b745779b1e",
+      "answer_type": "numeric",
+      "question_type": "numeric",
+      "subqueries": [
+       "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+       "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+       "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+      ],
+      "evidence_slots": [
+       {
+        "slot_id": "operand:operating_cash_flow",
+        "role": "operand",
+        "entity": "",
+        "metric": "operating cash flow",
+        "period": "2018",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "cash_flow_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "filled",
+        "evidence_ids": [
+         "cell::cash"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+        "locator": {},
+        "table_instance_id": "cell::cash",
+        "table_group_id": "cell::cash"
+       },
+       {
+        "slot_id": "operand:capital_expenditure",
+        "role": "operand",
+        "entity": "",
+        "metric": "capital expenditure",
+        "period": "2018",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "cash_flow_statement",
+        "financial_scope": "consolidated",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "filled",
+        "evidence_ids": [
+         "cell::capex"
+        ],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+        "locator": {},
+        "table_instance_id": "cell::capex",
+        "table_group_id": "cell::capex"
+       },
+       {
+        "slot_id": "dimension:scale",
+        "role": "dimension",
+        "entity": "",
+        "metric": "",
+        "period": "",
+        "period_kind": "",
+        "unit": "",
+        "scale": "",
+        "statement_kind": "",
+        "financial_scope": "",
+        "modality": "auto",
+        "required": true,
+        "required_for_retrieval": true,
+        "required_for_execution": true,
+        "required_for_verification": true,
+        "status": "missing",
+        "evidence_ids": [],
+        "cardinality": 1,
+        "operator_role": "",
+        "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+        "locator": null,
+        "applied_query_slot_ids": []
+       }
+      ],
+      "constraints": {
+       "periods": [
+        "2018"
+       ],
+       "verification_domain": "finance",
+       "requires_visual": false,
+       "requires_multiple_evidence": false,
+       "requires_distinct_source_pages": false,
+       "requires_structured_elements": false,
+       "explicit_page_labels": {
+        "__tuple__": []
+       },
+       "figure_label": "",
+       "table_label": "",
+       "requires_distinct_evidence": false,
+       "requires_structure": true,
+       "finance_formula_status": "not_applicable",
+       "question": "What was free cash flow in millions for 2018?"
+      },
+      "max_retrieval_rounds": 2,
+      "binding_trace": [
+       {
+        "slot_id": "operand:operating_cash_flow",
+        "preserved_existing_binding": true,
+        "replacement_reason": "",
+        "before_identity": "cell::cash",
+        "after_identity": "cell::cash"
+       },
+       {
+        "slot_id": "operand:capital_expenditure",
+        "preserved_existing_binding": true,
+        "replacement_reason": "",
+        "before_identity": "cell::capex",
+        "after_identity": "cell::capex"
+       },
+       {
+        "slot_id": "dimension:scale",
+        "preserved_existing_binding": false,
+        "replacement_reason": "missing_existing_binding",
+        "before_identity": "",
+        "after_identity": ""
+       }
+      ],
+      "state_authority": "provisional_calculation_plan",
+      "state_version": 4
+     },
+     "evidence_selection_trace": {
+      "strategy": "marginal_evidence_set_selection_v3",
+      "candidate_count": 2,
+      "selected_count": 2,
+      "max_items": 16,
+      "max_pages": 6,
+      "unique_pages": 0,
+      "selected_pages": [],
+      "slot_coverage": 0.6666666666666666,
+      "missing_required_slot_count": 1,
+      "continuation_expansion_count": 0,
+      "page_modality_expansion_count": 0,
+      "structure_expansion_enabled": false,
+      "mmr_lambda": 0.7,
+      "structure_metadata_coverage": 0.0,
+      "mixed_candidate_structure_metadata_coverage": 0.0,
+      "structure_coverage_scope": "element_index",
+      "required_slot_candidates_restored": 0,
+      "candidate_budget_partitions": {
+       "factual_narrative": 0,
+       "execution_operands": 4,
+       "parent_tables": 2,
+       "dimensions": 2
+      },
+      "selected_budget_usage": {
+       "factual_narrative": 0,
+       "execution_operands": 2,
+       "parent_tables": 0,
+       "dimensions": 0
+      },
+      "evidence_stage_trace": [
+       {
+        "evidence_id": "cell::capex",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "operand:capital_expenditure"
+        ],
+        "executable_operand": true,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       },
+       {
+        "evidence_id": "cell::cash",
+        "retrieved_candidate": true,
+        "selected_in_context": true,
+        "parent_retained": false,
+        "materialized_for_slot_ids": [],
+        "bound_to_slot_ids": [
+         "operand:operating_cash_flow"
+        ],
+        "executable_operand": true,
+        "verified_support": false,
+        "citation_emitted": false,
+        "stage_scope": "selection"
+       }
+      ],
+      "trace_validation_errors": [],
+      "required_slot_bindings": [
+       {
+        "slot_id": "operand:operating_cash_flow",
+        "status": "filled",
+        "retrieval_satisfied": true,
+        "execution_satisfied": true,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "cell::cash"
+        ],
+        "best_selected_slot_score": 2.25,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "cell::cash",
+          "reason": "bound_to_slot",
+          "slot_score": 2.25
+         }
+        ],
+        "candidate_drop_reasons": [
+         {
+          "evidence_id": "cell::capex",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         }
+        ]
+       },
+       {
+        "slot_id": "operand:capital_expenditure",
+        "status": "filled",
+        "retrieval_satisfied": true,
+        "execution_satisfied": true,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [
+         "cell::capex"
+        ],
+        "best_selected_slot_score": 2.25,
+        "candidate_selection_reasons": [
+         {
+          "evidence_id": "cell::capex",
+          "reason": "bound_to_slot",
+          "slot_score": 2.25
+         }
+        ],
+        "candidate_drop_reasons": [
+         {
+          "evidence_id": "cell::cash",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         }
+        ]
+       },
+       {
+        "slot_id": "dimension:scale",
+        "status": "missing",
+        "retrieval_satisfied": false,
+        "execution_satisfied": false,
+        "verification_satisfied": false,
+        "reason": "",
+        "selected_evidence_ids": [],
+        "best_selected_slot_score": 0.0,
+        "candidate_selection_reasons": [],
+        "candidate_drop_reasons": [
+         {
+          "evidence_id": "cell::capex",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         },
+         {
+          "evidence_id": "cell::cash",
+          "reason": "semantic_slot_mismatch",
+          "slot_score": 0.0
+         }
+        ]
+       }
+      ],
+      "execution_slot_lineage": [
+       {
+        "slot_id": "operand:operating_cash_flow",
+        "slot_query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+        "parent_candidates": [],
+        "selected_parent": "",
+        "materialized_cell_candidates": [],
+        "reranker_observations": [],
+        "selected_cell": "cell::cash",
+        "binding_score": 2.25,
+        "rejection_reasons": [],
+        "execution_operand": {
+         "evidence_id": "cash",
+         "source_id": "",
+         "source_name": "",
+         "page_label": "",
+         "modality": "table",
+         "element_id": "",
+         "cell_id": "cash",
+         "canonical_id": "cell::cash",
+         "parent_element_id": "",
+         "neighbor_element_ids": [],
+         "section_id": "",
+         "table_id": "",
+         "cell_role": "data",
+         "row_index": null,
+         "column_index": null,
+         "row_label": "Operating cash flow",
+         "column_label": "2018",
+         "raw_row_label": "Operating cash flow",
+         "raw_column_label": "2018",
+         "normalized_row_label": "Operating cash flow",
+         "normalized_column_label": "2018",
+         "period": "2018",
+         "value": "100",
+         "statement_kind": "cash_flow_statement",
+         "financial_scope": "consolidated",
+         "continuation_id": "",
+         "chunk_start": null,
+         "chunk_end": null,
+         "normalized_text_hash": "294a4ce3b31b20c2e1852d717d72f6ab5d040f2d883301ef7373343217bdc0a9",
+         "duplicate_evidence_ids": [],
+         "retrieval_lineage": [
+          {
+           "round_id": 1,
+           "query_id": "round1:operand:operating_cash_flow",
+           "slot_id": "operand:operating_cash_flow",
+           "retriever_name": "text",
+           "raw_rank": 1,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          },
+          {
+           "round_id": 1,
+           "query_id": "round1:operand:capital_expenditure",
+           "slot_id": "operand:capital_expenditure",
+           "retriever_name": "text",
+           "raw_rank": 1,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          },
+          {
+           "round_id": 1,
+           "query_id": "round1:dimension:scale",
+           "slot_id": "dimension:scale",
+           "retriever_name": "text",
+           "raw_rank": 1,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          },
+          {
+           "round_id": 2,
+           "query_id": "round2:calculation_recovery:dimension:scale",
+           "slot_id": "dimension:scale",
+           "retriever_name": "text",
+           "raw_rank": 1,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          }
+         ],
+         "bbox": null,
+         "caption": "",
+         "text": "Operating cash flow 2018 100",
+         "ocr_text": "",
+         "vlm_text": "",
+         "source_backrefs": [],
+         "evidence_level": "cell",
+         "metadata": {},
+         "span_id": "",
+         "table_instance_id": null,
+         "table_group_id": null,
+         "block_id": null,
+         "period_kind": null,
+         "unit": null,
+         "scale": null,
+         "currency": null,
+         "representations": [
+          {
+           "modality": "table",
+           "field": "text",
+           "text": "Operating cash flow 2018 100"
+          }
+         ],
+         "identity": {
+          "source_id": "",
+          "kind": "cell",
+          "local_id": "cash"
+         },
+         "_selection_relevance_score": 0.0,
+         "_selection_relevance_sources": []
+        }
+       },
+       {
+        "slot_id": "operand:capital_expenditure",
+        "slot_query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+        "parent_candidates": [],
+        "selected_parent": "",
+        "materialized_cell_candidates": [],
+        "reranker_observations": [],
+        "selected_cell": "cell::capex",
+        "binding_score": 2.25,
+        "rejection_reasons": [],
+        "execution_operand": {
+         "evidence_id": "capex",
+         "source_id": "",
+         "source_name": "",
+         "page_label": "",
+         "modality": "table",
+         "element_id": "",
+         "cell_id": "capex",
+         "canonical_id": "cell::capex",
+         "parent_element_id": "",
+         "neighbor_element_ids": [],
+         "section_id": "",
+         "table_id": "",
+         "cell_role": "data",
+         "row_index": null,
+         "column_index": null,
+         "row_label": "Capital expenditure",
+         "column_label": "2018",
+         "raw_row_label": "Capital expenditure",
+         "raw_column_label": "2018",
+         "normalized_row_label": "Capital expenditure",
+         "normalized_column_label": "2018",
+         "period": "2018",
+         "value": "20",
+         "statement_kind": "cash_flow_statement",
+         "financial_scope": "consolidated",
+         "continuation_id": "",
+         "chunk_start": null,
+         "chunk_end": null,
+         "normalized_text_hash": "badb9d69548a5f644db1f66fe97583dad8ff994764a5c3cd94a68dc2eb56695c",
+         "duplicate_evidence_ids": [],
+         "retrieval_lineage": [
+          {
+           "round_id": 1,
+           "query_id": "round1:operand:operating_cash_flow",
+           "slot_id": "operand:operating_cash_flow",
+           "retriever_name": "text",
+           "raw_rank": 2,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          },
+          {
+           "round_id": 1,
+           "query_id": "round1:operand:capital_expenditure",
+           "slot_id": "operand:capital_expenditure",
+           "retriever_name": "text",
+           "raw_rank": 2,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          },
+          {
+           "round_id": 1,
+           "query_id": "round1:dimension:scale",
+           "slot_id": "dimension:scale",
+           "retriever_name": "text",
+           "raw_rank": 2,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          },
+          {
+           "round_id": 2,
+           "query_id": "round2:calculation_recovery:dimension:scale",
+           "slot_id": "dimension:scale",
+           "retriever_name": "text",
+           "raw_rank": 2,
+           "raw_score": null,
+           "score_type": "not_recorded"
+          }
+         ],
+         "bbox": null,
+         "caption": "",
+         "text": "Capital expenditure 2018 20",
+         "ocr_text": "",
+         "vlm_text": "",
+         "source_backrefs": [],
+         "evidence_level": "cell",
+         "metadata": {},
+         "span_id": "",
+         "table_instance_id": null,
+         "table_group_id": null,
+         "block_id": null,
+         "period_kind": null,
+         "unit": null,
+         "scale": null,
+         "currency": null,
+         "representations": [
+          {
+           "modality": "table",
+           "field": "text",
+           "text": "Capital expenditure 2018 20"
+          }
+         ],
+         "identity": {
+          "source_id": "",
+          "kind": "cell",
+          "local_id": "capex"
+         },
+         "_selection_relevance_score": 0.0,
+         "_selection_relevance_sources": []
+        }
+       },
+       {
+        "slot_id": "dimension:scale",
+        "slot_query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+        "parent_candidates": [],
+        "selected_parent": "",
+        "materialized_cell_candidates": [],
+        "reranker_observations": [],
+        "selected_cell": "",
+        "binding_score": 0.0,
+        "rejection_reasons": [],
+        "execution_operand": {}
+       }
+      ],
+      "relevance_score_contract": "single_stage_per_query_rank_normalized_v2",
+      "boolean_assessment_cache": {
+       "unique_semantic_candidates": 0,
+       "slots": 0,
+       "cache_entries": 0,
+       "cache_builds": 1,
+       "cache_hits": 0,
+       "cache_misses": 0,
+       "classification_calls": 0,
+       "mmr_hot_loop_misses": 0,
+       "time_spent_ms": "elapsed milliseconds"
+      }
+     },
+     "structure_metadata_coverage": 0.0,
+     "slot_coverage": 0.6666666666666666,
+     "missing_required_slot_count": 1,
+     "second_round_queries": [
+      "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+      "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment operating cash flow 2018 cash_flow_statement operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure 2018 cash_flow_statement capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 What was free cash flow in millions for 2018? parent table dollars scale unit convention statement locator"
+     ],
+     "second_round_requests": [
+      {
+       "query_id": "round2:calculation_recovery:dimension:scale",
+       "slot_id": "dimension:scale",
+       "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment operating cash flow 2018 cash_flow_statement operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure 2018 cash_flow_statement capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 What was free cash flow in millions for 2018? parent table dollars scale unit convention statement locator",
+       "modality": "auto"
+      }
+     ],
+     "retrieval_rounds": 2,
+     "finance_numeric_trace": {
+      "answer": "",
+      "confidence": 0.0,
+      "question_type": "free_cash_flow",
+      "inputs": {
+       "operating_cash_flow": 100.0,
+       "capital_expenditure": 20.0
+      },
+      "formula": "operating_cash_flow - capital_expenditure",
+      "calculation_plan": {
+       "contract_id": "calculation_plan.v1",
+       "formula_inputs": [
+        {
+         "input_id": "operating_cash_flow",
+         "query_slot_id": "operand:operating_cash_flow",
+         "metric": "operating cash flow",
+         "period": "2018",
+         "cardinality": 1,
+         "operator_role": "operating_cash_flow",
+         "required_for_execution": true
+        },
+        {
+         "input_id": "capital_expenditure",
+         "query_slot_id": "operand:capital_expenditure",
+         "metric": "capital expenditure",
+         "period": "2018",
+         "cardinality": 1,
+         "operator_role": "capital_expenditure",
+         "required_for_execution": true
+        }
+       ],
+       "operands": [
+        {
+         "operand_id": "operating_cash_flow",
+         "evidence_id": "cash",
+         "value": "100.0",
+         "input_id": "operating_cash_flow",
+         "query_slot_id": "operand:operating_cash_flow",
+         "evidence_identity": "cell::cash",
+         "unit": "",
+         "scale": "",
+         "currency": "",
+         "period": "2018",
+         "entity": "",
+         "source": "evidence",
+         "cell_id": "cash",
+         "row_label": "Operating cash flow",
+         "column_label": "2018",
+         "statement_kind": "cash_flow_statement",
+         "financial_scope": "consolidated",
+         "table_instance_id": "cell::cash",
+         "table_group_id": "cell::cash"
+        },
+        {
+         "operand_id": "capital_expenditure",
+         "evidence_id": "capex",
+         "value": "20.0",
+         "input_id": "capital_expenditure",
+         "query_slot_id": "operand:capital_expenditure",
+         "evidence_identity": "cell::capex",
+         "unit": "",
+         "scale": "",
+         "currency": "",
+         "period": "2018",
+         "entity": "",
+         "source": "evidence",
+         "value_semantics": "positive_magnitude",
+         "cell_id": "capex",
+         "row_label": "Capital expenditure",
+         "column_label": "2018",
+         "statement_kind": "cash_flow_statement",
+         "financial_scope": "consolidated",
+         "table_instance_id": "cell::capex",
+         "table_group_id": "cell::capex"
+        }
+       ],
+       "steps": [
+        {
+         "step_id": "result",
+         "operator": "subtract",
+         "input_ids": [
+          "operating_cash_flow",
+          "capital_expenditure"
+         ],
+         "constant": null,
+         "constant_source": "",
+         "rounding_places": null
+        }
+       ],
+       "result_step_id": "result",
+       "answer_unit": "",
+       "answer_scale": "million"
+      },
+      "calculation_verification": {
+       "valid": false,
+       "errors": {
+        "__tuple__": [
+         "operand_scale_missing_for_conversion:operating_cash_flow",
+         "operand_scale_missing_for_conversion:capital_expenditure",
+         "required_slot_missing:dimension:scale"
+        ]
+       },
+       "verified_operand_ids": {
+        "__tuple__": [
+         "operating_cash_flow",
+         "capital_expenditure"
+        ]
+       },
+       "citation_ids": {
+        "__tuple__": [
+         "cell::cash",
+         "cell::capex"
+        ]
+       },
+       "required_slot_ids": {
+        "__tuple__": [
+         "operand:operating_cash_flow",
+         "operand:capital_expenditure",
+         "dimension:scale"
+        ]
+       },
+       "verified_required_slot_ids": {
+        "__tuple__": [
+         "operand:operating_cash_flow",
+         "operand:capital_expenditure"
+        ]
+       }
+      },
+      "calculation_execution": {
+       "status": "error",
+       "value": null,
+       "citation_ids": [],
+       "step_values": {},
+       "error": "verification_failed"
+      },
+      "authoritative_query_plan": {
+       "contract_id": "query_plan.v1",
+       "plan_id": "plan:29168cb668b745779b1e",
+       "answer_type": "numeric",
+       "question_type": "numeric",
+       "subqueries": [
+        "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+        "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+        "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+       ],
+       "evidence_slots": [
+        {
+         "slot_id": "operand:operating_cash_flow",
+         "role": "operand",
+         "entity": "",
+         "metric": "operating cash flow",
+         "period": "2018",
+         "period_kind": "",
+         "unit": "",
+         "scale": "",
+         "statement_kind": "cash_flow_statement",
+         "financial_scope": "consolidated",
+         "modality": "auto",
+         "required": true,
+         "required_for_retrieval": true,
+         "required_for_execution": true,
+         "required_for_verification": true,
+         "status": "filled",
+         "evidence_ids": [
+          "cell::cash"
+         ],
+         "cardinality": 1,
+         "operator_role": "",
+         "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+         "locator": {},
+         "table_instance_id": "cell::cash",
+         "table_group_id": "cell::cash"
+        },
+        {
+         "slot_id": "operand:capital_expenditure",
+         "role": "operand",
+         "entity": "",
+         "metric": "capital expenditure",
+         "period": "2018",
+         "period_kind": "",
+         "unit": "",
+         "scale": "",
+         "statement_kind": "cash_flow_statement",
+         "financial_scope": "consolidated",
+         "modality": "auto",
+         "required": true,
+         "required_for_retrieval": true,
+         "required_for_execution": true,
+         "required_for_verification": true,
+         "status": "filled",
+         "evidence_ids": [
+          "cell::capex"
+         ],
+         "cardinality": 1,
+         "operator_role": "",
+         "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+         "locator": {},
+         "table_instance_id": "cell::capex",
+         "table_group_id": "cell::capex"
+        },
+        {
+         "slot_id": "dimension:scale",
+         "role": "dimension",
+         "entity": "",
+         "metric": "",
+         "period": "",
+         "period_kind": "",
+         "unit": "",
+         "scale": "",
+         "statement_kind": "",
+         "financial_scope": "",
+         "modality": "auto",
+         "required": true,
+         "required_for_retrieval": true,
+         "required_for_execution": true,
+         "required_for_verification": true,
+         "status": "missing",
+         "evidence_ids": [],
+         "cardinality": 1,
+         "operator_role": "",
+         "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+         "locator": null,
+         "applied_query_slot_ids": []
+        }
+       ],
+       "constraints": {
+        "periods": [
+         "2018"
+        ],
+        "verification_domain": "finance",
+        "requires_visual": false,
+        "requires_multiple_evidence": false,
+        "requires_distinct_source_pages": false,
+        "requires_structured_elements": false,
+        "explicit_page_labels": {
+         "__tuple__": []
+        },
+        "figure_label": "",
+        "table_label": "",
+        "requires_distinct_evidence": false,
+        "requires_structure": true,
+        "finance_formula_status": "not_applicable",
+        "question": "What was free cash flow in millions for 2018?"
+       },
+       "max_retrieval_rounds": 2,
+       "binding_trace": [
+        {
+         "slot_id": "operand:operating_cash_flow",
+         "preserved_existing_binding": true,
+         "replacement_reason": "",
+         "before_identity": "cell::cash",
+         "after_identity": "cell::cash"
+        },
+        {
+         "slot_id": "operand:capital_expenditure",
+         "preserved_existing_binding": true,
+         "replacement_reason": "",
+         "before_identity": "cell::capex",
+         "after_identity": "cell::capex"
+        },
+        {
+         "slot_id": "dimension:scale",
+         "preserved_existing_binding": false,
+         "replacement_reason": "missing_existing_binding",
+         "before_identity": "",
+         "after_identity": ""
+        }
+       ],
+       "state_authority": "provisional_calculation_plan",
+       "state_version": 4
+      },
+      "attempt_status": "verification_failed",
+      "dimension_bindings": []
+     },
+     "verification_slot_states": [
+      {
+       "slot_id": "operand:operating_cash_flow",
+       "status": "missing",
+       "evidence_ids": []
+      },
+      {
+       "slot_id": "operand:capital_expenditure",
+       "status": "missing",
+       "evidence_ids": []
+      },
+      {
+       "slot_id": "dimension:scale",
+       "status": "missing",
+       "evidence_ids": []
+      }
+     ],
+     "missing_required_calculation_slot_ids": [
+      "dimension:scale"
+     ],
+     "calculation_recovery_requests": [
+      {
+       "query_id": "round2:calculation_recovery:dimension:scale",
+       "slot_id": "dimension:scale",
+       "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment operating cash flow 2018 cash_flow_statement operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure 2018 cash_flow_statement capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 What was free cash flow in millions for 2018? parent table dollars scale unit convention statement locator",
+       "modality": "auto"
+      }
+     ],
+     "typed_adequacy_status": "incomplete",
+     "heuristic_adequacy_status": "good",
+     "final_adequacy_status": "ambiguous",
+     "adequacy_decision_authority": "query_plan",
+     "heuristic_overridden": false,
+     "heuristic_override_reason": "",
+     "typed_adequacy_reason": "typed_calculation_not_verified",
+     "retrieval_stop_reason": "max_retrieval_rounds_exhausted",
+     "missing_required_slot_ids": [
+      "dimension:scale"
+     ],
+     "pipeline_stage_timings": {
+      "planning_seconds": "elapsed seconds",
+      "retrieval_seconds": "elapsed seconds",
+      "generation_seconds": "elapsed seconds",
+      "retry_seconds": "elapsed seconds",
+      "verification_seconds": "elapsed seconds",
+      "finalization_seconds": "elapsed seconds"
+     }
+    }
+   },
+   "terminal_outcome": "safe_abstention",
+   "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+   "terminal_semantic_commit": {
+    "contract_id": "terminal_semantic_commit.v3",
+    "semantic_answer": "unanswerable",
+    "presentation_answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context.",
+    "outcome": "safe_abstention",
+    "outcome_reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted.",
+    "answer_status": "abstained",
+    "verify_decision": {
+     "mode": "light",
+     "status": "not_enough_evidence",
+     "reason": "Verification-required evidence slots are missing: dimension:scale",
+     "action": "abstain",
+     "claims": [],
+     "unsupported_claims": [],
+     "unknown_claims": [],
+     "verified_citations": [],
+     "claim_results": [],
+     "input_answer_polarity": "",
+     "canonical_answer_polarity": "",
+     "semantic_correction_applied": false,
+     "boolean_authority_status": "",
+     "authoritative_evidence_id": "",
+     "authoritative_evidence_ref": "",
+     "authoritative_span_id": "",
+     "authoritative_quote": "",
+     "authoritative_span_start": null,
+     "authoritative_span_end": null,
+     "authoritative_canonical_start": null,
+     "authoritative_canonical_end": null,
+     "actor": "",
+     "section_scope": "",
+     "relation": "",
+     "object": "",
+     "predicate_arguments": {
+      "__tuple__": []
+     },
+     "qualifier": "",
+     "quantifier": "",
+     "verified_support_slot_ids": [],
+     "authority_derivations": [],
+     "selected_derivation_id": "",
+     "authoritative_conflict": {},
+     "typed_authority": {},
+     "candidate_contract_id": "",
+     "candidate_label": "",
+     "verifier_input_candidate": "",
+     "verifier_candidate_status": "",
+     "replacement_candidate_allowed": false,
+     "predicate": "",
+     "arguments": [],
+     "scope": ""
+    },
+    "guardrail_decision": {
+     "status": "not_enough_evidence",
+     "action": "abstain",
+     "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+    },
+    "authoritative_evidence": [],
+    "citations": [],
+    "projection_hash": "92fc6f6d1711493558819c220e0026c3b02f8d53205cd90d4ef9158708f3c1f6",
+    "state_version": 3
+   }
+  },
+  "terminal_verification": {
+   "mode": "light",
+   "status": "not_enough_evidence",
+   "reason": "Verification-required evidence slots are missing: dimension:scale",
+   "action": "abstain",
+   "claims": [],
+   "unsupported_claims": [],
+   "unknown_claims": [],
+   "verified_citations": [],
+   "claim_results": [],
+   "input_answer_polarity": "",
+   "canonical_answer_polarity": "",
+   "semantic_correction_applied": false,
+   "boolean_authority_status": "",
+   "authoritative_evidence_id": "",
+   "authoritative_evidence_ref": "",
+   "authoritative_span_id": "",
+   "authoritative_quote": "",
+   "authoritative_span_start": null,
+   "authoritative_span_end": null,
+   "authoritative_canonical_start": null,
+   "authoritative_canonical_end": null,
+   "actor": "",
+   "section_scope": "",
+   "relation": "",
+   "object": "",
+   "predicate_arguments": {
+    "__tuple__": []
+   },
+   "qualifier": "",
+   "quantifier": "",
+   "verified_support_slot_ids": [],
+   "authority_derivations": [],
+   "selected_derivation_id": "",
+   "authoritative_conflict": {},
+   "typed_authority": {},
+   "candidate_contract_id": "",
+   "candidate_label": "",
+   "verifier_input_candidate": "",
+   "verifier_candidate_status": "",
+   "replacement_candidate_allowed": false,
+   "predicate": "",
+   "arguments": [],
+   "scope": ""
+  },
+  "terminal_guardrail": {
+   "status": "not_enough_evidence",
+   "action": "abstain",
+   "reason": "Retrieved evidence does not fill 1 required QueryPlan slot(s). stop_reason=max_retrieval_rounds_exhausted."
+  },
+  "rounds": 2,
+  "recovery": {
+   "contract_id": "calculation_recovery.v1",
+   "action": "targeted_retrieval_materialization_rebind",
+   "initial_missing_slot_ids": [
+    "dimension:scale"
+   ],
+   "attempt_count": 1,
+   "status": "failed",
+   "targeted_requests": [
+    {
+     "query_id": "round2:calculation_recovery:dimension:scale",
+     "slot_id": "dimension:scale",
+     "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment operating cash flow 2018 cash_flow_statement operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure 2018 cash_flow_statement capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 What was free cash flow in millions for 2018? parent table dollars scale unit convention statement locator",
+     "modality": "auto"
+    }
+   ],
+   "final_missing_slot_ids": [
+    "dimension:scale"
+   ],
+   "authoritative_query_plan_state_authority": "provisional_calculation_plan",
+   "authoritative_slot_evidence_ids": {
+    "operand:operating_cash_flow": [
+     "cell::cash"
+    ],
+    "operand:capital_expenditure": [
+     "cell::capex"
+    ],
+    "dimension:scale": []
+   }
+  },
+  "numeric": {
+   "attempt_status": "verification_failed",
+   "answer": "",
+   "formula": "operating_cash_flow - capital_expenditure",
+   "inputs": {
+    "operating_cash_flow": 100.0,
+    "capital_expenditure": 20.0
+   },
+   "calculation_execution": {
+    "status": "error",
+    "value": null,
+    "citation_ids": [],
+    "step_values": {},
+    "error": "verification_failed"
+   },
+   "calculation_verification": {
+    "valid": false,
+    "errors": {
+     "__tuple__": [
+      "operand_scale_missing_for_conversion:operating_cash_flow",
+      "operand_scale_missing_for_conversion:capital_expenditure",
+      "required_slot_missing:dimension:scale"
+     ]
+    },
+    "verified_operand_ids": {
+     "__tuple__": [
+      "operating_cash_flow",
+      "capital_expenditure"
+     ]
+    },
+    "citation_ids": {
+     "__tuple__": [
+      "cell::cash",
+      "cell::capex"
+     ]
+    },
+    "required_slot_ids": {
+     "__tuple__": [
+      "operand:operating_cash_flow",
+      "operand:capital_expenditure",
+      "dimension:scale"
+     ]
+    },
+    "verified_required_slot_ids": {
+     "__tuple__": [
+      "operand:operating_cash_flow",
+      "operand:capital_expenditure"
+     ]
+    }
+   },
+   "authoritative_query_plan": {
+    "contract_id": "query_plan.v1",
+    "plan_id": "plan:29168cb668b745779b1e",
+    "answer_type": "numeric",
+    "question_type": "numeric",
+    "subqueries": [
+     "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+     "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+     "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment"
+    ],
+    "evidence_slots": [
+     {
+      "slot_id": "operand:operating_cash_flow",
+      "role": "operand",
+      "entity": "",
+      "metric": "operating cash flow",
+      "period": "2018",
+      "period_kind": "",
+      "unit": "",
+      "scale": "",
+      "statement_kind": "cash_flow_statement",
+      "financial_scope": "consolidated",
+      "modality": "auto",
+      "required": true,
+      "required_for_retrieval": true,
+      "required_for_execution": true,
+      "required_for_verification": true,
+      "status": "filled",
+      "evidence_ids": [
+       "cell::cash"
+      ],
+      "cardinality": 1,
+      "operator_role": "",
+      "query": "operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018",
+      "locator": {},
+      "table_instance_id": "cell::cash",
+      "table_group_id": "cell::cash"
+     },
+     {
+      "slot_id": "operand:capital_expenditure",
+      "role": "operand",
+      "entity": "",
+      "metric": "capital expenditure",
+      "period": "2018",
+      "period_kind": "",
+      "unit": "",
+      "scale": "",
+      "statement_kind": "cash_flow_statement",
+      "financial_scope": "consolidated",
+      "modality": "auto",
+      "required": true,
+      "required_for_retrieval": true,
+      "required_for_execution": true,
+      "required_for_verification": true,
+      "status": "filled",
+      "evidence_ids": [
+       "cell::capex"
+      ],
+      "cardinality": 1,
+      "operator_role": "",
+      "query": "capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018",
+      "locator": {},
+      "table_instance_id": "cell::capex",
+      "table_group_id": "cell::capex"
+     },
+     {
+      "slot_id": "dimension:scale",
+      "role": "dimension",
+      "entity": "",
+      "metric": "",
+      "period": "",
+      "period_kind": "",
+      "unit": "",
+      "scale": "",
+      "statement_kind": "",
+      "financial_scope": "",
+      "modality": "auto",
+      "required": true,
+      "required_for_retrieval": true,
+      "required_for_execution": true,
+      "required_for_verification": true,
+      "status": "missing",
+      "evidence_ids": [],
+      "cardinality": 1,
+      "operator_role": "",
+      "query": "tabular dollars unit scale convention operating cash flow 2018 operating cash flow cash from operations net cash provided by operating activities consolidated statement of cash flows 2018 capital expenditure capital expenditure capital spending capex purchases of land buildings and equipment consolidated statement of cash flows 2018 consolidated statement of cash flows net cash provided by operating activities purchases of land buildings and equipment",
+      "locator": null,
+      "applied_query_slot_ids": []
+     }
+    ],
+    "constraints": {
+     "periods": [
+      "2018"
+     ],
+     "verification_domain": "finance",
+     "requires_visual": false,
+     "requires_multiple_evidence": false,
+     "requires_distinct_source_pages": false,
+     "requires_structured_elements": false,
+     "explicit_page_labels": {
+      "__tuple__": []
+     },
+     "figure_label": "",
+     "table_label": "",
+     "requires_distinct_evidence": false,
+     "requires_structure": true,
+     "finance_formula_status": "not_applicable",
+     "question": "What was free cash flow in millions for 2018?"
+    },
+    "max_retrieval_rounds": 2,
+    "binding_trace": [
+     {
+      "slot_id": "operand:operating_cash_flow",
+      "preserved_existing_binding": true,
+      "replacement_reason": "",
+      "before_identity": "cell::cash",
+      "after_identity": "cell::cash"
+     },
+     {
+      "slot_id": "operand:capital_expenditure",
+      "preserved_existing_binding": true,
+      "replacement_reason": "",
+      "before_identity": "cell::capex",
+      "after_identity": "cell::capex"
+     },
+     {
+      "slot_id": "dimension:scale",
+      "preserved_existing_binding": false,
+      "replacement_reason": "missing_existing_binding",
+      "before_identity": "",
+      "after_identity": ""
+     }
+    ],
+    "state_authority": "provisional_calculation_plan",
+    "state_version": 4
+   }
+  }
+ }
+}

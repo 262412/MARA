@@ -2,29 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from ktem_contracts import file_selection as _file_selection
 
-def normalize_selected_file_ids(selected_file_ids: Any) -> list[str]:
-    if selected_file_ids in (None, ""):
-        return []
-    if isinstance(selected_file_ids, list):
-        return [str(item) for item in selected_file_ids if item not in (None, "")]
-    return [str(selected_file_ids)]
-
-
-def merge_unique_file_ids(*groups: Any) -> list[str]:
-    merged: list[str] = []
-    seen = set()
-    for group in groups:
-        if group in (None, ""):
-            continue
-        values = group if isinstance(group, list) else [group]
-        for value in values:
-            item = str(value or "").strip()
-            if not item or item in seen:
-                continue
-            seen.add(item)
-            merged.append(item)
-    return merged
+normalize_selected_file_ids = _file_selection.normalize_selected_file_ids
+merge_unique_file_ids = _file_selection.merge_unique_file_ids
 
 
 def extract_selected_ids_from_data_source(data_source: dict | None) -> list[str]:

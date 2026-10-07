@@ -1,7 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
-import path from "node:path";
 
 import type {
   DoctorPayload,
@@ -43,7 +42,12 @@ import type {
   SessionRenameRequest,
   SessionSummary,
 } from "../shared/session-contracts";
-import { mergeSidecarEnvironment } from "./smoke-environment";
+import {
+  resolveDevelopmentPython,
+  resolveSidecarCommand,
+  sidecarEnvironment,
+  sidecarWorkingDirectory,
+} from "./sidecar-launch";
 
 export type SidecarReadyMessage = {
   type: "ready";
@@ -259,6 +263,7 @@ export class SidecarManager {
   private token?: string;
   private port?: number;
   private startup?: Promise<RuntimeStatus>;
+  private shutdown?: Promise<void>;
   private startupRevision?: string;
   private activeRevision?: string;
   private restartTimer?: ReturnType<typeof setTimeout>;
@@ -559,6 +564,9 @@ export class SidecarManager {
   }
 
   start(expectedRevision?: string): Promise<RuntimeStatus> {
+    if (this.shutdown) {
+      return this.shutdown.then(() => this.start(expectedRevision));
+    }
     if (this.startup) {
       if (this.startupRevision !== expectedRevision) {
         return Promise.reject(
@@ -629,48 +637,29 @@ export class SidecarManager {
 
     const token = randomBytes(32).toString("hex");
     const command = this.sidecarCommand();
-    const runtimeWorkingDirectory = path.join(this.options.dataRoot, "tmp");
+    const runtimeWorkingDirectory = sidecarWorkingDirectory(this.options.dataRoot);
     mkdirSync(runtimeWorkingDirectory, { recursive: true });
-    const repositoryRoot = path.resolve(this.options.appPath, "..", "..");
-    const developmentPythonPath = [
-      this.options.appPath,
-      path.join(repositoryRoot, "libs", "ktem"),
-      path.join(repositoryRoot, "libs", "kotaemon"),
-      path.join(repositoryRoot, "libs", "slide_cli"),
-      process.env.PYTHONPATH,
-    ]
-      .filter((entry): entry is string => Boolean(entry))
-      .join(path.delimiter);
     const child = spawn(command.executable, command.args, {
-      env: {
-        ...mergeSidecarEnvironment(process.env, environment),
-        KH_APP_DATA_DIR: path.join(
-          this.options.dataRoot,
-          "state",
-          "ktem_app_data",
-        ),
-        MARA_DESKTOP_DATA_DIR: this.options.dataRoot,
-        MARA_DESKTOP_TOKEN: token,
-        MARA_DESKTOP_SMOKE_FAULT: this.options.smokeFault ?? "",
-        THEFLOW_SETTINGS_MODULE: "ktem.default_flowsettings",
-        KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED: "1",
-        ...(!this.options.isPackaged
-          ? { PYTHONPATH: developmentPythonPath }
-          : {}),
-      },
+      env: sidecarEnvironment({
+        appPath: this.options.appPath,
+        dataRoot: this.options.dataRoot,
+        isPackaged: this.options.isPackaged,
+        smokeFault: this.options.smokeFault,
+      }, process.env, environment, token),
       cwd: runtimeWorkingDirectory,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });
     this.child = child;
     this.token = token;
+    let terminating = false;
 
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
       process.stderr.write(`[mara-sidecar] ${chunk}`);
     });
     child.once("exit", (code, signal) => {
-      if (this.child !== child || generation !== this.generation) {
+      if (this.child !== child || generation !== this.generation || terminating) {
         return;
       }
       this.child = undefined;
@@ -723,15 +712,24 @@ export class SidecarManager {
       });
       return this.getStatus();
     } catch (error) {
-      child.kill();
+      terminating = true;
+      let message = error instanceof Error ? error.message : String(error);
+      try {
+        await this.terminateChild(child);
+      } catch (cleanupError) {
+        const detail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        message += ` Shutdown also failed: ${detail}`;
+      }
       if (this.child !== child || generation !== this.generation) {
+        await this.shutdown;
         return this.getStatus();
       }
-      this.child = undefined;
+      if (child.exitCode !== null || child.signalCode !== null || !child.pid) {
+        this.child = undefined;
+      }
       this.port = undefined;
       this.token = undefined;
       this.activeRevision = undefined;
-      const message = error instanceof Error ? error.message : String(error);
       this.setStatus({
         state: "failed",
         protocol: SIDECAR_PROTOCOL_VERSION,
@@ -792,6 +790,19 @@ export class SidecarManager {
   }
 
   async stop(): Promise<void> {
+    if (this.shutdown) {
+      return this.shutdown;
+    }
+    const shutdown = this.stopChild();
+    this.shutdown = shutdown;
+    const clear = () => {
+      if (this.shutdown === shutdown) this.shutdown = undefined;
+    };
+    shutdown.then(clear, clear);
+    return shutdown;
+  }
+
+  private async stopChild(): Promise<void> {
     this.stopping = true;
     this.generation += 1;
     this.startup = undefined;
@@ -814,15 +825,20 @@ export class SidecarManager {
 
     try {
       await this.requestJson("/shutdown", { method: "POST" });
-      await Promise.race([
-        new Promise<void>((resolve) => child.once("exit", () => resolve())),
-        new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
-      ]);
+      await this.waitForExit(child, 2_000);
     } catch {
       // The final kill below is the bounded shutdown fallback.
     }
-    if (this.child) {
-      child.kill();
+    try {
+      await this.terminateChild(child);
+    } catch (error) {
+      this.setStatus({
+        state: "failed",
+        protocol: SIDECAR_PROTOCOL_VERSION,
+        capabilities: [],
+        message: "The MARA Sidecar could not be stopped.",
+      });
+      throw error;
     }
     this.child = undefined;
     this.port = undefined;
@@ -835,42 +851,46 @@ export class SidecarManager {
     });
   }
 
-  private sidecarCommand(): { executable: string; args: string[] } {
-    if (this.options.isPackaged) {
-      const executableName =
-        process.platform === "win32" ? "mara-desktop-sidecar.exe" : "mara-desktop-sidecar";
-      return {
-        executable: path.join(
-          this.options.resourcesPath,
-          "sidecar",
-          "mara-desktop-sidecar",
-          executableName,
-        ),
-        args: [],
-      };
+  private waitForExit(child: ChildProcessWithoutNullStreams, timeout: number): Promise<boolean> {
+    if (child.exitCode !== null || child.signalCode !== null || !child.pid) {
+      return Promise.resolve(true);
     }
+    return new Promise((resolve) => {
+      const finish = (exited: boolean) => {
+        clearTimeout(timer);
+        child.off("exit", onExit);
+        resolve(exited);
+      };
+      const onExit = () => finish(true);
+      const timer = setTimeout(() => finish(false), timeout);
+      child.once("exit", onExit);
+    });
+  }
 
-    return {
-      executable: this.developmentPython(),
-      args: ["-m", "sidecar.server"],
-    };
+  private async terminateChild(child: ChildProcessWithoutNullStreams): Promise<void> {
+    if (child.exitCode !== null || child.signalCode !== null || !child.pid) return;
+    const exited = this.waitForExit(child, 2_000);
+    child.kill();
+    if (await exited) return;
+    const forcedExit = this.waitForExit(child, 2_000);
+    child.kill("SIGKILL");
+    if (!await forcedExit) {
+      throw new Error("Sidecar did not exit after termination");
+    }
+  }
+
+  private sidecarCommand(): { executable: string; args: string[] } {
+    return resolveSidecarCommand({
+      isPackaged: this.options.isPackaged,
+      resourcesPath: this.options.resourcesPath,
+      platform: process.platform,
+    }, () => this.developmentPython());
   }
 
   private developmentPython(): string {
-    if (process.env.MARA_DESKTOP_PYTHON) {
-      return process.env.MARA_DESKTOP_PYTHON;
-    }
-    const workspacePython = path.resolve(
-      this.options.appPath,
-      "..",
-      "..",
-      ".venv",
-      process.platform === "win32" ? "Scripts/python.exe" : "bin/python",
+    return resolveDevelopmentPython(
+      this.options.appPath, process.env, process.platform, existsSync,
     );
-    if (existsSync(workspacePython)) {
-      return workspacePython;
-    }
-    return process.platform === "win32" ? "python" : "python3";
   }
 
   private waitForReady(

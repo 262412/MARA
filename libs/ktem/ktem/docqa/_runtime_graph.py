@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ktem.preview.context import preview_access_for_user
+
 from . import _runtime_elements
 from ._runtime_elements import documents_for_selected_files
 from .graph_builder import (
@@ -9,6 +11,34 @@ from .graph_builder import (
     graph_index_from_index_documents,
     local_graph_index_from_documents,
 )
+from .knowledge_graph_lifetime import GraphCacheRequest
+
+
+def read_conversation_cache(runtime, conversation_id, user_id, engine):
+    graph = runtime.knowledge_graph
+    if not conversation_id or not graph:
+        return None
+    principal = runtime._resolve_user_id(user_id)
+    if runtime.load_session(conversation_id, user_id=principal) is None:
+        raise PermissionError("Graph conversation is unavailable")
+    state = graph._load_cached_state(conversation_id)
+    if state.get("conversation_id") != conversation_id or not state.get("graph"):
+        return None
+    sources = graph._load_sources(list(state.get("manifest") or {}), user_id=principal)
+    access = preview_access_for_user(graph._app, principal)
+    request = GraphCacheRequest(
+        graph._storage_dir,
+        engine,
+        graph._index,
+        conversation_id,
+        access.user_id,
+        sources,
+        owner_required=access.owner_required,
+        register=False,
+    )
+    with request.current():
+        latest = graph._load_cached_state(conversation_id)
+        return latest if latest == state and request.cache_matches(latest) else None
 
 
 def graph_context_for_selected_files(

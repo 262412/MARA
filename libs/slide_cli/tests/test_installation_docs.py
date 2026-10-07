@@ -54,7 +54,9 @@ def test_posix_installer_installs_mara_cli_from_local_implementation():
 def test_root_readme_documents_mara_research_cli_source_install():
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert "uv sync --extra mara" in readme
+    assert "docs/development/contributing.md" in readme
+    assert "`install.sh`" in readme
+    assert "uv sync --extra mara" not in readme
     assert 'pip install -e "libs/slide_cli"' not in readme
     assert "pip install mara-research-cli" in readme
     assert "MARA doctor" in readme

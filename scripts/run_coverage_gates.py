@@ -4,6 +4,7 @@ import argparse
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -14,10 +15,10 @@ COVERAGE_FLOORS = {
     "ktem": 50,
 }
 PRODUCTION_PATHS = {
-    "benchmark": "benchmark",
-    "slide_cli": "libs/slide_cli/slide_cli",
-    "kotaemon": "libs/kotaemon/kotaemon",
-    "ktem": "libs/ktem/ktem",
+    "benchmark": ("benchmark",),
+    "slide_cli": ("libs/slide_cli/slide_cli",),
+    "kotaemon": ("libs/kotaemon/kotaemon",),
+    "ktem": ("libs/ktem/ktem", "libs/ktem/ktem_contracts"),
 }
 COVERAGE_OMIT = (
     "*/tests/*",
@@ -33,12 +34,7 @@ TEST_SUITES = (
     ("libs/ktem/ktem_tests",),
     ("libs/slide_cli",),
 )
-SOURCE_PATHS = (
-    "benchmark",
-    "libs/kotaemon/kotaemon",
-    "libs/ktem/ktem",
-    "libs/slide_cli/slide_cli",
-)
+SOURCE_PATHS = tuple(path for paths in PRODUCTION_PATHS.values() for path in paths)
 ROOT_SOURCE_MODULES = ("app", "flowsettings", "sso_app", "sso_app_demo")
 
 
@@ -53,7 +49,25 @@ def write_coverage_config(output_dir: Path) -> Path:
     source_lines = "\n".join(
         f"    {path}" for path in (*SOURCE_PATHS, *ROOT_SOURCE_MODULES)
     )
-    omit_lines = "\n".join(f"    {pattern}" for pattern in COVERAGE_OMIT)
+    explicit_parent = os.environ.get("MARA_PYTEST_RUNTIME_PARENT", "").strip()
+    runtime_parent = (
+        Path(explicit_parent)
+        if explicit_parent
+        else Path(tempfile.gettempdir()) / "mara_pytest"
+    )
+    runtime_pattern = f"{runtime_parent.expanduser().resolve().as_posix()}/session-*/*"
+    # Test-owned settings can share a production module name, then be removed
+    # at session cleanup. Exclude these fixtures from collection and exports.
+    omit_lines = "\n".join(
+        f"    {pattern}" for pattern in (*COVERAGE_OMIT, runtime_pattern)
+    )
+    # Subprocesses started in a package directory record package-relative paths.
+    # Merge those measurements into the same files used by the package floors.
+    path_mappings = "\n".join(
+        f"{Path(path).name} =\n    {path}\n    {Path(path).name}"
+        for path in SOURCE_PATHS
+        if path != Path(path).name
+    )
     config_path.write_text(
         "[run]\n"
         "patch = subprocess\n"
@@ -63,7 +77,11 @@ def write_coverage_config(output_dir: Path) -> Path:
         f"{source_lines}\n"
         "omit =\n"
         f"{omit_lines}\n"
+        "\n[paths]\n"
+        f"{path_mappings}\n"
         "\n[report]\n"
+        "omit =\n"
+        f"{omit_lines}\n"
         "precision = 2\n",
         encoding="utf-8",
     )
@@ -113,7 +131,7 @@ def run_gates(output_dir: Path) -> None:
                 "report",
                 f"--fail-under={floor}",
                 "--precision=2",
-                f"--include={PRODUCTION_PATHS[name]}/*",
+                "--include=" + ",".join(f"{path}/*" for path in PRODUCTION_PATHS[name]),
             ),
             env=env,
         )

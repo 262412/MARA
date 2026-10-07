@@ -11,6 +11,7 @@ from decouple import config
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from ktem.auth.policy import AuthConfigurationError
+from ktem.index.file.download_http import download_app_kwargs
 from ktem.launcher import (
     ensure_gradio_temp_dir,
     ensure_pdfjs_runtime_assets,
@@ -120,6 +121,7 @@ def create_sso_app(
         "/app",
         secret_key=_session_secret(),
         auth_dependency=sso_auth_dependency,
+        app_kwargs=download_app_kwargs(mara_app),
         allowed_paths=build_gradio_allowed_paths(
             pdfjs_dir=pdfjs_dir,
             gradio_temp_dir=gradio_temp_dir,

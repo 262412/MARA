@@ -291,7 +291,7 @@ class ReactAgentPipeline(BaseReasoning):
                 server_name = tool_name[len("[MCP] ") :]
                 entry = mcp_manager.get(server_name)
                 if entry:
-                    config = entry["config"]
+                    config = dict(entry["config"])
                     enabled_tools = config.pop("enabled_tools", None)
                     mcp_tools = create_tools_from_config(config, enabled_tools)
                     tools.extend(mcp_tools)

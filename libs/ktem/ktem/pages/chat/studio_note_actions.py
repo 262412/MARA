@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import gradio as gr
@@ -119,11 +120,19 @@ def convert_note_to_source_update(
     result = page.docqa.index_paths([source_path], reindex=False, user_id=user_id)
     if getattr(result, "failures", []):
         return render_notebook_panel_html(notebook)
+    source_ids = _indexed_source_ids(result)
+    if not source_ids:
+        source_ids = [
+            record.file_id
+            for record in page.docqa.resolve_file_refs(
+                [Path(source_path).name], user_id=user_id
+            )
+        ]
     notebook_service.record_note_indexed_source_to_conversation(
         conversation_id,
         note_id,
         user_id=user_id,
-        source_ids=_indexed_source_ids(result),
+        source_ids=source_ids,
         source_path=source_path,
     )
     return render_conversation_notebook_panel_html(conversation_id, user_id=user_id)

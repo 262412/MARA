@@ -6,9 +6,11 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+from email.parser import Parser
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
 
 from scripts import run_clean_wheel_smoke
 
@@ -18,6 +20,15 @@ PACKAGES = {
     "kotaemon": REPO_ROOT / "libs" / "kotaemon",
     "ktem": REPO_ROOT / "libs" / "ktem",
     "mara-research-cli": REPO_ROOT / "libs" / "slide_cli",
+}
+KTEM_PUBLIC_MODULES = {
+    "ktem_contracts/file_selection.py",
+    "ktem/docqa/__init__.py",
+    "ktem/docqa/_runtime_models.py",
+    "ktem/docqa/_runtime_utils.py",
+    "ktem/docqa/session_projection.py",
+    "ktem/docqa/pipeline_preparation.py",
+    "ktem/docqa/runtime.py",
 }
 
 
@@ -73,10 +84,25 @@ def test_four_distribution_artifacts_have_apache_metadata_and_legal_files(tmp_pa
         assert any(
             name.endswith(".dist-info/licenses/NOTICE") for name in wheel_names
         ), package_name
+        if package_name == "ktem":
+            assert KTEM_PUBLIC_MODULES <= wheel_names
+        if package_name == "kotaemon":
+            requirements = [
+                Requirement(value)
+                for value in Parser().parsestr(metadata).get_all("Requires-Dist", [])
+            ]
+            nltk = next(item for item in requirements if item.name == "nltk")
+            assert "3.10.0" not in nltk.specifier
+            assert "3.10.2" not in nltk.specifier
+            assert "3.10.3" in nltk.specifier
 
         with tarfile.open(sdist_path, mode="r:gz") as sdist:
-            sdist_names = {Path(name).name for name in sdist.getnames()}
+            sdist_members = sdist.getnames()
+            sdist_names = {Path(name).name for name in sdist_members}
         assert {"LICENSE.txt", "NOTICE"} <= sdist_names, package_name
+        if package_name == "ktem":
+            for module_path in KTEM_PUBLIC_MODULES:
+                assert any(name.endswith("/" + module_path) for name in sdist_members)
 
 
 def test_wheel_validator_rejects_artifact_without_legal_files(tmp_path):
@@ -176,7 +202,10 @@ def test_clean_layer_smoke_imports_representative_installed_modules():
     layer_imports = getattr(run_clean_wheel_smoke, "LAYER_IMPORTS", {})
 
     assert layer_imports["kotaemon"] == ("kotaemon",)
-    assert layer_imports["ktem"] == ("ktem.index.file.pipelines",)
+    assert layer_imports["ktem"] == (
+        "ktem_contracts.file_selection",
+        "ktem.index.file.pipelines",
+    )
     assert layer_imports["mara-research-cli"] == ("slide_cli.cli",)
     assert callable(getattr(run_clean_wheel_smoke, "_run_layer_imports", None))
 

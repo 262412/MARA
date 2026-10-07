@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from ktem.preview.context import PreviewAccess
+
 
 @dataclass(frozen=True)
 class PreviewPayloadRequest:
@@ -8,6 +10,7 @@ class PreviewPayloadRequest:
     file_path: str
     requested_page: int
     known_total_pages: int = 1
+    access: PreviewAccess | None = None
 
 
 @dataclass(frozen=True)

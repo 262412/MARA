@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import Any, Callable, TypeVar
 
+from . import route_stage_runner
+
 DEFAULT_OPTIONAL_STAGE_RESERVE_SECONDS = 12.0
 DEFAULT_TERMINAL_COMMIT_RESERVE_SECONDS = 12.0
 
@@ -299,29 +301,20 @@ def _run_with_interruptible_timeout(
             on_cancel=on_cancel,
             event=event,
         )
-    sigalrm = signal.SIGALRM
-    itimer_real = signal.ITIMER_REAL
-    previous_handler = signal.getsignal(sigalrm)
-    previous_delay, previous_interval = signal.getitimer(itimer_real)
-    started = monotonic()
-
-    def handle_timeout(_signum: int, _frame: Any) -> None:
-        raise on_timeout()
-
-    signal.signal(sigalrm, handle_timeout)
-    signal.setitimer(itimer_real, max(0.000001, float(timeout_seconds)))
-    try:
-        return call()
-    finally:
-        signal.setitimer(itimer_real, 0.0)
-        signal.signal(sigalrm, previous_handler)
-        if previous_delay > 0:
-            elapsed = monotonic() - started
-            signal.setitimer(
-                itimer_real,
-                max(0.000001, previous_delay - elapsed),
-                previous_interval,
-            )
+    sigalrm = getattr(signal, "SIGALRM")
+    itimer_real = getattr(signal, "ITIMER_REAL")
+    return route_stage_runner.run_signal_timeout(
+        timeout_seconds,
+        call,
+        on_timeout=on_timeout,
+        monotonic=lambda: monotonic(),
+        get_handler=lambda: signal.getsignal(sigalrm),
+        get_timer=lambda: getattr(signal, "getitimer")(itimer_real),
+        set_handler=lambda handler: signal.signal(sigalrm, handler),
+        set_timer=lambda delay, interval=0: getattr(signal, "setitimer")(
+            itimer_real, delay, interval
+        ),
+    )
 
 
 def _run_with_worker_timeout(
@@ -332,49 +325,27 @@ def _run_with_worker_timeout(
     on_cancel: Callable[[], list[str]],
     event: dict[str, Any],
 ) -> _T:
-    completed = threading.Event()
-    result_lock = threading.Lock()
-    accepting_result = True
-    result: list[_T] = []
-    errors: list[BaseException] = []
-
-    def invoke() -> None:
-        try:
-            value = call()
-        except Exception as error:
-            LOGGER.debug("DocQA route worker failed", exc_info=True)
-            with result_lock:
-                if accepting_result:
-                    errors.append(error)
-        else:
-            with result_lock:
-                if accepting_result:
-                    result.append(value)
-        finally:
-            completed.set()
-
-    worker = threading.Thread(
-        target=invoke,
-        name="mara-route-stage",
-        daemon=True,
-    )
-    worker.start()
-    if not completed.wait(max(0.000001, float(timeout_seconds))):
-        with result_lock:
-            accepting_result = False
-            result.clear()
-            errors.clear()
+    def cancel_worker() -> None:
         cancellation_errors = on_cancel()
         if cancellation_errors:
             event["cancellation_error_types"] = cancellation_errors
-        producer_stopped = completed.wait(0.1)
+
+    def record_stopped(producer_stopped: bool) -> None:
         event["cancellation_status"] = (
             "producer_stopped" if producer_stopped else "producer_unresponsive"
         )
-        raise on_timeout()
-    if errors:
-        raise errors[0]
-    return result[0]
+
+    return route_stage_runner.run_worker_timeout(
+        timeout_seconds,
+        call,
+        on_timeout=on_timeout,
+        on_cancel=cancel_worker,
+        on_stopped=record_stopped,
+        make_event=threading.Event,
+        make_lock=threading.Lock,
+        make_thread=threading.Thread,
+        logger=LOGGER,
+    )
 
 
 def _cancel_blocking_route_stage(

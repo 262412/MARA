@@ -1,116 +1,76 @@
 # Contributing
 
-## Setting up
+## Environment ownership
 
-- Clone the repo
+Read [storage layout](storage-layout-contract.md) before setup or tests. The
+shared primary checkout owns the canonical `.venv`; linked worktrees never
+synchronize it. Preserve existing environments, real configuration and data.
 
-  ```shell
-  git clone git@github.com:262412/MARA.git
-  cd MARA
-  ```
+The supported shared Linux setup uses local Python 3.10 and the repository's
+locked uv version. `install.sh` is the only synchronizer for the canonical
+environment: it uses `uv sync --frozen --no-editable --extra mara --no-dev` and
+reinstalls the four distributions. Initialization and optional coding-tool
+bundle installation are explicit installer actions; review the target data
+directories first. Do not replace an existing `.venv` or copy over `.env`.
 
-- Install the environment
+Routine primary-checkout commands use `uv run --no-sync --python 3.10 ...`.
+Source verification uses `scripts/run_with_canonical_env.sh`, which adds the
+checkout libraries to the import path without installing them editable. This
+also serves linked worktrees after `scripts/check_mara_worktree_env.py check`.
+An overlay is source-test evidence, never installed-wheel evidence.
 
-  - Create a conda environment (python >= 3.10 is recommended)
+The installer/wrapper commands are Bash/Linux interfaces, not native Windows
+setup instructions. Windows development requires an explicitly owned, already
+prepared environment and the same test isolation. Do not infer that HOME is
+the Windows Known Folder or resynchronize the shared environment to run a test.
+Disposable CI runners use their own locked environments; their `uv sync`
+commands are not permission to synchronize a developer's canonical environment.
 
-    ```shell
-    conda create -n mara python=3.10
-    conda activate mara
+## Verification
 
-    # install dependencies
-    cd libs/kotaemon
-    pip install -e ".[all]"
-    ```
+Run these Bash commands from the repository root after the storage/environment
+checks and with development tools already available in the owned environment:
 
-  - Or run the installer (one of the `scripts/run_*` scripts depends on your OS), then
-    you will have all the dependencies installed as a conda environment at
-    `install_dir/env`.
-
-    ```shell
-    conda activate install_dir/env
-    ```
-
-- Pre-commit
-
-  ```shell
-  pre-commit install
-  ```
-
-- Test
-
-  ```shell
-  pytest tests
-  ```
-
-## Package overview
-
-`kotaemon` library focuses on the AI building blocks to implement a RAG-based QA application. It consists of base interfaces, core components and a list of utilities:
-
-- Base interfaces: `kotaemon` defines the base interface of a component in a pipeline. A pipeline is also a component. By clearly define this interface, a pipeline of steps can be easily constructed and orchestrated.
-- Core components: `kotaemon` implements (or wraps 3rd-party libraries
-  like Langchain, llama-index,... when possible) commonly used components in
-  kotaemon use cases. Some of these components are: LLM, vector store,
-  document store, retriever... For a detailed list and description of these
-  components, please refer to the [API Reference](../reference/Summary.md) section.
-- List of utilities: `kotaemon` provides utilities and tools that are
-  usually needed in client project. For example, it provides a prompt
-  engineering UI for AI developers in a project to quickly create a prompt
-  engineering tool for DMs and QALs. It also provides a command to quickly spin
-  up a project code base. For a full list and description of these utilities,
-  please refer to the [Utilities](utilities.md) section.
-
-```mermaid
-mindmap
-  root((kotaemon))
-    Base Interfaces
-      Document
-      LLMInterface
-      RetrievedDocument
-      BaseEmbeddings
-      BaseChat
-      BaseCompletion
-      ...
-    Core Components
-      LLMs
-        AzureOpenAI
-        OpenAI
-      Embeddings
-        AzureOpenAI
-        OpenAI
-        HuggingFaceEmbedding
-      VectorStore
-        InMemoryVectorstore
-        ChromaVectorstore
-      Agent
-      Tool
-      DocumentStore
-      ...
-    Utilities
-      Scaffold project
-      PromptUI
-      Documentation Support
+```bash
+scripts/run_with_canonical_env.sh -m pytest -q libs/slide_cli/tests
+scripts/run_with_canonical_env.sh -m pytest -q libs/kotaemon/tests
+scripts/run_with_canonical_env.sh -m pytest -q libs/ktem/ktem_tests
+scripts/run_with_canonical_env.sh -m pytest -q benchmark/tests tests
+scripts/run_with_canonical_env.sh scripts/check_pytest_collection.py --minimum 1260
+scripts/run_with_canonical_env.sh scripts/check_codebase_hygiene.py
 ```
 
-## Common conventions
+Choose the affected suite first. Root `conftest.py` activates the owned runtime
+before business imports; subprocess fixtures must preserve that isolation.
+Never run a configuration-writing example against a real user profile for a
+test. Unified collection is a gate, not proof that the collected tests passed
+on every OS. Native Windows limitations have individual node evidence in the
+[refactor status](refactor-status.md).
 
-- PR title: One-line description (example: Feat: Declare BaseComponent and decide LLM call interface).
-- [Encouraged] Provide a quick description in the PR, so that:
-  - Reviewers can quickly understand the direction of the PR.
-  - It will be included in the commit message when the PR is merged.
+The [Quality workflow](../../.github/workflows/quality-gates.yaml) is the current
+authority for complete hooks/static, package suites, frontend security checks,
+collection, four-distribution builds, fresh wheel installs and coverage.
+It uses `uv.lock`, fixed tool versions and pinned actions. The former advice
+to bump `__init__.py` or add `[ignore cache]` to refresh CI environments does not
+apply. Dependency changes require the existing lock/security review; do not
+alter locks, scan scope, baselines or thresholds as a testing workaround.
 
-## Environment caching on PR
+For Desktop, use the already prepared Node environment in `apps/desktop`:
+`npm run verify`. The [native workflow](../../.github/workflows/desktop-gate2.yaml)
+separately builds and exercises frozen Sidecar/Electron combinations. Source
+tests do not prove an installer, clean VM, macOS or unfinished product feature.
 
-- To speed up CI, environments are cached based on the version specified in `__init__.py`.
-- Since dependencies versions in `setup.py` are not pinned, you need to pump the version in order to use a new environment. That environment will then be cached and used by your subsequence commits within the PR, until you pump the version again
-- The new environment created during your PR is cached and will be available to others once the PR is merged.
-- If you are experimenting with new dependencies and want a fresh environment every time, add `[ignore cache]` in your commit message. The CI will create a fresh environment to run your commit and then discard it.
-- If your PR include updated dependencies, the recommended workflow would be:
-  - Doing development as usual.
-  - When you want to run the CI, push a commit with the message containing `[ignore cache]`.
-  - Once the PR is final, pump the version in `__init__.py` and push a final commit not containing `[ignore cache]`.
+## Responsibilities and review
 
-## Merge PR guideline
+- `slide_cli` owns the public shell and compatibility entrypoints.
+- `kotaemon` owns reusable model, agent, storage and coding-tool bundle services.
+- `ktem` owns Web/DocQA composition; `ktem_contracts` holds neutral shared rules.
+- `benchmark` owns experiment execution/scoring contracts; passing synthetic
+  fixtures does not establish provider or research quality.
+- The root `mara-app` distribution composes the runtime packages.
 
-- Use squash and merge option
-- 1st line message is the PR title.
-- The text area is the PR description.
+See [architecture contracts](architecture-contracts.md) for precise seams and
+consumer tests, and [hygiene](codebase-hygiene-contract.md) for unchanged risk
+and complexity gates. Pull requests should state the affected public surface,
+old/new behavior, actual commands/platform/input SHA and unresolved evidence.
+Keep source fixes, test repairs and report-only updates distinguishable.
