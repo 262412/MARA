@@ -502,9 +502,9 @@ def test_gradio_password_auth_issues_httponly_cookie_and_logout_clears_it(
             "access-token" in cookie and "httponly" in cookie.lower()
             for cookie in login.headers.get_list("set-cookie")
         )
-        assert client.get("/user").json() == "Operator"
+        assert client.get("/gradio_api/user").json() == "Operator"
 
         logout = client.get("/logout", follow_redirects=False)
         assert logout.status_code == 302
-        assert logout.headers["location"] == "/"
-        assert client.get("/user").json() is None
+        assert logout.headers["location"] == "http://testserver"
+        assert client.get("/gradio_api/user").json() is None

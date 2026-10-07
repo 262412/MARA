@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Literal, NamedTuple, Optional, Union
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, model_serializer
 
 from kotaemon.base import LLMInterface
 
@@ -250,9 +250,27 @@ class AgentOutput(LLMInterface):
 
     model_config = ConfigDict(extra="allow")
 
-    text: str
-    type: str = "agent"
+    # AgentOutput's existing discriminator is wider than AIMessage's role.
+    type: str = "agent"  # type: ignore[assignment]
     agent_type: AgentType
     status: Literal["thinking", "finished", "stopped", "failed"]
     error: Optional[str] = None
     intermediate_steps: Optional[list] = None
+
+    @model_serializer(mode="wrap")
+    def custom_model_dump(self, handler, info):
+        data = super().custom_model_dump(handler, info)
+        default = {"extra": "allow"}
+        extras = self.model_extra or {}
+        value = extras.get("model_config", default)
+        selected = info.include is None or "model_config" in info.include
+        omitted = (
+            "model_config" in (info.exclude or {})
+            or (info.exclude_defaults and value == default)
+            or (info.exclude_unset and "model_config" not in extras)
+        )
+        if selected and not omitted:
+            data["model_config"] = value
+        else:
+            data.pop("model_config", None)
+        return data

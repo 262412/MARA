@@ -45,6 +45,7 @@ from .chat_conversation_events import (
 )
 from .chat_docqa_runtime import build_web_docqa_request
 from .chat_gradio_adapters import chat_app_load_ports, chat_conversation_ports
+from .chat_history import feedback_value, message_position
 from .chat_knowledge_graph_bindings import subscribe_public_knowledge_graph_events
 from .chat_knowledge_graph_runtime import generate_graph, refresh_graph
 from .chat_layout import render_chat_workbench_layout
@@ -1317,8 +1318,8 @@ class ChatPage(BasePage):
         try:
             self.docqa.append_session_like(
                 convo_id,
-                liked.index,
-                liked.value,
+                message_position(liked.index),
+                feedback_value(liked.value),
                 liked.liked,
                 user_id=user_id,
             )
@@ -1326,7 +1327,7 @@ class ChatPage(BasePage):
             raise gr.Error(str(exc)) from exc
 
     def message_selected(self, retrieval_history, plot_history, msg: gr.SelectData):
-        index = msg.index[0]
+        index = message_position(msg.index)[0]
         try:
             retrieval_content, plot_content = (
                 retrieval_history[index],

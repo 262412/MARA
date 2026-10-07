@@ -404,7 +404,7 @@ mara_bootstrap_benchmark_runtime() {
   # shared checkout .venv or performing editable installs there.
   (
     cd "$MARA_BENCHMARK_PROJECT_ROOT"
-    "$uv_command" sync --frozen --no-dev --extra mara --python 3.10
+    "$uv_command" sync --frozen --no-dev --extra mara --python 3.11
   )
   [[ -x "$MARA_BENCHMARK_PYTHON" ]] || {
     mara_benchmark_die "frozen sync did not create $MARA_BENCHMARK_PYTHON"

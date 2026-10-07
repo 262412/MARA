@@ -100,7 +100,7 @@ def test_demo_new_chat_binds_clear_conversation_callback():
     callback = btn_new.calls[0][1]["fn"]
     assert callback.__wrapped__ is clear_conv
     request = gr.Request(username="owner", session_hash="demo-browser")
-    inputs, _, _ = special_args(callback, [], request=request)
+    inputs, _, _, _ = special_args(callback, [], request=request)
     assert inputs == [request]
     assert callback(*inputs) == ("", [], {})
 

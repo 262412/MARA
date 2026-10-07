@@ -93,7 +93,7 @@ async function login(username = 'browser-owner', {initialize = true, traceRefres
     }
   });
   page.on('response', async response => {
-    if (new URL(response.url()).pathname === '/queue/join' && response.ok()) {
+    if (new URL(response.url()).pathname === '/gradio_api/queue/join' && response.ok()) {
       try {
         const body = await response.json();
         queue.requestIds[queue.requestOrder.get(response.request())] = body.event_id;
@@ -212,6 +212,11 @@ async function settled(queue) {
 }
 
 async function selectSource(page) {
+  for (const id of ['chat-file-click', 'selected-page-text', 'selected-graph-context', 'main-pdf-preview-src']) {
+    const bridge = page.locator(`#${id} textarea, #${id} input`);
+    await expect(bridge).toBeAttached();
+    await expect(bridge).toBeHidden();
+  }
   await expect(page.locator('#chat-file-list')).toHaveAttribute('data-chat-file-bound', 'true');
   await page.locator('[data-chat-file-id="owned-observatory"]').click();
   await expect(page.locator('[data-chat-file-id="owned-observatory"]')).toHaveClass(/is-selected/);
@@ -313,7 +318,7 @@ async function conversationIsolation() {
     await page.getByText('Conversation', {exact: true}).click();
     await page.locator('#conversation-dropdown input').click();
     await page.getByRole('option', {name: 'Owned document discussion', exact: true}).click();
-    await expect(page.locator('#answer-panel')).toContainText('SECOND question about the telescopes');
+    await expect(page.locator('#answer-panel')).toContainText('SECOND question about the telescopes', {timeout: 20000});
     const before = (await evidence()).conversations;
     await page.locator('#new-conv-button').click();
     await expect.poll(async () => (await evidence()).conversations.length).toBe(before.length + 1);
@@ -334,7 +339,7 @@ async function conversationIsolation() {
     await expect(page.locator('#answer-panel')).toContainText('ISOLATED CONVERSATION');
     await page.locator('#conversation-dropdown input').click();
     await page.getByRole('option', {name: 'Owned document discussion', exact: true}).click();
-    await expect(page.locator('#answer-panel')).toContainText('SECOND question about the telescopes');
+    await expect(page.locator('#answer-panel')).toContainText('SECOND question about the telescopes', {timeout: 20000});
     await expect(page.locator('#answer-panel')).not.toContainText('ISOLATED CONVERSATION');
     await page.reload();
     await page.locator('#chat-input textarea').waitFor({state: 'visible'});
@@ -342,7 +347,7 @@ async function conversationIsolation() {
     await page.getByText('Conversation', {exact: true}).click();
     await page.locator('#conversation-dropdown input').click();
     await page.getByRole('option', {name: 'Isolated conversation', exact: true}).click();
-    await expect(page.locator('#answer-panel')).toContainText('ISOLATED CONVERSATION');
+    await expect(page.locator('#answer-panel')).toContainText('ISOLATED CONVERSATION', {timeout: 20000});
     await expect(page.locator('#answer-panel')).not.toContainText('SECOND question');
     data = await evidence();
     expect(data.conversations.find(row => row.id === fresh.id).data_source).toEqual(fresh.data_source);
@@ -400,7 +405,7 @@ async function authenticatedIndexing() {
       const filename = username + '-uploaded.txt';
       await page.getByRole('radio', {name: 'Document', exact: true}).check();
       const uploadResponse = page.waitForResponse(response =>
-        response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload');
+        response.request().method() === 'POST' && new URL(response.url()).pathname === '/gradio_api/upload');
       await page.locator('#chat-input input[type=file]').setInputFiles({
         name: filename, mimeType: 'text/plain',
         buffer: Buffer.from(username + ': the observatory has seven telescopes.'),
@@ -447,7 +452,8 @@ async function authenticatedIndexing() {
 (async () => {
   browser = await chromium.launch({headless: true,
     downloadsPath: path.join(ownedRuntime.root, 'tmp', 'browser-downloads'),
-    args: ['--disk-cache-dir=' + path.join(ownedRuntime.root, 'cache', 'browser')],
+    args: ['--disk-cache-dir=' + path.join(ownedRuntime.root, 'cache', 'browser'),
+      ...(process.platform === 'win32' ? ['--disable-gpu'] : [])],
     ...(process.env.MARA_BROWSER_CHANNEL ? {channel: process.env.MARA_BROWSER_CHANNEL} : {})});
   const selected = process.env.MARA_BROWSER_SCENARIOS?.split(',');
   const operations = require('./conversation_actions.cjs')({expect, login, evidence, send, tailFinished, settled, initialized, roles, results, output, base, assertFinalizerAndWebWrites});

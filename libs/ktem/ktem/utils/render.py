@@ -101,15 +101,14 @@ class Render:
             return html_content
 
         is_pdf = doc.metadata.get("file_type", "") == "application/pdf"
-        page_idx = int(doc.metadata.get("page_label", 1))
+        page_idx = doc.metadata.get("page_number")
 
         if not is_pdf:
             logger.debug("Document is not pdf")
             return html_content
 
-        if page_idx < 0:
-            logger.debug("Fail to extract page number")
-            return html_content
+        if type(page_idx) is not int or page_idx < 1:
+            return html_content + " <span>Page position unavailable</span>"
 
         if not highlight_text:
             phrase = "false"

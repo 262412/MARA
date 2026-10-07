@@ -379,7 +379,7 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
     const filename = 'r3d-quick-upload.txt';
     await control('/arm', {key, callback: 'FileIndexPage.index_fn_file_with_default_loaders', username: 'browser-owner', session_hash: queue.sessionHash});
     try {
-      const response = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload');
+      const response = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/gradio_api/upload');
       await page.locator('#quick-file input[type=file]').setInputFiles({
         name: filename, mimeType: 'text/plain', buffer: Buffer.from('D1 owned upload: seven telescopes.'),
       });
@@ -460,7 +460,7 @@ module.exports = ({expect, login, evidence, settled, send, tailFinished, results
     const key = 'file-list-before-authorized-deletion';
     await control('/arm', {key, callback: 'refresh_chat_file_list', event: 'delivery', username: 'browser-owner', session_hash: queue.sessionHash, filter_text: '.txt'});
     try {
-      const upload = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload');
+      const upload = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/gradio_api/upload');
       await page.locator('#quick-file input[type=file]').setInputFiles({name: filename, mimeType: 'text/plain', buffer: Buffer.from('Owned deletion notification document.')});
       expect((await upload).ok()).toBe(true);
       await expect(page.locator('#quick-file-upload-status')).toContainText('Indexing completed.', {timeout: 20000});

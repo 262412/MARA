@@ -3,7 +3,7 @@
 FROM ghcr.io/astral-sh/uv:0.11.19@sha256:b46b03ddfcfbf8f547af7e9eaefdf8a39c8cebcba7c98858d3162bd28cf536f6 AS uv-bin
 FROM ollama/ollama:0.31.2@sha256:509fdf54e23bd50d87af646cb51c0a7a203d6a83cc4d6695b3b08c5be1c62c0a AS ollama-source
 
-FROM python:3.10.20-slim-bookworm@sha256:ff7161e2b8e2a56fc6a62a6099ff8feb72f1a6dbae9860cdcb9a6c65cf4c6be9 AS builder-base
+FROM python:3.11.17-slim-bookworm@sha256:0a310eeecf4e1f5a0743f9a6520c90c88d089c903ca5fd283f501e3a805f5f89 AS builder-base
 COPY --from=uv-bin /uv /uvx /usr/local/bin/
 RUN apt-get update -qqy \
     && apt-get install -y --no-install-recommends \
@@ -42,7 +42,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && NLTK_DATA="$NLTK_CACHE" /opt/mara/.venv/bin/python -c \
         "import nltk; nltk.download = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('network download forbidden')); from llama_index.core.readers.base import BaseReader; from llama_index.core.utils import get_tokenizer; assert get_tokenizer()('MARA works offline.')"
 
-FROM python:3.10.20-slim-bookworm@sha256:ff7161e2b8e2a56fc6a62a6099ff8feb72f1a6dbae9860cdcb9a6c65cf4c6be9 AS runtime-base
+FROM python:3.11.17-slim-bookworm@sha256:0a310eeecf4e1f5a0743f9a6520c90c88d089c903ca5fd283f501e3a805f5f89 AS runtime-base
 RUN apt-get update -qqy \
     && apt-get install -y --no-install-recommends \
         libmagic1 \
@@ -80,7 +80,7 @@ ENV HOME=/home/mara \
     XDG_CONFIG_HOME=/var/lib/mara/config \
     XDG_CACHE_HOME=/var/lib/mara/cache \
     XDG_DATA_HOME=/var/lib/mara/data \
-    NLTK_DATA=/opt/mara/.venv/lib/python3.10/site-packages/llama_index/core/_static/nltk_cache \
+    NLTK_DATA=/opt/mara/.venv/lib/python3.11/site-packages/llama_index/core/_static/nltk_cache \
     GRADIO_SERVER_NAME=0.0.0.0 \
     GRADIO_SERVER_PORT=7860 \
     MARA_AUTH_MODE=password \
@@ -100,7 +100,7 @@ ENV HOME=/home/mara \
     XDG_CONFIG_HOME=/var/lib/mara/config \
     XDG_CACHE_HOME=/var/lib/mara/cache \
     XDG_DATA_HOME=/var/lib/mara/data \
-    NLTK_DATA=/opt/mara/.venv/lib/python3.10/site-packages/llama_index/core/_static/nltk_cache \
+    NLTK_DATA=/opt/mara/.venv/lib/python3.11/site-packages/llama_index/core/_static/nltk_cache \
     GRADIO_SERVER_NAME=0.0.0.0 \
     GRADIO_SERVER_PORT=7860 \
     MARA_AUTH_MODE=password \
@@ -123,7 +123,7 @@ ENV HOME=/home/mara \
     XDG_CONFIG_HOME=/var/lib/mara/config \
     XDG_CACHE_HOME=/var/lib/mara/cache \
     XDG_DATA_HOME=/var/lib/mara/data \
-    NLTK_DATA=/opt/mara/.venv/lib/python3.10/site-packages/llama_index/core/_static/nltk_cache \
+    NLTK_DATA=/opt/mara/.venv/lib/python3.11/site-packages/llama_index/core/_static/nltk_cache \
     GRADIO_SERVER_NAME=0.0.0.0 \
     GRADIO_SERVER_PORT=7860 \
     MARA_AUTH_MODE=password \

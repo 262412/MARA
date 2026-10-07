@@ -5,13 +5,14 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from urllib.parse import quote
 
 import gradio as gr
 from gradio.data_classes import FileData
 from ktem.auth.service import resolve_request_user_id
 from ktem.db.models import engine as default_engine
 from starlette.concurrency import run_in_threadpool
-from starlette.responses import Response, StreamingResponse
+from starlette.responses import RedirectResponse, Response, StreamingResponse
 from starlette.routing import Route
 from theflow.settings import settings
 
@@ -29,6 +30,13 @@ class DownloadButton(gr.DownloadButton):
         if isinstance(value, str) and value.startswith(("http://", "https://")):
             return FileData(path=value, url=value, orig_name=value.rsplit("/", 1)[-1])
         return super().postprocess(value)
+
+
+def _legacy_file_link(request):
+    """Saved preview links retain the current Gradio file authorization checks."""
+    root = request.scope.get("root_path", "")
+    path = quote(request.path_params["path"], safe="/:")
+    return RedirectResponse(f"{root}/gradio_api/file={path}")
 
 
 def download_button(path, index_id, file_id, request):
@@ -175,11 +183,12 @@ def download_app_kwargs(app, *, engine=default_engine):
 
     return {
         "routes": [
+            Route("/file={path:path}", _legacy_file_link, methods=["GET", "HEAD"]),
             Route(
                 "/mara-download/{index_id}/{file_id}/{request_name}/{filename}",
                 serve,
                 methods=["GET", "HEAD"],
                 name="mara_download",
-            )
+            ),
         ]
     }

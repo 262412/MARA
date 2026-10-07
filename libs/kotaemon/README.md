@@ -58,10 +58,10 @@ Supported platforms: `claude-code`, `codex`.
 
 ### Setup
 
-- Create conda environment (suggest 3.10)
+- Create a Python 3.11 environment (Python 3.12 is also supported by the package metadata)
 
   ```shell
-  conda create -n kotaemon python=3.10
+  conda create -n kotaemon python=3.11
   conda activate kotaemon
   ```
 

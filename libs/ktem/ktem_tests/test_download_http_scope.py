@@ -75,7 +75,7 @@ def download_app(tmp_path, monkeypatch):
             == 200
         )
         response = owner.post(
-            "/run/owned_download",
+            "/gradio_api/run/owned_download",
             json={
                 "data": [False, "OWNER-BYTES", "file", "spoof"],
                 "session_hash": "owner",

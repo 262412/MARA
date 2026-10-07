@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import gradio as gr
 from ktem.app import compose_blocks_js
 from ktem.assets.pdfjs_assets import materialize_pdfjs
+from ktem.index.file.download_http import download_app_kwargs
 from ktem.pages.chat.chat_panel import ChatPanel
 from ktem.pages.chat.page_preview_document import extract_docx_html, paginate_docx_html
 from ktem.pages.chat.page_preview_presentation import PresentationPreviewService
@@ -92,11 +93,7 @@ def _render_source(file_name: str, file_path: str, page: int):
 
 
 def create_app(pdfjs_dir: Path):
-    with gr.Blocks(
-        js=_blocks_javascript(pdfjs_dir),
-        css="#main-pdf-preview{height:620px} .pdf-preview-shell{height:100%}",
-        analytics_enabled=False,
-    ) as demo:
+    with gr.Blocks(analytics_enabled=False) as demo:
         gr.Markdown("# MARA Preview Security Flow")
         upload = gr.File(label="Upload preview fixture", elem_id="preview-upload")
         selector = gr.Dropdown(
@@ -140,6 +137,13 @@ def create_app(pdfjs_dir: Path):
                 panel.page_number,
             ],
         )
+    demo.gradio_launch_kwargs = {
+        "js": _blocks_javascript(pdfjs_dir),
+        "css": "#main-pdf-preview{height:620px} .pdf-preview-shell{height:100%}",
+        "app_kwargs": download_app_kwargs(
+            SimpleNamespace(index_manager=SimpleNamespace(indices=[]))
+        ),
+    }
     return demo
 
 
@@ -159,7 +163,9 @@ def main() -> None:
     file_storage.mkdir(parents=True, exist_ok=True)
     (file_storage / "victim.pdf").write_bytes(b"not-visible")
     docs = Path(__file__).resolve().parents[2] / "docs"
-    create_app(pdfjs_dir).queue().launch(
+    demo = create_app(pdfjs_dir)
+    demo.queue().launch(
+        **demo.gradio_launch_kwargs,
         server_name="127.0.0.1",
         server_port=args.port,
         inbrowser=False,

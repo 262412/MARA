@@ -156,6 +156,29 @@ def test_owned_cleanup_restores_environment_and_preserves_siblings(tmp_path):
     assert environment == original
 
 
+def test_owned_cleanup_releases_finished_worker_cache_connections(tmp_path):
+    import gc
+    import threading
+
+    from theflow.cache.filebased import FileCache
+
+    from pytest_runtime_isolation import ActiveTestRuntime
+
+    runtime = ActiveTestRuntime.start({"MARA_PYTEST_RUNTIME_PARENT": str(tmp_path)})
+    cache = FileCache(runtime.paths.cache_dir / "worker")
+    gc.disable()
+    try:
+        worker = threading.Thread(target=lambda: cache.set("owned", "value"))
+        worker.start()
+        worker.join(5)
+        assert not worker.is_alive()
+        runtime.close()
+        assert not runtime.paths.root.exists()
+    finally:
+        gc.enable()
+        gc.collect()
+
+
 def test_owned_cleanup_removes_readonly_fixtures_but_preserves_siblings(tmp_path):
     import stat
 

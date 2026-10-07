@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 
-from langchain.output_parsers.boolean import BooleanOutputParser
+from langchain_classic.output_parsers.boolean import BooleanOutputParser
 
 from kotaemon.base import Document
 from kotaemon.llms import BaseLLM, PromptTemplate

@@ -94,7 +94,7 @@ def test_dockerfile_uses_only_explicit_application_inputs():
     assert "COPY docs" not in dockerfile
     assert "COPY app.py" not in dockerfile
 
-    assert "python:3.10.20-slim-bookworm@sha256:" in dockerfile
+    assert "python:3.11.17-slim-bookworm@sha256:" in dockerfile
     assert "FROM runtime-base AS lite" in dockerfile
     assert "FROM runtime-full AS full" in dockerfile
     assert "FROM runtime-full AS ollama" in dockerfile

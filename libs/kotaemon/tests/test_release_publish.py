@@ -47,7 +47,7 @@ def test_kotaemon_adv_dependency_includes_milvus_lite_for_local_backend():
     pyproject_path = repo_root / "libs" / "kotaemon" / "pyproject.toml"
 
     content = pyproject_path.read_text(encoding="utf-8")
-    assert '"llama-index-vector-stores-milvus"' in content
+    assert '"llama-index-vector-stores-milvus==1.2.0"' in content
     assert '"milvus-lite>=2.4.0; sys_platform != \\"win32\\""' in content
 
 

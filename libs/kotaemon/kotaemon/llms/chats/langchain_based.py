@@ -1,13 +1,28 @@
 from __future__ import annotations
 
 import logging
-from typing import AsyncGenerator, Iterator
+from contextlib import aclosing, closing
+from typing import AsyncGenerator, Generator
+
+from langchain_core.outputs import ChatGeneration, LLMResult
 
 from kotaemon.base import BaseMessage, HumanMessage, LLMInterface, Param
+from kotaemon.base.message_adapters import from_langchain_message, to_langchain_message
 
 from .base import ChatLLM
 
 logger = logging.getLogger(__name__)
+
+
+def _runnable_options(kwargs):
+    """Runnable calls receive callbacks through config, unlike generate()."""
+    options = dict(kwargs)
+    if "callbacks" in options:
+        options["config"] = {
+            **(options.get("config") or {}),
+            "callbacks": options.pop("callbacks"),
+        }
+    return options
 
 
 class LCChatMixin:
@@ -46,29 +61,36 @@ class LCChatMixin:
         else:
             input_ = messages
 
-        return input_
+        return [to_langchain_message(message) for message in input_]
 
     def prepare_response(self, pred):
         all_text = [each.text for each in pred.generations[0]]
-        all_messages = [each.message for each in pred.generations[0]]
+        all_messages = [
+            from_langchain_message(each.message) for each in pred.generations[0]
+        ]
 
-        completion_tokens, total_tokens, prompt_tokens = 0, 0, 0
-        try:
-            if pred.llm_output is not None:
-                completion_tokens = pred.llm_output["token_usage"]["completion_tokens"]
-                total_tokens = pred.llm_output["token_usage"]["total_tokens"]
-                prompt_tokens = pred.llm_output["token_usage"]["prompt_tokens"]
-        except Exception:
-            pass
-
-        return LLMInterface(
-            text=all_text[0] if len(all_text) > 0 else "",
+        first = all_messages[0] if all_messages else None
+        usage = (pred.llm_output or {}).get("token_usage", {})
+        message_usage = (first.usage_metadata or {}) if first is not None else {}
+        return LLMInterface.from_dict(
+            first.to_dict() if first is not None else {"content": ""},
             candidates=all_text,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-            prompt_tokens=prompt_tokens,
+            completion_tokens=usage.get(
+                "completion_tokens", message_usage.get("output_tokens", 0)
+            ),
+            total_tokens=usage.get(
+                "total_tokens", message_usage.get("total_tokens", 0)
+            ),
+            prompt_tokens=usage.get(
+                "prompt_tokens", message_usage.get("input_tokens", 0)
+            ),
             messages=all_messages,
             logits=[],
+        )
+
+    def _prepare_native_response(self, message):
+        return self.prepare_response(
+            LLMResult(generations=[[ChatGeneration(message=message)]])
         )
 
     def invoke(
@@ -92,17 +114,15 @@ class LCChatMixin:
             lc_tool_call = self._obj.bind_tools(tools)
             pred = lc_tool_call.invoke(
                 input_,
-                **self._get_tool_call_kwargs(),
+                **_runnable_options({**kwargs, **self._get_tool_call_kwargs()}),
             )
             if pred.tool_calls:
                 tool_calls = pred.tool_calls
             else:
                 tool_calls = pred.additional_kwargs.get("tool_calls", [])
 
-            output = LLMInterface(
-                content="",
-                additional_kwargs={"tool_calls": tool_calls},
-            )
+            output = self._prepare_native_response(pred)
+            output.additional_kwargs.setdefault("tool_calls", tool_calls)
         else:
             pred = self._obj.generate(messages=[input_], **kwargs)
             output = self.prepare_response(pred)
@@ -113,20 +133,38 @@ class LCChatMixin:
         self, messages: str | BaseMessage | list[BaseMessage], **kwargs
     ) -> LLMInterface:
         input_ = self.prepare_message(messages)
+        if "tools_pydantic" in kwargs:
+            tools = kwargs.pop("tools_pydantic")
+            pred = await self._obj.bind_tools(tools).ainvoke(
+                input_, **_runnable_options({**kwargs, **self._get_tool_call_kwargs()})
+            )
+            output = self._prepare_native_response(pred)
+            output.additional_kwargs.setdefault("tool_calls", pred.tool_calls)
+            return output
         pred = await self._obj.agenerate(messages=[input_], **kwargs)
         return self.prepare_response(pred)
 
     def stream(
         self, messages: str | BaseMessage | list[BaseMessage], **kwargs
-    ) -> Iterator[LLMInterface]:
-        for response in self._obj.stream(input=messages, **kwargs):
-            yield LLMInterface(content=response.content)
+    ) -> Generator[LLMInterface, None, None]:
+        with closing(
+            self._obj.stream(
+                input=self.prepare_message(messages), **_runnable_options(kwargs)
+            )
+        ) as responses:
+            for response in responses:
+                yield self._prepare_native_response(response)
 
     async def astream(
         self, messages: str | BaseMessage | list[BaseMessage], **kwargs
     ) -> AsyncGenerator[LLMInterface, None]:
-        async for response in self._obj.astream(input=messages, **kwargs):
-            yield LLMInterface(content=response.content)
+        async with aclosing(
+            self._obj.astream(
+                input=self.prepare_message(messages), **_runnable_options(kwargs)
+            )
+        ) as responses:
+            async for response in responses:
+                yield self._prepare_native_response(response)
 
     def to_langchain_format(self):
         return self._obj
@@ -153,7 +191,7 @@ class LCChatMixin:
         if name == "_lc_class":
             return super().__setattr__(name, value)
 
-        if name in self._lc_class.__fields__:
+        if name in self._lc_class.model_fields:
             self._kwargs[name] = value
             self._obj = self._lc_class(**self._kwargs)
         else:

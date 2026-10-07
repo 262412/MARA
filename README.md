@@ -177,6 +177,39 @@ The current runtime covers OpenAI, Azure OpenAI, Google Gemini, Anthropic Claude
 
 ### Quick Start
 
+This source tree requires Python 3.11 or 3.12; the installers default to 3.11.
+
+The runtime migration uses Gradio 6, LangChain 1 and LlamaIndex 0.14. Existing
+MARA commands and saved conversation turn pairs remain the same. Extension authors
+must pass `app.gradio_launch_kwargs` when launching or mounting `app.make()`;
+PromptUI returns the same launch options on its `demo` object. Native Gradio APIs
+use the `/gradio_api` prefix and message dictionaries. Existing `/file=` preview
+links redirect through the authenticated file route.
+
+LangChain response IDs follow its current format, and streams can end with an
+empty chunk marked `chunk_position="last"`.
+
+PDF parsing retains display labels and adds one-based physical `page_number`
+metadata. `page_number`, `page`, `page_idx` and `page_label` are parser-owned and
+cannot be supplied through `extra_info`. Older PDF cache entries are reparsed
+when their reader identity or physical page metadata is incompatible.
+
+Verified evidence projections now use canonical ID order and diagnostic lists use
+lexical order, independent of Python's set iteration. Newly computed terminal
+hashes can therefore differ; existing stored records are not rewritten.
+
+Local Unstructured parsing now requires an installed spaCy `en_core_web_sm` model
+(upstream pins 3.8.0). MARA reports a missing model before parsing instead of
+running the upstream automatic downloader. API-based parsing is unchanged.
+
+External imports of `llama_index.agent.openai.OpenAIAgent` move to
+`kotaemon.agents.openai.OpenAIAgent`. MARA model configuration resolves the old
+classpath without rewriting saved records. Chat, async chat, streaming, history
+and reset are covered; advanced AgentRunner task/step methods remain unsupported.
+The old `llama_index.multi_modal_llms.openai.OpenAIMultiModal` entry is retired.
+Remove it from model configuration; MARA rejects it with an explicit retirement
+error and does not substitute another provider or rewrite saved records.
+
 #### Option 1: Install The Public CLI Package
 
 Use this path when you want MARA's application and CLI capabilities without editing the source tree.
@@ -541,14 +574,14 @@ When changing the `libs/slide_cli` public command surface:
 
 ```powershell
 cd libs\slide_cli
-uv run --no-sync --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.11 python -m pytest -q
 ```
 
 When changing the `libs/kotaemon` GitHub Actions unit-test path:
 
 ```powershell
 cd libs\kotaemon
-uv run --no-sync --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.11 python -m pytest -q
 ```
 
 ### Current Boundaries
@@ -706,6 +739,32 @@ Route-aware MARA 运行可以暴露以下 controller 元数据：
 `modelcli.yml` 用于独立管理模型别名、Provider 优先级和运行前检查，适合把应用配置与命令行模型路由解耦。
 
 ### 快速开始
+
+当前源码要求 Python 3.11 或 3.12；安装脚本默认使用 3.11。
+
+运行时已迁移到 Gradio 6、LangChain 1 和 LlamaIndex 0.14。MARA 命令和已保存的
+会话轮次结构保持不变。扩展代码启动或挂载 `app.make()` 时，需要传入
+`app.gradio_launch_kwargs`；PromptUI 返回的 `demo` 也提供该参数字典。Gradio 原生
+API 使用 `/gradio_api` 前缀和消息字典；原有 `/file=` 预览链接通过认证文件路由重定向。
+
+LangChain 响应 ID 使用其当前格式；流式响应可能以标记为 `chunk_position="last"`
+的空块结束。
+
+PDF 解析保留显示页标签，并新增从 1 开始的物理页码 `page_number`。
+`page_number`、`page`、`page_idx` 和 `page_label` 由解析器维护，不能通过
+`extra_info` 覆盖。旧 PDF 缓存与当前读取器身份或物理页元数据不兼容时会重新解析。
+
+验证证据投影按 canonical ID 排序，诊断列表按字典序排序，消除 Python 集合遍历顺序的
+影响。因此新计算的终态哈希可能变化；已有保存记录不会被重写。
+
+Unstructured 本地解析现在需要预装 spaCy `en_core_web_sm` 模型（上游固定为 3.8.0）。
+模型缺失时 MARA 会在解析前报错，不触发上游自动下载；API 解析入口不变。
+
+外部 Python 导入 `llama_index.agent.openai.OpenAIAgent` 需要改为
+`kotaemon.agents.openai.OpenAIAgent`。MARA 模型配置会解析旧路径，不改写保存的记录。
+适配范围包括普通与异步聊天、流式输出、历史和重置；高级 AgentRunner 任务／步骤方法
+仍不支持。旧 `llama_index.multi_modal_llms.openai.OpenAIMultiModal` 入口已停用，
+需要从模型配置中移除；MARA 会明确报错，不自动替换提供方或改写保存记录。
 
 #### 方式一：安装公开 CLI 包
 
@@ -1059,14 +1118,14 @@ MARA docqa doctor
 
 ```powershell
 cd libs\slide_cli
-uv run --no-sync --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.11 python -m pytest -q
 ```
 
 当改动 `libs/kotaemon` 的 GitHub Actions 单元测试路径时：
 
 ```powershell
 cd libs\kotaemon
-uv run --no-sync --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.11 python -m pytest -q
 ```
 
 ### 当前边界

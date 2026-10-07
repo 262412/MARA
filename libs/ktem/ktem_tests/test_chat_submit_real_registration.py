@@ -151,7 +151,9 @@ def _check_conversation_callbacks(blocks, page):
         fn = blocks.fns[root["id"]]
         assert getattr(fn.fn, "__wrapped__", fn.fn) == callback
         component_inputs = cast(list, inputs)
-        injected, _, _ = special_args(fn.fn, list(component_inputs), request=request)
+        injected, _, _, _component_props = special_args(
+            fn.fn, list(component_inputs), request=request
+        )
         assert injected == [*component_inputs, request]
         assert root["trigger_after"] is None
         assert root["trigger_only_on_success"] is False
@@ -226,7 +228,7 @@ def _check_file_browser_callbacks(blocks, page):
         assert "captureFiles(1)" in dep["js"]
         assert dep["cancels"] == []
         args = ["conversation", "claimed", [], [], [], "filter", {"epoch": "a"}]
-        injected, _, _ = special_args(
+        injected, _, _, _component_props = special_args(
             blocks.fns[dep["id"]].fn, args[:], request=request
         )
         assert injected == [*args, request]
@@ -246,7 +248,7 @@ def _check_file_browser_callbacks(blocks, page):
             ]
         )
         args = [[], "claimed", {"epoch": "a"}, {}]
-        injected, _, _ = special_args(
+        injected, _, _, _component_props = special_args(
             blocks.fns[dep["id"]].fn, args[:], request=request
         )
         assert injected == [*args, request]

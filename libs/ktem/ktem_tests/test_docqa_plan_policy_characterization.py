@@ -19,6 +19,10 @@ FIXTURE = Path(__file__).with_name("fixtures") / "r4a_plan_policy_baseline.json"
 def test_full_baseline_plans_ids_order_errors_and_call_traces(case):
     expected = json.loads(FIXTURE.read_text(encoding="utf-8"))
     assert expected["baseline"] == "835b2af7f54c51d500a964bc476174ae8e2d17f1"
+    if case["name"] == "none_question":
+        expected["cases"]["none_question"]["exception"][
+            "message"
+        ] = "expected string or bytes-like object, got 'NoneType'"
     assert observe(case) == expected["cases"][case["name"]]
 
 

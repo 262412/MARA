@@ -328,6 +328,7 @@ def with_verification_evidence(
         if identity not in seen:
             seen.add(identity)
             verified.append(item)
+    verified.sort(key=lambda item: identity_of(item).key)
     metadata = dict(bundle.metadata)
     metadata["verified_evidence"] = verified
     metadata["verified_claim_support_evidence"] = list(verified)

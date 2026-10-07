@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 from decouple import config
 from fsspec import AbstractFileSystem
-from llama_index.readers.file import PDFReader
+from llama_index.readers.file import PDFReader as NativePDFReader
 from PIL import Image
 
 from kotaemon.base import Document
@@ -34,14 +34,13 @@ def get_page_thumbnails(
     except ImportError:
         raise ImportError("Please install PyMuPDF: 'pip install PyMuPDF'")
 
-    doc = fitz.open(file_path)
-
     output_imgs = []
-    for page_number in pages:
-        page = doc.load_page(page_number)
-        pm = page.get_pixmap(dpi=dpi)
-        img = Image.frombytes("RGB", [pm.width, pm.height], pm.samples)
-        output_imgs.append(convert_image_to_base64(img))
+    with fitz.open(file_path) as doc:
+        for page_number in pages:
+            page = doc.load_page(page_number)
+            pm = page.get_pixmap(dpi=dpi)
+            img = Image.frombytes("RGB", [pm.width, pm.height], pm.samples)
+            output_imgs.append(convert_image_to_base64(img))
 
     return output_imgs
 
@@ -54,6 +53,55 @@ def convert_image_to_base64(img: Image.Image) -> str:
     img_base64 = f"data:image/png;base64,{img_base64}"
 
     return img_base64
+
+
+class PDFReader(NativePDFReader):
+    """Add one-based positions at the native one-record-per-physical-page boundary."""
+
+    physical_page_policy = "mara-pdf-physical-pages-v1"
+
+    @staticmethod
+    def validate_extra_info(extra_info):
+        reserved = {"page_number", "page", "page_idx", "page_label"}
+        if extra_info and reserved.intersection(extra_info):
+            raise ValueError("PDF page position and label are parser-owned metadata")
+
+    def load_data(self, file, extra_info=None, fs=None):
+        self.validate_extra_info(extra_info)
+        documents = super().load_data(file, extra_info, fs)
+        if not self.return_full_document:
+            # NativePDFReader emits each physical page, including empty pages,
+            # before any MARA filtering/splitting. Display labels are unrelated.
+            for page_number, document in enumerate(documents, 1):
+                document.metadata["page_number"] = page_number
+        return documents
+
+    def valid_cached_documents(self, payload):
+        if not all(
+            isinstance(item, dict) and isinstance(item.get("metadata"), dict)
+            for item in payload
+        ):
+            return False
+        metadata = [item["metadata"] for item in payload]
+        if self.return_full_document:
+            return len(metadata) == 1 and not any(
+                key in metadata[0]
+                for key in ("page_number", "page", "page_idx", "page_label")
+            )
+        if any(
+            type(item.get("page_number")) is not int or item["page_number"] < 1
+            for item in metadata
+        ):
+            return False
+        text_pages = [
+            item["page_number"] for item in metadata if item.get("type") != "thumbnail"
+        ]
+        thumbnails = [
+            item["page_number"] for item in metadata if item.get("type") == "thumbnail"
+        ]
+        return text_pages == list(range(1, len(text_pages) + 1)) and (
+            not thumbnails or thumbnails == text_pages
+        )
 
 
 class PDFThumbnailReader(PDFReader):
@@ -74,27 +122,10 @@ class PDFThumbnailReader(PDFReader):
         """Parse file."""
         documents = super().load_data(file, extra_info, fs)
 
-        page_numbers_str = []
-        filtered_docs = []
-        is_int_page_number: dict[str, bool] = {}
-
-        for doc in documents:
-            if "page_label" in doc.metadata:
-                page_num_str = doc.metadata["page_label"]
-                page_numbers_str.append(page_num_str)
-                try:
-                    _ = int(page_num_str)
-                    is_int_page_number[page_num_str] = True
-                    filtered_docs.append(doc)
-                except ValueError:
-                    is_int_page_number[page_num_str] = False
-                    continue
-
-        documents = filtered_docs
-        page_numbers = list(range(len(page_numbers_str)))
-
-        print("Page numbers:", len(page_numbers))
-        page_thumbnails = get_page_thumbnails(file, page_numbers)
+        # PyMuPDF accepts zero-based positions; convert exactly at this boundary.
+        page_thumbnails = get_page_thumbnails(
+            file, [doc.metadata["page_number"] - 1 for doc in documents]
+        )
 
         documents.extend(
             [
@@ -103,14 +134,12 @@ class PDFThumbnailReader(PDFReader):
                     metadata={
                         "image_origin": page_thumbnail,
                         "type": "thumbnail",
-                        "page_label": page_number,
                         **(extra_info if extra_info is not None else {}),
+                        "page_label": document.metadata["page_label"],
+                        "page_number": document.metadata["page_number"],
                     },
                 )
-                for (page_thumbnail, page_number) in zip(
-                    page_thumbnails, page_numbers_str
-                )
-                if is_int_page_number[page_number]
+                for page_thumbnail, document in zip(page_thumbnails, documents)
             ]
         )
 

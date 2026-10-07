@@ -326,7 +326,7 @@ def test_preview_callbacks_receive_exact_injected_gradio_request(owned_preview_a
     ]
 
     for callback, component_inputs in cases:
-        injected, _, _ = special_args(
+        injected, _, _, _component_props = special_args(
             callback, inputs=list(component_inputs), request=request
         )
         assert injected == [*component_inputs, request]

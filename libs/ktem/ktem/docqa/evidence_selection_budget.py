@@ -118,7 +118,7 @@ def selection_trace_consistency_errors(
             errors.append(f"bound_identity_not_retrieved:{slot.slot_id}:{evidence_id}")
         for evidence_id in evidence_ids - selected_ids:
             errors.append(f"bound_identity_not_selected:{slot.slot_id}:{evidence_id}")
-    return errors
+    return sorted(errors)
 
 
 def slot_candidate_reasons(

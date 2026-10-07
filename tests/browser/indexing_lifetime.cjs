@@ -18,7 +18,7 @@ module.exports = function ({expect, login, evidence, settled, results, output, b
     }
     const input = quick ? page.locator('#quick-file input[type=file]') : manager(page).locator('input[type=file][multiple]');
     const [uploaded] = await Promise.all([
-      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload'),
+      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/gradio_api/upload'),
       input.setInputFiles({name: filename, mimeType: 'application/zip', buffer: fs.readFileSync(zip)}),
     ]);
     expect(uploaded.ok()).toBe(true);

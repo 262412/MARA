@@ -16,7 +16,7 @@ tag_filter = "v?\\d+(\\.\\d+)*.*"
 [project]
 name = "ktem"
 dynamic = ["version"]
-requires-python = ">= 3.10"
+requires-python = ">=3.11,<3.13"
 description = "MARA application runtime and local document QA workbench UI."
 readme = "README.md"
 license = "Apache-2.0"
@@ -32,10 +32,10 @@ dependencies = [
     "SQLAlchemy>=2.0.29,<3",
     "sqlmodel>=0.0.16,<0.1",
     "tiktoken>=0.6.0,<1",
-    "gradio>=4.31.0,<5",
+    "gradio==6.29.1",
     "gradiologin",
     "jsonschema>=4.23,<5",
-    "python-multipart==0.0.12", # required for gradio, pinning to avoid yanking issues with micropip (fixed in gradio >= 5.4.0)
+    "python-multipart>=0.0.18,<1",
     "markdown>=3.6,<4",
     "nh3>=0.3.0,<0.4",
     "tzlocal>=5.0",

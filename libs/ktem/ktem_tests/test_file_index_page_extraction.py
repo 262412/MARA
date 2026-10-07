@@ -258,12 +258,12 @@ def test_gradio_injects_request_into_registered_delete_facades():
     page = cast(Any, FileIndexPage.__new__(FileIndexPage))
     request = cast(Any, SimpleNamespace(username="alice"))
 
-    one_inputs, _, _ = special_args(
+    one_inputs, _, _, _component_props = special_args(
         page.delete_event,
         inputs=["file-1", "browser-user"],
         request=request,
     )
-    all_inputs, _, _ = special_args(
+    all_inputs, _, _, _component_props = special_args(
         page.delete_all_files,
         inputs=[pd.DataFrame({"id": ["file-1"]}), "browser-user"],
         request=request,

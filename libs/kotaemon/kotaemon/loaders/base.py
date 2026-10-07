@@ -39,6 +39,12 @@ class AutoReader(BaseReader):
                 self._reader = download_loader(reader_type)()
         else:
             self._reader = reader_type()
+        from llama_index.readers.file import PDFReader as NativePDFReader
+
+        from .pdf_loader import PDFReader
+
+        if type(self._reader) is NativePDFReader:
+            self._reader = PDFReader()
         super().__init__()
 
     def load_data(self, file: Union[Path, str], **kwargs: Any) -> List[Document]:

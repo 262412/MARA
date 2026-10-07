@@ -88,7 +88,9 @@ def test_stream_adapter_captures_scope_without_changing_old_callback():
         yield (*range(13), history)
 
     adapted = with_completion_context(old)
-    inputs, _, _ = special_args(adapted, ["id", selected], request=request)
+    inputs, _, _, _component_props = special_args(
+        adapted, ["id", selected], request=request
+    )
     result = list(adapted(*inputs))[0]
     assert result[:14] == (*range(13), history)
     assert calls == [("id", request, (selected,))]
@@ -245,6 +247,8 @@ def test_gradio_injects_request_into_every_tail_callback(completion):
             10,
         ),
     ):
-        actual, _, _ = special_args(callback, list(inputs), request=request)
+        actual, _, _, _component_props = special_args(
+            callback, list(inputs), request=request
+        )
         assert actual[position] is request
         assert actual[:position] + actual[position + 1 :] == inputs

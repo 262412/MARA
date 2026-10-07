@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,11 @@ from typing import Any, cast
 
 from kotaemon.base import Document
 
+from .pdf_parse_identity import (
+    PDFParseIdentityUnavailable,
+    pdf_parse_identity,
+    physical_pdf_reader,
+)
 from .performance_cache import JsonDiskCache, content_hash, file_hash, stable_cache_key
 
 PARSE_CACHE_PAYLOAD_VERSION = 3
@@ -36,6 +42,9 @@ def load_data_with_parse_cache(
 ) -> CachedLoadResult:
     """Load parser output through a file-hash cache, then apply runtime metadata."""
 
+    pdf_reader = physical_pdf_reader(loader)
+    if pdf_reader is not None:
+        pdf_reader.validate_extra_info(extra_info)
     if not cache_dir:
         loaded_documents = loader.load_data(
             Path(file_path), extra_info=extra_info, **load_kwargs
@@ -46,14 +55,17 @@ def load_data_with_parse_cache(
             cache_hit=False,
         )
 
+    try:
+        key = build_parse_cache_key(loader, file_path, reader_policy=reader_policy)
+    except PDFParseIdentityUnavailable as exc:
+        warnings.warn(f"PDF parse cache bypass: {exc}", RuntimeWarning, stacklevel=2)
+        return load_data_with_parse_cache(
+            loader, file_path, extra_info=extra_info, **load_kwargs
+        )
     cache = JsonDiskCache(cache_dir, "parse")
-    key = build_parse_cache_key(loader, file_path, reader_policy=reader_policy)
     found, cached_payload = cache.get_with_status(key)
     if found:
-        decoded = _decode_cache_payload(
-            cached_payload,
-            require_sidecar=_requires_artifact_sidecar(loader),
-        )
+        decoded = _decode_cache_payload(cached_payload, loader=loader)
         if decoded is not None:
             payload, artifact_sidecar = decoded
             documents = documents_from_cache_payload(payload)
@@ -120,6 +132,9 @@ def build_parse_cache_key(
             }
         ),
     }
+    identity = pdf_parse_identity(loader, path)
+    if identity is not None:
+        payload["automatic_pdf_identity"] = identity
     return stable_cache_key("parse", payload)
 
 
@@ -254,8 +269,20 @@ def _cache_payload(
 def _decode_cache_payload(
     cached_payload: object,
     *,
-    require_sidecar: bool,
+    loader: Any,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None] | None:
+    require_sidecar = _requires_artifact_sidecar(loader)
+    pdf_reader = physical_pdf_reader(loader)
+    if pdf_reader is not None:
+        documents = (
+            cached_payload.get("documents")
+            if isinstance(cached_payload, dict)
+            else cached_payload
+        )
+        if not isinstance(documents, list) or not pdf_reader.valid_cached_documents(
+            documents
+        ):
+            return None
     if isinstance(cached_payload, list) and not require_sidecar:
         return cast(list[dict[str, Any]], cached_payload), None
     if not isinstance(cached_payload, dict):

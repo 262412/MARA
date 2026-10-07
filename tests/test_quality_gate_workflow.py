@@ -91,12 +91,12 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
     assert audit["strategy"]["fail-fast"] is False
     assert audit["strategy"]["max-parallel"] == 1
     assert audit["strategy"]["matrix"]["include"] == [
-        {"label": "root-py310", "project": ".", "python-version": "3.10"},
         {"label": "root-py311", "project": ".", "python-version": "3.11"},
+        {"label": "root-py312", "project": ".", "python-version": "3.12"},
         {
-            "label": "container-py310",
+            "label": "container-py311",
             "project": "docker",
-            "python-version": "3.10",
+            "python-version": "3.11",
         },
     ]
     audit_commands = _commands(audit)
@@ -108,13 +108,13 @@ def test_static_and_test_jobs_enforce_the_repository_contracts():
         for step in audit["steps"]
         if str(step.get("uses", "")).startswith("actions/setup-python@")
     )
-    assert audit_setup["with"]["python-version"] == "3.10"
+    assert audit_setup["with"]["python-version"] == "3.11"
     collection_commands = _commands(jobs["collection"])
     assert "check_pytest_collection.py" in collection_commands
     assert "--minimum 1260" in collection_commands
     assert jobs["kotaemon"]["strategy"]["matrix"]["python-version"] == [
-        "3.10",
         "3.11",
+        "3.12",
     ]
     assert "libs/kotaemon" in _commands(jobs["kotaemon"])
     assert "libs/ktem/ktem_tests" in _commands(jobs["ktem"])

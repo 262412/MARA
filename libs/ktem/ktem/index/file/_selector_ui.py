@@ -65,7 +65,11 @@ class FileSelector(BasePage):
         default_mode, default_selector, user_id = self.default()
         self.mode = gr.Radio(
             value=default_mode,
-            choices=[("Search All", "all"), ("Search In File(s)", "select")],
+            choices=[
+                ("No files", "disabled"),
+                ("Search All", "all"),
+                ("Search In File(s)", "select"),
+            ],
             container=False,
         )
         self.selector = gr.Dropdown(
@@ -220,7 +224,7 @@ class FileSelector(BasePage):
         """
         from gradio.context import LocalContext
 
-        config = LocalContext.blocks_config.get()
+        config = LocalContext.blocks_config.get(None)
         if config is None:
             raise RuntimeError("File choices require an active Gradio session")
         with self._choices_lock:

@@ -6,10 +6,12 @@ import secrets
 from collections.abc import Mapping
 from pathlib import Path
 
+import gradio as gr
 import gradiologin
 from decouple import config
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
+from gradiologin.routes import add_routes
 from ktem.auth.policy import AuthConfigurationError
 from ktem.index.file.download_http import download_app_kwargs
 from ktem.launcher import (
@@ -19,6 +21,7 @@ from ktem.launcher import (
 )
 from ktem.main import App
 from ktem.preview.allowed_paths import build_gradio_allowed_paths
+from starlette.middleware.sessions import SessionMiddleware
 from theflow.settings import settings as flowsettings
 
 _GENERATED_SESSION_SECRET = secrets.token_urlsafe(48)
@@ -51,6 +54,22 @@ def sso_auth_dependency(request: Request) -> str | None:
     subject = str(claim.get("sub") or "").strip()
     email = str(claim.get("email") or "").strip()
     return subject if subject and email else None
+
+
+def _configure_sso_routes(app: FastAPI, secret_key: str) -> None:
+    add_routes(app, "/app", no_login_page=False)
+
+    @app.middleware("http")
+    async def require_login(request: Request, call_next):
+        # Gradio owns API authentication; browser pages redirect to the login UI.
+        path = request.url.path
+        if path.startswith(("/login", "/auth", "/app/gradio_api/")):
+            return await call_next(request)
+        if sso_auth_dependency(request) is None:
+            return RedirectResponse(url="/login")
+        return await call_next(request)
+
+    app.add_middleware(SessionMiddleware, secret_key=secret_key)
 
 
 def _register_provider() -> None:
@@ -115,11 +134,12 @@ def create_sso_app(
     async def favicon():
         return FileResponse(mara_app._favicon)
 
-    return gradiologin.mount_gradio_app(
+    _configure_sso_routes(app, _session_secret())
+    return gr.mount_gradio_app(
         app,
         blocks,
         "/app",
-        secret_key=_session_secret(),
+        **mara_app.gradio_launch_kwargs,
         auth_dependency=sso_auth_dependency,
         app_kwargs=download_app_kwargs(mara_app),
         allowed_paths=build_gradio_allowed_paths(

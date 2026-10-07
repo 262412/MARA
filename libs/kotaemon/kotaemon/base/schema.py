@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar
+from uuid import uuid4
 
 from langchain_core.messages import AIMessage as LCAIMessage
 from langchain_core.messages import HumanMessage as LCHumanMessage
 from langchain_core.messages import SystemMessage as LCSystemMessage
+from langchain_core.messages.ai import UsageMetadata
+from langchain_core.messages.tool import InvalidToolCall, ToolCall
 from llama_index.core.bridge.pydantic import Field
 from llama_index.core.schema import Document as BaseDocument
+from llama_index.core.schema import MediaResource, NodeRelationship
+from pydantic import ConfigDict, model_serializer, model_validator
 
 if TYPE_CHECKING:
     from haystack.schema import Document as HaystackDocument
@@ -39,6 +44,10 @@ class Document(BaseDocument):
     content: Any = None
     source: Optional[str] = None
     channel: Optional[Literal["chat", "info", "index", "debug", "plot"]] = None
+    id_: str = Field(default_factory=lambda: str(uuid4()), alias="doc_id")
+    mimetype: str = "text/plain"
+    start_char_idx: int | None = None
+    end_char_idx: int | None = None
 
     def __init__(self, content: Optional[Any] = None, *args, **kwargs):
         if content is None:
@@ -59,7 +68,73 @@ class Document(BaseDocument):
                 kwargs["text"] = str(content)
             else:
                 kwargs["text"] = ""
+        if kwargs.get("text") == "":
+            kwargs["text_resource"] = MediaResource(text=kwargs.pop("text"))
         super().__init__(*args, **kwargs)
+
+    @property
+    def text(self) -> str:
+        return self.get_content()
+
+    @text.setter
+    def text(self, value: str) -> None:
+        self.text_resource = MediaResource(text=value)
+
+    @property
+    def metadata_seperator(self) -> str:
+        return self.metadata_separator
+
+    @metadata_seperator.setter
+    def metadata_seperator(self, value: str) -> None:
+        self.metadata_separator = value
+
+    @model_serializer(mode="wrap")
+    def custom_model_dump(self, handler, info):
+        """Keep MARA's existing text-document wire format, including nested messages."""
+        data = handler(self)
+        for name in (
+            "text_resource",
+            "image_resource",
+            "audio_resource",
+            "video_resource",
+        ):
+            data.pop(name, None)
+        for internal, public in (
+            ("metadata_separator", "metadata_seperator"),
+            ("is_example", "example"),
+        ):
+            if internal not in type(self).model_fields:
+                continue
+            if internal in data:
+                data[public] = data.pop(internal)
+            if public in (info.exclude or {}):
+                data.pop(public, None)
+            elif info.include is not None and public in info.include:
+                value = getattr(self, internal)
+                field = type(self).model_fields[internal]
+                if not (
+                    (info.exclude_defaults and value == field.default)
+                    or (info.exclude_unset and internal not in self.model_fields_set)
+                ):
+                    data[public] = value
+        if "relationships" in data:
+            data["relationships"] = {
+                NodeRelationship[key].value
+                if key in NodeRelationship.__members__
+                else key: value
+                for key, value in data["relationships"].items()
+            }
+        if (
+            (info.include is None or "text" in info.include)
+            and "text" not in (info.exclude or {})
+            and not (info.exclude_defaults and self.text == "")
+            and not (
+                info.exclude_unset and "text_resource" not in self.model_fields_set
+            )
+        ):
+            data["text"] = self.text
+        data["class_name"] = self.class_name()
+        return data
 
     def __bool__(self):
         return bool(self.content)
@@ -79,6 +154,14 @@ class Document(BaseDocument):
         metadata = self.metadata or {}
         text = self.text
         return HaystackDocument(content=text, meta=metadata)
+
+    def to_langchain_format(self):
+        """Convert directly without importing LlamaIndex's legacy provider bridge."""
+        from langchain_core.documents import Document as LangchainDocument
+
+        return LangchainDocument(
+            page_content=self.text, metadata=self.metadata or {}, id=self.id_
+        )
 
     def __str__(self):
         return str(self.content)
@@ -103,17 +186,90 @@ class BaseMessage(Document):
         raise NotImplementedError
 
 
-class SystemMessage(BaseMessage, LCSystemMessage):
+class _RoleMessage(BaseMessage):
+    """Preserve MARA's document record when messages cross provider boundaries."""
+
+    model_config = ConfigDict(extra="allow")
+    additional_kwargs: dict = Field(default_factory=dict)
+    response_metadata: dict = Field(default_factory=dict)
+    name: str | None = None
+    id: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def read_nested_legacy_record(cls, values):
+        if isinstance(values, dict):
+            if "class_name" in values and values["class_name"] != "Document":
+                raise ValueError("Invalid nested message class_name; expected Document")
+            return {key: value for key, value in values.items() if key != "class_name"}
+        return values
+
+    def __init__(self, content=None, *args, **kwargs):
+        if (
+            content is None
+            and kwargs.get("text") is None
+            and kwargs.get("embedding") is None
+        ):
+            raise TypeError("content or text is required")
+        super().__init__(content, *args, **kwargs)
+
+
+class SystemMessage(_RoleMessage, LCSystemMessage):
+    type: Literal["system"] = "system"
+
     def to_openai_format(self) -> "ChatCompletionMessageParam":
         return {"role": "system", "content": self.content}
 
 
-class AIMessage(BaseMessage, LCAIMessage):
+class AIMessage(_RoleMessage, LCAIMessage):
+    type: Literal["ai"] = "ai"
+    is_example: bool = Field(default=False, alias="example")
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+    invalid_tool_calls: list[InvalidToolCall] = Field(default_factory=list)
+    usage_metadata: UsageMetadata | None = None
+
+    # Legacy messages expose a bool under Document's example classmethod name.
+    @property  # type: ignore[override]
+    def example(self) -> bool:
+        return self.is_example
+
+    @example.setter
+    def example(self, value: bool) -> None:
+        self.is_example = value
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_tool_data(cls, values):
+        if not isinstance(values, dict):
+            raise ValueError("AI message fields must be a mapping")
+        fields = (
+            "additional_kwargs",
+            "tool_calls",
+            "invalid_tool_calls",
+            "usage_metadata",
+        )
+        native = LCAIMessage(
+            content="", **{key: values[key] for key in fields if key in values}
+        )
+        return {**values, **{key: native.model_dump()[key] for key in fields}}
+
     def to_openai_format(self) -> "ChatCompletionMessageParam":
         return {"role": "assistant", "content": self.content}
 
 
-class HumanMessage(BaseMessage, LCHumanMessage):
+class HumanMessage(_RoleMessage, LCHumanMessage):
+    type: Literal["human"] = "human"
+    is_example: bool = Field(default=False, alias="example")
+
+    # Preserve the same legacy public name without widening the field type.
+    @property  # type: ignore[override]
+    def example(self) -> bool:
+        return self.is_example
+
+    @example.setter
+    def example(self, value: bool) -> None:
+        self.is_example = value
+
     def to_openai_format(self) -> "ChatCompletionMessageParam":
         return {"role": "user", "content": self.content}
 
@@ -144,7 +300,7 @@ class LLMInterface(AIMessage):
 
 
 class StructuredOutputLLMInterface(LLMInterface):
-    parsed: Any
+    parsed: Any = None
     refusal: str = ""
 
 

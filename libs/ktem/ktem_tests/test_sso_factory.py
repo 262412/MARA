@@ -37,6 +37,7 @@ def _launch_config(host="0.0.0.0"):
 def _fake_mara_app(tmp_path):
     class _FakeMaraApp:
         _favicon = str(tmp_path / "favicon.svg")
+        gradio_launch_kwargs = {"css": ".mara { color: red; }"}
 
         def make(self):
             with gr.Blocks() as blocks:
@@ -49,6 +50,7 @@ def _fake_mara_app(tmp_path):
 def _callback_mara_app(tmp_path, callback_calls):
     class _CallbackMaraApp:
         _favicon = str(tmp_path / "favicon.svg")
+        gradio_launch_kwargs = {}
 
         def make(self):
             def _predict(value):
@@ -74,7 +76,7 @@ def _signed_session_cookie(secret_key, claim):
     return TimestampSigner(secret_key).sign(payload).decode("utf-8")
 
 
-def test_packaged_sso_factory_uses_gradiologin_mount(monkeypatch, tmp_path):
+def test_packaged_sso_factory_mounts_gradio_with_provider_routes(monkeypatch, tmp_path):
     sso = _sso_module()
     registered = []
     mounted: dict[str, Any] = {}
@@ -100,7 +102,7 @@ def test_packaged_sso_factory_uses_gradiologin_mount(monkeypatch, tmp_path):
         )
         return app
 
-    monkeypatch.setattr(gradiologin, "mount_gradio_app", _mount)
+    monkeypatch.setattr(gr, "mount_gradio_app", _mount)
     monkeypatch.setenv("AUTHENTICATION_METHOD", "GOOGLE")
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id")
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "client-secret")
@@ -110,6 +112,7 @@ def test_packaged_sso_factory_uses_gradiologin_mount(monkeypatch, tmp_path):
     assert app is mounted["app"]
     assert mounted["blocks"] is not None
     assert mounted["path"] == "/app"
+    assert mounted["kwargs"]["css"] == mara_app.gradio_launch_kwargs["css"]
     allowed_paths = mounted["kwargs"]["allowed_paths"]
     assert str(ICONS_DIR.resolve()) in allowed_paths
     assert str(ASSETS_DIR.resolve()) not in allowed_paths
@@ -120,7 +123,8 @@ def test_packaged_sso_factory_uses_gradiologin_mount(monkeypatch, tmp_path):
         str((Path(sso.ensure_gradio_temp_dir()) / "pdf_previews").resolve())
         in allowed_paths
     )
-    assert mounted["kwargs"]["secret_key"] != "some-secret-string"
+    session_middleware = app.user_middleware[0]
+    assert session_middleware.kwargs["secret_key"] != "some-secret-string"
     assert mounted["kwargs"]["auth_dependency"] is sso.sso_auth_dependency
     assert registered[0]["name"] == "google"
     assert app.state.mara_app is mara_app
@@ -178,7 +182,7 @@ def test_sso_predict_route_rejects_unauthenticated_callback(monkeypatch, tmp_pat
 
     with TestClient(app) as client:
         response = client.post(
-            "/app/api/predict",
+            "/app/gradio_api/api/predict",
             json={"data": ["blocked"], "fn_index": 0, "session_hash": "test"},
         )
 
@@ -206,7 +210,7 @@ def test_sso_predict_route_accepts_signed_provider_session(monkeypatch, tmp_path
             ),
         )
         response = client.post(
-            "/app/api/predict",
+            "/app/gradio_api/api/predict",
             json={"data": ["allowed"], "fn_index": 0, "session_hash": "test"},
         )
 

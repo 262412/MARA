@@ -57,7 +57,7 @@ module.exports = function ({expect, login, evidence, send, tailFinished, settled
 
   async function upload(page, queue, question) {
     await page.getByRole('radio', {name: 'Document', exact: true}).check();
-    const response = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload');
+    const response = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/gradio_api/upload');
     await page.locator('#chat-input input[type=file]').setInputFiles({
       name: 'control-owned.txt', mimeType: 'text/plain',
       buffer: Buffer.from('This owned observatory has seven telescopes.'),

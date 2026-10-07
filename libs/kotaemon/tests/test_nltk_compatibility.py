@@ -63,13 +63,35 @@ def test_word_tokenization_keeps_contractions_and_punctuation(offline_nltk):
     assert nltk.word_tokenize("Alpha isn't beta.") == expected
 
 
-def test_unstructured_uses_the_same_fixed_local_resources(offline_nltk):
-    from unstructured.nlp.tokenize import sent_tokenize, word_tokenize
+def test_unstructured_spacy_tokenizer_uses_local_fixture(offline_nltk, monkeypatch):
+    import spacy
+    from unstructured.nlp import tokenize
 
-    sent_tokenize.cache_clear()
-    word_tokenize.cache_clear()
-    assert sent_tokenize("Alpha beta. Gamma delta!") == ["Alpha beta.", "Gamma delta!"]
-    assert word_tokenize("Alpha isn't beta.") == ["Alpha", "is", "n't", "beta", "."]
+    pipeline = spacy.blank("en")
+    pipeline.add_pipe("sentencizer")
+    monkeypatch.setattr(tokenize, "_get_nlp", lambda: pipeline)
+    caches = (
+        tokenize._tokenize_for_cache,
+        tokenize.word_tokenize,
+        tokenize._process_cached,
+    )
+    for cache in caches:
+        cache.cache_clear()
+    try:
+        assert tokenize.sent_tokenize("Alpha beta. Gamma delta!") == [
+            "Alpha beta.",
+            "Gamma delta!",
+        ]
+        assert tokenize.word_tokenize("Alpha isn't beta.") == [
+            "Alpha",
+            "is",
+            "n't",
+            "beta",
+            ".",
+        ]
+    finally:
+        for cache in caches:
+            cache.cache_clear()
 
 
 def test_sentence_window_preserves_indexing_metadata(offline_nltk):

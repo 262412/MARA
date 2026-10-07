@@ -18,7 +18,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
     const oldIds = (await evidence()).files.filter(file => names.includes(file.name)).map(file => file.id);
     await manager(page).getByRole('tab', {name: 'Upload Files', exact: true}).click();
     const [uploaded] = await Promise.all([
-      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload'),
+      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/gradio_api/upload'),
       manager(page).locator('input[type=file][multiple]').setInputFiles(names.map(name => ({
         name, mimeType: 'text/plain', buffer: Buffer.from('Owned management source: seven telescopes. ' + (reindex ? 'Reindexed revision two.' : name)),
       }))),

@@ -68,7 +68,7 @@ def test_local_verification_docs_do_not_resync_the_canonical_environment():
         REPO_ROOT / "docs/development/codebase-hygiene-contract.md"
     ).read_text(encoding="utf-8")
 
-    assert "uv run --python 3.10" not in readme
-    assert "uv run --python 3.10" not in hygiene_contract
-    assert "uv run --no-sync --python 3.10" in readme
-    assert "uv run --no-sync --python 3.10" in hygiene_contract
+    assert "uv run --python 3.11" not in readme
+    assert "uv run --python 3.11" not in hygiene_contract
+    assert "uv run --no-sync --python 3.11" in readme
+    assert "uv run --no-sync --python 3.11" in hygiene_contract

@@ -61,7 +61,7 @@ def write_pdf(path: Path, labels=None, *, encrypted=False):
         ([{"startpage": 0, "style": "D", "firstpagenum": 7}], ["7", "8", "9"]),
         ([{"startpage": 0, "style": "r", "firstpagenum": 1}], ["i", "ii", "iii"]),
         ([{"startpage": 0, "style": "A", "firstpagenum": 1}], ["A", "B", "C"]),
-        ([{"startpage": 0, "style": "A", "firstpagenum": 27}], ["AA", "AB", "AC"]),
+        ([{"startpage": 0, "style": "A", "firstpagenum": 27}], ["AA", "BB", "CC"]),
         (
             [{"startpage": 0, "style": "D", "prefix": "App-", "firstpagenum": 1}],
             ["App-1", "App-2", "App-3"],
@@ -72,7 +72,7 @@ def write_pdf(path: Path, labels=None, *, encrypted=False):
         "offset-digits",
         "roman",
         "alphabetical",
-        "past-z-baseline",
+        "past-z-official619",
         "prefix",
     ],
 )
@@ -86,8 +86,14 @@ def test_real_pdf_page_order_text_labels_and_metadata(tmp_path, labels, expected
     assert all(isinstance(document, Document) for document in documents)
     assert len({document.doc_id for document in documents}) == 3
     assert all(
-        document.metadata == {"file_name": "report.pdf", "page_label": label, **extra}
-        for document, label in zip(documents, expected)
+        document.metadata
+        == {
+            "file_name": "report.pdf",
+            "page_label": label,
+            "page_number": position,
+            **extra,
+        }
+        for position, (document, label) in enumerate(zip(documents, expected), 1)
     )
     assert PdfReader(source).metadata.title == "Owned PDF contract"
     full = PDFReader(return_full_document=True).load_data(source, extra_info=extra)
@@ -97,23 +103,20 @@ def test_real_pdf_page_order_text_labels_and_metadata(tmp_path, labels, expected
 
 
 @pytest.mark.parametrize("style", ["D", "r", "A"])
-def test_thumbnail_reader_preserves_current_numeric_label_filter(tmp_path, style):
-    """Non-numeric labels currently lose both text and thumbnails; expose that debt."""
+def test_thumbnail_reader_preserves_display_labels_and_physical_pages(tmp_path, style):
+    """The closeout fixes the frozen 4E filter that lost non-numeric pages."""
     source = write_pdf(
         tmp_path / "labels.pdf",
         [{"startpage": 0, "style": style, "firstpagenum": 1}],
     )
     documents = PDFThumbnailReader().load_data(source, extra_info={"file_id": "f"})
-    if style != "D":
-        assert documents == []
-        return
     text, thumbnails = documents[:3], documents[3:]
     assert [document.text.strip() for document in text] == PAGE_TEXT
-    assert [document.metadata["page_label"] for document in thumbnails] == [
-        "1",
-        "2",
-        "3",
-    ]
+    assert [document.metadata["page_label"] for document in thumbnails] == PdfReader(
+        source
+    ).page_labels
+    assert [document.metadata["page_number"] for document in text] == [1, 2, 3]
+    assert [document.metadata["page_number"] for document in thumbnails] == [1, 2, 3]
     for thumbnail, expected_color in zip(thumbnails, PAGE_COLORS):
         assert thumbnail.metadata["type"] == "thumbnail"
         assert thumbnail.metadata["file_id"] == "f"
@@ -298,10 +301,18 @@ def test_real_pdf_configured_chroma_lance_stores_survive_reopen(tmp_path):
         "kotaemon.storages.QdrantVectorStore",
         "kotaemon.embeddings.AzureOpenAIEmbeddings",
         "kotaemon.llms.AzureChatOpenAI",
-        "llama_index.agent.openai.OpenAIAgent",
-        "llama_index.multi_modal_llms.openai.OpenAIMultiModal",
+        "kotaemon.agents.openai.OpenAIAgent",
     ],
 )
-def test_existing_configurable_classpaths_remain_importable(classpath):
+def test_supported_configurable_classpaths_remain_importable(classpath):
     module, _, name = classpath.rpartition(".")
     assert callable(getattr(importlib.import_module(module), name))
+
+
+@pytest.mark.parametrize(
+    "module",
+    ["llama_index.agent.openai", "llama_index.multi_modal_llms.openai"],
+)
+def test_obsolete_third_party_import_paths_are_no_longer_shipped(module):
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(module)

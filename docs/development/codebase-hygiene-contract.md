@@ -193,7 +193,7 @@ allowing incremental work to continue.
 To intentionally refresh the baseline after an accepted change:
 
 ```powershell
-uv run --no-sync --python 3.10 python scripts/check_codebase_hygiene.py --update-baseline
+uv run --no-sync --python 3.11 python scripts/check_codebase_hygiene.py --update-baseline
 ```
 
 Do not refresh the baseline just to make the gate pass.
@@ -280,19 +280,19 @@ test ! -e .theflow
 Always before changing or committing Python files:
 
 ```powershell
-uv run --no-sync --python 3.10 python scripts/check_codebase_hygiene.py <changed-files>
+uv run --no-sync --python 3.11 python scripts/check_codebase_hygiene.py <changed-files>
 ```
 
 Always for changed Python files:
 
 ```powershell
-uv run --no-sync --python 3.10 python -m pre_commit run --files <changed-files>
+uv run --no-sync --python 3.11 python -m pre_commit run --files <changed-files>
 ```
 
 For the public MARA CLI entrypoints:
 
 ```powershell
-uv run --no-sync --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.11 python -m pytest -q
 ```
 
 Run from:
@@ -304,7 +304,7 @@ D:\PythonProject\MARA\libs\slide_cli
 For the GitHub Actions unit-test path:
 
 ```powershell
-uv run --no-sync --python 3.10 python -m pytest -q
+uv run --no-sync --python 3.11 python -m pytest -q
 ```
 
 Run from:
@@ -316,26 +316,26 @@ D:\PythonProject\MARA\libs\kotaemon
 For knowledge graph changes:
 
 ```powershell
-uv run --no-sync --python 3.10 python -m pytest libs/ktem/ktem_tests/test_knowledge_graph_service.py libs/ktem/ktem_tests/test_chat_knowledge_graph_bindings.py -q
+uv run --no-sync --python 3.11 python -m pytest libs/ktem/ktem_tests/test_knowledge_graph_service.py libs/ktem/ktem_tests/test_chat_knowledge_graph_bindings.py -q
 ```
 
 For file index UI/event changes:
 
 ```powershell
-uv run --no-sync --python 3.10 python -m pytest libs/ktem/ktem_tests/test_file_index_page_extraction.py -q
+uv run --no-sync --python 3.11 python -m pytest libs/ktem/ktem_tests/test_file_index_page_extraction.py -q
 ```
 
 For MCP / agent tool changes:
 
 ```powershell
-uv run --no-sync --python 3.10 python -m pytest libs/kotaemon/tests/test_mcp_tools.py libs/kotaemon/tests/test_mcp_manager.py -q
+uv run --no-sync --python 3.11 python -m pytest libs/kotaemon/tests/test_mcp_tools.py libs/kotaemon/tests/test_mcp_manager.py -q
 ```
 
 Before any QASPER Provider probe, natural probe, or 6x3 submission, the
 QASPER pre-provider gate is mandatory:
 
 ```powershell
-uv run --no-sync --python 3.10 python scripts/run_qasper_local_gate.py
+uv run --no-sync --python 3.11 python scripts/run_qasper_local_gate.py
 ```
 
 From a linked worktree, run the same gate through the canonical-environment

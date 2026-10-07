@@ -346,12 +346,12 @@ def check_dependency_audit(root: Path) -> list[ContractIssue]:
     audit = workflow.get("jobs", {}).get("dependency-audit", {})
     matrix = audit.get("strategy", {}).get("matrix", {}).get("include")
     expected = [
-        {"label": "root-py310", "project": ".", "python-version": "3.10"},
         {"label": "root-py311", "project": ".", "python-version": "3.11"},
+        {"label": "root-py312", "project": ".", "python-version": "3.12"},
         {
-            "label": "container-py310",
+            "label": "container-py311",
             "project": "docker",
-            "python-version": "3.10",
+            "python-version": "3.11",
         },
     ]
     issues: list[ContractIssue] = []
@@ -360,7 +360,7 @@ def check_dependency_audit(root: Path) -> list[ContractIssue]:
             ContractIssue(
                 path,
                 "dependency-audit-matrix",
-                "root 3.10/3.11 and container 3.10 must be audited",
+                "root 3.11/3.12 and container 3.11 must be audited",
             )
         )
     commands = "\n".join(str(step.get("run", "")) for step in audit.get("steps", []))
@@ -374,7 +374,7 @@ def check_dependency_audit(root: Path) -> list[ContractIssue]:
             issues.append(ContractIssue(path, "dependency-audit", f"missing {token}"))
     setup_python = any(
         str(step.get("uses", "")).startswith("actions/setup-python@")
-        and step.get("with", {}).get("python-version") == "3.10"
+        and step.get("with", {}).get("python-version") == "3.11"
         for step in audit.get("steps", [])
     )
     if not setup_python:

@@ -10,7 +10,7 @@ module.exports = function ({expect, login, evidence, settled, send, tailFinished
     }
     const input = quick ? page.locator('#quick-file input[type=file]') : manager(page).locator('input[type=file][multiple]');
     const [response] = await Promise.all([
-      page.waitForResponse(item => item.request().method() === 'POST' && new URL(item.url()).pathname === '/upload'),
+      page.waitForResponse(item => item.request().method() === 'POST' && new URL(item.url()).pathname === '/gradio_api/upload'),
       input.setInputFiles({name, mimeType: 'text/plain', buffer: Buffer.from(body)}),
     ]);
     expect(response.ok()).toBe(true);

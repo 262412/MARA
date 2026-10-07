@@ -19,7 +19,7 @@ module.exports = function ({expect, login, evidence, settled, roles, results}) {
       await owner.page.locator('#studio-manual-note-text textarea').fill('Only its owner may convert this saved note.');
       await owner.page.locator('#studio-save-manual-note').click();
       await expect.poll(async () => (await evidence()).conversations.find(item => item.name === 'Owned public control').data_source.mara_notebook?.notes.length).toBe(1);
-      const uploaded = owner.page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload');
+      const uploaded = owner.page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/gradio_api/upload');
       await owner.page.locator('#quick-file input[type=file]').setInputFiles({name: 'r3d-public-artifact.txt', mimeType: 'text/plain', buffer: Buffer.from('Owned public artifact source: seven telescopes observe stars.')});
       expect((await uploaded).ok()).toBe(true);
       await expect(owner.page.locator('#quick-file-upload-status')).toContainText('Indexing completed.', {timeout: 30000});

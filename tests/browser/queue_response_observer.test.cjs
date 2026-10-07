@@ -11,7 +11,7 @@ assert.ok(start > 0 && end > start);
 const registration = source.slice(start, end);
 const missing = 'response.json: Protocol error (Network.getResponseBody): No resource with given identifier found';
 
-function fixture({closed = false, navigation = 0, index = 0, error, pathname = '/queue/join', ok = true} = {}) {
+function fixture({closed = false, navigation = 0, index = 0, error, pathname = '/gradio_api/queue/join', ok = true} = {}) {
   const request = {};
   const queue = [];
   queue.requestOrder = new WeakMap();
@@ -58,7 +58,7 @@ test('only a known response from a replaced document may lose its CDP body', asy
   assert.equal(observation.pageClosed, false);
   assert.equal(observation.requestIndex, 0);
   assert.equal(observation.navigationStart, 1);
-  assert.equal(observation.url, 'http://127.0.0.1:8768/queue/join');
+  assert.equal(observation.url, 'http://127.0.0.1:8768/gradio_api/queue/join');
   assert.equal(observation.sessionHash, 'owned-session');
   assert.equal(typeof observation.at, 'string');
   assert.deepEqual(f.queue.requestIds, []);

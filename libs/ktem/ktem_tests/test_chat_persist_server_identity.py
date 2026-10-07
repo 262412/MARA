@@ -157,7 +157,12 @@ def test_gradio_injects_request_without_changing_component_input_order():
     ]
     original_inputs = list(component_inputs)
 
-    resolved_inputs, _progress_index, _event_data_index = special_args(
+    (
+        resolved_inputs,
+        _progress_index,
+        _event_data_index,
+        _component_props,
+    ) = special_args(
         page.persist_data_source,
         inputs=component_inputs,
         request=request,
@@ -175,7 +180,12 @@ def test_gradio_injects_chat_runtime_request_before_dynamic_index_inputs():
     selected_input = ["select", ["file-1"], "claimed-user"]
     component_inputs = [*fixed_inputs, selected_input]
 
-    resolved_inputs, _progress_index, _event_data_index = special_args(
+    (
+        resolved_inputs,
+        _progress_index,
+        _event_data_index,
+        _component_props,
+    ) = special_args(
         page.chat_fn,
         inputs=list(component_inputs),
         request=request,
@@ -253,7 +263,12 @@ def test_gradio_injects_rerun_request_without_component_input_changes():
     component_inputs = [*fixed_inputs, selected_input]
     original_inputs = list(component_inputs)
 
-    resolved_inputs, _progress_index, _event_data_index = special_args(
+    (
+        resolved_inputs,
+        _progress_index,
+        _event_data_index,
+        _component_props,
+    ) = special_args(
         page.rerun_page_answer,
         inputs=component_inputs,
         request=request,

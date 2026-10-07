@@ -117,7 +117,7 @@ def test_openai_embeddings_batch_raw(openai_embedding_call):
     side_effect=lambda *args, **kwargs: None,
 )
 @patch(
-    "langchain.embeddings.huggingface.HuggingFaceBgeEmbeddings.embed_documents",
+    "langchain_community.embeddings.huggingface.HuggingFaceBgeEmbeddings.embed_documents",
     side_effect=lambda *args, **kwargs: [[1.0, 2.1, 3.2]],
 )
 def test_lchuggingface_embeddings(

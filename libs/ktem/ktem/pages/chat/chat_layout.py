@@ -50,13 +50,13 @@ def render_workbench_states(page: Any) -> None:
     page._graph_source_ids = gr.State([])
     page.first_selector_choices = gr.State(None)
     page._selected_page_text = gr.Textbox(
-        value="", visible=False, elem_id="selected-page-text"
+        value="", visible="hidden", elem_id="selected-page-text"
     )
     page._selected_graph_context = gr.Textbox(
-        value="", visible=False, elem_id="selected-graph-context"
+        value="", visible="hidden", elem_id="selected-graph-context"
     )
     page._chat_file_click = gr.Textbox(
-        value="", visible=False, elem_id="chat-file-click"
+        value="", visible="hidden", elem_id="chat-file-click"
     )
 
 

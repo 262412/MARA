@@ -42,9 +42,15 @@ common = dict(
     layout_gap="*spacing_xl",
     section_header_text_size="*text_lg",
     # buttons
-    button_shadow="none",
-    button_shadow_active="*shadow_drop",
-    button_shadow_hover="none",
+    button_primary_shadow="none",
+    button_primary_shadow_active="*shadow_drop",
+    button_primary_shadow_hover="none",
+    button_secondary_shadow="none",
+    button_secondary_shadow_active="*shadow_drop",
+    button_secondary_shadow_hover="none",
+    button_cancel_shadow="none",
+    button_cancel_shadow_active="*shadow_drop",
+    button_cancel_shadow_hover="none",
     # button_large_radius="*radius_xxl",
     # button_small_radius="*radius_xxl",
     # -----

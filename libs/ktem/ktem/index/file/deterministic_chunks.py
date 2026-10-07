@@ -43,16 +43,22 @@ def prepare_chunks_for_indexing(
     if deterministic_chunk_ids:
         chunks = stabilize_chunk_identities(chunks, source_identity=file_name)
     thumbnail_objects = {id(thumbnail) for thumbnail in thumbnail_docs}
-    page_thumbnails = {
-        chunk.metadata["page_label"]: chunk.doc_id
-        for chunk in chunks
-        if id(chunk) in thumbnail_objects
-    }
+    page_thumbnails = defaultdict(list)
+    for chunk in chunks:
+        if id(chunk) in thumbnail_objects:
+            page_thumbnails[_thumbnail_page_key(chunk)].append(chunk.doc_id)
     for chunk in text_chunks:
-        page_label = chunk.metadata.get("page_label")
-        if page_label in page_thumbnails:
-            chunk.metadata["thumbnail_doc_id"] = page_thumbnails[page_label]
+        matches = page_thumbnails.get(_thumbnail_page_key(chunk), [])
+        if len(matches) == 1:
+            chunk.metadata["thumbnail_doc_id"] = matches[0]
     return chunks
+
+
+def _thumbnail_page_key(chunk: Document) -> tuple[str, object]:
+    metadata = chunk.metadata
+    if metadata.get("page_number") is not None:
+        return "physical", metadata["page_number"]
+    return "label", metadata.get("page_label")
 
 
 def _stable_chunk_key(chunk: Document, source_identity: str) -> tuple[str, ...]:

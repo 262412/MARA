@@ -148,6 +148,7 @@ def launch_app(
     app = App()
     demo = app.make()
     demo.queue().launch(
+        **app.gradio_launch_kwargs,
         favicon_path=app._favicon,
         inbrowser=inbrowser,
         allowed_paths=build_gradio_allowed_paths(

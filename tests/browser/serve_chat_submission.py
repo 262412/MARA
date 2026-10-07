@@ -141,7 +141,7 @@ def _launch(app, blocks, root, output, observer):
 
     model_boundary = import_module("libs.ktem.ktem_tests.chat_submission_model_fixture")
 
-    assert gradio.__version__ == "4.39.0"
+    assert gradio.__version__ == "6.29.1"
     seed_owned_document(app, root)
     if os.environ.get("MARA_BROWSER_PUBLIC_FIXTURE") == "1":
         _seed_public_conversations()
@@ -179,6 +179,7 @@ def _launch(app, blocks, root, output, observer):
     from ktem.index.file.download_http import download_app_kwargs
 
     blocks.queue().launch(
+        **app.gradio_launch_kwargs,
         server_name="127.0.0.1",
         server_port=8768,
         auth=authenticate_password,

@@ -67,7 +67,7 @@ def test_control_is_loaded_from_this_checkout():
     assert Path(module.__file__).resolve() == (
         Path(__file__).resolve().parents[1] / "ktem/pages/chat/control.py"
     )
-    assert gr.__version__ == "4.39.0"
+    assert gr.__version__ == "6.29.1"
 
 
 def test_new_orders_identity_create_and_refresh_once(monkeypatch):

@@ -43,10 +43,11 @@ def test_duplicate_labels_do_not_replace_physical_order_or_thumbnail_positions(
             assert image.getpixel((5, 5)) == tuple(
                 int(value * 255) for value in PAGE_COLORS[index]
             )
-    # Current reader output has no physical position metadata. A label-only
-    # historical record remains ambiguous; this is not a navigation PASS.
-    assert citation_target_from_document(documents[0]).page_number is None
-    assert citation_target_from_document(documents[2]).page_number is None
+    assert citation_target_from_document(documents[0]).page_number == 1
+    assert citation_target_from_document(documents[2]).page_number == 3
+    # Historical label-only records still cannot establish a physical position.
+    old = Document(text="saved text", metadata={"page_label": "7"})
+    assert citation_target_from_document(old).page_number is None
 
 
 def test_persisted_known_one_based_position_drives_preview_without_rewriting_label(

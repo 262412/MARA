@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import os
 import shutil
 import stat
@@ -289,6 +290,8 @@ class ActiveTestRuntime:
             root = self.require_owned_root()
             _dispose_session_database(root)
             _close_session_caches(root)
+            # Finished workers can leave cyclic SQLite connections until collection.
+            gc.collect()
             if self.process_guard is not None:
                 self.process_guard.cleaning = True
             shutil.rmtree(root, onerror=partial(_remove_readonly_fixture, root))

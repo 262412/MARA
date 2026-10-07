@@ -48,7 +48,9 @@ def test_studio_result_requires_original_browser_view(monkeypatch, changed, mult
 
     page = object()
     bound = bind_page_callback(callback, page)
-    args, _, _ = special_args(bound, inputs=["conversation"], request=request)
+    args, _, _, _component_props = special_args(
+        bound, inputs=["conversation"], request=request
+    )
     result = bound(*args)
     assert effects == [(page, "conversation", request)]
     if changed in {"conversation", "page", "generation"}:

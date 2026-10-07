@@ -69,7 +69,7 @@ def test_conversation_tail_uses_authenticated_notebook_and_keeps_old_renderer(
             page.chat_control.conversation_id,
             page._app.user_id,
         ]
-        args, _, _ = special_args(
+        args, _, _, _component_props = special_args(
             event["fn"],
             inputs=[history, retrieval, conversation_id, "forged"],
             request=request,

@@ -107,12 +107,12 @@ def test_nested_messages_and_structured_defaults():
 
 
 @pytest.mark.parametrize("name", ["LLMInterface", "StructuredOutputLLMInterface"])
-def test_legacy_nested_json_exposes_class_name_collision(name):
-    # Preserve the baseline defect: nested from_dict does not strip class_name.
+def test_legacy_nested_json_does_not_shadow_class_name(name):
+    # Nested legacy records must remain serializable after their discriminator is read.
     restored = getattr(schema, name).from_dict(deepcopy(PAYLOADS[name]))
     assert restored.messages[0].id == "provider-message-id"
-    with pytest.raises(TypeError, match="not callable"):
-        restored.to_dict()
+    assert callable(restored.messages[0].class_name)
+    assert restored.to_dict() == PAYLOADS[name]
 
 
 def test_document_copy_text_and_old_embedding_reload_behavior():

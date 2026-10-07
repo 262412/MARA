@@ -214,6 +214,8 @@ def test_added_request_parameter_is_injected_by_real_gradio(adapter):
     wrapped = getattr(conversation_restore, adapter)(original)
     request = gr.Request(username="owner", session_hash="browser")
     values = [] if adapter == "clear_conversation" else list(range(9))
-    injected, _, _ = special_args(wrapped, values.copy(), request=request)
+    injected, _, _, _component_props = special_args(
+        wrapped, values.copy(), request=request
+    )
     assert injected == [*values, request]
     assert wrapped.__wrapped__ is original

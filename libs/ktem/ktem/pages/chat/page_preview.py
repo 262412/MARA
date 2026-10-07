@@ -150,10 +150,10 @@ class ChatPagePreviewController:
             for doc in docs:
                 if doc.metadata.get("type") != "thumbnail":
                     continue
-                page_label = str(doc.metadata.get("page_label", ""))
+                page_number = doc.metadata.get("page_number")
                 image_origin = doc.metadata.get("image_origin", "")
-                if page_label and image_origin:
-                    page_map[page_label] = image_origin
+                if type(page_number) is int and page_number >= 1 and image_origin:
+                    page_map[str(page_number)] = image_origin
 
         self._page_thumbnail_cache[file_id] = page_map
         return page_map.get(page_key, "")

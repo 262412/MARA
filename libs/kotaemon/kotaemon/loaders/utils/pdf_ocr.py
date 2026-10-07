@@ -15,6 +15,7 @@ from .box import (
     union_points,
 )
 from .table import table_cells_to_markdown
+from .unstructured_nlp import require_local_spacy_model
 
 IOU_THRES = 0.5
 PADDING_THRES = 1.1
@@ -38,6 +39,7 @@ def read_pdf_unstructured(input_path: Union[Path, str]):
             f"{e}"
         )
 
+    require_local_spacy_model()
     page_items = defaultdict(list)
     items = partition(input_path)
     for item in items:

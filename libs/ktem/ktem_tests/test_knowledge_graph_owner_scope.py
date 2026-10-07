@@ -288,7 +288,7 @@ def test_studio_root_receives_request_before_variable_selector_tail():
     ]
     request = cast(Any, SimpleNamespace(username="attacker"))
 
-    injected, _, _ = special_args(
+    injected, _, _, _component_props = special_args(
         callback,
         inputs=list(component_inputs),
         request=request,

@@ -208,12 +208,12 @@ def test_gradio_injects_file_scope_request_after_component_inputs():
     page = cast(Any, FileIndexPage.__new__(FileIndexPage))
     request = SimpleNamespace(username="alice")
 
-    selected_inputs, _, _ = special_args(
+    selected_inputs, _, _, _component_props = special_args(
         page.file_selected,
         inputs=["file-1", "browser-user"],
         request=cast(Any, request),
     )
-    indexing_inputs, _, _ = special_args(
+    indexing_inputs, _, _, _component_props = special_args(
         page.index_fn_file_with_default_loaders,
         inputs=[["report.pdf"], False, {}, "browser-user"],
         request=cast(Any, request),

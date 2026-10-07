@@ -25,6 +25,7 @@ def test_launcher_allows_the_runtime_pdfjs_directory(monkeypatch, tmp_path):
 
     class _App:
         _favicon = "favicon.svg"
+        gradio_launch_kwargs = {}
 
         def make(self):
             return _Demo()

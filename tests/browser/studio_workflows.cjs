@@ -7,7 +7,7 @@ module.exports = function ({expect, login, evidence, send, tailFinished, settled
   async function createConversation(page, queue, name) {
     await page.getByRole('radio', {name: 'Document', exact: true}).check();
     const [uploaded] = await Promise.all([
-      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/upload'),
+      page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/gradio_api/upload'),
       page.locator('#chat-input input[type=file]').setInputFiles({
         name, mimeType: 'text/plain', buffer: Buffer.from('An owned observatory has seven telescopes. Astronomers track stars and planets.'),
       }),

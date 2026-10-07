@@ -78,7 +78,7 @@ def test_bound_note_callback_injects_exact_request_without_component_port(
     callback = bind_page_callback(save_manual_note_update, _page("owner-1"))
     component_inputs = [private_notebook, "Server note", "server-owned text"]
 
-    resolved, _progress, _event_data = special_args(
+    resolved, _progress, _event_data, _component_props = special_args(
         callback,
         inputs=list(component_inputs),
         request=request,

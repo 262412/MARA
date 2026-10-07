@@ -1,4 +1,4 @@
-"""Old OpenAIAgent public methods exercised through a synthetic SDK transport."""
+"""Migrated OpenAIAgent methods exercised through a synthetic SDK transport."""
 
 import asyncio
 import json
@@ -6,7 +6,6 @@ from typing import Any
 
 import httpx
 import pytest
-from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.callbacks import CallbackManager, CBEventType, LlamaDebugHandler
 from llama_index.core.chat_engine.types import (
     AgentChatResponse,
@@ -16,6 +15,8 @@ from llama_index.core.llms import ChatMessage
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.tools import FunctionTool
 from llama_index.llms.openai import OpenAI
+
+from kotaemon.agents.openai import OpenAIAgent
 
 
 def _agent_response(request, requests, controls):
