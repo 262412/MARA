@@ -1,0 +1,17 @@
+{
+  "pdf": {
+    "filename": "LMDoc-EACL2027.pdf",
+    "bytes": 775291,
+    "sha256": "8f131930616d465b831cb91a5e921cf265775bbeb0428cf55facc045b0f4bbe0"
+  },
+  "overleaf": {
+    "filename": "LMDoc-EACL2027-Overleaf.zip",
+    "bytes": 781282,
+    "sha256": "76ccd9ed65c1ebd9be31f377f3777c4566b9e08e4f0db48482eced9a036e2e45"
+  },
+  "supplement": {
+    "filename": "LMDoc-EACL2027-supplement.zip",
+    "bytes": 2886773,
+    "sha256": "bb4291a50ea04018c32b5dc55ba8d70ce6979174f0153072eeed7de9b106656c"
+  }
+}

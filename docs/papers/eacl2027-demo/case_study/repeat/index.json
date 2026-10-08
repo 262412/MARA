@@ -1,0 +1,31 @@
+{
+  "successes": [
+    {
+      "file_path": "D:\\MARA-reviewer-build\\20260923-diagnostic-case\\live-reproduction\\inputs\\harbor-data-policy.txt",
+      "file_name": "harbor-data-policy.txt",
+      "status": "success"
+    },
+    {
+      "file_path": "D:\\MARA-reviewer-build\\20260923-diagnostic-case\\live-reproduction\\inputs\\harbor-operations.txt",
+      "file_name": "harbor-operations.txt",
+      "status": "success"
+    }
+  ],
+  "failures": [],
+  "debug_messages": [
+    "Indexing [1/2]: harbor-data-policy.txt",
+    " => Converting harbor-data-policy.txt to text",
+    " => Converted harbor-data-policy.txt to text (parse cache miss; hits=0, misses=1, writes=1)",
+    " => [harbor-data-policy.txt] Processed 1 chunks",
+    " => [harbor-data-policy.txt] Created embedding for 1 chunks; cache hits=0, misses=1, writes=1",
+    " => [harbor-data-policy.txt] Refreshed vector index (no-op)",
+    " => Finished indexing harbor-data-policy.txt",
+    "Indexing [2/2]: harbor-operations.txt",
+    " => Converting harbor-operations.txt to text",
+    " => Converted harbor-operations.txt to text (parse cache miss; hits=0, misses=1, writes=1)",
+    " => [harbor-operations.txt] Processed 1 chunks",
+    " => [harbor-operations.txt] Created embedding for 1 chunks; cache hits=0, misses=1, writes=1",
+    " => [harbor-operations.txt] Refreshed vector index (no-op)",
+    " => Finished indexing harbor-operations.txt"
+  ]
+}

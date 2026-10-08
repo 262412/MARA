@@ -1,0 +1,14 @@
+{
+  "datasets": 6,
+  "bootstrap_resamples": 1000,
+  "bootstrap_seed": 20260705,
+  "confidence_percent": 95,
+  "f1_display_scale": 100,
+  "case_reference_days": 17,
+  "case_source_files": 2,
+  "historical_version_components": [
+    0,
+    40
+  ],
+  "main_paper_pages_limit": 6
+}

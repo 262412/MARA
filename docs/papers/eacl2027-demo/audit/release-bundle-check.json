@@ -1,0 +1,15 @@
+{
+  "checked_at_utc": "2026-09-22T02:57:02.115517+00:00",
+  "url": "https://github.com/262412/MARA/releases/download/v0.0.40/mara-full-system-benchmark-synthesis-v0.0.40.zip",
+  "local_sha256": "7fabae169ef270dd2e6ee5edd1aa74841f3ffa100f3bf47bb5fa6139f866cafb",
+  "error": "Remote end closed connection without response",
+  "matches_public_release": null,
+  "github_api_asset": {
+    "id": 474358900,
+    "name": "mara-full-system-benchmark-synthesis-v0.0.40.zip",
+    "size": 1038051,
+    "digest": "sha256:7fabae169ef270dd2e6ee5edd1aa74841f3ffa100f3bf47bb5fa6139f866cafb",
+    "browser_download_url": "https://github.com/262412/MARA/releases/download/v0.0.40/mara-full-system-benchmark-synthesis-v0.0.40.zip"
+  },
+  "matches_github_asset_digest": true
+}

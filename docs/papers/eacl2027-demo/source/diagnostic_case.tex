@@ -1,0 +1,47 @@
+\section{Diagnostic Case Studies}
+\label{sec:case}
+Two case studies connect observed output to recorded evidence, an intervention, and a control.
+
+\subsection{Diagnosing and Repairing a Verifier Error}
+The Harbor task uses two author-constructed documents about a fictional sensor pilot, queried through real APIs. An operating guide refers to a separate policy, which specifies a 17-day raw-log retention period.
+
+\paragraph{Observation.}
+With only the guide selected, the first Harbor execution produces a raw answer that explains the missing duration and points to the policy. A generic final refusal obscures that useful explanation. Selecting the policy yields a cited 17-day answer. A second run in a fresh environment also generates the correct duration, but the verifier rejects an explanation that logs are deleted after 17 days and that the policy applies to Harbor raw logs. The policy supports both statements.
+
+\paragraph{Inspection.}
+The raw answer and evidence already suggest source reselection and expose the incorrect rejection. LMDoc's added records locate the processing stages (Table~\ref{tab:boundary}): the guide-only turn has \texttt{good} retrieval, \texttt{unknown} verification, and a guardrail abstention. For the rejected policy explanation, inspecting the recorded claim and lexical matcher reveals eight matching content tokens out of twelve, below the nine required. The matcher treats \emph{delete} and \emph{deleted} as different words.
+
+\begin{table}[t]
+\small
+\centering
+\begin{tabularx}{\columnwidth}{@{}p{0.19\columnwidth}XX@{}}
+\toprule
+Question & Raw answer + evidence & Added records + replay \\
+\midrule
+Missing source? & Already directs the reader to the policy. & Retrieval succeeds; verification is unknown. \\
+Correct refusal? & Policy supports the rejected explanation. & Identifies the rejected claim and guardrail. \\
+Which check? & Provides answer-level evidence. & Replays recorded claims to test the lexical rule. \\
+\bottomrule
+\end{tabularx}
+\caption{Inspection views of the same Harbor records. Raw output already supports source correction; the additional fields connect the rejected claim to a testable implementation rule.}
+\label{tab:boundary}
+\end{table}
+
+\paragraph{Intervention and controls.}
+A small patch matches regular \emph{-d/-ed} variants while retaining the coverage threshold and numerical/negation conflict checks. Replaying the same recorded claims changes verification from unsupported to supported; wrong-duration and negated controls remain rejected. Following a predeclared protocol, we run five repetitions using the patched code, each querying the operating guide and the policy in separate fresh conversations. All five policy-selected turns return the supported duration, and all five guide-only turns abstain. We retain every answer and abstention. The unpatched verifier also accepts the five newly generated policy claim strings. Evidence for the specific repair therefore comes from replaying the same recorded claims from the rejected explanation; the fresh runs check execution with new generations.
+
+\subsection{Inspecting the Effect of Visual Evidence}
+\paragraph{Observation and inspection.}
+A second case asks for the pink curve's rightmost value on a public Arctic sea-ice chart (Figure~\ref{fig:diagnosis}). Auto selects text and answers approximately $-50\%$, whereas the plotted endpoint is near $-40\%$. The execution record shows a text-provider call with no image input, identifying a concrete intervention to test.
+
+\paragraph{Intervention and control.}
+Manually selecting the page-image route sends the rendered page to the same model and returns approximately $-40\%$. Removing only the image from that captured generation request yields $-50\%$ again. This component ablation connects the changed answer to image input on this page and question. Verification is disabled in all compared runtime conditions to isolate generation, and the local selector searches one preselected page. The result demonstrates a user-directed visual intervention.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/arctic-page9.png}
+\caption{The actual visual input, rendered from page 9 of the NOAA/NASA report \citep{noaanasa2024analysis}. The pink line ends near $-40\%$. Auto/text and the image-removed generation control answer $-50\%$; the fixed visual route answers $-40\%$. Full requests and responses are supplied.}
+\label{fig:diagnosis}
+\end{figure}
+
+The package preserves requests, settings, evidence, raw outputs, intermediate and displayed answers, and decision traces for both cases. Offline checks recompute declared outcomes from saved strings; live scripts make fresh provider calls. Appendix~\ref{app:followup} gives execution identities, controls, and retained preliminary failures.

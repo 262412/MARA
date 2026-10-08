@@ -1,0 +1,10 @@
+{
+  "before": {
+    "exact_match": 0,
+    "token_f1": 0.0
+  },
+  "after": {
+    "exact_match": 1,
+    "token_f1": 1.0
+  }
+}

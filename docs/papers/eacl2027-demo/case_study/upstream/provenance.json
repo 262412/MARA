@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/Cinnamon/kotaemon",
+  "commit": "9ad3e4e49aa35b8acddd235918a5d9753c1cfdf9",
+  "method": "Static source walkthrough; no upstream runtime or timed user trial",
+  "source_files": {
+    "LICENSE.txt": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6",
+    "libs/ktem/ktem/pages/chat/__init__.py": "ac27bc98a8bba20b0afd9cd3e640ac50317e80deea358de60f21cb51f60ab39a",
+    "libs/ktem/ktem/pages/chat/chat_panel.py": "20dac898e7eaa0266874edee9b4a7b4d83f1fd563ce836d40237cf61f522981e",
+    "libs/ktem/ktem/index/file/ui.py": "00465fb57fb72a5d27ed25f76e4b715922dcfc340858dc3d4c7a9ce7ce3b269b",
+    "libs/ktem/ktem/reasoning/simple.py": "6899310b647d841ac3cca424784ba4acc3b82ce763c181ff7e62987605f814b9"
+  }
+}

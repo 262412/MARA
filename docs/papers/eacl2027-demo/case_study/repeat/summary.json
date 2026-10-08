@@ -1,0 +1,18 @@
+{
+  "before": {
+    "route": "doc_text",
+    "retrieval": "good",
+    "verification": "unknown",
+    "action": "abstain",
+    "reason": "Strict verification could not establish claim-level support for every claim.",
+    "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context."
+  },
+  "after": {
+    "route": "doc_text",
+    "retrieval": "good",
+    "verification": "unsupported",
+    "action": "abstain",
+    "reason": "Strict verification supported the core claim but found unsupported or conflicting extensions.",
+    "answer": "MARA could not retrieve enough evidence to answer reliably. Select a relevant source or page, or ask with more source-specific context."
+  }
+}

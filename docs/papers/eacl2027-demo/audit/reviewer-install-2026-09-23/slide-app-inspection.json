@@ -1,0 +1,17 @@
+{
+  "files": 53,
+  "root_files": [
+    "slide-app/",
+    "slide-app/LICENSE.txt",
+    "slide-app/.env",
+    "slide-app/app.py",
+    "slide-app/VERSION",
+    "slide-app/flowsettings.py"
+  ],
+  "version": "v0.0.40",
+  "windows_launcher_matches_source_tag": true,
+  "full_core_source_present": false,
+  "root_pyproject_present": false,
+  "installs_remote_tagged_libraries": true,
+  "archive_crc_ok": true
+}

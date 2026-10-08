@@ -1,0 +1,8 @@
+{
+  "document": "inputs/reviewer-smoke.txt",
+  "question": "What is the review marker?",
+  "expected_answer_contains": "ORCHID-7429",
+  "generated_test_data": true,
+  "executed": false,
+  "reason": "Installation has not passed."
+}

@@ -1,0 +1,6 @@
+Harbor sensor pilot: data policy
+
+The Harbor sensor pilot retains raw sensor logs for exactly 17 days. Delete raw
+sensor logs after 17 days. The policy applies to raw sensor logs collected by the
+Harbor pilot. Aggregated daily summaries are kept separately and are not covered
+by this raw-log retention period. The laboratory coordinator owns this policy.

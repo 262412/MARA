@@ -1,0 +1,27 @@
+{
+  "question": "At the rightmost endpoint of the main Arctic sea ice chart (excluding the inset), what are the approximate percentage changes for March and September relative to the 1980-1989 average?",
+  "source_url": "https://www.nasa.gov/wp-content/uploads/2024/01/noaa-nasa-global-analysis-2023.pdf",
+  "source_sha256": "f8716a707b54edbdef9e03badc26b3987139313d526041e4de38b817cf3b0743",
+  "source_page": 9,
+  "indexed_excerpt_page": 1,
+  "reference_method": "Human visual reading of the main chart, fixed before API calls; approximate values, not digitized source data.",
+  "reference_percent": {
+    "March": [
+      -10,
+      -8
+    ],
+    "September": [
+      -42,
+      -38
+    ]
+  },
+  "conditions": [
+    "fixed text runtime",
+    "automatic runtime with rendered page",
+    "generation-only image-removed ablation"
+  ],
+  "model": "gpt-4.1-mini-2025-04-14",
+  "verification": "off in both runtime conditions to isolate generation, not a verification reliability test",
+  "retrieval_scope": "One preselected page; deterministic local image selector, not learned visual retrieval evaluation",
+  "retention_policy": "Retain all attempts including failures; no selection among multiple questions."
+}

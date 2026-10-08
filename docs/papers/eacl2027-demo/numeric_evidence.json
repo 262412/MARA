@@ -1,0 +1,5080 @@
+{
+  "schema_version": "ai-research-writing/numeric-evidence-v2",
+  "entries": [
+    {
+      "value": 3540,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/record_count"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 1090,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/unique_dataset_example_pairs"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 41,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/artifact_sets"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 200,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/0/n"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/0/switches"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.2573725,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/0/f1_by_final_route/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.268517,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/0/comparison_oracle_f1"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.0111445,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/0/signed_oracle_mean_gap"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.012321,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/0/positive_part_regret"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 150,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/1/n"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 146,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/1/final_route_counts/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 4,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/1/final_route_counts/doc_page_image"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 11,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/1/planner_counts/hybrid"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 124,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/1/planner_counts/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.15511986301369862,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/1/f1_by_final_route/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.29349333333333333,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/1/comparison_oracle_f1"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.14251,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/1/signed_oracle_mean_gap"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.14457066666666665,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/1/positive_part_regret"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 120,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/n"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 101,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/final_route_counts/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 16,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/final_route_counts/doc_page_image"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 3,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/final_route_counts/graph_global"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 31,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/planner_counts/graph_global"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 75,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/planner_counts/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 13,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/planner_counts/doc_page_image"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 1,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/planner_counts/hybrid"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 6,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/switches"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.0537,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/f1_by_final_route/graph_global"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.3794861386138614,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/f1_by_final_route/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.1894625,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/f1_by_final_route/doc_page_image"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.4326041666666667,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/comparison_oracle_f1"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.08659916666666667,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/signed_oracle_mean_gap"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.11053,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/2/positive_part_regret"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 194,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/3/final_route_counts/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 188,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/3/planner_counts/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 9,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/3/planner_counts/graph_global"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.08515,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/3/f1_by_final_route/graph_global"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.21833505154639174,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/3/f1_by_final_route/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.217995,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/3/comparison_oracle_f1"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.0036555000000000003,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/3/signed_oracle_mean_gap"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.0036555,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/3/positive_part_regret"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 300,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/n"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 214,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/final_route_counts/graph_global"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 83,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/final_route_counts/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 236,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/planner_counts/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 18,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/planner_counts/doc_page_image"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 39,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/planner_counts/hybrid"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.19595794392523364,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/f1_by_final_route/graph_global"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.2782096385542169,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/f1_by_final_route/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.251085,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/comparison_oracle_f1"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.03433033333333334,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/signed_oracle_mean_gap"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.03433033333333333,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/4/positive_part_regret"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 87,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/5/planner_counts/doc_text"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 26,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/5/planner_counts/doc_page_image"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 7,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/5/planner_counts/graph_global"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.43249666666666664,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/controller_diagnostics/5/f1_by_final_route/doc_page_image"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.034772,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/finance_text_only_positive_gap"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 360,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/aggregate_cells_checked"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 14,
+      "source": "audit/revision-evidence.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/win_loss_tie_rows_reconciled"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 5,
+      "source": "audit/revision-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/pdf/main_content_ends_on_page"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 595.276,
+      "source": "audit/revision-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/pdf/page_dimensions_pt/0/0"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 841.89,
+      "source": "audit/revision-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/pdf/page_dimensions_pt/0/1"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 2,
+      "source": "audit/revision-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/pdf/visually_inspected_pages/1"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 8,
+      "source": "audit/revision-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/pdf/visually_inspected_pages/7"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 10,
+      "source": "audit/revision-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/pdf/visually_inspected_pages/9"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 0.955,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.13,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_em",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2574,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.8737,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.7707,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_mara_score",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.135,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.8956,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.075,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_em",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1516,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.981,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.632,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_mara_score",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.05,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.0041,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.46,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_unsupported_claim_rate",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.145,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_em",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2668,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.0328,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.7714,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_mara_score",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.0547,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1822,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.51,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_metadata_recall",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0067,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_em",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.151,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 3.4993,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0867,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_mara_score",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.6,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_page_hit",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 3.5889,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1533,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_unsupported_claim_rate",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0267,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "false_abstention_rate",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 3.3956,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 3.4838,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.14,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_unsupported_claim_rate",
+        "where": {
+          "dataset": "financebench",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0133,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_em",
+        "where": {
+          "dataset": "financebench",
+          "route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1734,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "financebench",
+          "route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.1731,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.02,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "financebench",
+          "route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1367,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "financebench",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.4856,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_metadata_recall",
+        "where": {
+          "dataset": "financebench",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1483,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "financebench",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.4725,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 15.4089,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1467,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_unsupported_claim_rate",
+        "where": {
+          "dataset": "financebench",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0733,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "false_abstention_rate",
+        "where": {
+          "dataset": "financebench",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2512,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.6799,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_metadata_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0083,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_em",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.346,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 12.3023,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1917,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.825,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_page_hit",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 22.3708,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0285,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0326,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_metadata_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0557,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1507,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.025,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0583,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_page_hit",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 10.0508,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.7667,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "false_abstention_rate",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1344,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.3077,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_metadata_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.3399,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 22.3758,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1583,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.5833,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_page_hit",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 32.3416,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2553,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.4841,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_metadata_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1638,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 18.7886,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0917,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.5667,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_page_hit",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 29.5592,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2403,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.6862,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_metadata_recall",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.3544,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 4.3472,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.8167,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_page_hit",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 14.3286,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.8965,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "qasper",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.005,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_em",
+        "where": {
+          "dataset": "qasper",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2143,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "qasper",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.3844,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.105,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "qasper",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.4047,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2006,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "qasper",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.4208,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.095,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "qasper",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.4397,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.06,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_unsupported_claim_rate",
+        "where": {
+          "dataset": "qasper",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.9091,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "qasper",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2144,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "qasper",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.6821,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1.7016,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.015,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "false_abstention_rate",
+        "where": {
+          "dataset": "qasper",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.99,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.5567,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_metadata_recall",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2168,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.8578,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.54,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_mara_score",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.8769,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2145,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.8625,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.8815,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.01,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_unsupported_claim_rate",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.9833,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2306,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.9199,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2733,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.9419,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_total_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.7875,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_citation_inline_recall",
+        "where": {
+          "dataset": "slidevqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.4325,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_f1",
+        "where": {
+          "dataset": "slidevqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 4.6081,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "slidevqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1083,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_numeric_match",
+        "where": {
+          "dataset": "slidevqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.5481,
+      "source": "audit/evidence-tables/statistical_main_result_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_generation_seconds",
+        "where": {
+          "dataset": "slidevqa",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0289,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0754,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0224,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0264,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.022,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0027,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0041,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0103,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0023,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0039,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "qasper",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.004,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "qasper",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0001,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "qasper",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0268,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "qasper",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0028,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "qasper",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0138,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "qasper",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.003,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "ragtruth",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0241,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "ragtruth",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0138,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "ragtruth",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0022,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "ragtruth",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0008,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "alce_asqa",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0222,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "alce_asqa",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0094,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "alce_asqa",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1398,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "alce_asqa",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.073,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "alce_asqa",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1057,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "alce_asqa",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0232,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0402,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0084,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.3289,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2511,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2903,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.2296,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.1319,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0497,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_high_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": -0.0379,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ci_low_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0061,
+      "source": "audit/evidence-tables/statistical_bootstrap_ci_by_route.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "mean_delta_f1",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0219,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.8128,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.023,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.9634,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 3.1614,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "alce_asqa",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0896,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 11.4978,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0882,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 11.589,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.8737,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 12.9365,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 29.0451,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "financebench",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 10.0686,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 101.5425,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 9.9001,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 34.0738,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 9.9658,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 76.616,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 10.7706,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 70.6267,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 9.9814,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 38.4789,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "mmdocrag",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0203,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.4907,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0189,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.553,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0194,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.9177,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "qasper",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0191,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 3.1637,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 3.179,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 0.0221,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "avg_index_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 5.06,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "ragtruth",
+          "route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 5.0118,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "slidevqa",
+          "route": "controller_auto"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 2.8644,
+      "source": "audit/evidence-tables/statistical_failure_latency_backend_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "p95_total_seconds",
+        "where": {
+          "dataset": "slidevqa",
+          "route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 48.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "losses",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 44.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ties",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 58.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "wins",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "direct_answer"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 29.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "losses",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 98.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ties",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 23.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "wins",
+        "where": {
+          "dataset": "financebench",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 185.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ties",
+        "where": {
+          "dataset": "qasper",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 190.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ties",
+        "where": {
+          "dataset": "qasper",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 129.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "losses",
+        "where": {
+          "dataset": "ragtruth",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 81.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ties",
+        "where": {
+          "dataset": "ragtruth",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 90.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "wins",
+        "where": {
+          "dataset": "ragtruth",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 297.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ties",
+        "where": {
+          "dataset": "ragtruth",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 142.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ties",
+        "where": {
+          "dataset": "alce_asqa",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 55.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "wins",
+        "where": {
+          "dataset": "alce_asqa",
+          "candidate_route": "controller_auto",
+          "baseline_route": "crag_guarded"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 54.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "losses",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 21.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ties",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 45.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "wins",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "text_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 102.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "wins",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "element_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 20.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "ties",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 82.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "wins",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "page_image_rag_vlm"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 49.0,
+      "source": "audit/evidence-tables/statistical_win_loss_tie_table.csv",
+      "selector": {
+        "kind": "csv",
+        "column": "losses",
+        "where": {
+          "dataset": "mmdocrag",
+          "candidate_route": "controller_auto",
+          "baseline_route": "hybrid_rag"
+        }
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Unchanged released summary table"
+    },
+    {
+      "value": 1000,
+      "source": "audit/measurement-design.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/bootstrap_resamples"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 20260705,
+      "source": "audit/measurement-design.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/bootstrap_seed"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 95,
+      "source": "audit/measurement-design.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/confidence_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 100,
+      "source": "audit/measurement-design.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/f1_display_scale"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 17,
+      "source": "audit/measurement-design.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/case_reference_days"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 40,
+      "source": "audit/measurement-design.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/historical_version_components/1"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.005,
+      "note": "Existing artifact audit value; raw and percentage renderings"
+    },
+    {
+      "value": 94,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/files_verified"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 5,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/policy_returns"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 5,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/guide_abstentions"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 5,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/old_verifier_accepts_new_policy_claims"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 8,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/lexical_check/matched"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 12,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/lexical_check/total"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 9,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/lexical_check/required"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 129,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/subsystem_tests_passed"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -50.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/automatic_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -40.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/fixed_visual_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -50.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/image_removed_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -42,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/reference_low"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -38,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/reference_high"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 1,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/visual/image_parts"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -50.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/automatic_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -40.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/fixed_visual_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -50.0,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/image_removed_answer_percent"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -42,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/reference_low"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": -38,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/reference_high"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    },
+    {
+      "value": 1,
+      "source": "audit/followup-verification.json",
+      "selector": {
+        "kind": "json-pointer",
+        "pointer": "/recipe_validation/image_parts"
+      },
+      "representations": [
+        "raw",
+        "percent"
+      ],
+      "tolerance": 0.001,
+      "note": "Recomputed from retained follow-up records by verify_followup.py; case observations, not population estimates."
+    }
+  ]
+}
