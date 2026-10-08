@@ -28,6 +28,10 @@ APPROVED_ACTIONS = {
 
 DEFAULT_GITHUB_RUNNER = "ubuntu-24.04"
 APPROVED_WORKFLOW_JOB_RUNNERS = {
+    (
+        ".github/workflows/quality-gates.yaml",
+        "windows-storage-security",
+    ): "windows-2022",
     (".github/workflows/desktop-gate2.yaml", "package-linux-22"): "ubuntu-22.04",
     (".github/workflows/desktop-gate2.yaml", "package-windows"): "windows-2022",
 }

@@ -1,12 +1,27 @@
-from typing import Any, Dict, List, Optional, Type, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
-from llama_index.vector_stores.chroma import ChromaVectorStore as LIChromaVectorStore
+if TYPE_CHECKING:
+    from llama_index.vector_stores.chroma import (
+        ChromaVectorStore as LIChromaVectorStore,
+    )
 
 from .base import LlamaIndexVectorStore
 
 
 class ChromaVectorStore(LlamaIndexVectorStore):
-    _li_class: Type[LIChromaVectorStore] = LIChromaVectorStore
+    """Legacy adapter for isolated migration environments."""
+
+    _li_class = None
+
+    def _get_li_class(self):
+        try:
+            from llama_index.vector_stores.chroma import ChromaVectorStore
+        except ImportError as error:
+            raise ImportError(
+                "The legacy Chroma adapter requires the old migration environment. "
+                "Use scripts/migrate_chroma_to_qdrant.py; the normal runtime uses Qdrant."
+            ) from error
+        return ChromaVectorStore
 
     def __init__(
         self,
@@ -36,8 +51,8 @@ class ChromaVectorStore(LlamaIndexVectorStore):
             import chromadb
         except ImportError:
             raise ImportError(
-                "ChromaVectorStore requires chromadb. "
-                "Please install chromadb first `pip install chromadb`"
+                "ChromaVectorStore is available only in the legacy migration environment. "
+                "Use scripts/migrate_chroma_to_qdrant.py to migrate existing data."
             )
 
         client = chromadb.PersistentClient(path=path)
@@ -55,7 +70,7 @@ class ChromaVectorStore(LlamaIndexVectorStore):
             flat_metadata=flat_metadata,
             **kwargs,
         )
-        self._client = cast(LIChromaVectorStore, self._client)
+        self._client = cast("LIChromaVectorStore", self._client)
 
     def delete(self, ids: List[str], **kwargs):
         """Delete vector embeddings from vector stores

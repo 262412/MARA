@@ -1,1 +1,3 @@
 *.bat   text eol=crlf
+vendor/nltk/*.patch text eol=lf
+vendor/nltk/*.json text eol=lf

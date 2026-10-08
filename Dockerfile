@@ -24,6 +24,8 @@ RUN install -d -m 0755 /opt/mara/bin
 COPY pyproject.toml uv.lock README.md LICENSE.txt NOTICE ./
 COPY docker/pyproject.toml docker/uv.lock ./docker/
 COPY libs ./libs
+COPY vendor/nltk ./vendor/nltk
+COPY scripts/check_nltk_backport.py ./scripts/check_nltk_backport.py
 COPY scripts/prepare_container_nltk.py /opt/mara/bin/prepare_container_nltk.py
 
 # Reuse v0.31.2's native libraries and rebuild its Go service with patched modules.
@@ -59,6 +61,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM builder-base AS lite-builder
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project /opt/mara/docker --frozen --no-dev --no-editable \
+    && /opt/mara/.venv/bin/python /opt/mara/scripts/check_nltk_backport.py \
     && NLTK_CACHE="$(echo /opt/mara/.venv/lib/python*/site-packages/llama_index/core/_static/nltk_cache)" \
     && /opt/mara/.venv/bin/python /opt/mara/bin/prepare_container_nltk.py "$NLTK_CACHE" \
     && NLTK_DATA="$NLTK_CACHE" /opt/mara/.venv/bin/python -c \
@@ -67,6 +70,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM builder-base AS full-builder
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project /opt/mara/docker --frozen --no-dev --no-editable \
+    && /opt/mara/.venv/bin/python /opt/mara/scripts/check_nltk_backport.py \
     && NLTK_CACHE="$(echo /opt/mara/.venv/lib/python*/site-packages/llama_index/core/_static/nltk_cache)" \
     && /opt/mara/.venv/bin/python /opt/mara/bin/prepare_container_nltk.py "$NLTK_CACHE" \
     && NLTK_DATA="$NLTK_CACHE" /opt/mara/.venv/bin/python -c \
@@ -90,6 +94,8 @@ RUN python -m pip uninstall --yes setuptools wheel pip \
 WORKDIR /var/lib/mara
 COPY --chown=0:0 --chmod=0555 scripts/container_entrypoint.py /opt/mara/bin/container-entrypoint
 COPY --chown=0:0 --chmod=0444 scripts/container_healthcheck.py /opt/mara/bin/container_healthcheck.py
+COPY --chown=0:0 --chmod=0444 scripts/check_nltk_backport.py /opt/mara/bin/check_nltk_backport.py
+COPY --chown=0:0 --chmod=0444 vendor/nltk/base-files.json vendor/nltk/backport.json /opt/mara/vendor/nltk/
 RUN chmod -R a-w /opt/mara
 
 FROM runtime-base AS runtime-full

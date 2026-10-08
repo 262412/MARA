@@ -39,7 +39,7 @@ def test_actual_store_writes_finish_cache_replay_and_two_owners(backend, threade
     relations = support.rows(backend, "Index")
     assert len(relations) == 4
     assert [row.user for row in relations] == ["alice", "alice", "bob", "bob"]
-    vectors = backend.vectors._collection.get()["ids"]
+    vectors = support.vector_ids(backend.vectors)
     assert set(vectors) == {
         row.target_id for row in relations if row.relation_type == "vector"
     }
@@ -79,7 +79,7 @@ def test_partial_persistent_state_is_not_rolled_back_or_reported_success(
     assert not any("Finished indexing" in event.text for event in events)
     assert len(support.rows(backend, "Source")) == 1
     assert len(backend.documents.query("partialunique")) == 1
-    assert len(backend.vectors._collection.get()["ids"]) == 1
+    assert len(support.vector_ids(backend.vectors)) == 1
     relations = support.rows(backend, "Index")
     assert [row.relation_type for row in relations] == (
         ["document"] if failure == "vector" else ["document", "vector"]
@@ -138,7 +138,7 @@ def test_delete_during_embedding_rejects_all_late_persistent_writes(
     assert "Source removed during indexing" in str(failures[0])
     assert not any("Finished indexing" in event.text for event in events)
     assert support.rows(backend, "Source") == []
-    assert backend.vectors._collection.get()["ids"] == []
+    assert support.vector_ids(backend.vectors) == []
     assert support.rows(backend, "Index") == []
     assert backend.documents.query("lateunique") == []
 
@@ -172,10 +172,10 @@ def test_unsplit_cache_replay_uses_independent_persistent_identities(
         for identity in source_ids
     ]
     assert targets[0] and targets[1] and not set(targets[0]).intersection(targets[1])
-    assert len(backend.vectors._collection.get()["ids"]) == 2
+    assert len(support.vector_ids(backend.vectors)) == 2
     pipelines_by_source[delete_first].delete_file(source_ids[delete_first])
     remaining = 1 - delete_first
-    assert backend.vectors._collection.get()["ids"] == targets[remaining]
+    assert support.vector_ids(backend.vectors) == targets[remaining]
     retrieved = backend.documents.query("unsplitunique")
     assert [doc.doc_id for doc in retrieved] == targets[remaining]
     assert retrieved[0].metadata["file_id"] == source_ids[remaining]

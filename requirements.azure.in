@@ -1,6 +1,7 @@
 # Local workspace packages for Azure App Service and other pip-only deployments.
 # Use non-editable local paths so Oryx installs relocatable wheels into antenv.
 # requirements.txt applies the runtime versions exported in constraints.txt.
+./vendor/nltk
 ./libs/kotaemon
 ./libs/ktem
 ./libs/slide_cli

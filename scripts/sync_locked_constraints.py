@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -22,9 +23,8 @@ EXPORT_COMMAND = (
     "--no-annotate",
 )
 HEADER = (
-    "# Generated from uv.lock. Do not edit by hand.\n"
-    "# Regenerate: uv export --locked --all-packages --no-dev --no-hashes "
-    "--no-emit-workspace --no-header --no-annotate > constraints.txt\n"
+    "# Generated from uv.lock; local source packages are version-pinned.\n"
+    "# Regenerate: python scripts/sync_locked_constraints.py\n"
     "# Verify: python scripts/sync_locked_constraints.py --check\n"
 )
 
@@ -48,7 +48,15 @@ def render_locked_constraints() -> str:
     body = result.stdout.strip()
     if not body:
         raise RuntimeError("uv export produced an empty runtime constraint set")
-    return f"{HEADER}{body}\n"
+    lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
+    nltk = next(package for package in lock["package"] if package["name"] == "nltk")
+    if nltk["source"] != {"directory": "vendor/nltk"}:
+        raise RuntimeError("NLTK must resolve to the reviewed local backport")
+    lines = body.splitlines()
+    if lines.count("./vendor/nltk") != 1:
+        raise RuntimeError("Locked export is missing the local NLTK source")
+    lines[lines.index("./vendor/nltk")] = f"nltk=={nltk['version']}"
+    return HEADER + "\n".join(lines) + "\n"
 
 
 def write_constraints(content: str) -> None:

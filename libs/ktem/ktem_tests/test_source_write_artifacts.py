@@ -91,5 +91,5 @@ def test_finish_manifest_publication_and_delete_are_one_source_critical_section(
     assert not manifests[0].exists()
     assert not list(roots.chunks.iterdir())
     assert support.rows(backend, "Source") == support.rows(backend, "Index") == []
-    assert backend.vectors._collection.get()["ids"] == []
+    assert support.vector_ids(backend.vectors) == []
     assert backend.documents.query("artifactunique") == []

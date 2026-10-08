@@ -108,7 +108,7 @@ def test_waiting_delete_recollects_targets_after_store_write_before_relation(
     )
     assert support.rows(backend, "Source") == []
     assert support.rows(backend, "Index") == []
-    assert backend.vectors._collection.get()["ids"] == []
+    assert support.vector_ids(backend.vectors) == []
     assert backend.documents.query("protectedunique") == []
     assert not (backend.resources["FileStoragePath"] / plans[0].stored_path).exists()
 
@@ -184,7 +184,7 @@ def test_wrong_owner_is_rejected_before_any_persistent_write(backend):
     with pytest.raises(RuntimeError, match="Source owner changed"):
         stranger.handle_chunks_docstore([Document(text="ownerunique")], file_id)
     assert support.rows(backend, "Index") == []
-    assert backend.vectors._collection.get()["ids"] == []
+    assert support.vector_ids(backend.vectors) == []
     assert support.rows(backend, "Source")[0].user == "alice"
 
 

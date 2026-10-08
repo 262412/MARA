@@ -45,6 +45,7 @@ mara-app = { path = ".." }
 mara-research-cli = { path = "../libs/slide_cli" }
 kotaemon = { path = "../libs/kotaemon" }
 ktem = { path = "../libs/ktem" }
+nltk = { path = "../vendor/nltk" }
 torch = { index = "pytorch-cpu" }
 
 [[tool.uv.index]]

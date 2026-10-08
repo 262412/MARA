@@ -32,6 +32,7 @@ def test_root_requirements_file_keeps_azure_app_service_build_installable():
     }
 
     expected_local_packages = {
+        "./vendor/nltk",
         "./libs/kotaemon",
         "./libs/ktem",
         "./libs/slide_cli",
@@ -45,8 +46,7 @@ def test_root_requirements_file_keeps_azure_app_service_build_installable():
         "langchain-core==1.6.7",
         "numpy==1.26.4",
         "ollama==0.6.3",
-        "onnxruntime==1.19.2",
-        "opentelemetry-instrumentation-fastapi==0.66b1",
+        "nltk==3.10.3.post1+mara.1",
     }
     assert "-c constraints.txt" in requirement_lines
     assert "-r requirements.azure.in" in requirement_lines

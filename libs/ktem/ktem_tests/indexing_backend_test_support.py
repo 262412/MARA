@@ -1,4 +1,4 @@
-"""Exclusive SQL, Chroma and Lance resources for producer lifecycle checks."""
+"""Exclusive SQL, Qdrant and Lance resources for producer lifecycle checks."""
 
 from importlib import import_module
 from types import SimpleNamespace
@@ -15,9 +15,9 @@ from kotaemon.indices.splitters import TokenSplitter
 from kotaemon.loaders.txt_loader import TxtReader
 from kotaemon.storages import LanceDBDocumentStore
 
-owned_chroma_stores = import_module(
-    "libs.kotaemon.tests.chroma_test_runtime"
-).owned_chroma_stores
+owned_qdrant_stores = import_module(
+    "libs.kotaemon.tests.qdrant_test_runtime"
+).owned_qdrant_stores
 
 
 class OwnedEmbeddings(BaseEmbeddings):
@@ -40,7 +40,7 @@ def backend(tmp_path, monkeypatch):
         pipelines.settings, "KH_FILE_INDEX_ARTIFACTS_ENABLED", False, raising=False
     )
     produced = []
-    with owned_chroma_stores(tmp_path) as create:
+    with owned_qdrant_stores(tmp_path, cleanup=True) as create:
         vectors = create(collection_name="r5b-owned-vectors")
         monkeypatch.setattr(index_module, "get_vectorstore", lambda _: vectors)
         monkeypatch.setattr(index_module, "get_docstore", lambda _: documents)
@@ -94,6 +94,15 @@ def backend(tmp_path, monkeypatch):
 def rows(backend, key):
     with Session(backend.engine) as session:
         return list(session.scalars(select(backend.resources[key])))
+
+
+def vector_ids(store, ids=None):
+    from kotaemon.storages.vectorstores.qdrant_local import point_id
+
+    if not store.count():
+        return []
+    native_ids = [point_id(value) for value in ids] if ids is not None else None
+    return [node.id_ for node in store._client.get_nodes(node_ids=native_ids)]
 
 
 def drain(stream):

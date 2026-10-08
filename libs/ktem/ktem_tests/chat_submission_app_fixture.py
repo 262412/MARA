@@ -12,9 +12,9 @@ def submission_app(monkeypatch, root, *, demo_mode=False):
 
     # Test suites have different mypy package roots; load the shared owner by
     # its runtime name without assigning a second static name to that file.
-    owned_chroma_stores = import_module(
-        "libs.kotaemon.tests.chroma_test_runtime"
-    ).owned_chroma_stores
+    owned_qdrant_stores = import_module(
+        "libs.kotaemon.tests.qdrant_test_runtime"
+    ).owned_qdrant_stores
 
     docs = Path(settings.KH_DOC_DIR)
     assert docs.resolve().is_relative_to(root)
@@ -42,9 +42,11 @@ def submission_app(monkeypatch, root, *, demo_mode=False):
     llms.info()
     embedding_models_manager.info()
     reranking_models_manager.info()
-    with owned_chroma_stores(root) as create_store:
+    with owned_qdrant_stores(root, cleanup=True) as create_store:
         configuration = dict(settings.KH_VECTORSTORE)
-        assert configuration.pop("__type__") == "kotaemon.storages.ChromaVectorStore"
+        assert configuration.pop("__type__") == "kotaemon.storages.QdrantVectorStore"
+        for key in ("url", "api_key", "namespace", "mara_compatibility"):
+            configuration.pop(key, None)
 
         def vector_store(collection_name):
             return create_store(**configuration, collection_name=collection_name)

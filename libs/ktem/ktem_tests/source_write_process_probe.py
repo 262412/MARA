@@ -1,4 +1,4 @@
-"""Task-owned producer using real SQL, Chroma, Lance and file leases."""
+"""Task-owned producer using real SQL, Qdrant, Lance and file leases."""
 
 import json
 import sys
@@ -13,7 +13,7 @@ from kotaemon.indices.splitters import TokenSplitter
 from kotaemon.loaders.txt_loader import TxtReader
 from kotaemon.storages import LanceDBDocumentStore
 
-from .indexing_backend_test_support import OwnedEmbeddings, owned_chroma_stores
+from .indexing_backend_test_support import OwnedEmbeddings, owned_qdrant_stores
 from .storage_lifetime_process_probe import wait_for
 
 
@@ -27,7 +27,7 @@ def main():
         str(root / "lance"), collection_name="r5b_owned_documents"
     )
     try:
-        with owned_chroma_stores(root) as create, MonkeyPatch.context() as patches:
+        with owned_qdrant_stores(root) as create, MonkeyPatch.context() as patches:
             vectors = create(collection_name="r5b-owned-vectors")
             index_module.filestorage_path = root / "storage"
             patches.setattr(index_module, "get_docstore", lambda _: documents)

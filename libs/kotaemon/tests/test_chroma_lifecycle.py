@@ -5,6 +5,12 @@ import pytest
 from .chroma_test_runtime import owned_chroma_stores
 
 
+@pytest.fixture(autouse=True)
+def legacy_chroma():
+    pytest.importorskip("chromadb", reason="Executed in the isolated legacy job")
+    pytest.importorskip("llama_index.vector_stores.chroma")
+
+
 def test_closing_owned_chroma_keeps_other_system_alive(tmp_path):
     owned = tmp_path / "owned"
     other = tmp_path / "other"

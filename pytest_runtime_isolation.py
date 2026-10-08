@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Mapping, MutableMapping
+from urllib.parse import urlsplit
 
 ISOLATED_RUNTIME_ENV_KEYS = (
     "MARA_PYTEST_RUNTIME_ROOT",
@@ -63,6 +64,19 @@ _DIAGNOSTIC_ENV_KEYS = (
 )
 
 OWNER_MARKER = ".mara-pytest-owner"
+
+
+def isolated_vector_service(environment: Mapping[str, str]) -> dict[str, str]:
+    url = environment.get("MARA_TEST_QDRANT_URL", "")
+    if url and urlsplit(url).hostname not in {"127.0.0.1", "::1", "localhost"}:
+        raise ValueError("Qdrant tests require an explicitly owned loopback service")
+    return {
+        "MARA_QDRANT_URL": url or "http://127.0.0.1:1",
+        "MARA_QDRANT_API_KEY": environment.get("MARA_TEST_QDRANT_API_KEY", "")
+        if url
+        else "",
+        "MARA_QDRANT_NAMESPACE": "",
+    }
 
 
 def _seed_nltk_cache(target: Path) -> None:
@@ -156,9 +170,10 @@ class TestRuntimePaths:
             path.mkdir(parents=True, exist_ok=True)
         _seed_nltk_cache(self.cache_dir / "nltk")
 
-    def environment(self) -> dict[str, str]:
+    def environment(self, inherited: Mapping[str, str] | None = None) -> dict[str, str]:
         cache_dir = self.cache_dir
         return {
+            **isolated_vector_service(os.environ if inherited is None else inherited),
             "MARA_PYTEST_RUNTIME_ROOT": str(self.root),
             "MARA_RUNTIME_DIR": str(self.root),
             "MARA_OUTPUT_DIR": str(self.output_dir),
@@ -204,7 +219,10 @@ def activate_test_runtime(
     paths = TestRuntimePaths.from_root(root)
     paths.create_directories()
     cleared = {key for key in environment if key.startswith("MARA_DESKTOP_")} | {
-        "KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED"
+        "KOTAEMON_RUNTIME_SETTINGS_BOOTSTRAPPED",
+        "MARA_QDRANT_URL",
+        "MARA_QDRANT_API_KEY",
+        "MARA_QDRANT_NAMESPACE",
     }
     snapshot = {
         key: environment.get(key)
@@ -217,7 +235,7 @@ def activate_test_runtime(
     }
     for key in cleared:
         environment.pop(key, None)
-    environment.update(paths.environment())
+    environment.update(paths.environment(environment))
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     return snapshot, paths
 

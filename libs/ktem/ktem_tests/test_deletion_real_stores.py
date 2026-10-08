@@ -11,16 +11,17 @@ from kotaemon.base import Document
 from kotaemon.storages import LanceDBDocumentStore
 
 from . import test_deletion_coordinator as fixtures
+from .indexing_backend_test_support import vector_ids
 from .test_deletion_coordinator import _coordinator, _row_counts, _seed_file
 
 deletion_db = fixtures.deletion_db
 # Reuse the same runtime helper without introducing a second static package name.
-owned_chroma_stores = import_module(
-    "libs.kotaemon.tests.chroma_test_runtime"
-).owned_chroma_stores
+owned_qdrant_stores = import_module(
+    "libs.kotaemon.tests.qdrant_test_runtime"
+).owned_qdrant_stores
 
 
-def test_real_chroma_lancedb_delete_fts_and_external_missing_retry(
+def test_real_qdrant_lancedb_delete_fts_and_external_missing_retry(
     deletion_db, tmp_path
 ):
     _seed_file(deletion_db)
@@ -39,7 +40,7 @@ def test_real_chroma_lancedb_delete_fts_and_external_missing_retry(
     assert len(table.search("deleteunique", query_type="fts").to_list()) == 3
     # This configured backend has no coordinator refresh hook; test actual FTS reads.
     assert getattr(documents, "create_fts_index", None) is None
-    with owned_chroma_stores(tmp_path) as create:
+    with owned_qdrant_stores(tmp_path, cleanup=True) as create:
         vectors = create(collection_name="r5a-owned-vectors")
         vectors.add([[0.1, 0.2], [0.3, 0.4]], ids=["vector-1", "unrelated"])
 
@@ -54,7 +55,7 @@ def test_real_chroma_lancedb_delete_fts_and_external_missing_retry(
                 artifact_cleaner=fail_artifacts,
             ).delete("file-1", user_id="user-1")
         assert raised.value.stage == "artifacts" and _row_counts(deletion_db) == (1, 4)
-        assert vectors._collection.get()["ids"] == ["unrelated"]
+        assert vector_ids(vectors) == ["unrelated"]
         assert [doc.doc_id for doc in documents.get(ids)] == ["unrelated"]
         # A previously opened table is a snapshot. The production query opens anew.
         assert documents.query("deleteunique") == []
@@ -69,7 +70,7 @@ def test_real_chroma_lancedb_delete_fts_and_external_missing_retry(
             .file_id
             == "file-1"
         )
-        assert vectors._collection.get()["ids"] == ["unrelated"]
+        assert vector_ids(vectors) == ["unrelated"]
         assert _row_counts(deletion_db) == (0, 0)
         with pytest.raises(DeletionError, match="validate"):
             _coordinator(deletion_db, vector_store=vectors, doc_store=documents).delete(

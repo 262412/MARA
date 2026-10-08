@@ -94,6 +94,6 @@ def test_cross_process_producer_and_delete_share_the_same_source_lease(
         assert plans[1].vector_ids
     assert support.rows(backend, "Source") == []
     assert support.rows(backend, "Index") == []
-    assert backend.vectors._collection.get()["ids"] == []
+    assert support.vector_ids(backend.vectors) == []
     assert backend.documents.query("processunique") == []
     assert not (backend.resources["FileStoragePath"] / plans[0].stored_path).exists()

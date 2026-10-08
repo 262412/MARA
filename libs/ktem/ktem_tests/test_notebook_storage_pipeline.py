@@ -1,4 +1,4 @@
-"""Real materialization, SQL, Lance, Chroma and export boundaries; no model calls."""
+"""Real materialization, SQL, Lance, Qdrant and export boundaries; no model calls."""
 
 from importlib import import_module
 from pathlib import Path
@@ -98,7 +98,7 @@ def test_note_materialization_index_and_backfill_record_actual_stage(
         ]
         assert document_ids and vector_ids
         assert note_store.documents.get(document_ids)
-        assert set(note_store.vectors._collection.get(ids=vector_ids)["ids"]) == set(
+        assert set(support.vector_ids(note_store.vectors, vector_ids)) == set(
             vector_ids
         )
     if failure == "deleted":

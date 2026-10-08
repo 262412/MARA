@@ -22,6 +22,7 @@ from scripts import clean_wheel_deletion_smoke as deletion_smoke  # noqa: E402
 from scripts import clean_wheel_indexing_smoke as indexing_smoke  # noqa: E402
 from scripts import clean_wheel_route_smoke as route_smoke  # noqa: E402
 from scripts import clean_wheel_web_smoke as web_smoke  # noqa: E402
+from scripts.sync_locked_constraints import render_locked_constraints  # noqa: E402
 
 EXPECTED_WHEELS = {
     "ktem": "ktem/",
@@ -203,21 +204,9 @@ def _write_offline_guard(root: Path) -> Path:
     guard_dir = root / "offline-guard"
     guard_dir.mkdir()
     (guard_dir / "sitecustomize.py").write_text(
-        """import socket
-
-class OfflineSocket(socket.socket):
-    def connect(self, *args, **kwargs):
-        raise RuntimeError(\"network access is forbidden during wheel smoke\")
-
-    def connect_ex(self, *args, **kwargs):
-        raise RuntimeError(\"network access is forbidden during wheel smoke\")
-
-def _offline(*args, **kwargs):
-    raise RuntimeError(\"network access is forbidden during wheel smoke\")
-
-socket.socket = OfflineSocket
-socket.create_connection = _offline
-""",
+        Path(__file__)
+        .with_name("clean_wheel_network_guard.py")
+        .read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     return guard_dir
@@ -225,23 +214,7 @@ socket.create_connection = _offline
 
 def _export_constraints(uv: str, root: Path, env: dict[str, str]) -> Path:
     constraints = root / "locked-constraints.txt"
-    _run(
-        [
-            uv,
-            "export",
-            "--locked",
-            "--all-packages",
-            "--no-dev",
-            "--no-emit-workspace",
-            "--no-hashes",
-            "--no-header",
-            "--no-annotate",
-            "--output-file",
-            constraints,
-        ],
-        env=env,
-        cwd=REPO_ROOT,
-    )
+    constraints.write_text(render_locked_constraints(), encoding="utf-8")
     return constraints
 
 
@@ -328,6 +301,7 @@ def _install_wheel_layers(
                 python,
                 "--constraint",
                 constraints,
+                REPO_ROOT / "vendor/nltk",
                 wheels[distribution],
             ],
             env=env,
@@ -339,6 +313,11 @@ def _install_wheel_layers(
             cwd=venv.parent,
         )
         _run_layer_imports(distribution, venv, env)
+        _run(
+            [python, REPO_ROOT / "scripts/check_nltk_backport.py"],
+            env=env,
+            cwd=venv.parent,
+        )
 
 
 def _install_combined_wheels(
@@ -358,6 +337,7 @@ def _install_combined_wheels(
             python,
             "--constraint",
             constraints,
+            REPO_ROOT / "vendor/nltk",
             *(wheels[distribution] for distribution in PACKAGE_ORDER),
         ],
         env=env,

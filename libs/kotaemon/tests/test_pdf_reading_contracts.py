@@ -262,15 +262,15 @@ def test_real_pdf_owned_index_reload_citations_and_embedding_cache(tmp_path):
         assert target.element_id == document.metadata["element_id"]
 
 
-def test_real_pdf_configured_chroma_lance_stores_survive_reopen(tmp_path):
-    from .chroma_test_runtime import owned_chroma_stores
+def test_real_pdf_configured_qdrant_lance_stores_survive_reopen(tmp_path):
+    from .qdrant_test_runtime import owned_qdrant_stores
 
     documents = AutoReader("PDFReader").load_data(write_pdf(tmp_path / "stored.pdf"))
     ids = [document.doc_id for document in documents]
-    doc_path, vector_path = tmp_path / "lance", tmp_path / "chroma"
+    doc_path, vector_path = tmp_path / "lance", tmp_path / "qdrant"
     store = LanceDBDocumentStore(path=str(doc_path), collection_name="owned_pdf")
     store.add(documents)
-    with owned_chroma_stores(tmp_path) as create:
+    with owned_qdrant_stores(tmp_path) as create:
         vectors = create(path=vector_path)
         vectors.add(
             embeddings=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -285,7 +285,7 @@ def test_real_pdf_configured_chroma_lance_stores_survive_reopen(tmp_path):
         "2",
         "3",
     ]
-    with owned_chroma_stores(tmp_path) as create:
+    with owned_qdrant_stores(tmp_path, cleanup=True) as create:
         vectors = create(path=vector_path)
         assert vectors.count() == 3
         assert vectors.query([1.0, 0.0, 0.0], top_k=1)[2] == ids[:1]

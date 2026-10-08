@@ -21,6 +21,8 @@ def offline_nltk(monkeypatch, tmp_path):
     monkeypatch.setattr(socket, "create_connection", unexpected_network)
     monkeypatch.setattr(socket.socket, "connect", unexpected_network)
     data = tmp_path / "nltk_data"
+    monkeypatch.setenv("NLTK_DATA", str(data))
+    monkeypatch.setattr(nltk.data, "path", [str(data)])
     punkt = data / "tokenizers/punkt_tab/english"
     punkt.mkdir(parents=True)
     save_punkt_params(PunktParameters(), dir=str(punkt))
@@ -34,8 +36,6 @@ def offline_nltk(monkeypatch, tmp_path):
         (tagger / f"averaged_perceptron_tagger_eng.{name}.json").write_text(
             json.dumps(value), encoding="utf-8"
         )
-    monkeypatch.setenv("NLTK_DATA", str(data))
-    monkeypatch.setattr(nltk.data, "path", [str(data)])
     nltk.tokenize._get_punkt_tokenizer.cache_clear()
     yield data
     nltk.tokenize._get_punkt_tokenizer.cache_clear()

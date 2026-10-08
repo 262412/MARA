@@ -11,6 +11,8 @@ from decouple import config
 from ktem.auth.policy import resolve_auth_mode, resolve_legacy_bootstrap_credentials
 from ktem.utils.lang import SUPPORTED_LANGUAGE_MAP
 
+from kotaemon.storages.vectorstores.migration import configured_vectorstore
+
 
 def _ensure_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
@@ -341,10 +343,7 @@ def build_kotaemon_settings(
             "__type__": "kotaemon.storages.LanceDBDocumentStore",
             "path": str(user_data_dir / "docstore"),
         },
-        "KH_VECTORSTORE": {
-            "__type__": "kotaemon.storages.ChromaVectorStore",
-            "path": str(user_data_dir / "vectorstore"),
-        },
+        "KH_VECTORSTORE": configured_vectorstore(user_data_dir, read_config),
         "KH_LLMS": {},
         "KH_EMBEDDINGS": {},
         "KH_RERANKINGS": {},

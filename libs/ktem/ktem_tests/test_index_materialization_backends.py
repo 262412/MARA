@@ -48,11 +48,11 @@ def test_new_source_identity_matrix_and_survivor_access(
     targets = [document_targets(backend, identity) for identity in sources]
     assert len(targets[0]) == len(targets[1]) == 1
     assert set(targets[0]).isdisjoint(targets[1])
-    assert set(backend.vectors._collection.get()["ids"]) == set(targets[0] + targets[1])
+    assert set(support.vector_ids(backend.vectors)) == set(targets[0] + targets[1])
     producers[delete_first].delete_file(sources[delete_first])
     remaining = 1 - delete_first
     owner = ("alice", "bob")[remaining]
-    assert backend.vectors._collection.get()["ids"] == targets[remaining]
+    assert support.vector_ids(backend.vectors) == targets[remaining]
     assert [
         doc.doc_id for doc in backend.documents.query("isolationunique")
     ] == targets[remaining]
@@ -136,7 +136,7 @@ def test_old_source_delete_same_name_new_source_then_old_writer_cannot_cross_wri
     assert len(errors) == 1 and "Source removed during indexing" in str(errors[0])
     assert [row.id for row in support.rows(backend, "Source")] == [new_id]
     assert {row.source_id for row in support.rows(backend, "Index")} == {new_id}
-    assert backend.vectors._collection.get()["ids"] == targets
+    assert support.vector_ids(backend.vectors) == targets
     assert [
         doc.doc_id for doc in backend.documents.query("incarnationunique")
     ] == targets

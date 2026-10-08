@@ -2,6 +2,29 @@ import pytest
 from ktem.runtime_defaults import build_kotaemon_settings
 
 
+def test_vector_default_uses_shared_service_and_preserves_explicit_namespace(tmp_path):
+    selected = build_kotaemon_settings(
+        base_dir=tmp_path,
+        app_data_dir=tmp_path / "app-data",
+        config_reader=_config_reader(
+            {
+                "MARA_QDRANT_URL": "https://configured.example",
+                "MARA_QDRANT_API_KEY": "synthetic-configured-value",
+                "MARA_QDRANT_NAMESPACE": "mara_shared",
+            }
+        ),
+    )["KH_VECTORSTORE"]
+    assert selected == {
+        "__type__": "kotaemon.storages.QdrantVectorStore",
+        "url": "https://configured.example",
+        "api_key": "synthetic-configured-value",
+        "namespace": "mara_shared",
+        "mara_compatibility": True,
+        "legacy_path": str(tmp_path / "app-data/user_data/vectorstore"),
+        "migration_path": str(tmp_path / "app-data/user_data/vectorstore_qdrant"),
+    }
+
+
 @pytest.fixture(autouse=True)
 def _clear_auth_environment(monkeypatch):
     for name in (

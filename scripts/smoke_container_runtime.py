@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import time
 import uuid
@@ -311,6 +312,14 @@ def smoke(
             "--detach",
             "--name",
             container,
+            "--network",
+            "host",
+            "--env",
+            "GRADIO_SERVER_NAME=127.0.0.1",
+            "--env",
+            "MARA_QDRANT_URL=" + os.environ["MARA_QDRANT_URL"],
+            "--env",
+            "MARA_QDRANT_API_KEY=" + os.environ["MARA_QDRANT_API_KEY"],
             "--mount",
             (
                 f"type=bind,src={secret_file.resolve()},"

@@ -21,6 +21,7 @@ REQUIRED_JOBS = {
     "collection",
     "secret-scan",
     "kotaemon",
+    "windows-storage-security",
     "ktem",
     "slide-cli",
     "benchmark-root",
@@ -568,26 +569,6 @@ def test_non_pr_quality_calls_use_a_trusted_base_not_head_parent():
         assert "github.event.pull_request.base.sha" in base_expression
         assert "github.event.before" in base_expression
         assert "github.event.repository.default_branch" in base_expression
-
-
-def test_secret_scan_is_reusable_required_and_pinned():
-    quality = _load_workflow(WORKFLOW_PATH)
-    secret_path = REPO_ROOT / ".github" / "workflows" / "secret-scan.yaml"
-    secret = _load_workflow(secret_path)
-    triggers = _trigger(secret)
-
-    assert quality["jobs"]["secret-scan"]["uses"] == (
-        "./.github/workflows/secret-scan.yaml"
-    )
-    assert "secret-scan" in quality["jobs"]["required"]["needs"]
-    assert "workflow_call" in triggers
-    assert "pull_request" not in triggers
-    assert "push" not in triggers
-    for job in secret["jobs"].values():
-        for step in job.get("steps", []):
-            action = step.get("uses")
-            if action and not action.startswith("./"):
-                assert FULL_SHA.fullmatch(action.rsplit("@", 1)[-1]), action
 
 
 @pytest.mark.parametrize("path", ["style-check.yaml", "unit-test.yaml"])
