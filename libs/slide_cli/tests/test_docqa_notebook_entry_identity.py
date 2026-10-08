@@ -46,7 +46,7 @@ commands = [
 results = []
 for arguments in commands:
     result = runner.invoke(main, ['docqa', *arguments])
-    results.append({'args': arguments, 'exit': result.exit_code, 'output': result.output,
+    results.append({'args': arguments, 'exit': result.exit_code, 'output': result.output, 'stdout': result.stdout,
                     'error_type': type(result.exception).__name__ if result.exception else None,
                     'error': str(result.exception) if result.exception else ''})
 unchanged = notebook.get_notebook('public', user_id='other')
@@ -88,7 +88,7 @@ def test_real_notebook_cli_uses_runtime_identity_and_keeps_public_writes_forbidd
     owned = payload["results"][:10]
     assert all(item["exit"] == 0 for item in owned), owned
     for item in owned:
-        json.loads(item["output"])
+        json.loads(item["stdout"])
     denied = payload["results"][10:]
     assert all(item["exit"] == 1 for item in denied), denied
     assert denied[0]["error_type"] == "SystemExit"

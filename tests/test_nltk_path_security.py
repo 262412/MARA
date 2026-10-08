@@ -99,14 +99,14 @@ def outside_reference(mode, allowed, outside):
             pytest.skip(f"Directory symlinks unavailable: {error}")
         return link
     if mode == "junction":
-        if sys.platform != "win32":
-            pytest.skip("Windows directory junction case")
-        import _winapi
+        if sys.platform == "win32":
+            import _winapi
 
-        link = allowed / "junction"
-        _winapi.CreateJunction(str(outside), str(link))
-        assert link.resolve() == outside.resolve()
-        return link
+            link = allowed / "junction"
+            _winapi.CreateJunction(str(outside), str(link))
+            assert link.resolve() == outside.resolve()
+            return link
+        pytest.skip("Windows directory junction case")
     raise AssertionError(mode)
 
 

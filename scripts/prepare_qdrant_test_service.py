@@ -133,6 +133,9 @@ def start_service(root, executable, restore_snapshot=None):
     command = [str(executable), "--config-path", str(configuration)]
     if restore_snapshot is not None:
         command.extend(["--storage-snapshot", str(restore_snapshot.resolve())])
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.CREATE_NO_WINDOW
     with (root / "server.log").open("xb") as log:
         process = subprocess.Popen(
             command,
@@ -141,7 +144,7 @@ def start_service(root, executable, restore_snapshot=None):
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            creationflags=creationflags,
         )
     url = f"http://127.0.0.1:{http_port}"
     try:
