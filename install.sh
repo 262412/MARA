@@ -7,6 +7,7 @@ PYTHON_BIN="${PYTHON_BIN:-3.11}"
 SKIP_INIT="${SKIP_INIT:-0}"
 INSTALL_CODEX="${INSTALL_CODEX:-0}"
 INSTALL_CLAUDE_CODE="${INSTALL_CLAUDE_CODE:-0}"
+INSTALL_DEV="${INSTALL_DEV:-0}"
 
 if [[ ! -f "$SCRIPT_DIR/pyproject.toml" || ! -f "$SCRIPT_DIR/uv.lock" ]]; then
   echo "install.sh supports a verified MARA source checkout with uv.lock." >&2
@@ -35,10 +36,14 @@ if ! uv python find "$PYTHON_BIN" >/dev/null 2>&1; then
 fi
 
 export UV_PROJECT_ENVIRONMENT="$VENV_DIR"
+DEVELOPMENT_FLAGS=(--no-dev)
+if [[ "$INSTALL_DEV" == "1" ]]; then
+  DEVELOPMENT_FLAGS=()
+fi
 uv sync \
   --project "$SCRIPT_DIR" \
   --frozen \
-  --no-dev \
+  "${DEVELOPMENT_FLAGS[@]}" \
   --no-editable \
   --reinstall-package mara-app \
   --reinstall-package mara-research-cli \

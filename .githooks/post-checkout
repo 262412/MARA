@@ -15,6 +15,11 @@ guard="$primary_root/scripts/check_mara_worktree_env.py"
 
 bootstrap_python=python3
 case "$(uname -s)" in
-  MINGW*|MSYS*) bootstrap_python=python ;;
+  MINGW*|MSYS*)
+    bootstrap_python=python
+    if [[ -x "$primary_root/.venv/Scripts/python.exe" ]]; then
+      bootstrap_python="$primary_root/.venv/Scripts/python.exe"
+    fi
+    ;;
 esac
 exec "$bootstrap_python" "$guard" prepare-linked

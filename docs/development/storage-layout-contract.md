@@ -11,7 +11,8 @@ On Windows, keep the primary checkout at `D:\PythonProject\MARA`. Its ignored
 `.mara` directory owns environments, caches, builds, the local Qdrant WSL disk,
 and backups. `.venv` may be a directory junction to `.mara/envs/mara`; linked
 worktrees still require the sentinel and canonical wrapper. Run `install.sh`
-through Git Bash to synchronize the non-editable canonical environment. The
+through Git Bash to synchronize the non-editable canonical environment; set
+`INSTALL_DEV=1` to include the locked test and lint tools. The
 default existing app data remains in `ktem_app_data`; other migrated data roots
 stay separate under `.mara/data`. Do not put new MARA working directories at the
 drive root. Qdrant writes inside the WSL Linux filesystem, not a Windows bind
