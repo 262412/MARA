@@ -106,6 +106,14 @@ and namespace for another attempt. Hashes of the retained legacy source, the
 service address, namespace and server-side migration identity are checked at
 startup. An existing server namespace is never overwritten by import.
 
+If a copied legacy HNSW index cannot answer queries but all records and vectors
+can still be read, retry export into new directories with `--probe-mode exact-l2`.
+This explicitly computes the probes from every exported vector using squared L2
+distance; it does not re-embed documents or repair the original Chroma directory.
+The export and migration receipt record the probe source. Payload/vector checks
+and target nearest-neighbor verification still apply, but this recovery mode
+does not establish parity with the broken legacy approximate index.
+
 After verification, start the new MARA version. The legacy source is preserved.
 Before any new writes, rollback can use the old application and untouched source.
 After new writes, roll back the old application **and the complete pre-cutover

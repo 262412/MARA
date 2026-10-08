@@ -1,6 +1,7 @@
 """Export an offline legacy Chroma copy, then import/verify in the new runtime."""
 
 import argparse
+import heapq
 import importlib.metadata
 import importlib.util
 import json
@@ -43,7 +44,27 @@ def _copy_snapshot(source, snapshot, output, migration):
     return source_files
 
 
-def _export_collection(collection, stream):
+def _exact_l2_probes(collection, probes, count):
+    """Recover query references from vectors when the legacy HNSW is unusable."""
+    nearest: list[list[tuple[float, str]]] = [[] for _ in probes]
+    for offset in range(0, count, 128):
+        rows = collection.get(limit=128, offset=offset, include=["embeddings"])
+        for identifier, vector in zip(rows["ids"], rows["embeddings"], strict=True):
+            for index, probe in enumerate(probes):
+                distance = math.fsum(
+                    (float(a) - float(b)) ** 2
+                    for a, b in zip(probe["embedding"], vector, strict=True)
+                )
+                nearest[index] = heapq.nsmallest(
+                    min(10, count), [*nearest[index], (distance, identifier)]
+                )
+    for probe, neighbors in zip(probes, nearest, strict=True):
+        probe["ids"] = [identifier for _, identifier in neighbors]
+        probe["scores"] = [math.exp(-distance) for distance, _ in neighbors]
+    return probes
+
+
+def _export_collection(collection, stream, *, probe_mode="chroma"):
     count, dimension = collection.count(), 0
     probes: list[dict] = []
     metric = (collection.metadata or {}).get("hnsw:space", "l2")
@@ -69,6 +90,9 @@ def _export_collection(collection, stream):
             }
             stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
             if len(probes) < 3:
+                if probe_mode == "exact-l2":
+                    probes.append({"embedding": vector})
+                    continue
                 result = collection.query(
                     query_embeddings=[vector], n_results=min(10, count)
                 )
@@ -86,11 +110,18 @@ def _export_collection(collection, stream):
         "count": count,
         "dimension": dimension,
         "metric": metric,
-        "probes": probes,
+        "probe_source": probe_mode,
+        "probes": (
+            _exact_l2_probes(collection, probes, count)
+            if probe_mode == "exact-l2"
+            else probes
+        ),
     }
 
 
-def export_snapshot(source, snapshot, output):
+def export_snapshot(source, snapshot, output, *, probe_mode="chroma"):
+    if probe_mode not in {"chroma", "exact-l2"}:
+        raise ValueError(f"Unsupported probe mode: {probe_mode!r}")
     version = importlib.metadata.version("chromadb")
     if version not in {"0.5.16", "0.5.17"}:
         raise ValueError(
@@ -113,7 +144,9 @@ def export_snapshot(source, snapshot, output):
         with (output / "records.jsonl").open("x", encoding="utf-8") as stream:
             for item in sorted(client.list_collections(), key=lambda item: item.name):
                 collection = client.get_collection(item.name, embedding_function=None)
-                collections.append(_export_collection(collection, stream))
+                collections.append(
+                    _export_collection(collection, stream, probe_mode=probe_mode)
+                )
     finally:
         client._system.stop()
         from chromadb.api.shared_system_client import SharedSystemClient
@@ -154,6 +187,12 @@ def main(argv=None):
     export.add_argument("--snapshot", type=Path, required=True)
     export.add_argument("--output", type=Path, required=True)
     export.add_argument("--source-stopped", action="store_true", required=True)
+    export.add_argument(
+        "--probe-mode",
+        choices=["chroma", "exact-l2"],
+        default="chroma",
+        help="Use exact-l2 only to recover a legacy index whose queries fail",
+    )
     for name in ("import", "verify"):
         command = commands.add_parser(name, help="Run in the new MARA environment")
         command.add_argument("--export", type=Path, required=True)
@@ -164,7 +203,9 @@ def main(argv=None):
         )
     args = parser.parse_args(argv)
     if args.command == "export":
-        result = export_snapshot(args.source, args.snapshot, args.output)
+        result = export_snapshot(
+            args.source, args.snapshot, args.output, probe_mode=args.probe_mode
+        )
     else:
         from kotaemon.storages.vectorstores.migration import (
             import_snapshot,

@@ -336,6 +336,10 @@ def import_snapshot(export, target, *, url=None, api_key=None, namespace=None):
         "source": manifest["source"],
         "source_files": manifest["source_files"],
         "records_sha256": manifest["records_sha256"],
+        "probe_sources": {
+            item["name"]: item.get("probe_source", "chroma")
+            for item in manifest["collections"]
+        },
         "destination": destination,
         **result,
     }
