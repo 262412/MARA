@@ -26,6 +26,30 @@ COPY docker/pyproject.toml docker/uv.lock ./docker/
 COPY libs ./libs
 COPY scripts/prepare_container_nltk.py /opt/mara/bin/prepare_container_nltk.py
 
+# Reuse v0.31.2's native libraries and rebuild its Go service with patched modules.
+FROM builder-base AS ollama-builder
+ADD --checksum=sha256:63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445 \
+    https://go.dev/dl/go1.27.1.linux-amd64.tar.gz /tmp/go.tar.gz
+ADD --checksum=sha256:9c334ffe4dda2afce6bc448b0d5505e97a5f067db5141cac988d3edfd920bb6f \
+    https://codeload.github.com/ollama/ollama/tar.gz/a6293eb5164214f15e7856268f3adddeae1026e2 /tmp/ollama.tar.gz
+RUN tar -xzf /tmp/go.tar.gz -C /usr/local \
+    && mkdir /opt/ollama-src \
+    && tar -xzf /tmp/ollama.tar.gz -C /opt/ollama-src --strip-components=1
+ENV PATH=/usr/local/go/bin:$PATH \
+    GOTOOLCHAIN=local
+WORKDIR /opt/ollama-src
+COPY docker/ollama/go.mod docker/ollama/go.sum ./
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    sha256sum go.mod go.sum > /tmp/ollama-locks.sha256 \
+    && go mod download \
+    && go mod verify \
+    && go test -mod=readonly -timeout=3m ./api ./envconfig \
+    && CGO_ENABLED=1 go build -mod=readonly -trimpath -buildmode=pie \
+        -ldflags="-s -w -X github.com/ollama/ollama/version.Version=0.31.2" \
+        -o /bin/ollama . \
+    && sha256sum --check /tmp/ollama-locks.sha256 \
+    && go version -m /bin/ollama
+
 FROM builder-base AS lite-builder
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project /opt/mara/docker --frozen --no-dev --no-editable \
@@ -115,7 +139,7 @@ ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/opt/mara/bin/container-entrypoint"]
 
 FROM runtime-full AS ollama
 COPY --from=full-builder --chown=0:0 /opt/mara/.venv /opt/mara/.venv
-COPY --from=ollama-source --chown=0:0 /bin/ollama /usr/bin/ollama
+COPY --from=ollama-builder --chown=0:0 /bin/ollama /usr/bin/ollama
 COPY --from=ollama-source --chown=0:0 /usr/lib/ollama /usr/lib/ollama
 RUN install -d -m 0750 -o 10001 -g 10001 /var/lib/mara/ollama \
     && chmod -R a-w /opt/mara

@@ -421,3 +421,44 @@ printf '%s\n' "$MARA_SECRET_DIR" >"$2"
 
     assert completed.returncode == 0, completed.stderr
     assert not Path(marker.read_text(encoding="utf-8").strip()).exists()
+
+
+@pytest.mark.parametrize(
+    ("version", "models", "error"),
+    [("0.31.2", [], None), ("0.0.0", [], "version"), ("0.31.2", {}, "model-list")],
+)
+def test_ollama_probe_checks_release_version_and_model_api(
+    monkeypatch, version, models, error
+):
+    import io
+    import json
+    import urllib.request
+
+    from scripts import smoke_container_runtime as smoke
+
+    requests = []
+    responses = {
+        "http://127.0.0.1:11434/api/version": {"version": version},
+        "http://127.0.0.1:11434/api/tags": {"models": models},
+    }
+
+    def response(url, *, timeout):
+        assert timeout == 5
+        requests.append(url)
+        return io.StringIO(json.dumps(responses[url]))
+
+    def run(*command, check=True, timeout=None):
+        if command[1] == "top":
+            return subprocess.CompletedProcess(command, 0, "1 ollama serve", "")
+        if command[1] == "exec" and command[3] == "/opt/mara/.venv/bin/python":
+            exec(compile(command[-1], "ollama-probe", "exec"), {})
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(urllib.request, "urlopen", response)
+    monkeypatch.setattr(smoke, "_run", run)
+    if error:
+        with pytest.raises(RuntimeError, match=error):
+            smoke._check_runtime("container-id", "ollama")
+    else:
+        smoke._check_runtime("container-id", "ollama")
+        assert requests == list(responses)

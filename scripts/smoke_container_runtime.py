@@ -9,6 +9,21 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+OLLAMA_PROBE = r"""
+import json
+from urllib.request import urlopen
+
+with urlopen("http://127.0.0.1:11434/api/version", timeout=5) as response:
+    version = json.load(response)["version"]
+if version != "0.31.2":
+    raise RuntimeError(f"Unexpected Ollama version: {version!r}")
+with urlopen("http://127.0.0.1:11434/api/tags", timeout=5) as response:
+    models = json.load(response)["models"]
+if not isinstance(models, list):
+    raise RuntimeError("Unexpected Ollama model-list response")
+print(json.dumps({"version": version, "model_count": len(models)}))
+"""
+
 PCRE2_PROBE = r"""
 import ctypes as c
 import hashlib
@@ -222,11 +237,10 @@ def _check_runtime(container: str, target: str) -> None:
             "exec",
             container,
             "/opt/mara/.venv/bin/python",
+            "-I",
             "-c",
-            (
-                "import socket; s=socket.create_connection("
-                "('127.0.0.1', 11434), timeout=5); s.close()"
-            ),
+            OLLAMA_PROBE,
+            timeout=15,
         )
 
 
