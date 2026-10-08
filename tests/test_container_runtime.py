@@ -378,20 +378,22 @@ def test_llama_cpp_is_optional_and_not_built_for_container_runtime():
     assert "llama-cpp" in extras["all"][0]
 
 
-def test_readme_uses_non_root_compatible_volume_and_secret_permissions():
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(
-        encoding="utf-8"
-    )
+def test_linked_container_guide_uses_non_root_volume_and_secret_permissions():
+    repo_root = Path(__file__).resolve().parents[1]
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    guide_path = "docs/development/container-usage.md"
+    assert f"({guide_path})" in readme
+    guide = (repo_root / guide_path).read_text(encoding="utf-8")
 
-    assert "docker volume create mara-data" in readme
-    assert "type=volume,src=mara-data,dst=/var/lib/mara" in readme
-    assert 'install -m 0600 /dev/null "$MARA_SECRET_FILE"' in readme
-    assert 'chmod 0444 "$MARA_SECRET_FILE"' in readme
-    assert "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX" in readme
-    assert "read -rsp 'MARA admin password: ' MARA_ADMIN_PASSWORD" in readme
-    assert "unset MARA_ADMIN_PASSWORD" in readme
-    assert 'trap \'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"\' EXIT' in readme
-    assert "-v ./ktem_app_data:/var/lib/mara" not in readme
+    assert "docker volume create mara-data" in guide
+    assert "type=volume,src=mara-data,dst=/var/lib/mara" in guide
+    assert 'install -m 0600 /dev/null "$MARA_SECRET_FILE"' in guide
+    assert 'chmod 0444 "$MARA_SECRET_FILE"' in guide
+    assert "${XDG_RUNTIME_DIR:-/tmp}/mara-secret.XXXXXX" in guide
+    assert "read -rsp 'MARA admin password: ' MARA_ADMIN_PASSWORD" in guide
+    assert "unset MARA_ADMIN_PASSWORD" in guide
+    assert 'trap \'rm -f "$MARA_SECRET_FILE"; rmdir "$MARA_SECRET_DIR"\' EXIT' in guide
+    assert "-v ./ktem_app_data:/var/lib/mara" not in guide
 
 
 def test_documented_secret_file_permissions_are_non_root_readable_and_cleaned(
