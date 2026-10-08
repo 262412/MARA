@@ -358,6 +358,7 @@ celerybeat.pid
 # Environments
 .venv
 .venv/
+.mara/
 env/
 venv/
 ENV/

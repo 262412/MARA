@@ -14,13 +14,34 @@ CONFIG_ERROR = getattr(os, "EX_CONFIG", 78)
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    completed = subprocess.run(
         ["git", *args],
         cwd=repo,
         text=True,
         capture_output=True,
-        check=True,
+        check=False,
     )
+    assert completed.returncode == 0, completed.stderr
+    return completed
+
+
+def _directory_link(path: Path, target: Path) -> None:
+    if os.name == "nt":
+        script = "New-Item -ItemType Junction -Path '{}' -Target '{}' | Out-Null"
+        subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                script.format(
+                    str(path).replace("'", "''"), str(target).replace("'", "''")
+                ),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    else:
+        path.symlink_to(target, target_is_directory=True)
 
 
 def _init_repository(tmp_path: Path) -> tuple[Path, Path]:
@@ -51,7 +72,7 @@ def _init_repository(tmp_path: Path) -> tuple[Path, Path]:
     python = canonical / "bin" / "python"
     python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     python.chmod(0o755)
-    (repo / ".venv").symlink_to(canonical, target_is_directory=True)
+    _directory_link(repo / ".venv", canonical)
     return repo, canonical
 
 
@@ -98,7 +119,7 @@ def test_prepare_linked_replaces_only_a_shared_canonical_symlink(tmp_path: Path)
     repo, canonical = _init_repository(tmp_path)
     linked = tmp_path / "linked"
     _git(repo, "worktree", "add", "--detach", str(linked), "HEAD")
-    (linked / ".venv").symlink_to(canonical, target_is_directory=True)
+    _directory_link(linked / ".venv", canonical)
 
     completed = _guard(linked, "prepare-linked", check=True)
 
@@ -113,7 +134,7 @@ def test_prepare_linked_preserves_an_unknown_environment(tmp_path: Path):
     _git(repo, "worktree", "add", "--detach", str(linked), "HEAD")
     unknown = tmp_path / "unknown-venv"
     unknown.mkdir()
-    (linked / ".venv").symlink_to(unknown, target_is_directory=True)
+    _directory_link(linked / ".venv", unknown)
 
     completed = _guard(linked, "prepare-linked")
 
@@ -135,7 +156,14 @@ def test_linked_sentinel_makes_uv_fail_before_creating_an_environment(
         cwd=linked,
         text=True,
         capture_output=True,
-        env={**os.environ, "UV_NO_CACHE": "1"},
+        env={
+            **{
+                key: value
+                for key, value in os.environ.items()
+                if key not in {"UV_PROJECT_ENVIRONMENT", "VIRTUAL_ENV"}
+            },
+            "UV_NO_CACHE": "1",
+        },
         check=False,
     )
 

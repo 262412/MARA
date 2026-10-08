@@ -3,7 +3,7 @@ set -euo pipefail
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 common_dir="$(git -C "$root" rev-parse --git-common-dir)"
-if [[ "$common_dir" != /* ]]; then
+if [[ "$common_dir" != /* && ! "$common_dir" =~ ^[A-Za-z]:[/\\] ]]; then
   common_dir="$root/$common_dir"
 fi
 primary_root="$(cd -- "$common_dir/.." && pwd -P)"
@@ -13,4 +13,8 @@ current_root="$(cd -- "$root" && pwd -P)"
 guard="$primary_root/scripts/check_mara_worktree_env.py"
 [[ -f "$guard" ]] || exit 0
 
-exec python3 "$guard" prepare-linked
+bootstrap_python=python3
+case "$(uname -s)" in
+  MINGW*|MSYS*) bootstrap_python=python ;;
+esac
+exec "$bootstrap_python" "$guard" prepare-linked

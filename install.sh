@@ -14,7 +14,7 @@ if [[ ! -f "$SCRIPT_DIR/pyproject.toml" || ! -f "$SCRIPT_DIR/uv.lock" ]]; then
 fi
 COMMON_GIT_DIR="$(git -C "$SCRIPT_DIR" rev-parse --git-common-dir 2>/dev/null || true)"
 if [[ -n "$COMMON_GIT_DIR" ]]; then
-  if [[ "$COMMON_GIT_DIR" != /* ]]; then
+  if [[ "$COMMON_GIT_DIR" != /* && ! "$COMMON_GIT_DIR" =~ ^[A-Za-z]:[/\\] ]]; then
     COMMON_GIT_DIR="$SCRIPT_DIR/$COMMON_GIT_DIR"
   fi
   PRIMARY_ROOT="$(cd -- "$COMMON_GIT_DIR/.." && pwd -P)"
@@ -48,6 +48,9 @@ uv sync \
   --python "$PYTHON_BIN"
 
 VENV_MARA="$VENV_DIR/bin/MARA"
+if [[ -f "$VENV_DIR/Scripts/MARA.exe" ]]; then
+  VENV_MARA="$VENV_DIR/Scripts/MARA.exe"
+fi
 if [[ ! -x "$VENV_MARA" ]]; then
   echo "The frozen sync did not create $VENV_MARA." >&2
   exit 70

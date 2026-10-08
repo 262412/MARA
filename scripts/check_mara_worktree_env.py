@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -39,11 +40,22 @@ def _primary_root(root: Path) -> Path:
     return _common_git_dir(root).parent.resolve()
 
 
+def _is_environment_link(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    return (
+        os.name == "nt"
+        and path.exists()
+        and (path.lstat().st_reparse_tag == stat.IO_REPARSE_TAG_MOUNT_POINT)
+    )
+
+
 def _canonical_venv(root: Path) -> Path:
     primary_venv = _primary_root(root) / ".venv"
-    if not primary_venv.is_symlink():
+    if not _is_environment_link(primary_venv):
         raise RuntimeError(
-            f"primary .venv must be a symlink before sharing dependencies: {primary_venv}"
+            "primary .venv must be a symlink or Windows junction before sharing "
+            f"dependencies: {primary_venv}"
         )
     return primary_venv.resolve(strict=True)
 
@@ -74,14 +86,14 @@ def check(root: Path) -> None:
     canonical = _canonical_venv(root)
     venv = root / ".venv"
     if root == primary:
-        if not venv.is_symlink() or venv.resolve(strict=True) != canonical:
+        if not _is_environment_link(venv) or venv.resolve(strict=True) != canonical:
             raise RuntimeError(f"primary .venv is not canonical: {venv}")
         print(f"MARA primary worktree environment is canonical: {canonical}")
         return
     if _is_sentinel(venv):
         print(f"MARA linked worktree sentinel is active: {venv}")
         return
-    if venv.is_symlink() and venv.resolve(strict=False) == canonical:
+    if _is_environment_link(venv) and venv.resolve(strict=False) == canonical:
         raise RuntimeError(
             f"linked worktree shares the canonical environment: {root}; "
             "run scripts/check_mara_worktree_env.py prepare-linked"
@@ -98,11 +110,14 @@ def prepare_linked(root: Path) -> None:
     if _is_sentinel(venv):
         print(f"MARA linked worktree sentinel is already active: {venv}")
         return
-    if venv.is_symlink():
+    if _is_environment_link(venv):
         target = venv.resolve(strict=False)
         if target != canonical:
             raise RuntimeError(f"refusing to replace unknown .venv target: {target}")
-        venv.unlink()
+        if venv.is_symlink():
+            venv.unlink()
+        else:
+            venv.rmdir()
         _write_sentinel(venv, canonical)
         print(f"MARA replaced shared environment symlink with sentinel: {venv}")
         return

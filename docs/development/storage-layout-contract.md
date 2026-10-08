@@ -7,7 +7,17 @@ any task that may create many files.
 
 ## Required Layout
 
-Use this layout:
+On Windows, keep the primary checkout at `D:\PythonProject\MARA`. Its ignored
+`.mara` directory owns environments, caches, builds, the local Qdrant WSL disk,
+and backups. `.venv` may be a directory junction to `.mara/envs/mara`; linked
+worktrees still require the sentinel and canonical wrapper. Run `install.sh`
+through Git Bash to synchronize the non-editable canonical environment. The
+default existing app data remains in `ktem_app_data`; other migrated data roots
+stay separate under `.mara/data`. Do not put new MARA working directories at the
+drive root. Qdrant writes inside the WSL Linux filesystem, not a Windows bind
+mount. The Linux quota commands and paths below apply only to that host.
+
+On the configured Linux host, use this layout:
 
 ```text
 Source/Git repository:
