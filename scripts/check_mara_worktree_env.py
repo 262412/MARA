@@ -43,11 +43,11 @@ def _primary_root(root: Path) -> Path:
 def _is_environment_link(path: Path) -> bool:
     if path.is_symlink():
         return True
-    return (
-        os.name == "nt"
-        and path.exists()
-        and (path.lstat().st_reparse_tag == stat.IO_REPARSE_TAG_MOUNT_POINT)
-    )
+    if sys.platform == "win32":
+        return path.exists() and (
+            path.lstat().st_reparse_tag == stat.IO_REPARSE_TAG_MOUNT_POINT
+        )
+    return False
 
 
 def _canonical_venv(root: Path) -> Path:
