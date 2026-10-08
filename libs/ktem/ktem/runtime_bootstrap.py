@@ -56,6 +56,21 @@ def _owned_settings_module_path(source: str, root: Path) -> Path:
     return origin
 
 
+def _validate_test_vector_service(value, app_data_dir) -> None:
+    from urllib.parse import urlsplit
+
+    from kotaemon.storages.vectorstores.migration import default_namespace
+
+    expected_url = os.environ.get("MARA_TEST_QDRANT_URL") or "http://127.0.0.1:1"
+    if (
+        urlsplit(expected_url).hostname not in {"127.0.0.1", "::1", "localhost"}
+        or value.get("url") != expected_url
+        or app_data_dir is None
+        or value.get("namespace") != default_namespace(Path(app_data_dir) / "user_data")
+    ):
+        raise RuntimeError("Qdrant service is outside the isolated test runtime")
+
+
 def validate_test_runtime_paths(values) -> None:
     """Fail before I/O when an activated test config escapes its session."""
     root = _test_runtime_root()
@@ -85,7 +100,20 @@ def validate_test_runtime_paths(values) -> None:
             if not str(value).startswith("sqlite:///"):
                 raise RuntimeError("Database is outside the isolated test runtime")
             value = str(value).removeprefix("sqlite:///")
-        elif name in {"STORAGE", "KH_DOCSTORE", "KH_VECTORSTORE"}:
+        elif name == "KH_VECTORSTORE":
+            if value.get("url") is not None:
+                _validate_test_vector_service(
+                    value,
+                    values.get("KH_APP_DATA_DIR") or os.environ.get("KH_APP_DATA_DIR"),
+                )
+            validate_test_runtime_paths(
+                {
+                    f"KH_VECTORSTORE_{key.upper()}": value.get(key)
+                    for key in ("path", "legacy_path", "migration_path")
+                }
+            )
+            continue
+        elif name in {"STORAGE", "KH_DOCSTORE"}:
             value = value.get("prefix" if name == "STORAGE" else "path")
             if value is None:
                 continue

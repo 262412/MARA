@@ -212,8 +212,8 @@ def check_secret_scan(root: Path) -> list[ContractIssue]:
             ContractIssue(
                 Path(".gitleaks.toml"),
                 "gitleaks-frp-allowlist",
-                "only the exact public callback digest and report image tag "
-                "exceptions are allowed; "
+                "only exact public callback/NLTK digests and the report image tag "
+                "are allowed at their fixed paths; "
                 "FRP token detection must remain unchanged",
             )
         )
@@ -254,6 +254,16 @@ def _exact_gitleaks_digest_exception(config: dict) -> bool:
                             r"4203ca87cf7f62a84878d231014925e9e90502ce\x60$"
                         ],
                         "paths": [r"^(?:/repo/)?docs/development/refactor-status\.md$"],
+                    },
+                    {
+                        "description": "Verified public NLTK file digests in the base wheel manifest",
+                        "condition": "AND",
+                        "regexTarget": "secret",
+                        "regexes": [
+                            f"^{digest}$"
+                            for digest in supply_chain_pins.GITLEAKS_NLTK_BASE_DIGESTS
+                        ],
+                        "paths": [r"^(?:/repo/)?vendor/nltk/base-files\.json$"],
                     },
                 ],
             },

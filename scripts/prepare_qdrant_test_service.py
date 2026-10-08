@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
+from urllib.parse import quote, urlsplit
 
 VERSION = "1.19.2"
 ASSETS = {
@@ -22,8 +24,8 @@ ASSETS = {
         "7d86596f16c6e85d45a50312f5e16ccb51e059b62e3d7308110cb65b4c799a4d",
     ),
     "linux": (
-        "qdrant-x86_64-unknown-linux-gnu.tar.gz",
-        "34a788a09a4cb278b5c6d2af96d9a6db30c8c7e88ae3550455f7a4d425bb8d4b",
+        "qdrant-x86_64-unknown-linux-musl.tar.gz",
+        "50b253243309ed0ae50a19f678f0d0adcc4f0b567b3bd2c5c0c7e02fa8404bb6",
     ),
 }
 TEST_KEY = "mara-owned-synthetic-test"
@@ -91,7 +93,7 @@ def wait_ready(process, url):
     raise RuntimeError("The test Qdrant service did not enforce API authentication")
 
 
-def start_service(root, executable):
+def start_service(root, executable, restore_snapshot=None):
     http_port, grpc_port = free_port(), free_port()
     while http_port == grpc_port:
         grpc_port = free_port()
@@ -128,15 +130,18 @@ def start_service(root, executable):
         QDRANT__SERVICE__MAX_WORKERS="2",
         QDRANT__TELEMETRY_DISABLED="true",
     )
+    command = [str(executable), "--config-path", str(configuration)]
+    if restore_snapshot is not None:
+        command.extend(["--storage-snapshot", str(restore_snapshot.resolve())])
     with (root / "server.log").open("xb") as log:
         process = subprocess.Popen(
-            [str(executable), "--config-path", str(configuration)],
+            command,
             cwd=root,
             env=env,
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
         )
     url = f"http://127.0.0.1:{http_port}"
     try:
@@ -152,17 +157,41 @@ def start_service(root, executable):
     return url
 
 
+def save_snapshot(output):
+    url = os.environ["MARA_TEST_QDRANT_URL"].rstrip("/")
+    if urlsplit(url).hostname != "127.0.0.1":
+        raise ValueError("Snapshot export requires the owned loopback test service")
+    headers = {"api-key": TEST_KEY}
+    with output.open("xb") as destination:
+        request = urllib.request.Request(
+            url + "/snapshots?wait=true", headers=headers, method="POST"
+        )
+        with urllib.request.urlopen(request, timeout=120) as response:
+            snapshot = json.load(response)["result"]
+        request = urllib.request.Request(
+            url + "/snapshots/" + quote(snapshot["name"], safe=""), headers=headers
+        )
+        with urllib.request.urlopen(request, timeout=120) as response:
+            shutil.copyfileobj(response, destination)
+    print(f"Saved test vector snapshot: {output}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path)
     parser.add_argument("--archive", type=Path)
+    parser.add_argument("--restore-snapshot", type=Path)
+    parser.add_argument("--snapshot-output", type=Path)
     args = parser.parse_args()
+    if args.snapshot_output:
+        save_snapshot(args.snapshot_output)
+        return
     if args.root:
         root = args.root.resolve()
         root.mkdir(parents=True, exist_ok=False)
     else:
         root = Path(tempfile.mkdtemp(prefix="qd-", dir=os.environ.get("RUNNER_TEMP")))
-    url = start_service(root, prepare_binary(root, args.archive))
+    url = start_service(root, prepare_binary(root, args.archive), args.restore_snapshot)
     if destination := os.environ.get("GITHUB_ENV"):
         with Path(destination).open("a", encoding="utf-8") as stream:
             for prefix in ("MARA_QDRANT", "MARA_TEST_QDRANT"):

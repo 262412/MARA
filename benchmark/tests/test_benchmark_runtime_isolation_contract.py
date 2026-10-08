@@ -63,6 +63,7 @@ def _fresh_runtime_command(
     export MARA_BENCHMARK_UV={fake_uv}
     export PYTHONPATH={source_roots}
     export SLURM_JOB_ID={job_id}
+    export MARA_QDRANT_NAMESPACE=unrelated_interactive_namespace
     source {RUNTIME_HELPER}
     mara_configure_benchmark_runtime concurrent-suite
     mara_bootstrap_benchmark_runtime
@@ -400,6 +401,11 @@ def test_two_fresh_docqa_subprocesses_keep_runtime_and_source_storage_disjoint(
         assert "fresh_docqa=DocQARuntime" in stdout
     contracts = [json.loads(output.read_text(encoding="utf-8")) for output in outputs]
     assert contracts[0]["KH_APP_DATA_DIR"] != contracts[1]["KH_APP_DATA_DIR"]
+    assert contracts[0]["qdrant_namespace"] != contracts[1]["qdrant_namespace"]
+    assert all(
+        contract["qdrant_namespace"] != "unrelated_interactive_namespace"
+        for contract in contracts
+    )
     assert (
         contracts[0]["theflow_storage_prefix"] != contracts[1]["theflow_storage_prefix"]
     )

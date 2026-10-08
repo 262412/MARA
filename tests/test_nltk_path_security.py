@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+import sys
 
 import nltk
 import numpy as np
@@ -98,7 +99,7 @@ def outside_reference(mode, allowed, outside):
             pytest.skip(f"Directory symlinks unavailable: {error}")
         return link
     if mode == "junction":
-        if os.name != "nt":
+        if sys.platform != "win32":
             pytest.skip("Windows directory junction case")
         import _winapi
 

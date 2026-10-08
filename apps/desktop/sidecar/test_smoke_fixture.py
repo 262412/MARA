@@ -150,11 +150,10 @@ class Gate2SmokeFixtureTest(unittest.TestCase):
                 )
             finally:
                 service = None
-                from chromadb.api.client import SharedSystemClient
+                from ktem.components import get_docstore, get_vectorstore
 
-                for system in tuple(SharedSystemClient._identifier_to_system.values()):
-                    system.stop()
-                SharedSystemClient.clear_system_cache()
+                get_vectorstore.cache_clear()
+                get_docstore.cache_clear()
                 engine.dispose()
                 gc.collect()
 

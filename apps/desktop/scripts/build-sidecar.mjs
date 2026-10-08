@@ -122,6 +122,8 @@ try {
       ]),
       "--copy-metadata",
       "en-core-web-sm",
+      "--copy-metadata",
+      "qdrant-client",
       ...requiredSidecarDataDirectories.flatMap(({ source, destination }) => [
         "--add-data",
         `${path.join(desktopRoot, source)}:${destination}`,

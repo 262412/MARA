@@ -226,7 +226,7 @@ def test_gitleaks_image_tag_exception_requires_exact_match_and_report_path():
 
     config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
     allowlists = config["rules"][1]["allowlists"]
-    assert len(allowlists) == 2
+    assert len(allowlists) == 3
     rule = allowlists[1]
     assert rule["condition"] == "AND"
     assert rule["regexTarget"] == "match"
@@ -257,12 +257,40 @@ def test_gitleaks_image_tag_exception_requires_exact_match_and_report_path():
         ("commits", ["anything"]),
     ],
 )
-def test_gitleaks_rejects_broadening_public_image_tag_exception(field, value):
+@pytest.mark.parametrize("rule_index", [1, 2])
+def test_gitleaks_rejects_broadening_public_artifact_exceptions(
+    field, value, rule_index
+):
     import tomli
 
     from scripts.supply_chain_contracts import _exact_gitleaks_digest_exception
 
     config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
-    assert len(config["rules"][1]["allowlists"]) == 2
-    config["rules"][1]["allowlists"][1][field] = value
+    assert len(config["rules"][1]["allowlists"]) == 3
+    config["rules"][1]["allowlists"][rule_index][field] = value
     assert not _exact_gitleaks_digest_exception(config)
+
+
+def test_gitleaks_nltk_exception_requires_verified_digest_and_manifest_path():
+    import json
+    import re
+
+    import tomli
+
+    config = tomli.loads((REPO_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    rule = config["rules"][1]["allowlists"][2]
+    manifest = json.loads(
+        (REPO_ROOT / "vendor/nltk/base-files.json").read_text(encoding="utf-8")
+    )
+    digests = [pattern[1:-1] for pattern in rule["regexes"]]
+    assert len(digests) == 17
+    assert set(digests) <= set(manifest.values())
+    path = "vendor/nltk/base-files.json"
+    for candidate in (path, "/repo/" + path):
+        assert re.search(rule["paths"][0], candidate)
+    for candidate in ("other/" + path, "/other/" + path, path + ".bak"):
+        assert not re.search(rule["paths"][0], candidate)
+    for digest in digests:
+        assert any(re.search(pattern, digest) for pattern in rule["regexes"])
+        assert not any(re.search(pattern, digest + "0") for pattern in rule["regexes"])
+    assert not any(re.search(pattern, "1" * 64) for pattern in rule["regexes"])

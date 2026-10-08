@@ -24,3 +24,28 @@ condition = "AND"
 regexTarget = "match"
 regexes = ['''^mara-secret-scan:4203ca87cf7f62a84878d231014925e9e90502ce\x60$''']
 paths = ['''^(?:/repo/)?docs/development/refactor-status\.md$''']
+
+[[rules.allowlists]]
+description = "Verified public NLTK file digests in the base wheel manifest"
+condition = "AND"
+regexTarget = "secret"
+regexes = [
+  '''^5ceefa00d95bb29dca9f1417b13063397cb37d1b23512e7e1283b4324898da04$''',
+  '''^bc7a89f22849a2e66191b47b9a1506cca36505eacfaef6b204d48b733ae18b4a$''',
+  '''^03efdf16386e9a42d95c6d4b3972ac58b3f8414652335c065ac39f733abe6f60$''',
+  '''^b829beafeb289775e52eb31abf9254cc936c11491476f72ae609524354c75317$''',
+  '''^2a8eba060c14754ec04c7f60e33b13430a12342796c3486a216ab850f9044314$''',
+  '''^425a2c8081db73b07625b58ac5bd8c613fa22b87620b4bcff1994a683db7133a$''',
+  '''^46f2019a50f8db92d850e596b96707a9e5485d7b72bffb2b7852dcbe5657b31b$''',
+  '''^989c7f1f8eab3c518722612c6a350435cb2f6bf7eaedc4af1dcc529b8757506f$''',
+  '''^00590a4066db63fbdceb93306f19504857ec370bf16a0ef0989610e5cddf8578$''',
+  '''^db1e7b232d38073f611da1ec469ca2c0155735e4687159c825fd67ff22c31f00$''',
+  '''^e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855$''',
+  '''^bf607228dcc91dd49da846469ccc6259778fcfa226092125caa14dbf86d7f1a7$''',
+  '''^94c50de00af49001761d027413f1d14aed77fb8a3fb22c623f9da87244d0c4ea$''',
+  '''^9af95a29d601064a2ebb0b3e80602b0ea7fa764d964260fd4b84f78ebcba7279$''',
+  '''^c54d6071e7617300b5e59b1571a771ba2ef16692b0a590f7ff97bae70186868c$''',
+  '''^98fa268f7169103bfa5fc911aed41151dc40ab8f5c3ccacbc3a0730daed052dc$''',
+  '''^0eb92e5b5482f4c6a1e5e376fdef334a167020f07729a368d30002fe85b7b40e$''',
+]
+paths = ['''^(?:/repo/)?vendor/nltk/base-files\.json$''']

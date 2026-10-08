@@ -1,3 +1,5 @@
+import io
+import json
 import os
 import socket
 import subprocess
@@ -60,6 +62,59 @@ def test_qdrant_release_hash_mismatch_never_extracts_a_binary(tmp_path):
     with pytest.raises(ValueError, match="SHA-256"):
         prepare_binary(tmp_path, archive)
     assert list(tmp_path.iterdir()) == [archive]
+
+
+@pytest.mark.parametrize("url", [None, "https://user-database.invalid"])
+def test_snapshot_requires_an_explicit_owned_service(monkeypatch, tmp_path, url):
+    from scripts.prepare_qdrant_test_service import save_snapshot
+
+    monkeypatch.delenv("MARA_TEST_QDRANT_URL", raising=False)
+    monkeypatch.setenv("MARA_QDRANT_URL", "https://user-database.invalid")
+    if url is not None:
+        monkeypatch.setenv("MARA_TEST_QDRANT_URL", url)
+    with pytest.raises((KeyError, ValueError)):
+        save_snapshot(tmp_path / "vectors.snapshot")
+    assert not list(tmp_path.iterdir())
+
+
+def test_snapshot_never_overwrites_an_existing_artifact(monkeypatch, tmp_path):
+    from scripts import prepare_qdrant_test_service as service
+
+    monkeypatch.setenv("MARA_TEST_QDRANT_URL", "http://127.0.0.1:6333")
+    output = tmp_path / "vectors.snapshot"
+    output.write_bytes(b"existing artifact")
+
+    def unexpected_request(*args, **kwargs):
+        pytest.fail("An existing artifact must be rejected before creating a snapshot")
+
+    monkeypatch.setattr(service.urllib.request, "urlopen", unexpected_request)
+    with pytest.raises(FileExistsError):
+        service.save_snapshot(output)
+    assert output.read_bytes() == b"existing artifact"
+
+
+def test_snapshot_exports_the_owned_service_response(monkeypatch, tmp_path):
+    from scripts import prepare_qdrant_test_service as service
+
+    monkeypatch.setenv("MARA_TEST_QDRANT_URL", "http://127.0.0.1:6333/")
+    requests = []
+    responses = iter(
+        [json.dumps({"result": {"name": "test.snapshot"}}).encode(), b"snapshot data"]
+    )
+
+    def request(request, **kwargs):
+        requests.append(request)
+        return io.BytesIO(next(responses))
+
+    monkeypatch.setattr(service.urllib.request, "urlopen", request)
+    output = tmp_path / "vectors.snapshot"
+    service.save_snapshot(output)
+    assert output.read_bytes() == b"snapshot data"
+    assert [(item.get_method(), item.full_url) for item in requests] == [
+        ("POST", "http://127.0.0.1:6333/snapshots?wait=true"),
+        ("GET", "http://127.0.0.1:6333/snapshots/test.snapshot"),
+    ]
+    assert all(item.get_header("Api-key") == service.TEST_KEY for item in requests)
 
 
 @pytest.mark.parametrize("owned", [False, True])

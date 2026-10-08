@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from packaging.requirements import Requirement
 
-from scripts import run_clean_wheel_smoke
+from scripts import run_clean_wheel_smoke, sync_locked_constraints
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = {
@@ -94,7 +94,8 @@ def test_four_distribution_artifacts_have_apache_metadata_and_legal_files(tmp_pa
             nltk = next(item for item in requirements if item.name == "nltk")
             assert "3.10.0" not in nltk.specifier
             assert "3.10.2" not in nltk.specifier
-            assert "3.10.3" in nltk.specifier
+            assert "3.10.3" not in nltk.specifier
+            assert "3.10.3.post1+mara.1" in nltk.specifier
 
         with tarfile.open(sdist_path, mode="r:gz") as sdist:
             sdist_members = sdist.getnames()
@@ -187,8 +188,8 @@ def test_distribution_smoke_validates_sdists_and_offline_app_init():
     )
 
     assert callable(getattr(run_clean_wheel_smoke, "validate_sdist_contents", None))
-    assert '"--all-packages"' in smoke_source
-    assert '"--all-extras"' not in smoke_source
+    assert "--all-packages" in sync_locked_constraints.EXPORT_COMMAND
+    assert "--all-extras" not in sync_locked_constraints.EXPORT_COMMAND
     assert '"app", "init"' in smoke_source
     assert "sitecustomize.py" in smoke_source
     assert "viewer.html" in smoke_source
@@ -280,7 +281,7 @@ def test_command_runner_uses_an_explicit_non_repository_cwd(monkeypatch, tmp_pat
 
 
 def test_only_locked_export_runs_from_repository_root():
-    export_source = inspect.getsource(run_clean_wheel_smoke._export_constraints)
+    export_source = inspect.getsource(sync_locked_constraints.render_locked_constraints)
     layer_source = inspect.getsource(run_clean_wheel_smoke._run_layer_imports)
     metadata_source = inspect.getsource(
         run_clean_wheel_smoke._assert_installed_distribution_paths

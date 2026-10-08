@@ -251,6 +251,8 @@ jobs:
           checksum: 7035608168e106375b36d0c818d537a889c51a8625fe7f8f7cad5e62b947c368
       - name: Sync locked environment
         run: uv sync --frozen --python 3.11
+      - name: Start isolated Qdrant test service
+        run: python scripts/prepare_qdrant_test_service.py
       - name: Run slide_cli tests
         run: uv run pytest -q libs/slide_cli
 

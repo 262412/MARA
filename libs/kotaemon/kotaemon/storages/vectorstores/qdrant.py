@@ -240,6 +240,10 @@ class QdrantVectorStore(LlamaIndexVectorStore):
             if self._mara_compatibility:
                 from .qdrant_local import point_id
 
+                if not ids or not self._client._collection_exists(
+                    self._collection_name
+                ):
+                    return
                 ids = [point_id(value) for value in ids]
             self._client.client.delete(
                 collection_name=self._collection_name,

@@ -90,16 +90,6 @@ test("isolates PyInstaller analysis from the source checkout", () => {
 
 test("includes the storage, embedding, and modern Office modules used by Gate 3", () => {
   for (const moduleName of [
-    "chromadb",
-    "chromadb.api.segment",
-    "chromadb.db.impl.sqlite",
-    "chromadb.execution.executor.local",
-    "chromadb.segment.impl.manager.local",
-    "chromadb.segment.impl.metadata.sqlite",
-    "chromadb.segment.impl.vector.local_hnsw",
-    "chromadb.segment.impl.vector.local_persistent_hnsw",
-    "chromadb.telemetry.product.posthog",
-    "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
     "docx",
     "en_core_web_sm",
     "ktem.docqa",
@@ -112,14 +102,15 @@ test("includes the storage, embedding, and modern Office modules used by Gate 3"
     "kotaemon.llms",
     "kotaemon.llms.chats.openai",
     "kotaemon.storages.docstores.lancedb",
-    "kotaemon.storages.vectorstores.chroma",
+    "kotaemon.storages.vectorstores.qdrant",
     "lancedb",
-    "llama_index.vector_stores.chroma",
+    "llama_index.vector_stores.qdrant",
     "openai",
     "openpyxl",
     "onnxruntime",
     "pandas",
     "pptx",
+    "qdrant_client",
     "theflow.backends",
     "theflow.cache",
     "theflow.callbacks",
@@ -135,7 +126,7 @@ test("includes the storage, embedding, and modern Office modules used by Gate 3"
     assert.ok(requiredSidecarModules.includes(moduleName), moduleName);
   }
   for (const moduleName of [
-    "chromadb",
+    "qdrant_client",
     "ktem.docqa",
     "llama_index",
     "openai",
@@ -146,8 +137,10 @@ test("includes the storage, embedding, and modern Office modules used by Gate 3"
     assert.ok(!excludedSidecarModules.includes(moduleName), moduleName);
   }
   assert.deepEqual(requiredSidecarDataPackages, [
-    "chromadb", "en_core_web_sm", "llama_index.core",
+    "en_core_web_sm", "llama_index.core",
   ]);
+  assert.ok(!requiredSidecarModules.some((name) => name.startsWith("chromadb")));
+  assert.match(buildScript, /"--copy-metadata",\s*"qdrant-client"/);
   assert.match(buildScript, /"--copy-metadata",\s*"en-core-web-sm"/);
   assert.deepEqual(requiredTiktokenEncodings, ["cl100k_base"]);
   assert.equal(tiktokenCacheDestination, "tiktoken_cache");

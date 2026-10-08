@@ -171,6 +171,7 @@ def _run_upstream_tests(distribution, tagger_archive):
         "no:cacheprovider",
         "-o",
         "addopts=",
+        "--confcutdir=" + str(distribution.locate_file("nltk/test")),
         "--basetemp=" + str(root / "pytest"),
         "--junitxml=" + str(root / "results.xml"),
     ]

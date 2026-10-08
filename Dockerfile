@@ -96,7 +96,8 @@ COPY --chown=0:0 --chmod=0555 scripts/container_entrypoint.py /opt/mara/bin/cont
 COPY --chown=0:0 --chmod=0444 scripts/container_healthcheck.py /opt/mara/bin/container_healthcheck.py
 COPY --chown=0:0 --chmod=0444 scripts/check_nltk_backport.py /opt/mara/bin/check_nltk_backport.py
 COPY --chown=0:0 --chmod=0444 vendor/nltk/base-files.json vendor/nltk/backport.json /opt/mara/vendor/nltk/
-RUN chmod -R a-w /opt/mara
+RUN chmod 0555 /opt/mara/vendor /opt/mara/vendor/nltk \
+    && chmod -R a-w /opt/mara
 
 FROM runtime-base AS runtime-full
 RUN apt-get update -qqy \

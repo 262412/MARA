@@ -72,6 +72,8 @@ jobs:
       - name: Install locked desktop dependencies
         working-directory: apps/desktop
         run: npm ci
+      - name: Start isolated Qdrant test service
+        run: python scripts/prepare_qdrant_test_service.py
       - name: Run desktop contracts
         working-directory: apps/desktop
         run: npm run verify
@@ -480,8 +482,10 @@ jobs:
           .venv/bin/python apps/desktop/scripts/native-resource-receipt.py \
             --package apps/desktop/release/MARA-linux-x64 \
             --output apps/desktop/release/metrics/linux-22-native-resources.json
+      - name: Snapshot the test vector service for relocation
+        run: python scripts/prepare_qdrant_test_service.py --snapshot-output apps/desktop/release/gate2-vectors.snapshot
       - name: Archive Linux package
-        run: tar -C apps/desktop/release -czf apps/desktop/release/mara-linux-22.tar.gz MARA-linux-x64 metrics gate2-smoke-data
+        run: tar -C apps/desktop/release -czf apps/desktop/release/mara-linux-22.tar.gz MARA-linux-x64 metrics gate2-smoke-data gate2-vectors.snapshot
       - name: Upload Ubuntu 22.04 package evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -529,6 +533,8 @@ jobs:
         run: |
           mkdir -p /tmp/mara-desktop/data/MARA
           cp -a desktop-artifact/gate2-smoke-data/. /tmp/mara-desktop/data/MARA/
+      - name: Restore isolated Qdrant test service
+        run: python3 scripts/prepare_qdrant_test_service.py --restore-snapshot desktop-artifact/gate2-vectors.snapshot
       - name: Smoke packaged vertical slice
         shell: bash
         run: |
@@ -607,6 +613,8 @@ jobs:
       - name: Install locked desktop dependencies
         working-directory: apps/desktop
         run: npm ci
+      - name: Start isolated Qdrant test service
+        run: python scripts/prepare_qdrant_test_service.py
       - name: Run desktop contracts
         working-directory: apps/desktop
         shell: pwsh

@@ -38,6 +38,7 @@ def test_storage_and_nltk_remediation_are_required_on_supported_platforms():
         "kotaemon",
         "windows-storage-security",
         "ktem",
+        "slide-cli",
         "coverage",
         "wheel-smoke",
         "frontend-browser",

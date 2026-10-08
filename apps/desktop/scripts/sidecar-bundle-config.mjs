@@ -33,18 +33,6 @@ export const excludedSidecarModules = [
 ];
 
 export const requiredSidecarModules = [
-  "chromadb",
-  "chromadb.api.segment",
-  "chromadb.db.impl.sqlite",
-  "chromadb.execution.executor.local",
-  "chromadb.quota.simple_quota_enforcer",
-  "chromadb.rate_limit.simple_rate_limit",
-  "chromadb.segment.impl.manager.local",
-  "chromadb.segment.impl.metadata.sqlite",
-  "chromadb.segment.impl.vector.local_hnsw",
-  "chromadb.segment.impl.vector.local_persistent_hnsw",
-  "chromadb.telemetry.product.posthog",
-  "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
   "docx",
   "en_core_web_sm",
   "ktem.default_flowsettings",
@@ -59,14 +47,15 @@ export const requiredSidecarModules = [
   "kotaemon.llms",
   "kotaemon.llms.chats.openai",
   "kotaemon.storages.docstores.lancedb",
-  "kotaemon.storages.vectorstores.chroma",
+  "kotaemon.storages.vectorstores.qdrant",
   "lancedb",
-  "llama_index.vector_stores.chroma",
+  "llama_index.vector_stores.qdrant",
   "openai",
   "openpyxl",
   "onnxruntime",
   "pandas",
   "pptx",
+  "qdrant_client",
   "slide_cli.docqa_runtime",
   "theflow.backends",
   "theflow.cache",
@@ -101,7 +90,7 @@ export const supportedDesktopChatProviders = [
 ];
 
 export const requiredSidecarDataPackages = [
-  "chromadb", "en_core_web_sm", "llama_index.core",
+  "en_core_web_sm", "llama_index.core",
 ];
 
 export const requiredTiktokenEncodings = ["cl100k_base"];

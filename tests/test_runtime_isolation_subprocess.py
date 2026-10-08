@@ -63,12 +63,16 @@ def probe():
         "database": str(engine.url.database),
         "files": str(settings.KH_FILESTORAGE_PATH),
         "docstore": str(settings.KH_DOCSTORE["path"]),
-        "vectorstore": str(settings.KH_VECTORSTORE["path"]),
+        "vectorstore_receipt": str(settings.KH_VECTORSTORE["migration_path"]),
         "output": os.environ["MARA_OUTPUT_DIR"],
     }
     assert str(settings.STORAGE["prefix"]) == actual["storage"]
     for path in actual.values():
         assert Path(path).resolve().is_relative_to(root), path
+    from kotaemon.storages.vectorstores.migration import default_namespace
+    vectors = settings.KH_VECTORSTORE
+    assert vectors["url"] == (os.environ.get("MARA_TEST_QDRANT_URL") or "http://127.0.0.1:1")
+    assert vectors["namespace"] == default_namespace(Path(settings.KH_APP_DATA_DIR) / "user_data")
     for name, value in vars(settings).items():
         if name.startswith("KH_") and name.endswith(("_DIR", "_PATH")):
             assert Path(value).resolve().is_relative_to(root), name
@@ -215,6 +219,24 @@ def test_test_owned_config_cannot_redirect_storage_outside_session(
 
     result, _ = _controlled_process(tmp_path, configure)
 
+    assert result.returncode == 3, result.stdout + result.stderr
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+    assert "outside the isolated test runtime" in payload["error"]
+    assert payload["denied"] == []
+
+
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("MARA_QDRANT_URL", "https://user-database.invalid"),
+        ("MARA_QDRANT_NAMESPACE", "unrelated_user_database"),
+    ],
+)
+def test_vector_service_overrides_are_rejected_before_network_io(tmp_path, name, value):
+    def configure(environment, _paths, _outside):
+        environment[name] = value
+
+    result, _ = _controlled_process(tmp_path, configure)
     assert result.returncode == 3, result.stdout + result.stderr
     payload = json.loads(result.stdout.strip().splitlines()[-1])
     assert "outside the isolated test runtime" in payload["error"]

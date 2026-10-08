@@ -93,6 +93,13 @@ def test_local_empty_scopes_do_not_expand_to_all_documents(stores):
     assert store.query([1.0, 0.0], doc_ids=[]) == ([], [], [])
 
 
+def test_delete_from_an_empty_store_is_idempotent(stores):
+    store = stores()
+    store.delete(["never-indexed"])
+    store.delete([])
+    assert store.count() == 0
+
+
 def test_local_configuration_round_trip(stores):
     from theflow.utils.modules import deserialize
 
