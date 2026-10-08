@@ -1,7 +1,9 @@
 import hashlib
+import tomllib
 import zipfile
 
 import pytest
+from packaging.specifiers import SpecifierSet
 
 from scripts import build_reviewer_bundle as builder
 from scripts.prepare_reviewer_dependencies import source_requirements
@@ -70,3 +72,40 @@ def test_prebuild_selection_keeps_hashes_and_respects_platform_markers():
     )
     selected = source_requirements(lock, text)
     assert selected == [source.strip()]
+
+
+def test_reviewer_python_satisfies_current_runtime_contract():
+    project = tomllib.loads((builder.ROOT / "pyproject.toml").read_text("utf-8"))
+    assert builder.PYTHON_VERSION in SpecifierSet(project["project"]["requires-python"])
+
+
+def test_prebuild_selection_includes_locked_local_source():
+    lock = {
+        "package": [
+            {
+                "name": "nltk",
+                "version": "3.10.3.post1+mara.1",
+                "source": {"directory": "vendor/nltk"},
+            }
+        ]
+    }
+    assert source_requirements(lock, "./vendor/nltk\n") == ["./vendor/nltk"]
+
+
+def test_vendor_local_source_becomes_version_and_hash_pinned(tmp_path):
+    archive = wheel(tmp_path / "nltk.whl", "nltk", "3.10.3.post1+mara.1")
+    local_packages = {"./vendor/nltk": ("nltk", "3.10.3.post1+mara.1")}
+    result = builder.vendor_requirements("./vendor/nltk\n", [archive], local_packages)
+    assert result.startswith("nltk==3.10.3.post1+mara.1")
+    assert hashlib.sha256(archive.read_bytes()).hexdigest() in result
+    assert "vendor/nltk" not in result
+
+
+def test_vendor_local_source_rejects_wrong_version(tmp_path):
+    archive = wheel(tmp_path / "nltk.whl", "nltk", "3.10.3")
+    with pytest.raises(ValueError, match="locked version"):
+        builder.vendor_requirements(
+            "./vendor/nltk\n",
+            [archive],
+            {"./vendor/nltk": ("nltk", "3.10.3.post1+mara.1")},
+        )

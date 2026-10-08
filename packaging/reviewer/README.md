@@ -2,11 +2,14 @@
 
 1. Extract the entire ZIP to a writable folder with at least 8 GB free space.
    Keep that folder in place after installation.
-2. Double-click `Install.cmd`. It installs Python 3.10.19 into `runtime/python`,
+2. Double-click `Install.cmd`. It installs Python 3.11.14 into `runtime/python`,
    creates an independent environment, and installs the pinned dependencies and
    the included MARA wheels. First installation requires internet access to
    GitHub and PyPI. You do not need an existing Python, Git, Visual Studio, or CUDA.
-3. After installation succeeds, double-click `Start.cmd`. The Web UI opens at
+3. Configure an authenticated Qdrant 1.19.2 or newer service in
+   `runtime/app/config/.env` using `MARA_QDRANT_URL`, `MARA_QDRANT_API_KEY`, and a
+   dedicated `MARA_QDRANT_NAMESPACE`. The package does not install this service.
+   Then double-click `Start.cmd`. The Web UI opens at
    <http://127.0.0.1:7860>. Keep the terminal open while using MARA.
 4. Configure your generation and embedding providers in the Web UI. A chat API
    key alone does not supply an embedding model. Use credentials and models you

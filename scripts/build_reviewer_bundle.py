@@ -8,6 +8,7 @@ import json
 import re
 import shutil
 import tempfile
+import tomllib
 import zipfile
 from email import message_from_bytes
 from pathlib import Path
@@ -15,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "packaging" / "reviewer"
 UV_VERSION = "0.11.19"
-PYTHON_VERSION = "3.10.19"
+PYTHON_VERSION = "3.11.14"
 UV_WHEEL_SHA256 = "480fc34a8d0967af6a90b3f99a6e5687cd5c6e29528de96bec04d6e305a59363"
 PACKAGES = ("kotaemon", "ktem", "mara-research-cli", "mara-app")
 
@@ -38,15 +39,25 @@ def wheel_identity(path: Path) -> tuple[str, str]:
     return name, str(message["Version"])
 
 
-def vendor_requirements(text: str, wheels: list[Path]) -> str:
+def vendor_requirements(
+    text: str,
+    wheels: list[Path],
+    local_packages: dict[str, tuple[str, str]] | None = None,
+) -> str:
+    local_packages = local_packages or {}
     replacements = {
         wheel_identity(p)[0]: (wheel_identity(p)[1], digest(p)) for p in wheels
     }
-    blocks = re.split(r"\n(?=[a-zA-Z0-9])", text.strip())
+    blocks = re.split(r"\n(?=\S)", text.strip())
     used = set()
     result = []
     for block in blocks:
         first = block.split("\\\n")[0].strip().split(" --hash=")[0]
+        if first in local_packages:
+            name, version = local_packages[first]
+            if name not in replacements:
+                raise ValueError(f"Missing vendor wheel for local source {name}")
+            first = f"{name}=={version}"
         match = re.match(r"([\w.-]+)==([^ ;]+)", first)
         if match and match[1] in replacements:
             version, checksum = replacements[match[1]]
@@ -108,8 +119,10 @@ def copy_wheels(dist_root: Path, destination: Path) -> tuple[list[Path], list[Pa
 
 def assemble(args: argparse.Namespace) -> Path:
     output = args.output_dir.resolve()
-    if output.is_relative_to(ROOT):
-        raise ValueError("Store generated bundles outside the Git checkout")
+    if output.is_relative_to(ROOT) and not output.is_relative_to(ROOT / ".mara/build"):
+        raise ValueError(
+            "Store generated bundles in .mara/build or outside the checkout"
+        )
     if not re.fullmatch(r"[0-9a-f]{40}", args.source_commit):
         raise ValueError("--source-commit must be the full application source commit")
     output.mkdir(parents=True, exist_ok=True)
@@ -123,8 +136,14 @@ def assemble(args: argparse.Namespace) -> Path:
         app_wheels, vendor = copy_wheels(args.dist_root, bundle / "wheels")
         extract_uv(args.uv_wheel, bundle / "tools")
         runtime_lock = args.requirements.read_text(encoding="utf-8")
+        lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+        local_packages = {
+            "./" + p["source"]["directory"]: (p["name"], p["version"])
+            for p in lock["package"]
+            if "directory" in p.get("source", {})
+        }
         (bundle / "runtime-requirements.txt").write_text(
-            vendor_requirements(runtime_lock, vendor), encoding="utf-8"
+            vendor_requirements(runtime_lock, vendor, local_packages), encoding="utf-8"
         )
         (bundle / "application-requirements.txt").write_text(
             "\n".join(
