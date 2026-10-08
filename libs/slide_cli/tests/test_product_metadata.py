@@ -30,9 +30,10 @@ def test_product_package_metadata_uses_mara_identity():
 
 
 def test_quick_start_documents_single_local_app_port_default():
-    readme = _read("README.md")
+    for path in ("README.md", "README.zh-CN.md"):
+        readme = _read(path)
 
-    assert "The local default is\n`http://localhost:7860/`" in readme
-    assert "本地默认是\n`http://localhost:7860/`" in readme
-    assert "GRADIO_SERVER_PORT" in readme
-    assert "platform `PORT`" in readme
+        assert "http://127.0.0.1:7860" in readme
+        assert "MARA app run --host 127.0.0.1 --port 7870" in readme
+        assert "GRADIO_SERVER_PORT" in readme
+        assert "`PORT`" in readme

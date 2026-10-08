@@ -56,9 +56,11 @@ def test_root_readme_documents_mara_research_cli_source_install():
 
     assert "docs/development/contributing.md" in readme
     assert "`install.sh`" in readme
+    assert r".\install.ps1" in readme
+    assert "./install.sh" in readme
     assert "uv sync --extra mara" not in readme
     assert 'pip install -e "libs/slide_cli"' not in readme
-    assert "pip install mara-research-cli" in readme
+    assert "mara-research-cli" in readme
     assert "MARA doctor" in readme
 
 

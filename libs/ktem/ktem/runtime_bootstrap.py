@@ -173,6 +173,11 @@ def get_runtime_paths() -> RuntimePaths:
         config_dir = test_root / "config"
         data_dir = test_root / "ktem_app_data"
         cache_dir = test_root / "cache"
+    elif app_home := str(os.environ.get("MARA_APP_HOME", "") or "").strip():
+        root = Path(app_home).expanduser().resolve()
+        config_dir = root / "config"
+        data_dir = root / "data"
+        cache_dir = root / "cache"
     else:
         dirs = PlatformDirs(appname="Kotaemon", appauthor="Cinnamon")
         config_dir = Path(dirs.user_config_dir).resolve()
