@@ -1,0 +1,17 @@
+F.....                                                                   [100%]
+================================== FAILURES ===================================
+______________ test_recorded_supported_extension_is_not_rejected ______________
+
+    def test_recorded_supported_extension_is_not_rejected():
+        decision = verification(CORE + " " + RECORDED_EXTENSION)
+>       assert decision.status == "supported"
+E       AssertionError: assert 'unsupported' == 'supported'
+E         
+E         - supported
+E         + unsupported
+E         ? ++
+
+libs\ktem\ktem_tests\test_docqa_regular_inflection_support.py:39: AssertionError
+=========================== short test summary info ===========================
+FAILED libs/ktem/ktem_tests/test_docqa_regular_inflection_support.py::test_recorded_supported_extension_is_not_rejected
+1 failed, 5 passed in 7.54s

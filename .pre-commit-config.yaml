@@ -6,6 +6,18 @@ repos:
         entry: python scripts/check_codebase_hygiene.py
         language: python
         types: [python]
+      - id: eacl-case-integrity
+        name: EACL saved case integrity
+        entry: python docs/papers/eacl2027-demo/case_study/verify_case.py
+        language: python
+        files: ^docs/papers/eacl2027-demo/case_study/
+        pass_filenames: false
+      - id: eacl-followup-integrity
+        name: EACL saved followup integrity
+        entry: python docs/papers/eacl2027-demo/review_followup/verify_followup.py
+        language: python
+        files: ^docs/papers/eacl2027-demo/review_followup/
+        pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: 3298ddab3c13dd77d6ce1fc0baf97691430d84b0 # v4.3.0
     hooks:
@@ -13,11 +25,12 @@ repos:
         args: ["--unsafe"]
       - id: check-toml
       - id: end-of-file-fixer
-        exclude: "^\\.playwright-cli/"
+        # These imported records are bound by the saved paper manifests.
+        exclude: "^(\\.playwright-cli/|docs/papers/eacl2027-demo/(source|case_study|review_followup)/)"
       - id: trailing-whitespace
-        exclude: "^(\\.playwright-cli/|docs/demo_paper/acl_natbib\\.bst$|vendor/nltk/security\\.patch$)"
+        exclude: "^(\\.playwright-cli/|docs/demo_paper/acl_natbib\\.bst$|vendor/nltk/security\\.patch$|docs/papers/eacl2027-demo/(source|case_study|review_followup)/)"
       - id: mixed-line-ending
-        exclude: "^\\.playwright-cli/"
+        exclude: "^(\\.playwright-cli/|docs/papers/eacl2027-demo/(source|case_study|review_followup)/)"
       - id: detect-aws-credentials
         args: ["--allow-missing-credentials"]
       - id: detect-private-key
@@ -58,7 +71,7 @@ repos:
     hooks:
       - id: prettier
         types_or: [markdown, yaml]
-        exclude: "(^README\\.md$|^\\.playwright-cli/)"
+        exclude: "(^README\\.md$|^\\.playwright-cli/|^docs/papers/eacl2027-demo/|^docs/reviewer-installation-verification-2026-09-23\\.md$)"
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: 4daa14b20c0f48f472528c2b5f5bca28a18a7ce0 # v1.7.1
     hooks:
@@ -73,7 +86,18 @@ repos:
             types-tzlocal==5.1.0.1,
           ]
         args: ["--check-untyped-defs", "--ignore-missing-imports"]
-        exclude: "(^templates/|\\.pyi$|^libs/(kotaemon|slide_cli)/tests/conftest\\.py$)"
+        exclude: "(^templates/|\\.pyi$|^libs/(kotaemon|slide_cli)/tests/conftest\\.py$|^docs/papers/eacl2027-demo/(case_study|review_followup)/)"
+      - id: mypy
+        name: mypy archived EACL instrumentation
+        additional_dependencies: *mypy_dependencies
+        # The hash-bound experiment instruments model methods at runtime.
+        args:
+          [
+            "--check-untyped-defs",
+            "--ignore-missing-imports",
+            "--disable-error-code=method-assign",
+          ]
+        files: "^docs/papers/eacl2027-demo/(case_study|review_followup)/.*\\.py$"
       - id: mypy
         name: mypy kotaemon conftest
         additional_dependencies: *mypy_dependencies
@@ -88,6 +112,6 @@ repos:
     rev: ec0f41b9573937aebab66e3ca5b00d00a7b339fa # v2.2.4
     hooks:
       - id: codespell
-        exclude: "((^|/)package-lock\\.json$|^docker/ollama/go\\.sum$|^vendor/nltk/(security\\.patch|base-files\\.json)$|^benchmark/tests/fixtures/qasper_golden_replay_v1\\.jsonl$|^libs/ktem/ktem_tests/fixtures/qasper_stage2_10396653_7cd22_production_input_records\\.json$)"
+        exclude: "((^|/)package-lock\\.json$|^docker/ollama/go\\.sum$|^vendor/nltk/(security\\.patch|base-files\\.json)$|^benchmark/tests/fixtures/qasper_golden_replay_v1\\.jsonl$|^libs/ktem/ktem_tests/fixtures/qasper_stage2_10396653_7cd22_production_input_records\\.json$|^docs/papers/eacl2027-demo/source/(acl\\.sty|acl_natbib\\.bst|references\\.bib)$)"
         additional_dependencies:
           - tomli==2.2.1

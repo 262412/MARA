@@ -1,0 +1,32 @@
+codebase hygiene ratchet.................................................Passed
+check yaml...........................................(no files to check)Skipped
+check toml...........................................(no files to check)Skipped
+fix end of files.........................................................Passed
+trim trailing whitespace.................................................Passed
+mixed line ending........................................................Passed
+detect aws credentials...................................................Passed
+detect private key.......................................................Passed
+check for added large files..............................................Passed
+debug statements (python)................................................Passed
+black....................................................................Passed
+isort....................................................................Passed
+flake8...................................................................Passed
+autoflake................................................................Passed
+prettier.............................................(no files to check)Skipped
+mypy.....................................................................Failed
+- hook id: mypy
+- exit code: 1
+
+libs\ktem\ktem\docqa\route_budget.py:302: error: Module has no attribute "SIGALRM"  [attr-defined]
+libs\ktem\ktem\docqa\route_budget.py:303: error: Module has no attribute "ITIMER_REAL"  [attr-defined]
+libs\ktem\ktem\docqa\route_budget.py:305: error: Module has no attribute "getitimer"  [attr-defined]
+libs\ktem\ktem\docqa\route_budget.py:312: error: Module has no attribute "setitimer"  [attr-defined]
+libs\ktem\ktem\docqa\route_budget.py:316: error: Module has no attribute "setitimer"  [attr-defined]
+libs\ktem\ktem\docqa\route_budget.py:320: error: Module has no attribute "setitimer"  [attr-defined]
+libs\ktem\ktem\preview\cache_attestation.py:94: error: Module has no attribute "fchmod"; maybe "chmod"?  [attr-defined]
+libs\ktem\ktem\preview\cache_attestation.py:176: error: Module has no attribute "fchmod"; maybe "chmod"?  [attr-defined]
+Found 8 errors in 2 files (checked 2 source files)
+
+mypy kotaemon conftest...............................(no files to check)Skipped
+mypy slide-cli conftest..............................(no files to check)Skipped
+codespell................................................................Passed
