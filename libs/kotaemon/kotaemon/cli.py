@@ -326,6 +326,8 @@ def app_init(auth_mode, admin_user, force, json_output):
     if auth_mode == "password":
         password = _acquire_admin_password(json_output=json_output)
 
+    # Select the owned package runtime before ktem's import-time bootstrap.
+    os.environ["THEFLOW_SETTINGS_MODULE"] = "ktem.default_flowsettings"
     if password is not None:
         payload = _initialize_password_app(
             username=admin_user,
