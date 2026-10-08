@@ -28,11 +28,17 @@ COPY scripts/prepare_container_nltk.py /opt/mara/bin/prepare_container_nltk.py
 
 # Reuse v0.31.2's native libraries and rebuild its Go service with patched modules.
 FROM builder-base AS ollama-builder
-ADD --checksum=sha256:63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445 \
-    https://go.dev/dl/go1.27.1.linux-amd64.tar.gz /tmp/go.tar.gz
+ARG TARGETARCH
+ADD https://go.dev/dl/go1.27.1.linux-${TARGETARCH}.tar.gz /tmp/go.tar.gz
 ADD --checksum=sha256:9c334ffe4dda2afce6bc448b0d5505e97a5f067db5141cac988d3edfd920bb6f \
     https://codeload.github.com/ollama/ollama/tar.gz/a6293eb5164214f15e7856268f3adddeae1026e2 /tmp/ollama.tar.gz
-RUN tar -xzf /tmp/go.tar.gz -C /usr/local \
+RUN case "$TARGETARCH" in \
+        amd64) go_sha=63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445 ;; \
+        arm64) go_sha=3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec ;; \
+        *) exit 1 ;; \
+    esac \
+    && printf '%s  /tmp/go.tar.gz\n' "$go_sha" | sha256sum --check - \
+    && tar -xzf /tmp/go.tar.gz -C /usr/local \
     && mkdir /opt/ollama-src \
     && tar -xzf /tmp/ollama.tar.gz -C /opt/ollama-src --strip-components=1
 ENV PATH=/usr/local/go/bin:$PATH \
