@@ -6,15 +6,12 @@ without compatible Windows wheels, and `Install.cmd` / `Start.cmd` launchers.
 Python 3.11.14 and the remaining pinned binary dependencies are downloaded on
 first installation. There is no dependency on a published MARA PyPI package.
 
-The source baseline for this work is `main` at
-`dfcca9987fa4f4d3c5e4da303217c32692032b65`. The runtime change adds the optional
-`MARA_APP_HOME` environment variable for isolated config, data, and cache paths.
-An unset variable retains the existing platform paths; Desktop paths keep their
-existing precedence. Command names, options, and document QA behavior are unchanged.
-The help page now uses its bundled Markdown when user documentation is absent,
-reads the correct release-note cache filename, and applies connection/read timeouts
-to optional remote help requests. The reviewer launcher sets
-`MARA_ALLOW_REMOTE_HELP=False` to keep UI startup independent of remote documentation.
+The launcher sets `MARA_APP_HOME` for the bundle's isolated config, data, and
+cache paths. Web, CLI, and Desktop can use the same explicit profile; an unset
+variable retains each interface's default paths. Configuration precedence is
+described in the [root README](../README.md#configuration-and-data).
+The reviewer launcher also sets `MARA_ALLOW_REMOTE_HELP=False` so startup uses
+bundled help without requiring a remote documentation request.
 
 Build and validate locally before publishing. The existing release-containment
 workflow settings are unchanged. This procedure does not upload files or move tags.

@@ -6,14 +6,14 @@ Read [storage layout](storage-layout-contract.md) before setup or tests. The
 shared primary checkout owns the canonical `.venv`; linked worktrees never
 synchronize it. Preserve existing environments, real configuration and data.
 
-The supported shared Linux setup uses local Python 3.10 and the repository's
+The supported shared Linux setup uses local Python 3.11 and the repository's
 locked uv version. `install.sh` is the only synchronizer for the canonical
 environment: it uses `uv sync --frozen --no-editable --extra mara --no-dev` and
 reinstalls the four distributions. Initialization and optional coding-tool
 bundle installation are explicit installer actions; review the target data
 directories first. Do not replace an existing `.venv` or copy over `.env`.
 
-Routine primary-checkout commands use `uv run --no-sync --python 3.10 ...`.
+Routine primary-checkout commands use `uv run --no-sync --python 3.11 ...`.
 Source verification uses `scripts/run_with_canonical_env.sh`, which adds the
 checkout libraries to the import path without installing them editable. This
 also serves linked worktrees after `scripts/check_mara_worktree_env.py check`.
@@ -27,6 +27,15 @@ Disposable CI runners use their own locked environments; their `uv sync`
 commands are not permission to synchronize a developer's canonical environment.
 
 ## Verification
+
+DocQA integration tests require an isolated Qdrant service. CI starts one with
+`scripts/prepare_qdrant_test_service.py`; locally, use a new owned `--root` and
+an existing pinned `--archive` to avoid downloading the binary again. The helper
+prints its loopback URL and records the owned process in `process.json`.
+Set `MARA_TEST_QDRANT_URL` to that URL and `MARA_TEST_QDRANT_API_KEY` to the
+helper's synthetic `mara-owned-synthetic-test` key before running the suites.
+These variables identify a disposable test service, separate from the real
+application database. Stop that owned process when verification is finished.
 
 Run these Bash commands from the repository root after the storage/environment
 checks and with development tools already available in the owned environment:
@@ -44,7 +53,7 @@ Choose the affected suite first. Root `conftest.py` activates the owned runtime
 before business imports; subprocess fixtures must preserve that isolation.
 Never run a configuration-writing example against a real user profile for a
 test. Unified collection is a gate, not proof that the collected tests passed
-on every OS. Native Windows limitations have individual node evidence in the
+on every OS. Native Windows limitations are described in the
 [refactor status](refactor-status.md).
 
 The [Quality workflow](../../.github/workflows/quality-gates.yaml) is the current
@@ -73,4 +82,5 @@ See [architecture contracts](architecture-contracts.md) for precise seams and
 consumer tests, and [hygiene](codebase-hygiene-contract.md) for unchanged risk
 and complexity gates. Pull requests should state the affected public surface,
 old/new behavior, actual commands/platform/input SHA and unresolved evidence.
-Keep source fixes, test repairs and report-only updates distinguishable.
+Report actual results in the pull request; keep lasting guidance in the existing
+documentation rather than adding per-change reports.

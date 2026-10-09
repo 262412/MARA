@@ -2,9 +2,9 @@
 
 Last updated: 2026-07-07.
 
-This is the canonical current status source for MARA proposal alignment. The
-old `docs/development/proposal_project_audit_2026-06-25.md` path is now a
-compatibility pointer to this directory.
+This is the proposal-alignment audit for the dated research snapshot below.
+Current installation and runtime setup are maintained in the
+[root README](../../../README.md).
 
 ## Source Inputs
 
@@ -32,8 +32,8 @@ source.
   evaluator authority, and score promotion.
 - Use [Residual Risks](residual-risks.md) for work that still needs true
   benchmark evidence or paper/demo application.
-- Treat [Archive](archive/README.md) and `docs/superpowers/plans/` as historical
-  provenance only.
+- Superseded implementation plans remain available in Git history; use this
+  directory for research claim boundaries.
 
 ## Environment Status
 

@@ -394,7 +394,7 @@ while it is still generating.
 Desktop uses Electron and React with a bundled Python service. Current source
 includes native file import, background indexing, file management, conversation
 creation/search/rename/delete, document and multi-document questions, streamed
-answers, cancellation, and retry.
+answers, cancellation, retry, and baseline Resources, Settings, and Help pages.
 
 Page/selected-text scope, citation navigation and preview, Notes, Studio,
 complete resource/settings management, and data migration still have outstanding
@@ -432,7 +432,6 @@ requires **Node.js 22.12 or later** and npm.
 Windows PowerShell, from the repository root:
 
 ```powershell
-$env:MARA_DESKTOP_PYTHON = (Resolve-Path .venv\Scripts\python.exe).Path
 cd apps/desktop
 npm ci
 npm start
@@ -441,20 +440,28 @@ npm start
 Linux, from the repository root:
 
 ```bash
-export MARA_DESKTOP_PYTHON="$PWD/.venv/bin/python"
 cd apps/desktop
 npm ci
 npm start
 ```
 
-`npm start` builds the application and launches Electron.
+`npm start` builds the application and launches Electron. It selects the
+repository's `.venv` when present; use `MARA_DESKTOP_PYTHON` to choose another
+prepared interpreter.
 [Desktop development](apps/desktop/README.md) covers contracts, testing, and
 native packaging.
 
-Desktop uses its own data root: normally `%APPDATA%/MARA` on Windows and
-`$XDG_DATA_HOME/MARA` or `~/.local/share/MARA` on Linux.
-Do not assume it automatically opens an existing Web/CLI database or that
-simultaneous writes across interfaces are supported.
+To share configuration, indexed files, and conversations across Web, CLI, and
+Desktop, set the same absolute `MARA_APP_HOME` in each launch environment.
+For example, from the repository root, select an existing profile with
+`$env:MARA_APP_HOME = (Resolve-Path .mara/runtime).Path` in PowerShell or
+`export MARA_APP_HOME="$PWD/.mara/runtime"` in Bash before launching an interface.
+Use the same user and selected sources when continuing a conversation.
+
+Without `MARA_APP_HOME`, Desktop uses its own data root: normally
+`%APPDATA%/MARA` on Windows and `$XDG_DATA_HOME/MARA` or `~/.local/share/MARA`
+on Linux. Selecting a shared profile does not copy old data. Concurrent writes
+to the same conversation from multiple interfaces have not been validated.
 
 ## Configuration and data
 
@@ -463,15 +470,19 @@ simultaneous writes across interfaces are supported.
 | Repository `.env` and [flowsettings.py](flowsettings.py) | Source-workspace model defaults and application settings |
 | `MARA app init` | Creates user-level configuration templates; `app doctor` reports the effective paths |
 | User config `.env` / `flowsettings.py` | Packaged-runtime configuration when no workspace or explicit settings module takes precedence |
+| `MARA_APP_HOME` | Shared profile: `config/`, default `data/`, `cache/`, and Desktop state under `desktop/` |
 | `KH_APP_DATA_DIR` | Overrides the application's data directory |
 | `modelcli.yml` | Separate provider/alias configuration for `MARA model` and agent workflows |
-| Desktop Settings and its data directory | Desktop-owned model settings and application state |
+| Desktop Settings and its data directory | Model settings and application state for an independent Desktop profile |
 
-Runtime discovery checks an explicit `THEFLOW_SETTINGS_MODULE`, then a workspace
-`flowsettings.py`, then packaged defaults. Running from the repository and
-running from another directory can therefore select different settings.
+Web/CLI runtime discovery checks an explicit `THEFLOW_SETTINGS_MODULE`, then
+`MARA_APP_HOME`, then a workspace `flowsettings.py`, then packaged defaults.
+With `MARA_APP_HOME`, all three interfaces load its `config/.env` and
+`config/flowsettings.py`; `KH_APP_DATA_DIR` can override the profile's default
+data directory. Without an explicit profile, running inside and outside the
+repository can select different settings.
 Use `MARA app doctor` to check **Settings source**, **App data dir**, and
-**File storage** before expecting Web and CLI to share records.
+**File storage** before expecting the interfaces to share records.
 
 Source mode defaults to `ktem_app_data/`. The packaged runtime retains the
 platform-directory names **Cinnamon/Kotaemon** for compatibility; the command's

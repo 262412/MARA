@@ -1,32 +1,19 @@
-{%
-    include-markdown "../../README.md"
-    start="<!-- start-intro -->"
-    end="<!-- end-intro -->"
-%}
+# Development
 
-## Platform CLI
+Start with [Contributing](contributing.md) for environment ownership and
+verification commands. Installation and user workflows live in the
+[main README](../../README.md).
 
-For the single-repo Claude Code and Codex support workflow, see
-[Platform CLI Support](platform-cli-support.md).
-
-## Project Status
-
-For proposal alignment, phase closure, thesis claim boundaries, evaluation
-protocol, and remaining work, see [Project Status](project-status/README.md).
-
-## Development and architecture
-
-Use [Contributing](contributing.md) for current environment/test commands and
-[Architecture contracts](architecture-contracts.md) for owners and compatibility
-guards. Current acceptance and unresolved gates live in [Refactor status](refactor-status.md).
-
-## Codebase Hygiene
-
-For the default rules that keep future development from turning into a big ball
-of mud, see [Codebase Hygiene Contract](codebase-hygiene-contract.md).
-
-## Storage Layout
-
-For the required local layout that keeps environments, caches, Codex state, and
-MARA runtime data off `scratch`, see
-[Storage Layout Contract](storage-layout-contract.md).
+- [Architecture contracts](architecture-contracts.md): responsibility boundaries
+  and compatibility tests.
+- [Refactor boundaries](refactor-status.md): public migration constraints and
+  remaining platform or acceptance limits.
+- [Codebase hygiene](codebase-hygiene-contract.md): change scope, complexity
+  budgets, and required checks.
+- [Storage layout](storage-layout-contract.md): environment, cache, runtime,
+  and maintainer HPC paths.
+- [Platform CLI support](platform-cli-support.md): packaged Codex and Claude Code
+  support assets.
+- [Desktop](../desktop/README.md): architecture and release requirements.
+- [Research status](project-status/README.md): proposal alignment, benchmark
+  authority, and thesis claim boundaries.

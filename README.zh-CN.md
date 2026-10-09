@@ -357,7 +357,7 @@ MARA model run --help
 
 桌面端使用 Electron、React 与内置 Python 服务。
 当前源码已接入原生文件导入、后台索引、文件管理、会话新建/搜索/重命名/删除、
-文档与多文档问答、流式答案、停止和重试。
+文档与多文档问答、流式答案、停止、重试，以及 Resources、Settings、Help 基础页面。
 
 页级/选中文本范围、引用跳转与预览、Notes、Studio、完整资源/设置管理以及数据迁移
 仍有未完成工作。具体进展和验收证据见[功能矩阵](docs/desktop/feature-parity-matrix.md)。
@@ -389,7 +389,6 @@ MARA model run --help
 Windows PowerShell，在仓库根目录执行：
 
 ```powershell
-$env:MARA_DESKTOP_PYTHON = (Resolve-Path .venv\Scripts\python.exe).Path
 cd apps/desktop
 npm ci
 npm start
@@ -398,33 +397,42 @@ npm start
 Linux，在仓库根目录执行：
 
 ```bash
-export MARA_DESKTOP_PYTHON="$PWD/.venv/bin/python"
 cd apps/desktop
 npm ci
 npm start
 ```
 
-`npm start` 会构建应用并启动 Electron。
+`npm start` 会构建应用并启动 Electron，优先使用仓库内已有的 `.venv`。
+需要指定其他已准备好的解释器时，设置 `MARA_DESKTOP_PYTHON`。
 契约验证、测试和原生打包见[桌面开发说明](apps/desktop/README.md)。
 
-桌面端使用独立数据目录：Windows 通常是 `%APPDATA%/MARA`，
-Linux 是 `$XDG_DATA_HOME/MARA` 或 `~/.local/share/MARA`。
-不要假定它会自动打开 Web/CLI 的旧数据库，或支持不同入口同时写入同一份数据。
+需要让 Web、CLI 和桌面端共享配置、索引文件与会话时，在三端启动环境中设置同一个
+绝对路径 `MARA_APP_HOME`。例如在仓库根目录选择已有配置目录：PowerShell 使用
+`$env:MARA_APP_HOME = (Resolve-Path .mara/runtime).Path`，Bash 使用
+`export MARA_APP_HOME="$PWD/.mara/runtime"`，然后启动对应入口。
+继续同一会话时还需使用相同用户与选定来源。
+
+未设置 `MARA_APP_HOME` 时，桌面端仍使用独立数据目录：Windows 通常是
+`%APPDATA%/MARA`，Linux 是 `$XDG_DATA_HOME/MARA` 或 `~/.local/share/MARA`。
+选择共享配置目录不会自动复制旧数据；多端同时写入同一会话尚未验证。
 
 ## 配置与数据保存
 
-| 设置或位置                                        | 用途                                                     |
-| ------------------------------------------------- | -------------------------------------------------------- |
-| 仓库 `.env` 与 [flowsettings.py](flowsettings.py) | 源码工作区的模型默认值和应用设置                         |
-| `MARA app init`                                   | 创建用户级配置模板；`app doctor` 显示实际生效的路径      |
-| 用户配置目录中的 `.env` / `flowsettings.py`       | 没有工作区或显式设置模块覆盖时，供 packaged runtime 使用 |
-| `KH_APP_DATA_DIR`                                 | 覆盖应用数据目录                                         |
-| `modelcli.yml`                                    | `MARA model` 与 Agent 流程的独立 Provider/模型别名配置   |
-| 桌面 Settings 与其数据目录                        | 桌面端负责的模型设置与应用状态                           |
+| 设置或位置                                        | 用途                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| 仓库 `.env` 与 [flowsettings.py](flowsettings.py) | 源码工作区的模型默认值和应用设置                                         |
+| `MARA app init`                                   | 创建用户级配置模板；`app doctor` 显示实际生效的路径                      |
+| 用户配置目录中的 `.env` / `flowsettings.py`       | 没有工作区或显式设置模块覆盖时，供 packaged runtime 使用                 |
+| `MARA_APP_HOME`                                   | 共享配置目录：`config/`、默认 `data/`、`cache/`；桌面状态位于 `desktop/` |
+| `KH_APP_DATA_DIR`                                 | 覆盖应用数据目录                                                         |
+| `modelcli.yml`                                    | `MARA model` 与 Agent 流程的独立 Provider/模型别名配置                   |
+| 桌面 Settings 与其数据目录                        | 独立桌面配置目录中的模型设置与应用状态                                   |
 
-运行时会依次检查显式的 `THEFLOW_SETTINGS_MODULE`、工作区 `flowsettings.py`、
-packaged defaults。因此，从仓库内和其他目录执行命令，可能使用不同配置。
-在期望 Web 与 CLI 看到相同文件之前，先比较 `MARA app doctor` 中的
+Web/CLI 运行时依次检查显式的 `THEFLOW_SETTINGS_MODULE`、`MARA_APP_HOME`、
+工作区 `flowsettings.py` 和 packaged defaults。设置 `MARA_APP_HOME` 后，三端读取
+其中的 `config/.env` 与 `config/flowsettings.py`；`KH_APP_DATA_DIR` 可覆盖默认数据目录。
+没有显式配置目录时，从仓库内和其他目录执行命令可能使用不同配置。
+在期望三端看到相同文件之前，先比较 `MARA app doctor` 中的
 **Settings source**、**App data dir** 和 **File storage**。
 
 源码模式默认使用 `ktem_app_data/`。

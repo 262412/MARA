@@ -1,24 +1,14 @@
 # MARA Desktop 功能对齐矩阵
 
-## 当前证据范围（2026-09-28）
+## 范围与验收口径
 
-R6-B 与 R6-C 的限定范围已独立接受。最新已执行原生证据为
-[`36381343652`](https://github.com/262412/MARA/actions/runs/36381343652)，
-输入 `f659007ee9693fb9f8603850ccfbbd00f56ff5cc`：Windows Server 2022、
-Ubuntu 22.04 构建和 Ubuntu 24.04 运行同一 Linux 组合目录，认证 IPC/HTTP、
-既有业务 smoke、真实退出及资源哈希已验证。这是 PyInstaller Sidecar/Electron
-组合目录证据，不是当前安装器、签名、更新/卸载或 Windows 10/11 clean VM 验收。
-macOS 未验证；历史 VM/旧 Gate 2 记录只适用于各自原包，不能转用于当前包。
+当前源码已接入文件、会话、文档问答，以及 Resources、Settings、Help 基础页面。
+通过 `MARA_APP_HOME` 可以与 Web/CLI 共用配置、文件和会话。
+实际开发启动和验证命令见 [Desktop README](../../apps/desktop/README.md)。
 
-Notes、Studio、Graph、导出/预览及完整 Resources/Settings 的 Desktop 目标仍按
-各切片进度跟踪，不能由 Web/CLI 服务或组合包 smoke 推定全功能完成。
-下文产品目标与历史证据保留；当前逐项输入和未决事项以
-[重构状态](../development/refactor-status.md)为准。U1、历史保护和安全门禁独立未决，
-merge/release NO-GO。
-
-本矩阵是功能范围的唯一基线。`P0` 表示首个可用版本必须完成，`P1` 表示
-Beta 稳定化阶段，`Later` 表示不阻塞首发。状态在正式开发开始后使用
-`Not started / In progress / Verified / Deferred` 更新。
+下表区分产品目标与已接入能力。`P0` 表示首个完整版本的必需项，`P1` 表示 Beta
+稳定化项，`Later` 表示不阻塞首发。源码测试和当前主机的功能检查不能替代对应发行包
+的原生安装、干净系统、签名或升级验收；历史包的结果只适用于原包。
 
 ## 1. 当前 Web UI 功能
 
@@ -85,47 +75,22 @@ Beta 稳定化阶段，`Later` 表示不阻塞首发。状态在正式开发开�
 只有当这些能力未来成为独立的 MARA 产品需求并通过新的 PRD/ADR 时，才会
 进入本矩阵。
 
-## 4. Gate 2 纵向切片状态
+## 4. 已接入能力与剩余工作
 
-`Verified` 仍以两平台原生构建、打包后真实 smoke 和风险登记册中的平台证据为
-准。开发机或单一平台通过不能提前升级状态。
+| 能力                             | 已接入范围                                                       | 仍需完成或单独验证                     |
+| -------------------------------- | ---------------------------------------------------------------- | -------------------------------------- |
+| Doctor、Files、Sessions          | application service、认证 Sidecar、窄 IPC、加载/空/失败/成功状态 | 每次发行包的原生系统验收               |
+| 原生导入与后台索引               | 文件选择/拖放、准备状态、进度、取消/重试、完成后刷新             | 格式矩阵、真实 OS 拖放与故障恢复       |
+| 文件与会话管理                   | 文件删除、会话新建/搜索/重命名/删除、详情读取                    | 固定会话、跨进程并发行为               |
+| 草稿与 Composer                  | 首次发送建会话、重复提交保护、IME/快捷键处理                     | 中文 IME 和缩放的人工验收              |
+| Resources、Help、Settings        | 真实导航、离线帮助、基础模型设置                                 | 完整资源管理与设置功能对齐             |
+| 文档/多文档问答                  | 流式答案、停止、原范围重试、partial answer、引用身份             | 页级/选中文本范围、引用定位            |
+| 共享 Web/CLI 配置                | 相同用户/数据目录下继续会话，重启后恢复历史                      | 同一会话的多端同时写入、自动旧数据迁移 |
+| 预览、Notes、Studio、Graph、导出 | 对应 Web/CLI 服务可作为后续接入基础                              | Desktop 界面与原生能力接入、各自验收   |
 
-| 切片     | 状态     | 当前证据                                                                                                                          | 升级为 Verified 仍需 |
-| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Doctor   | Verified | CLI/application/Sidecar/IPC/React；启动等待回归；OpenAPI 漂移门；Windows Server 2022、Ubuntu 22/24 CI；Windows 10/11 干净 VM 验收 | —                    |
-| Files    | Verified | 真实记录且路径不进入 Renderer；四态；Windows、Ubuntu 22/24 非空打包 smoke；Windows 10/11 干净 VM 验收                             | —                    |
-| Sessions | Verified | 真实会话；左栏四态；Windows、Ubuntu 22/24 非空打包 smoke；Windows 10/11 干净 VM 验收                                              | —                    |
+自动化覆盖分别位于 `apps/desktop/electron/`、`src/`、`sidecar/` 和打包脚本。
+原生 smoke 必须让沙箱 Renderer 获得完整 `window.desktop`，并经 Preload 实际调用
+Runtime、Doctor、Files 和 Sessions IPC；只从 Main 直接访问 Sidecar 不足以验证桥接。
 
-详细命令、指标、已解决问题和剩余验收项见
-[Gate 2 纵向切片证据](gate-2-vertical-slice-evidence.md)。
-
-## 5. Gate 3 纵向切片状态
-
-Gate 3 从“原生文件导入 → 后台索引 → Files 刷新/删除”开始。以下状态只表示该
-能力切片的进度，不代表未列出的 P0 功能或整个 Gate 3 已完成。
-
-| 能力                             | 状态        | 当前证据                                                                                         | 升级为 Verified 仍需                     |
-| -------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| 原生选择器导入                   | In progress | Main 持有原生路径；无 embedding 时导入/拖放禁用且不建任务；Windows/Ubuntu handoff 组合包通过     | Windows 10/11 原生选择器与真实 OS 拖放   |
-| 后台索引任务                     | In progress | 真实 DocQA runtime；稳定 indexing readiness/error；只写 Desktop cache；三平台原生 smoke 通过     | PDF、图片、DOC/XLS/PPT；Windows 10/11 VM |
-| Files 完成后刷新与删除           | In progress | 终态只刷新一次；真实 deletion coordinator；窄批量契约；当前 Windows/Ubuntu 组合包通过            | 当前包 Windows 10/11 产品 VM             |
-| 会话详情读取                     | In progress | 真实 `load_session()`；五态、重试与过期响应保护；Windows、Ubuntu 22/24 非空组合包通过            | 当前 Gate 3 包的 Windows 10/11 产品 VM   |
-| 会话新建、搜索、重命名与删除     | In progress | 真实 create/rename/delete；客户端搜索；认证、幂等、写互斥与窄 IPC；Windows、Ubuntu 22/24 包通过  | 当前包 Windows 10/11 VM；固定            |
-| 冷启动草稿与 Composer            | In progress | 启动不建空会话；首次发送幂等建会话/任务；IME、Enter、Alt+Enter、重复键与失败保留自动化通过       | Windows 10/11 VM；中文 IME 人工验收      |
-| Resources、Help、Settings 基线页 | In progress | 五类强类型页面；焦点/ARIA/标题；离线帮助；模型设置页和跨页后台任务连续性三平台包通过             | 完整 Resources/Settings P0；缩放人工验收 |
-| 模型设置与问答准备状态           | In progress | Electron route 唯一权威；旧库幂等迁移与密钥清理；revision/PID/fingerprint；真实 POST 捕获门      | 当前包 Windows 10/11 安全存储与迁移验收  |
-| 文档/多文档问答、流式与引用      | In progress | 真实 `stream_turn()`；64 来源；单调 SSE；未配置 LLM 不建任务；双文件 partial 取消/重试三平台通过 | Windows 10/11 VM；页/选中文本；引用定位  |
-
-当前 Gate 3 文件索引修复打包基线为
-`4112e99f5f9d6beccb06f67e5e4e3e160beb3129`。所有原生 smoke
-除业务断言外，还必须证明沙箱 Renderer 获得完整 `window.desktop`，并通过 Preload
-真实调用 Runtime、Doctor、Files 和 Sessions IPC；只从 Main 直接访问 Sidecar 不再视为
-充分的打包证据。
-
-实现、测试、包体测量与剩余风险见
-[Gate 3 文件索引纵向切片证据](gate-3-file-indexing-evidence.md)和
-[Gate 3 会话详情纵向切片证据](gate-3-session-detail-evidence.md)、
-[Gate 3 会话管理纵向切片证据](gate-3-session-management-evidence.md)和
-[Gate 3 会话新建纵向切片证据](gate-3-session-creation-evidence.md)、
-[Gate 3 真实问答纵向切片证据](gate-3-query-streaming-evidence.md)和
-[Gate 3 草稿、导航与模型准备纵向切片证据](gate-3-draft-navigation-and-model-settings-evidence.md)。
+安装、升级、卸载、安全存储及签名要求以[发布与验收计划](release-and-acceptance-plan.md)
+和[安全边界](security-and-risk-register.md)为准。

@@ -2,8 +2,9 @@
 
 This guide records responsibility boundaries implemented during R1–R6. It is
 not a claim that every feature, provider or platform has been accepted. Current
-input SHAs, execution receipts and unresolved gates belong in
-[refactor status](refactor-status.md); historical failures stay there.
+compatibility constraints and remaining acceptance limits are summarized in
+[refactor boundaries](refactor-status.md). Actual executions belong in their
+CI runs or review artifacts.
 
 ## Executable boundaries
 
@@ -37,17 +38,17 @@ policy is needed.
 
 ## Retained responsibilities and remaining boundaries
 
-| Original plan domain          | Treatment and bounded remaining work                                                                                                                                                                                 |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public CLI and distributions  | Keep `MARA`/`MARA-cli` mapped to `slide_cli.cli:main`; internal `slide_cli`, `kotaemon`, `ktem` names and root `mara-app` are compatibility/package boundaries. Verify installed scripts outside the checkout.       |
-| Web/DocQA                     | Keep workflow composition and accepted R1–R5 owners. U1 async browser application remains deferred/BLOCKED in chat event/selector harness scope, not a prerequisite for independent structure tests.                 |
-| Planning/evidence/benchmark   | Retain runner/scoring modules and frozen fixtures. Structure tests do not establish model/dataset performance, scientific claims or paid-provider readiness.                                                         |
-| Resource lifecycle            | Retain R5 cache, transaction, Source-lock, Notebook, artifact/download owners and supported process scope. No data migration, historical cleanup or cross-store rollback claim.                                      |
-| Desktop/Sidecar               | Keep manager lifecycle, application services, IPC/SSE/task contracts. Native combination packages, installers, clean VMs and unfinished Notes/Studio/Graph/export/preview are separate capabilities.                 |
-| MCP/agents and deck/artifacts | Retain accepted operation/session/export boundaries and registry services. SSE cancellation does not imply remote rollback; media adapters and external office/provider capabilities remain conditional.             |
-| App/model/platform commands   | Keep lazy public groups and actual aliases. Test read-only entrypaths and installed coding-tool bundles with owned targets/fake configuration; never write real `.codex`/`.claude` directories for verification.     |
-| Containers/build/resources    | Four distributions, legal files, PDF.js/JS/CSS/platform assets, package manifests and native resources remain explicit delivery contracts. Security/PCRE2 failures independently block release.                      |
-| Docs/developer tools          | Current setup uses the storage/hygiene contracts and locked CI. Existing generated schemas, locks, vendor licenses, fixtures and historical auxiliary files are retained by role, not deleted for apparent tidiness. |
+| Original plan domain          | Treatment and bounded remaining work                                                                                                                                                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public CLI and distributions  | Keep `MARA`/`MARA-cli` mapped to `slide_cli.cli:main`; internal `slide_cli`, `kotaemon`, `ktem` names and root `mara-app` are compatibility/package boundaries. Verify installed scripts outside the checkout.                                |
+| Web/DocQA                     | Keep workflow composition and accepted R1–R5 owners. U1 async browser application remains deferred/BLOCKED in chat event/selector harness scope, not a prerequisite for independent structure tests.                                          |
+| Planning/evidence/benchmark   | Retain runner/scoring modules and frozen fixtures. Structure tests do not establish model/dataset performance, scientific claims or paid-provider readiness.                                                                                  |
+| Resource lifecycle            | Retain R5 cache, transaction, Source-lock, Notebook, artifact/download owners and supported process scope. No data migration, historical cleanup or cross-store rollback claim.                                                               |
+| Desktop/Sidecar               | Keep manager lifecycle, application services, IPC/SSE/task contracts. Native combination packages, installers, clean VMs and unfinished Notes/Studio/Graph/export/preview are separate capabilities.                                          |
+| MCP/agents and deck/artifacts | Retain accepted operation/session/export boundaries and registry services. SSE cancellation does not imply remote rollback; media adapters and external office/provider capabilities remain conditional.                                      |
+| App/model/platform commands   | Keep lazy public groups and actual aliases. Test read-only entrypaths and installed coding-tool bundles with owned targets/fake configuration; never write real `.codex`/`.claude` directories for verification.                              |
+| Containers/build/resources    | Four distributions, legal files, PDF.js/JS/CSS/platform assets, package manifests and native resources remain explicit delivery contracts. Security/PCRE2 failures independently block release.                                               |
+| Docs/developer tools          | Current setup uses the storage/hygiene contracts and locked CI. Generated schemas, locks, vendor licenses and fixtures are runtime or verification inputs. Maintain durable guidance in existing docs; remove superseded planning narratives. |
 
 The tracked-tree reconciliation reuses the original R0 classifications and Git
 blob identities. Its file denominator covers repository-owned tracked domains;

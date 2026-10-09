@@ -1,20 +1,14 @@
 # MARA Desktop 发布与验收计划
 
-## 当前证据范围（2026-09-28）
+## 验收范围
 
-R6-B 与 R6-C 的限定范围已独立接受。最新已执行原生证据为
-[`36381343652`](https://github.com/262412/MARA/actions/runs/36381343652)，
-输入 `f659007ee9693fb9f8603850ccfbbd00f56ff5cc`：Windows Server 2022、
-Ubuntu 22.04 构建和 Ubuntu 24.04 运行同一 Linux 组合目录，认证 IPC/HTTP、
-既有业务 smoke、真实退出及资源哈希已验证。这是 PyInstaller Sidecar/Electron
-组合目录证据，不是当前安装器、签名、更新/卸载或 Windows 10/11 clean VM 验收。
-macOS 未验证；历史 VM/旧 Gate 2 记录只适用于各自原包，不能转用于当前包。
+本计划定义每个发行包需要满足的条件。当前功能范围见
+[功能矩阵](feature-parity-matrix.md)，源码运行和构建命令见
+[Desktop README](../../apps/desktop/README.md)。
 
-Notes、Studio、Graph、导出/预览及完整 Resources/Settings 的 Desktop 目标仍按
-各切片进度跟踪，不能由 Web/CLI 服务或组合包 smoke 推定全功能完成。
-下文产品目标与历史证据保留；当前逐项输入和未决事项以
-[重构状态](../development/refactor-status.md)为准。U1、历史保护和安全门禁独立未决，
-merge/release NO-GO。
+CI 和发布说明应注明输入 commit、平台及实际产物。源码测试、PyInstaller/Electron
+组合目录 smoke、安装器、干净系统和签名分别验收；旧包通过的检查不能直接用于新包。
+Windows 10/11 与 Ubuntu 22.04/24.04 是目标平台，macOS 不在当前发行范围。
 
 ## 1. 产物
 
