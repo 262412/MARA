@@ -28,3 +28,14 @@ test("uses the freedesktop fallback on Linux", () => {
     "/home/mara/.local/share/MARA",
   );
 });
+
+test("keeps Desktop state inside an explicitly shared MARA profile", () => {
+  assert.equal(
+    resolveDesktopDataRoot("win32", { MARA_APP_HOME: "D:\\MARA profile" }, "C:\\Users\\Mara", "C:\\Users\\Mara\\AppData\\Roaming"),
+    "D:\\MARA profile\\desktop",
+  );
+  assert.equal(
+    resolveDesktopDataRoot("linux", { MARA_APP_HOME: "/shared/mara" }, "/home/mara", "/home/mara/.config"),
+    "/shared/mara/desktop",
+  );
+});

@@ -238,6 +238,29 @@ def test_desktop_provider_defaults_are_independent_for_chat_and_embeddings(
     assert settings["KH_EMBEDDINGS"]["openai"]["default"] is False
 
 
+def test_shared_desktop_profile_preserves_web_and_cli_model_configuration(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("MARA_APP_HOME", str(tmp_path / "shared"))
+    arguments = {
+        "base_dir": tmp_path,
+        "app_data_dir": tmp_path / "app-data",
+        "config_reader": _config_reader(
+            {
+                "OPENAI_API_KEY": "configured-key",
+                "OPENAI_EMBEDDINGS_MODEL": "openai-embedding",
+                "LOCAL_MODEL_EMBEDDINGS": "ollama-embedding",
+            }
+        ),
+    }
+    web_settings = build_kotaemon_settings(**arguments)
+    monkeypatch.setenv("MARA_DESKTOP_DATA_DIR", str(tmp_path / "shared/desktop"))
+    desktop_settings = build_kotaemon_settings(**arguments)
+
+    for key in ("KH_LLMS", "KH_EMBEDDINGS"):
+        assert desktop_settings[key] == web_settings[key]
+
+
 def test_desktop_ollama_embedding_can_be_configured_without_chat_model(
     monkeypatch,
     tmp_path,

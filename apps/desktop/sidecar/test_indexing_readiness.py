@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -36,6 +37,38 @@ def _embedding(
 
 
 class DesktopIndexingReadinessTest(unittest.TestCase):
+    def test_shared_profile_diagnosis_preserves_the_saved_model_route(self) -> None:
+        configured = _embedding()
+        persisted = _embedding()
+        persisted["desktop"]["default"] = False
+        persisted["web-selected"] = _embedding()["desktop"]
+        manager = SimpleNamespace(
+            info=lambda: persisted,
+            add=Mock(side_effect=AssertionError("diagnosis must not add models")),
+            update=Mock(side_effect=AssertionError("diagnosis must not change models")),
+        )
+        manager_module = ModuleType("ktem.embeddings.manager")
+        setattr(manager_module, "embedding_models_manager", manager)
+        settings_module = ModuleType("theflow.settings")
+        setattr(settings_module, "settings", SimpleNamespace(KH_EMBEDDINGS=configured))
+        routes_module = ModuleType("ktem.desktop_model_routes")
+        setattr(routes_module, "persisted_desktop_spec", lambda spec, _kind: spec)
+
+        with patch.dict(os.environ, {"MARA_APP_HOME": "/shared-profile"}), patch.dict(
+            sys.modules,
+            {
+                "ktem.embeddings.manager": manager_module,
+                "theflow.settings": settings_module,
+                "ktem.desktop_model_routes": routes_module,
+            },
+        ):
+            actual = _desktop_embedding_configurations()
+
+        self.assertIs(actual, persisted)
+        self.assertTrue(actual["web-selected"]["default"])
+        manager.add.assert_not_called()
+        manager.update.assert_not_called()
+
     def test_runtime_configuration_remains_authoritative_after_database_scrub(
         self,
     ) -> None:

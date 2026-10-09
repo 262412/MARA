@@ -13,6 +13,7 @@ from ktem.preview.errors import PreviewConversionError
 def test_permission_capability_failure_never_publishes_or_leaks_descriptor(
     monkeypatch, tmp_path, operation, missing
 ):
+    monkeypatch.setattr(cache_attestation, "_WINDOWS", False)
     monkeypatch.setenv("KH_APP_DATA_DIR", str(tmp_path / "app-data"))
     cache = tmp_path / "cache"
     cache.mkdir()
@@ -88,3 +89,40 @@ def test_native_key_and_manifest_permissions_and_existing_key_identity(
     assert target.read_bytes() == b"owned manifest"
     assert list(cache.iterdir()) == [target]
     assert list(store.key_path.parent.iterdir()) == [store.key_path]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows DPAPI")
+def test_windows_key_is_encrypted_and_tampering_fails_closed(monkeypatch, tmp_path):
+    monkeypatch.setenv("KH_APP_DATA_DIR", str(tmp_path / "app-data"))
+    fake_key = b"k" * 32
+    monkeypatch.setattr(
+        cache_attestation.secrets, "token_bytes", lambda _size: fake_key
+    )
+    store = cache_attestation.CacheAttestationStore(tmp_path / "cache")
+    source = tmp_path / "source.docx"
+    cache_attestation._create_key_atomically(store.key_path, source)
+    assert fake_key not in store.key_path.read_bytes()
+    assert store._key(source) == fake_key
+    identity = store.key_path.stat()
+    cache_attestation._create_key_atomically(store.key_path, source)
+    assert store.key_path.stat().st_ino == identity.st_ino
+    store.key_path.write_bytes(b"invalid encrypted key")
+    with pytest.raises(PreviewConversionError, match="Windows key protection"):
+        store._key(source)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows DPAPI")
+def test_windows_encryption_failure_leaves_no_key_or_temporary(monkeypatch, tmp_path):
+    import pywintypes
+    import win32crypt
+
+    monkeypatch.setenv("KH_APP_DATA_DIR", str(tmp_path / "app-data"))
+    store = cache_attestation.CacheAttestationStore(tmp_path / "cache")
+
+    def denied(*args):
+        raise pywintypes.error(5, "CryptProtectData", "owned permission denial")
+
+    monkeypatch.setattr(win32crypt, "CryptProtectData", denied)
+    with pytest.raises(PreviewConversionError, match="Windows key protection"):
+        cache_attestation._create_key_atomically(store.key_path, tmp_path / "source")
+    assert list(store.key_path.parent.iterdir()) == []

@@ -16,6 +16,7 @@ from .errors import PreviewConversionError, PreviewErrorCode
 _ATTESTATION_VERSION = "mara-office-preview-v1"
 _KEY_BYTES = 32
 _MAX_MANIFEST_BYTES = 4096
+_WINDOWS = os.name == "nt"
 
 
 @dataclass(frozen=True)
@@ -92,8 +93,7 @@ class CacheAttestationStore:
         )
         temporary = Path(name)
         try:
-            fchmod: Callable[[int, int], None] = getattr(os, "fchmod")
-            fchmod(descriptor, 0o600)
+            _restrict_posix_permissions(descriptor)
             with os.fdopen(descriptor, "wb") as file_obj:
                 descriptor = -1
                 file_obj.write(prepared.manifest)
@@ -149,11 +149,13 @@ class CacheAttestationStore:
             _create_key_atomically(self.key_path, source_path)
         key_file = _required_regular_file(self.key_path, source_path, "attestation key")
         mode = key_file.stat().st_mode
-        if mode & 0o077:
+        if not _WINDOWS and mode & 0o077:
             raise _attestation_error(
                 source_path, "The cache attestation key must have mode 0600."
             )
         key = key_file.read_bytes()
+        if _WINDOWS:
+            key = _windows_key_data(key, source_path, protect=False)
         if len(key) != _KEY_BYTES:
             raise _attestation_error(
                 source_path, "The cache attestation key is invalid."
@@ -175,11 +177,13 @@ def _create_key_atomically(key_path: Path, source_path: Path) -> None:
     descriptor, name = tempfile.mkstemp(prefix=".preview-key-", dir=key_path.parent)
     temporary = Path(name)
     try:
-        fchmod: Callable[[int, int], None] = getattr(os, "fchmod")
-        fchmod(descriptor, 0o600)
+        _restrict_posix_permissions(descriptor)
+        key = secrets.token_bytes(_KEY_BYTES)
+        if _WINDOWS:
+            key = _windows_key_data(key, source_path, protect=True)
         with os.fdopen(descriptor, "wb") as file_obj:
             descriptor = -1
-            file_obj.write(secrets.token_bytes(_KEY_BYTES))
+            file_obj.write(key)
             file_obj.flush()
             os.fsync(file_obj.fileno())
         try:
@@ -194,6 +198,29 @@ def _create_key_atomically(key_path: Path, source_path: Path) -> None:
         if descriptor >= 0:
             os.close(descriptor)
         temporary.unlink(missing_ok=True)
+
+
+def _restrict_posix_permissions(descriptor: int) -> None:
+    if not _WINDOWS:
+        fchmod: Callable[[int, int], None] = getattr(os, "fchmod")
+        fchmod(descriptor, 0o600)
+
+
+def _windows_key_data(data: bytes, source_path: Path, *, protect: bool) -> bytes:
+    """Bind the on-disk key to the Windows user; never write its plaintext."""
+    import pywintypes
+    import win32crypt
+
+    try:
+        if protect:
+            return win32crypt.CryptProtectData(
+                data, "MARA preview cache", None, None, None, 1
+            )
+        return win32crypt.CryptUnprotectData(data, None, None, None, 1)[1]
+    except pywintypes.error as exc:
+        raise _attestation_error(
+            source_path, f"Windows key protection failed: {exc}"
+        ) from exc
 
 
 def _manifest_path(artifact_path: Path) -> Path:

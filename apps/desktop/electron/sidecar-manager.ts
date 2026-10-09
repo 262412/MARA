@@ -45,6 +45,7 @@ import type {
 import {
   resolveDevelopmentPython,
   resolveSidecarCommand,
+  resolveWindowsPythonLaunch,
   sidecarEnvironment,
   sidecarWorkingDirectory,
 } from "./sidecar-launch";
@@ -639,13 +640,15 @@ export class SidecarManager {
     const command = this.sidecarCommand();
     const runtimeWorkingDirectory = sidecarWorkingDirectory(this.options.dataRoot);
     mkdirSync(runtimeWorkingDirectory, { recursive: true });
-    const child = spawn(command.executable, command.args, {
-      env: sidecarEnvironment({
+    const launch = resolveWindowsPythonLaunch(command.executable,
+      sidecarEnvironment({
         appPath: this.options.appPath,
         dataRoot: this.options.dataRoot,
         isPackaged: this.options.isPackaged,
         smokeFault: this.options.smokeFault,
-      }, process.env, environment, token),
+      }, process.env, environment, token), this.options.isPackaged);
+    const child = spawn(launch.executable, command.args, {
+      env: launch.environment,
       cwd: runtimeWorkingDirectory,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,

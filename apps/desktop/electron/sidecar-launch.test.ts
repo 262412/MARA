@@ -7,8 +7,17 @@ import { PassThrough } from "node:stream";
 import test, { type TestContext } from "node:test";
 
 import { SidecarManager } from "./sidecar-manager";
+import { sidecarEnvironment } from "./sidecar-launch";
 
 type Command = { executable: string; args: string[] };
+
+test("shared profile leaves data selection to its configuration or explicit environment", () => {
+  const configuration = { appPath: "/workspace/apps/desktop", dataRoot: "/profile/desktop", isPackaged: false };
+  const inherited = { MARA_APP_HOME: "/profile" };
+  const untrustedDataOverride = { KH_APP_DATA_DIR: "/other/profile" };
+  assert.equal(sidecarEnvironment(configuration, inherited, untrustedDataOverride, "fake-token").KH_APP_DATA_DIR, undefined);
+  assert.equal(sidecarEnvironment(configuration, { ...inherited, KH_APP_DATA_DIR: "/shared/data" }, untrustedDataOverride, "fake-token").KH_APP_DATA_DIR, "/shared/data");
+});
 type Seams = {
   sidecarCommand(): Command;
   developmentPython(): string;

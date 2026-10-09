@@ -512,7 +512,7 @@ def build_kotaemon_settings(
         },
         "default": False,
     }
-    if os.environ.get("MARA_DESKTOP_DATA_DIR"):
+    if os.environ.get("MARA_DESKTOP_DATA_DIR") and not os.environ.get("MARA_APP_HOME"):
         _desktop_provider_settings(settings, read_config)
         _select_desktop_default(settings["KH_LLMS"], ("azure", "openai", "ollama"))
         _select_desktop_default(

@@ -169,6 +169,23 @@ test("Workspace renders streaming, success, failed, and cancelled answers", () =
   assert.doesNotMatch(modelMissing, /Retry answer/);
 });
 
+test("a later Web or CLI turn does not append the last Desktop answer again", () => {
+  const sharedDetail: SessionDetail = {
+    ...detail,
+    messages: [
+      ...detail.messages,
+      { role: "user", content: queryTask.prompt },
+      { role: "assistant", content: queryTask.answer },
+      { role: "user", content: "Continue from the Web client." },
+      { role: "assistant", content: "The later shared answer." },
+    ],
+  };
+  const html = render({ status: "success", data: sharedDetail }, queryTask);
+  assert.equal(html.match(/The evidence changed\./g)?.length, 1);
+  assert.ok(html.indexOf(queryTask.answer) < html.indexOf("The later shared answer."));
+  assert.doesNotMatch(html, /Answer saved/);
+});
+
 test("all assistant answer states share semantic Markdown rendering", () => {
   const markdown = "# Result\n\n- item\n\n| A | B |\n| - | - |\n| 1 | 2 |";
   const markdownDetail: SessionDetail = {

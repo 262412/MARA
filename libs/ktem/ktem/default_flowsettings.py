@@ -109,7 +109,7 @@ runtime_settings["STORAGE"] = {
     "prefix": str(theflow_storage_dir),
 }
 validate_test_runtime_paths(runtime_settings)
-if os.environ.get("MARA_DESKTOP_DATA_DIR"):
+if os.environ.get("MARA_DESKTOP_DATA_DIR") and not os.environ.get("MARA_APP_HOME"):
     # User overrides may configure models but Desktop selects only providers
     # whose dependencies are part of the native Sidecar bundle.
     runtime_settings["KH_EMBEDDINGS"] = _desktop_embedding_settings(

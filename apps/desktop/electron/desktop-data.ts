@@ -8,6 +8,11 @@ export function resolveDesktopDataRoot(
   homeDirectory: string,
   applicationDataDirectory: string,
 ): string {
+  const appHome = environment.MARA_APP_HOME?.trim();
+  if (appHome) {
+    const paths = platform === "win32" ? path.win32 : path.posix;
+    return paths.resolve(appHome, "desktop");
+  }
   if (platform === "win32") {
     return path.win32.join(applicationDataDirectory, "MARA");
   }

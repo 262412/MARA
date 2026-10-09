@@ -1,8 +1,35 @@
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { mergeSidecarEnvironment } from "./smoke-environment";
 
 type Environment = Record<string, string | undefined>;
+
+export function resolveWindowsPythonLaunch(
+  executable: string,
+  environment: Environment,
+  isPackaged: boolean,
+): { executable: string; environment: Environment } {
+  const unchanged = { executable, environment };
+  if (isPackaged || process.platform !== "win32" || !path.isAbsolute(executable)
+    || path.basename(executable).toLowerCase() !== "python.exe") {
+    return unchanged;
+  }
+  const configuration = path.resolve(path.dirname(executable), "..", "pyvenv.cfg");
+  if (!existsSync(configuration)) {
+    return unchanged;
+  }
+  const home = /^home\s*=\s*(.+)$/m.exec(readFileSync(configuration, "utf8"))?.[1].trim();
+  if (!home) {
+    throw new Error("The selected Python environment has no base interpreter home");
+  }
+  // Match CPython multiprocessing: bypass the Windows venv redirector so the
+  // spawned PID is the server PID while Python still activates this venv.
+  return {
+    executable: path.join(home, "python.exe"),
+    environment: { ...environment, __PYVENV_LAUNCHER__: executable },
+  };
+}
 
 export function resolveDevelopmentPython(
   appPath: string,
@@ -58,9 +85,17 @@ export function sidecarEnvironment(
   ]
     .filter((entry): entry is string => Boolean(entry))
     .join(path.delimiter);
+  const environment = mergeSidecarEnvironment(inherited, trusted);
+  if (inherited.MARA_APP_HOME?.trim()) {
+    delete environment.KH_APP_DATA_DIR;
+    if (inherited.KH_APP_DATA_DIR) {
+      environment.KH_APP_DATA_DIR = inherited.KH_APP_DATA_DIR;
+    }
+  } else {
+    environment.KH_APP_DATA_DIR = path.join(configuration.dataRoot, "state", "ktem_app_data");
+  }
   return {
-    ...mergeSidecarEnvironment(inherited, trusted),
-    KH_APP_DATA_DIR: path.join(configuration.dataRoot, "state", "ktem_app_data"),
+    ...environment,
     MARA_DESKTOP_DATA_DIR: configuration.dataRoot,
     MARA_DESKTOP_TOKEN: token,
     MARA_DESKTOP_SMOKE_FAULT: configuration.smokeFault ?? "",

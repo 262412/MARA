@@ -163,8 +163,9 @@ class RuntimePaths:
 def get_runtime_paths() -> RuntimePaths:
     validate_test_runtime_paths(os.environ)
     desktop_data_root = str(os.environ.get("MARA_DESKTOP_DATA_DIR", "") or "").strip()
+    app_home = str(os.environ.get("MARA_APP_HOME", "") or "").strip()
     test_root = _test_runtime_root()
-    if desktop_data_root:
+    if desktop_data_root and not app_home:
         desktop_root = Path(desktop_data_root).expanduser().resolve()
         config_dir = desktop_root / "state" / "config"
         data_dir = desktop_root / "state" / "runtime"
@@ -173,7 +174,7 @@ def get_runtime_paths() -> RuntimePaths:
         config_dir = test_root / "config"
         data_dir = test_root / "ktem_app_data"
         cache_dir = test_root / "cache"
-    elif app_home := str(os.environ.get("MARA_APP_HOME", "") or "").strip():
+    elif app_home:
         root = Path(app_home).expanduser().resolve()
         config_dir = root / "config"
         data_dir = root / "data"
@@ -350,6 +351,8 @@ def bootstrap_runtime_settings() -> str:
     if explicit_module:
         _synchronize_theflow_settings(explicit_module)
         return explicit_module
+    if os.environ.get("MARA_APP_HOME", "").strip():
+        return bootstrap_packaged_runtime_settings()
 
     local_flowsettings = find_local_flowsettings()
     if local_flowsettings is not None:
@@ -375,7 +378,9 @@ def bootstrap_packaged_runtime_settings() -> str:
 def load_packaged_runtime_env() -> Path:
     runtime_paths = get_runtime_paths()
     runtime_paths.config_dir.mkdir(parents=True, exist_ok=True)
-    desktop_owned_config = bool(os.environ.get("MARA_DESKTOP_DATA_DIR"))
+    desktop_owned_config = bool(os.environ.get("MARA_DESKTOP_DATA_DIR")) and not bool(
+        os.environ.get("MARA_APP_HOME", "").strip()
+    )
     desktop_model_environment = {
         name: value
         for name, value in os.environ.items()
@@ -411,7 +416,10 @@ def describe_runtime_settings() -> dict[str, str]:
         else:
             source = "explicit-module"
         module = explicit_module
-    elif local_flowsettings is not None:
+    elif (
+        local_flowsettings is not None
+        and not os.environ.get("MARA_APP_HOME", "").strip()
+    ):
         source = "workspace-flowsettings"
         module = str(local_flowsettings)
     else:

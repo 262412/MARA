@@ -31,10 +31,19 @@ def test_reviewer_app_home_isolated_from_existing_user_data(monkeypatch, tmp_pat
     assert paths.flowsettings_path == paths.config_dir / "flowsettings.py"
 
 
-def test_desktop_keeps_precedence_over_optional_app_home(monkeypatch, tmp_path):
+def test_desktop_shares_explicit_app_home_with_web_and_cli(monkeypatch, tmp_path):
     monkeypatch.setenv("MARA_APP_HOME", str(tmp_path / "reviewer"))
     monkeypatch.setenv("MARA_DESKTOP_DATA_DIR", str(tmp_path / "desktop"))
 
+    paths = get_runtime_paths()
+    assert paths.data_dir == tmp_path / "reviewer" / "data"
+    assert paths.config_dir == tmp_path / "reviewer" / "config"
+
+
+def test_desktop_without_shared_profile_keeps_its_independent_data(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("MARA_DESKTOP_DATA_DIR", str(tmp_path / "desktop"))
     assert get_runtime_paths().data_dir == tmp_path / "desktop" / "state" / "runtime"
 
 
@@ -60,3 +69,20 @@ def test_test_runtime_keeps_priority_over_external_app_home(monkeypatch, tmp_pat
     assert paths.config_dir == owned_root / "config"
     assert paths.cache_dir == owned_root / "cache"
     assert not external_home.exists()
+
+
+def test_explicit_profile_bootstrap_ignores_workspace_configuration(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("MARA_APP_HOME", str(tmp_path / "shared"))
+    monkeypatch.setattr(runtime, "_prepare_test_configuration", lambda: None)
+    monkeypatch.setattr(runtime, "ensure_llama_index_nltk_cache", lambda: None)
+    monkeypatch.setattr(
+        runtime, "find_local_flowsettings", lambda: tmp_path / "flowsettings.py"
+    )
+    loaded: list[str] = []
+    monkeypatch.setattr(runtime, "_synchronize_theflow_settings", loaded.append)
+
+    assert runtime.bootstrap_runtime_settings() == runtime.PACKAGE_FLOWSETTINGS_MODULE
+    assert loaded == [runtime.PACKAGE_FLOWSETTINGS_MODULE]
+    assert runtime.describe_runtime_settings()["settings_source"] == "package-default"
