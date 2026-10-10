@@ -2,10 +2,84 @@
 
 import os
 import stat
+import sys
+from types import ModuleType
 
 import pytest
 from ktem.preview import cache_attestation
 from ktem.preview.errors import PreviewConversionError
+
+
+class _FakeWindowsDPAPIError(Exception):
+    pass
+
+
+def _install_fake_dpapi(monkeypatch, *, protect, unprotect):
+    pywintypes = ModuleType("pywintypes")
+    setattr(pywintypes, "error", _FakeWindowsDPAPIError)
+    win32crypt = ModuleType("win32crypt")
+    setattr(win32crypt, "CryptProtectData", protect)
+    setattr(win32crypt, "CryptUnprotectData", unprotect)
+    monkeypatch.setitem(sys.modules, "pywintypes", pywintypes)
+    monkeypatch.setitem(sys.modules, "win32crypt", win32crypt)
+
+
+def test_mocked_windows_key_is_encrypted_and_tampering_fails_closed(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(cache_attestation, "_WINDOWS", True)
+    monkeypatch.setenv("KH_APP_DATA_DIR", str(tmp_path / "app-data"))
+    fake_key = b"k" * 32
+    ciphertext_prefix = b"encrypted:"
+
+    def protect(data, *_args):
+        return ciphertext_prefix + bytes(value ^ 0xFF for value in data)
+
+    def unprotect(data, *_args):
+        if data.startswith(ciphertext_prefix):
+            encrypted = data[len(ciphertext_prefix) :]
+            return "MARA preview cache", bytes(value ^ 0xFF for value in encrypted)
+        raise _FakeWindowsDPAPIError("invalid encrypted key")
+
+    _install_fake_dpapi(monkeypatch, protect=protect, unprotect=unprotect)
+    monkeypatch.setattr(
+        cache_attestation.secrets, "token_bytes", lambda _size: fake_key
+    )
+    store = cache_attestation.CacheAttestationStore(tmp_path / "cache")
+    source = tmp_path / "source.docx"
+
+    cache_attestation._create_key_atomically(store.key_path, source)
+
+    assert store.key_path.read_bytes() == ciphertext_prefix + bytes(
+        value ^ 0xFF for value in fake_key
+    )
+    assert fake_key not in store.key_path.read_bytes()
+    assert store._key(source) == fake_key
+    identity = store.key_path.stat()
+    cache_attestation._create_key_atomically(store.key_path, source)
+    assert store.key_path.stat().st_ino == identity.st_ino
+
+    store.key_path.write_bytes(b"invalid encrypted key")
+    with pytest.raises(PreviewConversionError, match="Windows key protection"):
+        store._key(source)
+
+
+def test_mocked_windows_encryption_failure_leaves_no_key_or_temporary(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(cache_attestation, "_WINDOWS", True)
+    monkeypatch.setenv("KH_APP_DATA_DIR", str(tmp_path / "app-data"))
+
+    def denied(*_args):
+        raise _FakeWindowsDPAPIError("owned permission denial")
+
+    _install_fake_dpapi(monkeypatch, protect=denied, unprotect=lambda *_args: None)
+    store = cache_attestation.CacheAttestationStore(tmp_path / "cache")
+
+    with pytest.raises(PreviewConversionError, match="Windows key protection"):
+        cache_attestation._create_key_atomically(store.key_path, tmp_path / "source")
+
+    assert list(store.key_path.parent.iterdir()) == []
 
 
 @pytest.mark.parametrize("operation", ["key", "manifest"])
