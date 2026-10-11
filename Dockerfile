@@ -28,15 +28,15 @@ COPY vendor/nltk ./vendor/nltk
 COPY scripts/check_nltk_backport.py ./scripts/check_nltk_backport.py
 COPY scripts/prepare_container_nltk.py /opt/mara/bin/prepare_container_nltk.py
 
-# Reuse v0.31.2's native libraries and rebuild its Go service with patched modules.
+# Reuse v0.31.2's native libraries and rebuild its Go service with updated Go and modules.
 FROM builder-base AS ollama-builder
 ARG TARGETARCH
-ADD https://go.dev/dl/go1.27.1.linux-${TARGETARCH}.tar.gz /tmp/go.tar.gz
+ADD https://go.dev/dl/go1.27.2.linux-${TARGETARCH}.tar.gz /tmp/go.tar.gz
 ADD --checksum=sha256:9c334ffe4dda2afce6bc448b0d5505e97a5f067db5141cac988d3edfd920bb6f \
     https://codeload.github.com/ollama/ollama/tar.gz/a6293eb5164214f15e7856268f3adddeae1026e2 /tmp/ollama.tar.gz
 RUN case "$TARGETARCH" in \
-        amd64) go_sha=63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445 ;; \
-        arm64) go_sha=3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec ;; \
+        amd64) go_sha=ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 ;; \
+        arm64) go_sha=94f3e30b8e374bc285e7dadc11e0865726b9bc6e85b841ccceaabc0214c6b7c8 ;; \
         *) exit 1 ;; \
     esac \
     && printf '%s  /tmp/go.tar.gz\n' "$go_sha" | sha256sum --check - \
