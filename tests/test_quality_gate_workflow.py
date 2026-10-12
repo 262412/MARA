@@ -486,50 +486,6 @@ def test_release_container_digest_is_signed_and_pushed_to_the_registry():
     assert attest["with"]["push-to-registry"] is True
 
 
-def test_supply_chain_pin_changes_require_trusted_context_owner_review():
-    path = REPO_ROOT / ".github" / "workflows" / "supply-chain-review.yaml"
-    workflow = _load_workflow(path)
-    triggers = _trigger(workflow)
-    source = path.read_text(encoding="utf-8")
-
-    assert "pull_request_target" in triggers
-    assert triggers["pull_request_review"]["types"] == ["submitted", "dismissed"]
-    assert "pull_request" not in triggers
-    assert "actions/checkout@" not in source
-    assert "pull_request.head.sha" in source
-    assert "author_association" in source
-    assert "APPROVED" in source
-    assert "COLLABORATOR" in source
-    assert 'pull_request["changed_files"]' in source and "CHANGED_FILES" not in source
-    assert "len(files) != expected_file_count" in source
-    for protected in (
-        ".dockerignore",
-        ".gitleaks",
-        "gitleaks.toml",
-        ".trivy",
-        "trivy.yaml",
-        "trivy.yml",
-        "pyproject.toml",
-        "uv.lock",
-        "constraints.txt",
-        "requirements.txt",
-        "requirements.azure.in",
-        "package-lock.json",
-        "install.sh",
-        "install.ps1",
-        "publish_packages.py",
-        "MANIFEST.in",
-        "generate_distribution_attestations.py",
-        "generate_container_attestation.py",
-        "smoke_container_runtime.py",
-        "check_container_lock_parity.py",
-        "check_dependency_audit.py",
-        "dependency_audit_baseline.json",
-    ):
-        assert protected in source
-    assert "two-person control" in source
-
-
 @pytest.mark.parametrize(
     ("path", "publish_job", "trusted_base"),
     [

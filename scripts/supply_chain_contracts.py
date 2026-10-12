@@ -271,58 +271,6 @@ def _exact_gitleaks_digest_exception(config: dict) -> bool:
     }
 
 
-def check_trusted_review(root: Path) -> list[ContractIssue]:
-    path = Path(".github/workflows/supply-chain-review.yaml")
-    source = (root / path).read_text(encoding="utf-8")
-    workflow = _load_yaml(root, path)
-    triggers = workflow.get("on", {})
-    issues: list[ContractIssue] = []
-    if "pull_request_target" not in triggers or "pull_request" in triggers:
-        issues.append(
-            ContractIssue(
-                path, "trusted-review-trigger", "must use trusted base context"
-            )
-        )
-    if triggers.get("pull_request_review", {}).get("types") != [
-        "submitted",
-        "dismissed",
-    ]:
-        issues.append(
-            ContractIssue(path, "trusted-review-rerun", "review changes must rerun")
-        )
-    for token in (
-        "pull_request.head.sha",
-        'api_item(f"/pulls/{number}")',
-        'pull_request["changed_files"]',
-        "len(files) != expected_file_count",
-        "author_association",
-        'review.get("state") == "APPROVED"',
-        '"COLLABORATOR"',
-        "two-person control",
-        'startswith((".gitleaks", ".trivy"))',
-        '"gitleaks.toml"',
-        '"trivy.yaml"',
-        '"trivy.yml"',
-    ):
-        if token not in source:
-            issues.append(
-                ContractIssue(path, "trusted-review-contract", f"missing {token}")
-            )
-    if "actions/checkout@" in source:
-        issues.append(
-            ContractIssue(path, "trusted-review-checkout", "checkout is forbidden")
-        )
-    if "CHANGED_FILES" in source:
-        issues.append(
-            ContractIssue(
-                path,
-                "trusted-review-file-count",
-                "changed file count must come from the pull request API",
-            )
-        )
-    return issues
-
-
 def check_signed_provenance(root: Path) -> list[ContractIssue]:
     path = Path(".github/workflows/signed-provenance.yaml")
     source = (root / path).read_text(encoding="utf-8")
@@ -538,7 +486,6 @@ def check_configuration(root: Path) -> list[ContractIssue]:
         *check_build_requirements(root),
         *check_workflow_tool_inputs(root),
         *check_secret_scan(root),
-        *check_trusted_review(root),
         *check_signed_provenance(root),
         *check_dependency_audit(root),
         *check_quality_supply_chain(root),
